@@ -1,10 +1,10 @@
 /**
  * @module examples/web-dashboard/queue-server
  *
- * The host: runs the real queue engines and serves each over http (one path per
+ * The node: runs the real queue engines and serves each over http (one path per
  * queue) so the browser can reach them with `Resource.client`. Drives live traffic
  * the sanctioned way — a **client** that enqueues over the wire (a loopback producer
- * here), not server-side `yield* tag` (a host doesn't expose its served service).
+ * here), not server-side `yield* tag` (a node doesn't expose its served service).
  * Run: `pnpm run example:queue-server`.
  */
 import { Duration, Effect, Layer, Logger } from "effect";
@@ -66,8 +66,8 @@ setInterval(() => {
   );
 }, 5000);
 
-// host every queue as ONE group on ONE port: `serveAllHttp` mounts a single `/rpc`
-// endpoint with group-id-prefixed procedures behind the Droplet host. (The wnba
+// node every queue as ONE group on ONE port: `serveAllHttp` mounts a single `/rpc`
+// endpoint with group-id-prefixed procedures behind the Droplet node. (The wnba
 // key-rotation process lives on the Mini — see mini-server.ts.)
 const serveLayer = Resource.serveAllHttp([
   serverEntry(Mail, cfg),
@@ -91,7 +91,7 @@ const serveLayer = Resource.serveAllHttp([
   Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );
 
-// loopback client transport: ONE Droplet-host transport the producers share (the single
+// loopback client transport: ONE Droplet-node transport the producers share (the single
 // /rpc endpoint, procedures group-prefixed). Tagged `x-loopback` so the rate monitor
 // separates the demo's own traffic from the browser's.
 const loopback = Resource.connect(

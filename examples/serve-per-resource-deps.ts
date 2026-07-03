@@ -36,7 +36,7 @@ class Import extends Resource.Tag<Import>()("example/Import", {
 const impl = { handler: Effect.map(ImportHandlers, (handlers) => handlers.label) };
 
 // httpServer([...serve layers], options) — bundles the provideMerge + registry
-const Host = Resource.httpServer(
+const Node = Resource.httpServer(
   [
     Resource.serve(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
     Resource.serve(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
@@ -51,7 +51,7 @@ const clientTransport = RpcClient.layerProtocolHttp({ url: `${base}/rpc` }).pipe
 );
 
 const program = Effect.gen(function* () {
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(Host)));
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(Node)));
   yield* Effect.sleep(Duration.millis(400)); // let the server bind
 
   yield* Effect.gen(function* () {

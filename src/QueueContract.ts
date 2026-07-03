@@ -30,10 +30,10 @@ import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
-  HostKey,
+  NodeKey,
   ImplOf,
   LocalCapability,
-  HostBoundTag,
+  NodeBoundTag,
   ResourceTag,
   ServeEntry,
 } from "./Resource";
@@ -535,7 +535,7 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  *
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
  * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec). Pass
- * `options.host` to bind the queue to a {@link Resource.Host} — the tag then carries its own
+ * `options.node` to bind the queue to a {@link Resource.Node} — the tag then carries its own
  * transport (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
  *
  * @public
@@ -548,8 +548,8 @@ const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     itemSchema: Schema.Struct<F>,
-    options: { readonly description?: string; readonly host: HostKey<HSelf> },
-  ): HostBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
+    options: { readonly description?: string; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     itemSchema: Schema.Struct<F>,
@@ -558,16 +558,16 @@ const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields>(
     key: string,
     itemSchema: Schema.Struct<F>,
-    options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+    options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
   ): ResourceTag<Self, QueueInstanceSpec<F>> {
     const spec = queueSpec(itemSchema);
-    const host = options?.host;
+    const node = options?.node;
     const tagOptions = { description: options?.description, kind };
-    // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
+    // node rides the inferring call; `makeTag`'s inner overload narrows the tag's node.
     const tag =
-      host === undefined
+      node === undefined
         ? Resource.Tag<Self>()(key, spec, tagOptions)
-        : Resource.Tag<Self>()(key, spec, { ...tagOptions, host });
+        : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
     // Readiness derived from the queue's own status (SSOT): ready iff the worker pool is running.
     // `status` is a live `value` — a plain, always-current property (no effect to run).
     return Resource.withReadiness(tag, (svc) =>
@@ -862,7 +862,7 @@ export const serveHttp = <
  * the queue's RPC handlers **and** registers into {@link Resource.servedResourcesLayer}, while
  * **preserving the worker requirement `R`** so a per-resource `Layer.provide` discharges it in isolation.
  *
- * Reach for this (with {@link Resource.httpServer}) when queues on one host need **different**
+ * Reach for this (with {@link Resource.httpServer}) when queues on one node need **different**
  * implementations of the same dependency tag; use {@link serverEntry} + {@link Resource.serveAllHttp}
  * for the shared-dependency case.
  *
@@ -927,7 +927,7 @@ export const serverEntry = <
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.
  * (Model B: each instance is its own resource; data-plane procedures are typed by the
- * instance's `itemSchema`.) `layer` runs it locally; `server` / `serveHttp` host it remotely;
+ * instance's `itemSchema`.) `layer` runs it locally; `server` / `serveHttp` node it remotely;
  * a remote {@link Resource.client} drives it with the same `yield* Tag` surface.
  *
  * @public

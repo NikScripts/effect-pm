@@ -33,7 +33,7 @@
  * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
  * default on both, so client/server can't disagree on the codec):
  * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
- * - {@link Resource.connectHttp} — wire a {@link Resource.Host}'s transport from a `url`.
+ * - {@link Resource.connectHttp} — wire a {@link Resource.Node}'s transport from a `url`.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
@@ -69,7 +69,7 @@ import {
   RpcSerialization,
   RpcServer,
 } from "effect/unstable/rpc";
-import { Combine, combineQuery } from "./MultiHost";
+import { Combine, combineQuery } from "./MultiNode";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -136,10 +136,10 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
   readonly method: string;
 }> {}
 
-/** No transport url for a host — neither on the {@link Resource.Host} (`{ url }`) nor passed to
+/** No transport url for a node — neither on the {@link Resource.Node} (`{ url }`) nor passed to
  *  {@link Resource.connectHttp}. @public */
-export class MissingHostUrl extends Data.TaggedError("MissingHostUrl")<{
-  readonly host: string;
+export class MissingNodeUrl extends Data.TaggedError("MissingNodeUrl")<{
+  readonly node: string;
 }> {}
 
 /**
@@ -219,13 +219,13 @@ export type AnyMethod = Method<
   MethodAnnotations
 >;
 
-/** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the hosts (in the
+/** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the nodes (in the
  *  layer via {@link peers}); served + client-visible like any query, but excluded from {@link peers}.
  *  Marked with a readable `fleet: true`. @public */
 export type FleetField<M extends AnyMethod> = Marked<M, { readonly fleet: true }>;
 
 /**
- * Mark a contract method as a **fleet** field — one combined across the hosts (its layer impl folds
+ * Mark a contract method as a **fleet** field — one combined across the nodes (its layer impl folds
  * {@link peers} + its own value). It's served and client-visible like any query, but **excluded from
  * {@link peers}**, so a fold over peers can't call a peer's *own* fleet field (a fan-out, not what you
  * want). The one lightweight tag the plain-query model keeps, purely for this exclusion.
@@ -1107,16 +1107,16 @@ export const kindSym: unique symbol = Symbol.for(
 export const readinessSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/readiness",
 );
-/** Where the resource's {@link Host} (if any) is stowed on a Tag. @internal */
-export const hostSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/host",
+/** Where the resource's {@link Node} (if any) is stowed on a Tag. @internal */
+export const nodeSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/node",
 );
 
-// ── readiness: a derived view of a resource's status, aggregated into host /health + HostStatus ──
+// ── readiness: a derived view of a resource's status, aggregated into node /health + NodeStatus ──
 
 /**
  * A resource's readiness — derived from its own status (its single source of truth), aggregated
- * into a host's `/health` and `HostStatus`. `ready: false` with a `detail` says *why* (surfaced in
+ * into a node's `/health` and `NodeStatus`. `ready: false` with a `detail` says *why* (surfaced in
  * the `/health` body and the dashboard health board).
  *
  * @public
@@ -1139,33 +1139,33 @@ export type ReadinessOf<Service> = (
   service: Service,
   base: Effect.Effect<Readiness, never, any>,
   // The derivation may depend on services (e.g. `Resource.readinessOf(Database)`); that requirement
-  // is satisfied by the serve context the host runs readiness in, and erased at this storage seam.
+  // is satisfied by the serve context the node runs readiness in, and erased at this storage seam.
 ) => Effect.Effect<Readiness, never, any>;
 
-// ── host: the transport for a resource, carried in the Tag ──
+// ── node: the transport for a resource, carried in the Tag ──
 
 /**
- * The value of a {@link Host} service: the RPC client transport `Protocol` for that host.
- * `Resource.connect(...)` produces a layer providing exactly this (re-keyed under the host),
+ * The value of a {@link Node} service: the RPC client transport `Protocol` for that node.
+ * `Resource.connect(...)` produces a layer providing exactly this (re-keyed under the node),
  * and {@link Resource.client} feeds it to `RpcClient.make` as the `RpcClient.Protocol`.
  *
  * @internal
  */
-type HostProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
+type NodeProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
 
 /**
- * The Context key of a {@link Host} (`HSelf` = its identity): a service whose value is the
- * transport {@link HostProtocol}. Stored on a host-bearing tag under {@link hostSym}; read by
+ * The Context key of a {@link Node} (`HSelf` = its identity): a service whose value is the
+ * transport {@link NodeProtocol}. Stored on a node-bearing tag under {@link nodeSym}; read by
  * {@link Resource.client} to resolve *where* to connect (its requirement channel).
  *
  * @public
  */
-export type HostKey<HSelf> = Context.Key<HSelf, HostProtocol>;
+export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
 
-/** A {@link Resource.Host} erased — a {@link HostKey} that also carries its own transport `url`
- *  (decision 2), so a tag's `multiHost` set is self-describing and {@link peersLayer} can reach each
+/** A {@link Resource.Node} erased — a {@link NodeKey} that also carries its own transport `url`
+ *  (decision 2), so a tag's `distributed` set is self-describing and {@link peersLayer} can reach each
  *  one. An element of a tag's fleet. @public */
-export type AnyHost = HostKey<unknown> & { readonly url: string | undefined };
+export type AnyNode = NodeKey<unknown> & { readonly url: string | undefined };
 
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
  *  don't collide in one context. @internal */
@@ -1173,20 +1173,20 @@ export interface PeersId<Self> {
   readonly _peers: Self;
 }
 
-/** Phantom brand for the per-resource {@link selfHost} capability (which host this instance runs as),
- *  so distinct resources' self-host identities don't collide in one context. @internal */
-export interface SelfHostId<Self> {
-  readonly _selfHost: Self;
+/** Phantom brand for the per-resource {@link selfNode} capability (which node this instance runs as),
+ *  so distinct resources' self-node identities don't collide in one context. @internal */
+export interface SelfNodeId<Self> {
+  readonly _selfNode: Self;
 }
 
-/** Holds a tag's `multiHost` set (the fleet). @internal */
-const multiHostSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/multiHost");
+/** Holds a tag's `distributed` set (the fleet). @internal */
+const nodesSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/distributed");
 
 /** Holds a tag's per-resource {@link peers} capability key. @internal */
 const peersSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/peers");
 
-/** Holds a tag's per-resource {@link selfHost} capability key. @internal */
-const selfHostSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/selfHost");
+/** Holds a tag's per-resource {@link selfNode} capability key. @internal */
+const selfNodeSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/selfNode");
 
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
@@ -1210,13 +1210,13 @@ export interface ResourceTag<Self, S extends Spec>
     { readonly granted: true }
   >;
   /**
-   * The resource's {@link Host} (its transport), or `undefined` for a hostless tag. Uniform
-   * across all tags (always present) so a host-bearing tag stays assignable wherever a plain
-   * {@link ResourceTag} is expected; the host-bearing tag constructors **narrow** this to a
-   * concrete {@link HostKey} in their return type, which is how {@link Resource.client}
-   * discriminates the host-aware path.
+   * The resource's {@link Node} (its transport), or `undefined` for a nodeless tag. Uniform
+   * across all tags (always present) so a node-bearing tag stays assignable wherever a plain
+   * {@link ResourceTag} is expected; the node-bearing tag constructors **narrow** this to a
+   * concrete {@link NodeKey} in their return type, which is how {@link Resource.client}
+   * discriminates the node-aware path.
    */
-  readonly [hostSym]: HostKey<unknown> | undefined;
+  readonly [nodeSym]: NodeKey<unknown> | undefined;
   /** The contract's kind (canonical id) — set by a contract `.Tag` factory, `undefined` for a bare
    *  {@link Resource.Tag}. Read it with {@link kindOf}. */
   readonly [kindSym]: string | undefined;
@@ -1224,27 +1224,27 @@ export interface ResourceTag<Self, S extends Spec>
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
   /** The per-resource {@link peers} capability key — its value is this resource's peer clients
-   *  (the other hosts' leaf services), keyed by host. Provided by {@link peersLayer}, read via {@link peers}. */
+   *  (the other nodes' leaf services), keyed by node. Provided by {@link peersLayer}, read via {@link peers}. */
   readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>>;
-  /** The per-resource {@link selfHost} capability key — its value is the host key this instance runs
-   *  as (the same key its peers are keyed by). Provided by {@link peersLayer} / {@link selfHostLayer},
-   *  read via {@link selfHost}. */
-  readonly [selfHostSym]: Context.Key<SelfHostId<Self>, string>;
-  /** The fleet — the tag's `multiHost` set, if declared (via {@link multiHost}); else `undefined`. */
-  readonly [multiHostSym]?: ReadonlyArray<AnyHost>;
+  /** The per-resource {@link selfNode} capability key — its value is the node key this instance runs
+   *  as (the same key its peers are keyed by). Provided by {@link peersLayer} / {@link selfNodeLayer},
+   *  read via {@link selfNode}. */
+  readonly [selfNodeSym]: Context.Key<SelfNodeId<Self>, string>;
+  /** The fleet — the tag's `distributed` set, if declared (via {@link distributed}); else `undefined`. */
+  readonly [nodesSym]?: ReadonlyArray<AnyNode>;
 }
 
 /**
- * A {@link ResourceTag} bound to a concrete {@link Host} — its `[hostSym]` narrowed to that host's
- * `HostKey<HSelf>`, which is how {@link Resource.client} discriminates the host-aware path. Returned
- * by the host-bearing tag constructors. It's a **named** type (not an inline `& { [hostSym] }`) so a
- * consumer can `export` a host-bearing tag without leaking the internal symbol (TS4020).
+ * A {@link ResourceTag} bound to a concrete {@link Node} — its `[nodeSym]` narrowed to that node's
+ * `NodeKey<HSelf>`, which is how {@link Resource.client} discriminates the node-aware path. Returned
+ * by the node-bearing tag constructors. It's a **named** type (not an inline `& { [nodeSym] }`) so a
+ * consumer can `export` a node-bearing tag without leaking the internal symbol (TS4020).
  *
  * @public
  */
-export interface HostBoundTag<Self, S extends Spec, HSelf>
+export interface NodeBoundTag<Self, S extends Spec, HSelf>
   extends ResourceTag<Self, S> {
-  readonly [hostSym]: HostKey<HSelf>;
+  readonly [nodeSym]: NodeKey<HSelf>;
 }
 
 /** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
@@ -1259,19 +1259,19 @@ export const kindOf = (tag: unknown): string | undefined => {
   return undefined;
 };
 
-/** The {@link Host} a tag is bound to (its transport key), or `undefined` for a hostless/bare tag
+/** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
- *  collect the distinct hosts to know which hosts back its resources. @since 1.0.0 */
-export const hostOf = (tag: unknown): HostKey<unknown> | undefined => {
-  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && hostSym in tag) {
-    const value = tag[hostSym];
-    return value === undefined ? undefined : (value as HostKey<unknown>);
+ *  collect the distinct nodes to know which nodes back its resources. @since 1.0.0 */
+export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
+  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && nodeSym in tag) {
+    const value = tag[nodeSym];
+    return value === undefined ? undefined : (value as NodeKey<unknown>);
   }
   return undefined;
 };
 
 /**
- * Attach a {@link Readiness} derivation to a tag — the seam the host's `/health` and `HostStatus`
+ * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and `NodeStatus`
  * aggregate over. Each contract applies it from its own status (so readiness can't drift from
  * status); a bare {@link Resource.Tag} can opt in the same way. Dual (data-first or `.pipe`):
  *
@@ -1288,26 +1288,26 @@ export const hostOf = (tag: unknown): HostKey<unknown> | undefined => {
  * @public
  */
 export const withReadiness: {
-  // The input is "any resource tag, host-bound or not" — `HostBoundTag` is a distinct interface, so
+  // The input is "any resource tag, node-bound or not" — `NodeBoundTag` is a distinct interface, so
   // it isn't structurally assignable to a bare `ResourceTag<any, any>` (its one invariant member,
   // `[groupSym]`); naming both arms is the honest type for "accepts either variant" (`client` does the
   // same). `Self` is widened to `any` on the data-last form so it works in a class `extends` position
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
   //
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
-  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
+  <T extends ResourceTag<any, any> | NodeBoundTag<any, any, any>>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
   ): (tag: T) => T;
   // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
   // Two **inferred** overloads (not a fixed `<any,any>` union) so a fully-defined *class* — a
-  // `typeof X` constructor — is accepted, the way `client`/`layer` accept one; host-bound first so a
-  // host-bound tag keeps its host in the return.
+  // `typeof X` constructor — is accepted, the way `client`/`layer` accept one; node-bound first so a
+  // node-bound tag keeps its node in the return.
   <Self, S extends Spec, HSelf>(
-    tag: HostBoundTag<Self, S, HSelf>,
+    tag: NodeBoundTag<Self, S, HSelf>,
     readiness: ReadinessOf<ServiceOf<S, Self>>,
-  ): HostBoundTag<Self, S, HSelf>;
+  ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
     tag: ResourceTag<Self, S>,
     readiness: ReadinessOf<ServiceOf<S, Self>>,
@@ -1327,7 +1327,7 @@ export const withReadiness: {
 
 /**
  * Run a tag's readiness derivation against its built service. A tag that declares none is **ready by
- * default**, so an unaware or bare resource never falsely fails a host's readiness gate. Accepts
+ * default**, so an unaware or bare resource never falsely fails a node's readiness gate. Accepts
  * `unknown` so a served entry's tag + impl pass straight in. @since 1.0.0
  */
 export const readinessCheck = (
@@ -1339,7 +1339,7 @@ export const readinessCheck = (
     if (typeof derive === "function") {
       // Symbol-stored metadata is type-erased (as with specSym/groupSym); recover the derivation
       // `withReadiness` stored. This single assertion also erases the derivation's requirement (its
-      // dependency services are ambient in the serve context the host runs readiness within).
+      // dependency services are ambient in the serve context the node runs readiness within).
       const fn = derive as (
         service: unknown,
         base: Effect.Effect<Readiness>,
@@ -1430,7 +1430,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   spec: S,
   group: RpcGroupOf<S>,
   description: string | undefined,
-  host: HostKey<unknown> | undefined,
+  node: NodeKey<unknown> | undefined,
   kind: string | undefined,
 ) => {
   if (claimedKeys.has(key)) {
@@ -1443,25 +1443,25 @@ const buildInstanceTag = <Self, S extends Spec>(
     Context.Service<LocalCapability<Self>, { readonly granted: true }>()(
       `${key}/__local`,
     );
-  // per-resource peer capability — its value is this resource's other-host clients, provided
+  // per-resource peer capability — its value is this resource's other-node clients, provided
   // only by peersLayer (the opt-in mesh), never by default.
   const peersKey: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>> =
     Context.Service<PeersId<Self>, Record<string, PeerServiceOf<S>>>()(`${key}/__peers`);
-  // per-resource self-host capability — its value is the host key this instance runs as, provided
-  // by peersLayer / selfHostLayer, never by default.
-  const selfHostKey: Context.Key<SelfHostId<Self>, string> =
-    Context.Service<SelfHostId<Self>, string>()(`${key}/__selfHost`);
+  // per-resource self-node capability — its value is the node key this instance runs as, provided
+  // by peersLayer / selfNodeLayer, never by default.
+  const selfNodeKey: Context.Key<SelfNodeId<Self>, string> =
+    Context.Service<SelfNodeId<Self>, string>()(`${key}/__selfNode`);
   return Object.assign(base, {
     groupId,
     description,
     [specSym]: flattenSpec(spec),
     [groupSym]: group,
     [localCapSym]: localCap,
-    [hostSym]: host,
+    [nodeSym]: node,
     [kindSym]: kind,
     [readinessSym]: undefined,
     [peersSym]: peersKey,
-    [selfHostSym]: selfHostKey,
+    [selfNodeSym]: selfNodeKey,
   });
 };
 
@@ -1481,15 +1481,15 @@ const buildInstanceTag = <Self, S extends Spec>(
  * Keys must be unique: a duplicate **throws at declaration** — Effect's `Context` is
  * keyed by the key string and silently last-write-wins on collisions, so we guard it.
  * For a single resource the key is also its **group id** (the wire prefix for its
- * procedures), so a shared `RpcServer` can host it alongside other resource types.
+ * procedures), so a shared `RpcServer` can node it alongside other resource types.
  *
  * @public
  */
 const makeTag = <Self>() => {
   // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
-  // inferring call; `options.host` rides the inferring call so its identity `HSelf` infers from the
-  // argument, and the host-bearing overload narrows `[hostSym]` to a concrete `HostKey` — which is
-  // how `Resource.client` discriminates the host-aware path.
+  // inferring call; `options.node` rides the inferring call so its identity `HSelf` infers from the
+  // argument, and the node-bearing overload narrows `[nodeSym]` to a concrete `NodeKey` — which is
+  // how `Resource.client` discriminates the node-aware path.
   function build<const S extends Spec>(
     key: string,
     spec: S,
@@ -1501,16 +1501,16 @@ const makeTag = <Self>() => {
     options: {
       readonly description?: string;
       readonly kind?: string;
-      readonly host: HostKey<HSelf>;
+      readonly node: NodeKey<HSelf>;
     },
-  ): HostBoundTag<Self, S, HSelf>;
+  ): NodeBoundTag<Self, S, HSelf>;
   function build<const S extends Spec>(
     key: string,
     spec: S,
     options?: {
       readonly description?: string;
       readonly kind?: string;
-      readonly host?: HostKey<unknown>;
+      readonly node?: NodeKey<unknown>;
     },
   ): ResourceTag<Self, S> {
     // single resource: key doubles as the group id (its wire prefix)
@@ -1521,7 +1521,7 @@ const makeTag = <Self>() => {
       spec,
       buildRpcGroup(key, flattenSpec(spec)),
       options?.description,
-      options?.host,
+      options?.node,
       options?.kind,
     );
   }
@@ -1545,14 +1545,14 @@ export interface TagFactory<S extends Spec> {
 }
 
 /**
- * A host-bearing {@link tagFor} factory: every instance it makes carries the family's
- * {@link Host}, so each is a host-bearing tag ({@link Resource.client} resolves the transport
+ * A node-bearing {@link tagFor} factory: every instance it makes carries the family's
+ * {@link Node}, so each is a node-bearing tag ({@link Resource.client} resolves the transport
  * from it). Otherwise identical to {@link TagFactory}.
  *
  * @public
  */
-export interface HostTagFactory<S extends Spec, HSelf> {
-  <Self>(key: string): HostBoundTag<Self, S, HSelf>;
+export interface NodeTagFactory<S extends Spec, HSelf> {
+  <Self>(key: string): NodeBoundTag<Self, S, HSelf>;
   readonly groupId: string;
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
@@ -1565,11 +1565,11 @@ export interface HostTagFactory<S extends Spec, HSelf> {
  * every instance shares the same contract + RPC group, and callers **never pass the spec**
  * — only an instance key. Use for resource families (many instances, one contract). The
  * `groupId` (e.g. `"queue"`) is the wire prefix for the family's procedures, so a shared
- * `RpcServer` can host this family next to other resource types without tag collisions;
+ * `RpcServer` can node this family next to other resource types without tag collisions;
  * instances are told apart by the per-call `key` header.
  *
- * Pass `options.host` to bind the whole family to a {@link Host}: every instance becomes a
- * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
+ * Pass `options.node` to bind the whole family to a {@link Node}: every instance becomes a
+ * node-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
  *
  * ```ts
  * const Queue = Resource.tagFor("queue", { pause: Resource.effectFn(Schema.Void) });
@@ -1582,8 +1582,8 @@ export interface HostTagFactory<S extends Spec, HSelf> {
 function tagFor<const S extends Spec, HSelf>(
   groupId: string,
   spec: S,
-  options: { readonly description?: string; readonly kind?: string; readonly host: HostKey<HSelf> },
-): HostTagFactory<S, HSelf>;
+  options: { readonly description?: string; readonly kind?: string; readonly node: NodeKey<HSelf> },
+): NodeTagFactory<S, HSelf>;
 function tagFor<const S extends Spec>(
   groupId: string,
   spec: S,
@@ -1592,11 +1592,11 @@ function tagFor<const S extends Spec>(
 function tagFor<const S extends Spec>(
   groupId: string,
   spec: S,
-  options?: { readonly description?: string; readonly kind?: string; readonly host?: HostKey<unknown> },
+  options?: { readonly description?: string; readonly kind?: string; readonly node?: NodeKey<unknown> },
 ): TagFactory<S> {
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, flattenSpec(spec));
-  const host = options?.host;
+  const node = options?.node;
   const factory = <Self>(key: string) =>
     buildInstanceTag<Self, S>(
       groupId,
@@ -1604,7 +1604,7 @@ function tagFor<const S extends Spec>(
       spec,
       group,
       options?.description,
-      host,
+      node,
       options?.kind,
     );
   // Stow the shared groupId/description/spec/group on the factory too, so the family
@@ -1859,7 +1859,7 @@ const serverLayer = <S extends Spec>(
 /**
  * One served resource's registry entry — its group (folded into the shared server), wire id, kind, and
  * readiness derivation. {@link serve} appends it; {@link httpServer} reads them for the merged server +
- * `/health` + host-status.
+ * `/health` + node-status.
  *
  * @public
  */
@@ -2102,7 +2102,7 @@ const mergeLayers = (
  * dependency):
  *
  * ```ts
- * const Host = Resource.httpServer([
+ * const Node = Resource.httpServer([
  *   Resource.serve(A, implA).pipe(Layer.provide(depA)),
  *   Resource.serve(B, implB).pipe(Layer.provide(depB)),
  * ], { health: { path: "/health" } }).pipe(
@@ -2288,7 +2288,7 @@ type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any>>> = EntryR<Entr
  * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
  * to {@link serveHttp}. Each resource's procedures are group-id-prefixed, so they coexist on the
  * one `/rpc` endpoint without collision; clients reach each via `Resource.client(Tag)` over a single
- * {@link connectHttp} transport (typically a shared {@link Host}). This is how a whole group runs
+ * {@link connectHttp} transport (typically a shared {@link Node}). This is how a whole group runs
  * behind one port.
  *
  * ```ts
@@ -2306,7 +2306,7 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
     readonly path?: HttpRouter.PathInput;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
     /** Readiness `/health` route (always mounted; set `path` to relocate it). A dumb probe gets
-     *  `200`/`503`; the JSON body lists the host's resources for a dashboard health board. */
+     *  `200`/`503`; the JSON body lists the node's resources for a dashboard health board. */
     readonly health?: {
       readonly path?: HttpRouter.PathInput;
     };
@@ -2325,12 +2325,12 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
   // plus the http server to listen on (same shape as a single `serveHttp`).
   return Layer.unwrap(
     Effect.gen(function* () {
-      // Every host auto-serves the reserved host status resource (status / logs / ping) alongside
-      // the user's resources, so a client can inspect any host without the author wiring it.
-      // Dynamic import keeps `hostStatusResource` (which imports this module) out of a static cycle;
+      // Every node auto-serves the reserved node status resource (status / logs / ping) alongside
+      // the user's resources, so a client can inspect any node without the author wiring it.
+      // Dynamic import keeps `nodeStatusResource` (which imports this module) out of a static cycle;
       // the entry is folded in before building so all entries stay one (erased) type.
-      const { hostStatusServeEntry } = yield* Effect.promise(
-        () => import("./internal/hostStatusResource"),
+      const { nodeStatusServeEntry } = yield* Effect.promise(
+        () => import("./internal/nodeStatusResource"),
       );
       const startedAt = yield* Clock.currentTimeMillis;
       const buildImpl = (entry: ServeEntry<any>) =>
@@ -2339,7 +2339,7 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
           : Effect.succeed(entry.impl)
         ).pipe(Effect.map((impl) => ({ tag: entry.tag, impl })));
       // Build the user's resources first so the readiness aggregate can close over their impls —
-      // both the `/health` route and the host-status resource read this ONE aggregate (SSOT): each
+      // both the `/health` route and the node-status resource read this ONE aggregate (SSOT): each
       // resource's own `readiness` derivation (default: ready), keyed by tag + kind.
       const userBuilt = yield* Effect.forEach(entries, buildImpl);
       const readiness = Effect.forEach(userBuilt, ({ tag, impl }) =>
@@ -2350,10 +2350,10 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
           ...(r.detail !== undefined ? { detail: r.detail } : {}),
         })),
       );
-      const hostBuilt = yield* buildImpl(
-        hostStatusServeEntry({ startedAt, resourceCount: entries.length, readiness }),
+      const nodeBuilt = yield* buildImpl(
+        nodeStatusServeEntry({ startedAt, resourceCount: entries.length, readiness }),
       );
-      const built = [...userBuilt, hostBuilt];
+      const built = [...userBuilt, nodeBuilt];
       const merged = built
         .map((b) => b.tag[groupSym])
         .reduce((acc, group) => acc.merge(group));
@@ -2381,9 +2381,9 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
         ),
       );
       // A plain HTTP readiness route alongside `/rpc` — a dumb probe (deploy gate, load balancer)
-      // gets a status code; the JSON body lists the host's resources for a dashboard health board.
-      // Readiness aggregates each resource's own derivation; if any is down the host is `degraded`
-      // → 503 (so a deploy gate won't promote a half-booted host).
+      // gets a status code; the JSON body lists the node's resources for a dashboard health board.
+      // Readiness aggregates each resource's own derivation; if any is down the node is `degraded`
+      // → 503 (so a deploy gate won't promote a half-booted node).
       const healthRoute = HttpRouter.add(
         "GET",
         options?.health?.path ?? "/health",
@@ -2427,7 +2427,7 @@ export interface ResourceInstance<S extends Spec> {
 /**
  * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
  *
- * **Not** how you serve a single custom resource on a shared host: this returns a
+ * **Not** how you serve a single custom resource on a shared node: this returns a
  * {@link ResourceInstance} for the {@link serveInstances} family, which `serveAllHttp` rejects. To
  * serve a custom `Resource.Tag` alongside queues/processes, use {@link Resource.serverEntry} (a
  * spec-checked `serveAllHttp` entry), then reach it with {@link Resource.client}.
@@ -2588,32 +2588,32 @@ export const forwardClient = <S extends Spec>(
 };
 
 /**
- * Declare a **host** — a named transport endpoint a resource connects to. A `Context.Service`
- * whose value is the RPC client {@link HostProtocol}; extend it like any Effect service:
+ * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
+ * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service:
  *
  * ```ts
- * class EdgeHost extends Resource.Host<EdgeHost>("edge") {}
+ * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}
  * ```
  *
- * Attach it to a tag (`Resource.Tag<Self>(key)(spec, EdgeHost)`) to make the tag carry its own
- * transport — then ship only the tag: {@link Resource.client} reads the host to resolve where
+ * Attach it to a tag (`Resource.Tag<Self>(key)(spec, EdgeNode)`) to make the tag carry its own
+ * transport — then ship only the tag: {@link Resource.client} reads the node to resolve where
  * to connect, and a consumer wires the transport once with {@link Resource.connect}.
  *
  * @public
  */
-const makeHost = <Self>(name: string, options?: { readonly url?: string }) =>
-  Object.assign(Context.Service<Self, HostProtocol>()(name), {
+const makeNode = <Self>(name: string, options?: { readonly url?: string }) =>
+  Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     url: options?.url,
   });
 
 /**
- * Wire a {@link Host}'s transport, **once**, from any RPC client `Protocol` layer — the
+ * Wire a {@link Node}'s transport, **once**, from any RPC client `Protocol` layer — the
  * transport-agnostic primitive (use {@link connectHttp} for the batteries-included http case).
- * Re-keys that `Protocol` under the host, so {@link Resource.client} resolves it for every tag
- * bound to this host; provide one `Resource.connect(...)` per host an app talks to.
+ * Re-keys that `Protocol` under the node, so {@link Resource.client} resolves it for every tag
+ * bound to this node; provide one `Resource.connect(...)` per node an app talks to.
  *
  * ```ts
- * const EdgeLive = Resource.connect(EdgeHost, RpcClient.layerProtocolWebsocket({ url }).pipe(
+ * const EdgeLive = Resource.connect(EdgeNode, RpcClient.layerProtocolWebsocket({ url }).pipe(
  *   Layer.provide(RpcSerialization.layerNdjson),
  *   Layer.provide(socketLayer),
  * ));
@@ -2622,10 +2622,10 @@ const makeHost = <Self>(name: string, options?: { readonly url?: string }) =>
  * @public
  */
 const connectLayer = <Self, RIn>(
-  host: HostKey<Self>,
+  node: NodeKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
 ): Layer.Layer<Self, never, RIn> =>
-  Layer.effect(host, RpcClient.Protocol).pipe(Layer.provide(protocol));
+  Layer.effect(node, RpcClient.Protocol).pipe(Layer.provide(protocol));
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
  * **streaming** responses, and is shared by {@link connectHttp} + {@link serveHttp} so a
@@ -2634,32 +2634,32 @@ const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
 
 /**
- * Wire a {@link Host}'s transport over **http**, the common case — `Resource.connect` with
+ * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
  * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
- * and re-keys it under the host. Serialization defaults to {@link defaultSerialization}
+ * and re-keys it under the node. Serialization defaults to {@link defaultSerialization}
  * (ndjson), matching {@link serveHttp}'s default so the two sides agree by construction.
  *
  * ```ts
- * const EdgeLive = Resource.connectHttp(EdgeHost, { url: "http://10.0.0.2:3002/rpc" });
+ * const EdgeLive = Resource.connectHttp(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
  * ```
  *
  * @public
  */
 const connectHttp = <Self>(
-  host: HostKey<Self> & { readonly url?: string },
+  node: NodeKey<Self> & { readonly url?: string },
   options?: {
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self> => {
-  // the url lives on the host by default (decision 2 — the host carries everything to reach it);
+  // the url lives on the node by default (decision 2 — the node carries everything to reach it);
   // an explicit `options.url` overrides. One or the other must be present.
-  const url = options?.url ?? host.url;
+  const url = options?.url ?? node.url;
   if (url === undefined) {
-    throw new MissingHostUrl({ host: host.key });
+    throw new MissingNodeUrl({ node: node.key });
   }
   return connectLayer(
-    host,
+    node,
     RpcClient.layerProtocolHttp({ url }).pipe(
       Layer.provide(options?.serialization ?? defaultSerialization),
       Layer.provide(FetchHttpClient.layer),
@@ -2667,44 +2667,44 @@ const connectHttp = <Self>(
   );
 };
 
-// ── multi-host: the fleet + peer clients ──
+// ── multi-node: the fleet + peer clients ──
 
 /**
- * Declare a resource's **fleet** — the hosts it's served on — piped onto the tag (like
- * {@link withReadiness}). Variadic; each {@link Host} carries its own url (decision 2), so the tag is
- * self-describing. Read by {@link peersLayer} to reach the other hosts.
+ * Declare a resource's **fleet** — the nodes it's served on — piped onto the tag (like
+ * {@link withReadiness}). Variadic; each {@link Node} carries its own url (decision 2), so the tag is
+ * self-describing. Read by {@link peersLayer} to reach the other nodes.
  *
  * ```ts
  * class Database extends Resource.Tag<Database>()("app/Database", spec).pipe(
- *   Resource.multiHost(NwslHost, EbwslHost, WnbaHost),
+ *   Resource.distributed(NwslNode, EbwslNode, WnbaNode),
  * ) {}
  * ```
  *
  * @public
  */
-export const multiHost: {
+export const distributed: {
   // data-last (pipe): mirrors `withReadiness` — the data-first overloads (which infer `Self`/`S` and
-  // return the *specific* tag) are what let a class `extends … .pipe(multiHost(...))` resolve without
-  // recursing on its own type, so `multiHost` is `Fn.dual` too (not a bare curry).
-  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
-    hosts: ReadonlyArray<AnyHost>,
+  // return the *specific* tag) are what let a class `extends … .pipe(distributed(...))` resolve without
+  // recursing on its own type, so `distributed` is `Fn.dual` too (not a bare curry).
+  <T extends ResourceTag<any, any> | NodeBoundTag<any, any, any>>(
+    nodes: ReadonlyArray<AnyNode>,
   ): (tag: T) => T;
   <Self, S extends Spec, HSelf>(
-    tag: HostBoundTag<Self, S, HSelf>,
-    hosts: ReadonlyArray<AnyHost>,
-  ): HostBoundTag<Self, S, HSelf>;
+    tag: NodeBoundTag<Self, S, HSelf>,
+    nodes: ReadonlyArray<AnyNode>,
+  ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
     tag: ResourceTag<Self, S>,
-    hosts: ReadonlyArray<AnyHost>,
+    nodes: ReadonlyArray<AnyNode>,
   ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any>>(tag: T, hosts: ReadonlyArray<AnyHost>): T =>
-    Object.assign(tag, { [multiHostSym]: hosts }),
+  <T extends ResourceTag<any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T =>
+    Object.assign(tag, { [nodesSym]: nodes }),
 );
 
 /**
- * Build a **peer** service — a fully **lazy** client for folding across hosts ({@link combineQuery} /
+ * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
  * {@link combineStream}). Unlike {@link buildClientService} it never resolves `constant`s or subscribes
  * `value` fields at build: those open a connection and (for a `value`) block on the initial push, so a
  * co-booting or down peer would hang the whole serve. A `value` is read **one-shot** here (`Stream.runHead`
@@ -2747,7 +2747,7 @@ const buildPeerService = <Self, S extends Spec>(
   return service as PeerServiceOf<S>;
 };
 
-/** Build a lazy client to one peer host over http (its own `url`), scoped to its transport. Fully lazy —
+/** Build a lazy client to one peer node over http (its own `url`), scoped to its transport. Fully lazy —
  *  see {@link buildPeerService} (nothing connects until a fold reads a field). */
 const buildPeerClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
@@ -2771,8 +2771,8 @@ const buildPeerClient = <Self, S extends Spec>(
   });
 
 /**
- * The resource's **peer clients** — the OTHER hosts' full services, keyed by host — for a resource's
- * *own* cross-host logic. Requires the {@link peersLayer} capability. Fold them with `/MultiHost`'s
+ * The resource's **peer clients** — the OTHER nodes' full services, keyed by node — for a resource's
+ * *own* cross-node logic. Requires the {@link peersLayer} capability. Fold them with `/MultiNode`'s
  * `combineQuery`/`combineStream` (or iterate) and add your own value:
  *
  * ```ts
@@ -2783,7 +2783,7 @@ const buildPeerClient = <Self, S extends Spec>(
  *
  * **Fold over per-instance ("leaf") fields** (`p.connections`), not a peer's own fleet field
  * (`p.totalConnections`) — a peer client is the full service, so a fleet field is *callable* but would
- * make it re-gather *its* peers (a cross-host fan-out, not what you want in a fold). The plain-query
+ * make it re-gather *its* peers (a cross-node fan-out, not what you want in a fold). The plain-query
  * model has no type-level leaf/fleet distinction, so this is a convention, not a compile error.
  *
  * @public
@@ -2793,48 +2793,48 @@ export const peers = <Self, S extends Spec>(
 ): Effect.Effect<Record<string, PeerServiceOf<S>>, never, PeersId<Self>> => tag[peersSym];
 
 /**
- * The host key this instance runs as — the **same key** its {@link peers} are keyed by. For folds that
- * key per host (`Combine.byHost`), so a resource's own logic can name its **own** row without
- * hand-threading the host key. Requires the {@link selfHostLayer} / {@link peersLayer} capability:
+ * The node key this instance runs as — the **same key** its {@link peers} are keyed by. For folds that
+ * key per node (`Combine.byNode`), so a resource's own logic can name its **own** row without
+ * hand-threading the node key. Requires the {@link selfNodeLayer} / {@link peersLayer} capability:
  *
  * ```ts
  * fleetStatus: Effect.gen(function* () {
- *   const self = yield* Resource.selfHost(FleetDatabase); // the host key I am
+ *   const self = yield* Resource.selfNode(FleetDatabase); // the node key I am
  *   const peers = yield* Resource.peers(FleetDatabase);
- *   const byHost = yield* combineQuery(peers, (p) => p.status, Combine.byHost);
- *   return { ...byHost, [self]: yield* ownStatus }; // key my own row, consistently
+ *   const byNode = yield* combineQuery(peers, (p) => p.status, Combine.byNode);
+ *   return { ...byNode, [self]: yield* ownStatus }; // key my own row, consistently
  * })
  * ```
  *
  * @public
  */
-export const selfHost = <Self, S extends Spec>(
+export const selfNode = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-): Effect.Effect<string, never, SelfHostId<Self>> => tag[selfHostSym];
+): Effect.Effect<string, never, SelfNodeId<Self>> => tag[selfNodeSym];
 
 /**
- * Provide the {@link selfHost} capability on **this** host — the host key this instance runs as. Bundled
+ * Provide the {@link selfNode} capability on **this** node — the node key this instance runs as. Bundled
  * into {@link peersLayer} (so a mesh resource gets it for free); use this standalone when a resource
- * keys per host but doesn't gather peers, or alongside {@link peersFrom} in a test. No transport, no
+ * keys per node but doesn't gather peers, or alongside {@link peersFrom} in a test. No transport, no
  * failure path — just the identity.
  *
  * @public
  */
-export const selfHostLayer = <Self, S extends Spec>(
+export const selfNodeLayer = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-  self: AnyHost,
-): Layer.Layer<SelfHostId<Self>> => Layer.succeed(tag[selfHostSym], self.key);
+  self: AnyNode,
+): Layer.Layer<SelfNodeId<Self>> => Layer.succeed(tag[selfNodeSym], self.key);
 
 /**
- * Provide the {@link peers} capability on **this** host: connect every OTHER host in the tag's
- * {@link multiHost} set and expose them as the peer clients. Also provides the {@link selfHost}
- * capability (this host's key) for `byHost`-style folds. The **opt-in mesh** — add it to a host's serve
- * only where the resource's own logic reaches across hosts. `self` is the host you are, so you're
+ * Provide the {@link peers} capability on **this** node: connect every OTHER node in the tag's
+ * {@link distributed} set and expose them as the peer clients. Also provides the {@link selfNode}
+ * capability (this node's key) for `byNode`-style folds. The **opt-in mesh** — add it to a node's serve
+ * only where the resource's own logic reaches across nodes. `self` is the node you are, so you're
  * excluded from your own peer set.
  *
- * **Peer urls:** each {@link Host}'s own `url` is the default (the standard practice — the host carries
- * how to reach it). Pass `options.url` to **override** per host — an env-specific port, a tunnel, or a
- * value from Effect `Config` — falling back to `Host.url` when the resolver returns `undefined`. A host
+ * **Peer urls:** each {@link Node}'s own `url` is the default (the standard practice — the node carries
+ * how to reach it). Pass `options.url` to **override** per node — an env-specific port, a tunnel, or a
+ * value from Effect `Config` — falling back to `Node.url` when the resolver returns `undefined`. A node
  * with no url from either source is **skipped** (never a throw), so a partial mesh degrades cleanly. The
  * resolver's error and requirements flow to the layer (typed): a `Config`-backed resolver surfaces a
  * `ConfigError` as a typed layer-build failure — fail-fast on a misconfigured url — or return `undefined`
@@ -2844,31 +2844,31 @@ export const selfHostLayer = <Self, S extends Spec>(
  */
 export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
   tag: ResourceTag<Self, S>,
-  self: AnyHost,
+  self: AnyNode,
   options?: {
     /** The fleet (including `self`) — supply it **at the use site** so a shared resource can be defined
-     *  host-free and exported; falls back to the tag's baked-in {@link multiHost} set when omitted. */
-    readonly hosts?: ReadonlyArray<AnyHost>;
-    readonly url?: (host: AnyHost) => Effect.Effect<string | undefined, EIn, RIn>;
+     *  node-free and exported; falls back to the tag's baked-in {@link distributed} set when omitted. */
+    readonly nodes?: ReadonlyArray<AnyNode>;
+    readonly url?: (node: AnyNode) => Effect.Effect<string | undefined, EIn, RIn>;
   },
-): Layer.Layer<PeersId<Self> | SelfHostId<Self>, EIn, RIn> =>
+): Layer.Layer<PeersId<Self> | SelfNodeId<Self>, EIn, RIn> =>
   Layer.merge(
     Layer.effect(
       tag[peersSym],
       Effect.gen(function* () {
-        // fleet from the use site (`options.hosts`) or the tag's baked set; drop self to get the peers.
-        const fleet = options?.hosts ?? tag[multiHostSym] ?? [];
-        const others = fleet.filter((host) => host.key !== self.key);
-        // the host's own url is the default; an optional resolver overrides it, falling back to the url.
-        const resolveUrl = (host: AnyHost): Effect.Effect<string | undefined, EIn, RIn> =>
+        // fleet from the use site (`options.nodes`) or the tag's baked set; drop self to get the peers.
+        const fleet = options?.nodes ?? tag[nodesSym] ?? [];
+        const others = fleet.filter((node) => node.key !== self.key);
+        // the node's own url is the default; an optional resolver overrides it, falling back to the url.
+        const resolveUrl = (node: AnyNode): Effect.Effect<string | undefined, EIn, RIn> =>
           options?.url === undefined
-            ? Effect.succeed(host.url)
-            : Effect.map(options.url(host), (override) => override ?? host.url);
-        const resolved = yield* Effect.forEach(others, (host) =>
-          Effect.map(resolveUrl(host), (url) => ({ key: host.key, url })),
+            ? Effect.succeed(node.url)
+            : Effect.map(options.url(node), (override) => override ?? node.url);
+        const resolved = yield* Effect.forEach(others, (node) =>
+          Effect.map(resolveUrl(node), (url) => ({ key: node.key, url })),
         );
         const entries = yield* Effect.forEach(
-          // a host with no url anywhere is skipped — a partial mesh, not a failure
+          // a node with no url anywhere is skipped — a partial mesh, not a failure
           resolved.filter(
             (entry): entry is { readonly key: string; readonly url: string } =>
               entry.url !== undefined,
@@ -2882,13 +2882,13 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
         return Object.fromEntries(entries) as unknown as Record<string, PeerServiceOf<S>>;
       }),
     ),
-    selfHostLayer(tag, self),
+    selfNodeLayer(tag, self),
   );
 
 /**
  * Provide the {@link peers} capability from an **explicit** client map — for a holder that already
- * holds the per-host clients (a dashboard's per-host bundles), or for a test. {@link peersLayer} is
- * the auto-connecting form (from the tag's `multiHost` set + urls); this one takes the clients as-is.
+ * holds the per-node clients (a dashboard's per-node bundles), or for a test. {@link peersLayer} is
+ * the auto-connecting form (from the tag's `distributed` set + urls); this one takes the clients as-is.
  *
  * @public
  */
@@ -2898,17 +2898,17 @@ export const peersFrom = <Self, S extends Spec>(
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**
- * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by host** (`Combine.byHost`),
- * and add **this** host's own value keyed by {@link selfHost}. The canned form of the recurring
- * droplet-health-table pattern, on the {@link peers} + {@link selfHost} + `/MultiHost` primitives:
+ * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by node** (`Combine.byNode`),
+ * and add **this** node's own value keyed by {@link selfNode}. The canned form of the recurring
+ * droplet-health-table pattern, on the {@link peers} + {@link selfNode} + `/MultiNode` primitives:
  *
  * ```ts
- * // in a resource's layer — a `fleet` field returning one row per host
+ * // in a resource's layer — a `fleet` field returning one row per node
  * fleetStatus: Resource.fleetHealth(FleetDatabase, (peer) => peer.status, ownStatus)
  * ```
  *
  * A down peer is skipped (its `pick` failure is captured, never thrown) — a partial table, not an error.
- * Requires the {@link peersLayer} capability (which bundles {@link selfHost}). The only error / requirement
+ * Requires the {@link peersLayer} capability (which bundles {@link selfNode}). The only error / requirement
  * is `own`'s.
  *
  * @public
@@ -2920,14 +2920,14 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
 ): Effect.Effect<
   Record<string, A>,
   EOwn,
-  ROwn | PeersId<Self> | SelfHostId<Self>
+  ROwn | PeersId<Self> | SelfNodeId<Self>
 > =>
   Effect.gen(function* () {
-    const self = yield* selfHost(tag);
+    const self = yield* selfNode(tag);
     const peerClients = yield* peers(tag);
-    const byHost = yield* combineQuery(peerClients, pick, Combine.byHost);
+    const byNode = yield* combineQuery(peerClients, pick, Combine.byNode);
     const ownValue = yield* own;
-    return { ...byHost, [self]: ownValue };
+    return { ...byNode, [self]: ownValue };
   });
 
 /**
@@ -2980,38 +2980,38 @@ const buildClientService = <Self, S extends Spec>(
  * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
  * matter where the resource actually runs.
  *
- * Three paths, by whether — and where — the tag names a {@link Host}:
- * - **host-bearing tag** — the transport is resolved from the tag's host; the layer's only
- *   requirement is that host (satisfied by {@link Resource.connect}). Ship just the tag.
- * - **hostless tag, host at the client** — a multi-host resource is N instances (one per host), so
- *   the client names *which* instance: `client(tag, host)`. The transport is resolved from that host
- *   (like a host-bearing tag), so the layer requires the host — satisfied by {@link Resource.connect}.
+ * Three paths, by whether — and where — the tag names a {@link Node}:
+ * - **node-bearing tag** — the transport is resolved from the tag's node; the layer's only
+ *   requirement is that node (satisfied by {@link Resource.connect}). Ship just the tag.
+ * - **nodeless tag, node at the client** — a multi-node resource is N instances (one per node), so
+ *   the client names *which* instance: `client(tag, node)`. The transport is resolved from that node
+ *   (like a node-bearing tag), so the layer requires the node — satisfied by {@link Resource.connect}.
  *   The requirement is enforced at compile time, so there's no way to wire it wrong at runtime.
- * - **hostless tag, ambient transport** — the transport is taken from the ambient `RpcClient.Protocol`,
- *   supplied at wire-up. (Remote use stays optional: a hostless resource can also just run locally via
+ * - **nodeless tag, ambient transport** — the transport is taken from the ambient `RpcClient.Protocol`,
+ *   supplied at wire-up. (Remote use stays optional: a nodeless resource can also just run locally via
  *   {@link Resource.layer}, or be served as its own process.)
  *
  * @public
  */
 function clientLayer<Self, S extends Spec, HSelf>(
-  tag: HostBoundTag<Self, S, HSelf>,
+  tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
-  host: HostKey<HSelf>,
+  node: NodeKey<HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
 ): Layer.Layer<Self, never, RpcClient.Protocol>;
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-  host?: HostKey<unknown>,
+  node?: NodeKey<unknown>,
 ): Layer.Layer<Self, never, RpcClient.Protocol> {
   const group = tag[groupSym];
-  // an explicit `host` (for a hostless tag) wins; otherwise the tag's own host, if any.
-  const hostKey = host ?? tag[hostSym];
-  // no host anywhere: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
-  if (hostKey === undefined) {
+  // an explicit `node` (for a nodeless tag) wins; otherwise the tag's own node, if any.
+  const nodeKey = node ?? tag[nodeSym];
+  // no node anywhere: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
+  if (nodeKey === undefined) {
     return Layer.effect(
       tag,
       Effect.flatMap(RpcClient.make(group), (client) =>
@@ -3019,16 +3019,16 @@ function clientLayer<Self, S extends Spec>(
       ),
     );
   }
-  // host chosen (from the tag or the argument): resolve the transport from that host service and
-  // provide it locally to the client, so the layer requires the host rather than the ambient
-  // Protocol. Reading a provided host service can't fail and `RpcClient.make` has no error channel,
+  // node chosen (from the tag or the argument): resolve the transport from that node service and
+  // provide it locally to the client, so the layer requires the node rather than the ambient
+  // Protocol. Reading a provided node service can't fail and `RpcClient.make` has no error channel,
   // so client construction never fails or dies — only the resulting method calls carry typed errors.
-  // The host identity is erased to `unknown` on the base tag; the two host-typed overloads pin the
+  // The node identity is erased to `unknown` on the base tag; the two node-typed overloads pin the
   // precise `HSelf` for callers, so this one contained boundary assertion restates the impl's return.
   const layer = Layer.effect(
     tag,
     Effect.flatMap(
-      Effect.flatMap(hostKey, (protocol) =>
+      Effect.flatMap(nodeKey, (protocol) =>
         Effect.provideService(
           RpcClient.make(group),
           RpcClient.Protocol,
@@ -3274,7 +3274,7 @@ export const runForEachTagScoped: {
 export {
   makeTag as Tag,
   tagFor,
-  makeHost as Host,
+  makeNode as Node,
   connectLayer as connect,
   connectHttp,
   instance,
@@ -3290,5 +3290,5 @@ export {
 // `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
 // exported above under their public names. The whole surface is now a tree-shakeable module
 // namespace: **`import * as Resource from "@nikscripts/effect-pm/Resource"`** — `Resource.Tag`
-// / `Resource.Host` pull only what's used.
+// / `Resource.Node` pull only what's used.
 

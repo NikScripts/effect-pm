@@ -1,6 +1,6 @@
 /**
  * In-memory log relay — a bounded sliding tail + PubSub for live watch. Durable persistence is a
- * separate, opt-in concern (`HostLogs.persistLayer(host)` → {@link LogStore}, keyed by host).
+ * separate, opt-in concern (`NodeLogs.persistLayer(node)` → {@link LogStore}, keyed by node).
  *
  * @module logsRelay
  */

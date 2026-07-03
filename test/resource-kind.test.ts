@@ -4,7 +4,7 @@ import * as Resource from "../src/Resource";
 import * as QueueResource from "../src/QueueContract";
 import * as ScheduledProcess from "../src/ScheduledProcess";
 import * as CustomQueueResource from "../src/CustomQueueContract";
-import { ApiMetrics } from "../src/ApiMetrics";
+import * as ApiMetrics from "../src/ApiMetrics";
 
 // Each contract stamps its canonical kind on the tag, so `Resource.kindOf` classifies a tag
 // without sniffing its spec (and a bare `Resource.Tag` reports no kind).

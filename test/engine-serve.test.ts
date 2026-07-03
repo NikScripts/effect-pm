@@ -35,7 +35,7 @@ const tick = Effect.gen(function* () {
 });
 const cfg = { effect: tick, polling: Polling.spaced(Duration.millis(50)) };
 
-const Host = Resource.httpServer().pipe(
+const Node = Resource.httpServer().pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       ScheduledProcess.serve(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
@@ -50,7 +50,7 @@ const Host = Resource.httpServer().pipe(
 it("engine-serve runs the tick engine per resource, with the dependency isolated", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(Host)));
+      yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(Node)));
       yield* Effect.sleep(Duration.millis(600)); // let both engines tick a few times
 
       // the ENGINES ran (ticks fired — not just handlers mounted), and each saw ITS OWN Dep:

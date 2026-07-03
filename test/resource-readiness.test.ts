@@ -3,10 +3,10 @@ import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
-import * as HostStatus from "../src/HostStatus";
+import * as NodeStatus from "../src/NodeStatus";
 
 // A resource carries its own readiness derivation (here a bare Resource.Tag opts in via
-// `withReadiness`). When it reports "not ready", the host's `/health` returns 503 and `HostStatus`
+// `withReadiness`). When it reports "not ready", the node's `/health` returns 503 and `NodeStatus`
 // reads `degraded` with the per-resource detail — the same aggregate, two faces (SSOT).
 class Warming extends Resource.Tag<Warming>()("readiness/Warming", {
   ping: Resource.effect(Schema.String),
@@ -41,19 +41,19 @@ it("a not-ready resource flips /health to 503 (degraded) with its detail", () =>
     ).pipe(Effect.provide(Server), Effect.scoped),
   ));
 
-it("HostStatus reports the same per-resource readiness (degraded board)", () =>
+it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
   Effect.runPromise(
     withPort((port) =>
       Effect.gen(function* () {
-        const host = yield* HostStatus.Tag;
-        const snap = yield* host.statusNow;
+        const node = yield* NodeStatus.Tag;
+        const snap = yield* node.statusNow;
         expect(snap.status).toBe("degraded");
         expect(snap.resources.length).toBe(1);
         expect(snap.resources[0]?.ready).toBe(false);
         expect(snap.resources[0]?.detail).toBe("warming up");
         expect(snap.resources[0]?.key).toBe("readiness/Warming");
       }).pipe(
-        Effect.provide(HostStatus.clientHttp(`http://127.0.0.1:${port}/rpc`)),
+        Effect.provide(NodeStatus.clientHttp(`http://127.0.0.1:${port}/rpc`)),
         Effect.scoped,
       ),
     ).pipe(Effect.provide(Server), Effect.scoped),
@@ -107,38 +107,38 @@ it("the factory/base check still applies — a stopped worker is not ready even 
   Effect.runPromise(checkWorker(true, false)).then((r) =>
     expect(r).toEqual({ ready: false, detail: "stopped" })));
 
-// Regression: a host-bound tag must be able to extend readiness via `.pipe`. A `HostBoundTag` is a
+// Regression: a node-bound tag must be able to extend readiness via `.pipe`. A `NodeBoundTag` is a
 // distinct interface, so `.pipe`'s `this` assignment to a bare `ResourceTag<any, any>` used to fail
-// on its invariant `[groupSym]` map; the data-last `withReadiness` overload now names HostBoundTag.
-class DepHost extends Resource.Host<DepHost>("dep/host") {}
-class HostedWorker extends Resource.Tag<HostedWorker>()(
-  "dep/HostedWorker",
+// on its invariant `[groupSym]` map; the data-last `withReadiness` overload now names NodeBoundTag.
+class DepNode extends Resource.Node<DepNode>("dep/node") {}
+class NodeWorker extends Resource.Tag<NodeWorker>()(
+  "dep/NodeWorker",
   { running: Resource.effect(Schema.Boolean) },
-  { host: DepHost },
+  { node: DepNode },
 ).pipe(
   Resource.withReadiness((svc) =>
     Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
   ),
 ) {}
 
-it("a host-bound tag can extend readiness via .pipe (regression)", () =>
+it("a node-bound tag can extend readiness via .pipe (regression)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const w = yield* HostedWorker;
-      return yield* Resource.readinessCheck(HostedWorker, w);
-    }).pipe(Effect.provide(Resource.layer(HostedWorker, { running: Effect.succeed(false) }))),
+      const w = yield* NodeWorker;
+      return yield* Resource.readinessCheck(NodeWorker, w);
+    }).pipe(Effect.provide(Resource.layer(NodeWorker, { running: Effect.succeed(false) }))),
   ).then((r) => expect(r).toEqual({ ready: false, detail: "stopped" })));
 
-// Regression: data-first `withReadiness(tag, fn)` accepts a fully-defined host-bound CLASS (a
+// Regression: data-first `withReadiness(tag, fn)` accepts a fully-defined node-bound CLASS (a
 // `typeof X` constructor). The data-first overloads are inferred (like `client`/`layer`), so the class
-// matches and its host is preserved in the return.
+// matches and its node is preserved in the return.
 class DataFirstWorker extends Resource.Tag<DataFirstWorker>()(
   "dep/DataFirstWorker",
   { running: Resource.effect(Schema.Boolean) },
-  { host: DepHost },
+  { node: DepNode },
 ) {}
 
-it("data-first withReadiness accepts a host-bound class (regression)", () => {
+it("data-first withReadiness accepts a node-bound class (regression)", () => {
   const tag = Resource.withReadiness(DataFirstWorker, (svc) =>
     Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
   );

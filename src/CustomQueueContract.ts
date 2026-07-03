@@ -12,12 +12,12 @@ import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
-  HostKey,
+  NodeKey,
   ImplOf,
   LocalCapability,
   Method,
   MethodAnnotations,
-  HostBoundTag,
+  NodeBoundTag,
   ResourceTag,
   ServeEntry,
 } from "./Resource";
@@ -195,7 +195,7 @@ export const customQueueControlSpec = {
   },
 };
 
-/** Tag options beyond lane config (description, host). @public */
+/** Tag options beyond lane config (description, node). @public */
 export type CustomQueueTagOptions = {
   readonly description?: string;
 };
@@ -206,16 +206,16 @@ type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
 const namedLevelsFromNames = (names: readonly string[]): Record<string, number> =>
   Object.fromEntries(names.map((name, index) => [name, index]));
 
-const isTagOptions = (value: object): value is CustomQueueTagOptions & { readonly host?: HostKey<unknown> } =>
-  "description" in value || "host" in value;
+const isTagOptions = (value: object): value is CustomQueueTagOptions & { readonly node?: NodeKey<unknown> } =>
+  "description" in value || "node" in value;
 
 const resolveTagLevelConfig = (
   levelCountOrNames: number | readonly string[],
-  fourth?: Readonly<Record<string, number>> | (CustomQueueTagOptions & { readonly host?: HostKey<unknown> }),
-  fifth?: CustomQueueTagOptions & { readonly host?: HostKey<unknown> },
+  fourth?: Readonly<Record<string, number>> | (CustomQueueTagOptions & { readonly node?: NodeKey<unknown> }),
+  fifth?: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> },
 ): {
   readonly levelConfig: CustomQueueTagLevelConfig;
-  readonly tagOptions: CustomQueueTagOptions & { readonly host?: HostKey<unknown> };
+  readonly tagOptions: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> };
 } => {
   if (typeof levelCountOrNames === "number") {
     const namedLevels =
@@ -352,14 +352,14 @@ export const customQueueTag = <Self>() => {
     itemSchema: Schema.Struct<F>,
     levelCount: number,
     namedLevels: Readonly<Record<string, number>> | undefined,
-    options: CustomQueueTagOptions & { readonly host: HostKey<HSelf> },
-  ): HostBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
+    options: CustomQueueTagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     itemSchema: Schema.Struct<F>,
     levelNames: readonly string[],
-    options: CustomQueueTagOptions & { readonly host: HostKey<HSelf> },
-  ): HostBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
+    options: CustomQueueTagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     itemSchema: Schema.Struct<F>,
@@ -379,21 +379,21 @@ export const customQueueTag = <Self>() => {
     levelCountOrNames: number | readonly string[],
     fourth?:
       | Readonly<Record<string, number>>
-      | (CustomQueueTagOptions & { readonly host?: HostKey<unknown> }),
-    fifth?: CustomQueueTagOptions & { readonly host?: HostKey<unknown> },
+      | (CustomQueueTagOptions & { readonly node?: NodeKey<unknown> }),
+    fifth?: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> },
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>> {
     const { levelConfig, tagOptions } = resolveTagLevelConfig(
       levelCountOrNames,
       fourth,
       fifth,
     );
-    const { description, host, ...rest } = tagOptions;
+    const { description, node, ...rest } = tagOptions;
     const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
     void rest;
     const tag =
-      host === undefined
+      node === undefined
         ? Resource.Tag<Self>()(key, spec, { description, kind })
-        : Resource.Tag<Self>()(key, spec, { description, kind, host });
+        : Resource.Tag<Self>()(key, spec, { description, kind, node });
     // Readiness from the queue's own status (SSOT): ready iff the worker pool is running.
     // `status` is a live `value` — a plain, always-current property (no effect to run).
     return Resource.withReadiness(tag, (svc) =>

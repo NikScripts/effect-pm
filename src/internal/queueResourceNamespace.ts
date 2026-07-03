@@ -3,10 +3,10 @@
  *
  * The single **`QueueResource`** namespace — the public `@nikscripts/effect-pm/QueueResource`
  * subpath resolves here (not the engine), so `QueueResource.Tag` is the **contract** tag (the
- * one with the `host` overload + `itemSchema`), consumed as a tree-shakeable module namespace:
+ * one with the `node` overload + `itemSchema`), consumed as a tree-shakeable module namespace:
  *
  *   import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
- *   class Mail extends QueueResource.Tag<Mail>()("@app/Mail", JobSchema, { host: MyHost }) {}
+ *   class Mail extends QueueResource.Tag<Mail>()("@app/Mail", JobSchema, { node: MyNode }) {}
  *
  * - `Tag` / `configure` come from the **light** contract (`QueueContract`).
  * - `layer` / `serve` / `server` / `serveHttp` / `serverEntry` are the runtime verbs (pull the engine

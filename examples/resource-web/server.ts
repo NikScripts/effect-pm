@@ -1,14 +1,14 @@
 /**
  * @module examples/resource-web/server
  *
- * The **WNBA host** — a node process serving the hub's box-score queue and live-score poller over
- * http on one port, plus the `HostStatus` that `serveAllHttp` auto-mounts. The browser dashboard
- * reaches it via `Resource.connectHttp(WnbaHost, …)` (vite proxies `/rpc` here), so the top-right
- * host status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
+ * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over
+ * http on one port, plus the `NodeStatus` that `serveAllHttp` auto-mounts. The browser dashboard
+ * reaches it via `Resource.connectHttp(WnbaNode, …)` (vite proxies `/rpc` here), so the top-right
+ * node status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
  * `pnpm run example:resource-web`).
  */
 import { Clock, Console, DateTime, Duration, Effect, Layer, Random, Stream } from "effect";
-// A node host entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
+// A node node entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -17,34 +17,34 @@ import * as Resource from "../../src/Resource";
 import { serverEntry as queueEntry } from "../../src/QueueContract";
 import { serverEntry as processEntry } from "../../src/ScheduledProcess";
 import { HistoryStore } from "../../src/HistoryStore";
-import { HostLogs } from "../../src/HostLogs";
+import { NodeLogs } from "../../src/NodeLogs";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, HOST_PORTS, LiveHost, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsHost, WnbaHost, WorkerPool } from "./hub";
-import { Combine, combineQuery } from "../../src/MultiHost";
+import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
+import { Combine, combineQuery } from "../../src/MultiNode";
 
 const WNBA_PORT = HOST_PORTS.wnba;
 const LIVE_PORT = HOST_PORTS.live;
 const STATS_PORT = HOST_PORTS.stats;
 
 // The WorkerPool impl, Effect form (spec-checked by `serverEntry`): resolve `peers` once, then
-// `fleetActive` folds the peers' `active` + this host's own. `own` varies per host so the fleet total
+// `fleetActive` folds the peers' `active` + this node's own. `own` varies per node so the fleet total
 // is meaningful; the impl's `peers` requirement is discharged by `peersLayer` at each serve.
 const workerPoolImpl = (own: number) =>
   Effect.gen(function* () {
     const peers = yield* Resource.peers(WorkerPool);
-    const self = yield* Resource.selfHost(WorkerPool); // which host am I — no hand-threaded key
+    const self = yield* Resource.selfNode(WorkerPool); // which node am I — no hand-threaded key
     return {
       active: Effect.succeed(own),
       fleetActive: combineQuery(peers, (p) => p.active, Combine.sum).pipe(
         Effect.map((others) => own + others),
       ),
-      // a per-host map: peers folded by host + this instance's own row, keyed by `self`
-      activeByHost: Effect.gen(function* () {
-        const byHost = yield* combineQuery(peers, (p) => p.active, Combine.byHost);
-        return { ...byHost, [self]: own };
+      // a per-node map: peers folded by node + this instance's own row, keyed by `self`
+      activeByNode: Effect.gen(function* () {
+        const byNode = yield* combineQuery(peers, (p) => p.active, Combine.byNode);
+        return { ...byNode, [self]: own };
       }),
     };
   });
@@ -73,7 +73,7 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
   all(...wnbaGames.map((g) => window(g.id, toDate(g.tipOff - 20 * MIN), toDate(g.tipOff + 60 * MIN)))),
 );
 
-// ── ScoresApi — synthetic API-usage windows (served on WnbaHost) ─────────────
+// ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
 // A real consumer instruments its outbound client (`HttpApiResource.instrumentEndpoints`) and serves
 // `ApiMetrics.serverEntry(tag)` (fed from the Metric registry). For the fixture there's no real
 // client, so we hand the served tag a mock `{ metrics, usageNow }` with synthetic windows — a
@@ -170,30 +170,30 @@ const scoresDbImpl = {
 };
 
 // Dogfood the durable log storage: after the live-score poller has logged a few times, read its logs
-// back out of LogStore two ways — every line on the live host, and just the poller's lines (by
-// resource). Proves the persist → query round-trip. (Provided into liveHost, which has the LogStore.)
+// back out of LogStore two ways — every line on the live node, and just the poller's lines (by
+// resource). Proves the persist → query round-trip. (Provided into liveNode, which has the LogStore.)
 const logStorageDemo = Layer.effectDiscard(
   Effect.forkScoped(
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.seconds(8));
-      const onHost = yield* HostLogs.byHost("live", { limit: 500 });
-      const fromPoller = yield* HostLogs.byResource({
+      const onNode = yield* NodeLogs.byNode("live", { limit: 500 });
+      const fromPoller = yield* NodeLogs.byResource({
         processId: "wnba/LiveScorePoller",
       });
       // Console.log (direct stdout) so the demo is visible regardless of the serve's logger routing
       yield* Console.log(
-        `[logs] durable storage — live host holds ${onHost.length} lines; ` +
+        `[logs] durable storage — live node holds ${onNode.length} lines; ` +
           `${fromPoller.length} are LiveScorePoller's (by resource)`,
       );
     }),
   ),
 );
 
-// Three hosts in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
-// API on WnbaHost, the live-score poller on LiveHost, the play-by-play queue on StatsHost. Each
+// Three nodes in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
+// API on WnbaNode, the live-score poller on LiveNode, the play-by-play queue on StatsNode. Each
 // `serveAllHttp` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
 // fight over one HttpServer).
-const wnbaHost = Resource.serveAllHttp([
+const wnbaNode = Resource.serveAllHttp([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
     concurrency: 3,
@@ -208,25 +208,25 @@ const wnbaHost = Resource.serveAllHttp([
   // Effect-form `serverEntry` spec-checks the impl and surfaces its `ScoresDb` requirement (provided
   // below) instead of a bare `{ tag, impl }` literal that would erase it.
   Resource.serverEntry(ScoresDb, ScoresDb),
-  // the multi-host WorkerPool, served here + on the other two hosts; `peersLayer` (below) lets this
+  // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
   Resource.serverEntry(WorkerPool, workerPoolImpl(5)),
 ]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, WnbaHost)),
+  Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
   // live relay (dashboard log stream) + durable storage: persistLayer("wnba") batches every captured
-  // line into LogStore bucketed by host; ProcessStorage backs LogStore (memory here — swap for sqlite/
-  // redis for cross-restart history). Queryable via HostLogs.byHost("wnba") / byResource({ queueId }).
-  Layer.provide(HostLogs.layer),
-  Layer.provide(HostLogs.persistLayer("wnba")),
+  // line into LogStore bucketed by node; ProcessStorage backs LogStore (memory here — swap for sqlite/
+  // redis for cross-restart history). Queryable via NodeLogs.byNode("wnba") / byResource({ queueId }).
+  Layer.provide(NodeLogs.layer),
+  Layer.provide(NodeLogs.persistLayer("wnba")),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
-const liveHost = Resource.serveAllHttp([
+const liveNode = Resource.serveAllHttp([
   processEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
@@ -235,18 +235,18 @@ const liveHost = Resource.serveAllHttp([
   }),
   Resource.serverEntry(WorkerPool, workerPoolImpl(3)),
 ]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, LiveHost)),
+  Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(HostLogs.layer),
+  Layer.provide(NodeLogs.layer),
   // provideMerge (not provide): these install a logger / fork a fiber and provide no service, so a
   // bare provide would be pruned as unused — merging forces the build.
-  Layer.provideMerge(HostLogs.persistLayer("live")),
+  Layer.provideMerge(NodeLogs.persistLayer("live")),
   Layer.provideMerge(logStorageDemo),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
-const statsHost = Resource.serveAllHttp([
+const statsNode = Resource.serveAllHttp([
   queueEntry(PlayByPlayQueue, {
     effect: importWorker,
     concurrency: 3,
@@ -254,28 +254,28 @@ const statsHost = Resource.serveAllHttp([
   }),
   Resource.serverEntry(WorkerPool, workerPoolImpl(4)),
 ]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, StatsHost)),
+  Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(HostLogs.layer),
-  Layer.provide(HostLogs.persistLayer("stats")),
+  Layer.provide(NodeLogs.layer),
+  Layer.provide(NodeLogs.persistLayer("stats")),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
 );
 
-// Each host is its own forked scope (NOT merged) so each gets its own HttpRouter — merging them
+// Each node is its own forked scope (NOT merged) so each gets its own HttpRouter — merging them
 // would register `/rpc` twice on one shared router. One process, three independent servers.
 const program = Effect.gen(function* () {
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(wnbaHost)));
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(liveHost)));
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(statsHost)));
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(wnbaNode)));
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(liveNode)));
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(statsNode)));
   yield* Effect.logInfo(
     `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,
   );
-  // WorkerPool (hostless, `multiHost` set) is served on all three hosts with `peersLayer`, so a client
-  // hitting any host gets `fleetActive` = that host's `active` + its peers' (5 + 3 + 4 = 12); the peer
+  // WorkerPool (nodeless, `distributed` set) is served on all three nodes with `peersLayer`, so a client
+  // hitting any node gets `fleetActive` = that node's `active` + its peers' (5 + 3 + 4 = 12); the peer
   // connections are established when each `peersLayer` builds above. (The fold is proven end-to-end in
-  // `test/multi-host-peers-http.test.ts`.)
-  yield* Effect.logInfo("WorkerPool: multi-host, served on wnba/live/stats (fleetActive folds active)");
+  // `test/multi-node-peers-http.test.ts`.)
+  yield* Effect.logInfo("WorkerPool: multi-node, served on wnba/live/stats (fleetActive folds active)");
   return yield* Effect.never;
 });
 

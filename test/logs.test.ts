@@ -24,7 +24,7 @@ describe("LogStore", () => {
         level: "Info",
         message: "sync tick",
         annotations: {
-          [LogAnnotationKeys.host]: "workshop-group",
+          [LogAnnotationKeys.node]: "workshop-group",
           [LogAnnotationKeys.processId]: "billing/sync",
         },
         spans: [],

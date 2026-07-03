@@ -5,10 +5,10 @@ import { Group, Resource, ScheduledProcess, specOf, methodMeta } from "../src";
 // A dashboard/TUI needs three things from the package, all proven here:
 //  1. walk a Group.Tag tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
-//  3. drive it over the wire (Resource.client / connectHttp — proven in the host/topology tests).
-class MiniHost extends Resource.Host<MiniHost>("ui/miniHost") {}
+//  3. drive it over the wire (Resource.client / connectHttp — proven in the node/topology tests).
+class MiniNode extends Resource.Node<MiniNode>("ui/miniNode") {}
 class Roster extends ScheduledProcess.Tag<Roster>()("ui/Roster") {}
-class Poller extends ScheduledProcess.Tag<Poller>()("ui/Poller", { host: MiniHost }) {}
+class Poller extends ScheduledProcess.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
 class Nwsl extends Group.Tag<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}
 class Hub extends Group.Tag<Hub>("ui/Hub")({ Nwsl }) {}
 

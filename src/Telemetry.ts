@@ -1,7 +1,7 @@
 /**
- * Telemetry — serve a host's whole Effect `Metric` registry as a Resource, for **custom** in-app use
+ * Telemetry — serve a node's whole Effect `Metric` registry as a Resource, for **custom** in-app use
  * (dashboards, TUIs, fleet pages, a `pm metrics` command). The thin counterpart to OTEL export: same
- * source (the per-host `Metric` registry), different sink. OTEL is the professional path — wire
+ * source (the per-node `Metric` registry), different sink. OTEL is the professional path — wire
  * `@effect/opentelemetry` and point OTLP at Sentry / Grafana / anything; Telemetry is for building
  * something custom without external infra. See `docs/guides/telemetry.md`.
  *
@@ -23,8 +23,8 @@ import {
   layer as resourceLayer,
   effect,
   stream,
-  type HostBoundTag,
-  type HostKey,
+  type NodeBoundTag,
+  type NodeKey,
   type ResourceTag,
   type ServeEntry,
 } from "./Resource";
@@ -68,10 +68,10 @@ export interface HistogramDatum {
   readonly sum: number;
 }
 
-/** One metric from a host's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
+/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
 export type MetricDatum = CounterDatum | GaugeDatum | HistogramDatum;
 
-/** A host's whole `Metric` registry, point-in-time. @public */
+/** A node's whole `Metric` registry, point-in-time. @public */
 export interface MetricsSnapshot {
   readonly ts: number;
   readonly metrics: ReadonlyArray<MetricDatum>;
@@ -194,10 +194,10 @@ export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.map(
 
 const telemetrySpec = {
   snapshot: effect(metricsSnapshot).annotate({
-    description: "Point-in-time snapshot of this host's whole Metric registry.",
+    description: "Point-in-time snapshot of this node's whole Metric registry.",
   }),
   live: stream(metricsSnapshot).annotate({
-    description: "Periodic push (~1s) of this host's Metric registry.",
+    description: "Periodic push (~1s) of this node's Metric registry.",
   }),
 };
 
@@ -210,38 +210,38 @@ export const kind = "@nikscripts/effect-pm/Telemetry";
 /** A Telemetry instance tag. @public */
 export type TelemetryTag<Self> = ResourceTag<Self, TelemetrySpec>;
 
-/** A host-bound {@link TelemetryTag} — served + reached on that host. @public */
-export type TelemetryHostTag<Self, HSelf> = HostBoundTag<Self, TelemetrySpec, HSelf>;
+/** A node-bound {@link TelemetryTag} — served + reached on that node. @public */
+export type TelemetryNodeTag<Self, HSelf> = NodeBoundTag<Self, TelemetrySpec, HSelf>;
 
 /** Tag-construction options for {@link Tag}. @public */
 export interface TelemetryConstructOptions<HSelf = never> {
-  readonly host?: HostKey<HSelf>;
+  readonly node?: NodeKey<HSelf>;
   readonly description?: string;
 }
 
 const defaultKey = "telemetry";
-const keyFor = (host: HostKey<unknown> | undefined): string =>
-  host === undefined ? defaultKey : `${host.key}/${defaultKey}`;
+const keyFor = (node: NodeKey<unknown> | undefined): string =>
+  node === undefined ? defaultKey : `${node.key}/${defaultKey}`;
 
 /**
- * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}` (hostless
- * — the dashboard reaches each host via `Resource.client(FleetTelemetry, host)`), or
- * `…Tag<FleetTelemetry>()({ host: MiniHost })` to bind + serve it on a specific host.
+ * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}` (nodeless
+ * — the dashboard reaches each node via `Resource.client(FleetTelemetry, node)`), or
+ * `…Tag<FleetTelemetry>()({ node: MiniNode })` to bind + serve it on a specific node.
  *
  * @public
  */
 export const Tag = <Self>() => {
   function build(): TelemetryTag<Self>;
   function build<HSelf>(options: {
-    readonly host: HostKey<HSelf>;
+    readonly node: NodeKey<HSelf>;
     readonly description?: string;
-  }): TelemetryHostTag<Self, HSelf>;
+  }): TelemetryNodeTag<Self, HSelf>;
   function build(
     options?: TelemetryConstructOptions<unknown>,
   ): TelemetryTag<Self> {
-    const host = options?.host;
-    const key = keyFor(host);
-    return host === undefined
+    const node = options?.node;
+    const key = keyFor(node);
+    return node === undefined
       ? resourceTag<Self>()(key, telemetrySpec, {
           kind,
           description: options?.description,
@@ -249,7 +249,7 @@ export const Tag = <Self>() => {
       : resourceTag<Self>()(key, telemetrySpec, {
           kind,
           description: options?.description,
-          host,
+          node,
         });
   }
   return build;
@@ -316,7 +316,7 @@ export const layer = <Self>(
   );
 
 /**
- * A `serveAllHttp` entry for a Telemetry tag — serve it on a host like a queue/process, then reach it
+ * A `serveAllHttp` entry for a Telemetry tag — serve it on a node like a queue/process, then reach it
  * with `Resource.client`.
  *
  * @public

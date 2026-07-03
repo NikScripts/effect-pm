@@ -28,7 +28,7 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Host = Resource.serveAllHttp([
+const Node = Resource.serveAllHttp([
   Telemetry.serverEntry(FleetTelemetry, { interval: Duration.millis(50) }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
@@ -56,7 +56,7 @@ it("serves the Metric registry — a labeled counter round-trips via snapshot ov
         expect(probe.count).toBe(3);
         expect(probe.labels.probe).toBe("roster");
       }
-    }).pipe(Effect.provide(Host), Effect.scoped),
+    }).pipe(Effect.provide(Node), Effect.scoped),
   ));
 
 it("live streams sampled snapshots (in-process)", () =>

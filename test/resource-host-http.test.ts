@@ -4,18 +4,18 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
-// Host-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
-// transport (EdgeHost), the server is one `Resource.serveHttp` call, and the client wires the
-// host with one `Resource.connectHttp`. Ship ONLY the tag — `Resource.client(tag)` resolves
-// where to connect from the host. Serialization defaults to ndjson on BOTH helpers, so the
+// Node-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
+// transport (EdgeNode), the server is one `Resource.serveHttp` call, and the client wires the
+// node with one `Resource.connectHttp`. Ship ONLY the tag — `Resource.client(tag)` resolves
+// where to connect from the node. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
-class EdgeHost extends Resource.Host<EdgeHost>("hostHttp/edge") {}
-class Echo extends Resource.Tag<Echo>()("hostHttp/Echo", 
+class EdgeNode extends Resource.Node<EdgeNode>("nodeHttp/edge") {}
+class Echo extends Resource.Tag<Echo>()("nodeHttp/Echo", 
   {
     ping: Resource.effect(Schema.String),
     shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
   },
-  { host: EdgeHost },
+  { node: EdgeNode },
 ) {}
 
 // the whole server, collapsed — only the platform HttpServer is left to provide
@@ -24,14 +24,14 @@ const ServerLive = Resource.serveHttp(Echo, {
   shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
 }).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
-it("drives a host-bearing resource over real http (ship only the tag)", () => {
+it("drives a node-bearing resource over real http (ship only the tag)", () => {
   const program = Effect.gen(function* () {
-    // the test server binds an ephemeral port; wire the host's transport against it
+    // the test server binds an ephemeral port; wire the node's transport against it
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
-    const EdgeLive = Resource.connectHttp(EdgeHost, {
+    const EdgeLive = Resource.connectHttp(EdgeNode, {
       url: `http://127.0.0.1:${port}/rpc`,
     });
 
@@ -40,7 +40,7 @@ it("drives a host-bearing resource over real http (ship only the tag)", () => {
       expect(yield* echo.ping).toBe("pong");
       expect(yield* echo.shout({ msg: "hi" })).toBe("HI");
     }).pipe(
-      // ship only the tag: client(Echo) requires EdgeHost; connectHttp(EdgeHost, …) supplies it.
+      // ship only the tag: client(Echo) requires EdgeNode; connectHttp(EdgeNode, …) supplies it.
       Effect.provide(Resource.client(Echo).pipe(Layer.provide(EdgeLive))),
       Effect.scoped,
     );

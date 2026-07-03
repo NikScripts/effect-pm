@@ -35,17 +35,17 @@ import {
   type QueueBundle,
   type QueueTag,
   type ScheduleEntry,
-  type HostRef,
-  hostsOf,
+  type NodeRef,
+  nodesOf,
   kindOf,
   leafTags,
   queueLeaves,
-  resourceHostRef,
+  resourceNodeRef,
   tagWireKey,
 } from "./data";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
-import type { Status as HostStatusValue } from "../HostStatus";
-import { useApiBundle, useHostBundle, useProcessBundle, useQueueBundle } from "./runtime";
+import type { Status as NodeStatusValue } from "../NodeStatus";
+import { useApiBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -272,7 +272,7 @@ const METRICS = {
 type MetricKey = keyof typeof METRICS;
 
 // Time windows the chart can show — each filters the deep metrics history by the point's real
-// (server) timestamp, so the curve's span actually changes (backed by the host's history store).
+// (server) timestamp, so the curve's span actually changes (backed by the node's history store).
 // Only the windows the data actually reaches are offered (see `availableWindows`).
 const ALL_MS = Number.POSITIVE_INFINITY;
 const WINDOWS = [
@@ -1288,12 +1288,12 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
   );
 };
 
-// ── Host widgets ─────────────────────────────────────────────────────────────
-// Hosts are read straight off the tags (`hostsOf`): a dot per host the group's resources are bound
-// to. Each dot's colour + popover come from that host's `HostStatus` (over its own transport).
+// ── Node widgets ─────────────────────────────────────────────────────────────
+// Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
+// to. Each dot's colour + popover come from that node's `NodeStatus` (over its own transport).
 
-/** A host's overall colour: grey while connecting, red down, amber degraded, green ok. @since 1.0.0 */
-const hostColor = (s: HostStatusValue | undefined): string =>
+/** A node's overall colour: grey while connecting, red down, amber degraded, green ok. @since 1.0.0 */
+const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
 /** Format an uptime span (ms) compactly. @since 1.0.0 */
@@ -1304,11 +1304,11 @@ const fmtUptime = (ms: number): string => {
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 };
 
-/** One host indicator dot + tap-for-info popover (tap again, or "view host", for the full screen).
+/** One node indicator dot + tap-for-info popover (tap again, or "view node", for the full screen).
  *  @since 1.0.0 */
 /** Compact "barrel stack" pip layout: dots in bottom-heavy, centered rows (≤3 rows) — upper rows
  *  nestle over the gaps below, so 3 → 1 over 2, 4 → 2-on-2, etc. Dots are sized **larger when there
- *  are fewer** hosts; beyond 9 the rows just keep widening. @since 1.0.0 */
+ *  are fewer** nodes; beyond 9 the rows just keep widening. @since 1.0.0 */
 const pipLayout = (
   n: number,
 ): {
@@ -1356,28 +1356,28 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One host's pip — a coloured dot, colour from its HostStatus. @since 1.0.0 */
-const HostPip = (props: {
-  readonly host: HostRef;
+/** One node's pip — a coloured dot, colour from its NodeStatus. @since 1.0.0 */
+const NodePip = (props: {
+  readonly node: NodeRef;
   readonly size: string;
 }): React.ReactElement => {
-  const r = useAtomValue(useHostBundle(props.host).status);
+  const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   React.useEffect(() => {
-    if (AsyncResult.isFailure(r)) dlog("host", props.host.id, "FAILURE", Cause.pretty(r.cause));
-    else dlog("host", props.host.id, asyncTag(r));
-  }, [r, props.host.id]);
+    if (AsyncResult.isFailure(r)) dlog("node", props.node.id, "FAILURE", Cause.pretty(r.cause));
+    else dlog("node", props.node.id, asyncTag(r));
+  }, [r, props.node.id]);
   return (
     <span
       className="rounded-full"
-      style={{ width: props.size, height: props.size, backgroundColor: hostColor(s) }}
+      style={{ width: props.size, height: props.size, backgroundColor: nodeColor(s) }}
     />
   );
 };
 
-/** Static preview of the host die at a given count — the barrel-stack pip pattern only (no live
+/** Static preview of the node die at a given count — the barrel-stack pip pattern only (no live
  *  status), for examples/docs that want to show the 1..9 shapes. @since 1.0.0 */
-export const HostDots = (props: { readonly count: number }): React.ReactElement => {
+export const NodeDots = (props: { readonly count: number }): React.ReactElement => {
   const layout = pipLayout(props.count);
   const rows = pipRows(
     Array.from({ length: props.count }, (_, i) => i),
@@ -1414,13 +1414,13 @@ const HealthStat = (props: {
   </div>
 );
 
-/** One resource's readiness row — pip (green ready / amber degraded) + name + (kind or host) + the
+/** One resource's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
  *  root-cause detail when degraded. Tap to open that resource's detail page. @since 1.0.0 */
 const ResourceReadinessRow = (props: {
-  readonly res: HostStatusValue["resources"][number];
-  readonly host: HostRef;
-  /** Show the host id on the right (cross-host "needs attention" list) instead of the kind. */
-  readonly showHost?: boolean;
+  readonly res: NodeStatusValue["resources"][number];
+  readonly node: NodeRef;
+  /** Show the node id on the right (cross-node "needs attention" list) instead of the kind. */
+  readonly showNode?: boolean;
   readonly onOpen: () => void;
 }): React.ReactElement => {
   const { res } = props;
@@ -1440,7 +1440,7 @@ const ResourceReadinessRow = (props: {
           <span className="flex items-baseline justify-between gap-2">
             <span className="truncate font-medium">{displayName(res.key.split("/").pop() ?? res.key)}</span>
             <span className="shrink-0 text-[0.7rem] text-muted-foreground">
-              {props.showHost === true ? displayName(props.host.id) : kindShort}
+              {props.showNode === true ? displayName(props.node.id) : kindShort}
             </span>
           </span>
           {!res.ready && res.detail !== undefined ? (
@@ -1455,12 +1455,12 @@ const ResourceReadinessRow = (props: {
   );
 };
 
-/** One host's card on the health board — status dot + name + stats (uptime · ready/total · resource
- *  count), then its full resource roster (each tappable). Tap the header for the host's full screen.
+/** One node's card on the health board — status dot + name + stats (uptime · ready/total · resource
+ *  count), then its full resource roster (each tappable). Tap the header for the node's full screen.
  *  Pure: the status value is read once by {@link HealthBoard} and passed in. @since 1.0.0 */
-const HostHealthCard = (props: {
-  readonly host: HostRef;
-  readonly s: HostStatusValue | undefined;
+const NodeHealthCard = (props: {
+  readonly node: NodeRef;
+  readonly s: NodeStatusValue | undefined;
   readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
   readonly onOpenResource: (resourceKey: string) => void;
@@ -1475,9 +1475,9 @@ const HostHealthCard = (props: {
         onClick={props.onOpen}
         className="flex w-full items-center gap-2.5 rounded-t-lg px-2 py-2 text-left hover:bg-muted"
       >
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: hostColor(s) }} />
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: nodeColor(s) }} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{displayName(props.host.id)}</span>
+          <span className="block truncate font-medium">{displayName(props.node.id)}</span>
           <span className="mt-0.5 block text-[0.7rem] leading-tight text-muted-foreground">
             {s !== undefined
               ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.resourceCount} resource${s.resourceCount === 1 ? "" : "s"}`
@@ -1494,7 +1494,7 @@ const HostHealthCard = (props: {
               {ready}/{total}
             </span>
           </div>
-          <Sparkline points={props.history} color={hostColor(s)} />
+          <Sparkline points={props.history} color={nodeColor(s)} />
         </div>
       ) : null}
       {s !== undefined && s.resources.length > 0 ? (
@@ -1503,7 +1503,7 @@ const HostHealthCard = (props: {
             <ResourceReadinessRow
               key={res.key}
               res={res}
-              host={props.host}
+              node={props.node}
               onOpen={() => props.onOpenResource(res.key)}
             />
           ))}
@@ -1513,25 +1513,25 @@ const HostHealthCard = (props: {
   );
 };
 
-/** The single host-status **die** button (top-right): one pip per host, coloured by its status — a die
- *  face for 1–9 hosts, then 3 rows + more columns. Tap to open the **health board** (full screen).
- *  Renders nothing for a hostless (local) group. @since 1.0.0 */
-export const HostBar = (props: {
+/** The single node-status **die** button (top-right): one pip per node, coloured by its status — a die
+ *  face for 1–9 nodes, then 3 rows + more columns. Tap to open the **health board** (full screen).
+ *  Renders nothing for a nodeless (local) group. @since 1.0.0 */
+export const NodeBar = (props: {
   readonly group: GroupNode;
   readonly onOpen: () => void;
 }): React.ReactElement | null => {
-  const hosts = hostsOf(props.group);
-  const ids = hosts.map((h) => h.id).join(", ");
+  const nodes = nodesOf(props.group);
+  const ids = nodes.map((h) => h.id).join(", ");
   React.useEffect(() => {
-    dlog("hostBar: hosts =", hosts.length, ids === "" ? "(none)" : ids);
-  }, [hosts.length, ids]);
-  if (hosts.length === 0) return null;
-  const layout = pipLayout(hosts.length);
-  const rowGroups = pipRows(hosts, layout.rows);
+    dlog("nodeBar: nodes =", nodes.length, ids === "" ? "(none)" : ids);
+  }, [nodes.length, ids]);
+  if (nodes.length === 0) return null;
+  const layout = pipLayout(nodes.length);
+  const rowGroups = pipRows(nodes, layout.rows);
   return (
     <button
       type="button"
-      aria-label={`${hosts.length} host${hosts.length === 1 ? "" : "s"} — open health board`}
+      aria-label={`${nodes.length} node${nodes.length === 1 ? "" : "s"} — open health board`}
       onClick={props.onOpen}
       className="block shrink-0 p-1 transition-transform active:scale-95"
     >
@@ -1539,7 +1539,7 @@ export const HostBar = (props: {
         {rowGroups.map((row, ri) => (
           <div key={ri} className="flex" style={{ gap: layout.gap }}>
             {row.map((h) => (
-              <HostPip key={h.id} host={h} size={layout.dot} />
+              <NodePip key={h.id} node={h} size={layout.dot} />
             ))}
           </div>
         ))}
@@ -1549,34 +1549,34 @@ export const HostBar = (props: {
 };
 
 /** The full-screen **health board** (opened from the die): a top stat strip, then degraded resources
- *  across **every** host first (with their root-cause detail — tap → that resource's detail), then a
- *  card per host (status · uptime · ready/total · resource count, tap → its full screen) with its full
- *  resource roster. Reads each host's `HostStatus` once (the host list is stable for a group, so the
- *  per-host reads keep a constant hook order; bundles are cached per runtime+host). @since 1.0.0 */
+ *  across **every** node first (with their root-cause detail — tap → that resource's detail), then a
+ *  card per node (status · uptime · ready/total · resource count, tap → its full screen) with its full
+ *  resource roster. Reads each node's `NodeStatus` once (the node list is stable for a group, so the
+ *  per-node reads keep a constant hook order; bundles are cached per runtime+node). @since 1.0.0 */
 export const HealthBoard = (props: {
   readonly group: GroupNode;
   readonly onBack: () => void;
-  readonly onOpenHost: (host: HostRef) => void;
+  readonly onOpenNode: (node: NodeRef) => void;
   readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
-  const hosts = hostsOf(props.group);
-  const rows = hosts.map((host) => {
-    const bundle = useHostBundle(host);
+  const nodes = nodesOf(props.group);
+  const rows = nodes.map((node) => {
+    const bundle = useNodeBundle(node);
     const r = useAtomValue(bundle.status);
     const h = useAtomValue(bundle.health);
     return {
-      host,
+      node,
       s: AsyncResult.isSuccess(r) ? r.value : undefined,
       history: AsyncResult.isSuccess(h) ? h.value : [],
     };
   });
-  const degraded = rows.flatMap(({ host, s }) =>
-    (s?.resources ?? []).filter((x) => !x.ready).map((res) => ({ host, res })),
+  const degraded = rows.flatMap(({ node, s }) =>
+    (s?.resources ?? []).filter((x) => !x.ready).map((res) => ({ node, res })),
   );
   const total = rows.reduce((n, { s }) => n + (s?.resources.length ?? 0), 0);
   const ready = rows.reduce((n, { s }) => n + (s?.resources.filter((x) => x.ready).length ?? 0), 0);
-  const degradedHosts = rows.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
-  const healthy = degradedHosts === 0;
+  const degradedNodes = rows.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
+  const healthy = degradedNodes === 0;
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-y-auto safe-area landscape:h-auto landscape:min-h-[100dvh]">
       <header className="flex items-center gap-2">
@@ -1585,11 +1585,11 @@ export const HealthBoard = (props: {
         </Button>
         <strong className="flex-1 truncate text-base">⬢ Health</strong>
         <span className="text-sm font-medium" style={{ color: healthy ? "#22c55e" : "#eab308" }}>
-          {healthy ? "all healthy" : `⚠ ${degradedHosts}/${hosts.length} degraded`}
+          {healthy ? "all healthy" : `⚠ ${degradedNodes}/${nodes.length} degraded`}
         </span>
       </header>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <HealthStat label="hosts ok" value={`${hosts.length - degradedHosts}/${hosts.length}`} />
+        <HealthStat label="nodes ok" value={`${nodes.length - degradedNodes}/${nodes.length}`} />
         <HealthStat label="resources ready" value={`${ready}/${total}`} />
         <HealthStat
           label="needs attention"
@@ -1603,12 +1603,12 @@ export const HealthBoard = (props: {
             needs attention · {degraded.length}
           </h2>
           <ul className="space-y-0.5">
-            {degraded.map(({ host, res }) => (
+            {degraded.map(({ node, res }) => (
               <ResourceReadinessRow
-                key={`${host.id}:${res.key}`}
+                key={`${node.id}:${res.key}`}
                 res={res}
-                host={host}
-                showHost
+                node={node}
+                showNode
                 onOpen={() => props.onOpenResource(res.key)}
               />
             ))}
@@ -1617,16 +1617,16 @@ export const HealthBoard = (props: {
       ) : null}
       <section>
         <h2 className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          hosts · {hosts.length}
+          nodes · {nodes.length}
         </h2>
         <div className="space-y-2">
-          {rows.map(({ host, s, history }) => (
-            <HostHealthCard
-              key={host.id}
-              host={host}
+          {rows.map(({ node, s, history }) => (
+            <NodeHealthCard
+              key={node.id}
+              node={node}
               s={s}
               history={history}
-              onOpen={() => props.onOpenHost(host)}
+              onOpen={() => props.onOpenNode(node)}
               onOpenResource={props.onOpenResource}
             />
           ))}
@@ -1636,14 +1636,14 @@ export const HealthBoard = (props: {
   );
 };
 
-/** Reads one resource's readiness from its host's `HostStatus` (the host computes it — SSOT). Always
- *  has a host (the public wrapper renders nothing for a hostless tag). Shows **only when degraded** —
+/** Reads one resource's readiness from its node's `NodeStatus` (the node computes it — SSOT). Always
+ *  has a node (the public wrapper renders nothing for a nodeless tag). Shows **only when degraded** —
  *  nothing while ready/connecting, so the banner only takes space when there's a problem. @since 1.0.0 */
 const ReadinessBannerInner = (props: {
   readonly tag: unknown;
-  readonly host: HostRef;
+  readonly node: NodeRef;
 }): React.ReactElement | null => {
-  const r = useAtomValue(useHostBundle(props.host).status);
+  const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const key = tagWireKey(props.tag);
   const readiness = s?.resources.find((x) => x.key === key);
@@ -1660,33 +1660,33 @@ const ReadinessBannerInner = (props: {
       ) : (
         <span className="flex-1" />
       )}
-      <span className="shrink-0 text-muted-foreground">{displayName(props.host.id)}</span>
+      <span className="shrink-0 text-muted-foreground">{displayName(props.node.id)}</span>
     </div>
   );
 };
 
 /** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
- *  read from its host's `HostStatus` (the same SSOT the health board uses). Renders nothing while the
- *  resource is ready/connecting or hostless, so it only appears (pushing content down) on a problem.
+ *  read from its node's `NodeStatus` (the same SSOT the health board uses). Renders nothing while the
+ *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem.
  *  @since 1.0.0 */
 export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const host = resourceHostRef(props.tag);
-  if (host === undefined) return null;
-  return <ReadinessBannerInner tag={props.tag} host={host} />;
+  const node = resourceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <ReadinessBannerInner tag={props.tag} node={node} />;
 };
 
-/** Fullscreen host view: header + each served resource's readiness (tap → that resource's page).
- *  Graphs land with host metrics. @since 1.0.0 */
-export const HostDetail = (props: {
-  readonly host: HostRef;
+/** Fullscreen node view: header + each served resource's readiness (tap → that resource's page).
+ *  Graphs land with node metrics. @since 1.0.0 */
+export const NodeDetail = (props: {
+  readonly node: NodeRef;
   readonly onBack: () => void;
-  /** Open a served resource's detail page, by its wire key (`HostStatus.resources[].key`). */
+  /** Open a served resource's detail page, by its wire key (`NodeStatus.resources[].key`). */
   readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
-  const bundle = useHostBundle(props.host);
+  const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const color = hostColor(s);
+  const color = nodeColor(s);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible">
       <div className="flex items-center gap-2">
@@ -1694,7 +1694,7 @@ export const HostDetail = (props: {
           ← back
         </Button>
         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-        <strong className="flex-1 truncate text-base">{displayName(props.host.id)}</strong>
+        <strong className="flex-1 truncate text-base">{displayName(props.node.id)}</strong>
         <span className="text-sm text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
       </div>
       {s !== undefined ? (
@@ -1733,10 +1733,10 @@ export const HostDetail = (props: {
             <div className="shrink-0 border-b px-3 py-2 text-sm font-semibold">logs</div>
             <LogStream bundle={{ logs: bundle.logs }} className="flex-1 py-1" />
           </div>
-          {/* Pass 2: host metrics graphs (CPU / mem / throughput) land here with HostStatus.metrics. */}
+          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with NodeStatus.metrics. */}
         </>
       ) : (
-        <div className="text-muted-foreground">connecting to host…</div>
+        <div className="text-muted-foreground">connecting to node…</div>
       )}
     </div>
   );

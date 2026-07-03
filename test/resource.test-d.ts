@@ -172,55 +172,55 @@ const _procClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
   Resource.clientInstances(Proc, P1, P2);
 void _procClients;
 
-// ── host in the tag: ship only the tag; the client resolves where to connect ──
-// A host-bearing tag carries its own transport. `Resource.client(tag)` then requires the
-// HOST (not the ambient Protocol), and `Resource.connect(Host, transport)` wires it once.
-class EdgeHost extends Resource.Host<EdgeHost>("test/edge") {}
+// ── node in the tag: ship only the tag; the client resolves where to connect ──
+// A node-bearing tag carries its own transport. `Resource.client(tag)` then requires the
+// HOST (not the ambient Protocol), and `Resource.connect(Node, transport)` wires it once.
+class EdgeNode extends Resource.Node<EdgeNode>("test/edge") {}
 class Hosted extends Resource.Tag<Hosted>()("test/Hosted", 
   { ping: Resource.effect(Schema.String) },
-  { host: EdgeHost },
+  { node: EdgeNode },
 ) {}
 
-// the host-bearing client's only requirement is the host itself.
-const _hostedClient: Layer.Layer<Hosted, never, EdgeHost> =
+// the node-bearing client's only requirement is the node itself.
+const _nodeedClient: Layer.Layer<Hosted, never, EdgeNode> =
   Resource.client(Hosted);
-void _hostedClient;
+void _nodeedClient;
 
-// Resource.connect re-keys an RPC `Protocol` layer under the host.
-const _hostLive: Layer.Layer<EdgeHost> = Resource.connect(EdgeHost, protocolLayer);
-void _hostLive;
+// Resource.connect re-keys an RPC `Protocol` layer under the node.
+const _nodeLive: Layer.Layer<EdgeNode> = Resource.connect(EdgeNode, protocolLayer);
+void _nodeLive;
 
-// full wiring: client(Hosted) needs EdgeHost; host(EdgeHost, …) supplies it → R = never.
-const _hostedRun: Promise<string> = Effect.runPromise(
+// full wiring: client(Hosted) needs EdgeNode; node(EdgeNode, …) supplies it → R = never.
+const _nodeedRun: Promise<string> = Effect.runPromise(
   Effect.flatMap(Hosted, (h) => h.ping).pipe(
     Effect.provide(
       Resource.client(Hosted).pipe(
-        Layer.provide(Resource.connect(EdgeHost, protocolLayer)),
+        Layer.provide(Resource.connect(EdgeNode, protocolLayer)),
       ),
     ),
   ),
 );
-void _hostedRun;
+void _nodeedRun;
 
-// hostless tag: client still takes the ambient Protocol (additive, non-breaking).
-const _hostlessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =
+// nodeless tag: client still takes the ambient Protocol (additive, non-breaking).
+const _nodelessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =
   Resource.client(Counter);
-void _hostlessClient;
+void _nodelessClient;
 
-// ── tagFor with a host: the whole family ships only the tag ──
-// One host baked into the factory → every instance is a host-bearing tag.
-const HostedProc = Resource.tagFor(
-  "hostedProc",
+// ── tagFor with a node: the whole family ships only the tag ──
+// One node baked into the factory → every instance is a node-bearing tag.
+const NodeProc = Resource.tagFor(
+  "nodeedProc",
   { start: Resource.effectFn(Schema.Void) },
-  { host: EdgeHost },
+  { node: EdgeNode },
 );
-class HP1 extends HostedProc<HP1>("@app/hp1") {}
+class HP1 extends NodeProc<HP1>("@app/hp1") {}
 
-// each instance's client requires the family's host, not the ambient Protocol.
-const _hp1Client: Layer.Layer<HP1, never, EdgeHost> = Resource.client(HP1);
+// each instance's client requires the family's node, not the ambient Protocol.
+const _hp1Client: Layer.Layer<HP1, never, EdgeNode> = Resource.client(HP1);
 void _hp1Client;
 
-// a hostless factory's instances keep the ambient-Protocol client (Proc, above).
+// a nodeless factory's instances keep the ambient-Protocol client (Proc, above).
 const _p1Client: Layer.Layer<P1, never, RpcClient.Protocol> =
   Resource.client(P1);
 void _p1Client;

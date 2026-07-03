@@ -20,11 +20,11 @@
  *   events for processes.
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
- *   `server` / `serveHttp` / `Host` switch only the layer). Batteries-included resource kinds build
+ *   `server` / `serveHttp` / `Node` switch only the layer). Batteries-included resource kinds build
  *   on it — **`ScheduledProcess`** and the toolkit queue (from
  *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `server` /
  *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
- *   different hosts). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
+ *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See `docs/guides/toolkit-by-example.md`.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
@@ -35,7 +35,7 @@
  *
  * ## Where to read next
  *
- * - Toolkit by example (every resource/group/host/UI pattern): `docs/guides/toolkit-by-example.md`
+ * - Toolkit by example (every resource/group/node/UI pattern): `docs/guides/toolkit-by-example.md`
  * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
  * - API tables (Process, Polling, Schedule): `docs/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
@@ -46,7 +46,7 @@
  *
  * Every public API lives under a **namespace** in its source module (`Query`,
  * `ResourceConfigure`, …). The root barrel re-exports the same bindings under **short
- * names** (`And`, `Endpoint`, …) so you can choose `import { And }` or `import { Query }`
+ * names** (`And`, `Node`, …) so you can choose `import { And }` or `import { Query }`
  * with `Query.And` — they are identical.
  *
  * ## Dedicated subpaths
@@ -59,7 +59,7 @@
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
  * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
  * **`@nikscripts/effect-pm/Group`**,
- * **`@nikscripts/effect-pm/HostLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
+ * **`@nikscripts/effect-pm/NodeLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
@@ -130,15 +130,7 @@ export {
   type HttpApiResourceConfig,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
-export {
-  ApiMetrics,
-  clientIdOf,
-  clientIdSym,
-  metricsKeyFor,
-  metricsKeySuffix,
-  type ApiMetricsTag,
-  type ApiMetricsTagOptions,
-} from "./ApiMetrics";
+export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
   apiUsageMetrics,
@@ -146,7 +138,6 @@ export {
   type ApiUsageMetrics,
   type ApiUsageSnapshot,
 } from "./ApiUsageSchema";
-export * as ApiMetricsModule from "./ApiMetrics";
 export * as Telemetry from "./Telemetry";
 export {
   DuplicateGroupId,
@@ -160,14 +151,14 @@ export {
   methodMeta,
   specOf,
 } from "./Resource";
-// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Host`
+// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Node`
 // pull only what's used. Import `* as Resource` from the subpath, or `{ Resource }` from here.
 export * as Resource from "./Resource";
 export type {
   AnyLocalMethod,
   AnyMethod,
-  HostKey,
-  HostTagFactory,
+  NodeKey,
+  NodeTagFactory,
   LocalCapability,
   LocalMethod,
   Method,
@@ -290,9 +281,9 @@ export {
   relayWithCaptureLoggerLayer,
   Logs,
 } from "./Logs";
-export { HostLogs } from "./HostLogs";
-export type { HostLogEntry } from "./HostLogs";
-export * as HostStatus from "./HostStatus";
+export { NodeLogs } from "./NodeLogs";
+export type { NodeLogEntry } from "./NodeLogs";
+export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export {
@@ -312,7 +303,7 @@ export type {
 export * as Group from "./Group";
 export {
   LogAnnotationKeys,
-  withHostLogAnnotations,
+  withNodeLogAnnotations,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
   LogContext,

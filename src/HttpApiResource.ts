@@ -5,7 +5,7 @@
  * on the `HttpClient` transport layer (via `HttpClientRunGate.withRunner` applied to
  * `HttpClient.transform`).
  *
- * ## Endpoint usage metrics
+ * ## Node usage metrics
  *
  * Each schema endpoint is wrapped via `HttpApi.reflect` after the client is built.
  * Labels use stable schema names (not raw URLs):

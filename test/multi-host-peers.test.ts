@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiHost";
+import { Combine, combineQuery } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 
 // combined fields are plain queries, tagged `fleet` (so peers exclude them); the layer implements them
@@ -25,7 +25,7 @@ const database = Resource.layer(
   }),
 );
 
-// the per-host peer clients (leaf fields only — peers exclude fleet fields); supplied via peersFrom
+// the per-node peer clients (leaf fields only — peers exclude fleet fields); supplied via peersFrom
 const fakePeers = {
   ebwsl: { connections: Effect.succeed(5) },
   wnba: { connections: Effect.succeed(3) },

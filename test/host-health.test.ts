@@ -5,11 +5,11 @@ import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import * as Resource from "../src/Resource";
 
-// A served host exposes a plain HTTP `/health` readiness route alongside `/rpc` — so a dumb probe
-// (deploy gate, load balancer) gets a status code, and the JSON body lists the host's resources.
+// A served node exposes a plain HTTP `/health` readiness route alongside `/rpc` — so a dumb probe
+// (deploy gate, load balancer) gets a status code, and the JSON body lists the node's resources.
 const Item = Schema.Struct({ n: Schema.Number });
-class HealthHost extends Resource.Host<HealthHost>("health/host") {}
-class HealthQueue extends QueueResource.Tag<HealthQueue>()("health/Q", Item, { host: HealthHost }) {}
+class HealthNode extends Resource.Node<HealthNode>("health/node") {}
+class HealthQueue extends QueueResource.Tag<HealthQueue>()("health/Q", Item, { node: HealthNode }) {}
 
 const Server = Resource.serveAllHttp([
   QueueResource.serverEntry(HealthQueue, { effect: (_i: { n: number }) => Effect.void }),

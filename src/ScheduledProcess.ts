@@ -47,9 +47,9 @@ import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import * as Resource from "./Resource";
 import type {
   HandlerContextOf,
-  HostKey,
+  NodeKey,
   LocalCapability,
-  HostBoundTag,
+  NodeBoundTag,
   ResourceTag,
   ServeEntry,
   ServiceOf,
@@ -254,8 +254,8 @@ type ProcessSpec = typeof processControlSpec;
  *
  * Unlike the queue, a process has no per-instance item type — every process shares the one
  * {@link processControlSpec}, so this binds a plain {@link Resource.Tag}. `Self` is given
- * explicitly (Effect's `()` two-stage form). Pass `options.host` to bind the process to a
- * {@link Resource.Host} (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
+ * explicitly (Effect's `()` two-stage form). Pass `options.node` to bind the process to a
+ * {@link Resource.Node} (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
  *
  * @public
  */
@@ -266,22 +266,22 @@ export const kind = "@nikscripts/effect-pm/ScheduledProcess";
 const processTag = <Self>() => {
   function build<HSelf>(
     key: string,
-    options: { readonly description?: string; readonly host: HostKey<HSelf> },
-  ): HostBoundTag<Self, ProcessSpec, HSelf>;
+    options: { readonly description?: string; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, ProcessSpec, HSelf>;
   function build(
     key: string,
     options?: { readonly description?: string },
   ): ResourceTag<Self, ProcessSpec>;
   function build(
     key: string,
-    options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+    options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
   ): ResourceTag<Self, ProcessSpec> {
-    const host = options?.host;
+    const node = options?.node;
     const tagOptions = { description: options?.description, kind };
     const tag =
-      host === undefined
+      node === undefined
         ? Resource.Tag<Self>()(key, processControlSpec, tagOptions)
-        : Resource.Tag<Self>()(key, processControlSpec, { ...tagOptions, host });
+        : Resource.Tag<Self>()(key, processControlSpec, { ...tagOptions, node });
     // Readiness from the process's own status (SSOT): ready iff its trigger driver is supervising.
     return Resource.withReadiness(tag, (svc) =>
       Effect.map(svc.statusNow, (s) => ({
@@ -587,7 +587,7 @@ export const serveHttp = <Self, E = never, R = never>(
  * **and** registers into {@link Resource.servedResourcesLayer}, while **preserving the tick requirement
  * `R`** so a per-resource `Layer.provide` discharges it in isolation.
  *
- * Reach for this (with {@link Resource.httpServer}) when processes on one host need **different**
+ * Reach for this (with {@link Resource.httpServer}) when processes on one node need **different**
  * implementations of the same dependency tag (e.g. a hooked vs. plain source); use {@link serverEntry} +
  * {@link Resource.serveAllHttp} for the shared-dependency case.
  *
@@ -622,7 +622,7 @@ export const serverEntry = <Self, E = never, R = never>(
 
 /**
  * Process resource toolkit — managed long-running processes on the {@link Resource} toolkit.
- * `layer` runs it locally; `server` / `serveHttp` host it remotely; a remote
+ * `layer` runs it locally; `server` / `serveHttp` node it remotely; a remote
  * {@link Resource.client} drives it with the same `yield* Tag` surface.
  *
  * @public

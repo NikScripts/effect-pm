@@ -39,23 +39,23 @@ it("Resource.make is runtime identity + type-anchored", () => {
   Resource.make(Svc, { name: 5, greet: () => Effect.succeed("z") });
 });
 
-// A SHARED multiHost resource is defined host-free (exportable); hosts are supplied at the USE site.
+// A SHARED distributed resource is defined node-free (exportable); nodes are supplied at the USE site.
 class Fleet extends Resource.Tag<Fleet>()("make-test/Fleet", {
   n: Resource.effect(Schema.Number),
-}) {} // no `.multiHost([…])`
-class HostA extends Resource.Host<HostA>("make-test/A") {}
-class HostB extends Resource.Host<HostB>("make-test/B") {}
+}) {} // no `.distributed([…])`
+class NodeA extends Resource.Node<NodeA>("make-test/A") {}
+class NodeB extends Resource.Node<NodeB>("make-test/B") {}
 
-it("peersLayer sources the fleet from options.hosts (shared tag has no baked hosts)", () =>
+it("peersLayer sources the fleet from options.nodes (shared tag has no baked nodes)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const peers = yield* Resource.peers(Fleet);
-      // if the fleet weren't read from options.hosts, the tag has none → no peers → undefined.
+      // if the fleet weren't read from options.nodes, the tag has none → no peers → undefined.
       expect(peers["make-test/B"]).toBeDefined();
     }).pipe(
       Effect.provide(
-        Resource.peersLayer(Fleet, HostA, {
-          hosts: [HostA, HostB], // fleet supplied at the use site
+        Resource.peersLayer(Fleet, NodeA, {
+          nodes: [NodeA, NodeB], // fleet supplied at the use site
           url: () => Effect.succeed("http://127.0.0.1:5999/rpc"), // dead but lazy → no hang
         }),
       ),
