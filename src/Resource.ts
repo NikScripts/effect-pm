@@ -621,6 +621,28 @@ export const value = <Su extends Schema.Top>(
   marked(stream(success), { _tag: "value" as const });
 
 /**
+ * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream
+ * of every change ({@link Subscribable.changes}). This is what a {@link ref} field surfaces — uniform local
+ * and remote — and it's exactly the read side of a `SubscriptionRef` (Effect ships no `Subscribable` type in
+ * this beta, so we name it here). @public
+ */
+export interface Subscribable<A> {
+  readonly get: Effect.Effect<A>;
+  readonly changes: Stream.Stream<A>;
+}
+
+/**
+ * Build a {@link Subscribable} view over a `SubscriptionRef` — the impl side of a {@link ref} field: the
+ * impl owns the ref (writes it), consumers get read + observe. @public
+ */
+export const subscribable = <A>(
+  source: SubscriptionRef.SubscriptionRef<A>,
+): Subscribable<A> => ({
+  get: SubscriptionRef.get(source),
+  changes: SubscriptionRef.changes(source),
+});
+
+/**
  * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
  * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`
  * and/or `error` via options; attach help/metadata with `.annotate({ description, destructive })`.
