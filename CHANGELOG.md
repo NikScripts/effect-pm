@@ -1,5 +1,24 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.25
+
+### Minor Changes
+
+- **Rename `Host` → `Node` (breaking).** "Host" implied a machine; a fleet member is a per-process runtime,
+  so `Node` is accurate (and avoids clashing with Effect's `HttpApiEndpoint`). Migration:
+
+  - `Resource.Host`→`Resource.Node`; `HostKey`→`NodeKey`, `AnyHost`→`AnyNode`, `HostBoundTag`→`NodeBoundTag`,
+    `SelfHostId`→`SelfNodeId`, `HostRef`→`NodeRef`; `hostOf`→`nodeOf`, `selfHost`→`selfNode`.
+  - Tag option `{ host }`→`{ node }`; `Resource.multiHost([…])`→`Resource.distributed([…])`;
+    `peersLayer(…, { hosts })`→`{ nodes }`.
+  - Subpaths `/HostStatus`→`/NodeStatus`, `/HostLogs`→`/NodeLogs`; barrel `HostStatus`/`HostLogs`
+    namespaces likewise. ApiMetrics `ApiMetricsHostTag`→`ApiMetricsNodeTag`.
+  - **Wire-visible** (both ends must upgrade together): reserved `kind` strings (`…/HostStatus`→`…/NodeStatus`)
+    and the structured-log annotation key (`host`→`node`).
+
+- **`./ScheduledProcess`** now resolves to its tree-shakeable namespace (schemas re-exported); **`ApiMetrics`**
+  is flat `export * as ApiMetrics` (the `ApiMetricsModule` alias is removed).
+
 ## 0.8.0-beta.24
 
 ### Minor Changes

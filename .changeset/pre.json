@@ -101,6 +101,7 @@
     "telemetry",
     "service-shape-redesign",
     "value-adoption-and-accessors",
-    "resource-make-and-host-free-multihost"
+    "resource-make-and-host-free-multihost",
+    "host-to-node-rename"
   ]
 }
