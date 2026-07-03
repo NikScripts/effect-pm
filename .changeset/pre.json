@@ -99,6 +99,7 @@
     "serve-ergonomics",
     "queue-serve-namespace",
     "telemetry",
-    "service-shape-redesign"
+    "service-shape-redesign",
+    "value-adoption-and-accessors"
   ]
 }

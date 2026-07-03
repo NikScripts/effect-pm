@@ -19,3 +19,16 @@
   `isEmpty` are `value`s; `sizes` / `completed` removed (read `p.status.*`); `metrics` / `logs` are nested
   `{ live, history }` groups (`p.metrics.live` / `p.metrics.history(query)`). Same for `CustomQueueResource`
   (`levelSizes` stays an `effect` — the raw index array isn't in the named-Record `status`).
+- **Fix (multiHost): peer clients are lazy — a `value`/`stream` field no longer deadlocks the serve.**
+  `peersLayer` used to eagerly build every peer client at layer-build, and a `value`'s client subscription
+  blocks for its initial push — so a co-booting or unreachable peer hung the whole host. Peer clients now
+  touch the network only when a fold reads them: a peer reads a `value` **one-shot** (so `PeerServiceOf`'s
+  `value` is an `Effect<A>`, and `combineQuery(peers, (p) => p.n, …)` works like an `effect`), and
+  `combineQuery` drops an unreachable peer. A `value`-bearing multiHost resource now boots against a down
+  peer.
+- **Export naming (BREAKING):** `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` and
+  `.../CustomQueueResource` now resolve to the full tree-shakeable **namespace** (`Tag` + `layer`/`serve`/…);
+  the confusing **`./QueueContract` + `./CustomQueueContract` subpaths are removed** (import from
+  `*/Resource`). No code moved; the light-Tag / heavy-engine split is unchanged.
+- **Removed `ProcessScheduleResource`** (unapproved, unused) — its contract, namespace, subpath, and export
+  are gone. The `ProcessSchedule` primitive (used by `ScheduledProcess`) is untouched.
