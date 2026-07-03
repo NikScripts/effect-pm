@@ -931,6 +931,42 @@ export type ImplOf<S extends Spec> = {
         : never;
 };
 
+/**
+ * Recover the (possibly nested) {@link Spec} a tag was built from — for annotating an extracted impl
+ * without hand-threading it: `obj satisfies ImplOf<SpecOf<typeof MyTag>>`. Usually you don't need it —
+ * {@link Resource.make} infers it. @public
+ */
+export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spec }
+  ? S
+  : never;
+
+/**
+ * Anchor a **reusable** impl to its contract at the definition site. Inline impls are already typed by
+ * `layer` / `serverEntry` / `serve`; but the moment you hoist one to a `const` (to share it across the
+ * local layer and a served entry, or across several serves) it loses that typing — the mistake then
+ * surfaces far away at the serve call, with no autocomplete as you write it. `Resource.make(tag, impl)`
+ * infers the tag's spec and constrains `impl` to its {@link ImplOf}, returning it typed. Runtime identity.
+ *
+ * ```ts
+ * const scoresImpl = Resource.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
+ * Resource.layer(ScoresDb, scoresImpl);                    // local
+ * Resource.serveAllHttp([Resource.serverEntry(ScoresDb, scoresImpl)]); // served — same impl, both typed
+ * ```
+ *
+ * @public
+ */
+export function make<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S>,
+): ImplOf<S>;
+export function make<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: Effect.Effect<ImplOf<S>, never, R>,
+): Effect.Effect<ImplOf<S>, never, R>;
+export function make(_tag: unknown, impl: unknown): unknown {
+  return impl;
+}
+
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
 /** The rpc payload schema: the schema itself when the payload IS a schema, a `Schema.Struct<F>`
@@ -2810,6 +2846,9 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
   tag: ResourceTag<Self, S>,
   self: AnyHost,
   options?: {
+    /** The fleet (including `self`) — supply it **at the use site** so a shared resource can be defined
+     *  host-free and exported; falls back to the tag's baked-in {@link multiHost} set when omitted. */
+    readonly hosts?: ReadonlyArray<AnyHost>;
     readonly url?: (host: AnyHost) => Effect.Effect<string | undefined, EIn, RIn>;
   },
 ): Layer.Layer<PeersId<Self> | SelfHostId<Self>, EIn, RIn> =>
@@ -2817,7 +2856,9 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
     Layer.effect(
       tag[peersSym],
       Effect.gen(function* () {
-        const others = (tag[multiHostSym] ?? []).filter((host) => host.key !== self.key);
+        // fleet from the use site (`options.hosts`) or the tag's baked set; drop self to get the peers.
+        const fleet = options?.hosts ?? tag[multiHostSym] ?? [];
+        const others = fleet.filter((host) => host.key !== self.key);
         // the host's own url is the default; an optional resolver overrides it, falling back to the url.
         const resolveUrl = (host: AnyHost): Effect.Effect<string | undefined, EIn, RIn> =>
           options?.url === undefined
