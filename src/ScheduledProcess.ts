@@ -316,8 +316,7 @@ const statusPollInterval = Duration.millis(500);
 // ─── wire ⇄ engine mapping (the contract uses DateTime.Utc + optionalKey; the engine uses Date + Option) ───
 
 /**
- * Map a (native) engine schedule entry to its wire form. Shared with the standalone
- * {@link ProcessScheduleContract}. @internal
+ * Map a (native) engine schedule entry to its wire form. @internal
  */
 export const toWireScheduleEntry = (
   entry: ProcessScheduleEntry,
@@ -330,8 +329,7 @@ export const toWireScheduleEntry = (
 });
 
 /**
- * Map a wire schedule entry back to the engine's (native) form. Shared with the standalone
- * {@link ProcessScheduleContract}. @internal
+ * Map a wire schedule entry back to the engine's (native) form. @internal
  */
 export const fromWireScheduleEntry = (
   wire: typeof processScheduleEntry.Type,
