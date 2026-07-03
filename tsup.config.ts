@@ -37,7 +37,7 @@ export default defineConfig([
       HistoryStore: "src/HistoryStore.ts",
       DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",
-      ScheduledProcess: "src/ScheduledProcess.ts",
+      ScheduledProcess: "src/internal/scheduledProcessNamespace.ts",
       ApiMetrics: "src/ApiMetrics.ts",
       Telemetry: "src/Telemetry.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",

@@ -1,9 +1,26 @@
 /**
  * @module internal/scheduledProcessNamespace
  *
- * The single **`ScheduledProcess`** namespace, assembled from per-member named exports so that
- * `export * as ScheduledProcess` (in the barrel) tree-shakes per member: `Tag` / `configure` are
- * light (the contract's spec is engine-free), while `layer` / `server` / `serveHttp` pull the
- * Process engine only when actually used (e.g. in a Node entrypoint).
+ * The single **`ScheduledProcess`** namespace — the target of both the `./ScheduledProcess` subpath and the
+ * barrel's `export * as ScheduledProcess`. Assembled from per-member named exports so member access
+ * **tree-shakes**: `Tag` / `configure` / the schemas (`processStatus`, `processScheduleEntry`, …) / `kind`
+ * are light (engine-free, browser-safe), while `layer` / `server` / `serve` / `serveHttp` / `serverEntry`
+ * pull the Process engine only when actually used (a Node entrypoint). The `@internal` wire mappers are
+ * deliberately **not** re-exported.
  */
-export { Tag, configure, layer, server, serveHttp, serverEntry } from "../ScheduledProcess";
+export {
+  Tag,
+  configure,
+  layer,
+  server,
+  serve,
+  serveHttp,
+  serverEntry,
+  kind,
+  processControlSpec,
+  processStatus,
+  processScheduleEntry,
+  processLogEntry,
+  historyQuery,
+} from "../ScheduledProcess";
+export type { ProcessLayerConfig } from "../ScheduledProcess";
