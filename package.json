@@ -1,6 +1,6 @@
 {
   "name": "@nikscripts/effect-pm",
-  "version": "0.8.0-beta.25",
+  "version": "0.8.0-beta.26",
   "packageManager": "pnpm@10.33.4",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
@@ -48,9 +48,9 @@
       "types": "./dist/Resource.d.ts",
       "default": "./dist/Resource.js"
     },
-    "./MultiHost": {
-      "types": "./dist/MultiHost.d.ts",
-      "default": "./dist/MultiHost.js"
+    "./MultiNode": {
+      "types": "./dist/MultiNode.d.ts",
+      "default": "./dist/MultiNode.js"
     },
     "./ProcessStore": {
       "types": "./dist/ProcessStore.d.ts",
