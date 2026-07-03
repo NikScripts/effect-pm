@@ -5,9 +5,12 @@ import {
   Exit,
   Fiber,
   Layer,
+  Option,
   Ref,
+  Schedule,
   Schema,
   Stream,
+  SubscriptionRef,
 } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
@@ -24,47 +27,56 @@ class Jobs extends Queue<Jobs>("@app/Jobs") {}
 class Mail extends Queue<Mail>("@app/Mail") {}
 
 // Minimal in-memory queue control impl (just enough state to assert the verbs round-trip).
+// `status` is the SSOT live snapshot (a SubscriptionRef); `size`/`isEmpty` are `value`s derived
+// from it (their impls are the backing streams). Mutating verbs push a new snapshot so the live
+// `value`s stay current on the client after a round-trip.
 const makeImpl = () => {
-  let paused = false;
-  let pending = 3;
-  let done = 0;
+  const initial = {
+    sizes: { high: 0, normal: 3, low: 0 },
+    paused: false,
+    inFlight: 0,
+    completed: 0,
+    phase: "running" as const,
+  };
+  const statusRef = Effect.runSync(SubscriptionRef.make(initial));
+  const patch = (f: (s: typeof initial) => typeof initial) =>
+    Effect.runSync(SubscriptionRef.update(statusRef, f));
+  const status = SubscriptionRef.changes(statusRef);
   return {
-    size: Effect.sync(() => pending),
-    sizes: Effect.sync(() => ({ high: 0, normal: pending, low: 0 })),
-    isEmpty: Effect.sync(() => pending === 0),
-    completed: Effect.sync(() => done),
+    // live current state — `status` is the SSOT; the scalars derive from it (`value` impls are streams).
+    status,
+    size: Stream.map(status, (s) => s.sizes.high + s.sizes.normal + s.sizes.low),
+    isEmpty: Stream.map(
+      status,
+      (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
+    ),
     start: Effect.void,
-    pause: Effect.sync(() => {
-      paused = true;
-    }),
-    resume: Effect.sync(() => {
-      paused = false;
-    }),
-    shutdown: Effect.sync(() => {
-      pending = 0;
-    }),
+    pause: Effect.sync(() => patch((s) => ({ ...s, paused: true }))),
+    resume: Effect.sync(() => patch((s) => ({ ...s, paused: false }))),
+    shutdown: Effect.sync(() =>
+      patch((s) => ({ ...s, sizes: { high: 0, normal: 0, low: 0 } })),
+    ),
     clear: Effect.sync(() => {
-      const cleared = pending;
-      pending = 0;
-      done = 0;
-      void paused;
+      const s = Effect.runSync(SubscriptionRef.get(statusRef));
+      const cleared = s.sizes.high + s.sizes.normal + s.sizes.low;
+      patch((cur) => ({
+        ...cur,
+        sizes: { high: 0, normal: 0, low: 0 },
+        completed: 0,
+      }));
       return cleared;
     }),
     // observability streams — not exercised by the RpcTest control round-trip below (streaming
     // is verified over real http in resource-stream-http.test.ts); empty streams satisfy the
     // contract. `events` (item-typed) is supplied per-instance where the item schema is known.
-    status: Stream.empty,
-    statusNow: Effect.sync(() => ({
-      sizes: { high: 0, normal: pending, low: 0 },
-      paused,
-      inFlight: 0,
-      completed: done,
-      phase: "running" as const,
-    })),
-    metrics: Stream.empty,
-    logs: Stream.empty,
-    metricsHistory: () => Effect.succeed([]),
-    logHistory: () => Effect.succeed([]),
+    metrics: {
+      live: Stream.empty,
+      history: () => Effect.succeed([]),
+    },
+    logs: {
+      live: Stream.empty,
+      history: () => Effect.succeed([]),
+    },
   };
 };
 
@@ -77,12 +89,20 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     const jobs = forwardClient(rpc, specOf(Queue), Jobs.groupId, Jobs.key);
     const mail = forwardClient(rpc, specOf(Queue), Mail.groupId, Mail.key);
 
-    // observation verbs round-trip
-    expect(yield* jobs.size).toBe(3);
-    expect(yield* jobs.sizes).toEqual({ high: 0, normal: 3, low: 0 });
-    expect(yield* jobs.isEmpty).toBe(false);
-    // one-shot status snapshot round-trips (no stream subscription needed)
-    expect(yield* jobs.statusNow).toEqual({
+    // observation verbs round-trip — `size`/`isEmpty`/`status` are live `value`s; on the raw wire
+    // (forwardClient) they surface as their backing streams, so read the current value off the head
+    // (a `value` stream emits the current snapshot first).
+    const head = <A>(s: Stream.Stream<A>) =>
+      Stream.runHead(s).pipe(Effect.map(Option.getOrThrow));
+    expect(yield* head(jobs.size)).toBe(3);
+    expect((yield* head(jobs.status)).sizes).toEqual({
+      high: 0,
+      normal: 3,
+      low: 0,
+    });
+    expect(yield* head(jobs.isEmpty)).toBe(false);
+    // current status snapshot is the head of the live status stream
+    expect(yield* head(jobs.status)).toEqual({
       sizes: { high: 0, normal: 3, low: 0 },
       paused: false,
       inFlight: 0,
@@ -94,8 +114,8 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     yield* jobs.pause;
     yield* jobs.resume;
     expect(yield* jobs.clear).toBe(3); // Jobs drained
-    expect(yield* jobs.size).toBe(0);
-    expect(yield* mail.size).toBe(3); // Mail untouched — routing is per-instance
+    expect(yield* head(jobs.size)).toBe(0);
+    expect(yield* head(mail.size)).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(
     Effect.provide(
       Resource.serveInstances(
@@ -114,27 +134,33 @@ it("exposes the expected control verbs", () => {
   expect(Object.keys(queueControlSpec).sort()).toEqual(
     [
       "clear",
-      "completed",
       "isEmpty",
-      "logHistory",
       "logs",
       "metrics",
-      "metricsHistory",
       "pause",
       "resume",
       "shutdown",
       "size",
-      "sizes",
       "start",
       "status",
-      "statusNow",
     ].sort(),
   );
+  // observability is nested: live stream + history query per group
+  expect(Object.keys(queueControlSpec.metrics).sort()).toEqual([
+    "history",
+    "live",
+  ]);
+  expect(Object.keys(queueControlSpec.logs).sort()).toEqual([
+    "history",
+    "live",
+  ]);
 });
 
 // Tool metadata (query/mutate/destructive/description) drives CLI/TUI/dashboard rendering.
 it("marks each verb query vs mutate, with destructive hints", () => {
-  const meta = (k: keyof typeof queueControlSpec) => methodMeta(queueControlSpec[k]);
+  // the direct (non-group) verbs — `metrics`/`logs` are nested groups, not methods.
+  type MethodKey = "size" | "isEmpty" | "pause" | "start" | "shutdown" | "clear";
+  const meta = (k: MethodKey) => methodMeta(queueControlSpec[k]);
 
   // reads are queries
   expect(meta("size").kind).toBe("query");
@@ -192,8 +218,11 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     // batch form: one call enqueues many (no N round trips)
     yield* svc.add([{ n: 8 }, { n: 9 }]);
     expect(enqueued).toEqual([5, 7, 8, 9]);
-    // the control surface still works on the same per-instance group
-    expect(yield* svc.size).toBe(3);
+    // the control surface still works on the same per-instance group — `size` is a `value`, which
+    // on the raw wire (forwardClient) surfaces as its backing stream; read the current head.
+    expect(
+      yield* Stream.runHead(svc.size).pipe(Effect.map(Option.getOrThrow)),
+    ).toBe(3);
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
@@ -330,11 +359,20 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     yield* q.prioritize({ n: 2 });
     // batch enqueue through the engine in one call
     yield* q.add([{ n: 3 }, { n: 4 }]);
-    while ((yield* q.completed) < 4) {
-      yield* Effect.sleep(Duration.millis(5));
-    }
+    // wait until all four completions have been observed on the events stream.
+    yield* Effect.repeat(Ref.get(seen), {
+      until: (a) => a.length >= 4,
+      schedule: Schedule.spaced(Duration.millis(5)),
+    });
     expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
-    expect(yield* q.isEmpty).toBe(true);
+    // the queue is now empty — the live `isEmpty` delta stream reflects it.
+    const emptied = yield* Stream.runHead(
+      Stream.filter(
+        Resource.changes(q, (s) => s.isEmpty),
+        (e) => e === true,
+      ),
+    );
+    expect(Option.getOrThrow(emptied)).toBe(true);
   }).pipe(
     Effect.provide(
       QueueResource.layer(LocalQueue, {
@@ -359,7 +397,7 @@ it("QueueResource.layer surfaces captured logs via queue.logs", () => {
     const collected = yield* Effect.forkChild(
       Stream.runCollect(
         Stream.take(
-          Stream.filter(q.logs, (e) => e.message.includes("handling")),
+          Stream.filter(q.logs.live, (e) => e.message.includes("handling")),
           1,
         ),
       ),

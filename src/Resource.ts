@@ -222,7 +222,7 @@ export type AnyMethod = Method<
 /** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the hosts (in the
  *  layer via {@link peers}); served + client-visible like any query, but excluded from {@link peers}.
  *  Marked with a readable `fleet: true`. @public */
-export type FleetField<M extends AnyMethod> = M & { readonly fleet: true };
+export type FleetField<M extends AnyMethod> = Marked<M, { readonly fleet: true }>;
 
 /**
  * Mark a contract method as a **fleet** field — one combined across the hosts (its layer impl folds
@@ -238,7 +238,7 @@ export type FleetField<M extends AnyMethod> = M & { readonly fleet: true };
  * @public
  */
 export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
-  Object.assign(Object.create(Pipeable.Prototype), method, { fleet: true as const });
+  marked(method, { fleet: true as const });
 
 /** @internal */
 declare const localCapabilityTypeId: unique symbol;
@@ -394,6 +394,25 @@ const nestService = (
   return nested;
 };
 
+/** Set a value at a (possibly dotted) path in the service tree, creating intermediate groups. Used to
+ *  build the service **directly into its nested shape**, so live `value` setters write the object the
+ *  consumer holds (rather than a pre-nesting copy). @internal */
+const setPath = (
+  obj: Record<string, unknown>,
+  path: string,
+  val: unknown,
+): void => {
+  const parts = path.split(".");
+  const last = parts.pop();
+  if (last === undefined) return;
+  let node = obj;
+  for (const part of parts) {
+    node[part] = (node[part] as Record<string, unknown> | undefined) ?? {};
+    node = node[part] as Record<string, unknown>;
+  }
+  node[last] = val;
+};
+
 /**
  * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
  * not in the wire contract; usable only when the local layer is provided.
@@ -469,6 +488,30 @@ const makeMethod = <
   });
 
 /**
+ * A {@link Method} carrying a shape marker `Mark` (`{ _tag: … }` / `{ fleet: true }`) whose `.annotate()`
+ * **re-applies the marker** — so `value(x).annotate(…)` stays a value instead of silently degrading to a
+ * plain stream method. @internal
+ */
+export type Marked<M extends AnyMethod, Mark> = Omit<M, "annotate"> &
+  Mark & {
+    readonly annotate: <A extends MethodAnnotations>(
+      a: A,
+    ) => Marked<
+      Method<M["kind"], M["payload"], M["success"], M["error"], M["stream"], M["annotations"] & A>,
+      Mark
+    >;
+  };
+
+/** Attach a shape marker whose `.annotate()` preserves it (rebuilds the marker after annotating). @internal */
+const marked = <M extends AnyMethod, Mark extends object>(
+  method: M,
+  mark: Mark,
+): Marked<M, Mark> =>
+  Object.assign(Object.create(Pipeable.Prototype), method, mark, {
+    annotate: <A extends MethodAnnotations>(a: A) => marked(method.annotate(a), mark),
+  }) as Marked<M, Mark>;
+
+/**
  * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read),
  * named for what it resolves to. Add a `payload` (a parameterized read becomes a function) and/or `error`
  * via options; attach help/metadata with `.annotate({ description, ... })`. The other shapes are
@@ -535,9 +578,7 @@ export function effect(
 
 /** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
  *  surfaced as a plain value. Tagged with a readable `_tag: "constant"`. @public */
-export type ConstantField<M extends AnyMethod> = M & {
-  readonly _tag: "constant";
-};
+export type ConstantField<M extends AnyMethod> = Marked<M, { readonly _tag: "constant" }>;
 
 /** Runtime guard: is a spec entry a {@link constant} field? */
 const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
@@ -554,15 +595,11 @@ const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
 export const constant = <Su extends Schema.Top>(
   success: Su,
 ): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
-  Object.assign(Object.create(Pipeable.Prototype), effect(success), {
-    _tag: "constant" as const,
-  });
+  marked(effect(success), { _tag: "constant" as const });
 
 /** A {@link Method} marked as a **value** field (via {@link value}) — a plain property kept live by a
  *  background stream. Tagged with a readable `_tag: "value"`. @public */
-export type ValueField<M extends AnyMethod> = M & {
-  readonly _tag: "value";
-};
+export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
 
 /** Runtime guard: is a spec entry a {@link value} field? */
 const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
@@ -581,9 +618,7 @@ const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
 export const value = <Su extends Schema.Top>(
   success: Su,
 ): ValueField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
-  Object.assign(Object.create(Pipeable.Prototype), stream(success), {
-    _tag: "value" as const,
-  });
+  marked(stream(success), { _tag: "value" as const });
 
 /**
  * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
@@ -875,8 +910,14 @@ type PeerServiceOf<S extends Spec> = {
  * it to require the {@link LocalCapability}). When an impl needs a capability (e.g. {@link peers}) to
  * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serverEntry}
  * — resolve it once, and the members close over it.
+ *
+ * A `value` field's impl is the **`Stream`** that feeds it (typically a `SubscriptionRef`'s `.changes`),
+ * and a `constant`'s is the `Effect<A>` resolved once — both differ from how they *surface* in
+ * {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not `ServiceOf`.
+ *
+ * @public
  */
-type ImplOf<S extends Spec> = {
+export type ImplOf<S extends Spec> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? T
     : S[K] extends { readonly kind: MethodKind }
@@ -1269,6 +1310,35 @@ export const readinessCheck = (
   }
   return Effect.succeed({ ready: true });
 };
+
+/**
+ * Readiness for a **served** resource, where all we have is the wire `impl` (a `value` field is a `Stream`
+ * there, a `constant` an `Effect`). Resolve those to plain values first — so the derivation sees the same
+ * service shape {@link readinessOf} gives it (the materialized service), not the raw wire impl. The `value`
+ * head is read in a short-lived scope so no `Scope` leaks into the result. @internal
+ */
+const readinessCheckServed = (
+  tag: { readonly [specSym]: FlatSpec },
+  impl: unknown,
+): Effect.Effect<Readiness> =>
+  Effect.gen(function* () {
+    const spec = tag[specSym];
+    const flat = flattenImpl(impl as Record<string, unknown>, spec);
+    const view: Record<string, unknown> = {};
+    for (const [key, m] of Object.entries(spec)) {
+      if (isConstantMethod(m)) {
+        setPath(view, key, yield* (flat[key] as Effect.Effect<unknown>));
+      } else if (isValueMethod(m)) {
+        const head = yield* Stream.runHead(
+          flat[key] as Stream.Stream<unknown>,
+        ).pipe(Effect.scoped);
+        setPath(view, key, Option.getOrUndefined(head));
+      } else {
+        setPath(view, key, flat[key]);
+      }
+    }
+    return yield* readinessCheck(tag, view);
+  });
 
 /**
  * Pull a resource's readiness **by tag** — yields its service and runs its derivation. Use it inside
@@ -1664,6 +1734,8 @@ function localLayer<Self, S extends Spec, R>(
     // impl may be nested (grouped) — flatten to path keys matching the flat spec, build the flat service,
     // then nest it back on the way out.
     const members = flattenImpl(builtImpl, spec);
+    // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
+    // holds; the impl was flattened to path keys, so `key` here is the flat path.
     const service: Record<string, unknown> = {};
     const valueRefs: ValueRefs = {};
     for (const [key, m] of Object.entries(spec)) {
@@ -1671,25 +1743,23 @@ function localLayer<Self, S extends Spec, R>(
       // value); constant fields are resolved once here into a plain value; other wire members pass
       // through unchanged.
       if (isLocalMethod(m)) {
-        service[key] = Effect.as(cap, members[key]);
+        setPath(service, key, Effect.as(cap, members[key]));
       } else if (isConstantMethod(m)) {
-        service[key] = yield* (members[key] as Effect.Effect<unknown>);
+        setPath(service, key, yield* (members[key] as Effect.Effect<unknown>));
       } else if (isValueMethod(m)) {
         valueRefs[key] = yield* bindValueToProp(
           members[key] as Stream.Stream<unknown>,
-          (v) => {
-            service[key] = v;
-          },
+          (v) => setPath(service, key, v),
           key,
         );
       } else {
-        service[key] = members[key];
+        setPath(service, key, members[key]);
       }
     }
     // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
     return Context.make(
       tag,
-      withValueRefs(nestService(service), valueRefs) as ServiceOf<S, Self>,
+      withValueRefs(service, valueRefs) as ServiceOf<S, Self>,
     ).pipe(Context.add(cap, { granted: true }));
   });
   return Layer.effectContext(build);
@@ -1898,7 +1968,7 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
               groupId: tag.groupId,
               group,
               kind: kindOf(tag) ?? "resource",
-              readiness: readinessCheck(tag, impl),
+              readiness: readinessCheckServed(tag, impl),
             }),
         }),
       ),
@@ -2233,7 +2303,7 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
       // resource's own `readiness` derivation (default: ready), keyed by tag + kind.
       const userBuilt = yield* Effect.forEach(entries, buildImpl);
       const readiness = Effect.forEach(userBuilt, ({ tag, impl }) =>
-        Effect.map(readinessCheck(tag, impl), (r) => ({
+        Effect.map(readinessCheckServed(tag, impl), (r) => ({
           key: tag.groupId,
           kind: kindOf(tag) ?? "resource",
           ready: r.ready,
@@ -2789,29 +2859,33 @@ const buildClientService = <Self, S extends Spec>(
       unknown
     >;
     const cap = tag[localCapSym];
-    const service: Record<string, unknown> = { ...wire };
+    // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
+    // holds; `wire` + `tag[specSym]` are flat path keys.
+    const service: Record<string, unknown> = {};
     const valueRefs: ValueRefs = {};
     for (const [key, m] of Object.entries(tag[specSym])) {
       if (isLocalMethod(m)) {
-        service[key] = Effect.flatMap(cap, () =>
-          Effect.die(new LocalOnlyMethod({ method: key })),
+        setPath(
+          service,
+          key,
+          Effect.flatMap(cap, () => Effect.die(new LocalOnlyMethod({ method: key }))),
         );
       } else if (isConstantMethod(m)) {
         // resolve the constant's query once at acquire → a plain value
-        service[key] = yield* (wire[key] as Effect.Effect<unknown>);
+        setPath(service, key, yield* (wire[key] as Effect.Effect<unknown>));
       } else if (isValueMethod(m)) {
         // subscribe once, block for the initial, keep the plain property live in place
         valueRefs[key] = yield* bindValueToProp(
           wire[key] as Stream.Stream<unknown>,
-          (v) => {
-            service[key] = v;
-          },
+          (v) => setPath(service, key, v),
           key,
         );
+      } else {
+        setPath(service, key, wire[key]);
       }
     }
     // Boundary assertion (runtime-safe): built from the spec, key-for-key.
-    return withValueRefs(nestService(service), valueRefs) as ServiceOf<S, Self>;
+    return withValueRefs(service, valueRefs) as ServiceOf<S, Self>;
   });
 
 /**

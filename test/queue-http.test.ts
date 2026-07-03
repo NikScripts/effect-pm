@@ -22,27 +22,29 @@ class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", NumberIte
 const received: Array<QueueEntry<NumberItem>> = [];
 
 const stub = {
-  size: Effect.succeed(0),
-  sizes: Effect.succeed({ high: 0, normal: 0, low: 0 }),
-  isEmpty: Effect.succeed(true),
-  completed: Effect.succeed(0),
+  // value-field impls are the backing streams (current value kept live in place).
+  size: Stream.make(0),
+  isEmpty: Stream.make(true),
   start: Effect.void,
   pause: Effect.void,
   resume: Effect.void,
   shutdown: Effect.void,
   clear: Effect.succeed(0),
-  status: Stream.empty,
-  statusNow: Effect.succeed({
+  status: Stream.make({
     sizes: { high: 0, normal: 0, low: 0 },
     paused: false,
     inFlight: 0,
     completed: 0,
     phase: "running" as const,
   }),
-  metrics: Stream.empty,
-  logs: Stream.empty,
-  metricsHistory: () => Effect.succeed([]),
-  logHistory: () => Effect.succeed([]),
+  metrics: {
+    live: Stream.empty,
+    history: () => Effect.succeed([]),
+  },
+  logs: {
+    live: Stream.empty,
+    history: () => Effect.succeed([]),
+  },
   add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   prioritize: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   defer: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,

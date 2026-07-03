@@ -1,6 +1,7 @@
-import { Context, Duration, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
+import * as Resource from "../src/Resource";
 
 // A refill loader that needs its OWN service dependency (like wow's Prisma repo) — distinct from
 // the worker, which needs nothing. Probes whether the refill's R is surfaced + provided.
@@ -14,6 +15,9 @@ class Q extends QueueResource.Tag<Q>()("queue-refill-deps/Q", Item) {}
 
 const queueLayer = QueueResource.layer(Q, {
   effect: (_item: { n: number }) => Effect.void, // worker needs nothing
+  // autoStart:false so the test can subscribe to the live status before the refill runs (the
+  // refill fires when the worker pool starts, which we trigger explicitly via `start`).
+  autoStart: false,
   refill: {
     onStart: true,
     load: (q) =>
@@ -29,8 +33,19 @@ it("refill loader gets its own service dependency", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const q = yield* Q;
-      while ((yield* q.completed) < 3) yield* Effect.sleep(Duration.millis(10));
-      expect(yield* q.completed).toBe(3);
+      // subscribe to the live status delta stream BEFORE starting (so we observe the refill's
+      // enqueue + processing rather than missing an already-past update).
+      const completed = yield* Effect.forkChild(
+        Stream.runHead(
+          Stream.filter(
+            Resource.changes(q, (s) => s.status),
+            (s) => s.completed >= 3,
+          ),
+        ),
+      );
+      yield* q.start; // fires the onStart refill, which pulls from Source and enqueues 1,2,3
+      const done = yield* Fiber.join(completed);
+      expect(done._tag === "Some" && done.value.completed >= 3).toBe(true);
     }).pipe(
       Effect.provide(queueLayer.pipe(Layer.provide(SourceLive))),
       Effect.scoped,
