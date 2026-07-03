@@ -10,7 +10,7 @@ import {
 import type { HttpClientError } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import { ApiMetrics, clientIdOf, metricsKeyFor } from "../src/ApiMetrics";
+import * as ApiMetrics from "../src/ApiMetrics";
 import { HttpApiResource } from "../src/HttpApiResource";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 import * as Resource from "../src/Resource";
@@ -57,10 +57,10 @@ beforeEach(() => {
 
 describe("ApiMetrics.Tag", () => {
   it("auto-suffixes the Resource key and stores clientIdSym", () => {
-    expect(DemoMetrics.key).toBe(metricsKeyFor(ClientId));
-    expect(clientIdOf(DemoMetrics)).toBe(ClientId);
+    expect(DemoMetrics.key).toBe(ApiMetrics.metricsKeyFor(ClientId));
+    expect(ApiMetrics.clientIdOf(DemoMetrics)).toBe(ClientId);
     // per-instance group: the groupId is the metrics key (its own wire prefix), not a shared family
-    expect(DemoMetrics.groupId).toBe(metricsKeyFor(ClientId));
+    expect(DemoMetrics.groupId).toBe(ApiMetrics.metricsKeyFor(ClientId));
   });
 });
 
@@ -101,7 +101,7 @@ describe("ApiMetrics per-instance groups + serveAllHttp", () => {
 
   it("each tag is its own group with a distinct, key-prefixed wire id", () => {
     expect(DemoMetrics.groupId).not.toBe(OtherMetrics.groupId);
-    expect(OtherMetrics.groupId).toBe(metricsKeyFor(OtherClientId));
+    expect(OtherMetrics.groupId).toBe(ApiMetrics.metricsKeyFor(OtherClientId));
   });
 
   // Two metrics tags served on one host via `serveAllHttp`; each reached over http with its own

@@ -16,7 +16,7 @@ import * as Resource from "../../src/Resource";
 import * as QueueResource from "../../src/QueueContract";
 import * as ProcessResource from "../../src/ScheduledProcess";
 import * as Group from "../../src/Group";
-import { ApiMetrics } from "../../src/ApiMetrics";
+import * as ApiMetrics from "../../src/ApiMetrics";
 
 const importJob = Schema.Struct({ id: Schema.String });
 

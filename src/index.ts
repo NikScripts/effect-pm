@@ -130,15 +130,7 @@ export {
   type HttpApiResourceConfig,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
-export {
-  ApiMetrics,
-  clientIdOf,
-  clientIdSym,
-  metricsKeyFor,
-  metricsKeySuffix,
-  type ApiMetricsTag,
-  type ApiMetricsTagOptions,
-} from "./ApiMetrics";
+export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
   apiUsageMetrics,
@@ -146,7 +138,6 @@ export {
   type ApiUsageMetrics,
   type ApiUsageSnapshot,
 } from "./ApiUsageSchema";
-export * as ApiMetricsModule from "./ApiMetrics";
 export * as Telemetry from "./Telemetry";
 export {
   DuplicateGroupId,

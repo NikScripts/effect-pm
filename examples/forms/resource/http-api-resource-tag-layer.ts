@@ -8,7 +8,7 @@
 import { FetchHttpClient } from "effect/unstable/http";
 import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import { ApiMetrics } from "../../../src/ApiMetrics";
+import * as ApiMetrics from "../../../src/ApiMetrics";
 import { HttpApiResource } from "../../../src/HttpApiResource";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 

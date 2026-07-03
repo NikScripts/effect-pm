@@ -164,7 +164,7 @@ const buildImpl = (
  *
  * @public
  */
-const layer = <Self>(
+export const layer = <Self>(
   tag: ApiMetricsTag<Self>,
   options?: ApiMetricsTagOptions,
 ): Layer.Layer<Self, never, Scope.Scope> =>
@@ -174,7 +174,7 @@ const layer = <Self>(
     ),
   );
 
-const layerFor = <
+export const layerFor = <
   Self,
   const ClientId extends string,
   Client extends Context.ServiceClass<any, ClientId, any>,
@@ -197,7 +197,7 @@ export interface ApiMetricsConstructOptions<HSelf = never> {
  * in-process Metric registry ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add
  * the tag to the served host's `Group` and drop this into `serveAllHttp([...])`. @public
  */
-const serverEntry = <Self>(
+export const serverEntry = <Self>(
   tag: ApiMetricsTag<Self>,
   options?: ApiMetricsTagOptions,
 ): ServeEntry<Scope.Scope> => ({
@@ -242,26 +242,15 @@ const tag = <Self>() => {
 };
 
 /**
- * ApiMetrics toolkit — shared observability contract for outbound API clients.
- *
- * @public
+ * The ApiMetrics tag constructor — `class Clients extends ApiMetrics.Tag<Clients>()(SdpClient) {}`. Flat
+ * exports (like {@link Telemetry}) so the whole module is a tree-shakeable `import * as ApiMetrics`
+ * namespace: `Tag` is light, `layer` / `serverEntry` pull the aggregation only when used. @public
  */
-export const ApiMetrics = {
-  /** @see {@link tag} */
-  Tag: tag,
-  /** This contract's canonical kind (stamped on every tag; read via {@link Resource.kindOf}). */
-  kind,
-  /** Suffix appended to `clientId` for the default Resource key. */
-  metricsKeySuffix,
-  metricsKeyFor,
-  clientIdOf,
-  layer,
-  layerFor,
-  /** A `serveAllHttp` entry for one tag — serve it on a host like a queue/process. @see {@link serverEntry} */
-  serverEntry,
-  /** Wire schemas re-exported for widgets and RPC. */
+export { tag as Tag };
+
+/** Wire schemas, re-exported for widgets and RPC (they live in `./ApiUsageSchema`). @public */
+export {
   apiUsageMetrics,
   apiUsageSnapshot,
-} as const;
-
+} from "./ApiUsageSchema";
 export type { ApiUsageMetrics, ApiUsageSnapshot };
