@@ -20,7 +20,7 @@ import {
   type ApiTag,
   type DashboardRuntime,
   type GroupNode,
-  type HostRef,
+  type NodeRef,
   type ProcessTag,
   type QueueBundle,
   type QueueTag,
@@ -35,7 +35,7 @@ import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRun
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HealthBoard, HostBar, HostDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -302,8 +302,8 @@ const DashboardInner = (props: {
           <h1 className="m-0 flex-1 text-lg font-semibold">⬢ {title}</h1>
         )}
         {countCircle}
-        {/* host-status die — all hosts the dashboard's resources are bound to (the root group). */}
-        <HostBar group={props.group} onOpen={props.onOpenHealth} />
+        {/* node-status die — all nodes the dashboard's resources are bound to (the root group). */}
+        <NodeBar group={props.group} onOpen={props.onOpenHealth} />
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
         {Object.entries(group.members).map(([name, member]) => (
@@ -324,10 +324,10 @@ const DashboardInner = (props: {
   );
 };
 
-/** A resource's detail opened **from a host** — rendered on the host axis (so "back" returns to the
- *  host, not the group), with logs/schedule as local sub-views. Reuses the same detail widgets the
+/** A resource's detail opened **from a node** — rendered on the node axis (so "back" returns to the
+ *  node, not the group), with logs/schedule as local sub-views. Reuses the same detail widgets the
  *  group route uses. @since 1.0.0 */
-const HostResourceView = (props: {
+const NodeResourceView = (props: {
   readonly tag: unknown;
   readonly onBack: () => void;
 }): React.ReactElement => {
@@ -357,23 +357,23 @@ const HostResourceView = (props: {
 };
 
 /** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
- *  yourself, or use `<Dashboard>` which wires all three. The host-status die lives in the header
- *  (see `DashboardInner`); opening a host swaps in its full screen, and opening a resource from a
- *  host stays on the host axis so "back" returns there. @since 1.0.0 */
+ *  yourself, or use `<Dashboard>` which wires all three. The node-status die lives in the header
+ *  (see `DashboardInner`); opening a node swaps in its full screen, and opening a resource from a
+ *  node stays on the node axis so "back" returns there. @since 1.0.0 */
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
 }): React.ReactElement => {
-  // Three stacked overlays over the group view, in back-pop order: a resource opened from a host/board
-  // (`hostTag`) sits over a host's full screen (`host`), which sits over the health board (`health`).
-  // Keeping them separate means "back" pops one layer at a time — resource → host → board → dashboard.
+  // Three stacked overlays over the group view, in back-pop order: a resource opened from a node/board
+  // (`nodeTag`) sits over a node's full screen (`node`), which sits over the health board (`health`).
+  // Keeping them separate means "back" pops one layer at a time — resource → node → board → dashboard.
   const [health, setHealth] = React.useState(false);
-  const [host, setHost] = React.useState<HostRef | null>(null);
-  const [hostTag, setHostTag] = React.useState<unknown>(null);
+  const [node, setNode] = React.useState<NodeRef | null>(null);
+  const [nodeTag, setNodeTag] = React.useState<unknown>(null);
   const openResource = React.useCallback(
     (resourceKey: string): void => {
       const found = leafByKey(props.group, resourceKey);
-      if (found !== undefined) setHostTag(found);
+      if (found !== undefined) setNodeTag(found);
     },
     [props.group],
   );
@@ -383,15 +383,15 @@ export const DashboardView = <R, ER>(props: {
   return (
     <RuntimeProvider runtime={props.runtime}>
       <div className="font-mono">
-        {hostTag !== null ? (
-          <HostResourceView tag={hostTag} onBack={() => setHostTag(null)} />
-        ) : host !== null ? (
-          <HostDetail host={host} onBack={() => setHost(null)} onOpenResource={openResource} />
+        {nodeTag !== null ? (
+          <NodeResourceView tag={nodeTag} onBack={() => setNodeTag(null)} />
+        ) : node !== null ? (
+          <NodeDetail node={node} onBack={() => setNode(null)} onOpenResource={openResource} />
         ) : health ? (
           <HealthBoard
             group={props.group}
             onBack={() => setHealth(false)}
-            onOpenHost={setHost}
+            onOpenNode={setNode}
             onOpenResource={openResource}
           />
         ) : (

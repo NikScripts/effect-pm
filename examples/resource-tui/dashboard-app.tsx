@@ -21,7 +21,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../../src/Group";
 import { Fleet } from "../web-dashboard/fleet";
 import {
-  hostOf,
+  nodeOf,
   kindOf,
   processBundle,
   processLeaves,
@@ -116,10 +116,10 @@ const PrioRow = (props: {
   );
 };
 
-// the ⬡ host marker (Mini), shown on resources that don't run on the Droplet
-const HostMark = (props: { readonly tagKey: string }): React.ReactElement | null => {
-  const host = hostOf(props.tagKey);
-  return host === undefined ? null : <Text color="cyan"> ⬡ {host}</Text>;
+// the ⬡ node marker (Mini), shown on resources that don't run on the Droplet
+const NodeMark = (props: { readonly tagKey: string }): React.ReactElement | null => {
+  const node = nodeOf(props.tagKey);
+  return node === undefined ? null : <Text color="cyan"> ⬡ {node}</Text>;
 };
 
 // a queue grid cell — reads its own live status straight from the tag
@@ -142,7 +142,7 @@ const QueueCell = (props: {
       <Box>
         <Box flexGrow={1}>
           <Text bold wrap="truncate">{displayName(tag.key)}</Text>
-          <HostMark tagKey={tag.key} />
+          <NodeMark tagKey={tag.key} />
         </Box>
         <Text color={COLOR[status]}>{STATUS_ICON[status]}</Text>
       </Box>
@@ -174,7 +174,7 @@ const ProcessCell = (props: {
       <Box>
         <Box flexGrow={1}>
           <Text bold wrap="truncate">⚙ {displayName(tag.key)}</Text>
-          <HostMark tagKey={tag.key} />
+          <NodeMark tagKey={tag.key} />
         </Box>
         <Text color={up ? "green" : "gray"}>{up ? "►" : "■"}</Text>
       </Box>
@@ -424,7 +424,7 @@ const FocusedQueue = (props: {
             <Text dimColor>LOGS </Text>
             <Text color="green">live</Text>
             <Text dimColor> · in-flight {s?.inFlight ?? 0}</Text>
-            <HostMark tagKey={tag.key} />
+            <NodeMark tagKey={tag.key} />
           </Box>
           <Text dimColor>phase {s?.phase ?? "?"}</Text>
         </Box>
@@ -491,7 +491,7 @@ const FocusedProcess = (props: {
         <Box justifyContent="space-between">
           <Text bold color="cyan">
             ⚙ {displayName(tag.key)}
-            <HostMark tagKey={tag.key} />
+            <NodeMark tagKey={tag.key} />
           </Text>
           <Text color={up ? "green" : "gray"}>{up ? "► running" : "■ stopped"}</Text>
         </Box>

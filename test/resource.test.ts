@@ -165,7 +165,7 @@ class Crates extends Resource.Tag<Crates>()("crates", {
 }) {}
 
 it("two resource types sharing a method name coexist on one server (group prefix)", () => {
-  // One server hosts both: their groups merge into one root, distinguished by group prefix.
+  // One server nodes both: their groups merge into one root, distinguished by group prefix.
   const root = groupOf(Widgets).merge(groupOf(Crates));
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(root);

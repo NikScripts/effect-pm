@@ -1,10 +1,10 @@
 /**
  * @module examples/web-dashboard/mini-server
  *
- * The **Mini** — a second machine (your home server). It hosts only `KeyRotation` (the
+ * The **Mini** — a second machine (your home server). It nodes only `KeyRotation` (the
  * wnba key-rotation process), served over http on its own port. The dashboard reaches
- * it via `Resource.connectHttp(MiniHost, …)` and shows it under the same group tree as
- * the Droplet's queues — proving nested groups across separate hosts (the wow topology).
+ * it via `Resource.connectHttp(MiniNode, …)` and shows it under the same group tree as
+ * the Droplet's queues — proving nested groups across separate nodes (the wow topology).
  * Run: `pnpm run example:mini-server` (alongside `example:queue-server`).
  */
 import { Duration, Effect, Layer, Logger } from "effect";

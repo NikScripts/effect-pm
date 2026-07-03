@@ -35,7 +35,7 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Host = Resource.serveAllHttp([Resource.serverEntry(Cfg, impl)]).pipe(
+const Node = Resource.serveAllHttp([Resource.serverEntry(Cfg, impl)]).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
@@ -55,5 +55,5 @@ it("constant fields are plain, resolved once — REMOTE (same shape)", () =>
         Effect.provide(Resource.client(Cfg).pipe(Layer.provide(protocol(`${base}/rpc`)))),
         Effect.scoped,
       );
-    }).pipe(Effect.provide(Host), Effect.scoped),
+    }).pipe(Effect.provide(Node), Effect.scoped),
   ));

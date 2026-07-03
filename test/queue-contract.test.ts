@@ -421,19 +421,19 @@ it("QueueResource.layer surfaces captured logs via queue.logs", () => {
   return Effect.runPromise(program);
 });
 
-// ── host in the queue tag (type-level): ship only the tag ──
-// A queue bound to a Host carries its own transport; its client requires the host, not the
+// ── node in the queue tag (type-level): ship only the tag ──
+// A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
-class QueueHost extends Resource.Host<QueueHost>("queue/host") {}
-class HostedNumbers extends QueueResource.Tag<HostedNumbers>()(
-  "test/HostedNumbers",
+class QueueNode extends Resource.Node<QueueNode>("queue/node") {}
+class NodeNumbers extends QueueResource.Tag<NodeNumbers>()(
+  "test/NodeNumbers",
   NumberItem,
-  { host: QueueHost },
+  { node: QueueNode },
 ) {}
-const _hostedQueueClient: Layer.Layer<HostedNumbers, never, QueueHost> =
-  Resource.client(HostedNumbers);
-void _hostedQueueClient;
-// a hostless queue keeps the ambient-Protocol client.
-const _hostlessQueueClient: Layer.Layer<Numbers, never, RpcClient.Protocol> =
+const _nodeedQueueClient: Layer.Layer<NodeNumbers, never, QueueNode> =
+  Resource.client(NodeNumbers);
+void _nodeedQueueClient;
+// a nodeless queue keeps the ambient-Protocol client.
+const _nodelessQueueClient: Layer.Layer<Numbers, never, RpcClient.Protocol> =
   Resource.client(Numbers);
-void _hostlessQueueClient;
+void _nodelessQueueClient;

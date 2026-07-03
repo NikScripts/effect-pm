@@ -1,7 +1,7 @@
 /**
  * @module examples/web-dashboard/fleet
  *
- * The fleet, defined **once, as tags** — shared by the server (which hosts them) and
+ * The fleet, defined **once, as tags** — shared by the server (which nodes them) and
  * the browser (which reaches them via `Resource.client`). The `Group.Tag` tree IS the
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
@@ -13,30 +13,30 @@ import * as Group from "../../src/Group";
 
 /** The Mini — a second machine (your home server). Resources bound to it run + are
  *  reached there; everything else is on the Droplet. */
-export class MiniHost extends Resource.Host<MiniHost>("hub/miniHost") {}
+export class MiniNode extends Resource.Node<MiniNode>("hub/miniNode") {}
 
-/** The Droplet — the main host. Every queue is bound to it, so they're served as one
+/** The Droplet — the main node. Every queue is bound to it, so they're served as one
  *  group on one port (`Resource.serveAllHttp`) and reached over one client transport. */
-export class Droplet extends Resource.Host<Droplet>("hub/droplet") {}
+export class Droplet extends Resource.Node<Droplet>("hub/droplet") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
 // leaf queue tags
-export class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", Job, { host: Droplet }) {}
-export class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", Job, { host: Droplet }) {}
-export class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", Job, { host: Droplet }) {}
-export class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", Job, { host: Droplet }) {}
-export class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", Job, { host: Droplet }) {}
-export class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", Job, { host: Droplet }) {}
-export class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", Job, { host: Droplet }) {}
-export class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", Job, { host: Droplet }) {}
-export class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", Job, { host: Droplet }) {}
-export class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job, { host: Droplet }) {}
-export class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job, { host: Droplet }) {}
+export class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", Job, { node: Droplet }) {}
+export class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", Job, { node: Droplet }) {}
+export class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", Job, { node: Droplet }) {}
+export class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", Job, { node: Droplet }) {}
+export class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", Job, { node: Droplet }) {}
+export class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", Job, { node: Droplet }) {}
+export class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", Job, { node: Droplet }) {}
+export class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", Job, { node: Droplet }) {}
+export class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", Job, { node: Droplet }) {}
+export class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job, { node: Droplet }) {}
+export class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job, { node: Droplet }) {}
 
-// a process bound to the Mini host — it runs there, not on the Droplet.
+// a process bound to the Mini node — it runs there, not on the Droplet.
 export class KeyRotation extends ScheduledProcess.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
-  host: MiniHost,
+  node: MiniNode,
 }) {}
 
 // the group tree — this is the navigable tree, nothing more is needed
@@ -54,7 +54,7 @@ export class Fleet extends Group.Tag<Fleet>("@acme/queues/Ops")({
   Mini,
 }) {}
 
-/** Every leaf queue tag (the ones the server hosts / the client connects to). */
+/** Every leaf queue tag (the ones the server nodes / the client connects to). */
 export const LEAVES = [
   Mail,
   Jobs,

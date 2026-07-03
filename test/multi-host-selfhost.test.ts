@@ -1,86 +1,86 @@
 import { Effect, Layer, Schema } from "effect";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiHost";
+import { Combine, combineQuery } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 
-class NwslHost extends Resource.Host<NwslHost>("selfhost/NwslHost") {}
+class NwslNode extends Resource.Node<NwslNode>("selfnode/NwslNode") {}
 
-// a fleet health view: `status` per instance, `fleetStatus` a per-host map (Combine.byHost)
-class FleetDatabase extends Resource.Tag<FleetDatabase>()("selfhost/FleetDatabase", {
+// a fleet health view: `status` per instance, `fleetStatus` a per-node map (Combine.byNode)
+class FleetDatabase extends Resource.Tag<FleetDatabase>()("selfnode/FleetDatabase", {
   status: Resource.effect(Schema.Boolean),
   fleetStatus: Resource.effect(Schema.Record(Schema.String, Schema.Boolean)).pipe(Resource.fleet),
 }) {}
 
-// the impl keys its OWN row with `selfHost` — no hand-threaded host key
+// the impl keys its OWN row with `selfNode` — no hand-threaded node key
 const database = Resource.layer(
   FleetDatabase,
   Effect.gen(function* () {
-    const self = yield* Resource.selfHost(FleetDatabase);
+    const self = yield* Resource.selfNode(FleetDatabase);
     const peers = yield* Resource.peers(FleetDatabase);
     return {
       status: Effect.succeed(true),
       fleetStatus: Effect.gen(function* () {
-        const byHost = yield* combineQuery(peers, (peer) => peer.status, Combine.byHost);
-        return { ...byHost, [self]: true }; // self keyed the same way peers are
+        const byNode = yield* combineQuery(peers, (peer) => peer.status, Combine.byNode);
+        return { ...byNode, [self]: true }; // self keyed the same way peers are
       }),
     };
   }),
 );
 
-// peers keyed by host key, exactly as peersLayer keys them
+// peers keyed by node key, exactly as peersLayer keys them
 const fakePeers = {
-  "selfhost/EbwslHost": { status: Effect.succeed(false) },
-  "selfhost/WnbaHost": { status: Effect.succeed(true) },
+  "selfnode/EbwslNode": { status: Effect.succeed(false) },
+  "selfnode/WnbaNode": { status: Effect.succeed(true) },
 };
 
-it("selfHost keys the own row consistently with peer keys in a byHost fold", () =>
+it("selfNode keys the own row consistently with peer keys in a byNode fold", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const db = yield* FleetDatabase;
       const fleet = yield* db.fleetStatus;
       expect(fleet).toEqual({
-        "selfhost/NwslHost": true, // self, via Resource.selfHost — same key shape as peers
-        "selfhost/EbwslHost": false, // peer
-        "selfhost/WnbaHost": true, // peer
+        "selfnode/NwslNode": true, // self, via Resource.selfNode — same key shape as peers
+        "selfnode/EbwslNode": false, // peer
+        "selfnode/WnbaNode": true, // peer
       });
     }).pipe(
       Effect.provide(
         database.pipe(
           Layer.provide(Resource.peersFrom(FleetDatabase, fakePeers)),
-          Layer.provide(Resource.selfHostLayer(FleetDatabase, NwslHost)),
+          Layer.provide(Resource.selfNodeLayer(FleetDatabase, NwslNode)),
         ),
       ),
     ),
   ));
 
-it("Resource.fleetHealth cans the byHost fold + adds self", () =>
+it("Resource.fleetHealth cans the byNode fold + adds self", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const byHost = yield* Resource.fleetHealth(
+      const byNode = yield* Resource.fleetHealth(
         FleetDatabase,
         (peer) => peer.status,
-        Effect.succeed(true), // this host's own value
+        Effect.succeed(true), // this node's own value
       );
-      expect(byHost).toEqual({
-        "selfhost/NwslHost": true, // self
-        "selfhost/EbwslHost": false, // peer
-        "selfhost/WnbaHost": true, // peer
+      expect(byNode).toEqual({
+        "selfnode/NwslNode": true, // self
+        "selfnode/EbwslNode": false, // peer
+        "selfnode/WnbaNode": true, // peer
       });
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
           Resource.peersFrom(FleetDatabase, fakePeers),
-          Resource.selfHostLayer(FleetDatabase, NwslHost),
+          Resource.selfNodeLayer(FleetDatabase, NwslNode),
         ),
       ),
     ),
   ));
 
-it("peersLayer bundles selfHost — one capability, both provided", () =>
+it("peersLayer bundles selfNode — one capability, both provided", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      // selfHost resolves from peersLayer's bundled provision (no separate selfHostLayer)
-      const self = yield* Resource.selfHost(FleetDatabase);
-      expect(self).toBe("selfhost/NwslHost");
-    }).pipe(Effect.provide(Resource.peersLayer(FleetDatabase, NwslHost))),
+      // selfNode resolves from peersLayer's bundled provision (no separate selfNodeLayer)
+      const self = yield* Resource.selfNode(FleetDatabase);
+      expect(self).toBe("selfnode/NwslNode");
+    }).pipe(Effect.provide(Resource.peersLayer(FleetDatabase, NwslNode))),
   ));

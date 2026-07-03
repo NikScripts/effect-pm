@@ -7,20 +7,20 @@ import * as Group from "../src/Group";
 
 // The real target topology: a ServicesHub group containing league groups (nesting), where almost
 // everything runs LOCAL on one Droplet (provided by its `.layer`) and one member runs REMOTE on
-// the Mini (a different host, reached by a client). One runtime, one group tree, mixed provision —
+// the Mini (a different node, reached by a client). One runtime, one group tree, mixed provision —
 // reached uniformly through the group accessors. This is the ProcessManager-free deploy shape.
 
-class MiniHost extends Resource.Host<MiniHost>("hub/miniHost") {}
+class MiniNode extends Resource.Node<MiniNode>("hub/miniNode") {}
 
-// Local on the Droplet (no host) — stands in for a roster import queue.
+// Local on the Droplet (no node) — stands in for a roster import queue.
 class RosterQueue extends Resource.Tag<RosterQueue>()("hub/RosterQueue", {
   count: Resource.effect(Schema.Number),
 }) {}
 
-// Remote on the Mini (host-bound) — stands in for the one poller that runs on the mini.
+// Remote on the Mini (node-bound) — stands in for the one poller that runs on the mini.
 class LiveScorePoller extends Resource.Tag<LiveScorePoller>()("hub/LiveScorePoller", 
   { where: Resource.effect(Schema.String) },
-  { host: MiniHost },
+  { node: MiniNode },
 ) {}
 
 // Nested groups: Hub → Nwsl league → members. (Two more leagues would just be more members.)
@@ -32,7 +32,7 @@ class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
   Nwsl: NwslLeague,
 }) {}
 
-// The Mini hosts the poller.
+// The Mini nodes the poller.
 const MiniServer = Resource.serveHttp(LiveScorePoller, {
   where: Effect.succeed("poller@mini"),
 }).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
@@ -55,7 +55,7 @@ it("nested hub group: local members + one remote (mini) member, one runtime", ()
         RosterLocal,
         Resource.client(LiveScorePoller).pipe(
           Layer.provide(
-            Resource.connectHttp(MiniHost, {
+            Resource.connectHttp(MiniNode, {
               url: `http://127.0.0.1:${portMini}/rpc`,
             }),
           ),

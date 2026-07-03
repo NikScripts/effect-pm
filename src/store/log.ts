@@ -275,7 +275,7 @@ const entryMatchesQuery = (
     const queueId = entry.annotations[LogAnnotationKeys.queueId];
     if (queueId !== query.queueId) return false;
   }
-  // the host bucket is filtered at the storage layer (ProcessId.equals below), not by annotation.
+  // the node bucket is filtered at the storage layer (ProcessId.equals below), not by annotation.
   return true;
 };
 

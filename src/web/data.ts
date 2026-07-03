@@ -13,8 +13,8 @@ import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { changes, client, hostOf, kindOf as resourceKindOf, specOf, type FlatSpec, type HostKey } from "../Resource";
-import * as HostStatus from "../HostStatus";
+import { changes, client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey } from "../Resource";
+import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
 import { kind as apiKind } from "../ApiMetrics";
@@ -138,12 +138,12 @@ export interface ProcessBundle {
   /** Remove all schedule entries. @since 1.0.0 */
   readonly clearSchedule: CommandAtom;
 }
-/** The atoms one host dot/detail needs — its live status (up, readiness rollup, per-resource).
+/** The atoms one node dot/detail needs — its live status (up, readiness rollup, per-resource).
  *  Read-only. @since 1.0.0 */
-export interface HostBundle {
+export interface NodeBundle {
   readonly id: string;
-  readonly status: ValueAtom<HostStatus.Status | undefined>;
-  /** The host's runtime-wide log stream (recent tail, then live). @since 1.0.0 */
+  readonly status: ValueAtom<NodeStatus.Status | undefined>;
+  /** The node's runtime-wide log stream (recent tail, then live). @since 1.0.0 */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
    *  when a resource (or its dependency) degrades. @since 1.0.0 */
@@ -159,33 +159,33 @@ export interface ApiBundle {
   readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
 }
 
-/** A host that backs one or more of a group's resources — its id (the `Resource.Host` key) plus the
- *  transport key itself. Read straight off the tags (`hostOf`), so the dashboard's host list is the
- *  distinct hosts its resources are bound to — no separate registry. @since 1.0.0 */
-export interface HostRef {
+/** A node that backs one or more of a group's resources — its id (the `Resource.Node` key) plus the
+ *  transport key itself. Read straight off the tags (`nodeOf`), so the dashboard's node list is the
+ *  distinct nodes its resources are bound to — no separate registry. @since 1.0.0 */
+export interface NodeRef {
   readonly id: string;
-  readonly host: HostKey<unknown>;
+  readonly node: NodeKey<unknown>;
 }
 
-/** Walk a group tree and collect the distinct hosts its resources are bound to. A hostless
- *  (local/in-process) group yields `[]` — host dots appear only when resources name a host. @since 1.0.0 */
-export const hostsOf = (group: unknown): ReadonlyArray<HostRef> => {
-  const seen = new Map<string, HostRef>();
-  const walk = (node: unknown): void => {
-    if (Group.isGroup(node)) {
-      for (const member of Object.values(Group.members(node))) walk(member);
+/** Walk a group tree and collect the distinct nodes its resources are bound to. A nodeless
+ *  (local/in-process) group yields `[]` — node dots appear only when resources name a node. @since 1.0.0 */
+export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
+  const seen = new Map<string, NodeRef>();
+  const walk = (member: unknown): void => {
+    if (Group.isGroup(member)) {
+      for (const child of Object.values(Group.members(member))) walk(child);
       return;
     }
-    const host = hostOf(node);
-    if (host !== undefined && !seen.has(host.key)) {
-      seen.set(host.key, { id: host.key, host });
+    const node = nodeOf(member);
+    if (node !== undefined && !seen.has(node.key)) {
+      seen.set(node.key, { id: node.key, node });
     }
   };
   walk(group);
   return [...seen.values()];
 };
 
-/** A tag's wire identity (its `groupId`, falling back to `key`) — what a host's `HostStatus`
+/** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's `NodeStatus`
  *  reports for each served resource. @since 1.0.0 */
 export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
@@ -196,15 +196,15 @@ export const tagWireKey = (member: unknown): string | undefined => {
   return undefined;
 };
 
-/** The {@link HostRef} a resource tag is bound to (its `Resource.Host`), or `undefined` for a hostless
- *  tag — lets a resource page read its own readiness from its host's `HostStatus`. @since 1.0.0 */
-export const resourceHostRef = (tag: unknown): HostRef | undefined => {
-  const host = hostOf(tag);
-  return host === undefined ? undefined : { id: host.key, host };
+/** The {@link NodeRef} a resource tag is bound to (its `Resource.Node`), or `undefined` for a nodeless
+ *  tag — lets a resource page read its own readiness from its node's `NodeStatus`. @since 1.0.0 */
+export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
+  const node = nodeOf(tag);
+  return node === undefined ? undefined : { id: node.key, node };
 };
 
-/** The leaf resource tag in a group tree whose wire key is `key` (as reported by a host's
- *  `HostStatus.resources[].key`), or `undefined` if not found. Lets the host page open a served
+/** The leaf resource tag in a group tree whose wire key is `key` (as reported by a node's
+ *  `NodeStatus.resources[].key`), or `undefined` if not found. Lets the node page open a served
  *  resource's detail directly (without round-tripping through the group route). @since 1.0.0 */
 export const leafByKey = (group: unknown, key: string): unknown => {
   const walk = (node: unknown): unknown => {
@@ -283,7 +283,7 @@ const cachedAccumulator = <A, R>(opts: {
 const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
 const processBundleCache = new WeakMap<object, Map<string, ProcessBundle>>();
 const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
-const hostBundleCache = new WeakMap<object, Map<string, HostBundle>>();
+const nodeBundleCache = new WeakMap<object, Map<string, NodeBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
   let m = map.get(runtime);
   if (m === undefined) {
@@ -448,47 +448,47 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
   return bundle;
 };
 
-// A HostStatus client over a specific host's transport: a HostKey's *value* is the RPC `Protocol`,
-// so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`hostsOf`) erases the host's
+// A NodeStatus client over a specific node's transport: a NodeKey's *value* is the RPC `Protocol`,
+// so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
-// requirement — the same contained boundary assertion `Resource.client` makes for host-bearing tags.
-const hostStatusClient = (host: HostKey<unknown>) =>
-  client(HostStatus.Tag).pipe(
-    Layer.provide(Layer.effect(RpcClient.Protocol, host as HostKey<never>)),
+// requirement — the same contained boundary assertion `Resource.client` makes for node-bearing tags.
+const nodeStatusClient = (node: NodeKey<unknown>) =>
+  client(NodeStatus.Tag).pipe(
+    Layer.provide(Layer.effect(RpcClient.Protocol, node as NodeKey<never>)),
   );
 
-/** Build (once per runtime+host) the atom bundle for a host's live status — read straight from the
- *  reserved `HostStatus` resource over that host's transport. @since 1.0.0 */
-export const hostStatusBundle = <R, ER>(
+/** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
+ *  reserved `NodeStatus` resource over that node's transport. @since 1.0.0 */
+export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  ref: HostRef,
-): HostBundle => {
-  const cache = cacheFor(hostBundleCache, runtime);
+  ref: NodeRef,
+): NodeBundle => {
+  const cache = cacheFor(nodeBundleCache, runtime);
   const existing = cache.get(ref.id);
   if (existing !== undefined) return existing;
   const logsKey = `${ref.id}/logs`;
   bumpLogIdFrom(logsKey);
-  const bundle: HostBundle = {
+  const bundle: NodeBundle = {
     id: ref.id,
     status: runtime.atom(
-      // Provide the per-host client at the STREAM level so its scope spans the whole subscription.
+      // Provide the per-node client at the STREAM level so its scope spans the whole subscription.
       // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
       // returned the stream, interrupting it — "all fibers interrupted".)
-      Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.status)).pipe(
-        Stream.provide(hostStatusClient(ref.host)),
+      Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status)).pipe(
+        Stream.provide(nodeStatusClient(ref.node)),
       ),
     ),
     logs: runtime.atom(
-      // `cachedAccumulator`'s live + history both require `HostStatus.Tag`; provide the per-host
+      // `cachedAccumulator`'s live + history both require `NodeStatus.Tag`; provide the per-node
       // client once over the combined stream (same stream-scoped provide as `status`).
       cachedAccumulator({
         key: logsKey,
         cap: 300,
-        live: Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.logs)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(HostStatus.Tag, (h) => h.logHistory({ limit: 300 })).pipe(
+        live: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs)).pipe(Stream.map(toLogLine)),
+        history: Effect.flatMap(NodeStatus.Tag, (h) => h.logHistory({ limit: 300 })).pipe(
           Effect.map((entries) => entries.map(toLogLine)),
         ),
-      }).pipe(Stream.provide(hostStatusClient(ref.host))),
+      }).pipe(Stream.provide(nodeStatusClient(ref.node))),
     ),
     // Ready-count over time, accumulated client-side from the status stream — a compact readiness
     // sparkline (no server change). Dips when a resource degrades (e.g. a dependency blips).
@@ -496,10 +496,10 @@ export const hostStatusBundle = <R, ER>(
       cachedAccumulator({
         key: `${ref.id}/health`,
         cap: 120,
-        live: Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.status)).pipe(
+        live: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status)).pipe(
           Stream.map((st) => st.resources.filter((x) => x.ready).length),
         ),
-      }).pipe(Stream.provide(hostStatusClient(ref.host))),
+      }).pipe(Stream.provide(nodeStatusClient(ref.node))),
     ),
   };
   cache.set(ref.id, bundle);

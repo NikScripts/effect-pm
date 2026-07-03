@@ -19,7 +19,7 @@ const entry = (message: string): LogEntry => ({
   level: "Info",
   message,
   annotations: {
-    [LogAnnotationKeys.host]: "workshop-group",
+    [LogAnnotationKeys.node]: "workshop-group",
     [LogAnnotationKeys.processId]: "billing/sync",
   },
   spans: [],

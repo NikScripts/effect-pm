@@ -39,8 +39,8 @@ import {
   layer as resourceLayer,
   effect,
   stream,
-  type HostBoundTag,
-  type HostKey,
+  type NodeBoundTag,
+  type NodeKey,
   type ResourceTag,
   type ServeEntry,
 } from "./Resource";
@@ -91,13 +91,13 @@ export type ApiMetricsTag<Self> = ResourceTag<Self, ApiMetricsSpec> & {
 };
 
 /**
- * A host-bound {@link ApiMetricsTag} — its `[hostSym]` narrowed to the host (so `Resource.client`
- * resolves the transport). A **named** type so a consumer can `export` a host-bound metrics tag
- * without leaking the internal `clientIdSym` (TS4020). Returned by `ApiMetrics.Tag()(id, { host })`.
+ * A node-bound {@link ApiMetricsTag} — its `[nodeSym]` narrowed to the node (so `Resource.client`
+ * resolves the transport). A **named** type so a consumer can `export` a node-bound metrics tag
+ * without leaking the internal `clientIdSym` (TS4020). Returned by `ApiMetrics.Tag()(id, { node })`.
  *
  * @public
  */
-export type ApiMetricsHostTag<Self, HSelf> = HostBoundTag<
+export type ApiMetricsNodeTag<Self, HSelf> = NodeBoundTag<
   Self,
   ApiMetricsSpec,
   HSelf
@@ -126,11 +126,11 @@ const apiMetricsSpec = {
  *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
 export const kind = "@nikscripts/effect-pm/ApiMetrics";
 
-/** The per-instance Resource key (wire group prefix) for a metrics tag. A host-bound tag prefixes by
- *  its host's key, so two hosts serving the **same** `clientId` (e.g. the same SDP client behind two
- *  league hosts) get distinct groups and never collide. @internal */
-const keyFor = (clientId: string, host: HostKey<unknown> | undefined): string =>
-  host === undefined ? metricsKeyFor(clientId) : `${host.key}/${metricsKeyFor(clientId)}`;
+/** The per-instance Resource key (wire group prefix) for a metrics tag. A node-bound tag prefixes by
+ *  its node's key, so two nodes serving the **same** `clientId` (e.g. the same SDP client behind two
+ *  league nodes) get distinct groups and never collide. @internal */
+const keyFor = (clientId: string, node: NodeKey<unknown> | undefined): string =>
+  node === undefined ? metricsKeyFor(clientId) : `${node.key}/${metricsKeyFor(clientId)}`;
 
 /**
  * Read the linked outbound client id from an {@link ApiMetrics} tag.
@@ -185,17 +185,17 @@ export const layerFor = <
 ): Layer.Layer<Self, never, Scope.Scope> => layer(tag, options);
 
 /** Tag-construction options for {@link ApiMetrics.Tag}: bind the metrics resource to a {@link
- *  Resource.Host} (so it's served + reached on that host) and/or set its dashboard panel title.
+ *  Resource.Node} (so it's served + reached on that node) and/or set its dashboard panel title.
  *  @public */
 export interface ApiMetricsConstructOptions<HSelf = never> {
-  readonly host?: HostKey<HSelf>;
+  readonly node?: NodeKey<HSelf>;
   readonly description?: string;
 }
 
 /**
  * A serveAllHttp entry for one {@link ApiMetrics} tag — served like a queue/process, fed from the
  * in-process Metric registry ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add
- * the tag to the served host's `Group` and drop this into `serveAllHttp([...])`. @public
+ * the tag to the served node's `Group` and drop this into `serveAllHttp([...])`. @public
  */
 export const serverEntry = <Self>(
   tag: ApiMetricsTag<Self>,
@@ -207,35 +207,35 @@ export const serverEntry = <Self>(
 
 /**
  * Class factory for an {@link ApiMetrics} instance tag — its own per-instance RPC group, so it
- * serves on a host alongside queues/processes via {@link ApiMetrics.serverEntry} and is reached with
- * `Resource.client`. Bind it to a host with `{ host }`.
+ * serves on a node alongside queues/processes via {@link ApiMetrics.serverEntry} and is reached with
+ * `Resource.client`. Bind it to a node with `{ node }`.
  *
  * @example
  * ```ts
- * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId, { host: NwslHost }) {}
+ * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId, { node: NwslNode }) {}
  * ```
  *
  * @public
  */
 // `Context.Service`-shaped: `<Self>()(clientId, options?)`. Only `Self` is explicit; the client id's
-// literal isn't carried on the tag (`clientIdSym` is `string`). The host-bearing call narrows the
+// literal isn't carried on the tag (`clientIdSym` is `string`). The node-bearing call narrows the
 // return so `Resource.client` resolves its transport (window cadence lives on the layer/serverEntry).
 const tag = <Self>() => {
   function build(clientId: string): ApiMetricsTag<Self>;
   function build<HSelf>(
     clientId: string,
-    options: { readonly host: HostKey<HSelf>; readonly description?: string },
-  ): ApiMetricsHostTag<Self, HSelf>;
+    options: { readonly node: NodeKey<HSelf>; readonly description?: string },
+  ): ApiMetricsNodeTag<Self, HSelf>;
   function build(
     clientId: string,
     options?: ApiMetricsConstructOptions<unknown>,
   ): ApiMetricsTag<Self> {
-    const host = options?.host;
-    const key = keyFor(clientId, host);
+    const node = options?.node;
+    const key = keyFor(clientId, node);
     const base =
-      host === undefined
+      node === undefined
         ? resourceTag<Self>()(key, apiMetricsSpec, { kind, description: options?.description })
-        : resourceTag<Self>()(key, apiMetricsSpec, { kind, description: options?.description, host });
+        : resourceTag<Self>()(key, apiMetricsSpec, { kind, description: options?.description, node });
     return Object.assign(base, { [clientIdSym]: clientId });
   }
   return build;

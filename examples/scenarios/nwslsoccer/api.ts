@@ -8,7 +8,7 @@
  * - **`player`** — `getPlayerProfile`
  *
  * These are the `GET` routes observed on `api-sdp.nwslsoccer.com` for `/v1/nwsl/football` (locale `en-US`).
- * Other hosts (vocabulary, widgets, ecal) are out of scope for this client.
+ * Other nodes (vocabulary, widgets, ecal) are out of scope for this client.
  */
 import { HttpApi } from "effect/unstable/httpapi";
 import { NwslSdpPlayerGroup } from "./player-group";

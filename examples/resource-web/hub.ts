@@ -3,10 +3,10 @@
  *
  * The review fixture for the shipped `@nikscripts/effect-pm/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled process (the WNBA live-score
- * poller), and an API-usage tap (`ScoresApi`). Every resource is **hosted remotely** across three
- * hosts (served by `server.ts`); the browser reaches each via `Resource.connectHttp` (vite proxies
- * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **host die**. `ScoresApi` is an
- * `ApiMetrics` resource served on `WnbaHost` via `ApiMetrics.serverEntry`. `ScoresDb` is a dependency
+ * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
+ * nodes (served by `server.ts`); the browser reaches each via `Resource.connectHttp` (vite proxies
+ * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
+ * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serverEntry`. `ScoresDb` is a dependency
  * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
  * connection blips, the queue cascades to degraded, dogfooding dependency-aware readiness.
  */
@@ -20,20 +20,20 @@ import * as ApiMetrics from "../../src/ApiMetrics";
 
 const importJob = Schema.Struct({ id: Schema.String });
 
-// Three remote machines (see `server.ts`): the box-score queue on `WnbaHost`, the live-score poller
-// on `LiveHost`, the play-by-play queue on `StatsHost` — so the dashboard's host die shows three
+// Three remote machines (see `server.ts`): the box-score queue on `WnbaNode`, the live-score poller
+// on `LiveNode`, the play-by-play queue on `StatsNode` — so the dashboard's node die shows three
 // pips (a pyramid).
-/** The three hosts' ports (one process, three servers — see `server.ts`). Exported so the host urls
- *  here and the servers stay in sync. Each host carries its server-side url so `Resource.peersLayer`
+/** The three nodes' ports (one process, three servers — see `server.ts`). Exported so the node urls
+ *  here and the servers stay in sync. Each node carries its server-side url so `Resource.peersLayer`
  *  can reach its peers; the browser overrides it with a vite-proxied path (below). */
 export const HOST_PORTS = { wnba: 7780, live: 7781, stats: 7782 } as const;
 const rpcUrl = (port: number) => `http://127.0.0.1:${port}/rpc`;
 
-export class WnbaHost extends Resource.Host<WnbaHost>("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
-export class LiveHost extends Resource.Host<LiveHost>("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
-export class StatsHost extends Resource.Host<StatsHost>("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
+export class WnbaNode extends Resource.Node<WnbaNode>("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
+export class LiveNode extends Resource.Node<LiveNode>("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
+export class StatsNode extends Resource.Node<StatsNode>("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
 
-// A **multi-host** resource: the SAME WorkerPool served on all three hosts — one class, three
+// A **multi-node** resource: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
 // total across the fleet — a `fleet`-tagged query the layer folds from `Resource.peers` + its own
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
@@ -41,19 +41,19 @@ export class StatsHost extends Resource.Host<StatsHost>("wnba/stats", { url: rpc
 export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
   active: Resource.effect(Schema.Number),
   fleetActive: Resource.effect(Schema.Number).pipe(Resource.fleet),
-  // a per-host view (one row per host) — needs `selfHost` to key this instance's own row
-  activeByHost: Resource.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
+  // a per-node view (one row per node) — needs `selfNode` to key this instance's own row
+  activeByNode: Resource.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
 }).pipe(
-  Resource.multiHost([WnbaHost, LiveHost, StatsHost]), // hostless, every instance an equal peer
+  Resource.distributed([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
 ) {}
 
-// A "scores database" connection, served on WnbaHost. Its readiness reflects a (simulated) physical
+// A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
 // DB blips the queue cascades to degraded. This dogfoods `readinessOf` + the readiness cascade.
 export class ScoresDb extends Resource.Tag<ScoresDb>()(
   "wnba/ScoresDb",
   { connected: Resource.effect(Schema.Boolean) },
-  { host: WnbaHost },
+  { node: WnbaNode },
 ).pipe(
   Resource.withReadiness((svc) =>
     Effect.map(svc.connected, (c) =>
@@ -65,7 +65,7 @@ export class ScoresDb extends Resource.Tag<ScoresDb>()(
 export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   importJob,
-  { host: WnbaHost },
+  { node: WnbaNode },
 ).pipe(
   // depend on the scores DB: ready only when the queue is running AND the DB is connected. `base` is
   // the queue's own `phase === "running"` check — kept, not replaced — AND-ed with the DB's readiness.
@@ -75,15 +75,15 @@ export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
 ) {}
 export class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
-  { host: LiveHost },
+  { node: LiveNode },
 ) {}
 export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   importJob,
-  { host: StatsHost },
+  { node: StatsNode },
 ) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
-  host: WnbaHost,
+  node: WnbaNode,
 }) {}
 
 /** WNBA league group — a nested group the dashboard drills into. */
@@ -103,15 +103,15 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // ── Browser runtime ──────────────────────────────────────────────────────────
 // Every resource — the box-score queue, live-score poller, play-by-play queue, and the scores
 // API-usage tap — is served remotely (server.ts); the browser is a thin `Resource.client` over each
-// host's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaHost` alongside the box-score queue.
-// One transport per host → one pip each, auto-fed by `HostStatus`.
-const wnbaTransport = Resource.connectHttp(WnbaHost, { url: "/rpc" });
-const liveTransport = Resource.connectHttp(LiveHost, { url: "/live/rpc" });
-const statsTransport = Resource.connectHttp(StatsHost, { url: "/stats/rpc" });
+// node's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaNode` alongside the box-score queue.
+// One transport per node → one pip each, auto-fed by `NodeStatus`.
+const wnbaTransport = Resource.connectHttp(WnbaNode, { url: "/rpc" });
+const liveTransport = Resource.connectHttp(LiveNode, { url: "/live/rpc" });
+const statsTransport = Resource.connectHttp(StatsNode, { url: "/stats/rpc" });
 
-// Expose each host itself in the runtime (not only the resource clients): the host-status die reads
-// `HostStatus` over each host's transport, so it needs the host in context. Each transport is one
-// const (shared by reference), so the client + the die reuse a single connection per host.
+// Expose each node itself in the runtime (not only the resource clients): the node-status die reads
+// `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one
+// const (shared by reference), so the client + the die reuse a single connection per node.
 const appLayer = Layer.mergeAll(
   wnbaTransport,
   liveTransport,
@@ -121,10 +121,10 @@ const appLayer = Layer.mergeAll(
   Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
   Resource.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
   Resource.client(ScoresDb).pipe(Layer.provide(wnbaTransport)),
-  // WorkerPool is a *hostless* multi-host tag, so the client names which instance to read — here the
-  // one on WnbaHost. `client(tag, host)` resolves the transport from that host, so the requirement is
-  // the host (satisfied by wnbaTransport), enforced at compile time.
-  Resource.client(WorkerPool, WnbaHost).pipe(Layer.provide(wnbaTransport)),
+  // WorkerPool is a *nodeless* multi-node tag, so the client names which instance to read — here the
+  // one on WnbaNode. `client(tag, node)` resolves the transport from that node, so the requirement is
+  // the node (satisfied by wnbaTransport), enforced at compile time.
+  Resource.client(WorkerPool, WnbaNode).pipe(Layer.provide(wnbaTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */

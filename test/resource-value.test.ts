@@ -40,7 +40,7 @@ it("value is plain + resolved at acquire — REMOTE (same shape)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ref = yield* SubscriptionRef.make(42);
-      const Host = Resource.serveAllHttp([
+      const Node = Resource.serveAllHttp([
         Resource.serverEntry(Live, { count: SubscriptionRef.changes(ref) }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
@@ -56,6 +56,6 @@ it("value is plain + resolved at acquire — REMOTE (same shape)", () =>
           Effect.provide(Resource.client(Live).pipe(Layer.provide(protocol(`${base}/rpc`)))),
           Effect.scoped,
         );
-      }).pipe(Effect.provide(Host), Effect.scoped);
+      }).pipe(Effect.provide(Node), Effect.scoped);
     }),
   ));

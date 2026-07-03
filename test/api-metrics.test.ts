@@ -104,7 +104,7 @@ describe("ApiMetrics per-instance groups + serveAllHttp", () => {
     expect(OtherMetrics.groupId).toBe(ApiMetrics.metricsKeyFor(OtherClientId));
   });
 
-  // Two metrics tags served on one host via `serveAllHttp`; each reached over http with its own
+  // Two metrics tags served on one node via `serveAllHttp`; each reached over http with its own
   // per-instance group — `Resource.client` routes to the right one (no shared key header).
   const alphaImpl = {
     usageNow: Effect.succeed({

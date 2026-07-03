@@ -14,8 +14,8 @@ export default defineConfig({
     host: true,
     port: 5176,
     allowedHosts: true,
-    // The browser is a thin client; proxy each host's RPC so the client is same-origin (no CORS).
-    // `/rpc` → WnbaHost, `/live` → LiveHost, `/stats` → StatsHost (all from server.ts).
+    // The browser is a thin client; proxy each node's RPC so the client is same-origin (no CORS).
+    // `/rpc` → WnbaNode, `/live` → LiveNode, `/stats` → StatsNode (all from server.ts).
     proxy: {
       "/rpc": { target: "http://localhost:7780", changeOrigin: true },
       "/live": {

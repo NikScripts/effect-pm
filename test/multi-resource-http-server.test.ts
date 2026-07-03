@@ -22,7 +22,7 @@ const layerA = Resource.serve(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1))
 const layerB = Resource.serve(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
 // the serves form — httpServer([...]) bundles the provideMerge + registry
-const Host = Resource.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(
+const Node = Resource.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
@@ -67,5 +67,5 @@ it("httpServer serves serve layers on one /rpc, isolated, with /health listing b
       };
       expect(body.status).toBe("ok");
       expect(body.resources.map((r) => r.key).sort()).toEqual(["httpserver/A", "httpserver/B"]);
-    }).pipe(Effect.provide(Host), Effect.scoped),
+    }).pipe(Effect.provide(Node), Effect.scoped),
   ));
