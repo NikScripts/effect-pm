@@ -15,7 +15,7 @@ and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engi
 
 ```ts
 // tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
-import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
 import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
 
 export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
@@ -25,7 +25,7 @@ export class LiveScores extends ScheduledProcess.Tag<LiveScores>()("nwsl/LiveSco
 ```ts
 // runtime.ts — Node OS edge only. Layers, serveHttp, storage, persistence.
 import { Layer } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
 import { SQLiteHistoryStore } from "@nikscripts/effect-pm/storage/sqlite";
 import { RosterQueue } from "./tags";
 
@@ -46,7 +46,7 @@ yield* queue.logHistory({ limit: 200 });
 
 If a file calls `Layer.provide` / `serveHttp` / `SQLiteRuntimeStorage` / a storage adapter, it
 belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
-**subpaths** (`@nikscripts/effect-pm/QueueContract`, `/ScheduledProcess`, `/Group`, …) so member
+**subpaths** (`@nikscripts/effect-pm/QueueResource`, `/ScheduledProcess`, `/Group`, …) so member
 access tree-shakes.
 
 See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer

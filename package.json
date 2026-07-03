@@ -40,10 +40,6 @@
       "types": "./dist/QueueResource.d.ts",
       "default": "./dist/QueueResource.js"
     },
-    "./CustomQueueContract": {
-      "types": "./dist/CustomQueueContract.d.ts",
-      "default": "./dist/CustomQueueContract.js"
-    },
     "./CustomQueueResource": {
       "types": "./dist/CustomQueueResource.d.ts",
       "default": "./dist/CustomQueueResource.js"
@@ -55,10 +51,6 @@
     "./MultiHost": {
       "types": "./dist/MultiHost.d.ts",
       "default": "./dist/MultiHost.js"
-    },
-    "./QueueContract": {
-      "types": "./dist/QueueContract.d.ts",
-      "default": "./dist/QueueContract.js"
     },
     "./ProcessStore": {
       "types": "./dist/ProcessStore.d.ts",

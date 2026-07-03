@@ -24,7 +24,7 @@ But `QueueResource.serve` **doesn't exist**. Checked in beta.19:
 - `ScheduledProcess` namespace exports: `serve`, `serveHttp`, `server`, `serverEntry` — the process form
   _is_ on its namespace, so the two are **asymmetric**.
 - The queue `serve` actually lives in **`QueueContract.ts`** (`export const serve` ~L861), reachable only
-  via the `@nikscripts/effect-pm/QueueContract` subpath — not re-exported through `QueueResource`.
+  via the `@nikscripts/effect-pm/QueueResource` subpath — not re-exported through `QueueResource`.
 
 So a consumer following the changeset/example hits `Property 'serve' does not exist on QueueResource`.
 
@@ -34,7 +34,7 @@ So a consumer following the changeset/example hits `Property 'serve' does not ex
 its existing `serverEntry` config:
 
 ```ts
-import * as QueueContract from "@nikscripts/effect-pm/QueueContract";
+import * as QueueContract from "@nikscripts/effect-pm/QueueResource";
 QueueContract.serve(NwslRosterImportQueue, nwslRosterImportQueueConfig); // ✅ compiles
 ```
 
@@ -47,7 +47,7 @@ So this is purely a **naming / re-export** gap, not a functional one. `Scheduled
    `ScheduledProcess.serve` and the changeset/example — the least-surprise fix; consumers use
    `QueueResource` for `Tag`/`layer`/`serverEntry` already, so `serve` belongs there too. **or**
 2. **Correct the changeset + example + any guide** to say `QueueContract.serve` (from
-   `@nikscripts/effect-pm/QueueContract`), and note the asymmetry with `ScheduledProcess.serve`.
+   `@nikscripts/effect-pm/QueueResource`), and note the asymmetry with `ScheduledProcess.serve`.
 
 Preference is (1) — a one-line re-export keeps the toolkit symmetric and the docs already-correct.
 

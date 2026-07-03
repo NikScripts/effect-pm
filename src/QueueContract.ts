@@ -959,10 +959,11 @@ export const configure = <
   patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
-// The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
-// re-exported by the barrel as `export * as QueueResource` (so member access tree-shakes — the
-// light `Tag`/spec here never pulls the engine that `layer`/`server`/`serveHttp` use).
+// This file is the **light half** (`Tag`/spec/schemas, no engine). The public `QueueResource` namespace is
+// assembled in `internal/queueResourceNamespace.ts` (light `Tag` here + engine `layer`/`serve`/…), and is
+// what the `./QueueResource` subpath + the barrel `export * as QueueResource` both resolve to — so member
+// access tree-shakes (`QueueResource.Tag` pulls no engine code). This module is internal; import from
+// `@nikscripts/effect-pm/QueueResource`.
 //
-// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueContract"` gives a
-// tree-shakeable namespace — `QueueResource.Tag` (alias of `queueTag`) pulls no engine code.
+// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` → `QueueResource.Tag`.
 export { queueTag as Tag };

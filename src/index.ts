@@ -22,7 +22,7 @@
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
  *   `server` / `serveHttp` / `Host` switch only the layer). Batteries-included resource kinds build
  *   on it — **`ScheduledProcess`**, **`ProcessScheduleResource`**, and the toolkit queue (from
- *   `@nikscripts/effect-pm/QueueContract`) — each with `Tag` / `layer` / `configure` / `server` /
+ *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `server` /
  *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different hosts). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See `docs/guides/toolkit-by-example.md`.
@@ -57,7 +57,7 @@
  * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueContract`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
+ * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
  * **`@nikscripts/effect-pm/ProcessScheduleContract`**, **`@nikscripts/effect-pm/Group`**,
  * **`@nikscripts/effect-pm/HostLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.

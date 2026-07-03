@@ -11,7 +11,7 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
 >
 > **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
-> the subpath — `import { queueTag, queueStatus, configure } from "@nikscripts/effect-pm/QueueContract"`
+> the subpath — `import { queueTag, queueStatus, configure } from "@nikscripts/effect-pm/QueueResource"`
 > — which is **proven engine-free** (≈23kb, zero engine code) and tree-shakes in any bundler. The
 > barrel `QueueResource.Tag` is functionally identical but may include the queue engine code
 > depending on your bundler (it's pure-Effect with **no native deps**, so it never *breaks* a build —
@@ -23,7 +23,7 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > subpath. You get the same `QueueResource.Tag` ergonomics, and it **tree-shakes** — zero engine code:
 >
 > ```ts
-> import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
+> import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
 > import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
 > import * as ProcessScheduleResource from "@nikscripts/effect-pm/ProcessScheduleContract";
 >
@@ -333,7 +333,7 @@ const program = Effect.gen(function* () {
 Contract-only import (tree-shake engine):
 
 ```ts
-import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueContract";
+import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueResource";
 ```
 
 See [`docs/RESOURCE-API.md`](../RESOURCE-API.md#customqueueresource) and

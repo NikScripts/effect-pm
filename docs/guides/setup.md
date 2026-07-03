@@ -128,7 +128,7 @@ A `Host` lets a group of resources be served on one port (§4) and reached over 
 ```ts
 import { Schema } from "effect";
 import { Resource } from "@nikscripts/effect-pm/Resource";
-import { queueTag } from "@nikscripts/effect-pm/QueueContract";
+import { queueTag } from "@nikscripts/effect-pm/QueueResource";
 import { processTag } from "@nikscripts/effect-pm/ScheduledProcess";
 import { Group } from "@nikscripts/effect-pm/Group";
 
@@ -152,7 +152,7 @@ import { Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { Resource } from "@nikscripts/effect-pm/Resource";
-import { serverEntry as queueEntry } from "@nikscripts/effect-pm/QueueContract";
+import { serverEntry as queueEntry } from "@nikscripts/effect-pm/QueueResource";
 import { serverEntry as processEntry } from "@nikscripts/effect-pm/ScheduledProcess";
 import { HistoryStore } from "@nikscripts/effect-pm/HistoryStore";
 

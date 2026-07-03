@@ -16,8 +16,8 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
 | **Toolkit (location-transparent)** | |
 | `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`serveAllHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. `serveAllHttp` = many resources on one port (group behind one `Host`). |
-| `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueContract`. |
-| `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueContract`. |
+| `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueResource`. |
+| `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueResource`. |
 | `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
 | `src/ScheduledProcess.ts` | Toolkit **process** (`ScheduledProcess`). |
 | `src/ProcessScheduleContract.ts` | Toolkit **schedule** (`ProcessScheduleResource`) — CRUD + reconcile + `changes`. |

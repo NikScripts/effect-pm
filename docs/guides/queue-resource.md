@@ -9,7 +9,7 @@ optional schema validation, observability, and (opt-in) durability. It's a locat
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
 
 const Job = Schema.Struct({ id: Schema.String });
 class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}

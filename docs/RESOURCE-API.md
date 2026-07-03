@@ -10,7 +10,7 @@ Every contract's `.Tag` factory stamps a canonical **kind** id on the tag it bui
 
 ```ts
 import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
 
 Resource.kindOf(MyQueue);        // "@nikscripts/effect-pm/QueueResource"
 Resource.kindOf(MyQueue) === QueueResource.kind; // true
@@ -323,7 +323,7 @@ const numeric = yield* queue.levelSizes // number[] indexed by lane
 Tree-shake the contract only (no engine on the tag import path):
 
 ```typescript
-import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueContract"
+import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueResource"
 ```
 
 ### Layer / engine
@@ -354,7 +354,7 @@ const queue = yield* CustomQueueEngine.make({
 - **`levelSizes`** — `number[]` parallel to lane indices.
 - No `prioritize` / `defer` — pick the lane explicitly on `add`.
 
-Subpaths: `@nikscripts/effect-pm/CustomQueueResource` (namespace + engine), `@nikscripts/effect-pm/CustomQueueContract` (tag/layer/server only).
+Subpaths: `@nikscripts/effect-pm/CustomQueueResource` (namespace + engine), `@nikscripts/effect-pm/CustomQueueResource` (tag/layer/server only).
 
 Example: [`examples/forms/queue/custom-queue-resource-n-level.ts`](../examples/forms/queue/custom-queue-resource-n-level.ts) (`pnpm run example:custom-queue-resource`).
 

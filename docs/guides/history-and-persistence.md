@@ -20,7 +20,7 @@ Provide a `HistoryStore` layer alongside the resource layer:
 ```ts
 import { Layer } from "effect";
 import { HistoryStore } from "@nikscripts/effect-pm";
-import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
 
 const rosterQueueLayer = QueueResource.layer(RosterQueue, {
   effect,
