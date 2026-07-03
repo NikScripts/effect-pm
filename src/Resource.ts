@@ -1965,6 +1965,39 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   >;
 };
 
+/**
+ * Serve a resource **and** grant its local instance from **one** materialization — the co-located "expose
+ * it over RPC AND consume it in-process" case (a node that serves its resources and also `yield*`s them,
+ * e.g. to read a {@link Resource.local} member). The impl runs **once**, so its cells / pollers / resolved
+ * {@link peers} are shared: the served view and the in-process view are the **same instance** — no double
+ * materialization, no second `peersLayer`. Register onto a node with {@link httpServer} like any
+ * {@link serve} layer; a served-**only** gateway (never consumed locally) uses {@link serve} directly.
+ *
+ * Use the **`Effect` form** when the impl needs a capability to build (resolve `peers` / a pool once; the
+ * members close over it) — `R` is discharged here, shared by both the grant and the handlers.
+ *
+ * @public
+ */
+export const serveLocal = <Self, S extends Spec, R = never>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<S>, never, R> =>
+  Layer.unwrap(
+    Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) =>
+      Layer.merge(
+        localLayer(tag, built),
+        // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
+        // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
+        // `R` was discharged by the Effect form above, so the handlers are requirement-free.
+        serve(tag, built as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
+          HandlerContextOf<S>,
+          never,
+          never
+        >,
+      ),
+    ),
+  );
+
 /** Options for {@link httpServer}. @public */
 export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;

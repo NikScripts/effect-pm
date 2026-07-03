@@ -18,3 +18,9 @@ fixed-at-build case, `value` was a non-idiomatic hack between the two.
 **Migration:** `Resource.value(S)` → `Resource.ref(S)`; the impl gives a `Subscribable` (`subscribable(ref)`
 or `mapSubscribable`) instead of a raw `Stream`; reads become `yield* svc.x.get` (was `svc.x`) and
 `svc.x.changes` (was `Resource.changes(svc, s => s.x)`). Queue `size`/`status`/`isEmpty` are now `ref`s.
+
+**`Resource.serveLocal(tag, impl)`** — serve a resource **and** grant its local instance from **one**
+materialization (the co-located "expose over RPC AND consume in-process" case). The impl runs once, so the
+served view and the in-process `yield* Tag` are the same instance — no double materialization, no second
+`peersLayer`. Composes onto a node with `httpServer` like any `serve` layer; a served-only gateway uses
+`serve` directly. Use the `Effect` form when the impl needs a capability (`peers`, a pool) to build.
