@@ -2032,9 +2032,6 @@ const httpServerBase = (
         );
       }
       const startedAt = yield* Clock.currentTimeMillis;
-      const merged = entries
-        .map((entry) => entry.group)
-        .reduce((acc, group) => acc.merge(group));
       const readiness = Effect.forEach(entries, (entry) =>
         Effect.map(entry.readiness, (result) => ({
           key: entry.groupId,
@@ -2043,11 +2040,43 @@ const httpServerBase = (
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );
+      // Every node auto-serves the reserved node-status resource (status / logs / ping) alongside the
+      // registered resources, so a client can inspect any node without the author wiring it. Built here
+      // (not a registered `serve` layer) so it reports the user resources without counting itself.
+      const { nodeStatusServeEntry } = yield* Effect.promise(
+        () => import("./internal/nodeStatusResource"),
+      );
+      const nodeEntry = nodeStatusServeEntry({
+        startedAt,
+        resourceCount: entries.length,
+        readiness,
+      });
+      const nodeTag = nodeEntry.tag;
+      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
+        ? nodeEntry.impl
+        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
+      const nodeFlat = flattenImpl(nodeImpl, nodeTag[specSym]);
+      const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
+      for (const [key, member] of Object.entries(nodeFlat)) {
+        nodeHandlers[wireTag(nodeTag.groupId, key)] = (payload) =>
+          invokeWireMethod(member, nodeTag[specSym][key] as AnyMethod, payload);
+      }
+      const merged = [...entries.map((entry) => entry.group), nodeTag[groupSym]].reduce(
+        (acc, group) => acc.merge(group),
+      );
       const rpcAppLayer = RpcServer.layerHttp({
         group: merged,
         path: options?.path ?? "/rpc",
         protocol: "http",
-      });
+      }).pipe(
+        Layer.provide(
+          nodeTag[groupSym].toLayer(
+            nodeHandlers as unknown as Parameters<
+              (typeof nodeTag)[typeof groupSym]["toLayer"]
+            >[0],
+          ),
+        ),
+      );
       const healthRoute = HttpRouter.add(
         "GET",
         options?.health?.path ?? "/health",
