@@ -1,36 +1,35 @@
 import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
-import { HistoryStore, ScheduledProcess } from "../src";
-import { ProcessSchedule } from "../src/ProcessSchedule";
+import { HistoryStore } from "../src";
+import * as Process from "../src/Process";
 
-// A process started disarmed (ProcessSchedule.empty) so it only runs on runImmediately; with
-// captureLogs + a HistoryStore, its logged line is captured, persisted, and read via logHistory.
-class LogProc extends ScheduledProcess.Tag<LogProc>()(
+// A process started disarmed (an empty inline schedule) so it only runs on runImmediately; with
+// captureLogs + a HistoryStore, its logged line is captured, persisted, and read via logs.history.
+class LogProc extends Process.Tag<LogProc>()(
   "test/process-log-history/Proc",
-) {}
+).pipe(Process.schedule([])) {}
 
-it("process logHistory reads back captured logs (captureLogs + HistoryStore)", () =>
+it("process logs.history reads back captured logs (captureLogs + HistoryStore)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
       yield* proc.runImmediately;
       // capture + append are async — wait until history is populated
       yield* Effect.gen(function* () {
-        while ((yield* proc.logHistory({})).length === 0) {
+        while ((yield* proc.logs.history({})).length === 0) {
           yield* Effect.sleep(Duration.millis(10));
         }
       }).pipe(Effect.timeout(Duration.seconds(2)));
 
-      const rows = yield* proc.logHistory({ limit: 50 });
+      const rows = yield* proc.logs.history({ limit: 50 });
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.some((r) => JSON.stringify(r).includes("process tick"))).toBe(
         true,
       );
     }).pipe(
       Effect.provide(
-        ScheduledProcess.layer(LogProc, {
+        Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-          schedule: ProcessSchedule.empty,
           captureLogs: true,
         }).pipe(Layer.provide(HistoryStore.layerMemory())),
       ),
@@ -38,18 +37,17 @@ it("process logHistory reads back captured logs (captureLogs + HistoryStore)", (
     ),
   ));
 
-it("process logHistory is empty without a HistoryStore (graceful, opt-in)", () =>
+it("process logs.history is empty without a HistoryStore (graceful, opt-in)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
       yield* proc.runImmediately;
       yield* Effect.sleep(Duration.millis(50));
-      expect(yield* proc.logHistory({})).toEqual([]);
+      expect(yield* proc.logs.history({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        ScheduledProcess.layer(LogProc, {
+        Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-          schedule: ProcessSchedule.empty,
           captureLogs: true,
         }),
       ),

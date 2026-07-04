@@ -12,7 +12,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
 import { ProcessStore } from "../src/ProcessStore";
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import {
   QueueResourceStore,

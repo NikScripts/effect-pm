@@ -64,14 +64,14 @@ yield* queue.metricsHistory({ since, until })    // past metric windows (queueMe
 Same shape as the queue — set `captureLogs` on the process layer, provide a `HistoryStore`:
 
 ```ts
-const procLayer = ScheduledProcess.layer(NwslSync, {
+const procLayer = Process.layer(NwslSync, {
   effect,
   captureLogs: true,
 }).pipe(Layer.provide(HistoryStore.layerMemory()));
 
 const proc = yield* NwslSync;
-yield* proc.logs                      // live captured lines
-yield* proc.logHistory({ limit: 100 }) // past captured lines
+yield* proc.logs.live                    // live captured lines
+yield* proc.logs.history({ limit: 100 }) // past captured lines
 ```
 
 ## Runtime-wide (HostLogs)
@@ -144,7 +144,7 @@ the host owns persistence. This is the proven path (`test/queue-remote-http.test
 **Host (Droplet/Mini)** — serve the resource with capture + a history backend:
 
 ```ts
-QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
+Resource.httpServer([QueueResource.serve(RosterQueue, { effect, captureLogs: true })])
   .pipe(Layer.provide(HistoryStore.layerMemory())); // or SQLiteHistoryStore.layer({ filename })
 ```
 

@@ -1,41 +1,52 @@
-import { ProcessStorage } from "../../../src/ProcessStorage";
+import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-controls-external-fiber
  *
- * ProcessSchedule service from an external controller fiber. Run: `pnpm run example:form:schedule-controls-external-fiber`
+ * Drive a running process's schedule from an EXTERNAL controller fiber. The schedule initializer
+ * seeds the first window and hands the live `Process.ScheduleControls` to a shared `Ref`; a separate
+ * fiber then arms/replaces windows through those controls.
+ * Run: `pnpm run example:form:schedule-controls-external-fiber`
  */
 
-import { Duration, Effect, Fiber, Layer, Ref } from "effect";
+import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule } from "../../../src";
+import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
-const scheduleLayer = ProcessSchedule.inMemory([
-  ProcessSchedule.window("external-1", utcDateFromMillis(0), utcDateFromMillis(500)),
-]);
-
-const env = Layer.mergeAll(ProcessStorage.layer, scheduleLayer, TestClock.layer());
+const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
+  // The live schedule controls, published by the initializer for the external controller to use.
+  const controlsRef = yield* Ref.make<Option.Option<Process.ScheduleControls>>(
+    Option.none(),
+  );
 
   const proc = Process.make("examples/forms/schedule-controls-external-fiber", {
     polling: Polling.spaced(Duration.millis(100)),
-    // No inlined schedule — arms via ProcessSchedule layer at fork site.
+    // Seed the first window, then hand the live controls to the external controller fiber.
+    schedule: (controls) =>
+      controls
+        .set([Process.window("external-1", utcDateFromMillis(0), utcDateFromMillis(500))])
+        .pipe(Effect.andThen(Ref.set(controlsRef, Option.some(controls)))),
     effect: Ref.update(ticks, (n) => n + 1),
   });
 
   const controller = Effect.gen(function* () {
-    const schedule = yield* ProcessSchedule;
     yield* Effect.sleep(Duration.millis(900));
-    yield* schedule.add(
-      ProcessSchedule.window("external-2", utcDateFromMillis(900), utcDateFromMillis(1_500)),
-    );
+    const controls = yield* Ref.get(controlsRef);
+    yield* Option.match(controls, {
+      onNone: () => Effect.void,
+      onSome: (c) =>
+        c.add(Process.window("external-2", utcDateFromMillis(900), utcDateFromMillis(1_500))),
+    });
     yield* Effect.sleep(Duration.millis(700));
-    yield* schedule.set([
-      ProcessSchedule.window("external-2", utcDateFromMillis(900), utcDateFromMillis(1_500)),
-    ]);
+    yield* Option.match(controls, {
+      onNone: () => Effect.void,
+      onSome: (c) =>
+        c.set([Process.window("external-2", utcDateFromMillis(900), utcDateFromMillis(1_500))]),
+    });
   });
 
   const supervised = yield* Effect.forkChild(proc.effect);

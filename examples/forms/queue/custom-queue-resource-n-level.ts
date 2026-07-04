@@ -26,7 +26,7 @@ const program = Effect.gen(function* () {
   yield* queue.add({ id: "b", kind: "report" }, "batch");
   yield* queue.add([{ id: "c", kind: "email" }, { id: "d", kind: "email" }], 2);
 
-  const sizes = queue.status.sizes;
+  const sizes = (yield* queue.status.get).sizes;
   yield* Effect.log(`sizes: ${Object.entries(sizes).map(([k, n]) => `${k}=${String(n)}`).join(", ")}`);
 
   const levelSizes = yield* queue.levelSizes;

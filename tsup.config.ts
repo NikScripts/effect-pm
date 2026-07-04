@@ -17,8 +17,8 @@ export default defineConfig([
     entry: {
       index: "src/index.ts",
       Process: "src/Process.ts",
-      QueueResource: "src/internal/queueResourceNamespace.ts",
-      CustomQueueResource: "src/internal/customQueueResourceNamespace.ts",
+      QueueResource: "src/QueueResource.ts",
+      CustomQueueResource: "src/CustomQueueResource.ts",
       Resource: "src/Resource.ts",
       MultiNode: "src/MultiNode.ts",
       ProcessStore: "src/ProcessStore.ts",
@@ -37,7 +37,6 @@ export default defineConfig([
       HistoryStore: "src/HistoryStore.ts",
       DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",
-      ScheduledProcess: "src/internal/scheduledProcessNamespace.ts",
       ApiMetrics: "src/ApiMetrics.ts",
       Telemetry: "src/Telemetry.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",

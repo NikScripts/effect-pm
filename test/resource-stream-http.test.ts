@@ -13,7 +13,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import { groupOf } from "../src/Resource";
-import { queueStatus } from "../src/QueueContract";
+import { queueStatus } from "../src/QueueResource";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a
@@ -30,7 +30,7 @@ const TickerServer = HttpRouter.serve(
     protocol: "http",
   }).pipe(
     Layer.provide(
-      Resource.server(Ticker, {
+      Resource.serveRemote(Ticker, {
         current: Effect.succeed(0),
         // a finite snapshot stream — deterministic proof the elements cross the wire in order
         changes: Stream.fromIterable([1, 2, 3]),
@@ -84,7 +84,7 @@ class Status extends Resource.Tag<Status>()("stream/Status", {
 
 // The queue contract's `status` snapshot streams over http — proves the real `queueStatus`
 // (per-priority sizes + paused + in-flight + completed) crosses the wire as stream elements,
-// using the batteries-included `serveHttp` (ndjson by default, which streaming needs).
+// using the batteries-included `httpServer([serve(...)])` (ndjson by default, which streaming needs).
 class QueueWatch extends Resource.Tag<QueueWatch>()("stream/QueueWatch", {
   status: Resource.stream(queueStatus),
 }) {}
@@ -104,9 +104,11 @@ const snapB = {
   phase: "running" as const,
 };
 
-const QueueWatchServer = Resource.serveHttp(QueueWatch, {
-  status: Stream.fromIterable([snapA, snapB]),
-}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const QueueWatchServer = Resource.httpServer([
+  Resource.serve(QueueWatch, {
+    status: Stream.fromIterable([snapA, snapB]),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("streams the queue status snapshot over real http", () => {
   const program = Effect.gen(function* () {

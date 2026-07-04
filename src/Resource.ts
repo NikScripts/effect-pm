@@ -32,8 +32,9 @@
  *
  * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
  * default on both, so client/server can't disagree on the codec):
- * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
- * - {@link Resource.connectHttp} — wire a {@link Resource.Node}'s transport from a `url`.
+ * - {@link Resource.httpServer} — expose one or more {@link Resource.serve} layers on an http
+ *   `RpcServer` in one call;
+ * - {@link Resource.httpClient} — wire a {@link Resource.Node}'s transport from a `url`.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
@@ -44,8 +45,6 @@ import {
   Clock,
   Context,
   Data,
-  Deferred,
-  Duration,
   Effect,
   Fiber,
   Function as Fn,
@@ -137,7 +136,7 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
 }> {}
 
 /** No transport url for a node — neither on the {@link Resource.Node} (`{ url }`) nor passed to
- *  {@link Resource.connectHttp}. @public */
+ *  {@link Resource.httpClient}. @public */
 export class MissingNodeUrl extends Data.TaggedError("MissingNodeUrl")<{
   readonly node: string;
 }> {}
@@ -597,28 +596,61 @@ export const constant = <Su extends Schema.Top>(
 ): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
   marked(effect(success), { _tag: "constant" as const });
 
-/** A {@link Method} marked as a **value** field (via {@link value}) — a plain property kept live by a
- *  background stream. Tagged with a readable `_tag: "value"`. @public */
-export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
+/** A {@link Method} marked as a **ref** field (via {@link ref}) — surfaces as a {@link Subscribable}.
+ *  Tagged with a readable `_tag: "ref"`. @public */
+export type RefField<M extends AnyMethod> = Marked<M, { readonly _tag: "ref" }>;
 
-/** Runtime guard: is a spec entry a {@link value} field? */
-const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
-  Predicate.hasProperty(m, "_tag") && m._tag === "value";
+/** Runtime guard: is a spec entry a {@link ref} field? */
+const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+  Predicate.hasProperty(m, "_tag") && m._tag === "ref";
 
 /**
- * Define a **`value`** field — a **plain** property (`p.x: A`, no `yield*`) kept **live** by a background
- * stream. The impl supplies a `SubscriptionRef`'s `.changes` (or any stream that emits its current value
- * on subscribe); each acquire subscribes once, **blocks for the initial value**, and thereafter keeps the
- * property current in place. Reads are free — `yield* Tag` never makes a request. Identical local and
- * remote (remote is eventually-consistent — latency, not divergence). For fixed values use `constant`; for
- * on-demand reads use `effect`. See `docs/handoffs/service-shape-redesign.md`.
+ * Define a **`ref`** field — reactive state surfaced as a {@link Subscribable}<A> (`get` + `changes`),
+ * uniform local and remote. The impl **owns** a `SubscriptionRef` (writes it) and provides it via
+ * {@link subscribable}; consumers **read** (`yield* svc.x.get`) and **observe** (`svc.x.changes`) — a read
+ * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use `constant`; for on-demand
+ * calls use `effect`. See `docs/handoffs/2026-07-03-contract-serve-reform.md`.
  *
  * @public
  */
-export const value = <Su extends Schema.Top>(
+export const ref = <Su extends Schema.Top>(
   success: Su,
-): ValueField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
-  marked(stream(success), { _tag: "value" as const });
+): RefField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
+  marked(stream(success), { _tag: "ref" as const });
+
+/**
+ * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream
+ * of every change ({@link Subscribable.changes}). This is what a {@link ref} field surfaces — uniform local
+ * and remote — and it's exactly the read side of a `SubscriptionRef` (Effect ships no `Subscribable` type in
+ * this beta, so we name it here). @public
+ */
+export interface Subscribable<A> {
+  readonly get: Effect.Effect<A>;
+  readonly changes: Stream.Stream<A>;
+}
+
+/**
+ * Build a {@link Subscribable} view over a `SubscriptionRef` — the impl side of a {@link ref} field: the
+ * impl owns the ref (writes it), consumers get read + observe. @public
+ */
+export const subscribable = <A>(
+  source: SubscriptionRef.SubscriptionRef<A>,
+): Subscribable<A> => ({
+  get: SubscriptionRef.get(source),
+  changes: SubscriptionRef.changes(source),
+});
+
+/**
+ * Derive a {@link Subscribable} from another by mapping both its current value and its changes — one source
+ * of truth feeds every view (a queue's `size`/`isEmpty` from its `status`). @public
+ */
+export const mapSubscribable = <A, B>(
+  source: Subscribable<A>,
+  f: (a: A) => B,
+): Subscribable<B> => ({
+  get: Effect.map(source.get, f),
+  changes: Stream.map(source.changes, f),
+});
 
 /**
  * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
@@ -869,8 +901,8 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
     ? Effect.Effect<T, never, LocalCapability<Self>>
     : S[K] extends { readonly _tag: "constant" }
       ? SuccessOf<AsMethod<S[K]>>
-      : S[K] extends { readonly _tag: "value" }
-        ? SuccessOf<AsMethod<S[K]>>
+      : S[K] extends { readonly _tag: "ref" }
+        ? Subscribable<SuccessOf<AsMethod<S[K]>>>
         : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
           ? ServiceMethod<AsMethod<S[K]>>
           : S[K] extends Spec
@@ -881,12 +913,14 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
 type WireServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
-    readonly kind: MethodKind;
+    readonly _tag: "ref";
   }
-    ? ServiceMethod<AsMethod<S[K]>>
-    : S[K] extends Spec
-      ? WireServiceOf<S[K]>
-      : never;
+    ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl provides the Subscribable; wire serves its .changes
+    : S[K] extends { readonly kind: MethodKind }
+      ? ServiceMethod<AsMethod<S[K]>>
+      : S[K] extends Spec
+        ? WireServiceOf<S[K]>
+        : never;
 };
 
 /** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
@@ -897,8 +931,8 @@ type PeerServiceOf<S extends Spec> = {
     ? never
     : S[K] extends AnyLocalMethod
       ? never
-      : K]: S[K] extends { readonly _tag: "value" }
-    ? // a peer reads a `value` **one-shot** (its current value, lazily) — not a live subscription, so
+      : K]: S[K] extends { readonly _tag: "ref" }
+    ? // a peer reads a `ref` **one-shot** (its current value, lazily) — not a live subscription, so
       // folding it never opens a persistent connection at build (see buildPeerService).
       Effect.Effect<SuccessOf<AsMethod<S[K]>>>
     : S[K] extends { readonly kind: MethodKind }
@@ -909,10 +943,10 @@ type PeerServiceOf<S extends Spec> = {
 };
 
 /**
- * The **implementation** a {@link localLayer} / {@link serverLayer} expects: wire members are their
+ * The **implementation** a {@link localLayer} / {@link serve} expects: wire members are their
  * `Effect`/`Stream`/function, and each {@link LocalMethod} is its **raw** value `T` (the toolkit wraps
  * it to require the {@link LocalCapability}). When an impl needs a capability (e.g. {@link peers}) to
- * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serverEntry}
+ * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serve}
  * — resolve it once, and the members close over it.
  *
  * A `value` field's impl is the **`Stream`** that feeds it (typically a `SubscriptionRef`'s `.changes`),
@@ -924,11 +958,13 @@ type PeerServiceOf<S extends Spec> = {
 export type ImplOf<S extends Spec> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? T
-    : S[K] extends { readonly kind: MethodKind }
-      ? ServiceMethod<AsMethod<S[K]>>
-      : S[K] extends Spec
-        ? ImplOf<S[K]> // nested group → nested impl
-        : never;
+    : S[K] extends { readonly _tag: "ref" }
+      ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
+      : S[K] extends { readonly kind: MethodKind }
+        ? ServiceMethod<AsMethod<S[K]>>
+        : S[K] extends Spec
+          ? ImplOf<S[K]> // nested group → nested impl
+          : never;
 };
 
 /**
@@ -942,7 +978,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
 
 /**
  * Anchor a **reusable** impl to its contract at the definition site. Inline impls are already typed by
- * `layer` / `serverEntry` / `serve`; but the moment you hoist one to a `const` (to share it across the
+ * `layer` / `serve`; but the moment you hoist one to a `const` (to share it across the
  * local layer and a served entry, or across several serves) it loses that typing — the mistake then
  * surfaces far away at the serve call, with no autocomplete as you write it. `Resource.make(tag, impl)`
  * infers the tag's spec and constrains `impl` to its {@link ImplOf}, returning it typed. Runtime identity.
@@ -950,7 +986,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * ```ts
  * const scoresImpl = Resource.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
  * Resource.layer(ScoresDb, scoresImpl);                    // local
- * Resource.serveAllHttp([Resource.serverEntry(ScoresDb, scoresImpl)]); // served — same impl, both typed
+ * Resource.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
  * ```
  *
  * @public
@@ -1368,12 +1404,8 @@ const readinessCheckServed = (
     for (const [key, m] of Object.entries(spec)) {
       if (isConstantMethod(m)) {
         setPath(view, key, yield* (flat[key] as Effect.Effect<unknown>));
-      } else if (isValueMethod(m)) {
-        const head = yield* Stream.runHead(
-          flat[key] as Stream.Stream<unknown>,
-        ).pipe(Effect.scoped);
-        setPath(view, key, Option.getOrUndefined(head));
       } else {
+        // ref → its Subscribable (the readiness derivation reads `.get` itself); other wire members as-is
         setPath(view, key, flat[key]);
       }
     }
@@ -1617,125 +1649,40 @@ function tagFor<const S extends Spec>(
   });
 }
 
-/** Block-for-initial timeout for a {@link value} field's first push. @internal */
-const valueInitialTimeout = Duration.seconds(30);
-
-/** Where a materialized service stows its {@link value} fields' `SubscriptionRef`s (path-keyed), for
- *  {@link changes} / {@link ref} to subscribe to. Runtime-only — never in {@link ServiceOf}. @internal */
-const valueRefsSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/valueRefs",
-);
-
-/** Registry of a service's value-field cells, path-keyed (`"connections.size"`). @internal */
-type ValueRefs = Record<string, SubscriptionRef.SubscriptionRef<unknown>>;
-
-/** Attach the value-field ref registry to a built (nested) service — only when it has value fields, so a
- *  service with none stays a clean record. @internal */
-const withValueRefs = <T extends object>(service: T, refs: ValueRefs): T =>
-  Object.keys(refs).length === 0
-    ? service
-    : Object.assign(service, { [valueRefsSym]: refs });
-
-/** Resolve a value-field selector `(s) => s.a.b` to its flat path via a path-recording proxy — so
- *  {@link changes} / {@link ref} address nested fields **without string paths**. @internal */
-const selectorPath = (select: (s: never) => unknown): string => {
-  const parts: Array<string> = [];
-  const probe = (): unknown =>
-    new Proxy(() => {}, {
-      get: (_t, prop) => {
-        if (typeof prop === "string") parts.push(prop);
-        return probe();
-      },
-    });
-  select(probe() as never);
-  return parts.join(".");
-};
-
-/** Look up the `SubscriptionRef` backing the value field a selector picks; dies loudly if it isn't a
- *  live {@link value} field. @internal */
-const valueRefOf = <Svc extends object, A>(
-  service: Svc,
-  select: (s: Svc) => A,
-): SubscriptionRef.SubscriptionRef<A> => {
-  const path = selectorPath(select as (s: never) => unknown);
-  const refs = Predicate.hasProperty(service, valueRefsSym)
-    ? (service[valueRefsSym] as ValueRefs)
-    : undefined;
-  const cell = refs?.[path];
-  if (cell === undefined) {
-    throw new Error(
-      `Resource.changes/ref: "${path}" is not a live value field on this service`,
-    );
-  }
-  return cell as SubscriptionRef.SubscriptionRef<A>;
-};
-
 /**
- * Subscribe to a {@link value} field's live delta stream — `SubscriptionRef.changes` under the hood, so
- * you get the current value immediately, then every update. Pick the field with a **selector** (nesting-
- * friendly, no string paths); passing a non-`value` field dies loudly.
- *
- * ```ts
- * const p = yield* Live;
- * yield* Resource.changes(p, (s) => s.connections.size).pipe(
- *   Stream.runForEach((n) => Console.log(n)),
- * );
- * ```
- *
- * @public
+ * Client side of a {@link ref} field: a {@link Subscribable} over the RPC changes stream — `changes` is the
+ * stream itself; `get` takes its replayed current head (a `SubscriptionRef`'s changes emit the current value
+ * on subscribe). No mirror, no block-for-initial. @internal
  */
-export const changes = <Svc extends object, A>(
-  service: Svc,
-  select: (s: Svc) => A,
-): Stream.Stream<A> => SubscriptionRef.changes(valueRefOf(service, select));
-
-/**
- * The `SubscriptionRef` backing a {@link value} field — for `get`, `changes`, or bridging to an `Atom`.
- * Same selector as {@link changes}. @public
- */
-export const ref = <Svc extends object, A>(
-  service: Svc,
-  select: (s: Svc) => A,
-): SubscriptionRef.SubscriptionRef<A> => valueRefOf(service, select);
-
-/**
- * Bind a {@link value} field's live stream to a plain, in-place-mutated service property: block for the
- * initial value (a source that never emits fails acquisition **loudly**, as a defect), set it, then fork
- * an updater that keeps the property current. So `yield* Tag` reads a cheap property; freshness is push,
- * not pull. Shared by the local and client materializations, so `value` behaves identically on both.
- * @internal
- */
-const bindValueToProp = (
-  source: Stream.Stream<unknown>,
-  set: (v: unknown) => void,
-  label: string,
-): Effect.Effect<SubscriptionRef.SubscriptionRef<unknown>, never, Scope.Scope> =>
+// Client side of a ref field: ONE kept-open subscription to the RPC changes stream mirrors the latest into
+// a local cache (never closing the wire stream — closing a `Never`-error RPC stream early trips its error
+// decode). `get` reads the cache (waiting on the local cache stream for the first value if needed — safe to
+// close); `changes` replays from the same cache, so a client opens exactly one wire stream per ref. No
+// block-for-initial at build, so a slow/absent source never deadlocks acquisition.
+const clientSubscribable = <A>(
+  wire: Stream.Stream<A>,
+): Effect.Effect<Subscribable<A>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    // back the field with a SubscriptionRef so the delta stream can be subscribed to directly
-    // ({@link changes} / {@link ref}) instead of only read via the plain property.
-    const cell = yield* SubscriptionRef.make<unknown>(undefined);
-    const firstArrived = yield* Deferred.make<void>();
+    const cache = yield* SubscriptionRef.make<Option.Option<A>>(Option.none());
     yield* Effect.forkScoped(
-      Stream.runForEach(source, (v) =>
-        Effect.andThen(
-          Effect.sync(() => set(v)), // mirror into the plain property (cheap synchronous read)
-          Effect.andThen(
-            SubscriptionRef.set(cell, v), // fan out to subscribers
-            Deferred.succeed(firstArrived, undefined),
-          ),
+      Stream.runForEach(wire, (v) => SubscriptionRef.set(cache, Option.some(v))),
+    );
+    const present: Stream.Stream<A> = SubscriptionRef.changes(cache).pipe(
+      Stream.filter(Option.isSome),
+      Stream.map((o) => o.value),
+    );
+    return {
+      changes: present,
+      get: SubscriptionRef.get(cache).pipe(
+        Effect.flatMap(
+          Option.match({
+            onSome: (v: A) => Effect.succeed(v),
+            onNone: () =>
+              Stream.runHead(present).pipe(Effect.scoped, Effect.map(Option.getOrThrow)),
+          }),
         ),
       ),
-    );
-    yield* Effect.race(
-      Deferred.await(firstArrived),
-      Effect.andThen(
-        Effect.sleep(valueInitialTimeout),
-        Effect.die(
-          new Error(`Resource value "${label}" produced no initial value in time`),
-        ),
-      ),
-    );
-    return cell;
+    };
   });
 
 /**
@@ -1743,13 +1690,50 @@ const bindValueToProp = (
  * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
  * become callable here — they're a compile error under {@link Resource.client}.
  *
- * Two forms, mirroring {@link serverEntry}: a **record** impl, or an **`Effect`** that builds the impl
+ * Two forms, mirroring {@link serve}: a **record** impl, or an **`Effect`** that builds the impl
  * — the latter for effectful construction (acquire a pool, resolve {@link peers}, …). The `Effect`'s
  * requirement `R` becomes the layer's, so its members close over whatever they need and stay
  * `R = never`; you provide `R` (e.g. `peersLayer`) alongside.
  *
  * @public
  */
+// Build the **local service Context** — the materialized service + granted capability — from a tag and its
+// **already-built** impl record. Shared by `localLayer` and the local grant that `httpServer`
+// adds by default, so "serve + use locally" and "just local" produce the *identical* instance. The impl may be
+// nested (grouped) — flattened to path keys matching the flat spec.
+const buildLocalContext = <Self>(
+  tag: {
+    readonly [specSym]: FlatSpec;
+    readonly [localCapSym]: Context.Key<
+      LocalCapability<Self>,
+      { readonly granted: true }
+    >;
+  },
+  builtImpl: Record<string, unknown>,
+): Effect.Effect<Context.Context<unknown>> =>
+  Effect.gen(function* () {
+    const cap = tag[localCapSym];
+    const spec = tag[specSym];
+    const members = flattenImpl(builtImpl, spec);
+    const service: Record<string, unknown> = {};
+    for (const [key, m] of Object.entries(spec)) {
+      // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
+      // value); constant fields are resolved once here into a plain value; ref fields and other wire
+      // members (their `Subscribable` / `Effect` / `Stream` / function) pass through unchanged.
+      if (isLocalMethod(m)) {
+        setPath(service, key, Effect.as(cap, members[key]));
+      } else if (isConstantMethod(m)) {
+        setPath(service, key, yield* (members[key] as Effect.Effect<unknown>));
+      } else {
+        setPath(service, key, members[key]);
+      }
+    }
+    return Context.make(
+      tag as unknown as Context.Key<unknown, unknown>,
+      service,
+    ).pipe(Context.add(cap, { granted: true }));
+  });
+
 function localLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S>,
@@ -1762,47 +1746,16 @@ function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>> {
-  const cap = tag[localCapSym];
-  const spec = tag[specSym];
-  // Build the service (from the record or the Effect), then hand back a Context carrying both the
-  // service and the granted capability — one `effectContext` layer, so any `Scope` the impl's
-  // construction needs is managed by the layer (not merged in separately).
-  const build = Effect.gen(function* () {
-    const builtImpl = (yield* (Effect.isEffect(impl)
-      ? impl
-      : Effect.succeed(impl))) as Record<string, unknown>;
-    // impl may be nested (grouped) — flatten to path keys matching the flat spec, build the flat service,
-    // then nest it back on the way out.
-    const members = flattenImpl(builtImpl, spec);
-    // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
-    // holds; the impl was flattened to path keys, so `key` here is the flat path.
-    const service: Record<string, unknown> = {};
-    const valueRefs: ValueRefs = {};
-    for (const [key, m] of Object.entries(spec)) {
-      // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
-      // value); constant fields are resolved once here into a plain value; other wire members pass
-      // through unchanged.
-      if (isLocalMethod(m)) {
-        setPath(service, key, Effect.as(cap, members[key]));
-      } else if (isConstantMethod(m)) {
-        setPath(service, key, yield* (members[key] as Effect.Effect<unknown>));
-      } else if (isValueMethod(m)) {
-        valueRefs[key] = yield* bindValueToProp(
-          members[key] as Stream.Stream<unknown>,
-          (v) => setPath(service, key, v),
-          key,
-        );
-      } else {
-        setPath(service, key, members[key]);
-      }
-    }
-    // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
-    return Context.make(
-      tag,
-      withValueRefs(service, valueRefs) as ServiceOf<S, Self>,
-    ).pipe(Context.add(cap, { granted: true }));
-  });
-  return Layer.effectContext(build);
+  // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
+  const build = Effect.flatMap(
+    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
+    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
+  );
+  return Layer.effectContext(build) as Layer.Layer<
+    Self | LocalCapability<Self>,
+    never,
+    Exclude<R, Scope.Scope>
+  >;
 }
 
 /**
@@ -1818,6 +1771,10 @@ const invokeWireMethod = (
   method: AnyMethod,
   payload: unknown,
 ): unknown => {
+  // a ref's impl is a Subscribable; the wire serves its changes stream (the client rebuilds get from it).
+  if (isRefMethod(method)) {
+    return (member as Subscribable<unknown>).changes;
+  }
   if (typeof member !== "function") {
     return member;
   }
@@ -1825,35 +1782,6 @@ const invokeWireMethod = (
     return member(payload[0], payload[1]);
   }
   return member(payload);
-};
-
-const serverLayer = <S extends Spec>(
-  tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [specTypeSym]?: S;
-    readonly [groupSym]: RpcGroupOf<S>;
-  },
-  impl: WireServiceOf<S>,
-): Layer.Layer<HandlerContextOf<S>> => {
-  const group = tag[groupSym];
-  const handlers: Record<string, (payload: unknown) => unknown> = {};
-  // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
-  const flatImpl = flattenImpl(impl as Record<string, unknown>, tag[specSym]);
-  for (const [key, member] of Object.entries(flatImpl)) {
-    // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
-    // runtime-checked: payload methods are functions (call them); no-payload methods
-    // are `Effect` properties (return as-is, ignoring the payload arg).
-    handlers[wireTag(tag.groupId, key)] = (payload) =>
-      invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
-  }
-  // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was built from,
-  // and RPC validates every payload/result against the spec schemas at the wire. The output pins
-  // {@link HandlerContextOf}; any capability `R` the handlers require (e.g. peers) rides the layer's
-  // requirement channel, discharged by the serve providing it.
-  return group.toLayer(
-    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as unknown as Layer.Layer<HandlerContextOf<S>>;
 };
 
 /**
@@ -1928,12 +1856,14 @@ export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
  */
 export type ServeImplOf<S extends Spec, R> = {
   readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
-    readonly kind: MethodKind;
+    readonly _tag: "ref";
   }
-    ? ServeMethod<AsMethod<S[K]>, R>
-    : S[K] extends Spec
-      ? ServeImplOf<S[K], R>
-      : never;
+    ? Subscribable<SuccessOf<AsMethod<S[K]>>>
+    : S[K] extends { readonly kind: MethodKind }
+      ? ServeMethod<AsMethod<S[K]>, R>
+      : S[K] extends Spec
+        ? ServeImplOf<S[K], R>
+        : never;
 };
 
 /**
@@ -1956,22 +1886,23 @@ export type ServeRequirements<Impl> = {
 }[keyof Impl];
 
 /**
- * A resource's **handler layer** — mounts the tag's group handlers, with the handlers' requirement `R`
- * **preserved** (not erased). Unlike {@link serverLayer}, whose `R` is erased to `never` (so all handlers
- * share one ambient provide), `serve`'s `R` rides the layer's requirement channel, so a per-resource
- * `Layer.provide` discharges *this* resource's dependency in isolation:
+ * A resource's **served-only handler layer** — mounts the tag's group handlers (wire members only,
+ * **no** local grant), with the handlers' requirement `R` **preserved** (not erased). This is the
+ * served-only counterpart to {@link serve}, which additionally grants the {@link LocalCapability} so
+ * members stay callable in-process. `serveRemote`'s `R` rides the layer's requirement channel, so a
+ * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
  *
  * ```ts
- * Resource.serve(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
+ * Resource.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
  * ```
  *
- * `R = never` (a handler that closes over its dependency at build) behaves exactly like `serverLayer`.
- * The point of `serve` is the run-time-requirement case: N resources needing different implementations of
- * the same tag, each isolated — merge the `serve` layers onto one `RpcServer` (groups are prefix-keyed).
+ * The point of `serveRemote` is the run-time-requirement case: N resources needing different
+ * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
+ * prefix-keyed).
  *
  * @public
  */
-export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
+export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   tag: {
     readonly groupId: string;
     readonly [specSym]: FlatSpec;
@@ -1988,7 +1919,7 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
     handlers[wireTag(tag.groupId, key)] = (payload) =>
       invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
   }
-  // dynamic handler construction (the same boundary `serverLayer` uses); the outer assertion **preserves**
+  // dynamic handler construction (the group's `toLayer` boundary); the outer assertion **preserves**
   // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
   // erasing it, so a per-resource `Layer.provide` can discharge it. `HandlerContextOf<S>` is the rpc
   // handler slots; the requirement is the union of the handlers' run-time needs.
@@ -2021,6 +1952,39 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   >;
 };
 
+/**
+ * Serve a resource **and** grant its local instance from **one** materialization — the co-located "expose
+ * it over RPC AND consume it in-process" case (a node that serves its resources and also `yield*`s them,
+ * e.g. to read a {@link Resource.local} member). The impl runs **once**, so its cells / pollers / resolved
+ * {@link peers} are shared: the served view and the in-process view are the **same instance** — no double
+ * materialization, no second `peersLayer`. Register onto a node with {@link httpServer} like any
+ * {@link serve} layer; a served-**only** gateway (never consumed locally) uses {@link serve} directly.
+ *
+ * Use the **`Effect` form** when the impl needs a capability to build (resolve `peers` / a pool once; the
+ * members close over it) — `R` is discharged here, shared by both the grant and the handlers.
+ *
+ * @public
+ */
+export const serve = <Self, S extends Spec, R = never>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<S>, never, R> =>
+  Layer.unwrap(
+    Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) =>
+      Layer.merge(
+        localLayer(tag, built),
+        // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
+        // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
+        // `R` was discharged by the Effect form above, so the handlers are requirement-free.
+        serveRemote(tag, built as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
+          HandlerContextOf<S>,
+          never,
+          never
+        >,
+      ),
+    ),
+  );
+
 /** Options for {@link httpServer}. @public */
 export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;
@@ -2036,14 +2000,13 @@ const httpServerBase = (
       const registry = yield* ServedResources;
       const entries = yield* registry.all;
       if (entries.length === 0) {
-        throw new Error(
-          "Resource.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+        return yield* Effect.die(
+          new Error(
+            "Resource.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+          ),
         );
       }
       const startedAt = yield* Clock.currentTimeMillis;
-      const merged = entries
-        .map((entry) => entry.group)
-        .reduce((acc, group) => acc.merge(group));
       const readiness = Effect.forEach(entries, (entry) =>
         Effect.map(entry.readiness, (result) => ({
           key: entry.groupId,
@@ -2052,11 +2015,43 @@ const httpServerBase = (
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );
+      // Every node auto-serves the reserved node-status resource (status / logs / ping) alongside the
+      // registered resources, so a client can inspect any node without the author wiring it. Built here
+      // (not a registered `serve` layer) so it reports the user resources without counting itself.
+      const { nodeStatusServeEntry } = yield* Effect.promise(
+        () => import("./internal/nodeStatusResource"),
+      );
+      const nodeEntry = nodeStatusServeEntry({
+        startedAt,
+        resourceCount: entries.length,
+        readiness,
+      });
+      const nodeTag = nodeEntry.tag;
+      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
+        ? nodeEntry.impl
+        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
+      const nodeFlat = flattenImpl(nodeImpl, nodeTag[specSym]);
+      const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
+      for (const [key, member] of Object.entries(nodeFlat)) {
+        nodeHandlers[wireTag(nodeTag.groupId, key)] = (payload) =>
+          invokeWireMethod(member, nodeTag[specSym][key] as AnyMethod, payload);
+      }
+      const merged = [...entries.map((entry) => entry.group), nodeTag[groupSym]].reduce(
+        (acc, group) => acc.merge(group),
+      );
       const rpcAppLayer = RpcServer.layerHttp({
         group: merged,
         path: options?.path ?? "/rpc",
         protocol: "http",
-      });
+      }).pipe(
+        Layer.provide(
+          nodeTag[groupSym].toLayer(
+            nodeHandlers as unknown as Parameters<
+              (typeof nodeTag)[typeof groupSym]["toLayer"]
+            >[0],
+          ),
+        ),
+      );
       const healthRoute = HttpRouter.add(
         "GET",
         options?.health?.path ?? "/health",
@@ -2091,7 +2086,7 @@ const mergeLayers = (
 
 /**
  * The shared http server for resources composed with {@link serve} — the multi-resource,
- * heterogeneous-dependency counterpart to {@link serveHttp} / {@link serveAllHttp}. Reads the
+ * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
  * {@link ServedResources} registry, merges every registered group onto **one** `RpcServer` at `path`
  * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each
  * `serve` layer carries **its own** `Layer.provide`d dependency, resources needing different
@@ -2120,13 +2115,19 @@ const mergeLayers = (
 export function httpServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
-export function httpServer<R>(
-  serves: readonly [
-    Layer.Layer<any, never, R>,
-    ...ReadonlyArray<Layer.Layer<any, never, R>>,
+export function httpServer<
+  Serves extends readonly [
+    Layer.Layer<any, never, any>,
+    ...ReadonlyArray<Layer.Layer<any, never, any>>,
   ],
+>(
+  serves: Serves,
   options?: HttpServerOptions,
-): Layer.Layer<never, never, R | HttpServer.HttpServer>;
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  never,
+  Layer.Services<Serves[number]> | HttpServer.HttpServer
+>;
 export function httpServer(
   servesOrOptions?:
     | ReadonlyArray<Layer.Layer<any, never, any>>
@@ -2167,249 +2168,6 @@ export const provide = <ROut, EL, RL, A, E, R>(
 ): Layer.Layer<A, E | EL, Exclude<R, ROut> | RL> =>
   Layer.mergeAll(...resources).pipe(Layer.provide(dependency));
 
-/**
- * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
- * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
- * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
- * (default {@link defaultSerialization}, matching the client). The only thing left to provide
- * is an `HttpServer` (platform-specific — e.g. `NodeHttpServer.layer({ port })`), since the
- * bind address is a deployment concern:
- *
- * ```ts
- * const JobsServer = Resource.serveHttp(Jobs, jobsImpl).pipe(
- *   Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })),
- * );
- * ```
- *
- * @public
- */
-const serveHttp = <S extends Spec>(
-  tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [specTypeSym]?: S;
-    readonly [groupSym]: RpcGroupOf<S>;
-  },
-  impl: WireServiceOf<S>,
-  options?: {
-    readonly path?: HttpRouter.PathInput;
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-) =>
-  HttpRouter.serve(
-    RpcServer.layerHttp({
-      group: tag[groupSym],
-      path: options?.path ?? "/rpc",
-      protocol: "http",
-    }).pipe(Layer.provide(serverLayer(tag, impl))),
-  ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
-
-/**
- * An entry for {@link serveAllHttp}: a resource tag + its built impl. Use {@link Resource.server}'s
- * impl shape (the same `WireServiceOf` you pass to {@link serveHttp}).
- *
- * @public
- */
-export interface ServeEntry<R = never> {
-  readonly tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [groupSym]: RpcGroup.RpcGroup<any>;
-  };
-  /**
-   * The resource's impl — either the built service record (a plain resource), or an `Effect` that
-   * builds it (a toolkit resource whose engine/worker is constructed at assembly, carrying its
-   * worker requirement `R`). Use `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` to
-   * produce the effect form.
-   */
-  readonly impl:
-    | Record<string, unknown>
-    | Effect.Effect<Record<string, unknown>, never, R>;
-}
-
-/**
- * A typed {@link ServeEntry} for a **raw** custom resource — `serveAllHttp`'s counterpart to
- * {@link Resource.layer} for serving. The impl is **spec-checked** against the tag's {@link Spec}
- * (`WireServiceOf<S>`), so a typo or missing method is a compile error — a hand-written `{ tag, impl }`
- * literal is typed `Record<string, unknown>` and silently accepts them. Mirrors
- * `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` / `ApiMetrics.serverEntry`. Note
- * {@link instance} is **not** this — it builds a `ResourceInstance` for the {@link serveInstances}
- * family and won't fit `serveAllHttp`.
- *
- * Two impl forms: a plain **record** (`R = never`), or an **`Effect`** that builds the record at
- * assembly and carries a requirement `R` (e.g. a pooled connection) — `R` is surfaced into the entry
- * so `serveAllHttp` demands + unions it, instead of erasing it as a bare `{ tag, impl }` literal would.
- *
- * ```ts
- * Resource.serveAllHttp([
- *   Resource.serverEntry(Database, { status: pingStatus }),        // record impl
- *   Resource.serverEntry(Cache, Effect.map(Pool, makeCacheImpl)),  // Effect impl, R = Pool
- *   QueueResource.serverEntry(RosterQueue, { effect }),
- * ]);
- * ```
- *
- * @public
- */
-// record impl (plain resource — no requirement)
-function serverEntry<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S>,
-): ServeEntry<never>;
-// Effect impl (built at assembly, carrying a requirement `R` — e.g. a pooled connection, or serving
-// the resource's own provided service): `R` is surfaced into the entry, so `serveAllHttp` demands it
-// (and unions it across entries) instead of it being erased.
-function serverEntry<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R>;
-function serverEntry<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S> | Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R> {
-  return { tag, impl };
-}
-
-/** One entry's requirement `R`, with `any`/`unknown` collapsed to `never` — a plain `{ tag, impl }`
- *  literal (impl a `Record`, no `Effect`) leaves `R` unconstrained, so it infers `unknown` (or `any`);
- *  treat that as "no requirement" rather than poisoning the whole union. Typed entries (`serverEntry`,
- *  the contract `serverEntry`s) carry a real `R` that's kept. */
-type EntryR<E> = E extends ServeEntry<infer R>
-  ? 0 extends 1 & R
-    ? never
-    : unknown extends R
-      ? never
-      : R
-  : never;
-
-/** Union of every entry's requirement — `serveAllHttp`'s result `R` (see {@link EntryR}). */
-type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any>>> = EntryR<Entries[number]>;
-
-/**
- * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
- * to {@link serveHttp}. Each resource's procedures are group-id-prefixed, so they coexist on the
- * one `/rpc` endpoint without collision; clients reach each via `Resource.client(Tag)` over a single
- * {@link connectHttp} transport (typically a shared {@link Node}). This is how a whole group runs
- * behind one port.
- *
- * ```ts
- * const LeagueServer = Resource.serveAllHttp([
- *   { tag: RosterQueue, impl: rosterImpl },
- *   { tag: SeasonMatches, impl: seasonImpl },
- * ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
- * ```
- *
- * @public
- */
-const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
-  entries: Entries,
-  options?: {
-    readonly path?: HttpRouter.PathInput;
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-    /** Readiness `/health` route (always mounted; set `path` to relocate it). A dumb probe gets
-     *  `200`/`503`; the JSON body lists the node's resources for a dashboard health board. */
-    readonly health?: {
-      readonly path?: HttpRouter.PathInput;
-    };
-  },
-  // Entries can carry *different* requirements (a queue's worker `R`, an ApiMetrics entry's `Scope`, a
-  // plain resource's `never`); union them — like `Layer.mergeAll` — instead of pinning all to one `R`.
-): Layer.Layer<never, never, ServeEntriesR<Entries> | HttpServer.HttpServer> => {
-  if (entries.length === 0) {
-    throw new Error("Resource.serveAllHttp: at least one resource is required");
-  }
-  // Build each impl (an Effect form carries the engine/worker requirement R; a plain record is
-  // lifted with succeed), then merge every resource's RpcGroup into one (procedures are
-  // group-id-prefixed → no collision) and merge their handler tables into one toLayer over the
-  // combined group. The merge is dynamic (heterogeneous specs), so types are erased through
-  // `unknown`; the result type is pinned to `R | HttpServer` — the union of worker requirements
-  // plus the http server to listen on (same shape as a single `serveHttp`).
-  return Layer.unwrap(
-    Effect.gen(function* () {
-      // Every node auto-serves the reserved node status resource (status / logs / ping) alongside
-      // the user's resources, so a client can inspect any node without the author wiring it.
-      // Dynamic import keeps `nodeStatusResource` (which imports this module) out of a static cycle;
-      // the entry is folded in before building so all entries stay one (erased) type.
-      const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./internal/nodeStatusResource"),
-      );
-      const startedAt = yield* Clock.currentTimeMillis;
-      const buildImpl = (entry: ServeEntry<any>) =>
-        (Effect.isEffect(entry.impl)
-          ? entry.impl
-          : Effect.succeed(entry.impl)
-        ).pipe(Effect.map((impl) => ({ tag: entry.tag, impl })));
-      // Build the user's resources first so the readiness aggregate can close over their impls —
-      // both the `/health` route and the node-status resource read this ONE aggregate (SSOT): each
-      // resource's own `readiness` derivation (default: ready), keyed by tag + kind.
-      const userBuilt = yield* Effect.forEach(entries, buildImpl);
-      const readiness = Effect.forEach(userBuilt, ({ tag, impl }) =>
-        Effect.map(readinessCheckServed(tag, impl), (r) => ({
-          key: tag.groupId,
-          kind: kindOf(tag) ?? "resource",
-          ready: r.ready,
-          ...(r.detail !== undefined ? { detail: r.detail } : {}),
-        })),
-      );
-      const nodeBuilt = yield* buildImpl(
-        nodeStatusServeEntry({ startedAt, resourceCount: entries.length, readiness }),
-      );
-      const built = [...userBuilt, nodeBuilt];
-      const merged = built
-        .map((b) => b.tag[groupSym])
-        .reduce((acc, group) => acc.merge(group));
-      const handlers: Record<string, (payload: unknown) => unknown> = {};
-      for (const { tag, impl } of built) {
-        // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed procedures.
-        const flatImpl = flattenImpl(
-          impl as Record<string, unknown>,
-          tag[specSym],
-        );
-        for (const [key, member] of Object.entries(flatImpl)) {
-          handlers[wireTag(tag.groupId, key)] = (payload) =>
-            typeof member === "function" ? member(payload) : member;
-        }
-      }
-      const rpcAppLayer = RpcServer.layerHttp({
-        group: merged,
-        path: options?.path ?? "/rpc",
-        protocol: "http",
-      }).pipe(
-        Layer.provide(
-          merged.toLayer(
-            handlers as unknown as Parameters<(typeof merged)["toLayer"]>[0],
-          ),
-        ),
-      );
-      // A plain HTTP readiness route alongside `/rpc` — a dumb probe (deploy gate, load balancer)
-      // gets a status code; the JSON body lists the node's resources for a dashboard health board.
-      // Readiness aggregates each resource's own derivation; if any is down the node is `degraded`
-      // → 503 (so a deploy gate won't promote a half-booted node).
-      const healthRoute = HttpRouter.add(
-        "GET",
-        options?.health?.path ?? "/health",
-        Effect.gen(function* () {
-          const ts = yield* Clock.currentTimeMillis;
-          const resources = yield* readiness;
-          const ok = resources.every((r) => r.ready);
-          return yield* HttpServerResponse.json({
-            status: ok ? "ok" : "degraded",
-            listening: true,
-            resources,
-            uptimeMillis: ts - startedAt,
-            ts,
-          }).pipe(
-            Effect.map((res) => HttpServerResponse.setStatus(res, ok ? 200 : 503)),
-            Effect.orDie,
-          );
-        }),
-      );
-      return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
-        Layer.provideMerge(options?.serialization ?? defaultSerialization),
-      );
-    }),
-  ) as unknown as Layer.Layer<never, never, ServeEntriesR<Entries> | HttpServer.HttpServer>;
-};
-
 /** The header carrying the target instance key, set per-call by {@link forwardClient}. */
 const INSTANCE_KEY_HEADER = "key";
 
@@ -2428,9 +2186,9 @@ export interface ResourceInstance<S extends Spec> {
  * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
  *
  * **Not** how you serve a single custom resource on a shared node: this returns a
- * {@link ResourceInstance} for the {@link serveInstances} family, which `serveAllHttp` rejects. To
- * serve a custom `Resource.Tag` alongside queues/processes, use {@link Resource.serverEntry} (a
- * spec-checked `serveAllHttp` entry), then reach it with {@link Resource.client}.
+ * {@link ResourceInstance} for the {@link serveInstances} family. To serve a custom `Resource.Tag`
+ * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Resource.httpServer},
+ * then reach it with {@link Resource.client}.
  *
  * @public
  */
@@ -2608,7 +2366,7 @@ const makeNode = <Self>(name: string, options?: { readonly url?: string }) =>
 
 /**
  * Wire a {@link Node}'s transport, **once**, from any RPC client `Protocol` layer — the
- * transport-agnostic primitive (use {@link connectHttp} for the batteries-included http case).
+ * transport-agnostic primitive (use {@link httpClient} for the batteries-included http case).
  * Re-keys that `Protocol` under the node, so {@link Resource.client} resolves it for every tag
  * bound to this node; provide one `Resource.connect(...)` per node an app talks to.
  *
@@ -2628,7 +2386,7 @@ const connectLayer = <Self, RIn>(
   Layer.effect(node, RpcClient.Protocol).pipe(Layer.provide(protocol));
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
- * **streaming** responses, and is shared by {@link connectHttp} + {@link serveHttp} so a
+ * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
  * client and server can't silently disagree on the codec. */
 const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
@@ -2637,15 +2395,15 @@ const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
  * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
  * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
  * and re-keys it under the node. Serialization defaults to {@link defaultSerialization}
- * (ndjson), matching {@link serveHttp}'s default so the two sides agree by construction.
+ * (ndjson), matching {@link httpServer}'s default so the two sides agree by construction.
  *
  * ```ts
- * const EdgeLive = Resource.connectHttp(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
+ * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
  * ```
  *
  * @public
  */
-const connectHttp = <Self>(
+const httpClient = <Self>(
   node: NodeKey<Self> & { readonly url?: string },
   options?: {
     readonly url?: string;
@@ -2721,7 +2479,7 @@ const buildPeerService = <Self, S extends Spec>(
   >;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(tag[specSym])) {
-    if (isValueMethod(m)) {
+    if (isRefMethod(m)) {
       // one-shot current value: subscribe, take the first (the replayed current), close. Lazy — no
       // connection until folded; fails (dropped by combineQuery) if the peer is unreachable.
       setPath(
@@ -2949,7 +2707,6 @@ const buildClientService = <Self, S extends Spec>(
     // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
     // holds; `wire` + `tag[specSym]` are flat path keys.
     const service: Record<string, unknown> = {};
-    const valueRefs: ValueRefs = {};
     for (const [key, m] of Object.entries(tag[specSym])) {
       if (isLocalMethod(m)) {
         setPath(
@@ -2960,19 +2717,15 @@ const buildClientService = <Self, S extends Spec>(
       } else if (isConstantMethod(m)) {
         // resolve the constant's query once at acquire → a plain value
         setPath(service, key, yield* (wire[key] as Effect.Effect<unknown>));
-      } else if (isValueMethod(m)) {
-        // subscribe once, block for the initial, keep the plain property live in place
-        valueRefs[key] = yield* bindValueToProp(
-          wire[key] as Stream.Stream<unknown>,
-          (v) => setPath(service, key, v),
-          key,
-        );
+      } else if (isRefMethod(m)) {
+        // a Subscribable over the RPC changes stream (one kept-open subscription → local cache)
+        setPath(service, key, yield* clientSubscribable(wire[key] as Stream.Stream<unknown>));
       } else {
         setPath(service, key, wire[key]);
       }
     }
     // Boundary assertion (runtime-safe): built from the spec, key-for-key.
-    return withValueRefs(service, valueRefs) as ServiceOf<S, Self>;
+    return service as ServiceOf<S, Self>;
   });
 
 /**
@@ -3267,7 +3020,7 @@ export const runForEachTagScoped: {
 /**
  * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
  * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
- * remotely, {@link Resource.server} exposes a local impl over RPC.
+ * remotely, {@link Resource.serve} / {@link Resource.serveRemote} expose an impl over RPC.
  *
  * @public
  */
@@ -3276,13 +3029,9 @@ export {
   tagFor,
   makeNode as Node,
   connectLayer as connect,
-  connectHttp,
+  httpClient,
   instance,
   localLayer as layer,
-  serverLayer as server,
-  serverEntry,
-  serveHttp,
-  serveAllHttp,
   serveInstances,
   clientLayer as client,
   clientInstances,

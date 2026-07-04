@@ -7,7 +7,7 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
 
 > **Imports:** everything is on the barrel (`@nikscripts/effect-pm`). `QueueResource` is a single
-> unified namespace — the toolkit `Tag` / `layer` / `server` / `serveHttp` / `configure` plus the
+> unified namespace — the toolkit `Tag` / `layer` / `serve` / `serveRemote` / `configure` plus the
 > engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
 >
 > **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
@@ -24,16 +24,15 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 >
 > ```ts
 > import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
-> import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
-> import * as ProcessScheduleResource from "@nikscripts/effect-pm/ProcessScheduleContract";
+> import * as Process from "@nikscripts/effect-pm/Process";
 >
 > class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
-> // QueueResource.Tag/ScheduledProcess.Tag bundle to ~27kb with ZERO engine symbols (proven).
+> // QueueResource.Tag / Process.Tag bundle with ZERO engine symbols (proven by the tree-shake check).
 > ```
 >
 > The **barrel** `import { QueueResource }` is the same API but its namespace is materialized, so
 > `QueueResource.Tag` from the barrel may include engine code (pure-Effect — never *breaks* a build,
-> just larger). Use the barrel on the Node side (where you also call `.layer` / `.make` / `.serveHttp`);
+> just larger). Use the barrel on the Node side (where you also call `.layer` / `.make` / `.serve`);
 > use the `import * as … from "<subpath>"` form anywhere a browser bundles. Making the barrel
 > namespace tree-shake too is the remaining follow-up (`docs/plans/18`).
 
@@ -118,16 +117,17 @@ const refillOnDrain = Effect.gen(function* () {
 
 ## 5. Define a process (polling)
 
-Default schedule is `alwaysArmed` — it **runs immediately** with its layer. Pass
-`schedule: ProcessSchedule.empty` to start disarmed.
+A base `Process.Tag` is **always-armed** — it **runs immediately** with its layer. Add a schedule at
+definition time with `.pipe(Process.schedule([…]))`; seed it empty (`Process.schedule([])`) to start
+disarmed.
 
 ```ts
 import { Duration, Effect } from "effect";
-import { Polling, ScheduledProcess } from "@nikscripts/effect-pm";
+import { Polling, Process } from "@nikscripts/effect-pm";
 
-class SeasonMatches extends ScheduledProcess.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
+class SeasonMatches extends Process.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
 
-const seasonMatchesLayer = ScheduledProcess.layer(SeasonMatches, {
+const seasonMatchesLayer = Process.layer(SeasonMatches, {
   effect: Effect.gen(function* () {
     const client = yield* NwslsoccerClient;
     yield* client.season.getSeasonMatches({ params: { seasonId } });
@@ -150,33 +150,52 @@ const tick = Effect.gen(function* () {
 
 ## 7. Drive a process
 
+`status` is a reactive `ref`: `status.get` reads the current snapshot, `status.changes` streams it.
+
 ```ts
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
   yield* proc.runImmediately;                 // out-of-band run
-  const status = yield* proc.statusNow;       // { supervising, armed, activeInstances, nextTriggerRun,
+  const status = yield* proc.status.get;      // { supervising, armed, activeInstances, nextTriggerRun,
                                               //   runsStarted, runsSucceeded, runsFailed, lastRunDurationMillis, ... }
-  yield* proc.setSchedule([{ id: "game-1", startAt, stopAt }]); // specific run windows
   yield* proc.stop;                           // pause supervision
   yield* proc.start;                          // resume
 });
 ```
 
-## 8. A schedule as its own resource (CRUD + reconcile)
+A process defined with an inline schedule (`.pipe(Process.schedule([…]))`) additionally exposes a
+`schedule` verb group — `schedule.entries` (a reactive `ref`), `schedule.set` / `add` / `clear`:
 
 ```ts
-import { ProcessScheduleResource } from "@nikscripts/effect-pm";
+class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule([])) {}
 
-class NwslCron extends ProcessScheduleResource.Tag<NwslCron>()("nwsl/Cron") {}
+const armWindows = Effect.gen(function* () {
+  const proc = yield* Ingest;
+  yield* proc.schedule.set([{ id: "game-1", startAt, stopAt }]); // specific run windows
+  const windows = yield* proc.schedule.entries.get;
+});
+```
 
-const nwslCronLayer = ProcessScheduleResource.layer(NwslCron, {
-  initial: [{ id: "sdp-tick", startAt }],
+## 8. A schedule as its own resource (reusable window manager)
+
+`Process.Schedule` is a standalone schedule `Resource` — full CRUD (`set` / `add` / `upsert` /
+`remove` / `removeMany` / `clear`), lookups (`get` / `has`), and a reactive `entries` ref. Gate any
+number of processes with `Process.schedule(TheSchedule)`.
+
+```ts
+import { Effect, Stream } from "effect";
+import { Process } from "@nikscripts/effect-pm";
+
+class NwslCron extends Process.Schedule<NwslCron>()("nwsl/Cron") {}
+
+const nwslCronLayer = Process.scheduleLayer(NwslCron, {
+  initial: [Process.at("sdp-tick", startAt)],
 });
 
 const syncFromDb = Effect.gen(function* () {
   const cron = yield* NwslCron;
-  const result = yield* cron.reconcile(entriesFromDb); // { added, updated, removed, unchanged }
-  yield* cron.changes.pipe(Stream.runForEach((entries) => Effect.log(entries.length)));
+  yield* cron.set(entriesFromDb);
+  yield* cron.entries.changes.pipe(Stream.runForEach((entries) => Effect.log(entries.length)));
 });
 ```
 
@@ -213,7 +232,7 @@ import { Resource } from "@nikscripts/effect-pm";
 
 class MiniHost extends Resource.Host<MiniHost>("hosts/mini") {}
 
-class LiveScorePoller extends ScheduledProcess.Tag<LiveScorePoller>()(
+class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { host: MiniHost },
 ) {}
@@ -253,27 +272,30 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const miniLayer = ScheduledProcess.serveHttp(LiveScorePoller, {
-  effect: pollLiveScores,
-  polling: Polling.spaced(Duration.seconds(5)),
-}).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));
+const miniLayer = Resource.httpServer([
+  Process.serve(LiveScorePoller, {
+    effect: pollLiveScores,
+    polling: Polling.spaced(Duration.seconds(5)),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));
 
 NodeRuntime.runMain(Layer.launch(miniLayer));
 ```
 
-## 12b. Serve many resources on one host (`serveAllHttp` / `serverEntry`)
+## 12b. Serve many resources on one host (`serve` / `httpServer`)
 
-A host usually runs **several** resources on **one** port. `Resource.serveAllHttp([entries])` mounts them
-all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each entry is built with a **spec-checked**
-`serverEntry` — `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` (they carry the engine) or
-`Resource.serverEntry(tag, impl)` for a raw resource. It **unions** each entry's requirement (a queue's
-worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast.
+A host usually runs **several** resources on **one** port. `Resource.httpServer([...serve-layers])` mounts
+them all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each layer is built with a **spec-checked**
+`serve` — `QueueResource.serve` / `Process.serve` (they carry the engine) or
+`Resource.serve(tag, impl)` for a raw resource. It **unions** each layer's requirement (a queue's
+worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast. Use
+`serveRemote` in place of `serve` for a served-only (gateway) node.
 
 ```ts
-const dropletLayer = Resource.serveAllHttp([
-  QueueResource.serverEntry(RosterImportQueue, { effect: importRoster, itemSchema: RosterItem }),
-  ScheduledProcess.serverEntry(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
-  Resource.serverEntry(Database, { status: pingStatus }),
+const dropletLayer = Resource.httpServer([
+  QueueResource.serve(RosterImportQueue, { effect: importRoster, itemSchema: RosterItem }),
+  Process.serve(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
+  Resource.serve(Database, { status: pingStatus }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })));
 ```
 
@@ -282,8 +304,8 @@ Working references: `test/serve-all-queues.test.ts` (two real queue engines, one
 `test/serve-all-http.test.ts`.
 
 **When resources need _different_ implementations of the same dependency** (a hooked vs. plain source),
-`serveAllHttp`'s single shared provide can't isolate them — reach for `Resource.serve` / `httpServer`
-instead. See [per-resource-dependencies.md](./per-resource-dependencies.md).
+give each its **own** `Layer.provide` on the `serve` layer — because each layer carries its own
+requirement, they stay isolated. See [per-resource-dependencies.md](./per-resource-dependencies.md).
 
 ## 13. Drive a remote resource — identical to local
 
@@ -292,7 +314,7 @@ The whole point of location transparency: the consuming code doesn't change, onl
 ```ts
 const program = Effect.gen(function* () {
   const poller = yield* LiveScorePoller; // resolves to the MiniHost transport
-  const status = yield* poller.statusNow;
+  const status = yield* poller.status.get;
 });
 // provided with: Resource.client(LiveScorePoller).pipe(Layer.provide(connectHttp(MiniHost, ...)))
 ```
@@ -401,7 +423,7 @@ ServicesHub
 ```
 
 **Migration state:** the consumer's services are being migrated onto the `.Tag` toolkit surface
-(`.Tag` + a separate `.layer` / `serveHttp`, examples 1–14 above). Build the dashboard against that
+(`.Tag` + a separate `.layer` / `serve`, examples 1–14 above). Build the dashboard against that
 toolkit surface — `Resource.client` + the resource tags (see
 [history-and-persistence.md](./history-and-persistence.md) for the data layer).
 
@@ -414,8 +436,8 @@ Droplet**; **one or two processes** (most likely a live-score poller) are peeled
 
 1. **Tree navigation** — walk `ServicesHub` with `Group.members` + `Group.isGroup` (example 15) to
    render Hub → league → resource. This is the skeleton everything hangs off.
-2. **Live status grid** — per resource, subscribe to the `status` stream (`statusNow` for first
-   paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun` plus **run
+2. **Live status grid** — per resource, subscribe to the `status.changes` stream (`status.get` for
+   first paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun` plus **run
    metrics** (`runsStarted` / `runsSucceeded` / `runsFailed` / `lastRunDurationMillis` — render
    success rate + last-run timing); queues show per-priority `sizes`, `paused`, `completed`. This is
    the at-a-glance health board.
@@ -425,7 +447,7 @@ Droplet**; **one or two processes** (most likely a live-score poller) are peeled
 4. **Queue throughput** — the three NWSL import queues: render `sizes` (depth) + `completed` +
    `metrics` (windowed throughput/latency) as progress/rate widgets.
 5. **Logs drill-in** — per-resource `logs` stream for debugging a misbehaving poller/queue.
-6. **Controls** — actuate from the UI: process `start`/`stop`/`runImmediately`/`setSchedule`;
+6. **Controls** — actuate from the UI: process `start`/`stop`/`runImmediately`/`schedule.set`;
    queue `pause`/`resume`/`add`/`clear`. Use `methodMeta` (`destructive`) to gate confirm dialogs.
 
 Don't render from a hand-maintained list — derive everything from the contract via `specOf` +

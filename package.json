@@ -1,6 +1,6 @@
 {
   "name": "@nikscripts/effect-pm",
-  "version": "0.8.0-beta.26",
+  "version": "0.8.0-beta.27",
   "packageManager": "pnpm@10.33.4",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
@@ -116,10 +116,6 @@
       "types": "./dist/Group.d.ts",
       "default": "./dist/Group.js"
     },
-    "./ScheduledProcess": {
-      "types": "./dist/ScheduledProcess.d.ts",
-      "default": "./dist/ScheduledProcess.js"
-    },
     "./ApiMetrics": {
       "types": "./dist/ApiMetrics.d.ts",
       "default": "./dist/ApiMetrics.js"
@@ -171,6 +167,7 @@
     "build": "tsup",
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json",
     "test": "vitest run",
+    "treeshake": "node scripts/treeshake-check.mjs",
     "test:nwsl": "node scripts/nwsl-local.mjs test",
     "test:watch": "vitest",
     "lint": "eslint . --ignore-pattern repos/**",

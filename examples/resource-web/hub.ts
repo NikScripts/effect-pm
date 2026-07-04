@@ -4,17 +4,17 @@
  * The review fixture for the shipped `@nikscripts/effect-pm/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled process (the WNBA live-score
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
- * nodes (served by `server.ts`); the browser reaches each via `Resource.connectHttp` (vite proxies
+ * nodes (served by `server.ts`); the browser reaches each via `Resource.httpClient` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
- * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serverEntry`. `ScoresDb` is a dependency
+ * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serve`. `ScoresDb` is a dependency
  * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
  * connection blips, the queue cascades to degraded, dogfooding dependency-aware readiness.
  */
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Resource from "../../src/Resource";
-import * as QueueResource from "../../src/QueueContract";
-import * as ProcessResource from "../../src/ScheduledProcess";
+import * as QueueResource from "../../src/QueueResource";
+import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 
@@ -73,10 +73,12 @@ export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
     Resource.allReady([base, Resource.readinessOf(ScoresDb)]),
   ),
 ) {}
-export class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
+// Owns an inline schedule (seeded empty; `server.ts` seeds the live game windows at startup) so the
+// dashboard can read + edit its run windows through the `schedule` verb group.
+export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
-) {}
+).pipe(Process.schedule([])) {}
 export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   importJob,
@@ -105,9 +107,9 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // API-usage tap — is served remotely (server.ts); the browser is a thin `Resource.client` over each
 // node's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaNode` alongside the box-score queue.
 // One transport per node → one pip each, auto-fed by `NodeStatus`.
-const wnbaTransport = Resource.connectHttp(WnbaNode, { url: "/rpc" });
-const liveTransport = Resource.connectHttp(LiveNode, { url: "/live/rpc" });
-const statsTransport = Resource.connectHttp(StatsNode, { url: "/stats/rpc" });
+const wnbaTransport = Resource.httpClient(WnbaNode, { url: "/rpc" });
+const liveTransport = Resource.httpClient(LiveNode, { url: "/live/rpc" });
+const statsTransport = Resource.httpClient(StatsNode, { url: "/stats/rpc" });
 
 // Expose each node itself in the runtime (not only the resource clients): the node-status die reads
 // `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one

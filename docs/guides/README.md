@@ -1,7 +1,7 @@
 # Guides
 
 How to build with the toolkit: location-transparent **`Resource`** tags (`QueueResource`,
-`ScheduledProcess`, `ProcessScheduleResource`), nestable **`Group`**, persistence, and the
+`Process` / `Process.Schedule`), nestable **`Group`**, persistence, and the
 dashboard data layer.
 
 Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
@@ -22,7 +22,7 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 
 | Guide | Topic |
 | --- | --- |
-| [process.md](./process.md) | `ScheduledProcess` / the `Process` engine |
+| [process.md](./process.md) | `Process` — the `Process.Tag` toolkit + the `Process.make` engine |
 | [queue-resource.md](./queue-resource.md) | `QueueResource` — priority, concurrency, `rateLimit`, `refill`, `persist` |
 | [resource-configure.md](./resource-configure.md) | `.configure` layer patches (per-env overrides) |
 | [per-resource-dependencies.md](./per-resource-dependencies.md) | Serving resources that need **different** implementations of the same dependency, isolated — `Resource.serve` / `httpServer` |
@@ -37,9 +37,9 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 
 ## Reading order
 
-1. Define **queues** (`QueueResource`) and **scheduled processes** (`ScheduledProcess`).
-2. Provide them **local** (`.layer`) or **remote** (`.serveHttp` on the host; `Resource.client` on
-   the dashboard) — same `yield* Tag` either way.
+1. Define **queues** (`QueueResource`) and **managed processes** (`Process`).
+2. Provide them **local** (`.layer`) or **served** (`.serve` on the host, composed with
+   `Resource.httpServer`; `Resource.client` on the dashboard) — same `yield* Tag` either way.
 3. Opt into **persistence** (`persist`, `HistoryStore` / `SQLiteHistoryStore`) where you need
    durability or history.
 4. Organize with **`Group`** (nestable; members may live on different hosts).

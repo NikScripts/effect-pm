@@ -37,12 +37,13 @@ import { ensureClientUsage } from "./internal/apiUsageRegistry";
 import {
   Tag as resourceTag,
   layer as resourceLayer,
+  serve as resourceServe,
+  serveRemote as resourceServeRemote,
   effect,
   stream,
   type NodeBoundTag,
   type NodeKey,
   type ResourceTag,
-  type ServeEntry,
 } from "./Resource";
 
 // ============================================================================
@@ -193,21 +194,39 @@ export interface ApiMetricsConstructOptions<HSelf = never> {
 }
 
 /**
- * A serveAllHttp entry for one {@link ApiMetrics} tag — served like a queue/process, fed from the
- * in-process Metric registry ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add
- * the tag to the served node's `Group` and drop this into `serveAllHttp([...])`. @public
+ * Serve this metrics resource **remotely (served-only)** — the counterpart to
+ * {@link Resource.serveRemote}. Mounts the metrics RPC handlers and registers into
+ * {@link Resource.servedResourcesLayer} **without** granting the local instance. For a pure
+ * gateway/edge; use {@link serve} when the serving node also reads the metrics in-process.
+ *
+ * @public
  */
-export const serverEntry = <Self>(
+export const serveRemote = <Self>(
   tag: ApiMetricsTag<Self>,
   options?: ApiMetricsTagOptions,
-): ServeEntry<Scope.Scope> => ({
-  tag,
-  impl: buildImpl(tag[clientIdSym], options),
-});
+) =>
+  Layer.unwrap(
+    Effect.map(buildImpl(tag[clientIdSym], options), (impl) =>
+      resourceServeRemote(tag, impl),
+    ),
+  );
+
+/**
+ * Serve this metrics resource **and** grant its local instance from **one** materialization — the
+ * counterpart to {@link Resource.serve}, fed from the in-process usage registry
+ * ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add the tag to the served node's
+ * `Group` and drop this into {@link Resource.httpServer}; a served-**only** edge uses {@link serveRemote}.
+ *
+ * @public
+ */
+export const serve = <Self>(
+  tag: ApiMetricsTag<Self>,
+  options?: ApiMetricsTagOptions,
+) => resourceServe(tag, buildImpl(tag[clientIdSym], options));
 
 /**
  * Class factory for an {@link ApiMetrics} instance tag — its own per-instance RPC group, so it
- * serves on a node alongside queues/processes via {@link ApiMetrics.serverEntry} and is reached with
+ * serves on a node alongside queues/processes via {@link ApiMetrics.serve} and is reached with
  * `Resource.client`. Bind it to a node with `{ node }`.
  *
  * @example
@@ -219,7 +238,7 @@ export const serverEntry = <Self>(
  */
 // `Context.Service`-shaped: `<Self>()(clientId, options?)`. Only `Self` is explicit; the client id's
 // literal isn't carried on the tag (`clientIdSym` is `string`). The node-bearing call narrows the
-// return so `Resource.client` resolves its transport (window cadence lives on the layer/serverEntry).
+// return so `Resource.client` resolves its transport (window cadence lives on the layer/serve).
 const tag = <Self>() => {
   function build(clientId: string): ApiMetricsTag<Self>;
   function build<HSelf>(
@@ -244,7 +263,7 @@ const tag = <Self>() => {
 /**
  * The ApiMetrics tag constructor — `class Clients extends ApiMetrics.Tag<Clients>()(SdpClient) {}`. Flat
  * exports (like {@link Telemetry}) so the whole module is a tree-shakeable `import * as ApiMetrics`
- * namespace: `Tag` is light, `layer` / `serverEntry` pull the aggregation only when used. @public
+ * namespace: `Tag` is light, `layer` / `serve` / `serveRemote` pull the aggregation only when used. @public
  */
 export { tag as Tag };
 

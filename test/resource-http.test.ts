@@ -7,7 +7,7 @@ import * as Resource from "../src/Resource";
 import { groupOf } from "../src/Resource";
 
 // The toolkit driven over a REAL http transport (not the in-memory RpcTest path): the same
-// `yield* Tag` code, the real `Resource.server` mounted on an http RpcServer, and the real
+// `yield* Tag` code, the real `Resource.serveRemote` mounted on an http RpcServer, and the real
 // `Resource.client` forwarding over `RpcClient`'s http protocol.
 class Echo extends Resource.Tag<Echo>()("http/Echo", {
   ping: Resource.effect(Schema.String),
@@ -21,7 +21,7 @@ const ServerLive = HttpRouter.serve(
     protocol: "http",
   }).pipe(
     Layer.provide(
-      Resource.server(Echo, {
+      Resource.serveRemote(Echo, {
         ping: Effect.succeed("pong"),
         shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
       }),

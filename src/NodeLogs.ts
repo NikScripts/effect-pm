@@ -195,18 +195,10 @@ export const byResource = (
   });
 
 /**
- * Node logs — runtime-wide capture + live stream + durable, node/resource-queryable storage.
- * See the {@link NodeLogs | module docs}.
+ * The backing relay service (provided by {@link layer}), exposed as `NodeLogs.Relay` so
+ * `import * as NodeLogs` keeps the documented namespace member alongside {@link layer},
+ * {@link stream}, {@link snapshot}, {@link persistLayer}, {@link byNode}, {@link byResource}.
  *
  * @public
  */
-export const NodeLogs = {
-  layer,
-  stream,
-  snapshot,
-  persistLayer,
-  byNode,
-  byResource,
-  /** The backing relay service (provided by {@link layer}). */
-  Relay: LogRelay,
-} as const;
+export { LogRelay as Relay };

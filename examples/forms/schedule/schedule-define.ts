@@ -1,13 +1,13 @@
-import { ProcessStorage } from "../../../src/ProcessStorage";
+import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-define
  *
- * ProcessSchedule.define composition. Run: `pnpm run example:form:schedule-define`
+ * Process.scheduleDefine composition. Run: `pnpm run example:form:schedule-define`
  */
 
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule } from "../../../src";
+import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -18,7 +18,7 @@ const program = Effect.gen(function* () {
 
   const proc = Process.make("examples/forms/schedule-define", {
     polling: Polling.spaced(Duration.millis(120)),
-    schedule: ProcessSchedule.define(({ all, at, window }) =>
+    schedule: Process.scheduleDefine(({ all, at, window }) =>
       all(
         at("define-one-shot", utcDateFromMillis(0)),
         window("define-window", utcDateFromMillis(900), utcDateFromMillis(1_500)),

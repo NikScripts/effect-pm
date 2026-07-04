@@ -13,10 +13,10 @@ import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { changes, client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
 import * as NodeStatus from "../NodeStatus";
-import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
-import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
+import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
+import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
@@ -52,12 +52,12 @@ export interface ApiPoint {
   readonly inFlight: number;
 }
 
-/** The structural shape of a queue's live service the widgets consume. `status`/`size`/`isEmpty` are live
- *  `value`s (plain reads; subscribe with `Resource.changes`); `metrics`/`logs` are `{ live, history }`. */
+/** The structural shape of a queue's live service the widgets consume. `status`/`size`/`isEmpty` are
+ *  reactive `ref`s (`Subscribable`: `.get` / `.changes`); `metrics`/`logs` are `{ live, history }`. */
 interface QueueService {
-  readonly status: QueueStatus;
-  readonly size: number;
-  readonly isEmpty: boolean;
+  readonly status: Subscribable<QueueStatus>;
+  readonly size: Subscribable<number>;
+  readonly isEmpty: Subscribable<boolean>;
   readonly metrics: {
     readonly live: Stream.Stream<QueueMetrics>;
     readonly history: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
@@ -73,17 +73,29 @@ interface QueueService {
   readonly clear: Effect.Effect<void>;
   readonly shutdown: Effect.Effect<void>;
 }
-/** The structural shape of a process's live service. */
+/** A reactive `ref` field on the wire: read once (`get`) or subscribe (`changes`). */
+interface RefLike<A> {
+  readonly get: Effect.Effect<A>;
+  readonly changes: Stream.Stream<A>;
+}
+/** The structural shape of a process's live service (the base `Process.Tag` contract). The inline
+ *  `schedule` verb group is present only on a process that owns an inline schedule
+ *  (`Process.schedule([...])`), so it is optional here. */
 interface ProcessService {
-  readonly status: Stream.Stream<ProcessStatus>;
-  readonly logs: Stream.Stream<{ readonly level: string; readonly message: string }>;
-  readonly logHistory: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
-  readonly schedule: Effect.Effect<ReadonlyArray<ScheduleEntry>>;
+  readonly status: RefLike<ProcessStatus>;
+  readonly logs: {
+    readonly live: Stream.Stream<{ readonly level: string; readonly message: string }>;
+    readonly history: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
+  };
   readonly start: Effect.Effect<void>;
   readonly stop: Effect.Effect<void>;
   readonly runImmediately: Effect.Effect<void>;
-  readonly setSchedule: (entries: ReadonlyArray<ScheduleEntry>) => Effect.Effect<void>;
-  readonly clearSchedule: Effect.Effect<void>;
+  readonly schedule?: {
+    readonly entries: RefLike<ReadonlyArray<ScheduleEntry>>;
+    readonly set: (entries: ReadonlyArray<ScheduleEntry>) => Effect.Effect<void>;
+    readonly add: (entry: ScheduleEntry) => Effect.Effect<void>;
+    readonly clear: Effect.Effect<void>;
+  };
 }
 /** The structural shape of an API-metrics resource's live service (read-only). */
 interface ApiService {
@@ -299,9 +311,9 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  // `status` is a live `value` — subscribe via `changes`; `metrics` is nested `{ live, history }`.
+  // `status` is a reactive `ref` — subscribe via `.changes`; `metrics` is nested `{ live, history }`.
   const statusStream = Stream.unwrap(
-    Effect.map(tag, (q) => changes(q, (s) => s.status)),
+    Effect.map(tag, (q) => q.status.changes),
   );
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.live));
   // Stamp the point with the metric's own window-end (real server time), not the client's receive
@@ -382,28 +394,35 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
   bumpLogIdFrom(`${tag.key}/logs`);
+  // The inline `schedule` group is optional (only processes that own an inline schedule have it),
+  // so the schedule read/mutations degrade to empty / no-op when a process is schedule-less.
+  const scheduleEntries = Effect.flatMap(tag, (p) =>
+    p.schedule === undefined
+      ? Effect.succeed<ReadonlyArray<ScheduleEntry>>([])
+      : p.schedule.entries.get,
+  );
   const bundle: ProcessBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status))),
+    status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status.changes))),
     logs: runtime.atom(
       cachedAccumulator({
         key: `${tag.key}/logs`,
         cap: 300,
-        live: Stream.unwrap(Effect.map(tag, (p) => p.logs)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(tag, (p) => p.logHistory({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
+        live: Stream.unwrap(Effect.map(tag, (p) => p.logs.live)).pipe(Stream.map(toLogLine)),
+        history: Effect.flatMap(tag, (p) => p.logs.history({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
       }),
     ),
     // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
-    // any external changes) — the contract exposes `schedule` as a query, not a live stream.
+    // any external changes) — the contract exposes `schedule.entries` as a reactive ref, read here.
     schedule: runtime.atom(
-      Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => Effect.flatMap(tag, (p) => p.schedule))),
+      Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => scheduleEntries)),
     ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
     setSchedule: runtime.fn((entries: ReadonlyArray<ScheduleEntry>) =>
-      Effect.flatMap(tag, (p) => p.setSchedule(entries)),
+      Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.set(entries))),
     ),
-    clearSchedule: runtime.fn(() => Effect.flatMap(tag, (p) => p.clearSchedule)),
+    clearSchedule: runtime.fn(() => Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.clear))),
   };
   cache.set(tag.key, bundle);
   return bundle;

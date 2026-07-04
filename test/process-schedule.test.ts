@@ -1,9 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, Option } from "effect";
-import { ProcessSchedule } from "../src";
+// The engine schedule primitive is internal now (its public face is `Process.scheduleInMemory` /
+// `scheduleDefine` + the `Process.Schedule` resource); this suite exercises the primitive itself, so
+// it imports the internal module directly.
+import { ProcessSchedule } from "../src/internal/processSchedule";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
-describe("ProcessSchedule.inMemory", () => {
+describe("engine schedule primitive (internal)", () => {
   it.effect("lists initial entries by process", () =>
     Effect.gen(function* () {
       const schedule = yield* ProcessSchedule;

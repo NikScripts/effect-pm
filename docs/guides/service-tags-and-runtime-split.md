@@ -1,8 +1,8 @@
 # Service tags vs runtime layers (bundler-safe split)
 
-Keep the **tag** (identity + contract) separate from the **runtime** (layers, `serveHttp`, storage,
-native adapters). A browser/dashboard bundle imports only the tag; the engine, SQL adapters, and
-Node bits never get pulled in.
+Keep the **tag** (identity + contract) separate from the **runtime** (layers, `serve` / `httpServer`,
+storage, native adapters). A browser/dashboard bundle imports only the tag; the engine, SQL adapters,
+and Node bits never get pulled in.
 
 ## Why
 
@@ -16,21 +16,23 @@ and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engi
 ```ts
 // tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
 import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
-import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
+import * as Process from "@nikscripts/effect-pm/Process";
 
 export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
-export class LiveScores extends ScheduledProcess.Tag<LiveScores>()("nwsl/LiveScores") {}
+export class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 ```
 
 ```ts
-// runtime.ts — Node OS edge only. Layers, serveHttp, storage, persistence.
+// runtime.ts — Node OS edge only. Layers, serve / httpServer, storage, persistence.
 import { Layer } from "effect";
+import { Resource } from "@nikscripts/effect-pm/Resource";
 import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
 import { SQLiteHistoryStore } from "@nikscripts/effect-pm/storage/sqlite";
 import { RosterQueue } from "./tags";
 
-export const RosterQueueLive = QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
-  .pipe(Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })));
+export const RosterQueueLive = Resource.httpServer([
+  QueueResource.serve(RosterQueue, { effect, captureLogs: true }),
+]).pipe(Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })));
 ```
 
 ```ts
@@ -44,9 +46,9 @@ yield* queue.logHistory({ limit: 200 });
 
 ## Rule of thumb
 
-If a file calls `Layer.provide` / `serveHttp` / `SQLiteRuntimeStorage` / a storage adapter, it
-belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
-**subpaths** (`@nikscripts/effect-pm/QueueResource`, `/ScheduledProcess`, `/Group`, …) so member
+If a file calls `Layer.provide` / `serve` / `httpServer` / `SQLiteRuntimeStorage` / a storage adapter,
+it belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
+**subpaths** (`@nikscripts/effect-pm/QueueResource`, `/Process`, `/Group`, …) so member
 access tree-shakes.
 
 See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer

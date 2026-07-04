@@ -1,14 +1,13 @@
-import { ProcessStorage } from "../../src/ProcessStorage";
+import * as ProcessStorage from "../../src/ProcessStorage";
 /**
  * @module examples/scenarios/schedule-sync-from-external-db
  *
- * DB rows → ProcessSchedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
+ * DB rows → Process schedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
  */
 
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process } from "../../src";
-import type { ProcessScheduleEntry } from "../../src/ProcessSchedule";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/internal/utcDate";
 
@@ -18,7 +17,7 @@ interface DbScheduleRow {
   readonly stopMs?: number;
 }
 
-const toEntry = (row: DbScheduleRow): ProcessScheduleEntry => ({
+const toEntry = (row: DbScheduleRow): Process.ScheduleEntry => ({
   id: Option.some(row.id),
   startAt: utcDateFromMillis(row.startMs),
   stopAt: row.stopMs === undefined ? Option.none() : Option.some(utcDateFromMillis(row.stopMs)),

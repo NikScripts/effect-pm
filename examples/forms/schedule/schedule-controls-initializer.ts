@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../../../src/ProcessStorage";
+import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-controls-initializer
  *
@@ -7,7 +7,7 @@ import { ProcessStorage } from "../../../src/ProcessStorage";
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule } from "../../../src";
+import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -23,12 +23,12 @@ const program = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* Effect.sleep(Duration.millis(10));
         yield* set([
-          ProcessSchedule.window("init-window", utcDateFromMillis(0), utcDateFromMillis(700)),
+          Process.window("init-window", utcDateFromMillis(0), utcDateFromMillis(700)),
         ]);
         const existing = yield* entries;
         if (existing.length === 1) {
           yield* add(
-            ProcessSchedule.window("late-window", utcDateFromMillis(1_200), utcDateFromMillis(1_700)),
+            Process.window("late-window", utcDateFromMillis(1_200), utcDateFromMillis(1_700)),
           );
         }
       }),

@@ -4,11 +4,11 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
-import type { QueueLayerConfig } from "../src/QueueContract";
+import type { QueueLayerConfig } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL toolkit QueueResource engine served over http via
-// `QueueResource.serveHttp`, driven by `Resource.client` over the wire. The same `yield* Tag`
+// `httpServer([QueueResource.serve(...)])`, driven by `Resource.client` over the wire. The same `yield* Tag`
 // surface a local consumer uses — only the provided layer differs. This proves "remote queue
 // usage, all pieces together": control (add/pause), reads (completed/statusNow), the rich-entry
 // handoff (release), and a live stream (status) all crossing real RPC.
@@ -33,7 +33,9 @@ const withServer = <A, E>(
   config: QueueLayerConfig<NumberItem, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
 ) => {
-  const server = QueueResource.serveHttp(RemoteQueue, config).pipe(
+  const server = Resource.httpServer([
+    QueueResource.serve(RemoteQueue, config),
+  ]).pipe(
     // server-side history backend (only used when the config enables captureLogs)
     Layer.provide(HistoryStore.layerMemory()),
     Layer.provideMerge(NodeHttpServer.layerTest),
@@ -63,7 +65,7 @@ it("add (single + batch) over http → real engine processes → completed/statu
         // stream (current snapshot first, then updates) as it crosses RPC.
         const drained = yield* Stream.runHead(
           Stream.filter(
-            Resource.changes(queue, (s) => s.status),
+            queue.status.changes,
             (s) => s.completed >= 3,
           ),
         );
@@ -88,7 +90,7 @@ it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () 
           yield* queue.add([{ n: 1 }, { n: 2 }]);
           yield* Stream.runDrain(
             Stream.takeUntil(
-              Resource.changes(queue, (s) => s.status),
+              queue.status.changes,
               (s) => s.completed >= 2,
             ),
           );
@@ -138,7 +140,7 @@ it("the status stream flows over http from the real engine", () =>
           Stream.runCollect(
             Stream.take(
               Stream.filter(
-                Resource.changes(queue, (s) => s.status),
+                queue.status.changes,
                 (s) => s.sizes.normal >= 2,
               ),
               1,

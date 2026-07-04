@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Ref } from "effect";
-import { QueueResource } from "../src/QueueResource";
+import * as QueueResource from "../src/QueueResource";
 
 const waitUntil = (predicate: Effect.Effect<boolean>) =>
   Effect.gen(function* () {

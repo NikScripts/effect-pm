@@ -18,8 +18,8 @@ class B extends Resource.Tag<B>()("httpserver/B", { read: Resource.effect(Schema
 
 const impl = { read: Effect.map(Dep, (value) => value) };
 
-const layerA = Resource.serve(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
-const layerB = Resource.serve(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
+const layerA = Resource.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
+const layerB = Resource.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
 // the serves form — httpServer([...]) bundles the provideMerge + registry
 const Node = Resource.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(

@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import {
   Cause,
@@ -20,11 +20,24 @@ import {
   QueueHandle,
   QueueMissingItemSchemaError,
   QueueItemValidationError,
-  QueueResource,
   makeQueueItemCodecDescriptor,
   schemaVersionOf,
   withSchemaVersion,
-} from "../src/QueueResource";
+  makeQueueEffect,
+  Tag as engineQueueTag,
+  queueResourceLayer,
+  Service as engineQueueService,
+} from "../src/internal/queueResource";
+// This suite exercises the queue **engine** primitives directly (name-only `Tag`, positional
+// `make`, `layer(tag, config)`) — distinct from the public `QueueResource` namespace whose `Tag`
+// takes an `itemSchema`. Reconstruct the flat engine exports into the historical object shape so
+// the call-sites read `QueueResource.make` / `.Tag` / `.layer` / `.Service`.
+const QueueResource = {
+  make: makeQueueEffect,
+  Tag: engineQueueTag,
+  layer: queueResourceLayer,
+  Service: engineQueueService,
+};
 import * as Resource from "../src/Resource";
 import { QueueResourceStore } from "../src/store/queueResource";
 

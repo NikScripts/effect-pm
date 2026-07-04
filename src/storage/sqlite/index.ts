@@ -52,7 +52,7 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
-import { ProcessStorage } from "../../ProcessStorage";
+import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
 import type { ProcessExecutionStore } from "../../store/processExecution";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";

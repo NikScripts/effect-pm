@@ -7,12 +7,13 @@
  * @remarks
  * ## What this package provides
  *
- * - **`Process`**, **`Polling`**, **`ProcessSchedule`** — Build a **managed process** with
- *   a trigger-driven runtime: a long-lived driver follows an Effect `Schedule` and spawns
- *   process instances; each instance checks `ProcessSchedule` and exits naturally when
- *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
- *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
- *   requirements stay accurate in TypeScript.
+ * - **`Process`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
+ *   long-lived driver follows a schedule and spawns process instances; each instance checks its
+ *   schedule and exits naturally when disarmed while `Polling` controls in-instance repeat cadence.
+ *   Optional `polling` / `schedule` layers on `Process.make` are merged into `process.effect` so
+ *   fork-time requirements stay accurate in TypeScript. Run windows are built with
+ *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
+ *   `Process.window` / `Process.at`).
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
@@ -20,10 +21,11 @@
  *   events for processes.
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
- *   `server` / `serveHttp` / `Node` switch only the layer). Batteries-included resource kinds build
- *   on it — **`ScheduledProcess`** and the toolkit queue (from
- *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `server` /
- *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
+ *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
+ *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
+ *   `@nikscripts/effect-pm/Process`) and the toolkit queue (from
+ *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
+ *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See `docs/guides/toolkit-by-example.md`.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
@@ -57,7 +59,7 @@
  * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
+ * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
  * **`@nikscripts/effect-pm/Group`**,
  * **`@nikscripts/effect-pm/NodeLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
@@ -102,34 +104,26 @@ export {
   DisarmedIdleSleep,
 } from "./disarmedIdleSleep";
 
-// Namespace exports (these export objects with .make methods)
-export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
+// The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
+// access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
+// engine only when used. Engine + Resource toolkit are both members (`Process.make`, `Process.Tag`, …).
+export * as Process from "./Process";
+export { ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
-// Unified namespaces via `export * as` (module namespace, Effect-style) so member access
-// tree-shakes — `ScheduledProcess.Tag` pulls no engine code.
-export * as ScheduledProcess from "./internal/scheduledProcessNamespace";
-export {
-  processControlSpec,
-  processLogEntry,
-  processScheduleEntry,
-  processStatus,
-} from "./ScheduledProcess";
-export type { ProcessLayerConfig } from "./ScheduledProcess";
 export { Polling } from "./Polling";
-export { ProcessSchedule } from "./ProcessSchedule";
 // The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serveHttp`
+// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
-export * as QueueResource from "./internal/queueResourceNamespace";
-export { RunResource } from "./RunResource";
-export { HttpClientRunGate } from "./HttpClientRunGate";
+export * as QueueResource from "./QueueResource";
+export * as RunResource from "./RunResource";
+export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
-  HttpApiResource,
   acceptJson,
   instrumentEndpoints,
   type HttpApiResourceConfig,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
+export * as HttpApiResource from "./HttpApiResource";
 export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
@@ -167,17 +161,16 @@ export type {
   MethodMeta,
   ResourceInstance,
   ResourceTag,
-  ServeEntry,
   ServiceOf,
   Spec,
   TagFactory,
   TagHandlers,
 } from "./Resource";
-export { ProcessStorage } from "./ProcessStorage";
+export * as ProcessStorage from "./ProcessStorage";
 
 
 // Query / Runtime Storage
-export { Query } from "./Query";
+export * as Query from "./Query";
 export {
   And,
   Attributes,
@@ -256,8 +249,8 @@ export {
   configureLayer,
   foldConfig,
   resourceConfigureTagKey,
-  ResourceConfigure,
 } from "./ResourceConfigure";
+export * as ResourceConfigure from "./ResourceConfigure";
 export type { ConfigPatch } from "./ResourceConfigure";
 
 // CLI
@@ -268,8 +261,8 @@ export {
   decodeLogEntryNdjson,
   logEntryFromLoggerOptions,
   LogEntrySchema,
-  LogEntry,
 } from "./LogEntry";
+export * as LogEntry from "./LogEntry";
 export {
   LogRelay,
   captureLogger,
@@ -279,9 +272,11 @@ export {
   replayLogEntry,
   relayOnlyLayer as logRelayLayer,
   relayWithCaptureLoggerLayer,
-  Logs,
 } from "./Logs";
-export { NodeLogs } from "./NodeLogs";
+// Module namespace (Effect-style) so `Logs.captureLoggerLayer` etc. resolve the
+// same bindings as the flat root re-exports above.
+export * as Logs from "./Logs";
+export * as NodeLogs from "./NodeLogs";
 export type { NodeLogEntry } from "./NodeLogs";
 export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";
@@ -306,8 +301,8 @@ export {
   withNodeLogAnnotations,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
-  LogContext,
 } from "./LogContext";
+export * as LogContext from "./LogContext";
 export type { LogEntryRecordedEvent } from "./store/log";
 export { isLogEntryRecorded } from "./store/log";
 
@@ -413,9 +408,8 @@ export type {
   ProcessServiceFactory,
 } from "./Process";
 
-// Types - Polling / ProcessSchedule
+// Types - Polling
 export type { PollingService, AcceleratingPollConfig } from "./Polling";
-export type { ProcessScheduleService } from "./ProcessSchedule";
 
 // Types - QueueResource
 export type {
@@ -461,9 +455,9 @@ export type {
   InferQueueWorkerError,
   InferQueueWorkerRequirements,
   ConsumeResult,
-} from "./QueueResource";
+} from "./internal/queueResource";
 
-export * as CustomQueueResource from "./internal/customQueueResourceNamespace";
+export * as CustomQueueResource from "./CustomQueueResource";
 
 export type {
   CustomQueueHandle,
@@ -474,11 +468,11 @@ export type {
   CustomQueueResourceConfigWithoutItemSchema,
   CustomQueueResourceConfigWithItemSchema,
   CustomQueueStatus,
-} from "./CustomQueueResource";
+} from "./internal/customQueueResource";
 
 export type {
   CustomQueueTagOptions,
-} from "./CustomQueueContract";
+} from "./CustomQueueResource";
 
 export {
   customQueueControlSpec,
@@ -487,7 +481,7 @@ export {
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,
-} from "./CustomQueueContract";
+} from "./CustomQueueResource";
 
 export {
   QueueItemCodecDescriptorSchema,
@@ -500,7 +494,7 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./QueueResource";
+} from "./internal/queueResource";
 
 // Types - RunResource
 export type {

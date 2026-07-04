@@ -1,5 +1,117 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.27
+
+### Minor Changes
+
+- 36b4190: **Flat module namespaces for the remaining Tag/service modules (breaking).** Continues the object-literal →
+  module-namespace conversion started in beta.9 (`Resource`, `Group`, `QueueResource`): the module now **is** the
+  namespace (`import * as Name`), members are flat top-level exports, and partial imports tree-shake.
+
+  Now converted: **`Logs`**, **`Query`**, **`LogContext`**, **`LogEntry`**, **`NodeLogs`**, **`RunResource`**,
+  **`HttpApiResource`**, **`HttpClientRunGate`**, **`ResourceConfigure`**, and **`ProcessStorage`**. All documented
+  members are preserved — the flat root re-exports (`And`, `captureLoggerLayer`, `LogAnnotationKeys`, `acceptJson`,
+  `configureLayer`, …) and the namespace members (`Query.And`, `Logs.captureLoggerLayer`, `LogEntry.Schema`,
+  `NodeLogs.layer`, `RunResource.Tag`, `HttpApiResource.Service`, `ResourceConfigure.tagKey`, …) are the same
+  bindings. `RunResource.Tag` / `HttpApiResource` now tree-shake their gate/runner and client-builder engines out
+  of a partial import. `ProcessStorage`'s `layer` / `layerRuntimeStorage`, the facet aliases (`ProcessStorage.Log`
+  / `.QueueResource` / …), and `ProcessStorage.Services` (now a flat `type`) convert likewise.
+
+  Internally, `QueueResource` and `CustomQueueResource` moved their engines under `src/internal/` so the public
+  subpaths carry only the tree-shakeable contract `Tag` (no public-surface change — the subpaths already resolved
+  to the namespace since beta.9).
+
+  **Migration.** Direct subpath **value** imports of the converted namespace objects change form:
+  `import { NodeLogs } from ".../NodeLogs"` → `import * as NodeLogs from ".../NodeLogs"` (and likewise
+  `ProcessStorage`, `RunResource`, `HttpApiResource`, `HttpClientRunGate`, `ResourceConfigure`, `Logs`, `Query`,
+  `LogContext`, `LogEntry`). The barrel forms (`import { NodeLogs } from "@nikscripts/effect-pm"`, …) are
+  unchanged.
+
+- 29259ee: `Process` is now a single Effect **module namespace** (`export * as Process`) that carries both the supervisor engine and the location-transparent `Resource` toolkit — the same shape as `QueueResource`. Member access tree-shakes: a `Process.Tag`-only consumer pulls no engine code; `make` / `layer` / `serve` pull the engine only when referenced.
+
+  **New (Resource toolkit, additive):**
+
+  - **`Process.Tag`** — define a managed process as a toolkit resource (observation + lifecycle: `status` reactive ref, `start` / `stop` / `runImmediately`, `logs.live` / `logs.history`). Driven locally or remotely over RPC through the same `yield* Tag` surface.
+  - **`Process.schedule(...)`** (pipeable) — attach a schedule. Inline windows (`Process.schedule([Process.window(...)])`) give the process its own `schedule` verb group (`entries` / `set` / `add` / `clear`); an external `Process.Schedule` resource gates it with no added verbs.
+  - **`Process.result(Schema)`** (pipeable) — mark a process value-returning; it gains a reactive `result` holding the latest success (an `Option`, absent until the first run).
+  - **`Process.Schedule`** — a standalone, reusable, RPC-capable window manager (full CRUD) that can gate one or more processes.
+  - **`Process.window` / `Process.at`** — declarative schedule-window templates (id optional).
+  - **`Process.layer` / `Process.serve` / `Process.serveRemote` / `Process.configure`** — run a process resource locally, serve it (with/without the local instance), or fold a per-environment config patch. **`Process.scheduleLayer` / `Process.scheduleServe`** do the same for a standalone `Process.Schedule`.
+
+  **Compatibility:** the engine surface is unchanged and stays under the same namespace — `Process.make`, `Process.Service`, `Process.currentScheduleId`, `Process.scheduleControls`, `Process.Errors` all keep working (barrel and `import * as Process` usage is unaffected). The only behavioral change is the export mechanism: a named-value import of the old namespace object (`import { Process } from "@nikscripts/effect-pm/Process"`) must become `import * as Process from "@nikscripts/effect-pm/Process"`.
+
+- 7a1a1d4: **Retire `ScheduledProcess` and privatize the schedule primitive (breaking).** The managed-process
+  surface is now a single module: **`Process`** carries both the toolkit contract (`Process.Tag`) and
+  the engine (`Process.make`), the same shape as `QueueResource`. `ScheduledProcess` and the public
+  `ProcessSchedule` primitive are gone; everything they offered lives on the `Process` namespace.
+
+  **Removed**
+
+  - **`ScheduledProcess`** — the namespace **and** the `@nikscripts/effect-pm/ScheduledProcess`
+    subpath. Define a process with **`Process.Tag`** and run it with **`Process.layer`** /
+    **`Process.serve`** / **`Process.serveRemote`** / **`Process.configure`** (the engine
+    `Process.make` / `Process.Service` are unchanged).
+  - **Public `ProcessSchedule`** — the schedule primitive is now internal. Its constructors, window
+    builders, types, and the standalone schedule resource are re-exposed on the `Process` namespace.
+
+  **Migration**
+
+  | Old                                                                                               | New                                                                                                                  |
+  | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+  | `ScheduledProcess.Tag` / `layer` / `serve` / `serveRemote` / `configure`                          | `Process.Tag` / `Process.layer` / `Process.serve` / `Process.serveRemote` / `Process.configure`                      |
+  | `import … from "@nikscripts/effect-pm/ScheduledProcess"`                                          | `import * as Process from "@nikscripts/effect-pm/Process"`                                                           |
+  | `ProcessSchedule.inMemory(entries?)`                                                              | `Process.scheduleInMemory(entries?)`                                                                                 |
+  | `ProcessSchedule.empty`                                                                           | `Process.scheduleInMemory()`                                                                                         |
+  | `ProcessSchedule.alwaysArmed`                                                                     | _(the default — omit `schedule` / `scheduleLayer`)_                                                                  |
+  | `ProcessSchedule.define(build)`                                                                   | `Process.scheduleDefine(build)`                                                                                      |
+  | `ProcessSchedule.at(...)` / `ProcessSchedule.window(...)`                                         | `Process.at(...)` / `Process.window(...)`                                                                            |
+  | `ProcessSchedule.fromStarts(dates)`                                                               | `dates.map((d) => Process.at(d))`                                                                                    |
+  | `ProcessScheduleEntry` / `ProcessScheduleService` / `ReconcileResult` / `ProcessScheduleControls` | `Process.ScheduleEntry` / `Process.ScheduleService` / `Process.ScheduleReconcileResult` / `Process.ScheduleControls` |
+
+  Prefer the pipeable combinator when a process owns its windows —
+  `Process.Tag<T>()("id").pipe(Process.schedule([Process.window(start, stop)]))` — or gate one or more
+  processes with a standalone **`Process.Schedule`** resource. Reading process status is now the
+  reactive `status` ref (`status.get` / `status.changes`), matching the queue.
+
+- 4b199c6: **Replace `value` fields with `ref` (a `Subscribable`).** A `value` was a plain property kept "live" by a
+  background fiber mutating the service object in place — which Effect never does (a plain member is fixed at
+  construction; changing state is a `Ref` read through an effect). With `constant` already covering the
+  fixed-at-build case, `value` was a non-idiomatic hack between the two.
+
+  - **Dropped `value`.** Field kinds are now `constant` / `ref` / `effect` / `stream` / `local` / `fleet`.
+  - **New `Resource.ref(schema)`** → materializes as **`Subscribable<A>`** (`{ get: Effect<A>; changes:
+Stream<A> }`), uniform local and remote: `yield* svc.x.get` for the current value, `svc.x.changes` to
+    observe. The impl owns a `SubscriptionRef`, provided via **`Resource.subscribable(ref)`** (or
+    **`Resource.mapSubscribable(source, f)`** to derive one — e.g. a queue's `size` from its `status`).
+  - **Removed `Resource.changes` / `Resource.ref` accessors** — `ref` fields expose `.changes` natively.
+  - **Deleted the mirror machinery** (`bindValueToProp`, the 30s block-for-initial and its deadlock class).
+
+  **Migration:** `Resource.value(S)` → `Resource.ref(S)`; the impl gives a `Subscribable` (`subscribable(ref)`
+  or `mapSubscribable`) instead of a raw `Stream`; reads become `yield* svc.x.get` (was `svc.x`) and
+  `svc.x.changes` (was `Resource.changes(svc, s => s.x)`). Queue `size`/`status`/`isEmpty` are now `ref`s.
+
+  **Serve-family vocabulary (breaking).** Modes are now protocol-neutral and uniform across `Resource` and
+  every contract namespace (`QueueResource`, `CustomQueueResource`, `Process`, `ApiMetrics`,
+  `Telemetry`):
+
+  - **`layer(tag, impl)`** — local only (grants `Self | LocalCapability<Self>`).
+  - **`serve(tag, impl)`** — local **and** served, the default. Builds the impl **once** and grants
+    `Self | LocalCapability<Self>` alongside the wire handlers, so a co-located node serves its resources
+    **and** `yield*`s them (read a `local` member, share a `ref` cell) with no double materialization and no
+    second `peersLayer`.
+  - **`serveRemote(tag, impl)`** — served only (a pure gateway/edge; no local grant).
+  - **`client(node)`** — remote.
+
+  **Transport bundlers:** **`httpServer([...serve-layers], opts)`** exposes one or more `serve`/`serveRemote`
+  layers on a single http `RpcServer` (and auto-serves the reserved node-status resource, so it fully replaces
+  the old all-in-one entry point); **`httpClient(node)`** wires a node's transport from a `url`; generic
+  **`connect`** covers custom protocols.
+
+  **Removed** the transitional names: `server`, `serverEntry`, `remoteEntry`, `serveHttp`, `serveAllHttp`, and
+  the `ServeEntry` `{ tag, impl }` shape. Migrate `serverEntry`→`serve`, `remoteEntry`→`serveRemote`,
+  `serveHttp(X, i, opts?)`→`httpServer([serve(X, i)], opts)`, and
+  `serveAllHttp([...])`→`httpServer([...serve-layers])`.
+
 ## 0.8.0-beta.26
 
 ### Patch Changes
@@ -105,7 +217,7 @@
   Effect `Metric` registry as a `Resource` (`snapshot` query + `live` ~1s stream) for building custom
   in-app metrics UIs with no external infra — the counterpart to OTEL export (same source, different
   sink; OTEL stays doc-only via `@effect/opentelemetry`, no new dependency). `import * as Telemetry from
-  "@nikscripts/effect-pm/Telemetry"` → `Telemetry.Tag` / `layer` / `serverEntry` / `snapshotNow` + the
+"@nikscripts/effect-pm/Telemetry"` → `Telemetry.Tag` / `layer` / `serverEntry` / `snapshotNow` + the
   `MetricsSnapshot` envelope (tagged counter/gauge/histogram). Host axis is free (which host you connected
   to); fan out with `Resource.client(tag, host)`. Cardinality-disciplined. See
   `docs/guides/telemetry.md`.
@@ -197,7 +309,7 @@
 
 - cd8a472: **`Resource.peersLayer(tag, self, { url })` — override peer urls** without freezing them into
   the host contract. `Host.url` stays the default; the resolver `url: (host) => Effect<string |
-  undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling back to `Host.url`. Its
+undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling back to `Host.url`. Its
   error + requirements flow to the layer (typed) — a `ConfigError` is a typed layer-build failure, or
   return `undefined` to skip a peer. Fully back-compatible (omit `options`).
 
@@ -341,7 +453,7 @@
 
 - ace74b5: **Tags now carry their contract kind.** Each contract's `.Tag` factory stamps a canonical
   `kind` id on the tag (e.g. `@nikscripts/effect-pm/QueueResource`), read with **`Resource.kindOf(tag)`**
-  — so consumers (notably the web/TUI dashboards) classify a tag by what it *is* instead of sniffing
+  — so consumers (notably the web/TUI dashboards) classify a tag by what it _is_ instead of sniffing
   its spec members (which mis-classified `ApiMetrics` as a process and broke custom-queue /
   process-schedule tags). Each contract exports its `kind` (`QueueResource.kind`,
   `ScheduledProcess.kind`, `ApiMetrics.kind`, `CustomQueueResource.kind`,

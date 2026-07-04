@@ -1,538 +1,650 @@
 /**
- * CustomQueueResource — N-level managed queue engine (local `make` entry point).
+ * **CustomQueueResource** — the public N-level managed-queue namespace, mirroring
+ * {@link QueueResource} but with N-level lanes, `Record<string, number>` sizes, and
+ * `add(item, level?)` where `level` is a numeric index or a configured name.
  *
- * For toolkit tags, layers, and RPC use {@link CustomQueueContract} /
- * `CustomQueueResource.Tag` from the namespace barrel.
+ * This module is the public face: the `@nikscripts/effect-pm/CustomQueueResource` subpath and the
+ * barrel `export * as CustomQueueResource` both resolve here. The light `Tag` / spec / schemas live
+ * in this file (engine-free, tree-shakeable); the heavy engine lives in
+ * `./internal/customQueueResource` and is pulled in only by the runtime verbs (`layer` / `serve` /
+ * `serveRemote` / `make`).
  *
  * @module CustomQueueResource
  */
+import { Effect, Layer, Option, Schema, Stream } from "effect";
+import * as Resource from "./Resource";
+import { specSym } from "./Resource";
+import { HistoryStore } from "./HistoryStore";
+import type {
+  HandlerContextOf,
+  NodeKey,
+  ImplOf,
+  LocalCapability,
+  Method,
+  MethodAnnotations,
+  NodeBoundTag,
+  ResourceTag,
+} from "./Resource";
+import { makeCustomQueueEffect } from "./internal/customQueueResource";
+import type {
+  CustomQueueHandle,
+  CustomQueueLevelConfig,
+  CustomQueueResourceConfigWithItemSchema,
+} from "./internal/customQueueResource";
+import type { QueueEnqueueErrors } from "./internal/queueResource";
 import {
-  Cause,
-  DateTime,
-  Effect,
-  Exit,
-  Schema,
-  Scope,
-  Stream,
-  Types,
-} from "effect";
-import type { LogEntry } from "./LogEntry";
-import { isJsonValue } from "./internal/json";
-import { resolveCustomQueueLevel } from "./internal/customQueueLevels";
-import { levelToDefaultPriority } from "./internal/priorityMapping";
-import {
-  buildCustomQueueProjection,
-  type CustomQueueStatus,
-} from "./internal/queueProjection";
-import type { QueueRuntimeProjection } from "./internal/queueProjection";
-import {
-  QueueResource,
-  type EffectContext,
-  type InferQueueEnqueueError,
-  type InferQueueItem,
-  type InferQueueWorkerError,
-  type InferQueueWorkerRequirements,
-  type QueueEncodedEntry,
-  type QueueEnqueueEntries,
-  type QueueEnqueueErrors,
-  type QueueEngineHandle,
-  type QueueEntry,
-  type QueueEntrySelector,
-  type QueueEvent,
-  type QueueHandlePhantomWorkerFailures,
-  type QueueMetrics,
-  type QueueOnFailure,
-  type QueueReleaseEncodingError,
-  type QueueReleaseOptions,
-  type QueueResourceConfigBase,
-  type QueueRouteOptions,
-  type QueueStatus,
-  type QueueRefill,
-  type QueueWorkerEffect,
-  QueueBatchValidationError,
-  QueueItemEncodingError,
-  QueueItemValidationError,
-  makeQueueItemCodecDescriptor,
+  historyQuery,
+  queueEncodedEntry,
+  queueEntryAttributes,
+  queueEntryTimestamps,
+  queueEvent,
+  queueLogEntry,
+  queueMetrics,
+  queuePriority,
+  queueReleaseEncodingError,
+  queueReleaseOptions,
+  queueRouteOptions,
 } from "./QueueResource";
+import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
+import type { ConfigPatch } from "./ResourceConfigure";
 
-export type { CustomQueueStatus } from "./internal/queueProjection";
-
-// ============================================================================
-// Public types
-// ============================================================================
-
-/** Named level registry and default lane for {@link CustomQueueResource}. @public */
-export interface CustomQueueLevelConfig {
-  /** Required lane count — one bounded queue per level index `0 … levelCount - 1`. */
-  readonly levelCount: number;
-  /** Map configured names to lane indices (e.g. `{ interactive: 2, batch: 5 }`). */
-  readonly namedLevels?: Record<string, number>;
-  /** Lane used when `add` omits a level. @default 0 */
-  readonly defaultLevel?: number;
-}
-
-/** @public */
-export interface CustomQueueEnqueue<T, EEnqueue = never, R = never> {
-  (
-    items: T | ReadonlyArray<T>,
-    level?: number | string,
-  ): Effect.Effect<void, EEnqueue, R>;
-}
-
-/** Control + observe surface for custom N-level queues. @public */
-export interface CustomQueueHandleApi<
-  T,
-  E = never,
-  EEnqueue = never,
-  R = never,
-> {
-  readonly add: CustomQueueEnqueue<T, EEnqueue, R>;
-  readonly enqueue: QueueEnqueueEntries<T, R>;
-  readonly size: Effect.Effect<number>;
-  readonly sizes: Effect.Effect<Record<string, number>, never, R>;
-  readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
-  readonly isEmpty: Effect.Effect<boolean>;
-  readonly completed: Effect.Effect<number>;
-  readonly events: Stream.Stream<QueueEvent<T, E>>;
-  readonly status: Stream.Stream<CustomQueueStatus>;
-  readonly statusNow: Effect.Effect<CustomQueueStatus>;
-  readonly metrics: Stream.Stream<QueueMetrics>;
-  readonly logs: Stream.Stream<LogEntry>;
-  readonly start: Effect.Effect<void, never, R>;
-  readonly pause: Effect.Effect<void>;
-  readonly resume: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void>;
-  readonly clear: Effect.Effect<number, never, R>;
-  readonly release: (
-    options?: QueueReleaseOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
-  readonly releaseEncoded: (
-    options?: QueueReleaseOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, R>;
-  readonly deadLetter: (
-    selector: QueueEntrySelector<T> | QueueEntry<T>,
-    options: QueueRouteOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
-  readonly drop: (
-    selector: QueueEntrySelector<T> | QueueEntry<T>,
-    options: QueueRouteOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
-}
-
-/** @public */
-export type CustomQueueHandle<
-  T,
-  E = never,
-  EEnqueue = never,
-  R = never,
-> = CustomQueueHandleApi<T, E, EEnqueue, R> &
-  QueueHandlePhantomWorkerFailures<E>;
-
-/** @public */
-export type CustomQueueResourceConfigWithoutItemSchema<T, E, R> = Omit<
-  QueueResourceConfigBase<T>,
-  "levelCount"
-> &
-  CustomQueueLevelConfig & {
-    readonly itemSchema?: undefined;
-    readonly effect: (
-      item: T,
-      ctx: EffectContext<T, never, R>,
-    ) => Effect.Effect<void, E, R>;
-    readonly onFailure?: QueueOnFailure<T, E, R>;
-    readonly refill?: CustomQueueRefill<T, E, never, R>;
-  };
-
-/** @public */
-export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
-  QueueResourceConfigBase<T>,
-  "levelCount"
-> &
-  CustomQueueLevelConfig & {
-    readonly itemSchema: Schema.Codec<T, unknown, never, never>;
-    readonly effect: (
-      item: T,
-      ctx: EffectContext<T, QueueEnqueueErrors, R>,
-    ) => Effect.Effect<void, E, R>;
-    readonly onFailure?: QueueOnFailure<T, E, R>;
-    readonly refill?: CustomQueueRefill<T, E, QueueEnqueueErrors, R>;
-  };
-
-/** @public */
-export type CustomQueueResourceConfig<T, E, R> =
-  | CustomQueueResourceConfigWithoutItemSchema<T, E, R>
-  | CustomQueueResourceConfigWithItemSchema<T, E, R>;
-
-/** @public */
-export type CustomQueueResourceOptionsWithoutItemSchema<T, E, R> = Omit<
-  CustomQueueResourceConfigWithoutItemSchema<T, E, R>,
-  "effect"
->;
-
-/** @public */
-export type CustomQueueResourceOptionsWithItemSchema<T, E, R> = Omit<
-  CustomQueueResourceConfigWithItemSchema<T, E, R>,
-  "effect"
->;
-
-/** @public */
-export interface CustomQueueRefill<T, E, EEnqueue, R> {
-  readonly onStart?: boolean;
-  readonly onDrained?: boolean;
-  readonly load: (
-    queue: CustomQueueHandle<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-}
-
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray<A> =>
-  Array.isArray(input);
-
-const normalizeEnqueueInput = <A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> =>
-  isReadonlyArray(input) ? input : [input];
-
-const levelResolution = (config: CustomQueueLevelConfig) => ({
-  levelCount: Math.max(1, Math.floor(config.levelCount)),
-  namedLevels: config.namedLevels ?? {},
-  defaultLevel: config.defaultLevel ?? 0,
-});
-
-const wrapCustomQueueHandle = <T, E, EEnqueue, R>(
-  engine: QueueEngineHandle<T, E, EEnqueue, R>,
-  levels: ReturnType<typeof levelResolution>,
-  projection: ReturnType<typeof buildCustomQueueProjection>,
-): CustomQueueHandle<T, E, EEnqueue, R> => {
-  const resolveLevel = (input?: number | string) =>
-    resolveCustomQueueLevel({ ...levels, input });
-
-  return {
-    add: (items, level?) =>
-      engine.enqueueAtLevel(normalizeEnqueueInput(items), resolveLevel(level)),
-    enqueue: engine.enqueue,
-    size: engine.size,
-    sizes: Effect.map(engine.levelSizes, projection.projectSizes),
-    levelSizes: engine.levelSizes,
-    isEmpty: engine.isEmpty,
-    completed: engine.completed,
-    events: engine.events,
-    status: engine.status as Stream.Stream<CustomQueueStatus>,
-    statusNow: engine.statusNow as Effect.Effect<CustomQueueStatus>,
-    metrics: engine.metrics,
-    logs: engine.logs,
-    start: engine.start,
-    pause: engine.pause,
-    resume: engine.resume,
-    shutdown: engine.shutdown,
-    clear: engine.clear,
-    release: engine.release,
-    releaseEncoded: engine.releaseEncoded,
-    deadLetter: engine.deadLetter,
-    drop: engine.drop,
-  };
-};
-
-const validateItemsWithSchema = <T>(
-  queueName: string,
-  itemSchema: Schema.Codec<T, unknown, never, never>,
-  codecId: string,
-  items: ReadonlyArray<T>,
-): Effect.Effect<ReadonlyArray<T>, QueueEnqueueErrors> => {
-  const decodeItem = Schema.decodeUnknownExit(itemSchema);
-  if (items.length === 1) {
-    const input = items[0];
-    const exit = decodeItem(input);
-    return Exit.match(exit, {
-      onSuccess: (value) => Effect.succeed([value]),
-      onFailure: (cause) =>
-        Effect.fail(
-          new QueueItemValidationError({
-            queue: queueName,
-            operation: "add",
-            input,
-            message: Cause.pretty(cause),
-            codecId,
-          }),
-        ),
-    });
-  }
-  return Effect.gen(function* () {
-    const decoded: T[] = [];
-    const failures: Array<{
-      readonly index: number;
-      readonly input: unknown;
-      readonly message: string;
-    }> = [];
-    for (let i = 0; i < items.length; i++) {
-      const input = items[i];
-      const exit = decodeItem(input);
-      if (Exit.isSuccess(exit)) {
-        decoded.push(exit.value);
-      } else {
-        failures.push({
-          index: i,
-          input,
-          message: Cause.pretty(exit.cause),
-        });
-      }
-    }
-    if (failures.length > 0) {
-      return yield* Effect.failCause(
-        Cause.fail(
-          new QueueBatchValidationError({
-            queue: queueName,
-            operation: "add",
-            mode: "atomic",
-            failures,
-            codecId,
-          }),
-        ),
-      );
-    }
-    return decoded;
-  });
-};
-
-const adaptRefill = <T, E, EEnqueue, R>(
-  config: CustomQueueResourceConfig<T, E, R>,
-  levels: ReturnType<typeof levelResolution>,
-  projection: ReturnType<typeof buildCustomQueueProjection>,
-): QueueRefill<T, E, EEnqueue, R> | undefined =>
-  config.refill === undefined
-    ? undefined
-    : ({
-        onStart: config.refill.onStart,
-        onDrained: config.refill.onDrained,
-        load: (queue) => {
-          const handle = wrapCustomQueueHandle(
-            queue as QueueEngineHandle<T, E, EEnqueue, R>,
-            levels,
-            projection,
-          );
-          return (
-            config.refill!.load as (
-              custom: CustomQueueHandle<T, E, EEnqueue, R>,
-            ) => Effect.Effect<void, never, R>
-          )(handle);
-        },
-      } satisfies QueueRefill<T, E, EEnqueue, R>);
-
-const buildCustomProjection = (config: CustomQueueLevelConfig) =>
-  buildCustomQueueProjection({
-    levelCount: levelResolution(config).levelCount,
-    namedLevels: config.namedLevels,
-  });
-
-const castProjection = (
-  projection: ReturnType<typeof buildCustomQueueProjection>,
-): QueueRuntimeProjection<
-  { readonly high: number; readonly normal: number; readonly low: number },
-  QueueStatus
-> =>
-  projection as QueueRuntimeProjection<
-    { readonly high: number; readonly normal: number; readonly low: number },
-    QueueStatus
-  >;
-
-const makeCustomQueueEffectWithoutSchema = <
-  const C extends CustomQueueResourceConfigWithoutItemSchema<any, any, any>,
->(
-  config: Types.NoInfer<C>,
-): Effect.Effect<
-  CustomQueueHandle<
-    InferQueueItem<C>,
-    InferQueueWorkerError<C>,
-    never,
-    InferQueueWorkerRequirements<C>
-  >,
-  never,
-  Scope.Scope | InferQueueWorkerRequirements<C>
-> =>
-  Effect.gen(function* () {
-    const levels = levelResolution(config);
-    const projection = buildCustomProjection(config);
-    const engine = yield* QueueResource.buildQueueEngine({
-      config: {
-        ...config,
-        levelCount: levels.levelCount,
-        refill: adaptRefill(config, levels, projection),
-      },
-      levelCount: levels.levelCount,
-      projection: castProjection(projection),
-      validateForEnqueue: (items) => Effect.succeed(items),
-      encodeForRelease: undefined,
-      persistCodec: undefined,
-    });
-    return wrapCustomQueueHandle(engine, levels, projection);
-  });
-
-const makeCustomQueueEffectWithSchema = <
-  const C extends CustomQueueResourceConfigWithItemSchema<any, any, any>,
->(
-  config: Types.NoInfer<C>,
-): Effect.Effect<
-  CustomQueueHandle<
-    InferQueueItem<C>,
-    InferQueueWorkerError<C>,
-    QueueEnqueueErrors,
-    InferQueueWorkerRequirements<C>
-  >,
-  never,
-  Scope.Scope | InferQueueWorkerRequirements<C>
-> => {
-  const queueName = config.name ?? "anonymous";
-  const descriptor = makeQueueItemCodecDescriptor(queueName, config.itemSchema);
-  const codecId = descriptor.id;
-  const encodeItem = Schema.encodeUnknownExit(config.itemSchema);
-  const encodeForRelease = (
-    internal: {
-      readonly item: InferQueueItem<C>;
-      readonly entryId: string;
-      readonly retries: number;
-      readonly level: number;
-      readonly enqueuedAt: number;
-      readonly key: string | undefined;
-    },
-    releaseId: string,
-    attributes?: Record<string, unknown>,
-  ) => {
-    const encoded = encodeItem(internal.item);
-    return Exit.match(encoded, {
-      onSuccess: (payload) =>
-        isJsonValue(payload)
-          ? Effect.succeed({
-              entryId: internal.entryId,
-              key: internal.key,
-              priority: levelToDefaultPriority(internal.level),
-              attempts: internal.retries + 1,
-              timestamps: {
-                enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
-              },
-              releaseId,
-              attributes,
-              payload,
-              item: descriptor,
-            } satisfies QueueEncodedEntry)
-          : Effect.fail(
-              new QueueItemEncodingError({
-                queue: queueName,
-                entryId: internal.entryId,
-                message: "encoded item is not JSON-compatible",
-                codecId,
-              }),
-            ),
-      onFailure: (cause) =>
-        Effect.fail(
-          new QueueItemEncodingError({
-            queue: queueName,
-            entryId: internal.entryId,
-            message: Cause.pretty(cause),
-            codecId,
-          }),
-        ),
-    });
-  };
-
-  return Effect.gen(function* () {
-    const levels = levelResolution(config);
-    const projection = buildCustomProjection(config);
-    const engine = yield* QueueResource.buildQueueEngine({
-      config: {
-        ...config,
-        levelCount: levels.levelCount,
-        refill: adaptRefill(config, levels, projection),
-      },
-      levelCount: levels.levelCount,
-      projection: castProjection(projection),
-      validateForEnqueue: (items) =>
-        validateItemsWithSchema(queueName, config.itemSchema, codecId, items),
-      encodeForRelease,
-      persistCodec: {
-        encode: encodeItem,
-        decode: Schema.decodeUnknownExit(config.itemSchema),
-      },
-    });
-    return wrapCustomQueueHandle(engine, levels, projection);
-  });
-};
-
-const hasItemSchema = <T, E, R>(
-  config: CustomQueueResourceConfig<T, E, R>,
-): config is CustomQueueResourceConfigWithItemSchema<T, E, R> =>
-  config.itemSchema !== undefined;
-
-const makeCustomQueueEffectFromConfig = (
-  config: CustomQueueResourceConfig<any, any, any>,
-): Effect.Effect<CustomQueueHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
-  hasItemSchema(config)
-    ? makeCustomQueueEffectWithSchema(config)
-    : makeCustomQueueEffectWithoutSchema(config);
-
-type CustomConfigFromEffect<
-  F extends QueueWorkerEffect<any, any, any, any>,
-  O extends
-    | CustomQueueResourceOptionsWithoutItemSchema<any, any, any>
-    | CustomQueueResourceOptionsWithItemSchema<any, any, any>
-    | undefined = undefined,
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- empty config branch
-> = { readonly effect: F } & (O extends undefined ? {} : O);
-
-function makeCustomQueueEffect<
-  const F extends QueueWorkerEffect<any, any, any, any>,
-  const O extends
-    | CustomQueueResourceOptionsWithoutItemSchema<any, any, any>
-    | CustomQueueResourceOptionsWithItemSchema<any, any, any>
-    | undefined = undefined,
->(
-  effect: F,
-  options: O & CustomQueueLevelConfig,
-): Effect.Effect<
-  CustomQueueHandle<
-    InferQueueItem<CustomConfigFromEffect<F, O>>,
-    InferQueueWorkerError<CustomConfigFromEffect<F, O>>,
-    InferQueueEnqueueError<CustomConfigFromEffect<F, O>>,
-    InferQueueWorkerRequirements<CustomConfigFromEffect<F, O>>
-  >,
-  never,
-  Scope.Scope | InferQueueWorkerRequirements<CustomConfigFromEffect<F, O>>
->;
-function makeCustomQueueEffect<const C extends CustomQueueResourceConfig<any, any, any>>(
-  config: C,
-): Effect.Effect<
-  CustomQueueHandle<
-    InferQueueItem<C>,
-    InferQueueWorkerError<C>,
-    InferQueueEnqueueError<C>,
-    InferQueueWorkerRequirements<C>
-  >,
-  never,
-  Scope.Scope | InferQueueWorkerRequirements<C>
->;
-function makeCustomQueueEffect(
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | CustomQueueResourceConfig<any, any, any>,
-  options?: (CustomQueueResourceOptionsWithoutItemSchema<any, any, any> &
-    CustomQueueLevelConfig),
-): Effect.Effect<CustomQueueHandle<any, any, any, any>, never, Scope.Scope | any> {
-  if (typeof effectOrConfig === "function") {
-    if (options === undefined || options.levelCount === undefined) {
-      return Effect.die(
-        new Error("CustomQueueResource.make requires levelCount in config or options"),
-      );
-    }
-    return makeCustomQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
-  }
-  return makeCustomQueueEffectFromConfig(effectOrConfig);
-}
+/** @public Re-export for custom-queue wire schemas. */
+export { queueLogEntry as customQueueLogEntry } from "./QueueResource";
 
 /**
- * CustomQueueResource engine namespace — prefer {@link CustomQueueResource} barrel
- * (`export * as CustomQueueResource`) for `Tag` / `layer` / `server`.
+ * Per-lane pending counts keyed by configured name (or `"0"`, `"1"`, …).
  *
  * @public
  */
-export const CustomQueueResource = {
-  make: makeCustomQueueEffect,
-  rateLimiterLayer: QueueResource.rateLimiterLayer,
-} as const;
+export const customQueueSizes = Schema.Record(Schema.String, Schema.Number);
+
+/**
+ * Custom-queue current-state snapshot — element of the `status` stream.
+ *
+ * @public
+ */
+export const customQueueStatus = Schema.Struct({
+  sizes: customQueueSizes,
+  paused: Schema.Boolean,
+  inFlight: Schema.Number,
+  completed: Schema.Number,
+  phase: Schema.Literals(["running", "draining", "off"]),
+});
+
+/**
+ * Level argument on the wire — numeric lane index or a name from the tag's
+ * `namedLevels` registry (when declared at tag construction).
+ *
+ * @public
+ */
+export const customQueueLevel = (
+  namedLevels?: Readonly<Record<string, number>>,
+): Schema.Schema<number | string> => {
+  const names =
+    namedLevels === undefined ? [] : Object.keys(namedLevels).filter((n) => n.length > 0);
+  return names.length === 0
+    ? Schema.Union([Schema.Number, Schema.String])
+    : Schema.Union([
+        Schema.Number,
+        Schema.Literals(names as [string, ...string[]]),
+      ]);
+};
+
+/**
+ * Custom queue entry on the wire — like {@link queueEntry} plus optional numeric `level`.
+ *
+ * @public
+ */
+export const customQueueEntry = <Sch extends Schema.Top>(
+  itemSchema: Sch,
+) =>
+  Schema.Struct({
+    item: itemSchema,
+    entryId: Schema.String,
+    key: Schema.optional(Schema.String),
+    priority: queuePriority,
+    level: Schema.optional(Schema.Number),
+    attempts: Schema.Number,
+    timestamps: queueEntryTimestamps,
+    batchId: Schema.optional(Schema.String),
+    releaseId: Schema.optional(Schema.String),
+    sourceResourceId: Schema.optional(Schema.String),
+    attributes: Schema.optional(queueEntryAttributes),
+  });
+
+/** Selector for custom-queue routing verbs. @public */
+export const customQueueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
+  Schema.Struct({
+    entryId: Schema.optionalKey(Schema.String),
+    key: Schema.optional(Schema.String),
+    item: Schema.optionalKey(itemSchema),
+  });
+
+/** Total pending across all lanes — the `size`/`isEmpty` `value`s derive from `status.sizes`. @internal */
+const sumLaneSizes = (sizes: Record<string, number>): number =>
+  Object.values(sizes).reduce((a, b) => a + b, 0);
+
+/**
+ * Shared control + observation contract for every custom-queue instance.
+ *
+ * @public
+ */
+export const customQueueControlSpec = {
+  // ── live current state — one SubscriptionRef-backed source of truth ──
+  // `status` is the whole snapshot; `size`/`isEmpty` are `Stream.map` derivations of it (SSOT). Plain
+  // reads (`p.size`) and subscribable (`Resource.changes(p, (s) => s.size)`).
+  status: Resource.ref(customQueueStatus).annotate({
+    description:
+      "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
+  }),
+  size: Resource.ref(Schema.Number).annotate({
+    description: "Total pending items across all lanes.",
+  }),
+  isEmpty: Resource.ref(Schema.Boolean).annotate({
+    description: "Whether all lanes are empty.",
+  }),
+  // stays `effect`: the raw per-index array isn't in the named-Record `status.sizes`, so it can't be a
+  // reliable `Stream.map` of `status` — an on-demand pull is the honest shape.
+  levelSizes: Resource.effect(Schema.Array(Schema.Number)).annotate({
+    description: "Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`).",
+  }),
+
+  // ── lifecycle commands ──
+  start: Resource.effectFn(Schema.Void).annotate({
+    description:
+      "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
+  }),
+  pause: Resource.effectFn(Schema.Void).annotate({
+    description: "Pause processing; items can still be enqueued and accumulate.",
+  }),
+  resume: Resource.effectFn(Schema.Void).annotate({
+    description: "Resume processing after a pause.",
+  }),
+  shutdown: Resource.effectFn(Schema.Void).annotate({
+    description:
+      "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
+      "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
+    destructive: true,
+  }),
+  clear: Resource.effectFn(Schema.Number).annotate({
+    description:
+      "Drain all pending items and reset the completed counter; returns the count cleared.",
+    destructive: true,
+  }),
+
+  // ── observability — live stream + history query, paired by nesting ──
+  metrics: {
+    live: Resource.stream(queueMetrics).annotate({
+      description:
+        "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
+    }),
+    history: Resource.effect(Schema.Array(queueMetrics), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
+    }),
+  },
+  logs: {
+    live: Resource.stream(queueLogEntry).annotate({
+      description:
+        "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
+    }),
+    history: Resource.effect(Schema.Array(queueLogEntry), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
+    }),
+  },
+};
+
+/** Tag options beyond lane config (description, node). @public */
+export type CustomQueueTagOptions = {
+  readonly description?: string;
+};
+
+/** Lane config resolved from tag factory positional args. @internal */
+type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
+
+const namedLevelsFromNames = (names: readonly string[]): Record<string, number> =>
+  Object.fromEntries(names.map((name, index) => [name, index]));
+
+const isTagOptions = (value: object): value is CustomQueueTagOptions & { readonly node?: NodeKey<unknown> } =>
+  "description" in value || "node" in value;
+
+const resolveTagLevelConfig = (
+  levelCountOrNames: number | readonly string[],
+  fourth?: Readonly<Record<string, number>> | (CustomQueueTagOptions & { readonly node?: NodeKey<unknown> }),
+  fifth?: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> },
+): {
+  readonly levelConfig: CustomQueueTagLevelConfig;
+  readonly tagOptions: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> };
+} => {
+  if (typeof levelCountOrNames === "number") {
+    const namedLevels =
+      fourth !== undefined && !isTagOptions(fourth) ? fourth : {};
+    const tagOptions =
+      fourth !== undefined && isTagOptions(fourth)
+        ? fourth
+        : (fifth ?? {});
+    return {
+      levelConfig: { levelCount: levelCountOrNames, namedLevels },
+      tagOptions,
+    };
+  }
+  const names = levelCountOrNames.filter((name) => name.length > 0);
+  return {
+    levelConfig: {
+      levelCount: Math.max(1, names.length),
+      namedLevels: namedLevelsFromNames(names),
+    },
+    tagOptions:
+      fourth !== undefined && isTagOptions(fourth) ? fourth : {},
+  };
+};
+
+/**
+ * Build a custom-queue **instance** spec: shared {@link customQueueControlSpec} plus
+ * per-instance data-plane procedures typed by `itemSchema`.
+ *
+ * @public
+ */
+export const customQueueSpec = <F extends Schema.Struct.Fields>(
+  itemSchema: Schema.Struct<F>,
+  levelConfig: CustomQueueLevelConfig,
+) => {
+  const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
+  const level = customQueueLevel(levelConfig.namedLevels);
+  const entry = customQueueEntry(itemSchema);
+  const eventSchema = queueEvent(itemSchema);
+  return {
+    ...customQueueControlSpec,
+    add: Resource.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
+      description:
+        "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
+    }),
+    enqueue: Resource.effectFn(Schema.Void, {
+      payload: Schema.Array(entry),
+    }).annotate({
+      description:
+        "Re-inject existing entries — each re-enters at its own level with attempts preserved.",
+    }),
+    release: Resource.effectFn(Schema.Array(entry), {
+      payload: { options: Schema.optionalKey(queueReleaseOptions) },
+    }).annotate({
+      description:
+        "Export pending entries for handoff and remove them from this queue.",
+      destructive: true,
+    }),
+    releaseEncoded: Resource.effectFn(Schema.Array(queueEncodedEntry), {
+      payload: { options: Schema.optionalKey(queueReleaseOptions) },
+      error: queueReleaseEncodingError,
+    }).annotate({
+      description: "Export pending entries in encoded/wire form for remote handoff.",
+      destructive: true,
+    }),
+    deadLetter: Resource.effectFn(Schema.Array(entry), {
+      payload: {
+        selector: customQueueEntrySelector(itemSchema),
+        options: queueRouteOptions,
+      },
+    }).annotate({
+      description: "Remove pending entries matching the selector and route to dead letter.",
+      destructive: true,
+    }),
+    drop: Resource.effectFn(Schema.Array(entry), {
+      payload: {
+        selector: customQueueEntrySelector(itemSchema),
+        options: queueRouteOptions,
+      },
+    }).annotate({
+      description: "Remove pending entries matching the selector without preserving them.",
+      destructive: true,
+    }),
+    events: Resource.stream(eventSchema).annotate({
+      description: "Discrete entry / worker / queue lifecycle events.",
+    }),
+  };
+};
+
+type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
+
+/** Wire `add` member — tuple payload surfaced as `add(item, level?)`. @public */
+export type CustomQueueAddMethod = Method<
+  "mutate",
+  Schema.Tuple<readonly [Schema.Top, Schema.Top]>,
+  Schema.Void,
+  Schema.Never,
+  false,
+  CustomQueuePairAnnotations
+>;
+
+/** Full custom-queue instance contract for `itemSchema` `F`. @public */
+export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
+  ReturnType<typeof customQueueSpec<F>>,
+  "add"
+> & {
+  readonly add: CustomQueueAddMethod;
+};
+
+/**
+ * Define a custom-queue **instance** — same shape as {@link QueueContract.queueTag}, with
+ * `levelCount` / `namedLevels` baked into the wire level union:
+ *
+ * ```ts
+ * class Jobs extends CustomQueueResource.Tag<Jobs>()(
+ *   "@app/Jobs",
+ *   JobSchema,
+ *   8,
+ *   { urgent: 0, batch: 7 },
+ * ) {}
+ * // or: (id, schema, ["urgent", "normal", "batch"])
+ * const q = yield* Jobs;
+ * yield* q.add(aJob, "urgent");
+ * ```
+ *
+ * @public
+ */
+/** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
+export const kind = "@nikscripts/effect-pm/CustomQueueResource";
+
+export const customQueueTag = <Self>() => {
+  function build<F extends Schema.Struct.Fields, HSelf>(
+    key: string,
+    itemSchema: Schema.Struct<F>,
+    levelCount: number,
+    namedLevels: Readonly<Record<string, number>> | undefined,
+    options: CustomQueueTagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
+  function build<F extends Schema.Struct.Fields, HSelf>(
+    key: string,
+    itemSchema: Schema.Struct<F>,
+    levelNames: readonly string[],
+    options: CustomQueueTagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
+  function build<F extends Schema.Struct.Fields>(
+    key: string,
+    itemSchema: Schema.Struct<F>,
+    levelCount: number,
+    namedLevels?: Readonly<Record<string, number>>,
+    options?: CustomQueueTagOptions,
+  ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
+  function build<F extends Schema.Struct.Fields>(
+    key: string,
+    itemSchema: Schema.Struct<F>,
+    levelNames: readonly string[],
+    options?: CustomQueueTagOptions,
+  ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
+  function build<F extends Schema.Struct.Fields>(
+    key: string,
+    itemSchema: Schema.Struct<F>,
+    levelCountOrNames: number | readonly string[],
+    fourth?:
+      | Readonly<Record<string, number>>
+      | (CustomQueueTagOptions & { readonly node?: NodeKey<unknown> }),
+    fifth?: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> },
+  ): ResourceTag<Self, CustomQueueInstanceSpec<F>> {
+    const { levelConfig, tagOptions } = resolveTagLevelConfig(
+      levelCountOrNames,
+      fourth,
+      fifth,
+    );
+    const { description, node, ...rest } = tagOptions;
+    const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
+    void rest;
+    const tag =
+      node === undefined
+        ? Resource.Tag<Self>()(key, spec, { description, kind })
+        : Resource.Tag<Self>()(key, spec, { description, kind, node });
+    // Readiness from the queue's own status (SSOT): ready iff the worker pool is running.
+    // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
+    return Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.status.get, (status) => ({
+        ready: status.phase === "running",
+        ...(status.phase === "running"
+          ? {}
+          : { detail: `phase: ${status.phase}` }),
+      })),
+    );
+  }
+  return build;
+};
+
+/** Worker/layer config for a toolkit custom queue (tag carries `itemSchema`). @public */
+export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
+  CustomQueueResourceConfigWithItemSchema<A, E, R>,
+  "itemSchema" | "refill" | "name"
+> & {
+  readonly refill?: {
+    readonly onStart?: boolean;
+    readonly onDrained?: boolean;
+    readonly load: (
+      queue: CustomQueueHandle<A, E, QueueEnqueueErrors, never>,
+    ) => Effect.Effect<void, never, RR>;
+  };
+};
+
+type CustomQueueItemFields = Record<
+  string,
+  Schema.Codec<unknown, unknown, never, never>
+>;
+
+const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
+  addPayload: CustomQueueInstanceSpec<F>["add"]["payload"],
+): Schema.Struct<F> => {
+  const tuple = addPayload as unknown as {
+    readonly elements: ReadonlyArray<{
+      readonly members: ReadonlyArray<Schema.Struct<F>>;
+    }>;
+  };
+  return tuple.elements[0]!.members[0]!;
+};
+
+const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+) =>
+  Effect.gen(function* () {
+    // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
+    // at this introspection boundary.
+    const addMethod = tag[specSym].add as unknown as {
+      readonly payload: CustomQueueInstanceSpec<F>["add"]["payload"];
+    };
+    const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
+      itemSchemaFromCustomQueueAdd(addMethod.payload);
+    const context = yield* Effect.context<R | RR>();
+    const effectiveConfig = yield* foldConfiguredSpec<
+      CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
+    >(tag.key, config);
+    const handle = yield* makeCustomQueueEffect({
+      name: tag.key,
+      ...effectiveConfig,
+      itemSchema,
+    } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+    const provideR = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R | RR>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+
+    const history = yield* Effect.serviceOption(HistoryStore);
+    const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
+    const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
+    const metricsStreamId = `${tag.key}/metrics`;
+    const logsStreamId = `${tag.key}/logs`;
+    yield* Option.match(history, {
+      onNone: () => Effect.void,
+      onSome: (store) =>
+        Effect.gen(function* () {
+          yield* Effect.forkScoped(
+            Stream.runForEach(handle.metrics, (m) =>
+              Schema.encodeEffect(queueMetrics)(m).pipe(
+                Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
+                Effect.orDie,
+              ),
+            ),
+          );
+          yield* Effect.forkScoped(
+            Stream.runForEach(handle.logs, (l) =>
+              Schema.encodeEffect(queueLogEntry)(l).pipe(
+                Effect.flatMap((enc) => store.append(logsStreamId, enc)),
+                Effect.orDie,
+              ),
+            ),
+          );
+        }),
+    });
+
+    // one Subscribable source of truth (get = statusNow, changes = status stream); scalars are views of it.
+    const statusSub = {
+      get: handle.statusNow,
+      changes: handle.status,
+    };
+    const impl: ImplOf<CustomQueueInstanceSpec<F>> = {
+      status: statusSub,
+      size: Resource.mapSubscribable(statusSub, (s) => sumLaneSizes(s.sizes)),
+      isEmpty: Resource.mapSubscribable(statusSub, (s) => sumLaneSizes(s.sizes) === 0),
+      levelSizes: provideR(handle.levelSizes),
+      start: provideR(handle.start),
+      pause: handle.pause,
+      resume: handle.resume,
+      shutdown: handle.shutdown,
+      clear: provideR(handle.clear),
+      metrics: {
+        live: handle.metrics,
+        history: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
+            onSome: (store) =>
+              store.read(metricsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+                ),
+              ),
+          }),
+      },
+      logs: {
+        live: handle.logs,
+        history: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
+            onSome: (store) =>
+              store.read(logsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
+                ),
+              ),
+          }),
+      },
+      add: ((
+        itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
+        level?: number | string,
+      ) => provideR(handle.add(itemOrItems, level)).pipe(Effect.orDie)) as ImplOf<
+        CustomQueueInstanceSpec<F>
+      >["add"],
+      enqueue: (entries) => provideR(handle.enqueue(entries)),
+      release: ({ options }) => provideR(handle.release(options)),
+      releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
+      deadLetter: ({ selector, options }) =>
+        provideR(handle.deadLetter(selector, options)),
+      drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
+      events: handle.events,
+    };
+    return impl;
+  });
+
+/** @public */
+export const layer = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<Self | LocalCapability<Self>, never, R | RR> =>
+  Layer.unwrap(
+    Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+  );
+
+/**
+ * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
+ * {@link Resource.serveRemote}. Mounts the queue's RPC handlers and registers into
+ * {@link Resource.servedResourcesLayer} **without** granting the local instance, preserving the worker
+ * requirement `R` for per-resource `Layer.provide`. For a pure gateway/edge; use {@link serve} when the
+ * serving node also drives the queue.
+ *
+ * @public
+ */
+export const serveRemote = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+) =>
+  Layer.unwrap(
+    Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
+      Resource.serveRemote(tag, impl),
+    ),
+  );
+
+/**
+ * Serve this custom queue **and** grant its local instance from **one** materialization — the
+ * engine-running counterpart to {@link Resource.serve}. Mounts the queue's RPC handlers, registers into
+ * {@link Resource.servedResourcesLayer}, **and** grants `Self | LocalCapability<Self>` so co-located code
+ * can `yield* Tag`; the served cells *are* the in-process instance. A served-**only** gateway uses
+ * {@link serveRemote}.
+ *
+ * @public
+ */
+export const serve = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<
+  Self | LocalCapability<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
+  never,
+  R | RR
+> =>
+  Layer.unwrap(
+    Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
+      Resource.serve(tag, impl),
+    ),
+  );
+
+/** @public */
+export const configure = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
+): Layer.Layer<never> => configureLayer(tag.key, patch);
+
+// The light `Tag` lives here (no engine) so `CustomQueueResource.Tag` member access tree-shakes.
+export { customQueueTag as Tag };
+
+// ============================================================================
+// Engine surface
+//
+// The engine helpers below pull in `./internal/customQueueResource` only when referenced, so a
+// `Tag`-only consumer tree-shakes the engine away entirely.
+// ============================================================================
+
+export {
+  makeCustomQueueEffect as make,
+  queueRateLimiterLayer as rateLimiterLayer,
+} from "./internal/customQueueResource";

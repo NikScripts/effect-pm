@@ -4,17 +4,17 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as NodeStatus from "../src/NodeStatus";
-import { NodeLogs } from "../src/NodeLogs";
+import * as NodeLogs from "../src/NodeLogs";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
 
-// A node serving one ordinary resource over `serveAllHttp` must ALSO auto-serve its node status
+// A node serving one ordinary resource over `httpServer` must ALSO auto-serve its node status
 // (status / ping / logs / logHistory) without the author wiring anything — driven over real http.
 class Echo extends Resource.Tag<Echo>()("nodeStatus/Echo", {
   ping: Resource.effect(Schema.String),
 }) {}
 
-const Server = Resource.serveAllHttp([
-  { tag: Echo, impl: { ping: Effect.succeed("pong") } },
+const Server = Resource.httpServer([
+  Resource.serve(Echo, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("every served node auto-serves its node status over http", () =>

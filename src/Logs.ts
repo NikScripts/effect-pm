@@ -48,22 +48,9 @@ export const relayWithCaptureLoggerLayer = relayLayerImpl.pipe(
 );
 
 /**
- * Capture and relay layers for process-manager logging.
- *
- * @remarks
- * Root imports match {@link Logs} members. Durable history uses
- * {@link LogStore} with `layerProcessStore`.
+ * Relay-only capture layer, aliased for discoverability alongside
+ * {@link relayWithCaptureLoggerLayer}.
  *
  * @public
  */
-export const Logs = {
-  LogRelay,
-  captureLogger,
-  captureLoggerLayer,
-  relayLayer,
-  logsRelayLayer,
-  replayLogEntry,
-  relayOnlyLayer,
-  relayWithCaptureLoggerLayer,
-  logRelayLayer: relayOnlyLayer,
-} as const;
+export { relayOnlyLayer as logRelayLayer };

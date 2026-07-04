@@ -13,7 +13,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serverEntry } from "../../src/QueueContract";
+import { serve as queueEntry } from "../../src/QueueResource";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Resource from "../../src/Resource";
 import {
@@ -66,21 +66,21 @@ setInterval(() => {
   );
 }, 5000);
 
-// node every queue as ONE group on ONE port: `serveAllHttp` mounts a single `/rpc`
+// node every queue as ONE group on ONE port: `httpServer` mounts a single `/rpc`
 // endpoint with group-id-prefixed procedures behind the Droplet node. (The wnba
 // key-rotation process lives on the Mini — see mini-server.ts.)
-const serveLayer = Resource.serveAllHttp([
-  serverEntry(Mail, cfg),
-  serverEntry(Jobs, cfg),
-  serverEntry(Billing, cfg),
-  serverEntry(Notify, cfg),
-  serverEntry(Worker1, cfg),
-  serverEntry(Worker2, cfg),
-  serverEntry(Worker3, cfg),
-  serverEntry(RegionUS, cfg),
-  serverEntry(RegionEU, cfg),
-  serverEntry(Daily, cfg),
-  serverEntry(Weekly, cfg),
+const serveLayer = Resource.httpServer([
+  queueEntry(Mail, cfg),
+  queueEntry(Jobs, cfg),
+  queueEntry(Billing, cfg),
+  queueEntry(Notify, cfg),
+  queueEntry(Worker1, cfg),
+  queueEntry(Worker2, cfg),
+  queueEntry(Worker3, cfg),
+  queueEntry(RegionUS, cfg),
+  queueEntry(RegionEU, cfg),
+  queueEntry(Daily, cfg),
+  queueEntry(Weekly, cfg),
 ]).pipe(
   // capture metrics + log history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),

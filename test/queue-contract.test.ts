@@ -15,7 +15,7 @@ import {
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import { queueControlSpec } from "../src/QueueContract";
+import { queueControlSpec } from "../src/QueueResource";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
@@ -41,13 +41,16 @@ const makeImpl = () => {
   const statusRef = Effect.runSync(SubscriptionRef.make(initial));
   const patch = (f: (s: typeof initial) => typeof initial) =>
     Effect.runSync(SubscriptionRef.update(statusRef, f));
-  const status = SubscriptionRef.changes(statusRef);
+  const statusSub = Resource.subscribable(statusRef);
   return {
-    // live current state — `status` is the SSOT; the scalars derive from it (`value` impls are streams).
-    status,
-    size: Stream.map(status, (s) => s.sizes.high + s.sizes.normal + s.sizes.low),
-    isEmpty: Stream.map(
-      status,
+    // live current state — `status` is the SSOT Subscribable; the scalars are mapped views (`ref` impls).
+    status: statusSub,
+    size: Resource.mapSubscribable(
+      statusSub,
+      (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
+    ),
+    isEmpty: Resource.mapSubscribable(
+      statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
     start: Effect.void,
@@ -223,7 +226,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     expect(
       yield* Stream.runHead(svc.size).pipe(Effect.map(Option.getOrThrow)),
     ).toBe(3);
-  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -260,7 +263,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
       },
     ]);
     expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
-  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -300,7 +303,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
       ),
     );
     expect(caught).toBe("missing:test/Numbers");
-  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -368,7 +371,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     // the queue is now empty — the live `isEmpty` delta stream reflects it.
     const emptied = yield* Stream.runHead(
       Stream.filter(
-        Resource.changes(q, (s) => s.isEmpty),
+        q.isEmpty.changes,
         (e) => e === true,
       ),
     );

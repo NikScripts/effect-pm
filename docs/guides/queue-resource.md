@@ -16,7 +16,7 @@ class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", J
 ```
 
 - **`QueueResource.layer(Tag, config)`** — local layer (auto-starts workers).
-- **`QueueResource.serveHttp(Tag, config)`** / **`server`** — host it over RPC.
+- **`QueueResource.serve(Tag, config)`** / **`serveRemote`** — host it over RPC (compose with `Resource.httpServer`).
 - **`QueueResource.make(config)`** — scoped engine handle, for tests / low-level composition.
 - **`Resource.client(Tag)`** — remote handle (dashboard).
 

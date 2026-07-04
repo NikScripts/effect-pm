@@ -26,7 +26,7 @@
  */
 
 import { Effect, Layer } from "effect";
-import { ProcessStorage } from "../../ProcessStorage";
+import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
 import type { ProcessExecutionStore } from "../../store/processExecution";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";

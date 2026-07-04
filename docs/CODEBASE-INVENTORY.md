@@ -18,7 +18,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## Polling
 
-**What it is:** `Layer` providing **`PollingService`** (Context tag `Polling` / `PollingTag`). Answers: *how long between repeats of the user tick while a run instance is armed?* Does not decide *whether* the instance runs — `ProcessSchedule` does.
+**What it is:** `Layer` providing **`PollingService`** (Context tag `Polling` / `PollingTag`). Answers: *how long between repeats of the user tick while a run instance is armed?* Does not decide *whether* the instance runs — the **schedule** does.
 
 ### Service contract (`PollingService`)
 
@@ -71,79 +71,80 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ---
 
-## ProcessSchedule
+## Schedule (run windows)
 
-**What it is:** `Layer` providing **`ProcessScheduleService`** (tag `ProcessSchedule` / `ProcessScheduleTag`). Stores **entries**; supervisor uses them to decide if a run instance should continue; driver can stay up while entries are empty (disarmed).
+**What it is:** The set of **run windows** the supervisor watches to decide *whether* a run instance should continue. Backed by an internal engine primitive (`src/internal/processSchedule.ts`); its public face is the **`Process`** namespace — window builders, schedule-layer factories, in-tick controls, and the standalone **`Process.Schedule`** resource. A process can stay up while its schedule is empty (disarmed).
 
-### Entry form (`ProcessScheduleEntry`)
+### Window form (`Process.ScheduleEntry` / `ScheduleWindow`)
 
-- **`id`** — `Option<string>`; stable identity for CRUD, `Process.currentScheduleId`, reconcile, removal.
-- **`startAt`** — `Date`; when instance becomes eligible.
+- **`id`** — `Option<string>`; stable identity for CRUD, `Process.currentScheduleId`, reconcile, removal. **Optional** — windows may be nameless.
+- **`startAt`** — `Date`; when the instance becomes eligible.
 - **`stopAt`** — `Option<Date>`; absent = open-ended from `startAt`; present = bounded window.
 
-### Entry constructor helpers (pure data, used in layers/initializers)
+### Window builders (pure data, used in schedules/initializers)
 
-- **`ProcessSchedule.at(startAt)`** — anonymous one-shot, no stop.
-- **`ProcessSchedule.at(id, startAt)`** — identified one-shot.
-- **`ProcessSchedule.window(startAt, stopAt)`** — anonymous bounded window.
-- **`ProcessSchedule.window(id, startAt, stopAt)`** — identified bounded window.
-- **`ProcessSchedule.fromStarts(dates[])`** — many anonymous `at` entries.
+- **`Process.at(startAt)`** — nameless one-shot, no stop.
+- **`Process.at(id, startAt)`** — identified one-shot.
+- **`Process.window(startAt, stopAt)`** — nameless bounded window.
+- **`Process.window(id, startAt, stopAt)`** — identified bounded window.
 
-### Schedule layer factories (storage + initial data)
+### Schedule-layer factories (storage + initial data)
 
-- **`ProcessSchedule.inMemory(initialEntries?)`** — mutable in-process store; default backing when Process doesn't override.
-- **`ProcessSchedule.alwaysArmed`** — single eternal entry from epoch, no stop (always eligible once driver started).
-- **`ProcessSchedule.define(({ at, window, fromStarts, all }) => entries[])`** — declarative builder; `all(...)` flattens entry list into one layer.
-- **Custom layer** — any `Layer` implementing full `ProcessScheduleService`.
+- **`Process.scheduleInMemory(entries?)`** — mutable in-process store seeded with `entries` (call with no argument for an empty, disarmed schedule). The `Layer` handed to `make`'s `schedule` / `scheduleLayer`.
+- **`Process.scheduleDefine(({ at, window }) => entries[])`** — declarative builder for the same in-memory layer.
+- **Default** (neither `schedule` nor `scheduleLayer` on `Process.make`) — an **always-armed** in-memory schedule (one open-ended window from the epoch), so the process runs immediately.
+- **Custom layer** — any `Layer` implementing the full schedule service.
 
-### `ProcessScheduleService` — read
+### Schedule service — read
 
-- **`entries`** — all entries sorted by `startAt`.
-- **`changed`** — completes when any mutation occurs (wait for external sync).
-- **`get(id)`** — `Option<entry>`; none if missing or entry has no id.
+- **`entries`** — a reactive **`ref`** (`entries.get` / `entries.changes`), all entries sorted by `startAt`.
+- **`get(id)`** — `Option<entry>`; none if missing or the window has no id.
 - **`has(id)`** — boolean.
 
-### `ProcessScheduleService` — mutate
+### Schedule service — mutate
 
-- **`set(entries)`** — replace entire list; triggers `changed`.
-- **`add(entry)`** — append; triggers `changed`.
-- **`upsert(entry)`** — insert or replace by id; triggers `changed`.
-- **`remove(id)`** — returns whether removed; triggers `changed`.
-- **`removeMany(ids)`** — count removed; triggers `changed`.
-- **`clear()`** — wipe all; triggers `changed`.
+- **`set(entries)`** — replace the entire list.
+- **`add(entry)`** — append.
+- **`upsert(entry)`** — insert or replace by id.
+- **`remove(id)`** — returns whether removed.
+- **`removeMany(ids)`** — count removed.
+- **`clear`** — wipe all.
 
-### `ProcessScheduleService` — sync
+### Schedule service — sync (engine-only)
 
-- **`reconcile(nextEntries)`** — diff vs current: returns **`ReconcileResult`** `{ added, updated, removed, unchanged }` (id-keyed; entries without id matched by reference only); applies atomically; triggers `changed`.
+- **`reconcile(nextEntries)`** — diff vs current: returns **`Process.ScheduleReconcileResult`** `{ added, updated, removed, unchanged }` (id-keyed; nameless windows matched by reference only); applies atomically. Available on the internal service, **not** on the `Process.Schedule` RPC surface.
 
-### Ways to wire schedule into `Process`
+### Ways to attach a schedule to a `Process`
 
-- **`Process.make(id, { schedule: ScheduleLayer })`** — fixed layer at build time.
-- **`Process.make(id, { schedule: (controls) => Effect })`** — **initializer** runs once when schedule resource starts; receives **`ProcessScheduleControls`** (`entries`, `set`, `add`, `clear` — subset of full service in initializer typing).
-- **`Process.make(id, { scheduleLayer: Layer })`** — explicit layer field (parallel to `schedule` field).
-- **Default** — in-memory schedule layer when not specified (per `Process` implementation).
+- **Inline on the tag** — `Process.Tag<T>()("id").pipe(Process.schedule([Process.window(...)]))`: bakes windows into the definition **and** exposes a `schedule` verb group (`entries` ref + `set` / `add` / `clear`) on the service.
+- **`Process.make(id, { schedule })`** — a schedule **layer** (`Process.scheduleInMemory(...)` / `scheduleDefine(...)`) **or** an **initializer** `(controls) => Effect` that runs once at start and receives **`Process.ScheduleControls`** (`entries`, `set`, `add`, `clear`).
+- **`Process.make(id, { scheduleLayer })`** — explicit schedule layer (parallel to `schedule`).
+- **Positional** — `Process.make(id, effect, polling?, schedule?)` accepts a schedule layer/initializer positionally.
 
-### In-process control surfaces
+### In-tick control surfaces
 
 | Surface | API available | Typical use |
 |---------|---------------|-------------|
-| **Initializer** | `entries`, `set`, `add`, `clear` | Seed on boot, subscribe once |
-| **`Process.scheduleControls` inside tick** | same subset | tick-driven schedule changes |
-| **Full service in another fiber** | full `ProcessScheduleService` including `upsert`, `remove`, `reconcile`, `changed` | HTTP handler, DB poller, game API sync |
-| **`Process.currentScheduleId` inside tick** | `Option<string>` | branch logic per match/job id |
+| **Initializer** (`schedule: (controls) => …`) | `Process.ScheduleControls` — `entries`, `set`, `add`, `clear` | Seed on boot, subscribe once |
+| **`Process.scheduleControls`** inside the tick | same subset | tick-driven schedule changes |
+| **`Process.Schedule`** resource (own tag) | full CRUD + `entries` ref | HTTP handler, DB poller, game API sync |
+| **`Process.currentScheduleId`** inside the tick | `Option<string>` | branch logic per match/job id |
+
+### Standalone schedule resource (`Process.Schedule`)
+
+- **`class Cron extends Process.Schedule<Cron>()("app/Cron") {}`** — a reusable window manager as its own `Resource` (kind `@nikscripts/effect-pm/Process/Schedule`).
+- **`Process.scheduleLayer(tag, { initial? })`** / **`Process.scheduleServe(tag, { initial? })`** — local / served layers (`initial` seeds `ScheduleWindow`s).
+- Gate any number of processes with `Process.schedule(TheSchedule)`.
 
 ### Armed vs disarmed (behavioral, not separate types)
 
-- **No entry covers “now”** — disarmed: instances exit at stop check; **driver fiber can still run** if process was started.
-- **At least one entry covers “now”** — armed: inner loop runs `Polling.awaitNextTick` → user `effect`.
-- **`alwaysArmed`** — always has covering entry after driver start.
+- **No window covers “now”** — disarmed: instances exit at the stop check; the **driver fiber can still run** if the process was started.
+- **At least one window covers “now”** — armed: the inner loop runs `Polling.awaitNextTick` → the user `effect`.
+- **Default schedule** — always has a covering window after the driver starts.
 
-### Remote / HTTP / CLI
+### Related types (on the `Process` namespace)
 
-
-### Related types
-
-- **`ProcessScheduleEntry`**, **`ReconcileResult`**, **`ProcessScheduleService`**, **`ProcessScheduleTag`**, **`ProcessScheduleControls`**, **`ProcessScheduleInitializer`**.
+- **`Process.ScheduleEntry`**, **`Process.ScheduleService`**, **`Process.ScheduleReconcileResult`**, **`Process.ScheduleControls`**, **`ScheduleWindow`**, **`ProcessScheduleInitializer`**, **`ProcessScheduleLayerInput`**, **`ScheduleDefineApi`**.
 
 ### Compatibility helpers (custom schedule authors)
 
@@ -498,7 +499,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/QueueContract`, `/CustomQueueResource`, `/CustomQueueContract`, `/ScheduledProcess`, `/ProcessScheduleContract`, `/Resource`, `/Group`, `/HostLogs`, `/HostStatus`, `/ApiMetrics`, `/ApiUsageSchema`, `/HttpApiResource`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`.
+- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/RunResource`, `/store/QueueResource`, `/store/Log`, `/store/ProcessLifecycle`, `/store/ProcessExecution`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`.
 
 ---
 

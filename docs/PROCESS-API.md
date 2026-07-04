@@ -1,6 +1,6 @@
 # Process, polling, and schedule — API reference
 
-This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy). The toolkit wraps these as the location-transparent `ScheduledProcess` / `ProcessScheduleResource` — see [guides/toolkit-by-example.md](./guides/toolkit-by-example.md).
+This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process engine (`Process.make`, `Polling`, the internal schedule primitive, disarmed idle policy). The **`Process`** module surfaces this stack as a location-transparent `Resource` — `Process.Tag` (a managed process) and `Process.Schedule` (a reusable schedule resource) — see [guides/toolkit-by-example.md](./guides/toolkit-by-example.md).
 
 ---
 
@@ -8,11 +8,11 @@ This document complements the [README](../README.md) with a concise **spec-style
 
 | Piece | Role |
 |--------|------|
-| **`Process`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. |
-| **`ProcessSchedule`** | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. |
+| **`Process.make`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. |
+| **Schedule primitive** (internal) | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. Surfaced publicly via `Process.scheduleInMemory` / `Process.scheduleDefine` and the `Process.Schedule` resource. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
 | **Storage facets** | Optional analytics: execution rows + lifecycle events via `ProcessStorage` / durable adapters. |
-| **`ScheduledProcess`** | The toolkit wrapper: this stack as a location-transparent `Resource` (lifecycle + observability + schedule control). |
+| **`Process.Tag`** | The toolkit wrapper: this stack as a location-transparent `Resource` (lifecycle + observability + schedule control). |
 
 **`start` / `runImmediately`** drive the schedule. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
@@ -31,8 +31,8 @@ This document complements the [README](../README.md) with a concise **spec-style
 |--------|----------|-------------|
 | `effect` | yes | `Effect<void, E, R>` — one **tick** body; failures logged + recorded when storage facets are provided. |
 | `polling` | no | `Layer.Layer<PollingService, never, never>` — repeat cadence inside an instance. Omit and provide at fork time. |
-| `schedule` | no | Either a `ProcessScheduleInitializer` (`({ set, add, clear }) => Effect`) or a `Layer.Layer<ProcessScheduleService, never, never>`. When omitted, defaults to `ProcessSchedule.alwaysArmed`. Use `ProcessSchedule.empty` for an empty store (disarmed until mutation). |
-| `scheduleLayer` | no | Explicit schedule service layer; takes precedence over `schedule`. When both are omitted, `ProcessSchedule.alwaysArmed` is used. |
+| `schedule` | no | Either a schedule initializer (`({ set, add, clear }) => Effect`) or a schedule layer (`Process.scheduleInMemory(…)` / `Process.scheduleDefine(…)`). When omitted, defaults to an **always-armed** schedule. Use `Process.scheduleInMemory()` (no argument) for an empty store (disarmed until mutation). |
+| `scheduleLayer` | no | Explicit schedule service layer; takes precedence over `schedule`. When both are omitted, an **always-armed** schedule is used. |
 
 ### `Process.make` overloads
 
@@ -87,21 +87,29 @@ Built-in factories:
 
 ---
 
-## `ProcessSchedule` (`ProcessScheduleService`)
+## Schedule surface (`Process.Schedule` / schedule constructors)
 
-| Factory | Behavior |
+The schedule primitive is internal; its public face is these constructors (for `make`'s
+`scheduleLayer` and the inline `Process.schedule([…])` combinator) plus the `Process.Schedule`
+resource.
+
+| Constructor | Behavior |
 |---------|----------|
-| **`ProcessSchedule.inMemory(entries?)`** | In-memory mutable schedule storage. |
-| **`ProcessSchedule.at(startAt)` / `at(id, startAt)`** | One-shot entry (no `stopAt`). |
-| **`ProcessSchedule.window(startAt, stopAt)` / `window(id, startAt, stopAt)`** | Bounded run window. |
-| **`ProcessSchedule.fromStarts([...])`** | Convenience constructor for many `at(...)` entries. |
-| **`ProcessSchedule.define((api) => [...])`** | Compositional layer builder using `at`, `window`, `fromStarts`, `all`. |
+| **`Process.scheduleInMemory(entries?)`** | In-memory mutable schedule layer (empty when called with no argument). |
+| **`Process.at(startAt)` / `at(id, startAt)`** | One-shot window entry (no `stopAt`); `id` optional. |
+| **`Process.window(startAt, stopAt)` / `window(id, startAt, stopAt)`** | Bounded run window; `id` optional. |
+| **`Process.scheduleDefine((api) => [...])`** | Compositional layer builder using `at`, `window`, `fromStarts`, `all`. |
+| **`Process.Schedule<Self>()(id)`** + **`Process.scheduleLayer` / `scheduleServe`** | A reusable schedule as a first-class `Resource` (CRUD + `reconcile` + `changes` stream + RPC), gate processes with `Process.schedule(Schedule)`. |
 
-### `ProcessScheduleService`
+### Schedule service (`Process.ScheduleService`)
+
+The shape behind a schedule layer. The inline `schedule` verb group on a scheduled `Process.Tag`
+exposes the reactive-read/CRUD subset (`entries` / `set` / `add` / `clear`); a `Process.Schedule`
+resource additionally exposes `get` / `has` / `upsert` / `remove` / `removeMany`.
 
 | Member | Returns |
 |--------|---------|
-| `entries` | `Effect<ReadonlyArray<ProcessScheduleEntry>>` |
+| `entries` | `Effect<ReadonlyArray<ProcessScheduleEntry>>` (on the process/`Schedule` service, a reactive `ref`: `entries.get` / `entries.changes`) |
 | `set(entries)` | `Effect<void>` |
 | `add(entry)` | `Effect<void>` |
 | `clear` | `Effect<void>` |

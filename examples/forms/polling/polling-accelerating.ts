@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../../../src/ProcessStorage";
+import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-accelerating
  *
@@ -7,7 +7,7 @@ import { ProcessStorage } from "../../../src/ProcessStorage";
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule } from "../../../src";
+import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -18,8 +18,8 @@ const runtime = Layer.mergeAll(
     slowest: "400 millis",
     decay: 0.4,
   }),
-  ProcessSchedule.inMemory([
-    ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),
+  Process.scheduleInMemory([
+    Process.at("polling-accelerating", utcDateFromMillis(0)),
   ]),
 );
 
@@ -30,8 +30,8 @@ const program = Effect.gen(function* () {
 
   const proc = Process.make("examples/forms/polling/polling-accelerating", {
     effect: Ref.update(tickCount, (n) => n + 1),
-    schedule: ProcessSchedule.inMemory([
-      ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),
+    schedule: Process.scheduleInMemory([
+      Process.at("polling-accelerating", utcDateFromMillis(0)),
     ]),
   });
 

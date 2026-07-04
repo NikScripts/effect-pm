@@ -51,7 +51,7 @@ import * as Telemetry from "@nikscripts/effect-pm/Telemetry";
 class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
 
 // serve it on a host (like a queue/process) — the sampler runs in the served scope
-const host = Resource.serveAllHttp([Telemetry.serverEntry(FleetTelemetry)]).pipe(
+const host = Resource.httpServer([Telemetry.serve(FleetTelemetry)]).pipe(
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 );
 

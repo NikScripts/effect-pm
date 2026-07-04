@@ -21,12 +21,13 @@ import {
 import {
   Tag as resourceTag,
   layer as resourceLayer,
+  serve as resourceServe,
+  serveRemote as resourceServeRemote,
   effect,
   stream,
   type NodeBoundTag,
   type NodeKey,
   type ResourceTag,
-  type ServeEntry,
 } from "./Resource";
 
 // ============================================================================
@@ -256,10 +257,10 @@ export const Tag = <Self>() => {
 };
 
 // ============================================================================
-// Engine (sampler + layer + serverEntry)
+// Engine (sampler + layer + serve/serveRemote)
 // ============================================================================
 
-/** Options for {@link layer} / {@link serverEntry}. @public */
+/** Options for {@link layer} / {@link serve} / {@link serveRemote}. @public */
 export interface TelemetryOptions {
   /** Live-stream sampling cadence. @default 1 second */
   readonly interval?: Duration.Duration;
@@ -316,15 +317,30 @@ export const layer = <Self>(
   );
 
 /**
- * A `serveAllHttp` entry for a Telemetry tag — serve it on a node like a queue/process, then reach it
- * with `Resource.client`.
+ * Serve this Telemetry resource **remotely (served-only)** — the counterpart to
+ * {@link Resource.serveRemote}. Mounts the `snapshot`/`live` RPC handlers and registers into
+ * {@link Resource.servedResourcesLayer} **without** granting the local instance. For a pure
+ * gateway/edge; use {@link serve} when the serving node also reads telemetry in-process.
  *
  * @public
  */
-export const serverEntry = <Self>(
+export const serveRemote = <Self>(
   tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
-): ServeEntry<Scope.Scope> => ({
-  tag,
-  impl: buildImpl(options),
-});
+) =>
+  Layer.unwrap(
+    Effect.map(buildImpl(options), (impl) => resourceServeRemote(tag, impl)),
+  );
+
+/**
+ * Serve this Telemetry resource **and** grant its local instance from **one** materialization — the
+ * counterpart to {@link Resource.serve}. Forks one sampling fiber, mounts the `snapshot`/`live` RPC
+ * handlers, and grants `Self | LocalCapability<Self>` so co-located code can `yield* Tag`. Reach it
+ * remotely with `Resource.client`; a served-**only** edge uses {@link serveRemote}.
+ *
+ * @public
+ */
+export const serve = <Self>(
+  tag: TelemetryTag<Self>,
+  options?: TelemetryOptions,
+) => resourceServe(tag, buildImpl(options));

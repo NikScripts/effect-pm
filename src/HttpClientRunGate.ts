@@ -34,12 +34,5 @@ export const transformClient = <E, R>(
   runner: RunResourceRunner
 ): HttpClient.HttpClient.With<E, R> => withRunner(runner)(client);
 
-/**
- * Namespace for {@link withRunner} / {@link transformClient}.
- *
- * @public
- */
-export const HttpClientRunGate = {
-  withRunner,
-  transformClient,
-} as const;
+// The module is the namespace: `withRunner` / `transformClient` are the flat
+// top-level exports above, consumed as `import * as HttpClientRunGate`.

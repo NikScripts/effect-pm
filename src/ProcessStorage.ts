@@ -61,53 +61,44 @@ const facetLayers = Layer.mergeAll(
   processLifecycleLayer,
 );
 
+// Combined storage layers plus facet class aliases. The module is the namespace
+// (`import * as ProcessStorage`): the layers are flat exports and the facet aliases
+// re-export the public `*Store` facet tags under shorter names.
+
 /**
- * Combined storage **layers** plus **facet class aliases** (same tags as the
- * public `*Store` facet services).
+ * Combined facet layer; requires the caller to provide {@link RuntimeStorage}. Use
+ * this for durable backends.
  *
  * @public
  */
-export const ProcessStorage = {
-  /**
-   * Combined facet layer; requires the caller to provide
-   * {@link RuntimeStorage}. Use this for durable backends.
-   */
-  layerRuntimeStorage: facetLayers,
+export const layerRuntimeStorage = facetLayers;
 
-  /**
-   * In-memory combined storage layer for tests, examples, and
-   * short-lived dev programs. Wraps {@link layerRuntimeStorage} with
-   * {@link RuntimeStorage.layer}.
-   */
-  layer: Layer.provide(
-    facetLayers,
-    RuntimeStorage.layer,
-  ),
+/**
+ * In-memory combined storage layer for tests, examples, and short-lived dev programs.
+ * Wraps {@link layerRuntimeStorage} with {@link RuntimeStorage.layer}.
+ *
+ * @public
+ */
+export const layer = Layer.provide(facetLayers, RuntimeStorage.layer);
 
-  /** Alias for {@link LogStore} (`log.entry` rows, durable log reads). */
-  Log: LogStore,
+/**
+ * Facet class aliases (same tags as the public `*Store` facet services) under shorter
+ * names: `ProcessStorage.QueueResource` === {@link QueueResourceStore}, etc.
+ *
+ * @public
+ */
+export {
+  LogStore as Log,
+  QueueResourceStore as QueueResource,
+  RunResourceStore as RunResource,
+  ProcessExecutionStore as ProcessExecution,
+  ProcessLifecycleStore as ProcessLifecycle,
+};
 
-  /**
-   * Storage facet for **`QueueResource`** analytics — alias for
-   * {@link QueueResourceStore}. Not the queue worker service.
-   */
-  QueueResource: QueueResourceStore,
-
-  /** Alias for {@link RunResourceStore}. */
-  RunResource: RunResourceStore,
-
-  /** Alias for {@link ProcessExecutionStore}. */
-  ProcessExecution: ProcessExecutionStore,
-
-  /** Alias for {@link ProcessLifecycleStore}. */
-  ProcessLifecycle: ProcessLifecycleStore,
-} as const;
-
-export declare namespace ProcessStorage {
-  export type Services =
-    | LogStore
-    | QueueResourceStore
-    | RunResourceStore
-    | ProcessExecutionStore
-    | ProcessLifecycleStore;
-}
+/** Union of every service composed by {@link layerRuntimeStorage}. @public */
+export type Services =
+  | LogStore
+  | QueueResourceStore
+  | RunResourceStore
+  | ProcessExecutionStore
+  | ProcessLifecycleStore;

@@ -1,7 +1,6 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { expect, it } from "@effect/vitest";
 import { CustomQueueResource } from "../src";
-import * as Resource from "../src/Resource";
 import { methodMeta, specOf } from "../src/Resource";
 
 const JobSchema = Schema.Struct({ id: Schema.String });
@@ -46,7 +45,7 @@ it.live("customQueueResource.layer drives add(item, level)", () =>
       // observe the live status delta stream until the "fast" lane reflects the enqueue.
       const snap = yield* Stream.runHead(
         Stream.filter(
-          Resource.changes(queue, (s) => s.status),
+          queue.status.changes,
           (s) => s.sizes.fast === 1,
         ),
       );

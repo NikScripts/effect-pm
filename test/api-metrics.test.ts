@@ -11,7 +11,7 @@ import type { HttpClientError } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../src/ApiMetrics";
-import { HttpApiResource } from "../src/HttpApiResource";
+import * as HttpApiResource from "../src/HttpApiResource";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 import * as Resource from "../src/Resource";
 
@@ -95,7 +95,7 @@ describe("ApiMetrics.layer", () => {
   );
 });
 
-describe("ApiMetrics per-instance groups + serveAllHttp", () => {
+describe("ApiMetrics per-instance groups + httpServer", () => {
   const OtherClientId = "test/api-metrics/other" as const;
   class OtherMetrics extends ApiMetrics.Tag<OtherMetrics>()(OtherClientId) {}
 
@@ -104,7 +104,7 @@ describe("ApiMetrics per-instance groups + serveAllHttp", () => {
     expect(OtherMetrics.groupId).toBe(ApiMetrics.metricsKeyFor(OtherClientId));
   });
 
-  // Two metrics tags served on one node via `serveAllHttp`; each reached over http with its own
+  // Two metrics tags served on one node via `httpServer`; each reached over http with its own
   // per-instance group — `Resource.client` routes to the right one (no shared key header).
   const alphaImpl = {
     usageNow: Effect.succeed({
@@ -126,12 +126,12 @@ describe("ApiMetrics per-instance groups + serveAllHttp", () => {
     }),
     metrics: Stream.empty,
   };
-  const Server = Resource.serveAllHttp([
-    { tag: DemoMetrics, impl: alphaImpl },
-    { tag: OtherMetrics, impl: betaImpl },
+  const Server = Resource.httpServer([
+    Resource.serve(DemoMetrics, alphaImpl),
+    Resource.serve(OtherMetrics, betaImpl),
   ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
-  it("serveAllHttp serves both; clients read the right one", () =>
+  it("httpServer serves both; clients read the right one", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));

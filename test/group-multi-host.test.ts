@@ -24,12 +24,16 @@ class Beta extends Resource.Tag<Beta>()("multi/Beta",
 // one group, members on different nodes (could just as easily be same node)
 class Cluster extends Group.Tag<Cluster>("multi/Cluster")({ Alpha, Beta }) {}
 
-const AlphaServer = Resource.serveHttp(Alpha, {
-  where: Effect.succeed("alpha@nodeA"),
-}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
-const BetaServer = Resource.serveHttp(Beta, {
-  where: Effect.succeed("beta@nodeB"),
-}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const AlphaServer = Resource.httpServer([
+  Resource.serve(Alpha, {
+    where: Effect.succeed("alpha@nodeA"),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const BetaServer = Resource.httpServer([
+  Resource.serve(Beta, {
+    where: Effect.succeed("beta@nodeB"),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {
   const address = Context.get(ctx, HttpServer.HttpServer).address;
@@ -47,14 +51,14 @@ it("a group's members each resolve their own node (mixed nodes, one group)", () 
       const clients = Layer.mergeAll(
         Resource.client(Cluster.Alpha).pipe(
           Layer.provide(
-            Resource.connectHttp(NodeA, {
+            Resource.httpClient(NodeA, {
               url: `http://127.0.0.1:${portA}/rpc`,
             }),
           ),
         ),
         Resource.client(Cluster.Beta).pipe(
           Layer.provide(
-            Resource.connectHttp(NodeB, {
+            Resource.httpClient(NodeB, {
               url: `http://127.0.0.1:${portB}/rpc`,
             }),
           ),

@@ -22,8 +22,8 @@ const fakePeers = {
   wnba: { connections: Effect.succeed(3) },
 };
 
-const Server = Resource.serveAllHttp([
-  Resource.serverEntry(
+const Server = Resource.httpServer([
+  Resource.serve(
     Database,
     Effect.gen(function* () {
       const peers = yield* Resource.peers(Database);
@@ -45,7 +45,7 @@ it("serves a peers-gathering combined field over http; a client gets the fleet t
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
-      const transport = Resource.connectHttp(DbNode, { url: `http://127.0.0.1:${port}/rpc` });
+      const transport = Resource.httpClient(DbNode, { url: `http://127.0.0.1:${port}/rpc` });
       yield* Effect.gen(function* () {
         const db = yield* Database;
         expect(yield* db.connections).toBe(2); // this instance

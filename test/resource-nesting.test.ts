@@ -73,7 +73,7 @@ it("nested spec — LOCAL: groups resolve; nested stream + payload fn work", () 
 it("nested spec — REMOTE over http: same nested access across the wire", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const Node = Resource.serveAllHttp([Resource.serverEntry(Server, impl)]).pipe(
+      const Node = Resource.httpServer([Resource.serve(Server, impl)]).pipe(
         Layer.provideMerge(NodeHttpServer.layerTest),
       );
 
