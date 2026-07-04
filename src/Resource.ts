@@ -1696,32 +1696,24 @@ const clientSubscribable = <A>(
  *
  * @public
  */
-function localLayer<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  impl: ImplOf<S>,
-): Layer.Layer<Self | LocalCapability<Self>>;
-function localLayer<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>>;
-function localLayer<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>> {
-  const cap = tag[localCapSym];
-  const spec = tag[specSym];
-  // Build the service (from the record or the Effect), then hand back a Context carrying both the
-  // service and the granted capability — one `effectContext` layer, so any `Scope` the impl's
-  // construction needs is managed by the layer (not merged in separately).
-  const build = Effect.gen(function* () {
-    const builtImpl = (yield* (Effect.isEffect(impl)
-      ? impl
-      : Effect.succeed(impl))) as Record<string, unknown>;
-    // impl may be nested (grouped) — flatten to path keys matching the flat spec, build the flat service,
-    // then nest it back on the way out.
+// Build the **local service Context** — the materialized service + granted capability — from a tag and its
+// **already-built** impl record. Shared by `localLayer` and the local grant that `serveAllHttp` / `serveHttp`
+// add by default, so "serve + use locally" and "just local" produce the *identical* instance. The impl may be
+// nested (grouped) — flattened to path keys matching the flat spec.
+const buildLocalContext = <Self>(
+  tag: {
+    readonly [specSym]: FlatSpec;
+    readonly [localCapSym]: Context.Key<
+      LocalCapability<Self>,
+      { readonly granted: true }
+    >;
+  },
+  builtImpl: Record<string, unknown>,
+): Effect.Effect<Context.Context<unknown>> =>
+  Effect.gen(function* () {
+    const cap = tag[localCapSym];
+    const spec = tag[specSym];
     const members = flattenImpl(builtImpl, spec);
-    // build directly into the nested shape (via setPath); the impl was flattened to path keys, so `key`
-    // here is the flat path.
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
       // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
@@ -1735,12 +1727,34 @@ function localLayer<Self, S extends Spec, R>(
         setPath(service, key, members[key]);
       }
     }
-    // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
-    return Context.make(tag, service as ServiceOf<S, Self>).pipe(
-      Context.add(cap, { granted: true }),
-    );
+    return Context.make(
+      tag as unknown as Context.Key<unknown, unknown>,
+      service,
+    ).pipe(Context.add(cap, { granted: true }));
   });
-  return Layer.effectContext(build);
+
+function localLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S>,
+): Layer.Layer<Self | LocalCapability<Self>>;
+function localLayer<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>>;
+function localLayer<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>> {
+  // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
+  const build = Effect.flatMap(
+    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
+    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
+  );
+  return Layer.effectContext(build) as Layer.Layer<
+    Self | LocalCapability<Self>,
+    never,
+    Exclude<R, Scope.Scope>
+  >;
 }
 
 /**
@@ -2160,26 +2174,36 @@ export const provide = <ROut, EL, RL, A, E, R>(
  *
  * @public
  */
-const serveHttp = <S extends Spec>(
-  tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [specTypeSym]?: S;
-    readonly [groupSym]: RpcGroupOf<S>;
-  },
+const serveHttp = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
   impl: WireServiceOf<S>,
   options?: {
     readonly path?: HttpRouter.PathInput;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-) =>
-  HttpRouter.serve(
-    RpcServer.layerHttp({
-      group: tag[groupSym],
-      path: options?.path ?? "/rpc",
-      protocol: "http",
-    }).pipe(Layer.provide(serverLayer(tag, impl))),
-  ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
+): Layer.Layer<Self | LocalCapability<Self>, never, HttpServer.HttpServer> =>
+  // Local + served by default (one build): serve the wire handlers AND grant this resource's local
+  // instance from the same `impl` record. The served cells ARE the in-process instance.
+  Layer.unwrap(
+    Effect.map(
+      buildLocalContext(tag, impl as Record<string, unknown>),
+      (localCtx) =>
+        Layer.merge(
+          HttpRouter.serve(
+            RpcServer.layerHttp({
+              group: tag[groupSym],
+              path: options?.path ?? "/rpc",
+              protocol: "http",
+            }).pipe(Layer.provide(serverLayer(tag, impl))),
+          ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization)),
+          Layer.succeedContext(localCtx),
+        ),
+    ),
+  ) as unknown as Layer.Layer<
+    Self | LocalCapability<Self>,
+    never,
+    HttpServer.HttpServer
+  >;
 
 /**
  * An entry for {@link serveAllHttp}: a resource tag + its built impl. Use {@link Resource.server}'s
@@ -2187,7 +2211,10 @@ const serveHttp = <S extends Spec>(
  *
  * @public
  */
-export interface ServeEntry<R = never> {
+/** @internal */
+declare const serveGrantSym: unique symbol;
+
+export interface ServeEntry<R = never, Self = never> {
   readonly tag: {
     readonly groupId: string;
     readonly [specSym]: FlatSpec;
@@ -2202,6 +2229,16 @@ export interface ServeEntry<R = never> {
   readonly impl:
     | Record<string, unknown>
     | Effect.Effect<Record<string, unknown>, never, R>;
+  /**
+   * When `true` (the default — {@link serverEntry}), the node **also grants this resource's local
+   * instance** (`Self | LocalCapability<Self>`) from the *same* materialization, so co-located code can
+   * `yield* Tag`. {@link remoteEntry} sets it `false` for a served-**only** gateway.
+   */
+  readonly local?: boolean;
+  /** Phantom carrier of the resource's `Self`, so `serveAllHttp` can type the local grant it adds (the
+   *  capability key is read off the tag at runtime). Never set — covariant, so a `remoteEntry`
+   *  (`Self = never`) is assignable where any entry is expected. */
+  readonly [serveGrantSym]?: Self;
 }
 
 /**
@@ -2231,26 +2268,49 @@ export interface ServeEntry<R = never> {
 function serverEntry<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: WireServiceOf<S>,
-): ServeEntry<never>;
+): ServeEntry<never, Self>;
 // Effect impl (built at assembly, carrying a requirement `R` — e.g. a pooled connection, or serving
 // the resource's own provided service): `R` is surfaced into the entry, so `serveAllHttp` demands it
 // (and unions it across entries) instead of it being erased.
 function serverEntry<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R>;
+): ServeEntry<R, Self>;
 function serverEntry<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: WireServiceOf<S> | Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R> {
-  return { tag, impl };
+): ServeEntry<R, Self> {
+  return { tag, impl, local: true };
+}
+
+/**
+ * A served-**only** {@link ServeEntry} — like {@link serverEntry}, but the node **does not** grant this
+ * resource's local instance (no `Self | LocalCapability`). For a pure gateway / edge that exposes a
+ * resource for remote clients but never `yield*`s it in-process. Use `serverEntry` (the default) when the
+ * serving process also consumes the resource.
+ *
+ * @public
+ */
+function remoteEntry<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: WireServiceOf<S>,
+): ServeEntry<never, never>;
+function remoteEntry<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: Effect.Effect<WireServiceOf<S>, never, R>,
+): ServeEntry<R, never>;
+function remoteEntry<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: WireServiceOf<S> | Effect.Effect<WireServiceOf<S>, never, R>,
+): ServeEntry<R, never> {
+  return { tag, impl, local: false };
 }
 
 /** One entry's requirement `R`, with `any`/`unknown` collapsed to `never` — a plain `{ tag, impl }`
  *  literal (impl a `Record`, no `Effect`) leaves `R` unconstrained, so it infers `unknown` (or `any`);
  *  treat that as "no requirement" rather than poisoning the whole union. Typed entries (`serverEntry`,
  *  the contract `serverEntry`s) carry a real `R` that's kept. */
-type EntryR<E> = E extends ServeEntry<infer R>
+type EntryR<E> = E extends ServeEntry<infer R, any>
   ? 0 extends 1 & R
     ? never
     : unknown extends R
@@ -2259,7 +2319,18 @@ type EntryR<E> = E extends ServeEntry<infer R>
   : never;
 
 /** Union of every entry's requirement — `serveAllHttp`'s result `R` (see {@link EntryR}). */
-type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any>>> = EntryR<Entries[number]>;
+type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any, any>>> = EntryR<Entries[number]>;
+
+/** The **local grant** a node adds per entry — `Self | LocalCapability<Self>` for each {@link serverEntry}
+ *  (default); a {@link remoteEntry} (`Self = never`) grants nothing, so a served-only gateway stays
+ *  `A = never`. This is what makes serving a resource *also* provide its in-process instance. */
+type ServeGrant<E> = E extends ServeEntry<any, infer Self>
+  ? [Self] extends [never]
+    ? never
+    : Self | LocalCapability<Self>
+  : never;
+type ServeEntriesGrant<Entries extends ReadonlyArray<ServeEntry<any, any>>> =
+  ServeGrant<Entries[number]>;
 
 /**
  * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
@@ -2277,7 +2348,7 @@ type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any>>> = EntryR<Entr
  *
  * @public
  */
-const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
+const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any, any>>>(
   entries: Entries,
   options?: {
     readonly path?: HttpRouter.PathInput;
@@ -2290,7 +2361,11 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
   },
   // Entries can carry *different* requirements (a queue's worker `R`, an ApiMetrics entry's `Scope`, a
   // plain resource's `never`); union them — like `Layer.mergeAll` — instead of pinning all to one `R`.
-): Layer.Layer<never, never, ServeEntriesR<Entries> | HttpServer.HttpServer> => {
+): Layer.Layer<
+  ServeEntriesGrant<Entries>,
+  never,
+  ServeEntriesR<Entries> | HttpServer.HttpServer
+> => {
   if (entries.length === 0) {
     throw new Error("Resource.serveAllHttp: at least one resource is required");
   }
@@ -2310,11 +2385,13 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
         () => import("./internal/nodeStatusResource"),
       );
       const startedAt = yield* Clock.currentTimeMillis;
-      const buildImpl = (entry: ServeEntry<any>) =>
+      const buildImpl = (entry: ServeEntry<any, any>) =>
         (Effect.isEffect(entry.impl)
           ? entry.impl
           : Effect.succeed(entry.impl)
-        ).pipe(Effect.map((impl) => ({ tag: entry.tag, impl })));
+        ).pipe(
+          Effect.map((impl) => ({ tag: entry.tag, impl, local: entry.local })),
+        );
       // Build the user's resources first so the readiness aggregate can close over their impls —
       // both the `/health` route and the node-status resource read this ONE aggregate (SSOT): each
       // resource's own `readiness` derivation (default: ready), keyed by tag + kind.
@@ -2380,11 +2457,32 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
           );
         }),
       );
-      return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
+      // Grant each local (default) entry's instance from the SAME built impl — the served cells ARE the
+      // in-process instance (one materialization; no second layer, no second peersLayer). `remoteEntry`
+      // (local === false) and any entry whose tag has no capability key are skipped.
+      let localContext = Context.empty();
+      for (const b of userBuilt) {
+        if (b.local === false) continue;
+        const cap = (b.tag as { readonly [localCapSym]?: unknown })[localCapSym];
+        if (cap === undefined) continue;
+        localContext = Context.merge(
+          localContext,
+          yield* buildLocalContext(
+            b.tag as unknown as Parameters<typeof buildLocalContext>[0],
+            b.impl as Record<string, unknown>,
+          ),
+        );
+      }
+      const served = HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
         Layer.provideMerge(options?.serialization ?? defaultSerialization),
       );
+      return Layer.merge(served, Layer.succeedContext(localContext));
     }),
-  ) as unknown as Layer.Layer<never, never, ServeEntriesR<Entries> | HttpServer.HttpServer>;
+  ) as unknown as Layer.Layer<
+    ServeEntriesGrant<Entries>,
+    never,
+    ServeEntriesR<Entries> | HttpServer.HttpServer
+  >;
 };
 
 /** The header carrying the target instance key, set per-call by {@link forwardClient}. */
@@ -3253,6 +3351,7 @@ export {
   localLayer as layer,
   serverLayer as server,
   serverEntry,
+  remoteEntry,
   serveHttp,
   serveAllHttp,
   serveInstances,
