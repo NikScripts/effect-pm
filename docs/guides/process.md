@@ -25,7 +25,7 @@ const layer = ScheduledProcess.layer(LiveScores, {
 ```
 
 - **`ScheduledProcess.layer(Tag, config)`** — local (auto-starts the driver).
-- **`ScheduledProcess.serveHttp(Tag, config)`** / **`server`** — host over RPC.
+- **`ScheduledProcess.serve(Tag, config)`** / **`serveRemote`** — host over RPC (compose with `Resource.httpServer`).
 - **`Resource.client(Tag)`** — remote handle.
 
 Default schedule is `ProcessSchedule.alwaysArmed` (runs immediately); pass

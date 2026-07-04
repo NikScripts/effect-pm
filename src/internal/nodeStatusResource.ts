@@ -2,13 +2,13 @@
  * @module internal/nodeStatusResource
  *
  * The reserved **node status** resource — every node that serves a group over
- * {@link Resource.serveAllHttp} automatically also serves this, so a client can ask any node
+ * {@link Resource.httpServer} automatically also serves this, so a client can ask any node
  * "are you up, how long, how many resources, and what are your logs?" without the node author
  * wiring anything. It's a nodeless {@link Resource.Tag} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url (see {@link NodeStatus}).
  *
  * Kept internal (not the public face) so {@link Resource} can dynamically import it from
- * `serveAllHttp` without a static import cycle (`Resource` ⇄ this); `src/NodeStatus.ts` is the
+ * `httpServer` without a static import cycle (`Resource` ⇄ this); `src/NodeStatus.ts` is the
  * public re-export.
  */
 import {
@@ -21,7 +21,6 @@ import {
   Stream,
 } from "effect";
 import * as Resource from "../Resource";
-import type { ServeEntry } from "../Resource";
 import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
@@ -145,14 +144,18 @@ export const buildNodeStatusImpl = (options: {
 };
 
 /**
- * A {@link Resource.serveAllHttp} entry that serves the reserved node status resource — appended
- * automatically by `serveAllHttp` so every node exposes its status + logs. @since 1.0.0
+ * The reserved node-status resource paired with its built impl — the `{ tag, impl }` that
+ * {@link Resource.httpServer} folds onto every node's `RpcServer` automatically, so every node
+ * exposes its status + logs without the author wiring it. @since 1.0.0
  */
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
   readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
-}): ServeEntry => ({
+}): {
+  readonly tag: typeof NodeStatusResource;
+  readonly impl: ReturnType<typeof buildNodeStatusImpl>;
+} => ({
   tag: NodeStatusResource,
   impl: buildNodeStatusImpl(options),
 });

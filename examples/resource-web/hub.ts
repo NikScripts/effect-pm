@@ -6,7 +6,7 @@
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
  * nodes (served by `server.ts`); the browser reaches each via `Resource.httpClient` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
- * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serverEntry`. `ScoresDb` is a dependency
+ * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serve`. `ScoresDb` is a dependency
  * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
  * connection blips, the queue cascades to degraded, dogfooding dependency-aware readiness.
  */

@@ -8,7 +8,7 @@ import type { QueueLayerConfig } from "../src/QueueContract";
 import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL toolkit QueueResource engine served over http via
-// `QueueResource.serveHttp`, driven by `Resource.client` over the wire. The same `yield* Tag`
+// `httpServer([QueueResource.serve(...)])`, driven by `Resource.client` over the wire. The same `yield* Tag`
 // surface a local consumer uses — only the provided layer differs. This proves "remote queue
 // usage, all pieces together": control (add/pause), reads (completed/statusNow), the rich-entry
 // handoff (release), and a live stream (status) all crossing real RPC.
@@ -33,7 +33,9 @@ const withServer = <A, E>(
   config: QueueLayerConfig<NumberItem, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
 ) => {
-  const server = QueueResource.serveHttp(RemoteQueue, config).pipe(
+  const server = Resource.httpServer([
+    QueueResource.serve(RemoteQueue, config),
+  ]).pipe(
     // server-side history backend (only used when the config enables captureLogs)
     Layer.provide(HistoryStore.layerMemory()),
     Layer.provideMerge(NodeHttpServer.layerTest),

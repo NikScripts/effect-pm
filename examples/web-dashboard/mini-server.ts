@@ -11,7 +11,7 @@ import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serverEntry as processEntry } from "../../src/ScheduledProcess";
+import { serve as processEntry } from "../../src/ScheduledProcess";
 import * as Resource from "../../src/Resource";
 import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";
@@ -19,7 +19,7 @@ import { KeyRotation } from "./fleet";
 
 const PORT = 7778;
 
-const serveLayer = Resource.serveAllHttp([
+const serveLayer = Resource.httpServer([
   processEntry(KeyRotation, {
     effect: Effect.logInfo("wnba: key-rotation check"),
     polling: Polling.spaced(Duration.seconds(5)),

@@ -7,7 +7,7 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
 
 > **Imports:** everything is on the barrel (`@nikscripts/effect-pm`). `QueueResource` is a single
-> unified namespace — the toolkit `Tag` / `layer` / `server` / `serveHttp` / `configure` plus the
+> unified namespace — the toolkit `Tag` / `layer` / `serve` / `serveRemote` / `configure` plus the
 > engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
 >
 > **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
@@ -33,7 +33,7 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 >
 > The **barrel** `import { QueueResource }` is the same API but its namespace is materialized, so
 > `QueueResource.Tag` from the barrel may include engine code (pure-Effect — never *breaks* a build,
-> just larger). Use the barrel on the Node side (where you also call `.layer` / `.make` / `.serveHttp`);
+> just larger). Use the barrel on the Node side (where you also call `.layer` / `.make` / `.serve`);
 > use the `import * as … from "<subpath>"` form anywhere a browser bundles. Making the barrel
 > namespace tree-shake too is the remaining follow-up (`docs/plans/18`).
 
@@ -253,27 +253,30 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const miniLayer = ScheduledProcess.serveHttp(LiveScorePoller, {
-  effect: pollLiveScores,
-  polling: Polling.spaced(Duration.seconds(5)),
-}).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));
+const miniLayer = Resource.httpServer([
+  ScheduledProcess.serve(LiveScorePoller, {
+    effect: pollLiveScores,
+    polling: Polling.spaced(Duration.seconds(5)),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));
 
 NodeRuntime.runMain(Layer.launch(miniLayer));
 ```
 
-## 12b. Serve many resources on one host (`serveAllHttp` / `serverEntry`)
+## 12b. Serve many resources on one host (`serve` / `httpServer`)
 
-A host usually runs **several** resources on **one** port. `Resource.serveAllHttp([entries])` mounts them
-all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each entry is built with a **spec-checked**
-`serverEntry` — `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` (they carry the engine) or
-`Resource.serverEntry(tag, impl)` for a raw resource. It **unions** each entry's requirement (a queue's
-worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast.
+A host usually runs **several** resources on **one** port. `Resource.httpServer([...serve-layers])` mounts
+them all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each layer is built with a **spec-checked**
+`serve` — `QueueResource.serve` / `ScheduledProcess.serve` (they carry the engine) or
+`Resource.serve(tag, impl)` for a raw resource. It **unions** each layer's requirement (a queue's
+worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast. Use
+`serveRemote` in place of `serve` for a served-only (gateway) node.
 
 ```ts
-const dropletLayer = Resource.serveAllHttp([
-  QueueResource.serverEntry(RosterImportQueue, { effect: importRoster, itemSchema: RosterItem }),
-  ScheduledProcess.serverEntry(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
-  Resource.serverEntry(Database, { status: pingStatus }),
+const dropletLayer = Resource.httpServer([
+  QueueResource.serve(RosterImportQueue, { effect: importRoster, itemSchema: RosterItem }),
+  ScheduledProcess.serve(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
+  Resource.serve(Database, { status: pingStatus }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })));
 ```
 
@@ -282,8 +285,8 @@ Working references: `test/serve-all-queues.test.ts` (two real queue engines, one
 `test/serve-all-http.test.ts`.
 
 **When resources need _different_ implementations of the same dependency** (a hooked vs. plain source),
-`serveAllHttp`'s single shared provide can't isolate them — reach for `Resource.serve` / `httpServer`
-instead. See [per-resource-dependencies.md](./per-resource-dependencies.md).
+give each its **own** `Layer.provide` on the `serve` layer — because each layer carries its own
+requirement, they stay isolated. See [per-resource-dependencies.md](./per-resource-dependencies.md).
 
 ## 13. Drive a remote resource — identical to local
 
@@ -401,7 +404,7 @@ ServicesHub
 ```
 
 **Migration state:** the consumer's services are being migrated onto the `.Tag` toolkit surface
-(`.Tag` + a separate `.layer` / `serveHttp`, examples 1–14 above). Build the dashboard against that
+(`.Tag` + a separate `.layer` / `serve`, examples 1–14 above). Build the dashboard against that
 toolkit surface — `Resource.client` + the resource tags (see
 [history-and-persistence.md](./history-and-persistence.md) for the data layer).
 

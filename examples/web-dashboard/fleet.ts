@@ -16,7 +16,7 @@ import * as Group from "../../src/Group";
 export class MiniNode extends Resource.Node<MiniNode>("hub/miniNode") {}
 
 /** The Droplet — the main node. Every queue is bound to it, so they're served as one
- *  group on one port (`Resource.serveAllHttp`) and reached over one client transport. */
+ *  group on one port (`Resource.httpServer`) and reached over one client transport. */
 export class Droplet extends Resource.Node<Droplet>("hub/droplet") {}
 
 const Job = Schema.Struct({ id: Schema.String });

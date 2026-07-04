@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
 // Node-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
-// transport (EdgeNode), the server is one `Resource.serveHttp` call, and the client wires the
+// transport (EdgeNode), the server is one `Resource.httpServer([serve(...)])` call, and the client wires the
 // node with one `Resource.httpClient`. Ship ONLY the tag — `Resource.client(tag)` resolves
 // where to connect from the node. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
@@ -19,10 +19,12 @@ class Echo extends Resource.Tag<Echo>()("nodeHttp/Echo",
 ) {}
 
 // the whole server, collapsed — only the platform HttpServer is left to provide
-const ServerLive = Resource.serveHttp(Echo, {
-  ping: Effect.succeed("pong"),
-  shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
-}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const ServerLive = Resource.httpServer([
+  Resource.serve(Echo, {
+    ping: Effect.succeed("pong"),
+    shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("drives a node-bearing resource over real http (ship only the tag)", () => {
   const program = Effect.gen(function* () {

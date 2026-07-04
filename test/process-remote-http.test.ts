@@ -9,7 +9,7 @@ import { ProcessSchedule } from "../src/ProcessSchedule";
 import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL toolkit Process driver served over http via
-// `ScheduledProcess.serveHttp`, driven by `Resource.client` over the wire — the same
+// `httpServer([ScheduledProcess.serve(...)])`, driven by `Resource.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
 // (start/stop), observation (statusNow), the out-of-band run (runImmediately), and the schedule
 // CRUD all cross real RPC.
@@ -26,7 +26,9 @@ const withServer = <A, E>(
   config: ProcessLayerConfig<never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteProc>,
 ) => {
-  const server = ScheduledProcess.serveHttp(RemoteProc, config).pipe(
+  const server = Resource.httpServer([
+    ScheduledProcess.serve(RemoteProc, config),
+  ]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {

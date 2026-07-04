@@ -21,9 +21,9 @@ yield* queue.add(job);
 yield* queue.statusNow;
 ```
 
-- **`Resource`** — the foundation: `Tag` + `layer` (local), `server` / `serveHttp` (host),
-  `client` / `connect` (remote), `Host` / `serveInstances` (many instances behind one transport).
-  Contracts are introspectable via `specOf` / `methodMeta` (build generic UIs).
+- **`Resource`** — the foundation: `Tag` + `layer` (local), `serve` / `serveRemote` (host, composed
+  with `httpServer`), `client` / `connect` (remote), `Host` / `serveInstances` (many instances behind
+  one transport). Contracts are introspectable via `specOf` / `methodMeta` (build generic UIs).
 - **`QueueResource`** — three-level **priority** queues with concurrency, optional `rateLimit`,
   `attempts` retry, `captureLogs`, **`refill`** (self-feeding from a source), and **`persist`**
   (durable, at-least-once).
@@ -85,7 +85,7 @@ const layer = ScheduledProcess.layer(LiveScores, {
 
 ```ts
 // host (Droplet / Mini)
-QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
+Resource.httpServer([QueueResource.serve(RosterQueue, { effect, captureLogs: true })])
   .pipe(Layer.provide(HistoryStore.layerMemory()));
 
 // dashboard (browser) — same Tag, over the wire (from Resource.client(RosterQueue))

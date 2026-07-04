@@ -22,8 +22,8 @@
  * **derived** from the schedule (a process is armed iff an entry currently places it in a run
  * window), so arming is done by mutating the schedule, not a manual toggle.
  *
- * The engine **control handle** these verbs forward to, and the `Tag` / `layer` / `server` /
- * `serveHttp` wiring, land in the next slice (they require exposing a controllable handle from
+ * The engine **control handle** these verbs forward to, and the `Tag` / `layer` / `serve` /
+ * `serveRemote` wiring, land in the next slice (they require exposing a controllable handle from
  * the `Process` supervisor — today the handle is only `{ effect, runImmediately }`).
  *
  * @module ScheduledProcess
@@ -51,7 +51,6 @@ import type {
   LocalCapability,
   NodeBoundTag,
   ResourceTag,
-  ServeEntry,
   ServiceOf,
 } from "./Resource";
 import { Process } from "./Process";
@@ -375,8 +374,8 @@ const toWireStatus = (
 
 /**
  * Build the live {@link Process} driver behind `tag` and map it onto the toolkit service impl —
- * the single adapter shared by the **local** layer ({@link layer}) and the **remote** server
- * ({@link server} / {@link serveHttp}).
+ * the single adapter shared by the **local** layer ({@link layer}) and the **served** layers
+ * ({@link serve} / {@link serveRemote}).
  *
  * The schedule is **hoisted**: it's built once here (into the layer scope) and fed back to the
  * driver as `Layer.succeedContext`, so the buried `provideStepLayers` and the contract's
@@ -548,52 +547,15 @@ export const layer = <Self, E = never, R = never>(
   );
 
 /**
- * Expose a toolkit process **over RPC** (transport-agnostic): run the live driver behind the
- * tag and mount its handlers on the contract group. Compose with an `RpcServer` + a `Protocol`
- * layer to serve; or use {@link serveHttp} for the http batteries. A remote
- * {@link Resource.client} then drives the process with the identical `yield* Tag` surface.
+ * Serve this process **remotely (served-only)** — the engine-running counterpart to
+ * {@link Resource.serveRemote}. Runs the tick schedule engine, mounts the process's RPC handlers, and
+ * registers into {@link Resource.servedResourcesLayer} **without** granting the local instance, while
+ * **preserving the tick requirement `R`** so a per-resource `Layer.provide` discharges it in isolation.
+ * For a pure gateway/edge; use {@link serve} when the serving node also drives the process.
  *
  * @public
  */
-export const server = <Self, E = never, R = never>(
-  tag: ResourceTag<Self, ProcessSpec>,
-  config: ProcessLayerConfig<E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R> =>
-  Layer.unwrap(
-    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.server(tag, impl)),
-  );
-
-/**
- * Serve a toolkit process **over http** in one call — the driver wired behind the tag and
- * mounted on an http `RpcServer` (ndjson by default). Provide an `HttpServer` and you have a
- * remote process; a {@link Resource.client} + transport drives it as if local.
- *
- * @public
- */
-export const serveHttp = <Self, E = never, R = never>(
-  tag: ResourceTag<Self, ProcessSpec>,
-  config: ProcessLayerConfig<E, R>,
-  options?: Parameters<typeof Resource.serveHttp>[2],
-) =>
-  Layer.unwrap(
-    Effect.map(buildProcessImpl(tag, config), (impl) =>
-      Resource.serveHttp(tag, impl, options),
-    ),
-  );
-
-/**
- * A **`serve`-style** layer for this process — the engine-running counterpart to {@link Resource.serve}.
- * Runs the tick schedule engine (like {@link serverEntry}) **and** mounts the process's RPC handlers
- * **and** registers into {@link Resource.servedResourcesLayer}, while **preserving the tick requirement
- * `R`** so a per-resource `Layer.provide` discharges it in isolation.
- *
- * Reach for this (with {@link Resource.httpServer}) when processes on one node need **different**
- * implementations of the same dependency tag (e.g. a hooked vs. plain source); use {@link serverEntry} +
- * {@link Resource.serveAllHttp} for the shared-dependency case.
- *
- * @public
- */
-export const serve = <Self, E = never, R = never>(
+export const serveRemote = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   config: ProcessLayerConfig<E, R>,
 ): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R> =>
@@ -602,27 +564,33 @@ export const serve = <Self, E = never, R = never>(
   );
 
 /**
- * A {@link Resource.serveAllHttp} entry for this process — the tag plus the (lazily built) impl,
- * so a whole group of processes/queues can be served on **one** http port. See
- * {@link QueueResource.serverEntry} for the composed example.
+ * Serve this process **and** grant its local instance from **one** materialization — the
+ * engine-running counterpart to {@link Resource.serve}. Runs the tick schedule engine, mounts the
+ * process's RPC handlers, registers into {@link Resource.servedResourcesLayer}, **and** grants
+ * `Self | LocalCapability<Self>` so co-located code can `yield* Tag`; the served driver *is* the
+ * in-process instance. The tick requirement `R` is preserved for per-resource `Layer.provide`. A
+ * served-**only** gateway uses {@link serveRemote}.
+ *
+ * ```ts
+ * Resource.httpServer([
+ *   ScheduledProcess.serve(SeasonMatches, { effect }),
+ *   QueueResource.serve(RosterQueue, { effect, itemSchema }),
+ * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
+ * ```
  *
  * @public
  */
-export const serverEntry = <Self, E = never, R = never>(
+export const serve = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   config: ProcessLayerConfig<E, R>,
-): ServeEntry<R> => ({
-  tag,
-  impl: buildProcessImpl(tag, config) as unknown as Effect.Effect<
-    Record<string, unknown>,
-    never,
-    R
-  >,
-});
+): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<ProcessSpec>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+  );
 
 /**
  * Process resource toolkit — managed long-running processes on the {@link Resource} toolkit.
- * `layer` runs it locally; `server` / `serveHttp` node it remotely; a remote
+ * `layer` runs it locally; `serve` / `serveRemote` node it remotely; a remote
  * {@link Resource.client} drives it with the same `yield* Tag` surface.
  *
  * @public
@@ -643,7 +611,7 @@ export const configure = <Self, E = never, R = never>(
 
 // The unified `ScheduledProcess` namespace is assembled in `internal/scheduledProcessNamespace.ts`
 // and re-exported by the barrel as `export * as ScheduledProcess` (so member access tree-shakes:
-// the light `Tag`/spec never pulls the engine that `layer`/`server`/`serveHttp` use).
+// the light `Tag`/spec never pulls the engine that `layer`/`serve`/`serveRemote` use).
 //
 // DX: `import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess"` gives a
 // tree-shakeable namespace — `ScheduledProcess.Tag` (alias of `processTag`) pulls no engine code.

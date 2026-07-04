@@ -19,16 +19,24 @@ fixed-at-build case, `value` was a non-idiomatic hack between the two.
 or `mapSubscribable`) instead of a raw `Stream`; reads become `yield* svc.x.get` (was `svc.x`) and
 `svc.x.changes` (was `Resource.changes(svc, s => s.x)`). Queue `size`/`status`/`isEmpty` are now `ref`s.
 
-**`Resource.serveLocal(tag, impl)`** — serve a resource **and** grant its local instance from **one**
-materialization (the co-located "expose over RPC AND consume in-process" case). The impl runs once, so the
-served view and the in-process `yield* Tag` are the same instance — no double materialization, no second
-`peersLayer`. Composes onto a node with `httpServer` like any `serve` layer; a served-only gateway uses
-`serve` directly. Use the `Effect` form when the impl needs a capability (`peers`, a pool) to build.
+**Serve-family vocabulary (breaking).** Modes are now protocol-neutral and uniform across `Resource` and
+every contract namespace (`QueueResource`, `CustomQueueResource`, `ScheduledProcess`, `ApiMetrics`,
+`Telemetry`):
 
-**Serving is local + served by default (breaking).** A resource is one instance; serving just exposes it
-outward, so the serving node now also gets it in-process. `serveAllHttp` / `serveHttp` build the impl **once**
-and grant `Self | LocalCapability<Self>` alongside the wire handlers — a co-located node serves its resources
-**and** `yield*`s them (read a `Resource.local` member, share `value`/`ref` cells) with no double
-materialization and no second `peersLayer`. `Resource.serverEntry` is local-by-default; new
-**`Resource.remoteEntry`** is served-only (a pure gateway). `serve` / `server` remain the served-only
-primitives, and **`Resource.serveLocal`** is the single-resource local+served combinator for `httpServer`.
+- **`layer(tag, impl)`** — local only (grants `Self | LocalCapability<Self>`).
+- **`serve(tag, impl)`** — local **and** served, the default. Builds the impl **once** and grants
+  `Self | LocalCapability<Self>` alongside the wire handlers, so a co-located node serves its resources
+  **and** `yield*`s them (read a `local` member, share a `ref` cell) with no double materialization and no
+  second `peersLayer`.
+- **`serveRemote(tag, impl)`** — served only (a pure gateway/edge; no local grant).
+- **`client(node)`** — remote.
+
+**Transport bundlers:** **`httpServer([...serve-layers], opts)`** exposes one or more `serve`/`serveRemote`
+layers on a single http `RpcServer` (and auto-serves the reserved node-status resource, so it fully replaces
+the old all-in-one entry point); **`httpClient(node)`** wires a node's transport from a `url`; generic
+**`connect`** covers custom protocols.
+
+**Removed** the transitional names: `server`, `serverEntry`, `remoteEntry`, `serveHttp`, `serveAllHttp`, and
+the `ServeEntry` `{ tag, impl }` shape. Migrate `serverEntry`→`serve`, `remoteEntry`→`serveRemote`,
+`serveHttp(X, i, opts?)`→`httpServer([serve(X, i)], opts)`, and
+`serveAllHttp([...])`→`httpServer([...serve-layers])`.

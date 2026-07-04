@@ -226,7 +226,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     expect(
       yield* Stream.runHead(svc.size).pipe(Effect.map(Option.getOrThrow)),
     ).toBe(3);
-  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -263,7 +263,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
       },
     ]);
     expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
-  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -303,7 +303,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
       ),
     );
     expect(caught).toBe("missing:test/Numbers");
-  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 

@@ -558,7 +558,7 @@ class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }
 ) {}
 ```
 
-`Resource.readinessCheck(tag, service)` runs a tag's derivation (a tag with none is **ready by default**); `serveAllHttp` calls it to build the host aggregate.
+`Resource.readinessCheck(tag, service)` runs a tag's derivation (a tag with none is **ready by default**); `httpServer` calls it to build the host aggregate.
 
 On the dashboard, the host **health board** (tap the host die) lists degraded resources across every host with their root cause, and each resource's own detail page shows a `degraded — <root cause>` banner (`ResourceReadinessBanner`).
 
@@ -566,47 +566,46 @@ On the dashboard, the host **health board** (tap the host die) lists degraded re
 
 ---
 
-## Serving custom resources (`serveAllHttp` / `serverEntry`)
+## Serving custom resources (`serve` / `serveRemote` / `httpServer`)
 
-`Resource.serveAllHttp([entries])` serves **many** resources on **one** host/port (one `/rpc` + the auto-mounted `/health` + `HostStatus`); a client reaches each via `Resource.client(Tag)` over one `connectHttp` transport. It accepts entries with **different** requirements and **unions** them (a queue's worker `R`, an `ApiMetrics` `Scope`, a plain resource's `never`) — no per-entry cast.
+`Resource.httpServer([...serve-layers], options?)` serves **many** resources on **one** host/port (one `/rpc` + the auto-mounted `/health` + `HostStatus`); a client reaches each via `Resource.client(Tag)` over one `connectHttp` transport. Each layer carries **its own** requirement `R`, and `httpServer` **unions** them (a queue's worker `R`, an `ApiMetrics` `Scope`, a plain resource's `never`) — no per-entry cast — while exposing the union of every layer's grants.
 
-Build an entry with the contract `serverEntry` (`QueueResource` / `ScheduledProcess` / `ApiMetrics`) or, for a **raw** `Resource.Tag`, **`Resource.serverEntry(tag, impl)`** — which **spec-checks** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
+Build each layer with **`serve`** (local **and** served — the default) or **`serveRemote`** (served-only, a pure gateway):
+
+- **`Resource.serve(tag, impl)`** / **`Resource.serveRemote(tag, impl)`** — for a **raw** `Resource.Tag`. Both **spec-check** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). `serve` additionally grants `Self | LocalCapability<Self>` from the **same** materialization, so the serving node also `yield*`s the resource in-process; `serveRemote` mounts wire handlers only. Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
+- **`QueueResource.serve(tag, config)`** / **`ScheduledProcess.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Resource.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
 
 ```ts
-Resource.serveAllHttp([
-  QueueResource.serverEntry(RosterQueue, { effect }),     // worker R
-  ApiMetrics.serverEntry(SdpApi),                         // Scope
-  Resource.serverEntry(Database, { status: pingStatus }), // raw, spec-checked
+Resource.httpServer([
+  QueueResource.serve(RosterQueue, { effect }),        // worker R
+  ApiMetrics.serve(SdpApi),                            // Scope
+  Resource.serve(Database, { status: pingStatus }),    // raw, spec-checked
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
 ```
 
-> `Resource.instance` is **not** for this — it builds a `ResourceInstance` for the `serveInstances` family (one factory, many keyed instances) and won't fit `serveAllHttp`. To serve one custom resource, use `serverEntry`.
+> `Resource.instance` is **not** for this — it builds a `ResourceInstance` for the `serveInstances` family (one factory, many keyed instances). To serve one custom resource, pass its `serve` layer to `httpServer`.
 
-### Per-resource dependencies (`serve` / `httpServer`)
+### Per-resource dependencies
 
-`serveAllHttp` unions every entry's `R` into **one** shared provide — ideal when resources share their dependencies. When resources on one host need **different implementations of the same tag** (mutually exclusive — e.g. one worker fires post-persist hooks, another must not), one shared provide can't tell them apart. `Resource.serve` + `Resource.httpServer` give each resource **its own** `Layer.provide`, isolated:
+Because each `serve` layer carries **its own** `Layer.provide`, resources on one host that need **different implementations of the same tag** (mutually exclusive — e.g. one worker fires post-persist hooks, another must not) stay isolated — no shared union-provide can confuse them. Resources that **share** a dependency memoize one instance (same `dependency` value → one build; `Layer.fresh(dependency)` to isolate).
 
-- **`Resource.serve(tag, impl)`** — a **raw** resource's handler layer that **preserves** the handlers' requirement `R` (via `ServeRequirements<Impl>`), so a per-resource `Layer.provide` discharges it. Self-registers into `ServedResources` for `/health`. (`R = never` — a handler that closes over its dependency at build — behaves like the internal `serverLayer`.)
-- **`QueueResource.serve(tag, config)`** / **`ScheduledProcess.serve(tag, config)`** — the **engine** forms: same isolation + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Resource.serve` only mounts handlers and would leave the worker/tick dead.
-- **`Resource.httpServer(serves, options?)`** — reads the registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. Pass the `serve` layers as the first arg (recommended) and it **bundles** the `provideMerge` + `servedResourcesLayer` — you provide only the platform (+ any shared dependency). The low-level `httpServer(options)` form still exists (then you `provideMerge` the `serve` layers, not `provide`, + `servedResourcesLayer` yourself).
+- **`Resource.httpServer(serves, options?)`** — reads the `ServedResources` registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. Pass the `serve` layers as the first arg (recommended) and it **bundles** the `provideMerge` + `servedResourcesLayer` — you provide only the platform (+ any shared dependency). The low-level `httpServer(options)` form still exists (then you `provideMerge` the `serve` layers, not `provide`, + `servedResourcesLayer` yourself).
 - **`Resource.servedResourcesLayer`** / **`Resource.ServedResources`** — the `Ref`-backed registry `serve` appends to and `httpServer` reads.
 - **`Resource.provide(dependency, [resources])`** — sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency."
 
 ```ts
-Resource.httpServer({ health: { path: "/health" } }).pipe(
-  Layer.provideMerge(Layer.mergeAll(
-    Resource.provide(importHandlers, [                          // a group sharing one dependency
-      Resource.serve(SeasonMatches,   seasonMatchesImpl),
-      Resource.serve(LiveScorePoller, pollerImpl),
-    ]),
-    Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(hookedImport)), // its own — isolated
-  )),
-  Layer.provide(Resource.servedResourcesLayer),                 // shared registry: serve registers, httpServer reads
+Resource.httpServer([
+  Resource.provide(importHandlers, [                          // a group sharing one dependency
+    Resource.serve(SeasonMatches,   seasonMatchesImpl),
+    Resource.serve(LiveScorePoller, pollerImpl),
+  ]),
+  Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(hookedImport)), // its own — isolated
+], { health: { path: "/health" } }).pipe(
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
 );
 ```
 
-The tick/worker body just **declares** its dependency (`const h = yield* ImportHandlers`) — no `Effect.provide`, so `strictEffectProvide: "error"` stays clean. Sharing is by **memoization** (same `dependency` value → one instance; `Layer.fresh(dependency)` to isolate). A missing handler fails the `RpcServer` at **boot**, never silently. Use `serveAllHttp` for the shared-dependency case (most hosts); reach for `serve` / `httpServer` when resources need **different** implementations of the same tag.
+The tick/worker body just **declares** its dependency (`const h = yield* ImportHandlers`) — no `Effect.provide`, so `strictEffectProvide: "error"` stays clean. A missing handler fails the `RpcServer` at **boot**, never silently.
 
 ---
 
@@ -641,7 +640,7 @@ const database = Resource.layer(
 );
 
 // serve on each host: the layer + `peersLayer` (the opt-in mesh — only where a host reaches its peers)
-Resource.serveAllHttp([Resource.serverEntry(Database, database)]).pipe(
+Resource.httpServer([Resource.serve(Database, database)]).pipe(
   Layer.provide(Resource.peersLayer(Database, NwslHost)),
 );
 ```
@@ -650,7 +649,7 @@ Resource.serveAllHttp([Resource.serverEntry(Database, database)]).pipe(
 - **`Resource.peers(tag)`** — the other hosts' leaf clients, keyed by host. Fold with `/MultiHost`'s `combineQuery`/`combineStream` + `Combine` (`sum`/`byHost`/`mergeStreams`/`mergeByHost`/…). Requires the peers capability, provided by **`Resource.peersLayer(tag, self)`** (connects the `multiHost` set minus self) or **`Resource.peersFrom(tag, clients)`** (an explicit client map — a holder's bundles, or a test). Peer urls default to each `Host.url` (the standard — the host carries how to reach it); pass **`peersLayer(tag, self, { url: (host) => Effect<string | undefined> })`** to override per host (env-specific ports, tunnels, Effect `Config`), falling back to `Host.url`. A host with no url from either source is skipped — a partial mesh, never a throw.
 - **`Resource.selfHost(tag)`** — the host key this instance runs as, the **same key** its peers are keyed by. For `Combine.byHost` folds (one row per host), so the impl keys its **own** row without hand-threading: `return { ...byHost, [yield* Resource.selfHost(tag)]: ownValue }`. Provided by `peersLayer` (bundled) or standalone **`Resource.selfHostLayer(tag, self)`** (with `peersFrom`, or when a resource keys per host without a mesh).
 - **`Resource.fleetHealth(tag, pick, own)`** — the canned droplet-health fold: `pick` a leaf from every peer, key it **by host**, and add this host's `own` value keyed by `selfHost`. `fleetStatus: Resource.fleetHealth(FleetDatabase, (p) => p.status, ownStatus)`. A down peer is skipped (captured, not thrown); the only error/requirement is `own`'s. Sugar over `peers` + `selfHost` + `combineQuery(…, Combine.byHost)`.
-- **`Resource.layer(tag, effect)`** — the Effect form: build the impl effectfully; its requirement (e.g. `peers`) becomes the layer's, discharged by providing `peersLayer` alongside. `Resource.serverEntry` has the same Effect form (`serveAllHttp` unions the requirement).
+- **`Resource.layer(tag, effect)`** — the Effect form: build the impl effectfully; its requirement (e.g. `peers`) becomes the layer's, discharged by providing `peersLayer` alongside. `Resource.serve` has the same Effect form (`httpServer` unions the requirement).
 - **`Resource.client(tag, host)`** — a hostless multi-host tag is N instances, so the client names *which* one: `Resource.client(FleetDatabase, NwslHost).pipe(Layer.provide(connectHttp(NwslHost)))`. The transport resolves from that host, so the layer requires the host (satisfied by `connectHttp`) — enforced at compile time, so there's no runtime "Service not found" for a hostless client. (Host-bound tags still use the one-arg `Resource.client(tag)`.)
 - A **client calling a fleet field on any host** gets the whole-fleet value — that host gathered its peers + itself. No cross-host hop at `/health`; readiness stays per-host.
 

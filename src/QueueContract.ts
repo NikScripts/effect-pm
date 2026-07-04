@@ -35,7 +35,6 @@ import type {
   LocalCapability,
   NodeBoundTag,
   ResourceTag,
-  ServeEntry,
 } from "./Resource";
 // Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
 import {
@@ -43,7 +42,7 @@ import {
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
 } from "./internal/queueSchema";
-// The engine is used only by the runtime verbs (buildQueueImpl/layer/server/serveHttp) below.
+// The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
 import { QueueResource as QueueEngine } from "./QueueResource";
 import type {
   QueueEnqueueErrors,
@@ -632,7 +631,7 @@ export type QueueLayerConfig<A, E, R, RR = never> = Omit<
  *
  * @public
  */
-/** The item-schema constraint shared by {@link layer} / {@link server} / {@link serveHttp}. */
+/** The item-schema constraint shared by {@link layer} / {@link serve} / {@link serveRemote}. */
 type QueueItemFields = Record<
   string,
   Schema.Codec<unknown, unknown, never, never>
@@ -640,13 +639,13 @@ type QueueItemFields = Record<
 
 /**
  * Build the live {@link QueueEngine} handle behind `tag` and map it onto the toolkit service
- * impl — the single adapter shared by the **local** layer ({@link layer}) and the **remote**
- * server ({@link server} / {@link serveHttp}). The worker `R` is captured at build time and
+ * impl — the single adapter shared by the **local** layer ({@link layer}) and the **served**
+ * forms ({@link serve} / {@link serveRemote}). The worker `R` is captured at build time and
  * provided to each method, so the impl requires nothing beyond the scope; the engine queue
  * `name` defaults to the tag id (telemetry attribution) unless `config.name` overrides.
  *
  * The queue spec has no {@link Resource.local} members, so the resulting impl satisfies both
- * `ImplOf` (for `Resource.layer`) and `WireServiceOf` (for `Resource.server` / `serveHttp`).
+ * `ImplOf` (for `Resource.layer` / `Resource.serve`) and `ServeImplOf` (for `Resource.serveRemote`).
  */
 const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
@@ -814,76 +813,25 @@ export const layer = <
   );
 
 /**
- * Expose a toolkit queue **over RPC** (transport-agnostic): run the live {@link QueueEngine}
- * behind the tag and mount its handlers on the contract group. Compose with an `RpcServer` +
- * a `Protocol` layer to actually serve; or use {@link serveHttp} for the http batteries.
- * A remote {@link Resource.client} then drives the queue with the identical `yield* Tag` surface.
+ * Serve this queue **remotely (served-only)** — run the worker / refill / `persist` / `captureLogs`
+ * engine behind the tag, mount its RPC handlers, and register into {@link Resource.servedResourcesLayer},
+ * **without** granting the local instance (no `yield* Tag` in the serving process). The engine's worker
+ * requirement `R` is **preserved**, so a per-resource `Layer.provide` discharges it in isolation — the
+ * queue's counterpart to {@link Resource.serveRemote}.
  *
- * @public
- */
-export const server = <
-  Self,
-  F extends QueueItemFields = QueueItemFields,
-  E = never,
-  R = never,
-  RR = never,
->(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<HandlerContextOf<QueueInstanceSpec<F>>, never, R | RR> =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.server(tag, impl)),
-  );
-
-/**
- * Serve a toolkit queue **over http** in one call — the engine wired behind the tag and mounted
- * on an http `RpcServer` (ndjson by default, matching {@link Resource.httpClient}). Provide an
- * `HttpServer` (e.g. `NodeHttpServer.layer({ port })`) and you have a remote queue; a
- * {@link Resource.client} + transport drives it as if local.
- *
- * @public
- */
-export const serveHttp = <
-  Self,
-  F extends QueueItemFields = QueueItemFields,
-  E = never,
-  R = never,
-  RR = never,
->(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-  options?: Parameters<typeof Resource.serveHttp>[2],
-) =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (impl) =>
-      Resource.serveHttp(tag, impl, options),
-    ),
-  );
-
-/**
- * A **`serve`-style** layer for this queue — the engine-running counterpart to {@link Resource.serve}.
- * Runs the worker / refill / `persist` / `captureLogs` engine (like {@link serverEntry}) **and** mounts
- * the queue's RPC handlers **and** registers into {@link Resource.servedResourcesLayer}, while
- * **preserving the worker requirement `R`** so a per-resource `Layer.provide` discharges it in isolation.
- *
- * Reach for this (with {@link Resource.httpServer}) when queues on one node need **different**
- * implementations of the same dependency tag; use {@link serverEntry} + {@link Resource.serveAllHttp}
- * for the shared-dependency case.
+ * Reach for this (with {@link Resource.httpServer}) for a pure gateway/edge that exposes the queue for
+ * remote clients but never consumes it locally; use {@link serve} when the serving node also drives it.
  *
  * ```ts
- * Resource.httpServer().pipe(
- *   Layer.provideMerge(Layer.mergeAll(
- *     QueueResource.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
- *     QueueResource.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
- *   )),
- *   Layer.provide(Resource.servedResourcesLayer),
- *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
- * );
+ * Resource.httpServer([
+ *   QueueResource.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
+ *   QueueResource.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
+ * ]).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port })));
  * ```
  *
  * @public
  */
-export const serve = <
+export const serveRemote = <
   Self,
   F extends QueueItemFields = QueueItemFields,
   E = never,
@@ -898,19 +846,23 @@ export const serve = <
   );
 
 /**
- * A {@link Resource.serveAllHttp} entry for this queue — the tag plus the (lazily built) engine
- * impl, so a whole group of queues/processes can be served on **one** http port:
+ * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
+ * refill / `persist` / `captureLogs` engine behind the tag, mount its RPC handlers, register into
+ * {@link Resource.servedResourcesLayer}, **and** grant `Self | LocalCapability<Self>` so co-located code
+ * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
+ * worker requirement `R` is preserved for per-resource `Layer.provide`. This is the queue's counterpart
+ * to {@link Resource.serve}; a served-**only** gateway uses {@link serveRemote}.
  *
  * ```ts
- * Resource.serveAllHttp([
- *   QueueResource.serverEntry(RosterQueue, { effect, itemSchema }),
- *   ScheduledProcess.serverEntry(SeasonMatches, { effect }),
- * ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })))
+ * Resource.httpServer([
+ *   QueueResource.serve(RosterQueue, { effect, itemSchema }),
+ *   ScheduledProcess.serve(SeasonMatches, { effect }),
+ * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
  * ```
  *
  * @public
  */
-export const serverEntry = <
+export const serve = <
   Self,
   F extends QueueItemFields = QueueItemFields,
   E = never,
@@ -919,19 +871,19 @@ export const serverEntry = <
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): ServeEntry<R | RR> => ({
-  tag,
-  impl: buildQueueImpl(tag, config) as unknown as Effect.Effect<
-    Record<string, unknown>,
-    never,
-    R | RR
-  >,
-});
+): Layer.Layer<
+  Self | LocalCapability<Self> | HandlerContextOf<QueueInstanceSpec<F>>,
+  never,
+  R | RR
+> =>
+  Layer.unwrap(
+    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+  );
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.
  * (Model B: each instance is its own resource; data-plane procedures are typed by the
- * instance's `itemSchema`.) `layer` runs it locally; `server` / `serveHttp` node it remotely;
+ * instance's `itemSchema`.) `layer` runs it locally; `serve` / `serveRemote` node it remotely;
  * a remote {@link Resource.client} drives it with the same `yield* Tag` surface.
  *
  * @public

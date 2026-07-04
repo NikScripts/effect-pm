@@ -79,7 +79,7 @@ it("client ↔ server round-trips in-memory", () => {
     expect(yield* svc.shout({ msg: "hi" })).toBe("HI");
   }).pipe(
     Effect.provide(
-      Resource.server(Echo, {
+      Resource.serveRemote(Echo, {
         ping: Effect.succeed("pong"),
         shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
       }),
@@ -178,8 +178,8 @@ it("two resource types sharing a method name coexist on one server (group prefix
   }).pipe(
     Effect.provide(
       Layer.mergeAll(
-        Resource.server(Widgets, { size: Effect.succeed(42) }),
-        Resource.server(Crates, { size: Effect.succeed("dozen") }),
+        Resource.serveRemote(Widgets, { size: Effect.succeed(42) }),
+        Resource.serveRemote(Crates, { size: Effect.succeed("dozen") }),
       ),
     ),
     Effect.scoped,

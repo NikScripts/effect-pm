@@ -38,8 +38,8 @@ it("ref.get reads the current value — REMOTE (same shape over the wire)", () =
   Effect.runPromise(
     Effect.gen(function* () {
       const cell = yield* SubscriptionRef.make(42);
-      const Node = Resource.serveAllHttp([
-        Resource.serverEntry(Live, { count: Resource.subscribable(cell) }),
+      const Node = Resource.httpServer([
+        Resource.serve(Live, { count: Resource.subscribable(cell) }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
       yield* Effect.gen(function* () {

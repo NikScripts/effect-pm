@@ -15,12 +15,12 @@ class Beta extends Resource.Tag<Beta>()("serveAll/Beta",
   { node: LeagueNode },
 ) {}
 
-const Server = Resource.serveAllHttp([
-  // Alpha via the spec-checked record `Resource.serverEntry`; Beta via the Effect-form `serverEntry`
-  // (impl built by an `Effect`); plus a raw `{ tag, impl }` literal still composes. All three coexist
-  // in one `serveAllHttp` and the result requirement unions cleanly.
-  Resource.serverEntry(Alpha, { where: Effect.succeed("alpha") }),
-  Resource.serverEntry(
+const Server = Resource.httpServer([
+  // Alpha via the spec-checked record `Resource.serve`; Beta via the Effect-form `serve`
+  // (impl built by an `Effect`). Both coexist in one `httpServer` and the result requirement
+  // unions cleanly.
+  Resource.serve(Alpha, { where: Effect.succeed("alpha") }),
+  Resource.serve(
     Beta,
     Effect.succeed({
       where: Effect.succeed("beta"),

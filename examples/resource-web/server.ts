@@ -2,7 +2,7 @@
  * @module examples/resource-web/server
  *
  * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over
- * http on one port, plus the `NodeStatus` that `serveAllHttp` auto-mounts. The browser dashboard
+ * http on one port, plus the `NodeStatus` that `httpServer` auto-mounts. The browser dashboard
  * reaches it via `Resource.httpClient(WnbaNode, …)` (vite proxies `/rpc` here), so the top-right
  * node status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
  * `pnpm run example:resource-web`).
@@ -14,8 +14,8 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Resource from "../../src/Resource";
-import { serverEntry as queueEntry } from "../../src/QueueContract";
-import { serverEntry as processEntry } from "../../src/ScheduledProcess";
+import { serve as queueEntry } from "../../src/QueueContract";
+import { serve as processEntry } from "../../src/ScheduledProcess";
 import { HistoryStore } from "../../src/HistoryStore";
 import { NodeLogs } from "../../src/NodeLogs";
 import { Polling } from "../../src/Polling";
@@ -29,7 +29,7 @@ const WNBA_PORT = HOST_PORTS.wnba;
 const LIVE_PORT = HOST_PORTS.live;
 const STATS_PORT = HOST_PORTS.stats;
 
-// The WorkerPool impl, Effect form (spec-checked by `serverEntry`): resolve `peers` once, then
+// The WorkerPool impl, Effect form (spec-checked by `serve`): resolve `peers` once, then
 // `fleetActive` folds the peers' `active` + this node's own. `own` varies per node so the fleet total
 // is meaningful; the impl's `peers` requirement is discharged by `peersLayer` at each serve.
 const workerPoolImpl = (own: number) =>
@@ -75,7 +75,7 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
 
 // ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
 // A real consumer instruments its outbound client (`HttpApiResource.instrumentEndpoints`) and serves
-// `ApiMetrics.serverEntry(tag)` (fed from the Metric registry). For the fixture there's no real
+// `ApiMetrics.serve(tag)` (fed from the Metric registry). For the fixture there's no real
 // client, so we hand the served tag a mock `{ metrics, usageNow }` with synthetic windows — a
 // realistic-ish WNBA stats surface (HttpApi groups × endpoints), accumulated for `topEndpoints`.
 interface EndpointSpec {
@@ -191,26 +191,26 @@ const logStorageDemo = Layer.effectDiscard(
 
 // Three nodes in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
 // API on WnbaNode, the live-score poller on LiveNode, the play-by-play queue on StatsNode. Each
-// `serveAllHttp` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
+// `httpServer` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
 // fight over one HttpServer).
-const wnbaNode = Resource.serveAllHttp([
+const wnbaNode = Resource.httpServer([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
     concurrency: 3,
     captureLogs: true,
   }),
-  // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Resource.serverEntry`
-  // (spec-checked against the tag) — a real app would use `ApiMetrics.serverEntry(ScoresApi)`, fed from
+  // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Resource.serve`
+  // (spec-checked against the tag) — a real app would use `ApiMetrics.serve(ScoresApi)`, fed from
   // the instrumented client's registry.
-  Resource.serverEntry(ScoresApi, scoresApiMock),
+  Resource.serve(ScoresApi, scoresApiMock),
   // Serve the scores DB from its own provided service (below) — the same instance the box-score
   // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent. The
-  // Effect-form `serverEntry` spec-checks the impl and surfaces its `ScoresDb` requirement (provided
+  // Effect-form `serve` spec-checks the impl and surfaces its `ScoresDb` requirement (provided
   // below) instead of a bare `{ tag, impl }` literal that would erase it.
-  Resource.serverEntry(ScoresDb, ScoresDb),
+  Resource.serve(ScoresDb, ScoresDb),
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
-  Resource.serverEntry(WorkerPool, workerPoolImpl(5)),
+  Resource.serve(WorkerPool, workerPoolImpl(5)),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
@@ -226,14 +226,14 @@ const wnbaNode = Resource.serveAllHttp([
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
-const liveNode = Resource.serveAllHttp([
+const liveNode = Resource.httpServer([
   processEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
     scheduleLayer: pollerSchedule,
     captureLogs: true,
   }),
-  Resource.serverEntry(WorkerPool, workerPoolImpl(3)),
+  Resource.serve(WorkerPool, workerPoolImpl(3)),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(HistoryStore.layerMemory()),
@@ -246,13 +246,13 @@ const liveNode = Resource.serveAllHttp([
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
-const statsNode = Resource.serveAllHttp([
+const statsNode = Resource.httpServer([
   queueEntry(PlayByPlayQueue, {
     effect: importWorker,
     concurrency: 3,
     captureLogs: true,
   }),
-  Resource.serverEntry(WorkerPool, workerPoolImpl(4)),
+  Resource.serve(WorkerPool, workerPoolImpl(4)),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),

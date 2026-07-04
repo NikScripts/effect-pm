@@ -35,7 +35,7 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Node = Resource.serveAllHttp([Resource.serverEntry(Cfg, impl)]).pipe(
+const Node = Resource.httpServer([Resource.serve(Cfg, impl)]).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 

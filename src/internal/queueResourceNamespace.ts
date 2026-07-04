@@ -9,11 +9,10 @@
  *   class Mail extends QueueResource.Tag<Mail>()("@app/Mail", JobSchema, { node: MyNode }) {}
  *
  * - `Tag` / `configure` come from the **light** contract (`QueueContract`).
- * - `layer` / `serve` / `server` / `serveHttp` / `serverEntry` are the runtime verbs (pull the engine
- *   only when used).
+ * - `layer` / `serve` / `serveRemote` are the runtime verbs (pull the engine only when used).
  * - `make` / `Service` / `Schema` / `Errors` / `rateLimiterLayer` are the engine helpers.
  */
-import { Tag, configure, layer, serve, serveHttp, server, serverEntry } from "../QueueContract";
+import { Tag, configure, layer, serve, serveRemote } from "../QueueContract";
 import { QueueResource as engine } from "../QueueResource";
 
 const make = engine.make;
@@ -22,7 +21,7 @@ const Schema = engine.Schema;
 const Errors = engine.Errors;
 const rateLimiterLayer = engine.rateLimiterLayer;
 
-export { Tag, configure, layer, serve, server, serveHttp, serverEntry, make, Service, Schema, Errors, rateLimiterLayer };
+export { Tag, configure, layer, serve, serveRemote, make, Service, Schema, Errors, rateLimiterLayer };
 
 // engine error classes / schemas / helpers — re-exported so the /QueueResource subpath
 // (which resolves to this module) still surfaces them for consumers.

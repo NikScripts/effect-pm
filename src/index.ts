@@ -20,10 +20,10 @@
  *   events for processes.
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
- *   `server` / `serveHttp` / `Node` switch only the layer). Batteries-included resource kinds build
+ *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
  *   on it — **`ScheduledProcess`** and the toolkit queue (from
- *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `server` /
- *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
+ *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
+ *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See `docs/guides/toolkit-by-example.md`.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
@@ -118,7 +118,7 @@ export type { ProcessLayerConfig } from "./ScheduledProcess";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 // The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serveHttp`
+// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
 export * as QueueResource from "./internal/queueResourceNamespace";
 export { RunResource } from "./RunResource";
@@ -167,7 +167,6 @@ export type {
   MethodMeta,
   ResourceInstance,
   ResourceTag,
-  ServeEntry,
   ServiceOf,
   Spec,
   TagFactory,

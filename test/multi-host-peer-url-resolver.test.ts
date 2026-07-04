@@ -14,8 +14,8 @@ class Fleet extends Resource.Tag<Fleet>()("resolver/Fleet", {
 ) {}
 
 // the PeerNode instance, served on a test server (count = 7)
-const PeerServer = Resource.serveAllHttp([
-  Resource.serverEntry(Fleet, { count: Effect.succeed(7) }),
+const PeerServer = Resource.httpServer([
+  Resource.serve(Fleet, { count: Effect.succeed(7) }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 // `options.url` overrides Node.url — here it supplies a url for PeerNode (which has none baked in),

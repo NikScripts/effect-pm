@@ -14,8 +14,8 @@ class Warming extends Resource.Tag<Warming>()("readiness/Warming", {
   Resource.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
 ) {}
 
-const Server = Resource.serveAllHttp([
-  { tag: Warming, impl: { ping: Effect.succeed("pong") } },
+const Server = Resource.httpServer([
+  Resource.serve(Warming, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 const withPort = <A, E, R>(

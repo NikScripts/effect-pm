@@ -2,7 +2,7 @@
  * @module NodeStatus
  *
  * **Node status** — the reserved resource every node serves automatically (via
- * {@link Resource.serveAllHttp}): is it up, when did it start, how long has it been up, how many
+ * {@link Resource.httpServer}): is it up, when did it start, how long has it been up, how many
  * resources does it serve, plus its runtime-wide {@link NodeLogs} (`logs` stream + `logHistory`)
  * and a `ping`. The node author wires nothing; clients just point a transport at the node.
  *
@@ -54,7 +54,7 @@ export const Tag = NodeStatusResource;
 
 /**
  * A client layer for the node status resource pointed at a node's `/rpc` `url` (ndjson over http,
- * matching `Resource.serveAllHttp`'s default). Provide it to a program that reads
+ * matching `Resource.httpServer`'s default). Provide it to a program that reads
  * {@link NodeStatus.Tag}. @since 1.0.0
  */
 export const clientHttp = (url: string): Layer.Layer<NodeStatusResource> =>

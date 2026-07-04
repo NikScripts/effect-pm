@@ -1,8 +1,9 @@
 # Per-resource dependencies at the serve
 
 When several resources run on one host, they usually **share** their dependencies — one database, one
-HTTP client, provided once. `Resource.serveAllHttp` is built for exactly that: it unions every entry's
-requirement `R` into a single provide at the serve root.
+HTTP client, provided once. `Resource.httpServer([...serve-layers])` handles that directly: provide the
+shared dependency once (to the whole set, or via `Resource.provide`) and every resource memoizes the
+same instance.
 
 But sometimes resources on the same host need **different implementations of the same dependency tag**,
 and those implementations are **mutually exclusive**. A classic case: an import pipeline where
@@ -13,9 +14,9 @@ and those implementations are **mutually exclusive**. A classic case: an import 
 and both read the same `ImportHandlers` tag. One shared provide can only supply *one* of those — hand
 the hooked handler to a plain worker and you double-enqueue. This guide is about that case.
 
-> If your resources share their dependencies, you don't need any of this — use `serveAllHttp` and provide
-> the shared dependency once. Reach for `serve` / `httpServer` only when resources need **different**
-> implementations of the same tag.
+> If your resources share their dependencies, provide the shared dependency once — every `serve` layer
+> in the set memoizes the same instance. Reach for a **per-layer** `Layer.provide` only when resources
+> need **different** implementations of the same tag.
 
 ## The idea in one line
 
@@ -27,7 +28,7 @@ layer memoization, not by data.
 
 | Primitive | Role |
 |-----------|------|
-| `Resource.serve(tag, impl)` | A **raw resource's** handler layer (impl is the query record). Unlike the internal server layer it **preserves** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. |
+| `Resource.serve(tag, impl)` | A **raw resource's** layer (impl is the query record) that grants the local instance **and** mounts the wire handlers, **preserving** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. (`serveRemote` is the served-only variant — same isolation, no local grant.) |
 | `QueueResource.serve(tag, config)` / `ScheduledProcess.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Resource.serve` only mounts handlers and would leave the worker/tick dead. |
 | `Resource.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
 | `Resource.servedResourcesLayer` | The registry the `serve` forms write to and `httpServer` reads. |

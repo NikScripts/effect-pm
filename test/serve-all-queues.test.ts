@@ -5,19 +5,19 @@ import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import * as Resource from "../src/Resource";
 
-// Two REAL queue engines bound to ONE Node, served on ONE port via serveAllHttp + serverEntry —
+// Two REAL queue engines bound to ONE Node, served on ONE port via httpServer + QueueResource.serve —
 // the ControlService.make({ group, port }) replacement for wow's per-league deploy.
 const Item = Schema.Struct({ n: Schema.Number });
 class LeagueNode extends Resource.Node<LeagueNode>("serveAllQ/node") {}
 class QA extends QueueResource.Tag<QA>()("serveAllQ/A", Item, { node: LeagueNode }) {}
 class QB extends QueueResource.Tag<QB>()("serveAllQ/B", Item, { node: LeagueNode }) {}
 
-const Server = Resource.serveAllHttp([
-  QueueResource.serverEntry(QA, { effect: (_i: { n: number }) => Effect.void }),
-  QueueResource.serverEntry(QB, { effect: (_i: { n: number }) => Effect.void }),
+const Server = Resource.httpServer([
+  QueueResource.serve(QA, { effect: (_i: { n: number }) => Effect.void }),
+  QueueResource.serve(QB, { effect: (_i: { n: number }) => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
-it("two real queues on one node/port via serveAllHttp", () =>
+it("two real queues on one node/port via httpServer", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));

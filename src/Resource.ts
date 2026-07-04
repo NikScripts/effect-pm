@@ -32,7 +32,8 @@
  *
  * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
  * default on both, so client/server can't disagree on the codec):
- * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
+ * - {@link Resource.httpServer} — expose one or more {@link Resource.serve} layers on an http
+ *   `RpcServer` in one call;
  * - {@link Resource.httpClient} — wire a {@link Resource.Node}'s transport from a `url`.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
@@ -942,10 +943,10 @@ type PeerServiceOf<S extends Spec> = {
 };
 
 /**
- * The **implementation** a {@link localLayer} / {@link serverLayer} expects: wire members are their
+ * The **implementation** a {@link localLayer} / {@link serve} expects: wire members are their
  * `Effect`/`Stream`/function, and each {@link LocalMethod} is its **raw** value `T` (the toolkit wraps
  * it to require the {@link LocalCapability}). When an impl needs a capability (e.g. {@link peers}) to
- * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serverEntry}
+ * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serve}
  * — resolve it once, and the members close over it.
  *
  * A `value` field's impl is the **`Stream`** that feeds it (typically a `SubscriptionRef`'s `.changes`),
@@ -977,7 +978,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
 
 /**
  * Anchor a **reusable** impl to its contract at the definition site. Inline impls are already typed by
- * `layer` / `serverEntry` / `serve`; but the moment you hoist one to a `const` (to share it across the
+ * `layer` / `serve`; but the moment you hoist one to a `const` (to share it across the
  * local layer and a served entry, or across several serves) it loses that typing — the mistake then
  * surfaces far away at the serve call, with no autocomplete as you write it. `Resource.make(tag, impl)`
  * infers the tag's spec and constrains `impl` to its {@link ImplOf}, returning it typed. Runtime identity.
@@ -985,7 +986,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * ```ts
  * const scoresImpl = Resource.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
  * Resource.layer(ScoresDb, scoresImpl);                    // local
- * Resource.serveAllHttp([Resource.serverEntry(ScoresDb, scoresImpl)]); // served — same impl, both typed
+ * Resource.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
  * ```
  *
  * @public
@@ -1689,7 +1690,7 @@ const clientSubscribable = <A>(
  * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
  * become callable here — they're a compile error under {@link Resource.client}.
  *
- * Two forms, mirroring {@link serverEntry}: a **record** impl, or an **`Effect`** that builds the impl
+ * Two forms, mirroring {@link serve}: a **record** impl, or an **`Effect`** that builds the impl
  * — the latter for effectful construction (acquire a pool, resolve {@link peers}, …). The `Effect`'s
  * requirement `R` becomes the layer's, so its members close over whatever they need and stay
  * `R = never`; you provide `R` (e.g. `peersLayer`) alongside.
@@ -1697,8 +1698,8 @@ const clientSubscribable = <A>(
  * @public
  */
 // Build the **local service Context** — the materialized service + granted capability — from a tag and its
-// **already-built** impl record. Shared by `localLayer` and the local grant that `serveAllHttp` / `serveHttp`
-// add by default, so "serve + use locally" and "just local" produce the *identical* instance. The impl may be
+// **already-built** impl record. Shared by `localLayer` and the local grant that `httpServer`
+// adds by default, so "serve + use locally" and "just local" produce the *identical* instance. The impl may be
 // nested (grouped) — flattened to path keys matching the flat spec.
 const buildLocalContext = <Self>(
   tag: {
@@ -1781,35 +1782,6 @@ const invokeWireMethod = (
     return member(payload[0], payload[1]);
   }
   return member(payload);
-};
-
-const serverLayer = <S extends Spec>(
-  tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [specTypeSym]?: S;
-    readonly [groupSym]: RpcGroupOf<S>;
-  },
-  impl: WireServiceOf<S>,
-): Layer.Layer<HandlerContextOf<S>> => {
-  const group = tag[groupSym];
-  const handlers: Record<string, (payload: unknown) => unknown> = {};
-  // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
-  const flatImpl = flattenImpl(impl as Record<string, unknown>, tag[specSym]);
-  for (const [key, member] of Object.entries(flatImpl)) {
-    // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
-    // runtime-checked: payload methods are functions (call them); no-payload methods
-    // are `Effect` properties (return as-is, ignoring the payload arg).
-    handlers[wireTag(tag.groupId, key)] = (payload) =>
-      invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
-  }
-  // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was built from,
-  // and RPC validates every payload/result against the spec schemas at the wire. The output pins
-  // {@link HandlerContextOf}; any capability `R` the handlers require (e.g. peers) rides the layer's
-  // requirement channel, discharged by the serve providing it.
-  return group.toLayer(
-    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as unknown as Layer.Layer<HandlerContextOf<S>>;
 };
 
 /**
@@ -1914,18 +1886,19 @@ export type ServeRequirements<Impl> = {
 }[keyof Impl];
 
 /**
- * A resource's **handler layer** — mounts the tag's group handlers, with the handlers' requirement `R`
- * **preserved** (not erased). Unlike {@link serverLayer}, whose `R` is erased to `never` (so all handlers
- * share one ambient provide), `serve`'s `R` rides the layer's requirement channel, so a per-resource
- * `Layer.provide` discharges *this* resource's dependency in isolation:
+ * A resource's **served-only handler layer** — mounts the tag's group handlers (wire members only,
+ * **no** local grant), with the handlers' requirement `R` **preserved** (not erased). This is the
+ * served-only counterpart to {@link serve}, which additionally grants the {@link LocalCapability} so
+ * members stay callable in-process. `serveRemote`'s `R` rides the layer's requirement channel, so a
+ * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
  *
  * ```ts
- * Resource.serve(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
+ * Resource.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
  * ```
  *
- * `R = never` (a handler that closes over its dependency at build) behaves exactly like `serverLayer`.
- * The point of `serve` is the run-time-requirement case: N resources needing different implementations of
- * the same tag, each isolated — merge the `serve` layers onto one `RpcServer` (groups are prefix-keyed).
+ * The point of `serveRemote` is the run-time-requirement case: N resources needing different
+ * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
+ * prefix-keyed).
  *
  * @public
  */
@@ -1946,7 +1919,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
     handlers[wireTag(tag.groupId, key)] = (payload) =>
       invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
   }
-  // dynamic handler construction (the same boundary `serverLayer` uses); the outer assertion **preserves**
+  // dynamic handler construction (the group's `toLayer` boundary); the outer assertion **preserves**
   // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
   // erasing it, so a per-resource `Layer.provide` can discharge it. `HandlerContextOf<S>` is the rpc
   // handler slots; the requirement is the union of the handlers' run-time needs.
@@ -2027,8 +2000,10 @@ const httpServerBase = (
       const registry = yield* ServedResources;
       const entries = yield* registry.all;
       if (entries.length === 0) {
-        throw new Error(
-          "Resource.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+        return yield* Effect.die(
+          new Error(
+            "Resource.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+          ),
         );
       }
       const startedAt = yield* Clock.currentTimeMillis;
@@ -2111,7 +2086,7 @@ const mergeLayers = (
 
 /**
  * The shared http server for resources composed with {@link serve} — the multi-resource,
- * heterogeneous-dependency counterpart to {@link serveHttp} / {@link serveAllHttp}. Reads the
+ * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
  * {@link ServedResources} registry, merges every registered group onto **one** `RpcServer` at `path`
  * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each
  * `serve` layer carries **its own** `Layer.provide`d dependency, resources needing different
@@ -2140,13 +2115,19 @@ const mergeLayers = (
 export function httpServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
-export function httpServer<R>(
-  serves: readonly [
-    Layer.Layer<any, never, R>,
-    ...ReadonlyArray<Layer.Layer<any, never, R>>,
+export function httpServer<
+  Serves extends readonly [
+    Layer.Layer<any, never, any>,
+    ...ReadonlyArray<Layer.Layer<any, never, any>>,
   ],
+>(
+  serves: Serves,
   options?: HttpServerOptions,
-): Layer.Layer<never, never, R | HttpServer.HttpServer>;
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  never,
+  Layer.Services<Serves[number]> | HttpServer.HttpServer
+>;
 export function httpServer(
   servesOrOptions?:
     | ReadonlyArray<Layer.Layer<any, never, any>>
@@ -2187,333 +2168,6 @@ export const provide = <ROut, EL, RL, A, E, R>(
 ): Layer.Layer<A, E | EL, Exclude<R, ROut> | RL> =>
   Layer.mergeAll(...resources).pipe(Layer.provide(dependency));
 
-/**
- * Expose a resource over **http** in one call — the server mirror of {@link httpClient}, and
- * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
- * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
- * (default {@link defaultSerialization}, matching the client). The only thing left to provide
- * is an `HttpServer` (platform-specific — e.g. `NodeHttpServer.layer({ port })`), since the
- * bind address is a deployment concern:
- *
- * ```ts
- * const JobsServer = Resource.serveHttp(Jobs, jobsImpl).pipe(
- *   Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })),
- * );
- * ```
- *
- * @public
- */
-const serveHttp = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S>,
-  options?: {
-    readonly path?: HttpRouter.PathInput;
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self | LocalCapability<Self>, never, HttpServer.HttpServer> =>
-  // Local + served by default (one build): serve the wire handlers AND grant this resource's local
-  // instance from the same `impl` record. The served cells ARE the in-process instance.
-  Layer.unwrap(
-    Effect.map(
-      buildLocalContext(tag, impl as Record<string, unknown>),
-      (localCtx) =>
-        Layer.merge(
-          HttpRouter.serve(
-            RpcServer.layerHttp({
-              group: tag[groupSym],
-              path: options?.path ?? "/rpc",
-              protocol: "http",
-            }).pipe(Layer.provide(serverLayer(tag, impl))),
-          ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization)),
-          Layer.succeedContext(localCtx),
-        ),
-    ),
-  ) as unknown as Layer.Layer<
-    Self | LocalCapability<Self>,
-    never,
-    HttpServer.HttpServer
-  >;
-
-/**
- * An entry for {@link serveAllHttp}: a resource tag + its built impl. Use {@link Resource.server}'s
- * impl shape (the same `WireServiceOf` you pass to {@link serveHttp}).
- *
- * @public
- */
-/** @internal */
-declare const serveGrantSym: unique symbol;
-
-export interface ServeEntry<R = never, Self = never> {
-  readonly tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [groupSym]: RpcGroup.RpcGroup<any>;
-  };
-  /**
-   * The resource's impl — either the built service record (a plain resource), or an `Effect` that
-   * builds it (a toolkit resource whose engine/worker is constructed at assembly, carrying its
-   * worker requirement `R`). Use `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` to
-   * produce the effect form.
-   */
-  readonly impl:
-    | Record<string, unknown>
-    | Effect.Effect<Record<string, unknown>, never, R>;
-  /**
-   * When `true` (the default — {@link serverEntry}), the node **also grants this resource's local
-   * instance** (`Self | LocalCapability<Self>`) from the *same* materialization, so co-located code can
-   * `yield* Tag`. {@link remoteEntry} sets it `false` for a served-**only** gateway.
-   */
-  readonly local?: boolean;
-  /** Phantom carrier of the resource's `Self`, so `serveAllHttp` can type the local grant it adds (the
-   *  capability key is read off the tag at runtime). Never set — covariant, so a `remoteEntry`
-   *  (`Self = never`) is assignable where any entry is expected. */
-  readonly [serveGrantSym]?: Self;
-}
-
-/**
- * A typed {@link ServeEntry} for a **raw** custom resource — `serveAllHttp`'s counterpart to
- * {@link Resource.layer} for serving. The impl is **spec-checked** against the tag's {@link Spec}
- * (`WireServiceOf<S>`), so a typo or missing method is a compile error — a hand-written `{ tag, impl }`
- * literal is typed `Record<string, unknown>` and silently accepts them. Mirrors
- * `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` / `ApiMetrics.serverEntry`. Note
- * {@link instance} is **not** this — it builds a `ResourceInstance` for the {@link serveInstances}
- * family and won't fit `serveAllHttp`.
- *
- * Two impl forms: a plain **record** (`R = never`), or an **`Effect`** that builds the record at
- * assembly and carries a requirement `R` (e.g. a pooled connection) — `R` is surfaced into the entry
- * so `serveAllHttp` demands + unions it, instead of erasing it as a bare `{ tag, impl }` literal would.
- *
- * ```ts
- * Resource.serveAllHttp([
- *   Resource.serverEntry(Database, { status: pingStatus }),        // record impl
- *   Resource.serverEntry(Cache, Effect.map(Pool, makeCacheImpl)),  // Effect impl, R = Pool
- *   QueueResource.serverEntry(RosterQueue, { effect }),
- * ]);
- * ```
- *
- * @public
- */
-// record impl (plain resource — no requirement)
-function serverEntry<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S>,
-): ServeEntry<never, Self>;
-// Effect impl (built at assembly, carrying a requirement `R` — e.g. a pooled connection, or serving
-// the resource's own provided service): `R` is surfaced into the entry, so `serveAllHttp` demands it
-// (and unions it across entries) instead of it being erased.
-function serverEntry<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R, Self>;
-function serverEntry<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S> | Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R, Self> {
-  return { tag, impl, local: true };
-}
-
-/**
- * A served-**only** {@link ServeEntry} — like {@link serverEntry}, but the node **does not** grant this
- * resource's local instance (no `Self | LocalCapability`). For a pure gateway / edge that exposes a
- * resource for remote clients but never `yield*`s it in-process. Use `serverEntry` (the default) when the
- * serving process also consumes the resource.
- *
- * @public
- */
-function remoteEntry<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S>,
-): ServeEntry<never, never>;
-function remoteEntry<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R, never>;
-function remoteEntry<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  impl: WireServiceOf<S> | Effect.Effect<WireServiceOf<S>, never, R>,
-): ServeEntry<R, never> {
-  return { tag, impl, local: false };
-}
-
-/** One entry's requirement `R`, with `any`/`unknown` collapsed to `never` — a plain `{ tag, impl }`
- *  literal (impl a `Record`, no `Effect`) leaves `R` unconstrained, so it infers `unknown` (or `any`);
- *  treat that as "no requirement" rather than poisoning the whole union. Typed entries (`serverEntry`,
- *  the contract `serverEntry`s) carry a real `R` that's kept. */
-type EntryR<E> = E extends ServeEntry<infer R, any>
-  ? 0 extends 1 & R
-    ? never
-    : unknown extends R
-      ? never
-      : R
-  : never;
-
-/** Union of every entry's requirement — `serveAllHttp`'s result `R` (see {@link EntryR}). */
-type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any, any>>> = EntryR<Entries[number]>;
-
-/** The **local grant** a node adds per entry — `Self | LocalCapability<Self>` for each {@link serverEntry}
- *  (default); a {@link remoteEntry} (`Self = never`) grants nothing, so a served-only gateway stays
- *  `A = never`. This is what makes serving a resource *also* provide its in-process instance. */
-type ServeGrant<E> = E extends ServeEntry<any, infer Self>
-  ? [Self] extends [never]
-    ? never
-    : Self | LocalCapability<Self>
-  : never;
-type ServeEntriesGrant<Entries extends ReadonlyArray<ServeEntry<any, any>>> =
-  ServeGrant<Entries[number]>;
-
-/**
- * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
- * to {@link serveHttp}. Each resource's procedures are group-id-prefixed, so they coexist on the
- * one `/rpc` endpoint without collision; clients reach each via `Resource.client(Tag)` over a single
- * {@link httpClient} transport (typically a shared {@link Node}). This is how a whole group runs
- * behind one port.
- *
- * ```ts
- * const LeagueServer = Resource.serveAllHttp([
- *   { tag: RosterQueue, impl: rosterImpl },
- *   { tag: SeasonMatches, impl: seasonImpl },
- * ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
- * ```
- *
- * @public
- */
-const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any, any>>>(
-  entries: Entries,
-  options?: {
-    readonly path?: HttpRouter.PathInput;
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-    /** Readiness `/health` route (always mounted; set `path` to relocate it). A dumb probe gets
-     *  `200`/`503`; the JSON body lists the node's resources for a dashboard health board. */
-    readonly health?: {
-      readonly path?: HttpRouter.PathInput;
-    };
-  },
-  // Entries can carry *different* requirements (a queue's worker `R`, an ApiMetrics entry's `Scope`, a
-  // plain resource's `never`); union them — like `Layer.mergeAll` — instead of pinning all to one `R`.
-): Layer.Layer<
-  ServeEntriesGrant<Entries>,
-  never,
-  ServeEntriesR<Entries> | HttpServer.HttpServer
-> => {
-  if (entries.length === 0) {
-    throw new Error("Resource.serveAllHttp: at least one resource is required");
-  }
-  // Build each impl (an Effect form carries the engine/worker requirement R; a plain record is
-  // lifted with succeed), then merge every resource's RpcGroup into one (procedures are
-  // group-id-prefixed → no collision) and merge their handler tables into one toLayer over the
-  // combined group. The merge is dynamic (heterogeneous specs), so types are erased through
-  // `unknown`; the result type is pinned to `R | HttpServer` — the union of worker requirements
-  // plus the http server to listen on (same shape as a single `serveHttp`).
-  return Layer.unwrap(
-    Effect.gen(function* () {
-      // Every node auto-serves the reserved node status resource (status / logs / ping) alongside
-      // the user's resources, so a client can inspect any node without the author wiring it.
-      // Dynamic import keeps `nodeStatusResource` (which imports this module) out of a static cycle;
-      // the entry is folded in before building so all entries stay one (erased) type.
-      const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./internal/nodeStatusResource"),
-      );
-      const startedAt = yield* Clock.currentTimeMillis;
-      const buildImpl = (entry: ServeEntry<any, any>) =>
-        (Effect.isEffect(entry.impl)
-          ? entry.impl
-          : Effect.succeed(entry.impl)
-        ).pipe(
-          Effect.map((impl) => ({ tag: entry.tag, impl, local: entry.local })),
-        );
-      // Build the user's resources first so the readiness aggregate can close over their impls —
-      // both the `/health` route and the node-status resource read this ONE aggregate (SSOT): each
-      // resource's own `readiness` derivation (default: ready), keyed by tag + kind.
-      const userBuilt = yield* Effect.forEach(entries, buildImpl);
-      const readiness = Effect.forEach(userBuilt, ({ tag, impl }) =>
-        Effect.map(readinessCheckServed(tag, impl), (r) => ({
-          key: tag.groupId,
-          kind: kindOf(tag) ?? "resource",
-          ready: r.ready,
-          ...(r.detail !== undefined ? { detail: r.detail } : {}),
-        })),
-      );
-      const nodeBuilt = yield* buildImpl(
-        nodeStatusServeEntry({ startedAt, resourceCount: entries.length, readiness }),
-      );
-      const built = [...userBuilt, nodeBuilt];
-      const merged = built
-        .map((b) => b.tag[groupSym])
-        .reduce((acc, group) => acc.merge(group));
-      const handlers: Record<string, (payload: unknown) => unknown> = {};
-      for (const { tag, impl } of built) {
-        // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed procedures.
-        const flatImpl = flattenImpl(
-          impl as Record<string, unknown>,
-          tag[specSym],
-        );
-        for (const [key, member] of Object.entries(flatImpl)) {
-          handlers[wireTag(tag.groupId, key)] = (payload) =>
-            invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
-        }
-      }
-      const rpcAppLayer = RpcServer.layerHttp({
-        group: merged,
-        path: options?.path ?? "/rpc",
-        protocol: "http",
-      }).pipe(
-        Layer.provide(
-          merged.toLayer(
-            handlers as unknown as Parameters<(typeof merged)["toLayer"]>[0],
-          ),
-        ),
-      );
-      // A plain HTTP readiness route alongside `/rpc` — a dumb probe (deploy gate, load balancer)
-      // gets a status code; the JSON body lists the node's resources for a dashboard health board.
-      // Readiness aggregates each resource's own derivation; if any is down the node is `degraded`
-      // → 503 (so a deploy gate won't promote a half-booted node).
-      const healthRoute = HttpRouter.add(
-        "GET",
-        options?.health?.path ?? "/health",
-        Effect.gen(function* () {
-          const ts = yield* Clock.currentTimeMillis;
-          const resources = yield* readiness;
-          const ok = resources.every((r) => r.ready);
-          return yield* HttpServerResponse.json({
-            status: ok ? "ok" : "degraded",
-            listening: true,
-            resources,
-            uptimeMillis: ts - startedAt,
-            ts,
-          }).pipe(
-            Effect.map((res) => HttpServerResponse.setStatus(res, ok ? 200 : 503)),
-            Effect.orDie,
-          );
-        }),
-      );
-      // Grant each local (default) entry's instance from the SAME built impl — the served cells ARE the
-      // in-process instance (one materialization; no second layer, no second peersLayer). `remoteEntry`
-      // (local === false) and any entry whose tag has no capability key are skipped.
-      let localContext = Context.empty();
-      for (const b of userBuilt) {
-        if (b.local === false) continue;
-        const cap = (b.tag as { readonly [localCapSym]?: unknown })[localCapSym];
-        if (cap === undefined) continue;
-        localContext = Context.merge(
-          localContext,
-          yield* buildLocalContext(
-            b.tag as unknown as Parameters<typeof buildLocalContext>[0],
-            b.impl as Record<string, unknown>,
-          ),
-        );
-      }
-      const served = HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
-        Layer.provideMerge(options?.serialization ?? defaultSerialization),
-      );
-      return Layer.merge(served, Layer.succeedContext(localContext));
-    }),
-  ) as unknown as Layer.Layer<
-    ServeEntriesGrant<Entries>,
-    never,
-    ServeEntriesR<Entries> | HttpServer.HttpServer
-  >;
-};
-
 /** The header carrying the target instance key, set per-call by {@link forwardClient}. */
 const INSTANCE_KEY_HEADER = "key";
 
@@ -2532,9 +2186,9 @@ export interface ResourceInstance<S extends Spec> {
  * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
  *
  * **Not** how you serve a single custom resource on a shared node: this returns a
- * {@link ResourceInstance} for the {@link serveInstances} family, which `serveAllHttp` rejects. To
- * serve a custom `Resource.Tag` alongside queues/processes, use {@link Resource.serverEntry} (a
- * spec-checked `serveAllHttp` entry), then reach it with {@link Resource.client}.
+ * {@link ResourceInstance} for the {@link serveInstances} family. To serve a custom `Resource.Tag`
+ * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Resource.httpServer},
+ * then reach it with {@link Resource.client}.
  *
  * @public
  */
@@ -2732,7 +2386,7 @@ const connectLayer = <Self, RIn>(
   Layer.effect(node, RpcClient.Protocol).pipe(Layer.provide(protocol));
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
- * **streaming** responses, and is shared by {@link httpClient} + {@link serveHttp} so a
+ * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
  * client and server can't silently disagree on the codec. */
 const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
@@ -2741,7 +2395,7 @@ const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
  * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
  * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
  * and re-keys it under the node. Serialization defaults to {@link defaultSerialization}
- * (ndjson), matching {@link serveHttp}'s default so the two sides agree by construction.
+ * (ndjson), matching {@link httpServer}'s default so the two sides agree by construction.
  *
  * ```ts
  * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
@@ -3366,7 +3020,7 @@ export const runForEachTagScoped: {
 /**
  * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
  * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
- * remotely, {@link Resource.server} exposes a local impl over RPC.
+ * remotely, {@link Resource.serve} / {@link Resource.serveRemote} expose an impl over RPC.
  *
  * @public
  */
@@ -3378,11 +3032,6 @@ export {
   httpClient,
   instance,
   localLayer as layer,
-  serverLayer as server,
-  serverEntry,
-  remoteEntry,
-  serveHttp,
-  serveAllHttp,
   serveInstances,
   clientLayer as client,
   clientInstances,

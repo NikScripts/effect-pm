@@ -22,8 +22,8 @@ const fakePeers = {
   wnba: { connections: Effect.succeed(3) },
 };
 
-const Server = Resource.serveAllHttp([
-  Resource.serverEntry(
+const Server = Resource.httpServer([
+  Resource.serve(
     Database,
     Effect.gen(function* () {
       const peers = yield* Resource.peers(Database);

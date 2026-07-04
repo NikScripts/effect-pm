@@ -11,12 +11,12 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/index.ts` | Public exports + package-level TSDoc. **Start here for imports.** |
 | `src/Process.ts` | `Process.make`, supervisor loop, `ProcessSupervisorRequirements`. |
 | `src/Polling.ts`, `src/ProcessSchedule.ts` | Cadence + gate services and preset `Layer`s. |
-| `src/QueueResource.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`server`/`serveHttp`; `persist`/`refill`). |
+| `src/QueueResource.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`serve`/`serveRemote`; `persist`/`refill`). |
 | `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
 | `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
 | **Toolkit (location-transparent)** | |
-| `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`serveAllHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. `serveAllHttp` = many resources on one port (group behind one `Host`). |
-| `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueResource`. |
+| `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`serve`/`serveRemote`/`httpServer`/`Host`/`connect`), `specOf`/`methodMeta` introspection. `httpServer([...serve-layers])` = many resources on one port (group behind one `Host`). |
+| `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`serve`/`serveRemote`) → `@nikscripts/effect-pm/QueueResource`. |
 | `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueResource`. |
 | `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
 | `src/ScheduledProcess.ts` | Toolkit **process** (`ScheduledProcess`). |
@@ -44,7 +44,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 
 1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc.
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs the user environment plus optional storage facets supplied by `ProcessStorage.layer`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
-3. **Location transparency** — a `Resource` tag is driven by the same `yield* Tag` code local or remote; only the provided layer differs (`.layer` vs `.client`/`.serveHttp`). Don't special-case local vs remote in resource consumers.
+3. **Location transparency** — a `Resource` tag is driven by the same `yield* Tag` code local or remote; only the provided layer differs (`.layer` vs `.client`/`.serve`). Don't special-case local vs remote in resource consumers.
 4. **Storage** — See [STORAGE.md](./STORAGE.md) only (`RuntimeStorage` + `src/store/*` facets, `ProcessStore` builder, `ProcessStorage` combined layers). Toolkit persistence ports: `HistoryStore` / `DurableQueueStore` (SQLite backends in `storage/sqlite`).
 
 ---
@@ -171,6 +171,6 @@ by default.
 - `pnpm install` runs the `prepare` hook, which patches TypeScript with
   `@effect/language-service`; seeing `effect-language-service patch` output is
   expected.
-- Examples that serve a resource over HTTP (`serveHttp`) bind to localhost ports. If an
+- Examples that serve a resource over HTTP (`httpServer`) bind to localhost ports. If an
   example fails because a port is already in use, rerun with a free port or stop the
   specific process that owns that port.

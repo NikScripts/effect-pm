@@ -144,7 +144,7 @@ the host owns persistence. This is the proven path (`test/queue-remote-http.test
 **Host (Droplet/Mini)** — serve the resource with capture + a history backend:
 
 ```ts
-QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
+Resource.httpServer([QueueResource.serve(RosterQueue, { effect, captureLogs: true })])
   .pipe(Layer.provide(HistoryStore.layerMemory())); // or SQLiteHistoryStore.layer({ filename })
 ```
 

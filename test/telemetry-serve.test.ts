@@ -28,8 +28,8 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Node = Resource.serveAllHttp([
-  Telemetry.serverEntry(FleetTelemetry, { interval: Duration.millis(50) }),
+const Node = Resource.httpServer([
+  Telemetry.serve(FleetTelemetry, { interval: Duration.millis(50) }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("serves the Metric registry — a labeled counter round-trips via snapshot over RPC", () =>

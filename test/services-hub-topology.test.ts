@@ -33,9 +33,11 @@ class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 }) {}
 
 // The Mini nodes the poller.
-const MiniServer = Resource.serveHttp(LiveScorePoller, {
-  where: Effect.succeed("poller@mini"),
-}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const MiniServer = Resource.httpServer([
+  Resource.serve(LiveScorePoller, {
+    where: Effect.succeed("poller@mini"),
+  }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 // The Droplet runs the roster queue locally.
 const RosterLocal = Resource.layer(RosterQueue, { count: Effect.succeed(42) });

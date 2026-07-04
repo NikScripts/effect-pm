@@ -78,7 +78,7 @@ const dropletRpc = inBrowser ? "/rpc" : "http://localhost:7777/rpc";
 /** The Mini node's rpc endpoint (used by `httpClient`). */
 export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 
-// One transport per HOST — each node serves its whole group on one /rpc (serveAllHttp),
+// One transport per HOST — each node serves its whole group on one /rpc (httpServer),
 // so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini.
 const dropletTransport = Resource.httpClient(Droplet, { url: dropletRpc });
 

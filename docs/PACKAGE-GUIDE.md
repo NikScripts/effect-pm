@@ -10,7 +10,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 1. **Managed processes** — `ScheduledProcess` over the `Process` engine: a driver watches `ProcessSchedule` entries, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes.
 2. **Queue resources** — `QueueResource`: priority queues with concurrency, throttling, retry, self-refill, and optional durability.
-3. **Location transparency** — every resource is a `Resource` tag. `.layer` runs it local, `.serveHttp` / `.server` host it over RPC, `Resource.client` reaches it remotely — the **same `yield* Tag` code either way**. `Resource.serveInstances` runs many instances behind one transport; `Group` organizes tags (nestable, multi-host).
+3. **Location transparency** — every resource is a `Resource` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Resource.httpServer`), `Resource.client` reaches it remotely — the **same `yield* Tag` code either way**. `Resource.serveInstances` runs many instances behind one transport; `Group` organizes tags (nestable, multi-host).
 4. **Persistence** — opt-in durability (`DurableQueueStore`) and observability history (`HistoryStore`), in-memory or SQLite; process/run analytics via `ProcessStore` / `RuntimeStorage`.
 
 ---
@@ -24,9 +24,9 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 │  • `yield* Tag` — the SAME code local or remote                   │
 └───────────────────────────────────────────────────────────────────┘
          │ provided by a layer
-         ├─ .layer              → local engine in this runtime
-         ├─ .serveHttp / .server → host over RPC (serveInstances = many)
-         └─ Resource.client     → remote handle (dashboard)
+         ├─ .layer               → local engine in this runtime
+         ├─ .serve / .serveRemote → host over RPC (serveInstances = many)
+         └─ Resource.client      → remote handle (dashboard)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
 │ engine  (queue worker pool  /  Process schedule driver)           │
@@ -87,7 +87,7 @@ For durable adapter work, start with
 
 | Export area | Role |
 |-------------|------|
-| `Resource` | Toolkit foundation: `Tag` / `layer` / `server` / `serveHttp` / `client` / `Host` / `serveInstances` + `specOf` / `methodMeta`. |
+| `Resource` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `httpServer` / `client` / `Host` / `serveInstances` + `specOf` / `methodMeta`. |
 | `QueueResource`, `ScheduledProcess`, `ProcessScheduleResource` | Batteries-included resource kinds (queue / scheduled process / schedule). |
 | `Group` | Organize member tags (nestable; same or different hosts). |
 | `Process`, `Polling`, `ProcessSchedule` | The process engine + gate/cadence layers under `ScheduledProcess`. |
@@ -118,8 +118,8 @@ streaming projection is planned.
 1. **A resource `layer` acquires its engine in scope** — provide it once (`Effect.provide` at the app root) so the queue/process is acquired exactly once.
 2. **Forking** a process driver needs **`R` plus any storage facets you compose**, where `R` is whatever remains after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root for many independent layers (clearer dependency graph; matches Effect lint guidance).
-4. **Hosting (`serveHttp`) is over RPC.** Auth/transport security is the deployment's responsibility (e.g. a private network or an edge gateway); a first-class auth story for `Resource` RPC is a future feature. Don't expose a host on the public internet without it.
-5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `@nikscripts/effect-pm/QueueResource`) — keep it **separate** from `Layer` / `serveHttp` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
+4. **Hosting (`httpServer`) is over RPC.** Auth/transport security is the deployment's responsibility (e.g. a private network or an edge gateway); a first-class auth story for `Resource` RPC is a future feature. Don't expose a host on the public internet without it.
+5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `@nikscripts/effect-pm/QueueResource`) — keep it **separate** from `Layer` / `serve` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
 
 ---
 

@@ -38,8 +38,8 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 ## Reading order
 
 1. Define **queues** (`QueueResource`) and **scheduled processes** (`ScheduledProcess`).
-2. Provide them **local** (`.layer`) or **remote** (`.serveHttp` on the host; `Resource.client` on
-   the dashboard) — same `yield* Tag` either way.
+2. Provide them **local** (`.layer`) or **served** (`.serve` on the host, composed with
+   `Resource.httpServer`; `Resource.client` on the dashboard) — same `yield* Tag` either way.
 3. Opt into **persistence** (`persist`, `HistoryStore` / `SQLiteHistoryStore`) where you need
    durability or history.
 4. Organize with **`Group`** (nestable; members may live on different hosts).

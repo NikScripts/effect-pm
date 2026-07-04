@@ -12,8 +12,8 @@ class FleetDatabase extends Resource.Tag<FleetDatabase>()("nodeless-client/Fleet
   Resource.distributed([DbNode]),
 ) {}
 
-const Server = Resource.serveAllHttp([
-  Resource.serverEntry(FleetDatabase, { status: Effect.succeed(true) }),
+const Server = Resource.httpServer([
+  Resource.serve(FleetDatabase, { status: Effect.succeed(true) }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 // The fix for #3: a nodeless tag has N instances, so the *client* names which one — `client(tag, node)`.

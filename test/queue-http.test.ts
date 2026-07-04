@@ -66,7 +66,7 @@ const HttpQueueServer = HttpRouter.serve(
     group: groupOf(HttpQueue),
     path: "/rpc",
     protocol: "http",
-  }).pipe(Layer.provide(Resource.server(HttpQueue, stub))),
+  }).pipe(Layer.provide(Resource.serveRemote(HttpQueue, stub))),
 ).pipe(
   Layer.provideMerge(RpcSerialization.layerNdjson),
   Layer.provideMerge(NodeHttpServer.layerTest),

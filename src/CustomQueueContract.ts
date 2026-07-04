@@ -19,7 +19,6 @@ import type {
   MethodAnnotations,
   NodeBoundTag,
   ResourceTag,
-  ServeEntry,
 } from "./Resource";
 import { CustomQueueResource as CustomQueueEngine } from "./CustomQueueResource";
 import type {
@@ -564,8 +563,16 @@ export const layer = <
     Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
   );
 
-/** @public */
-export const server = <
+/**
+ * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
+ * {@link Resource.serveRemote}. Mounts the queue's RPC handlers and registers into
+ * {@link Resource.servedResourcesLayer} **without** granting the local instance, preserving the worker
+ * requirement `R` for per-resource `Layer.provide`. For a pure gateway/edge; use {@link serve} when the
+ * serving node also drives the queue.
+ *
+ * @public
+ */
+export const serveRemote = <
   Self,
   F extends CustomQueueItemFields = CustomQueueItemFields,
   E = never,
@@ -574,31 +581,23 @@ export const server = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<HandlerContextOf<CustomQueueInstanceSpec<F>>, never, R | RR> =>
-  Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.server(tag, impl)),
-  );
-
-/** @public */
-export const serveHttp = <
-  Self,
-  F extends CustomQueueItemFields = CustomQueueItemFields,
-  E = never,
-  R = never,
-  RR = never,
->(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
-  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-  options?: Parameters<typeof Resource.serveHttp>[2],
 ) =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
-      Resource.serveHttp(tag, impl, options),
+      Resource.serveRemote(tag, impl),
     ),
   );
 
-/** @public */
-export const serverEntry = <
+/**
+ * Serve this custom queue **and** grant its local instance from **one** materialization — the
+ * engine-running counterpart to {@link Resource.serve}. Mounts the queue's RPC handlers, registers into
+ * {@link Resource.servedResourcesLayer}, **and** grants `Self | LocalCapability<Self>` so co-located code
+ * can `yield* Tag`; the served cells *are* the in-process instance. A served-**only** gateway uses
+ * {@link serveRemote}.
+ *
+ * @public
+ */
+export const serve = <
   Self,
   F extends CustomQueueItemFields = CustomQueueItemFields,
   E = never,
@@ -607,14 +606,16 @@ export const serverEntry = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): ServeEntry<R | RR> => ({
-  tag,
-  impl: buildCustomQueueImpl(tag, config) as unknown as Effect.Effect<
-    Record<string, unknown>,
-    never,
-    R | RR
-  >,
-});
+): Layer.Layer<
+  Self | LocalCapability<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
+  never,
+  R | RR
+> =>
+  Layer.unwrap(
+    Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
+      Resource.serve(tag, impl),
+    ),
+  );
 
 /** @public */
 export const configure = <

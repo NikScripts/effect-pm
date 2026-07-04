@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
 // `Resource.make(tag, impl)` anchors a HOISTED impl to its contract at the definition site — inline impls
-// are already typed by layer/serverEntry, but an extracted const loses that; make infers the tag's spec.
+// are already typed by layer/serve, but an extracted const loses that; make infers the tag's spec.
 class Svc extends Resource.Tag<Svc>()("make-test/Svc", {
   name: Resource.effect(Schema.String),
   greet: Resource.effectFn(Schema.String, {
@@ -16,8 +16,8 @@ const svcImpl = Resource.make(Svc, {
   greet: ({ who }) => Effect.succeed(`hi ${who}`), // `who` typed from the contract, at the def site
 });
 
-// the same anchored impl feeds BOTH the local layer and a served entry (ImplOf ⊇ WireServiceOf, no locals)
-void (() => Resource.serverEntry(Svc, svcImpl));
+// the same anchored impl feeds BOTH the local layer and a served layer (ImplOf ⊇ ServeImplOf, no locals)
+void (() => Resource.serve(Svc, svcImpl));
 
 it("Resource.make anchors a reusable impl (used by the local layer)", () =>
   Effect.runPromise(

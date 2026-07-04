@@ -27,12 +27,12 @@ of React/Ink/recharts.
 
 | Import | Purpose |
 | --- | --- |
-| `…/Resource` | `Resource.Tag` / `Host` / `client` / `connect` / `connectHttp` / `serveHttp` / **`serveAllHttp`** / **`serverEntry`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
-| `…/QueueContract` | `queueTag` (light tag), `serverEntry`, `serveHttp`, `layer` for a managed queue |
-| `…/ScheduledProcess` | `processTag` (light tag), `serverEntry`, `serveHttp`, `layer` for a scheduled/polling process |
+| `…/Resource` | `Resource.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
+| `…/QueueContract` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
+| `…/ScheduledProcess` | `processTag` (light tag), `serve`, `serveRemote`, `layer` for a scheduled/polling process |
 | `…/ProcessScheduleContract` | `processScheduleTag` — a schedule (run-windows) as its own resource |
 | `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiResource` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiResource.Service` client |
-| `…/HostStatus` | the reserved host status resource (auto-served by `serveAllHttp`): `status` / `ping` / `logs` |
+| `…/HostStatus` | the reserved host status resource (auto-served by `httpServer`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/MultiHost` | combine a field across N instances of one resource (`combineQuery` / `combineStream` / `Combine`) — isomorphic |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
@@ -57,12 +57,12 @@ it imports.
   `…/ScheduledProcess` (`processTag`), `…/ProcessScheduleContract`, `…/cli`, `…/tui`.
 - **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
   `@effect/sql-sqlite-node`), `…/storage/redis`, and the HTTP
-  server itself (`NodeHttpServer`) plus any worker/storage layers. (`serveAllHttp` / `serverEntry`
+  server itself (`NodeHttpServer`) plus any worker/storage layers. (`httpServer` / `serve`
   are clean to *reference*, but they belong to the server entry.)
 
 **The rule that actually bites:** keep the **contract** (light tags) in a different module from
 the **implementation** (engine layers, storage, worker `effect`s, the server). A module that
-defines a tag *and* imports its `QueueResource.layer` / `serveAllHttp` / a storage layer is
+defines a tag *and* imports its `QueueResource.layer` / `Resource.httpServer` / a storage layer is
 node-coupled — importing it in the browser just to get the tag drags the whole server in.
 
 ```ts
@@ -73,7 +73,7 @@ export class Nwsl extends Group.Tag<Nwsl>("nwsl")({ Roster }) {}
 
 // server.ts — NODE: imports fleet.ts + the engine / storage / HTTP server
 import { Roster } from "./fleet";
-const Server = Resource.serveAllHttp([queueEntry(Roster, { effect })]).pipe(/* storage + NodeHttpServer */);
+const Server = Resource.httpServer([queueServe(Roster, { effect })]).pipe(/* storage + NodeHttpServer */);
 ```
 
 The browser imports `fleet.ts` (tags) + `…/web` + `Resource.client` / `connectHttp`; the server
@@ -144,21 +144,21 @@ export class Nwsl extends Group.Tag<Nwsl>("nwsl")({ RosterQueue, SeasonMatches }
 
 ## 4. Serve a host's group on one port
 
-`serveAllHttp` mounts every resource of a host on one `/rpc` endpoint (procedures are
-group-id-prefixed). `serverEntry` carries each resource's worker requirement `R`.
+`httpServer` mounts every resource of a host on one `/rpc` endpoint (procedures are
+group-id-prefixed). Each `serve` layer carries its resource's worker requirement `R`.
 
 ```ts
 import { Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { Resource } from "@nikscripts/effect-pm/Resource";
-import { serverEntry as queueEntry } from "@nikscripts/effect-pm/QueueResource";
-import { serverEntry as processEntry } from "@nikscripts/effect-pm/ScheduledProcess";
+import { serve as queueServe } from "@nikscripts/effect-pm/QueueResource";
+import { serve as processServe } from "@nikscripts/effect-pm/ScheduledProcess";
 import { HistoryStore } from "@nikscripts/effect-pm/HistoryStore";
 
-const LeagueServer = Resource.serveAllHttp([
-  queueEntry(RosterQueue, { effect: (job) => loadRoster(job), captureLogs: true }),
-  processEntry(SeasonMatches, { effect: pollSeason }),
+const LeagueServer = Resource.httpServer([
+  queueServe(RosterQueue, { effect: (job) => loadRoster(job), captureLogs: true }),
+  processServe(SeasonMatches, { effect: pollSeason }),
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()), // backfill for `*History` (or SQLiteHistoryStore)
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
@@ -168,7 +168,7 @@ NodeRuntime.runMain(Layer.launch(LeagueServer));
 ```
 
 Provide your domain layers (whatever the worker `effect`s require) alongside the server.
-A single-resource host can still use `serveHttp(tag, impl)` without a `Host`.
+A single-resource host is just `httpServer([serve(tag, impl)])` without a `Host`.
 
 ## 5. Reach them — location-transparent client
 
