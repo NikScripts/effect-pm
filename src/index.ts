@@ -172,7 +172,7 @@ export type {
   TagFactory,
   TagHandlers,
 } from "./Resource";
-export { ProcessStorage } from "./ProcessStorage";
+export * as ProcessStorage from "./ProcessStorage";
 
 
 // Query / Runtime Storage

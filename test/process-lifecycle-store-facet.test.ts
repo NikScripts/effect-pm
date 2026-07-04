@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 import {
   ProcessLifecycleStore,
   type ProcessLifecycleRecordInput,

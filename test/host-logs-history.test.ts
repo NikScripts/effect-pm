@@ -2,7 +2,7 @@ import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
 import { NodeLogs } from "../src";
 import { LogAnnotationKeys } from "../src/LogContext";
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 
 // NodeLogs.layer (runtime-wide capture + relay) + persistLayer(node) → durable LogStore (memory
 // backend via ProcessStorage). Bare Effect.log* lines are captured, batched, persisted bucketed by

@@ -13,4 +13,6 @@
 `import { Resource } from ".../Resource"` → `import * as Resource from ".../Resource"`;
 `import { QueueResource } from ".../QueueResource"` → `import * as QueueResource from ".../QueueResource"`;
 `queueTag<T>()(…)` → `QueueResource.Tag<T>()(…)`, `processTag<T>()(…)` → `ScheduledProcess.Tag<T>()(…)`.
-Direct subpath value imports `import { NodeLogs } from ".../NodeLogs"` → `import * as NodeLogs from ".../NodeLogs"` (the barrel `import { NodeLogs } from "@nikscripts/effect-pm"` is unchanged).
+`ProcessStorage` also converts: `layer` / `layerRuntimeStorage` and the facet aliases (`ProcessStorage.Log` / `.QueueResource` / …) are flat exports, and `ProcessStorage.Services` is a flat `type` export.
+
+Direct subpath value imports `import { NodeLogs } from ".../NodeLogs"` (and likewise `ProcessStorage`, `RunResource`, `HttpApiResource`) → `import * as Name from ".../Name"`. The barrel forms (`import { NodeLogs } from "@nikscripts/effect-pm"`, etc.) are unchanged.

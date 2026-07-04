@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import {
   Cause,

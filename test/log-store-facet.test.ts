@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 /**
  * Conformance suite for the {@link LogStore} facet.
  *

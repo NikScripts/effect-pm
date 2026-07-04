@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../../src/ProcessStorage";
+import * as ProcessStorage from "../../src/ProcessStorage";
 /**
  * @module examples/scenarios/schedule-sync-from-external-db
  *

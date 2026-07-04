@@ -20,7 +20,7 @@ import { HistoryStore } from "../../src/HistoryStore";
 import * as NodeLogs from "../../src/NodeLogs";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
-import { ProcessStorage } from "../../src/ProcessStorage";
+import * as ProcessStorage from "../../src/ProcessStorage";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { Combine, combineQuery } from "../../src/MultiNode";

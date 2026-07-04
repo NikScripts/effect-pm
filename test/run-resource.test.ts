@@ -1,4 +1,4 @@
-import { ProcessStorage } from "../src/ProcessStorage";
+import * as ProcessStorage from "../src/ProcessStorage";
 import { it, describe, expect } from "@effect/vitest";
 import { Effect, Layer, Option, Ref } from "effect";
 import * as RunResource from "../src/RunResource";
