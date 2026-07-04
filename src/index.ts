@@ -102,8 +102,11 @@ export {
   DisarmedIdleSleep,
 } from "./disarmedIdleSleep";
 
-// Namespace exports (these export objects with .make methods)
-export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
+// The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
+// access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
+// engine only when used. Engine + Resource toolkit are both members (`Process.make`, `Process.Tag`, …).
+export * as Process from "./Process";
+export { ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
 // Unified namespaces via `export * as` (module namespace, Effect-style) so member access
 // tree-shakes — `ScheduledProcess.Tag` pulls no engine code.

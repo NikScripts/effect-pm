@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Clock, Duration, Effect, Layer, Ref } from "effect";
-import { Process } from "../src/Process";
+import * as Process from "../src/Process";
 import { foldConfig } from "../src/ResourceConfigure";
 import * as QueueResource from "../src/QueueResource";
 import type { EffectContext } from "../src/QueueResource";

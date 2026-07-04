@@ -20,10 +20,42 @@
  * supervisor behavior is unchanged — writes are silent no-ops. Target integration is
  * {@link ProcessExecutionStore} when composed at app or group boundaries.
  *
+ * ## Two surfaces, one namespace
+ *
+ * This module is consumed as an Effect **module namespace** (`export * as Process`), so member
+ * access tree-shakes. It carries two cooperating surfaces:
+ * - **Engine** — {@link make} (+ {@link Service}, {@link currentScheduleId}, {@link scheduleControls},
+ *   {@link Errors}): construct and run a supervised process directly.
+ * - **Resource toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} / {@link result} /
+ *   {@link window} / {@link at} shape a process as a {@link Resource}; {@link layer} / {@link serve} /
+ *   {@link serveRemote} / {@link configure} run it, driven locally or remotely over RPC through the
+ *   toolkit's location-transparent layers (the same `yield* Tag` runs local or remote; only the layer
+ *   changes). This mirrors `QueueResource`: the light `Process.Tag` path pulls no engine code, and the
+ *   engine loads only when a runtime verb (`make` / `layer` / `serve`) is referenced.
+ *
  * @module Process
  */
 
-import { Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
+import {
+  Clock,
+  Context,
+  Data,
+  DateTime,
+  Duration,
+  Effect,
+  Fiber,
+  Function as Fn,
+  Layer,
+  Logger,
+  MutableRef,
+  Option,
+  PubSub,
+  Ref,
+  Schema,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from "effect";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -31,7 +63,7 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
-import { LogAnnotationKeys } from "./LogContext";
+import { LogAnnotationKeys, withProcessLogAnnotations } from "./LogContext";
 import {
   ProcessExecutionStore,
   type ProcessExecutionFinishInput,
@@ -43,6 +75,27 @@ import type {
   ProcessScheduleEntry,
   ProcessScheduleService,
 } from "./ProcessSchedule";
+// ── toolkit (Resource) surface — the light contract + heavy layers assembled into `Process` ──
+import * as LogLevel from "effect/LogLevel";
+import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
+import * as Resource from "./Resource";
+import { buildRpcGroup, groupSym, specSym } from "./Resource";
+import type {
+  FlatSpec,
+  HandlerContextOf,
+  ImplOf,
+  LocalCapability,
+  Method,
+  NodeBoundTag,
+  NodeKey,
+  RefField,
+  ResourceTag,
+  Spec,
+  Subscribable,
+} from "./Resource";
+import { HistoryStore } from "./HistoryStore";
+import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
+import type { LogEntry } from "./LogEntry";
 // ============================================================================
 // Public types
 // ============================================================================
@@ -1235,23 +1288,1033 @@ export type ProcessServiceBuilder<Self> = ReturnType<typeof defineProcessService
 /** @public */
 export type ProcessServiceFactory = typeof defineProcessService;
 
+// ============================================================================
+// Engine surface (top-level exports)
+//
+// `Process` is a module namespace (Effect-style — the barrel does `export * as Process`), so the
+// engine helpers here and the Resource toolkit below are all its members: `Process.make`,
+// `Process.Service`, `Process.currentScheduleId`, `Process.scheduleControls`, `Process.Tag`,
+// `Process.schedule`, `Process.layer`, … Member access tree-shakes — a `Process.Tag`-only consumer
+// pulls no engine code, mirroring `QueueResource`.
+// ============================================================================
+
+export { make };
+export { defineProcessService as Service };
+
 /**
- * Managed process factories and schedule helpers.
- *
- * @remarks
- * - **`make`** — construct a {@link Process} from an `effect`, optional `polling` / `schedule`
- *   layers in any order, or a config object.
- * - **`currentScheduleId` / `scheduleControls`** — ergonomic access to schedule metadata and
- *   mutators from inside a running process instance.
+ * Engine errors thrown by {@link make}.
  *
  * @public
  */
-export const Process = {
-  make,
-  Service: defineProcessService,
-  currentScheduleId,
-  scheduleControls,
-  Errors: {
-    ProcessMakeInvalidLayerArgument,
-  },
+export const Errors = {
+  ProcessMakeInvalidLayerArgument,
 } as const;
+
+// ############################################################################
+// #                                                                          #
+// #  Resource toolkit — the light contract (schemas / specs / combinators /  #
+// #  Tag / Schedule) plus the heavy layers (layer / serve / serveRemote).    #
+// #  A process is a Resource: driven locally or remotely over RPC through    #
+// #  the toolkit's location-transparent layers, exactly like QueueResource.  #
+// #                                                                          #
+// ############################################################################
+
+// ============================================================================
+// Wire schemas
+// ============================================================================
+
+/**
+ * One scheduled run window on the wire — the wire form of the engine's {@link ProcessScheduleEntry}.
+ * The engine models `id` / `stopAt` as `Option` and the times as `Date`; the toolkit standard is
+ * `DateTime.Utc` and `optionalKey`, so the runtime maps between them. `startAt` is when the run
+ * instance triggers; `stopAt` (absent = open-ended) is when it stops.
+ *
+ * @public
+ */
+export const processScheduleEntry = Schema.Struct({
+  id: Schema.optionalKey(Schema.String),
+  startAt: Schema.DateTimeUtc,
+  stopAt: Schema.optionalKey(Schema.DateTimeUtc),
+});
+
+/**
+ * The current-state snapshot of a managed process — the wire form of the engine's
+ * {@link ProcessSnapshot} (plus `supervising`). The element of the reactive `status` field:
+ * `status.get` reads it once, `status.changes` streams it.
+ *
+ * @public
+ */
+export const processStatus = Schema.Struct({
+  supervising: Schema.Boolean,
+  armed: Schema.Boolean,
+  activeInstances: Schema.Number,
+  nextTriggerRun: Schema.optionalKey(Schema.DateTimeUtc),
+  nextScheduleTransition: Schema.optionalKey(Schema.DateTimeUtc),
+  nextPollCadence: Schema.optionalKey(Schema.Duration),
+  runsStarted: Schema.Number,
+  runsSucceeded: Schema.Number,
+  runsFailed: Schema.Number,
+  lastRunStartedAt: Schema.optionalKey(Schema.DateTimeUtc),
+  lastRunDurationMillis: Schema.optionalKey(Schema.Number),
+});
+
+/**
+ * A captured log line on the wire — the element of a process's `logs` stream. Reuses the package's
+ * structured log schema (`date`, `level`, `message`, `cause?`, `annotations`, `spans`).
+ *
+ * @public
+ */
+export const processLogEntry = LogEntrySchema;
+
+/**
+ * Payload fields for `logs.history` — newest `limit` entries within an optional `[since, until]`
+ * window.
+ *
+ * @public
+ */
+export const historyQuery = {
+  limit: Schema.optionalKey(Schema.Number),
+  since: Schema.optionalKey(Schema.DateTimeUtc),
+  until: Schema.optionalKey(Schema.DateTimeUtc),
+};
+
+/**
+ * This contract's canonical **kind** — stamped on every process tag so consumers (e.g. the
+ * dashboard) can classify it via {@link Resource.kindOf} without sniffing the spec.
+ *
+ * @public
+ */
+export const kind = "@nikscripts/effect-pm/Process";
+
+/**
+ * This contract's canonical **kind** for a standalone {@link Schedule} resource.
+ *
+ * @public
+ */
+export const scheduleKind = "@nikscripts/effect-pm/Process/Schedule";
+
+// ============================================================================
+// Base process spec (observation + lifecycle — no schedule verbs)
+// ============================================================================
+
+/**
+ * The **base** process control + observation contract — shared by every process. Mirrors the
+ * observable/controllable seams the engine supervisor exposes ({@link ProcessSnapshot} + lifecycle).
+ * A base process has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
+ * those verbs appear only when a process {@link schedule | owns an inline schedule}.
+ *
+ * @public
+ */
+export const processSpec = {
+  // ── live current state — one SubscriptionRef-backed source of truth ──
+  // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
+  // change (uniform local + remote), mirroring the queue's `status` ref.
+  status: Resource.ref(processStatus).annotate({
+    description:
+      "Live current-state snapshot: supervising, armed, active instances, next trigger/transition, " +
+      "poll cadence, and cumulative run metrics.",
+  }),
+
+  // ── lifecycle commands ──
+  start: Resource.effectFn(Schema.Void).annotate({
+    description: "Begin supervising — fork the trigger driver (idempotent).",
+  }),
+  stop: Resource.effectFn(Schema.Void).annotate({
+    description: "Stop supervising — interrupt the driver and any active run instances.",
+    destructive: true,
+  }),
+  runImmediately: Resource.effectFn(Schema.Void).annotate({
+    description:
+      "Run the process effect once with tracking, out of band — independent of the trigger cadence.",
+  }),
+
+  // ── observability — live stream + history query, paired by nesting ──
+  logs: {
+    live: Resource.stream(processLogEntry).annotate({
+      description:
+        "Captured log lines (engine + instance effect) with level/annotations/spans — empty unless " +
+        "the process was configured to capture logs.",
+    }),
+    history: Resource.effect(Schema.Array(processLogEntry), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
+        "empty unless captureLogs + a HistoryStore layer are provided.",
+    }),
+  },
+};
+// Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
+// The spec is validated (without widening) at the `Resource.Tag` call site.
+
+/** The base (schedule-less, result-less) process spec. @public */
+export type ProcessSpec = typeof processSpec;
+
+// ============================================================================
+// The `schedule` verb group (grafted onto a process that owns an inline schedule)
+// ============================================================================
+
+/**
+ * The schedule mutation verbs a process gains when it {@link schedule | owns an inline schedule}.
+ * Reading is `entries` (reactive); mutation is `set` / `add` / `clear`. This is how you arm/disarm:
+ * `armed` is derived from the entries, so arming is done by mutating them.
+ *
+ * @public
+ */
+export const scheduleGroupSpec = {
+  entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
+    description: "The process's current schedule entries (run windows), reactive.",
+  }),
+  set: Resource.effectFn(Schema.Void, {
+    payload: Schema.Array(processScheduleEntry),
+  }).annotate({
+    description: "Replace all schedule entries.",
+  }),
+  add: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+    description: "Append one schedule entry.",
+  }),
+  clear: Resource.effectFn(Schema.Void).annotate({
+    description: "Remove all schedule entries (disarms until new entries are added).",
+    destructive: true,
+  }),
+};
+// Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
+// The graft is validated (without widening) when `schedule` rebuilds the tag's RPC group.
+
+/** The `schedule` group as a nested {@link Spec} fragment (what {@link schedule}'s inline form grafts). */
+type ScheduleGroupSpec = { readonly schedule: typeof scheduleGroupSpec };
+
+// ============================================================================
+// The standalone `Schedule` resource spec (a reusable, RPC-capable window manager)
+// ============================================================================
+
+/**
+ * The full CRUD contract of a standalone {@link Schedule} resource — the reusable window manager
+ * one or more processes can be gated by. Mirrors the engine's {@link ProcessScheduleService}.
+ *
+ * @public
+ */
+export const scheduleResourceSpec = {
+  entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
+    description: "All schedule entries (run windows), reactive.",
+  }),
+  get: Resource.effect(Schema.Option(processScheduleEntry), {
+    payload: { id: Schema.String },
+  }).annotate({
+    description: "Look up a single entry by id (absent if none matches).",
+  }),
+  has: Resource.effect(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+    description: "Whether an entry with the given id exists.",
+  }),
+  set: Resource.effectFn(Schema.Void, {
+    payload: Schema.Array(processScheduleEntry),
+  }).annotate({
+    description: "Replace all schedule entries.",
+  }),
+  add: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+    description: "Append one schedule entry.",
+  }),
+  upsert: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+    description: "Insert or replace an entry, keyed by its id.",
+  }),
+  remove: Resource.effectFn(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+    description: "Remove the entry with the given id; returns whether one was removed.",
+    destructive: true,
+  }),
+  removeMany: Resource.effectFn(Schema.Number, {
+    payload: Schema.Array(Schema.String),
+  }).annotate({
+    description: "Remove every entry whose id is listed; returns the count removed.",
+    destructive: true,
+  }),
+  clear: Resource.effectFn(Schema.Void).annotate({
+    description: "Remove all schedule entries.",
+    destructive: true,
+  }),
+};
+// Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
+// The spec is validated (without widening) at the `Resource.Tag` call site.
+
+/** The standalone {@link Schedule} resource's spec. @public */
+export type ScheduleResourceSpec = typeof scheduleResourceSpec;
+
+// ============================================================================
+// The `result` field (grafted onto a value-returning process)
+// ============================================================================
+
+/** The reactive `result` field a value-returning process gains via {@link result}. */
+type ResultField<A extends Schema.Top> = RefField<
+  Method<"query", undefined, Schema.Option<A>, typeof Schema.Never, true>
+>;
+
+/** The `result` field as a {@link Spec} fragment (what {@link result} grafts). */
+type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> };
+
+// ============================================================================
+// Schedule windows (entry templates) — id optional
+// ============================================================================
+
+/**
+ * A schedule **window** template produced by {@link at} / {@link window} — the declarative form of
+ * a schedule entry. `id` is **optional** (a nameless window is `add`/`set`/`clear`'d and matched by
+ * reference, but is invisible to id-keyed ops). The runtime maps these to the engine's native
+ * {@link ProcessScheduleEntry}.
+ *
+ * @public
+ */
+export interface ScheduleWindow {
+  readonly id: Option.Option<string>;
+  readonly startAt: Date;
+  readonly stopAt: Option.Option<Date>;
+}
+
+const toWindowId = (id: string | undefined): Option.Option<string> =>
+  id === undefined ? Option.none() : Option.some(id);
+
+/**
+ * A **point** window (open-ended — no stop). The leading `id` is optional.
+ *
+ * ```ts
+ * Process.at(startDate)            // nameless
+ * Process.at("daily-2am", startDate)
+ * ```
+ *
+ * @public
+ */
+export function at(startAt: Date): ScheduleWindow;
+export function at(id: string, startAt: Date): ScheduleWindow;
+export function at(idOrStartAt: string | Date, maybeStartAt?: Date): ScheduleWindow {
+  if (idOrStartAt instanceof Date) {
+    return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.none() };
+  }
+  if (maybeStartAt === undefined) {
+    throw new Error("Process.at(id, startAt): startAt is required");
+  }
+  return { id: toWindowId(idOrStartAt), startAt: maybeStartAt, stopAt: Option.none() };
+}
+
+/**
+ * A **bounded** window (`start` + `stop`). The leading `id` is optional.
+ *
+ * ```ts
+ * Process.window(gameStart, gameEnd)            // nameless
+ * Process.window("game-123", gameStart, gameEnd)
+ * ```
+ *
+ * @public
+ */
+export function window(startAt: Date, stopAt: Date): ScheduleWindow;
+export function window(id: string, startAt: Date, stopAt: Date): ScheduleWindow;
+export function window(
+  idOrStartAt: string | Date,
+  startAtOrStopAt: Date,
+  maybeStopAt?: Date,
+): ScheduleWindow {
+  if (idOrStartAt instanceof Date) {
+    return {
+      id: Option.none(),
+      startAt: idOrStartAt,
+      stopAt: Option.some(startAtOrStopAt),
+    };
+  }
+  if (maybeStopAt === undefined) {
+    throw new Error("Process.window(id, startAt, stopAt): stopAt is required");
+  }
+  return {
+    id: toWindowId(idOrStartAt),
+    startAt: startAtOrStopAt,
+    stopAt: Option.some(maybeStopAt),
+  };
+}
+
+// ============================================================================
+// Combinator plumbing: augment a tag's spec (rebuild the flat spec + RPC group)
+// ============================================================================
+
+/** Where a process tag's schedule mode (inline windows vs external reference) is stowed. @internal */
+const scheduleModeSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Process/scheduleMode",
+);
+/** Where a value-returning process tag's result schema is stowed. @internal */
+const resultSchemaSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Process/resultSchema",
+);
+
+/** How a process is scheduled — read by the runtime to build the right impl. @internal */
+type ScheduleMode =
+  | { readonly _tag: "inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
+  | { readonly _tag: "reference"; readonly source: ResourceTag<unknown, ScheduleResourceSpec> };
+
+/** Read a process tag's {@link ScheduleMode}, if any (set by {@link schedule}). @internal */
+const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
+  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && scheduleModeSym in tag) {
+    const value = (tag as { readonly [scheduleModeSym]?: unknown })[scheduleModeSym];
+    return value as ScheduleMode | undefined;
+  }
+  return undefined;
+};
+
+/** Read a value-returning process tag's result schema, if any (set by {@link result}). @internal */
+const resultSchemaOf = (tag: unknown): Schema.Top | undefined => {
+  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && resultSchemaSym in tag) {
+    const value = (tag as { readonly [resultSchemaSym]?: unknown })[resultSchemaSym];
+    return value as Schema.Top | undefined;
+  }
+  return undefined;
+};
+
+/**
+ * Graft path-keyed leaves onto a tag's flat spec and rebuild its RPC group in place, optionally
+ * stamping combinator metadata. Reuses the tag's already-claimed `groupId` (no re-claim). Returns
+ * the same (mutated) tag — so `class X extends Tag(...).pipe(combinator) {}` extends it. @internal
+ */
+const augmentTag = (
+  tag: ResourceTag<any, any>,
+  flatAddition: FlatSpec,
+  stamp: object,
+): ResourceTag<any, any> => {
+  const nextFlat: FlatSpec = { ...tag[specSym], ...flatAddition };
+  return Object.assign(
+    tag,
+    { [specSym]: nextFlat, [groupSym]: buildRpcGroup(tag.groupId, nextFlat) },
+    stamp,
+  );
+};
+
+/** Flatten the one-level `schedule` group to path keys (`schedule.entries`, …). @internal */
+const scheduleGroupFlat: FlatSpec = Object.fromEntries(
+  Object.entries(scheduleGroupSpec).map(([k, v]) => [`schedule.${k}`, v]),
+);
+
+// ============================================================================
+// Combinators
+// ============================================================================
+
+/**
+ * Attach a schedule to a process (pipeable). Two forms, distinguished by argument:
+ *
+ * - **inline windows** — the process **owns** an in-memory schedule seeded with `windows`, and its
+ *   contract gains the `schedule` verb group (`entries` / `set` / `add` / `clear`):
+ *
+ * ```ts
+ * class Matches extends Process.Tag<Matches>()("app/Matches").pipe(
+ *   Process.schedule([Process.window(kickoff, final)]),
+ * ) {}
+ * ```
+ *
+ * - **an external {@link Schedule}** — the process is **gated by** a shared schedule resource and
+ *   gains **no** schedule verbs (they live on the resource, which can arm many processes at once):
+ *
+ * ```ts
+ * class IngestScores extends Process.Tag<IngestScores>()("app/IngestScores").pipe(
+ *   Process.schedule(SeasonSchedule),
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export function schedule(
+  windows: ReadonlyArray<ScheduleWindow>,
+): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S & ScheduleGroupSpec>;
+export function schedule(
+  source: ResourceTag<any, ScheduleResourceSpec>,
+): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S>;
+export function schedule(
+  windowsOrSource: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any>,
+): (tag: ResourceTag<any, any>) => ResourceTag<any, any> {
+  // A type-guard (not bare `Array.isArray`) so the else-branch narrows to the tag: `Array.isArray`
+  // alone won't remove a `ReadonlyArray` from the union.
+  const isWindows = (
+    x: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any>,
+  ): x is ReadonlyArray<ScheduleWindow> => Array.isArray(x);
+  if (isWindows(windowsOrSource)) {
+    const mode: ScheduleMode = { _tag: "inline", windows: windowsOrSource };
+    return (tag) => augmentTag(tag, scheduleGroupFlat, { [scheduleModeSym]: mode });
+  }
+  const mode: ScheduleMode = { _tag: "reference", source: windowsOrSource };
+  // reference form: shape is unchanged — just stamp the mode (identity, like `distributed`).
+  return (tag) => Object.assign(tag, { [scheduleModeSym]: mode });
+}
+
+/**
+ * Mark a process as **value-returning** (pipeable): its effect resolves to a value of `schema`, and
+ * its contract gains a reactive `result` holding the latest success (an `Option`, absent until the
+ * first run completes).
+ *
+ * ```ts
+ * class Prices extends Process.Tag<Prices>()("app/Prices").pipe(
+ *   Process.result(Schema.Struct({ symbol: Schema.String, usd: Schema.Number })),
+ * ) {}
+ * const latest = yield* (yield* Prices).result.get; // Option<{ symbol; usd }>
+ * ```
+ *
+ * @public
+ */
+export const result: {
+  <A extends Schema.Top>(
+    schema: A,
+  ): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S & ResultGroupSpec<A>>;
+  <Self, S extends Spec, A extends Schema.Top>(
+    tag: ResourceTag<Self, S>,
+    schema: A,
+  ): ResourceTag<any, S & ResultGroupSpec<A>>;
+} = Fn.dual(
+  2,
+  (tag: ResourceTag<any, any>, schema: Schema.Top): ResourceTag<any, any> =>
+    augmentTag(
+      tag,
+      {
+        result: Resource.ref(Schema.Option(schema)).annotate({
+          description:
+            "The latest value the process effect resolved to (absent until the first run completes).",
+        }),
+      },
+      { [resultSchemaSym]: schema },
+    ),
+);
+
+// ============================================================================
+// Tag factories
+// ============================================================================
+
+/**
+ * Define a managed process as a toolkit resource. `Self` is given explicitly (Effect's `()`
+ * two-stage form). The base tag carries only observation + lifecycle; add a schedule with
+ * `.pipe(`{@link schedule}`(…))` and a result with `.pipe(`{@link result}`(…))`. Pass `options.node`
+ * to bind the process to a {@link Resource.Node} (ship only the tag; see {@link Resource.client} /
+ * {@link Resource.connect}).
+ *
+ * ```ts
+ * class Health extends Process.Tag<Health>()("app/Health") {}
+ * const p = yield* Health;
+ * yield* p.runImmediately;
+ * const s = yield* p.status.get;
+ * ```
+ *
+ * @public
+ */
+export const Tag = <Self>() => {
+  function build<HSelf>(
+    key: string,
+    options: { readonly description?: string; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, ProcessSpec, HSelf>;
+  function build(
+    key: string,
+    options?: { readonly description?: string },
+  ): ResourceTag<Self, ProcessSpec>;
+  function build(
+    key: string,
+    options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
+  ): ResourceTag<Self, ProcessSpec> {
+    const node = options?.node;
+    const tagOptions = { description: options?.description, kind };
+    const tag =
+      node === undefined
+        ? Resource.Tag<Self>()(key, processSpec, tagOptions)
+        : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
+    // Readiness from the process's own status (SSOT): ready iff its trigger driver is supervising.
+    // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
+    return Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.status.get, (s) => ({
+        ready: s.supervising,
+        ...(s.supervising ? {} : { detail: "not supervising" }),
+      })),
+    );
+  }
+  return build;
+};
+
+/**
+ * Define a standalone {@link Schedule} resource — a reusable, RPC-capable window manager one or more
+ * processes can be gated by (via `.pipe(`{@link schedule}`(ThisSchedule))`). Full CRUD; pass
+ * `options.node` to bind it to a {@link Resource.Node}, like {@link Tag}.
+ *
+ * ```ts
+ * class SeasonSchedule extends Process.Schedule<SeasonSchedule>()("app/SeasonSchedule") {}
+ * const s = yield* SeasonSchedule;
+ * yield* s.add({ id: "wk2", startAt: wk2Start, stopAt: wk2End }); // arms every gated process
+ * ```
+ *
+ * @public
+ */
+export const Schedule = <Self>() => {
+  function build<HSelf>(
+    key: string,
+    options: { readonly description?: string; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, ScheduleResourceSpec, HSelf>;
+  function build(
+    key: string,
+    options?: { readonly description?: string },
+  ): ResourceTag<Self, ScheduleResourceSpec>;
+  function build(
+    key: string,
+    options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
+  ): ResourceTag<Self, ScheduleResourceSpec> {
+    const node = options?.node;
+    const tagOptions = { description: options?.description, kind: scheduleKind };
+    return node === undefined
+      ? Resource.Tag<Self>()(key, scheduleResourceSpec, tagOptions)
+      : Resource.Tag<Self>()(key, scheduleResourceSpec, { ...tagOptions, node });
+  }
+  return build;
+};
+
+// ============================================================================
+// Toolkit runtime — config
+// ============================================================================
+
+/**
+ * Config for {@link layer} / {@link serve} / {@link serveRemote}. The `effect` is the work each run
+ * performs; its success is captured into `result` when the tag is value-returning. Scheduling comes
+ * from the **tag** now (`Process.schedule(...)`), not the config.
+ *
+ * @public
+ */
+export interface ProcessLayerConfig<A, E, R> {
+  readonly effect: Effect.Effect<A, E, R>;
+  /** Optional polling layer for in-instance repeat cadence. */
+  readonly polling?: Layer.Layer<PollingTag, never, never>;
+  /**
+   * Capture this process's logs (engine + instance effect) into the `logs.live` stream — and, with
+   * a `HistoryStore` layer, into `logs.history`. `true` = all levels; `{ level }` = at or above it.
+   */
+  readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
+}
+
+// ============================================================================
+// wire ⇄ engine mapping
+// ============================================================================
+
+type WireEntry = typeof processScheduleEntry.Type;
+
+const toWireEntry = (entry: ProcessScheduleEntry): WireEntry => ({
+  ...(Option.isSome(entry.id) ? { id: entry.id.value } : {}),
+  startAt: DateTime.makeUnsafe(entry.startAt.getTime()),
+  ...(Option.isSome(entry.stopAt)
+    ? { stopAt: DateTime.makeUnsafe(entry.stopAt.value.getTime()) }
+    : {}),
+});
+
+const fromWireEntry = (wire: WireEntry): ProcessScheduleEntry => ({
+  id: wire.id !== undefined ? Option.some(wire.id) : Option.none(),
+  startAt: DateTime.toDateUtc(wire.startAt),
+  stopAt:
+    wire.stopAt !== undefined
+      ? Option.some(DateTime.toDateUtc(wire.stopAt))
+      : Option.none(),
+});
+
+const toWireStatus = (
+  snap: ProcessSnapshot,
+  supervising: boolean,
+): typeof processStatus.Type => ({
+  supervising,
+  armed: snap.armed,
+  activeInstances: snap.activeInstances,
+  ...(Option.isSome(snap.nextTriggerRun)
+    ? { nextTriggerRun: DateTime.makeUnsafe(snap.nextTriggerRun.value.getTime()) }
+    : {}),
+  ...(Option.isSome(snap.nextScheduleTransition)
+    ? {
+        nextScheduleTransition: DateTime.makeUnsafe(
+          snap.nextScheduleTransition.value.getTime(),
+        ),
+      }
+    : {}),
+  ...(Option.isSome(snap.nextPollCadence)
+    ? { nextPollCadence: snap.nextPollCadence.value }
+    : {}),
+  runsStarted: snap.runsStarted,
+  runsSucceeded: snap.runsSucceeded,
+  runsFailed: snap.runsFailed,
+  ...(Option.isSome(snap.lastRunStartedAt)
+    ? { lastRunStartedAt: DateTime.makeUnsafe(snap.lastRunStartedAt.value.getTime()) }
+    : {}),
+  ...(Option.isSome(snap.lastRunDurationMillis)
+    ? { lastRunDurationMillis: snap.lastRunDurationMillis.value }
+    : {}),
+});
+
+/** A reactive view of a schedule's entries (wire form), driven by its `changed` signal. */
+const entriesSubscribable = (
+  svc: ProcessScheduleService,
+): Subscribable<ReadonlyArray<WireEntry>> => ({
+  get: Effect.map(svc.entries, (entries) => entries.map(toWireEntry)),
+  changes: Stream.concat(
+    Stream.fromEffect(svc.entries),
+    Stream.fromEffectRepeat(Effect.flatMap(svc.changed, () => svc.entries)),
+  ).pipe(Stream.map((entries) => entries.map(toWireEntry))),
+});
+
+/** Thrown (as a defect) when a reference-mode process is materialized before its runtime lands. */
+class ReferenceScheduleNotWired extends Data.TaggedError(
+  "ReferenceScheduleNotWired",
+)<{ readonly process: string }> {}
+
+// ============================================================================
+// Per-process log capture
+// ============================================================================
+
+const makeProcessCaptureLogger = (
+  processId: string,
+  minLevel: LogLevel.LogLevel,
+  publish: (entry: LogEntry) => Effect.Effect<void>,
+): Logger.Logger<unknown, void> =>
+  Logger.make((options) => {
+    if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
+    const annotations = options.fiber.getRef(CurrentLogAnnotations);
+    if (annotations[LogAnnotationKeys.processId] !== processId) {
+      return;
+    }
+    const entry = logEntryFromLoggerOptions({
+      message: options.message,
+      logLevel: options.logLevel,
+      cause: options.cause,
+      date: options.date,
+      annotations,
+      spans: options.fiber.getRef(CurrentLogSpans),
+    });
+    options.fiber.currentDispatcher.scheduleTask(() => {
+      Effect.runFork(publish(entry));
+    }, 0);
+  });
+
+const statusPollInterval = Duration.millis(500);
+
+/** The decoded `logs.history` payload — mirrors {@link HistoryStore}'s read options. */
+interface HistoryQuery {
+  readonly limit?: number;
+  readonly since?: DateTime.Utc;
+  readonly until?: DateTime.Utc;
+}
+
+const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
+  id: w.id,
+  startAt: w.startAt,
+  stopAt: w.stopAt,
+});
+
+// ============================================================================
+// Process impl builder
+// ============================================================================
+
+/**
+ * Build the live process driver behind `tag` and map it onto the toolkit service impl — the adapter
+ * shared by {@link layer} / {@link serve} / {@link serveRemote}. The returned record is shaped to the
+ * tag's composed spec (base, `+ schedule`, `+ result`); `Resource.layer` flattens it against the
+ * tag's flat spec, so extra members are simply present when the spec declares them.
+ */
+const buildProcessImpl = <A, E, R>(
+  tag: ResourceTag<any, any>,
+  baseConfig: ProcessLayerConfig<A, E, R>,
+): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope> =>
+  Effect.gen(function* () {
+    const context = yield* Effect.context<R>();
+    const scope = yield* Effect.scope;
+    const provideR = <Out, Err>(effect: Effect.Effect<Out, Err, R>): Effect.Effect<Out, Err> =>
+      Effect.provide(effect, context);
+
+    const config = yield* foldConfiguredSpec<ProcessLayerConfig<A, E, R>>(tag.key, baseConfig);
+
+    const mode = scheduleModeOf(tag);
+    if (mode?._tag === "reference") {
+      return yield* Effect.die(new ReferenceScheduleNotWired({ process: tag.key }));
+    }
+
+    // ── result capture (value-returning process) ──
+    const resultSchema = resultSchemaOf(tag);
+    const resultRef =
+      resultSchema !== undefined
+        ? yield* SubscriptionRef.make<Option.Option<A>>(Option.none())
+        : undefined;
+    const captured: Effect.Effect<void, E, R> =
+      resultRef !== undefined
+        ? config.effect.pipe(
+            Effect.tap((value) => SubscriptionRef.set(resultRef, Option.some(value))),
+            Effect.asVoid,
+          )
+        : Effect.asVoid(config.effect);
+
+    // ── per-process log capture (optional) ──
+    const captureLogsConfig = config.captureLogs;
+    const captureLogsEnabled =
+      captureLogsConfig === true ||
+      (typeof captureLogsConfig === "object" && captureLogsConfig !== null);
+    const captureLogsMinLevel: LogLevel.LogLevel =
+      typeof captureLogsConfig === "object" && captureLogsConfig !== null
+        ? (captureLogsConfig.level ?? "All")
+        : "All";
+    const logsHub = yield* PubSub.sliding<LogEntry>(1024);
+    const logReplayCapacity = 256;
+    const logReplay = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const publishLog = (entry: LogEntry): Effect.Effect<void> =>
+      Effect.andThen(PubSub.publish(logsHub, entry), () =>
+        Ref.update(logReplay, (tail) => {
+          const next = [...tail, entry];
+          return next.length <= logReplayCapacity
+            ? next
+            : next.slice(next.length - logReplayCapacity);
+        }),
+      );
+    const loggerContext = captureLogsEnabled
+      ? yield* Layer.build(
+          Logger.layer([makeProcessCaptureLogger(tag.key, captureLogsMinLevel, publishLog)], {
+            mergeWithExisting: true,
+          }),
+        )
+      : undefined;
+    const tapLogs =
+      loggerContext === undefined
+        ? <A2, E2, R2>(effect: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> => effect
+        : <A2, E2, R2>(effect: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+            withProcessLogAnnotations(tag.key, Effect.provide(effect, loggerContext));
+    const logsStream = captureLogsEnabled
+      ? Stream.unwrap(
+          Effect.map(Ref.get(logReplay), (tail) =>
+            Stream.concat(Stream.fromIterable(tail), Stream.fromPubSub(logsHub)),
+          ),
+        )
+      : Stream.empty;
+
+    const history = yield* Effect.serviceOption(HistoryStore);
+    const logsStreamId = `${tag.key}/logs`;
+    if (captureLogsEnabled && Option.isSome(history)) {
+      const store = history.value;
+      yield* Effect.forkIn(
+        Stream.runForEach(Stream.fromPubSub(logsHub), (line) =>
+          Schema.encodeEffect(processLogEntry)(line).pipe(
+            Effect.flatMap((encoded) => store.append(logsStreamId, encoded)),
+            Effect.orDie,
+          ),
+        ),
+        scope,
+      );
+    }
+
+    // ── schedule: inline windows own an in-memory store; otherwise always-armed ──
+    const baseScheduleLayer =
+      mode?._tag === "inline"
+        ? ProcessSchedule.inMemory(mode.windows.map(fromWindow))
+        : ProcessSchedule.alwaysArmed;
+    const scheduleCtx = yield* Layer.build(baseScheduleLayer);
+    const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
+
+    const handle = make(tag.key, {
+      effect: captured,
+      ...(config.polling !== undefined ? { polling: config.polling } : {}),
+      scheduleLayer: Layer.succeedContext(scheduleCtx),
+    });
+
+    const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
+    const start = Effect.gen(function* () {
+      if ((yield* Ref.get(fiberRef)) !== null) return;
+      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs, provideR), scope);
+      yield* Ref.set(fiberRef, fiber);
+    });
+    const stop = Effect.gen(function* () {
+      const fiber = yield* Ref.get(fiberRef);
+      if (fiber === null) return;
+      yield* Fiber.interrupt(fiber);
+      yield* Ref.set(fiberRef, null);
+    });
+    const readStatus = Effect.gen(function* () {
+      const supervising = (yield* Ref.get(fiberRef)) !== null;
+      return toWireStatus(yield* handle.snapshot, supervising);
+    });
+
+    yield* start; // auto-start the driver on build
+
+    // `status` is a reactive `ref`: `get` reads the snapshot on demand; `changes` polls it (the
+    // engine mirror is a set of MutableRefs with no native subscription), one SSOT for both.
+    const statusChanges = Stream.tick(statusPollInterval).pipe(
+      Stream.mapEffect(() => readStatus),
+    );
+    const base: ImplOf<ProcessSpec> = {
+      status: { get: readStatus, changes: statusChanges },
+      start,
+      stop,
+      runImmediately: handle.runImmediately().pipe(tapLogs, provideR),
+      logs: {
+        live: logsStream,
+        history: ({ limit, since, until }: HistoryQuery) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
+            onSome: (store) =>
+              store.read(logsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((rows) =>
+                  Effect.forEach(rows, (row) =>
+                    Schema.decodeUnknownEffect(processLogEntry)(row).pipe(Effect.orDie),
+                  ),
+                ),
+              ),
+          }),
+      },
+    };
+
+    // Grafted members: present only when the tag composes them in, and served by their path key via
+    // the tag's full flat spec (`schedule.*` / `result`). They widen the runtime record beyond the
+    // base `ImplOf`, so they're spread on (not declared) — the base annotation is what `Resource`'s
+    // layer/serve type against, while the runtime object carries whatever the composed spec declares.
+    const scheduleMembers =
+      mode?._tag === "inline"
+        ? {
+            schedule: {
+              entries: entriesSubscribable(scheduleSvc),
+              set: (entries: ReadonlyArray<WireEntry>) =>
+                scheduleSvc.set(entries.map(fromWireEntry)),
+              add: (entry: WireEntry) => scheduleSvc.add(fromWireEntry(entry)),
+              clear: scheduleSvc.clear,
+            },
+          }
+        : {};
+    const resultMembers =
+      resultRef !== undefined ? { result: Resource.subscribable(resultRef) } : {};
+
+    return { ...base, ...scheduleMembers, ...resultMembers };
+  });
+
+// ============================================================================
+// Public layers
+// ============================================================================
+
+// The public layers are **overloaded**: the visible signature is generic over the tag's composed spec
+// `S` (so a `+ schedule` / `+ result` tag is accepted and `Self` — the composed service — is granted),
+// while the implementation signature is loose (`ResourceTag<any, any>` + a loose impl) so the
+// dynamically-shaped `buildProcessImpl` record fits. Two deliberate choices keep the types shallow:
+//   1. the visible **return** names `HandlerContextOf<ProcessSpec>` (the concrete base), not
+//      `HandlerContextOf<S>` — walking that over an open `S` blows the instantiation depth, and the
+//      served handler set is a run-time concern anyway (see 2);
+//   2. internally the tag is narrowed to the concrete base spec (`baseTag`) before `Resource.serve`,
+//      so its `HandlerContextOf`/`ImplOf` walks stay shallow.
+// At run time `Resource.serve` reads the tag's own `groupSym` / `specSym`, so the **full** handler set
+// (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
+// names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
+
+/**
+ * The **local** layer for a process: build its driver (auto-started) and provide its service.
+ *
+ * @public
+ */
+export function layer<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<Self | LocalCapability<Self>, never, R>;
+export function layer(
+  tag: ResourceTag<any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  return Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(baseTag, impl)),
+  );
+}
+
+/**
+ * Serve a process **and** grant its local instance from one materialization.
+ *
+ * @public
+ */
+export function serve<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<ProcessSpec>, never, R>;
+export function serve(
+  tag: ResourceTag<any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  return Layer.unwrap(
+    Effect.map(
+      buildProcessImpl(tag, config),
+      (impl): Layer.Layer<any, any, any> => Resource.serve(baseTag, impl),
+    ),
+  );
+}
+
+/**
+ * Serve a process **remotely (served-only)** — mounts its RPC handlers without granting the local
+ * instance, preserving the requirement `R` for a per-resource `Layer.provide`.
+ *
+ * @public
+ */
+export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R>;
+export function serveRemote(
+  tag: ResourceTag<any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  return Layer.unwrap(
+    Effect.map(
+      buildProcessImpl(tag, config),
+      (impl): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, impl),
+    ),
+  );
+}
+
+/**
+ * A **config-patch layer** for the process `tag` — merge it with the process's {@link layer} and its
+ * patch (polling / a `(previous) => next` wrap of `effect`) folds onto the base config at build.
+ *
+ * @public
+ */
+export const configure = <A = void, E = never, R = never>(
+  tag: ResourceTag<any, any>,
+  patch: ConfigPatch<ProcessLayerConfig<A, E, R>>,
+): Layer.Layer<never> => configureLayer(tag.key, patch);
+
+// ============================================================================
+// Standalone Schedule resource layer
+// ============================================================================
+
+const buildScheduleImpl = (
+  options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
+): Effect.Effect<ImplOf<ScheduleResourceSpec>, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const ctx = yield* Layer.build(
+      ProcessSchedule.inMemory((options?.initial ?? []).map(fromWindow)),
+    );
+    const scheduleSvc = Context.get(ctx, ProcessScheduleTag);
+    const impl: ImplOf<ScheduleResourceSpec> = {
+      entries: entriesSubscribable(scheduleSvc),
+      get: ({ id }: { readonly id: string }) =>
+        Effect.map(scheduleSvc.get(id), Option.map(toWireEntry)),
+      has: ({ id }: { readonly id: string }) => scheduleSvc.has(id),
+      set: (entries: ReadonlyArray<WireEntry>) => scheduleSvc.set(entries.map(fromWireEntry)),
+      add: (entry: WireEntry) => scheduleSvc.add(fromWireEntry(entry)),
+      upsert: (entry: WireEntry) => scheduleSvc.upsert(fromWireEntry(entry)),
+      remove: ({ id }: { readonly id: string }) => scheduleSvc.remove(id),
+      removeMany: (ids: ReadonlyArray<string>) => scheduleSvc.removeMany(ids),
+      clear: scheduleSvc.clear,
+    };
+    return impl;
+  });
+
+/**
+ * The **local** layer for a standalone {@link Schedule} resource — an in-memory window manager
+ * (optionally seeded with `initial` windows) that any number of processes can be gated by.
+ *
+ * @public
+ */
+export const scheduleLayer = <Self>(
+  tag: ResourceTag<Self, ScheduleResourceSpec>,
+  options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
+): Layer.Layer<Self | LocalCapability<Self>> =>
+  Layer.unwrap(
+    Effect.map(buildScheduleImpl(options), (impl) => Resource.layer(tag, impl)),
+  );
+
+/**
+ * Serve a standalone {@link Schedule} resource **and** grant its local instance.
+ *
+ * @public
+ */
+export const scheduleServe = <Self>(
+  tag: ResourceTag<Self, ScheduleResourceSpec>,
+  options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
+): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<ScheduleResourceSpec>> =>
+  Layer.unwrap(
+    Effect.map(buildScheduleImpl(options), (impl) => Resource.serve(tag, impl)),
+  );

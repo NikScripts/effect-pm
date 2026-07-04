@@ -53,7 +53,7 @@ import type {
   ResourceTag,
   ServiceOf,
 } from "./Resource";
-import { Process } from "./Process";
+import * as Process from "./Process";
 import type {
   ProcessMakeOptions,
   ProcessScheduleLayerInput,
