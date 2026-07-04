@@ -4,7 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as NodeStatus from "../src/NodeStatus";
-import { NodeLogs } from "../src/NodeLogs";
+import * as NodeLogs from "../src/NodeLogs";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
 
 // A node serving one ordinary resource over `httpServer` must ALSO auto-serve its node status

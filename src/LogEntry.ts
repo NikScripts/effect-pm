@@ -113,13 +113,15 @@ export const logEntryFromLoggerOptions = (options: {
 });
 
 /**
- * NDJSON log entry wire format for process-manager capture.
+ * NDJSON log entry wire format for process-manager capture — the `LogEntry.Schema` /
+ * `LogEntry.encode` / `LogEntry.decode` / `LogEntry.fromLoggerOptions` namespace members,
+ * exposed as flat aliases so `import * as LogEntry` and the root re-exports stay identical.
  *
  * @public
  */
-export const LogEntry = {
-  Schema: LogEntrySchema,
-  encode: encodeLogEntryNdjson,
-  decode: decodeLogEntryNdjson,
-  fromLoggerOptions: logEntryFromLoggerOptions,
-} as const;
+export {
+  LogEntrySchema as Schema,
+  encodeLogEntryNdjson as encode,
+  decodeLogEntryNdjson as decode,
+  logEntryFromLoggerOptions as fromLoggerOptions,
+};

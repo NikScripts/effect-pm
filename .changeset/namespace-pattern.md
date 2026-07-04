@@ -7,8 +7,10 @@
 - `Resource` and `Group` were object literals (`export const Resource = {…}`), so `import * as Resource` / tree-shaking couldn't work. They're now per-member module namespaces: `import * as Resource from "@nikscripts/effect-pm/Resource"` → `Resource.Tag` / `Resource.Host` pull only what's used; same for `Group`.
 - The `@nikscripts/effect-pm/QueueResource` **subpath** previously resolved to the internal engine — an object whose `Tag` had **no `host`** and didn't tree-shake. It now resolves to the namespace: `import * as QueueResource from ".../QueueResource"` gives the **host-ful** contract `Tag`, and `QueueResource.Tag` tree-shakes (~207 KB → ~27 KB). `/ScheduledProcess` already behaved this way.
 - The bare `queueTag` / `processTag` exports are removed — define resources via `QueueResource.Tag` / `ScheduledProcess.Tag` (both carry the `host` overload).
+- The same object-literal → module-namespace conversion now covers `Logs`, `Query`, `LogContext`, `LogEntry`, and `NodeLogs`: their members are flat top-level exports and the module **is** the namespace (`import * as Logs`, `import * as Query`, …). All documented members are preserved — the flat root re-exports (`And`, `captureLoggerLayer`, `LogAnnotationKeys`, …) and the namespace members (`Query.And`, `Logs.captureLoggerLayer`, `LogEntry.Schema`, `NodeLogs.layer`, …) are the same bindings.
 
 **BREAKING.** Migrate consumers:
 `import { Resource } from ".../Resource"` → `import * as Resource from ".../Resource"`;
 `import { QueueResource } from ".../QueueResource"` → `import * as QueueResource from ".../QueueResource"`;
 `queueTag<T>()(…)` → `QueueResource.Tag<T>()(…)`, `processTag<T>()(…)` → `ScheduledProcess.Tag<T>()(…)`.
+Direct subpath value imports `import { NodeLogs } from ".../NodeLogs"` → `import * as NodeLogs from ".../NodeLogs"` (the barrel `import { NodeLogs } from "@nikscripts/effect-pm"` is unchanged).

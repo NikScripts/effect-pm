@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Stream } from "effect";
-import { NodeLogs } from "../src/NodeLogs";
+import * as NodeLogs from "../src/NodeLogs";
 
 describe("NodeLogs — runtime-wide log capture", () => {
   it.live("captures a bare (untagged) Effect.log with level + message", () =>

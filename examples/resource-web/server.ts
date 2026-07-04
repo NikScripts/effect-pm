@@ -17,7 +17,7 @@ import * as Resource from "../../src/Resource";
 import { serve as queueEntry } from "../../src/QueueResource";
 import { serve as processEntry } from "../../src/ScheduledProcess";
 import { HistoryStore } from "../../src/HistoryStore";
-import { NodeLogs } from "../../src/NodeLogs";
+import * as NodeLogs from "../../src/NodeLogs";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";

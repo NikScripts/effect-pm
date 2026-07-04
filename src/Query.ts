@@ -515,47 +515,7 @@ export const Upsert = (
       : Effect.die("Runtime record source does not support upsert")
   );
 
-/**
- * Runtime record query DSL — columns, combinators, and storage operations.
- *
- * @remarks
- * Root imports (`And`, `Id`, `Select`, …) are the same bindings as
- * {@link Query.And}, {@link Query.Id}, {@link Query.Select}, etc.
- *
- * @public
- */
-export const Query = {
-  And,
-  Attributes,
-  Created,
-  Delete,
-  Id,
-  IndexA,
-  IndexB,
-  IndexC,
-  IndexD,
-  IndexE,
-  IndexF,
-  IndexG,
-  IndexH,
-  Insert,
-  Key,
-  Limit,
-  Occurred,
-  Offset,
-  Or,
-  OrderBy,
-  Payload,
-  ProcessId,
-  ProcessType,
-  Readonly,
-  RunId,
-  Select,
-  SubjectId,
-  SubjectType,
-  Type,
-  Update,
-  Upsert,
-  Where,
-} as const;
+// Runtime record query DSL — columns, combinators, and storage operations are the
+// flat top-level exports above. Consumed as `import * as Query` (module namespace);
+// root imports (`And`, `Id`, `Select`, …) are the same bindings as `Query.And`, etc.
 

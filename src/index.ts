@@ -176,7 +176,7 @@ export { ProcessStorage } from "./ProcessStorage";
 
 
 // Query / Runtime Storage
-export { Query } from "./Query";
+export * as Query from "./Query";
 export {
   And,
   Attributes,
@@ -267,8 +267,8 @@ export {
   decodeLogEntryNdjson,
   logEntryFromLoggerOptions,
   LogEntrySchema,
-  LogEntry,
 } from "./LogEntry";
+export * as LogEntry from "./LogEntry";
 export {
   LogRelay,
   captureLogger,
@@ -278,9 +278,11 @@ export {
   replayLogEntry,
   relayOnlyLayer as logRelayLayer,
   relayWithCaptureLoggerLayer,
-  Logs,
 } from "./Logs";
-export { NodeLogs } from "./NodeLogs";
+// Module namespace (Effect-style) so `Logs.captureLoggerLayer` etc. resolve the
+// same bindings as the flat root re-exports above.
+export * as Logs from "./Logs";
+export * as NodeLogs from "./NodeLogs";
 export type { NodeLogEntry } from "./NodeLogs";
 export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";
@@ -305,8 +307,8 @@ export {
   withNodeLogAnnotations,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
-  LogContext,
 } from "./LogContext";
+export * as LogContext from "./LogContext";
 export type { LogEntryRecordedEvent } from "./store/log";
 export { isLogEntryRecorded } from "./store/log";
 

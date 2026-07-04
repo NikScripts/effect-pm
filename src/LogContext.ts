@@ -63,13 +63,9 @@ export const withQueueLogAnnotations = <A, E, R>(
   });
 
 /**
- * Log annotation keys + per-scope helpers.
+ * Log annotation keys, aliased as `LogContext.keys` for discoverability alongside the
+ * per-scope annotation helpers above.
  *
  * @public
  */
-export const LogContext = {
-  keys: LogAnnotationKeys,
-  withNodeLogAnnotations,
-  withProcessLogAnnotations,
-  withQueueLogAnnotations,
-} as const;
+export { LogAnnotationKeys as keys };
