@@ -7,12 +7,13 @@
  * @remarks
  * ## What this package provides
  *
- * - **`Process`**, **`Polling`**, **`ProcessSchedule`** — Build a **managed process** with
- *   a trigger-driven runtime: a long-lived driver follows an Effect `Schedule` and spawns
- *   process instances; each instance checks `ProcessSchedule` and exits naturally when
- *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
- *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
- *   requirements stay accurate in TypeScript.
+ * - **`Process`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
+ *   long-lived driver follows a schedule and spawns process instances; each instance checks its
+ *   schedule and exits naturally when disarmed while `Polling` controls in-instance repeat cadence.
+ *   Optional `polling` / `schedule` layers on `Process.make` are merged into `process.effect` so
+ *   fork-time requirements stay accurate in TypeScript. Run windows are built with
+ *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
+ *   `Process.window` / `Process.at`).
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
@@ -21,7 +22,8 @@
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
- *   on it — **`ScheduledProcess`** and the toolkit queue (from
+ *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
+ *   `@nikscripts/effect-pm/Process`) and the toolkit queue (from
  *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
@@ -57,7 +59,7 @@
  * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
+ * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
  * **`@nikscripts/effect-pm/Group`**,
  * **`@nikscripts/effect-pm/NodeLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
@@ -108,18 +110,7 @@ export {
 export * as Process from "./Process";
 export { ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
-// Unified namespaces via `export * as` (module namespace, Effect-style) so member access
-// tree-shakes — `ScheduledProcess.Tag` pulls no engine code.
-export * as ScheduledProcess from "./internal/scheduledProcessNamespace";
-export {
-  processControlSpec,
-  processLogEntry,
-  processScheduleEntry,
-  processStatus,
-} from "./ScheduledProcess";
-export type { ProcessLayerConfig } from "./ScheduledProcess";
 export { Polling } from "./Polling";
-export { ProcessSchedule } from "./ProcessSchedule";
 // The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
 // member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
@@ -417,9 +408,8 @@ export type {
   ProcessServiceFactory,
 } from "./Process";
 
-// Types - Polling / ProcessSchedule
+// Types - Polling
 export type { PollingService, AcceleratingPollConfig } from "./Polling";
-export type { ProcessScheduleService } from "./ProcessSchedule";
 
 // Types - QueueResource
 export type {

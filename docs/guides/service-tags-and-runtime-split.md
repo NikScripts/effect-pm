@@ -16,10 +16,10 @@ and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engi
 ```ts
 // tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
 import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
-import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
+import * as Process from "@nikscripts/effect-pm/Process";
 
 export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
-export class LiveScores extends ScheduledProcess.Tag<LiveScores>()("nwsl/LiveScores") {}
+export class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 ```
 
 ```ts
@@ -48,7 +48,7 @@ yield* queue.logHistory({ limit: 200 });
 
 If a file calls `Layer.provide` / `serve` / `httpServer` / `SQLiteRuntimeStorage` / a storage adapter,
 it belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
-**subpaths** (`@nikscripts/effect-pm/QueueResource`, `/ScheduledProcess`, `/Group`, …) so member
+**subpaths** (`@nikscripts/effect-pm/QueueResource`, `/Process`, `/Group`, …) so member
 access tree-shakes.
 
 See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer

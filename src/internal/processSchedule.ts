@@ -1,9 +1,13 @@
 /**
- * ProcessSchedule — centralized schedule storage + controls.
+ * Engine schedule primitive — centralized run-window storage + controls that the `Process`
+ * supervisor watches. **Internal**: the public face lives on the `Process` namespace
+ * (`Process.scheduleInMemory` / `Process.scheduleDefine`, the `Process.ScheduleService` /
+ * `Process.ScheduleEntry` types, the `Process.at` / `Process.window` window builders, and the
+ * toolkit `Process.Schedule` resource). Not exported from the barrel and carries no subpath.
  *
- * A process schedule defines when run instances should be spawned. Each entry
- * has a `startAt` time and optional `stopAt` (the run window). The Process
- * supervisor watches this service for changes and manages trigger fibers.
+ * A process schedule defines when run instances should be spawned. Each entry has a `startAt`
+ * time and optional `stopAt` (the run window). The supervisor watches this service for changes
+ * and manages trigger fibers.
  *
  * ## Core operations
  *
@@ -21,28 +25,12 @@
  * | `clear` | Remove all entries |
  * | `reconcile` | Diff-based sync from external source (DB) |
  *
- * ## Usage
- *
- * ```ts
- * import { ProcessSchedule } from "@nikscripts/effect-pm"
- *
- * // Declarative schedule (Layer)
- * const schedule = ProcessSchedule.define(({ at, window }) => [
- *   at("daily-2am", new Date("2025-01-01T02:00:00Z")),
- *   window("game-123", gameStart, gameEnd),
- * ])
- *
- * // Or use the in-memory Layer directly
- * const schedule = ProcessSchedule.inMemory([
- *   ProcessSchedule.at("job-1", new Date()),
- * ])
- * ```
- *
- * @module ProcessSchedule
+ * @module internal/processSchedule
+ * @internal
  */
 
 import { Context, DateTime, Deferred, Effect, Layer, Option, Ref } from "effect";
-import { registerScheduleLayer } from "./internal/processLayerBrand";
+import { registerScheduleLayer } from "./processLayerBrand";
 
 // ============================================================================
 // Public Types
@@ -124,7 +112,7 @@ export interface ProcessScheduleService {
 export class ProcessScheduleTag extends Context.Service<
   ProcessScheduleTag,
   ProcessScheduleService
->()("@nikscripts/effect-pm/ProcessSchedule/ProcessScheduleTag") {}
+>()("@nikscripts/effect-pm/internal/processSchedule/ProcessScheduleTag") {}
 
 // ============================================================================
 // Internal: sorting and normalization
@@ -380,11 +368,18 @@ const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
 // Define DSL
 // ============================================================================
 
-interface DefineApi {
+/**
+ * The builder handed to {@link define} (`at` / `window` / `fromStarts` / `all`). Exported so the
+ * public re-export (`Process.scheduleDefine`) can name it; the dts bundler inlines it into the
+ * `@nikscripts/effect-pm/Process` declarations.
+ */
+export interface ScheduleDefineApi {
   readonly at: typeof at;
   readonly window: typeof window;
   readonly fromStarts: typeof fromStarts;
-  readonly all: (...entries: ReadonlyArray<ProcessScheduleEntry>) => ReadonlyArray<ProcessScheduleEntry>;
+  readonly all: (
+    ...entries: ReadonlyArray<ProcessScheduleEntry>
+  ) => ReadonlyArray<ProcessScheduleEntry>;
 }
 
 /**
@@ -399,7 +394,7 @@ interface DefineApi {
  * ```
  */
 const define = (
-  build: (api: DefineApi) => ReadonlyArray<ProcessScheduleEntry>,
+  build: (api: ScheduleDefineApi) => ReadonlyArray<ProcessScheduleEntry>,
 ): Layer.Layer<ProcessScheduleTag> =>
   inMemoryLayer(build({ at, window, fromStarts, all: (...entries) => entries }));
 

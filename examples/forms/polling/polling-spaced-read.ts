@@ -7,7 +7,7 @@ import * as ProcessStorage from "../../../src/ProcessStorage";
 
 import { DateTime, Duration, Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling, ProcessSchedule } from "../../../src";
+import { Process, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -24,8 +24,8 @@ const program = Effect.gen(function* () {
   const proc = Process.make("examples/forms/polling-spaced-read", {
     // 500 ms so the first tick (t≈500) still sees 0-0 before the feed changes at t≈600.
     polling: Polling.spaced(Duration.millis(500)),
-    schedule: ProcessSchedule.inMemory([
-      ProcessSchedule.at("sports-basic", scheduleStartAtUnixEpoch),
+    schedule: Process.scheduleInMemory([
+      Process.at("sports-basic", scheduleStartAtUnixEpoch),
     ]),
     effect: Effect.gen(function* () {
       // Production: HttpClient.get → parse JSON → GameScore.

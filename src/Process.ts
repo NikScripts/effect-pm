@@ -70,11 +70,13 @@ import {
 } from "./store/processExecution";
 import { ProcessStore } from "./ProcessStore";
 import { Polling, PollingTag } from "./Polling";
-import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
+import { ProcessSchedule, ProcessScheduleTag } from "./internal/processSchedule";
 import type {
   ProcessScheduleEntry,
   ProcessScheduleService,
-} from "./ProcessSchedule";
+  ReconcileResult,
+  ScheduleDefineApi,
+} from "./internal/processSchedule";
 // ── toolkit (Resource) surface — the light contract + heavy layers assembled into `Process` ──
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
@@ -153,8 +155,9 @@ export interface Process<out R> {
   readonly runImmediately: () => Effect.Effect<void, never, R>;
   /**
    * One-shot read of the runtime mirror (armed / active instances / next trigger / next schedule
-   * transition / poll cadence). Drives the toolkit contract's `statusNow` / `status`. Reads the
-   * supervisor's live mirror, so it reflects state regardless of who forked {@link Process.effect}.
+   * transition / poll cadence). Drives the toolkit contract's `status` ref (`status.get` /
+   * `status.changes`). Reads the supervisor's live mirror, so it reflects state regardless of who
+   * forked {@link Process.effect}.
    */
   readonly snapshot: Effect.Effect<ProcessSnapshot>;
 }
@@ -1626,6 +1629,72 @@ export function window(
     stopAt: Option.some(maybeStopAt),
   };
 }
+
+// ============================================================================
+// Engine schedule constructors — the public face of the internal schedule primitive
+// ============================================================================
+
+/**
+ * A native engine schedule **entry** — `{ id?, startAt, stopAt? }`, the same shape as a
+ * {@link ScheduleWindow} ({@link at} / {@link window} build these). Element of a
+ * {@link ScheduleService}'s entries.
+ *
+ * @public
+ */
+export type ScheduleEntry = ProcessScheduleEntry;
+
+/**
+ * The engine schedule **service** — run-window storage + controls (`entries` / `changed` / CRUD /
+ * `reconcile`) that a {@link make} supervisor watches for arming decisions. Materialized by the
+ * schedule-layer constructors below and injected via {@link ProcessMakeOptions.scheduleLayer}.
+ *
+ * @public
+ */
+export type ScheduleService = ProcessScheduleService;
+
+/**
+ * The subset of schedule controls handed to a {@link ProcessScheduleInitializer}
+ * (`entries` / `set` / `add` / `clear`) and available inside the process effect via
+ * {@link scheduleControls}.
+ *
+ * @public
+ */
+export type ScheduleControls = ProcessScheduleControls;
+
+/**
+ * The diff produced by {@link ScheduleService.reconcile} — the entry ids that were
+ * added / updated / removed / left unchanged.
+ *
+ * @public
+ */
+export type ScheduleReconcileResult = ReconcileResult;
+
+// These re-expose the internal engine schedule constructors for `make`'s `scheduleLayer`. They are
+// deliberately **lazy wrappers** (not `= ProcessSchedule.x`): a direct re-export would reference the
+// engine at module load, defeating tree-shaking so a `Process.Tag`-only import would drag the engine
+// schedule primitive into the bundle. Wrapping keeps the reference inside an eliminable function body.
+
+/**
+ * An **in-memory** schedule layer seeded with `entries` — the `Layer` you hand to {@link make}'s
+ * `scheduleLayer`. Call with no argument for an **empty** schedule (disarmed until an entry is added
+ * via `set` / `add` / `reconcile` or a schedule initializer). Mutable at runtime through the schedule
+ * controls (`Process.scheduleControls`, the inline `schedule` verbs, or a {@link Schedule} resource).
+ *
+ * @public
+ */
+export const scheduleInMemory = (
+  entries?: ReadonlyArray<ScheduleEntry>,
+): ProcessScheduleLayerInput => ProcessSchedule.inMemory(entries);
+
+/**
+ * A **declarative** schedule layer from a builder DSL:
+ * `Process.scheduleDefine(({ at, window }) => [at("daily", d), window("game", start, end)])`.
+ *
+ * @public
+ */
+export const scheduleDefine = (
+  build: (api: ScheduleDefineApi) => ReadonlyArray<ScheduleEntry>,
+): ProcessScheduleLayerInput => ProcessSchedule.define(build);
 
 // ============================================================================
 // Combinator plumbing: augment a tag's spec (rebuild the flat spec + RPC group)

@@ -30,7 +30,7 @@ import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Resource";
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
  * `key` / `description` and the stowed contract spec. A `Resource.Tag` / `QueueResource.Tag`
- * / `ScheduledProcess.Tag` class satisfies this — pass the classes directly.
+ * / `Process.Tag` class satisfies this — pass the classes directly.
  *
  * @since 1.0.0
  */

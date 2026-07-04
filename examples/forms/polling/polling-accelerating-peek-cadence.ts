@@ -7,7 +7,7 @@ import * as ProcessStorage from "../../../src/ProcessStorage";
 
 import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling, ProcessSchedule } from "../../../src";
+import { Process, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -17,7 +17,7 @@ import {
   scoreKey,
 } from "../../shared/sports-score-feed";
 
-// ProcessSchedule.at expects Date — build from DateTime, not `new Date()` inside Effect.
+// Process.at expects Date — build from DateTime, not `new Date()` inside Effect.
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 
 const pollLayer = Polling.accelerating({
@@ -26,8 +26,8 @@ const pollLayer = Polling.accelerating({
   decay: 0.55,
 });
 
-const scheduleLayer = ProcessSchedule.inMemory([
-  ProcessSchedule.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
+const scheduleLayer = Process.scheduleInMemory([
+  Process.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
 ]);
 
 const env = Layer.mergeAll(

@@ -2,11 +2,11 @@ import { Context, Duration, Effect, Layer } from "effect";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
-import * as ScheduledProcess from "../src/ScheduledProcess";
+import * as Process from "../src/Process";
 import { Polling } from "../src/Polling";
 
 // The engine-serve gap: Resource.serve is query-only (no worker/tick engine). QueueResource.serve /
-// ScheduledProcess.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
+// Process.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
 // dependency. Proof: two processes whose TICK reads the same Dep tag with different values; each engine
 // must actually fire, and each must see its own value.
 
@@ -24,8 +24,8 @@ const recorderLayer = Layer.succeed(Recorder, (dep) =>
   }),
 );
 
-class ProcA extends ScheduledProcess.Tag<ProcA>()("engine-serve/ProcA") {}
-class ProcB extends ScheduledProcess.Tag<ProcB>()("engine-serve/ProcB") {}
+class ProcA extends Process.Tag<ProcA>()("engine-serve/ProcA") {}
+class ProcB extends Process.Tag<ProcB>()("engine-serve/ProcB") {}
 
 // one tick body — reads its Dep and records it. R = Dep | Recorder.
 const tick = Effect.gen(function* () {
@@ -38,8 +38,8 @@ const cfg = { effect: tick, polling: Polling.spaced(Duration.millis(50)) };
 const Node = Resource.httpServer().pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      ScheduledProcess.serve(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
-      ScheduledProcess.serve(ProcB, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depB"))),
+      Process.serve(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
+      Process.serve(ProcB, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depB"))),
     ),
   ),
   Layer.provide(recorderLayer), // Dep discharged per resource; Recorder shared

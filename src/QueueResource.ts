@@ -865,7 +865,7 @@ export const serveRemote = <
  * ```ts
  * Resource.httpServer([
  *   QueueResource.serve(RosterQueue, { effect, itemSchema }),
- *   ScheduledProcess.serve(SeasonMatches, { effect }),
+ *   Process.serve(SeasonMatches, { effect }),
  * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
  * ```
  *

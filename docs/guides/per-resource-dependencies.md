@@ -29,14 +29,14 @@ layer memoization, not by data.
 | Primitive | Role |
 |-----------|------|
 | `Resource.serve(tag, impl)` | A **raw resource's** layer (impl is the query record) that grants the local instance **and** mounts the wire handlers, **preserving** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. (`serveRemote` is the served-only variant — same isolation, no local grant.) |
-| `QueueResource.serve(tag, config)` / `ScheduledProcess.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Resource.serve` only mounts handlers and would leave the worker/tick dead. |
+| `QueueResource.serve(tag, config)` / `Process.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Resource.serve` only mounts handlers and would leave the worker/tick dead. |
 | `Resource.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
 | `Resource.servedResourcesLayer` | The registry the `serve` forms write to and `httpServer` reads. |
 | `Resource.provide(dependency, [resources])` | Sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency." |
 
 > **Query resource vs. engine resource.** A bare `Resource.Tag` (status queries, streams) uses
-> `Resource.serve(tag, recordImpl)`. A `QueueResource` / `ScheduledProcess` is an **engine** — its worker
-> or tick must actually run — so use `QueueResource.serve(tag, config)` / `ScheduledProcess.serve(tag,
+> `Resource.serve(tag, recordImpl)`. A `QueueResource` / `Process` is an **engine** — its worker
+> or tick must actually run — so use `QueueResource.serve(tag, config)` / `Process.serve(tag,
 > config)`. Both are `serve`-style layers (preserve `R`, register for `/health`); the engine forms just
 > also start the engine. Composing an engine tag with `Resource.serve` would mount its RPC surface but
 > never run the worker.
@@ -46,7 +46,7 @@ layer memoization, not by data.
 ```ts
 import { Layer } from "effect";
 import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
+import * as Process from "@nikscripts/effect-pm/Process";
 import { NodeHttpServer } from "@effect/platform-node";
 import { createServer } from "node:http";
 
@@ -59,11 +59,11 @@ const Host = Resource.httpServer(
   [
     // processes that share the plain handler → state it once with `provide`
     Resource.provide(plainImportHandlers, [
-      ScheduledProcess.serve(SeasonMatches,   seasonMatchesCfg),
-      ScheduledProcess.serve(LiveScorePoller, pollerCfg),
+      Process.serve(SeasonMatches,   seasonMatchesCfg),
+      Process.serve(LiveScorePoller, pollerCfg),
     ]),
     // a process that needs the hooked handler → its own Layer.provide, isolated
-    ScheduledProcess.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
+    Process.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
   ],
   { health: { path: "/health" } },
 ).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })));

@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as QueueResource from "../src/QueueResource";
-import * as ScheduledProcess from "../src/ScheduledProcess";
+import * as Process from "../src/Process";
 import * as CustomQueueResource from "../src/CustomQueueResource";
 import * as ApiMetrics from "../src/ApiMetrics";
 
@@ -11,7 +11,7 @@ import * as ApiMetrics from "../src/ApiMetrics";
 const Item = Schema.Struct({ n: Schema.Number });
 
 class Q extends QueueResource.Tag<Q>()("kindtest/Q", Item) {}
-class P extends ScheduledProcess.Tag<P>()("kindtest/P") {}
+class P extends Process.Tag<P>()("kindtest/P") {}
 class C extends CustomQueueResource.Tag<C>()("kindtest/C", Item, 3) {}
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}
 class Bare extends Resource.Tag<Bare>()("kindtest/Bare", {
@@ -20,7 +20,7 @@ class Bare extends Resource.Tag<Bare>()("kindtest/Bare", {
 
 it("each contract stamps its kind; a bare Resource.Tag has none", () => {
   expect(Resource.kindOf(Q)).toBe(QueueResource.kind);
-  expect(Resource.kindOf(P)).toBe(ScheduledProcess.kind);
+  expect(Resource.kindOf(P)).toBe(Process.kind);
   expect(Resource.kindOf(C)).toBe(CustomQueueResource.kind);
   expect(Resource.kindOf(M)).toBe(ApiMetrics.kind);
   expect(Resource.kindOf(Bare)).toBeUndefined();

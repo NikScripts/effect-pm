@@ -29,8 +29,7 @@ of React/Ink/recharts.
 | --- | --- |
 | `…/Resource` | `Resource.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
 | `…/QueueContract` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
-| `…/ScheduledProcess` | `processTag` (light tag), `serve`, `serveRemote`, `layer` for a scheduled/polling process |
-| `…/ProcessScheduleContract` | `processScheduleTag` — a schedule (run-windows) as its own resource |
+| `…/Process` | `Process.Tag` (light tag), `schedule` / `window` / `at`, `serve`, `serveRemote`, `layer` for a managed/polling process — plus `Process.Schedule`, a run-windows manager as its own resource |
 | `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiResource` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiResource.Service` client |
 | `…/HostStatus` | the reserved host status resource (auto-served by `httpServer`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
@@ -42,8 +41,8 @@ of React/Ink/recharts.
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
 | **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `ResourceReadinessBanner` |
 
-> **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/ScheduledProcess`
-> (not the engine namespaces) so the worker engine + node deps stay out of the browser build.
+> **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/Process`
+> (not the engine layers) so the worker engine + node deps stay out of the browser build.
 
 ## 2a. Browser safety & tree-shaking
 
@@ -54,7 +53,7 @@ it imports.
 
 - **Browser-safe (no node built-ins):** `…/web`, `…/Group`, `…/Resource`
   (`client`/`connect`/`connectHttp`/`Host`), `…/MultiHost`, `…/QueueContract` (`queueTag` + contract),
-  `…/ScheduledProcess` (`processTag`), `…/ProcessScheduleContract`, `…/cli`, `…/tui`.
+  `…/Process` (`Process.Tag`), `…/cli`, `…/tui`.
 - **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
   `@effect/sql-sqlite-node`), `…/storage/redis`, and the HTTP
   server itself (`NodeHttpServer`) plus any worker/storage layers. (`httpServer` / `serve`
@@ -129,14 +128,14 @@ A `Host` lets a group of resources be served on one port (§4) and reached over 
 import { Schema } from "effect";
 import { Resource } from "@nikscripts/effect-pm/Resource";
 import { queueTag } from "@nikscripts/effect-pm/QueueResource";
-import { processTag } from "@nikscripts/effect-pm/ScheduledProcess";
+import * as Process from "@nikscripts/effect-pm/Process";
 import { Group } from "@nikscripts/effect-pm/Group";
 
 export class LeagueHost extends Resource.Host<LeagueHost>("nwsl/host") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 export class RosterQueue extends queueTag<RosterQueue>()("nwsl/Roster", Job, { host: LeagueHost }) {}
-export class SeasonMatches extends processTag<SeasonMatches>()("nwsl/Season", { host: LeagueHost }) {}
+export class SeasonMatches extends Process.Tag<SeasonMatches>()("nwsl/Season", { host: LeagueHost }) {}
 
 // the navigation tree — members may be nested groups or live on different hosts
 export class Nwsl extends Group.Tag<Nwsl>("nwsl")({ RosterQueue, SeasonMatches }) {}
@@ -153,7 +152,7 @@ import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { Resource } from "@nikscripts/effect-pm/Resource";
 import { serve as queueServe } from "@nikscripts/effect-pm/QueueResource";
-import { serve as processServe } from "@nikscripts/effect-pm/ScheduledProcess";
+import { serve as processServe } from "@nikscripts/effect-pm/Process";
 import { HistoryStore } from "@nikscripts/effect-pm/HistoryStore";
 
 const LeagueServer = Resource.httpServer([
@@ -191,7 +190,7 @@ const clients = Layer.mergeAll(
 ```
 
 To run a resource **in-process** instead, provide its `.layer` (from `…/QueueContract` /
-`…/ScheduledProcess`) rather than a client — the call sites don't change.
+`…/Process`) rather than a client — the call sites don't change.
 
 ## 6. Drive them
 

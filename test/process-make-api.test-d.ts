@@ -1,5 +1,5 @@
 import { Duration, Effect } from "effect";
-import { Polling, Process, ProcessSchedule } from "../src";
+import { Polling, Process } from "../src";
 
 // @ts-expect-error Process.make requires (id, config) or (id, effect)
 Process.make({ name: "legacy", effect: Effect.void });
@@ -20,7 +20,7 @@ const _withPolling = Process.make(
 const _scheduleThenPolling = Process.make(
   "@app/Valid",
   Effect.void,
-  ProcessSchedule.empty,
+  Process.scheduleInMemory(),
   Polling.spaced(Duration.seconds(1)),
 );
 
@@ -28,7 +28,7 @@ const _pollingThenSchedule = Process.make(
   "@app/Valid",
   Effect.void,
   Polling.spaced(Duration.seconds(1)),
-  ProcessSchedule.inMemory([]),
+  Process.scheduleInMemory([]),
 );
 
 class Heartbeat extends Process.Service<Heartbeat>()(

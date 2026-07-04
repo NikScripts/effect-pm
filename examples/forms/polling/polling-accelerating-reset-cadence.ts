@@ -7,7 +7,7 @@ import * as ProcessStorage from "../../../src/ProcessStorage";
 
 import { DateTime, Duration, Effect, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling, ProcessSchedule } from "../../../src";
+import { Process, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -24,8 +24,8 @@ const pollLayer = Polling.accelerating({
   slowest: "500 millis",
   decay: 0.55,
 });
-const scheduleLayer = ProcessSchedule.inMemory([
-  ProcessSchedule.at("sports-accel-simple", scheduleStartAtUnixEpoch),
+const scheduleLayer = Process.scheduleInMemory([
+  Process.at("sports-accel-simple", scheduleStartAtUnixEpoch),
 ]);
 
 const env = Layer.mergeAll(

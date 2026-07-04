@@ -15,11 +15,10 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Resource from "../../src/Resource";
 import { serve as queueEntry } from "../../src/QueueResource";
-import { serve as processEntry } from "../../src/ScheduledProcess";
+import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as NodeLogs from "../../src/NodeLogs";
 import { Polling } from "../../src/Polling";
-import { ProcessSchedule } from "../../src/ProcessSchedule";
 import * as ProcessStorage from "../../src/ProcessStorage";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
@@ -58,20 +57,22 @@ const importWorker = (job: { readonly id: string }) =>
 // ── WNBA live-score poller: armed only around game time ──────────────────────
 // In a real app you'd fetch the league schedule from a sports API; here we mock a few games and
 // arm the poller from 20 min before each tip-off until 60 min after — so it only polls live scores
-// while a game is on. The window entries show up (and are editable) in the dashboard's schedule.
+// while a game is on. `LiveScorePoller` owns an inline schedule (see `hub.ts`); the node seeds these
+// windows into it at startup (below), and they show up (editable) in the dashboard's schedule.
 const MIN = 60_000;
 const HR = 60 * MIN;
 // @effect-diagnostics-next-line globalDate:off
 const baseNow = Date.now();
-const toDate = (ms: number): Date => DateTime.toDateUtc(DateTime.makeUnsafe(ms));
 const wnbaGames: ReadonlyArray<{ readonly id: string; readonly tipOff: number }> = [
   { id: "LV@NY", tipOff: baseNow - 10 * MIN }, // tipped off 10 min ago → live now
   { id: "SEA@CHI", tipOff: baseNow + 2 * HR }, // later today
   { id: "PHX@LA", tipOff: baseNow + 26 * HR }, // tomorrow
 ];
-const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
-  all(...wnbaGames.map((g) => window(g.id, toDate(g.tipOff - 20 * MIN), toDate(g.tipOff + 60 * MIN)))),
-);
+const pollerWindows = wnbaGames.map((g) => ({
+  id: g.id,
+  startAt: DateTime.makeUnsafe(g.tipOff - 20 * MIN),
+  stopAt: DateTime.makeUnsafe(g.tipOff + 60 * MIN),
+}));
 
 // ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
 // A real consumer instruments its outbound client (`HttpApiResource.instrumentEndpoints`) and serves
@@ -230,7 +231,6 @@ const liveNode = Resource.httpServer([
   processEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
-    scheduleLayer: pollerSchedule,
     captureLogs: true,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
@@ -264,9 +264,17 @@ const statsNode = Resource.httpServer([
 
 // Each node is its own forked scope (NOT merged) so each gets its own HttpRouter — merging them
 // would register `/rpc` twice on one shared router. One process, three independent servers.
+// Seed the poller's inline schedule with this run's live game windows, then keep the node alive. The
+// dashboard reads/edits these same windows over RPC through the `schedule` verb group.
+const liveNodeProgram = Effect.gen(function* () {
+  const poller = yield* LiveScorePoller;
+  yield* poller.schedule.set(pollerWindows);
+  return yield* Effect.never;
+}).pipe(Effect.provide(liveNode));
+
 const program = Effect.gen(function* () {
   yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(wnbaNode)));
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(liveNode)));
+  yield* Effect.forkScoped(liveNodeProgram);
   yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(statsNode)));
   yield* Effect.logInfo(
     `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,

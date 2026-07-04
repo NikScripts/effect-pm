@@ -7,16 +7,16 @@ import * as ProcessStorage from "../../../src/ProcessStorage";
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule } from "../../../src";
+import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
   ProcessStorage.layer,
   Polling.spaced(Duration.millis(100)),
-  ProcessSchedule.inMemory([
+  Process.scheduleInMemory([
     // Disarmed until t=500 ms — supervisor runs but tick body never executes before this.
-    ProcessSchedule.at("delayed-start", utcDateFromMillis(500)),
+    Process.at("delayed-start", utcDateFromMillis(500)),
   ]),
 );
 

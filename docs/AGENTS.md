@@ -9,8 +9,8 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | Path | Purpose |
 |------|---------|
 | `src/index.ts` | Public exports + package-level TSDoc. **Start here for imports.** |
-| `src/Process.ts` | `Process.make`, supervisor loop, `ProcessSupervisorRequirements`. |
-| `src/Polling.ts`, `src/ProcessSchedule.ts` | Cadence + gate services and preset `Layer`s. |
+| `src/Process.ts` | **Process** toolkit **and** engine in one module — `Process.Tag` / `Process.Schedule`, the `schedule` / `result` combinators, `window` / `at` builders, `make` / `layer` / `serve` / `serveRemote`, and the supervisor loop → `@nikscripts/effect-pm/Process`. |
+| `src/Polling.ts` | Poll-cadence gate service + preset `Layer`s. (The run-window schedule primitive is internal: `src/internal/processSchedule.ts`, surfaced via the `Process` namespace.) |
 | `src/QueueResource.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`serve`/`serveRemote`; `persist`/`refill`). |
 | `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
 | `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
@@ -19,8 +19,6 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`serve`/`serveRemote`) → `@nikscripts/effect-pm/QueueResource`. |
 | `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueResource`. |
 | `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
-| `src/ScheduledProcess.ts` | Toolkit **process** (`ScheduledProcess`). |
-| `src/ProcessScheduleContract.ts` | Toolkit **schedule** (`ProcessScheduleResource`) — CRUD + reconcile + `changes`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
 | `src/HostLogs.ts` | Runtime-wide log capture + stream (`HostLogs`). |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |

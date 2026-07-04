@@ -7,7 +7,7 @@
  */
 import { Duration, Effect, Schema } from "effect";
 import * as QueueResource from "../../src/QueueResource";
-import * as ScheduledProcess from "../../src/internal/scheduledProcessNamespace";
+import * as Process from "../../src/Process";
 import * as Resource from "../../src/Resource";
 import * as Group from "../../src/Group";
 
@@ -35,7 +35,7 @@ export class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job,
 export class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job, { node: Droplet }) {}
 
 // a process bound to the Mini node — it runs there, not on the Droplet.
-export class KeyRotation extends ScheduledProcess.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
+export class KeyRotation extends Process.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
   node: MiniNode,
 }) {}
 

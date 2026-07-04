@@ -18,7 +18,7 @@ controls it; only the provided layer decides where it runs:
 ```ts
 const queue = yield* RosterQueue;   // identical local or over RPC
 yield* queue.add(job);
-yield* queue.statusNow;
+yield* queue.status.get;
 ```
 
 - **`Resource`** — the foundation: `Tag` + `layer` (local), `serve` / `serveRemote` (host, composed
@@ -27,11 +27,11 @@ yield* queue.statusNow;
 - **`QueueResource`** — three-level **priority** queues with concurrency, optional `rateLimit`,
   `attempts` retry, `captureLogs`, **`refill`** (self-feeding from a source), and **`persist`**
   (durable, at-least-once).
-- **`ScheduledProcess`** — a managed process: lifecycle (`start`/`stop`/`runImmediately`),
-  observability (`status`/`logs`/`logHistory`), and schedule control. Built on the `Process` engine
-  + `Polling` (in-instance cadence) + `ProcessSchedule` (when it's armed).
-- **`ProcessScheduleResource`** — a schedule as a controllable resource (CRUD + `reconcile` +
-  `changes` stream).
+- **`Process`** — a managed process: lifecycle (`start`/`stop`/`runImmediately`), observability
+  (reactive `status` + `logs.live` / `logs.history`), inline or referenced **schedule** control, and
+  an optional reactive `result`. One module carrying the `Process.Tag` toolkit, the `Process.make`
+  engine, and `Polling` (in-instance cadence); **`Process.Schedule`** is a reusable schedule resource
+  (full CRUD + a reactive `entries` ref) that can gate one or more processes.
 - **`Group`** — organize member tags (nestable; members may live on the same or different hosts).
 
 ## Quick start
@@ -67,16 +67,16 @@ QueueResource.layer(RosterQueue, {
 });
 ```
 
-### A scheduled process
+### A managed process
 
 ```ts
-import { ScheduledProcess } from "@nikscripts/effect-pm";
+import { Process } from "@nikscripts/effect-pm";
 
-class LiveScores extends ScheduledProcess.Tag<LiveScores>()("nwsl/LiveScores") {}
+class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 
-const layer = ScheduledProcess.layer(LiveScores, {
+const layer = Process.layer(LiveScores, {
   effect: pollLiveScores,
-  // `schedule` + `polling` control when / how often it runs
+  // `polling` sets the cadence; add a schedule at definition with `.pipe(Process.schedule([…]))`
 });
 // elsewhere: yield* (yield* LiveScores).runImmediately
 ```
@@ -114,7 +114,7 @@ Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStora
 |---|---|
 | [docs/guides/toolkit-by-example.md](./docs/guides/toolkit-by-example.md) | Every resource / group / host / UI pattern |
 | [docs/guides/history-and-persistence.md](./docs/guides/history-and-persistence.md) | History, durable queue, the dashboard data layer |
-| [docs/PROCESS-API.md](./docs/PROCESS-API.md) | Spec tables for `Process`, `Polling`, `ProcessSchedule` |
+| [docs/PROCESS-API.md](./docs/PROCESS-API.md) | Spec tables for `Process`, `Polling`, and `Process.Schedule` |
 | [docs/STORAGE.md](./docs/STORAGE.md) | Persistence model (the SSOT) |
 | [docs/PACKAGE-GUIDE.md](./docs/PACKAGE-GUIDE.md) | Narrative architecture |
 | [docs/AGENTS.md](./docs/AGENTS.md) | Repo map for agents |

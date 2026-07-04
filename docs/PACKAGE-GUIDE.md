@@ -8,7 +8,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 **effect-pm** (`@nikscripts/effect-pm`) is an [Effect](https://effect.website/)-first library for:
 
-1. **Managed processes** — `ScheduledProcess` over the `Process` engine: a driver watches `ProcessSchedule` entries, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes.
+1. **Managed processes** — `Process`: a driver watches the schedule's run windows, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes. Define one with `Process.Tag`, gate it with `Process.schedule` / `Process.window` / `Process.at` (or a reusable `Process.Schedule` resource).
 2. **Queue resources** — `QueueResource`: priority queues with concurrency, throttling, retry, self-refill, and optional durability.
 3. **Location transparency** — every resource is a `Resource` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Resource.httpServer`), `Resource.client` reaches it remotely — the **same `yield* Tag` code either way**. `Resource.serveInstances` runs many instances behind one transport; `Group` organizes tags (nestable, multi-host).
 4. **Persistence** — opt-in durability (`DurableQueueStore`) and observability history (`HistoryStore`), in-memory or SQLite; process/run analytics via `ProcessStore` / `RuntimeStorage`.
@@ -19,7 +19,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│ Resource tag  (QueueResource / ScheduledProcess / …)              │
+│ Resource tag  (QueueResource / Process / …)                       │
 │  • identity + contract (spec)                                     │
 │  • `yield* Tag` — the SAME code local or remote                   │
 └───────────────────────────────────────────────────────────────────┘
@@ -35,7 +35,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-**Key distinction:** `Polling` answers “how often does an armed instance repeat?” `ProcessSchedule` answers “should this instance keep running right now?” Stopping a process interrupts driver + child instances; disarming makes instances exit naturally.
+**Key distinction:** `Polling` answers “how often does an armed instance repeat?” the **schedule** (run windows) answers “should this instance keep running right now?” Stopping a process interrupts driver + child instances; disarming makes instances exit naturally.
 
 ---
 
@@ -61,13 +61,12 @@ Root imports from `@nikscripts/effect-pm` remain backwards compatible. Prefer
 dedicated subpaths for focused imports:
 
 - `@nikscripts/effect-pm/Resource`
+- `@nikscripts/effect-pm/Process` — `Process.Tag` / `Process.Schedule` + `make` / `layer` / `serve`
 - `@nikscripts/effect-pm/QueueResource`
-- `@nikscripts/effect-pm/ScheduledProcess`
-- `@nikscripts/effect-pm/ProcessScheduleContract`
 - `@nikscripts/effect-pm/Group`
 - `@nikscripts/effect-pm/HostLogs`
 - `@nikscripts/effect-pm/HistoryStore`, `@nikscripts/effect-pm/DurableQueueStore`
-- `@nikscripts/effect-pm/Process`, `@nikscripts/effect-pm/QueueResource`, `@nikscripts/effect-pm/ProcessStore`
+- `@nikscripts/effect-pm/ProcessStore`
 - `@nikscripts/effect-pm/storage/sqlite`
 - `@nikscripts/effect-pm/storage/redis`
 
@@ -88,9 +87,9 @@ For durable adapter work, start with
 | Export area | Role |
 |-------------|------|
 | `Resource` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `httpServer` / `client` / `Host` / `serveInstances` + `specOf` / `methodMeta`. |
-| `QueueResource`, `ScheduledProcess`, `ProcessScheduleResource` | Batteries-included resource kinds (queue / scheduled process / schedule). |
+| `QueueResource`, `Process` | Batteries-included resource kinds (queue / managed process). `Process.Schedule` is a standalone run-windows resource. |
 | `Group` | Organize member tags (nestable; same or different hosts). |
-| `Process`, `Polling`, `ProcessSchedule` | The process engine + gate/cadence layers under `ScheduledProcess`. |
+| `Process`, `Polling` | The managed-process toolkit + engine (`Process.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
 | `HostLogs`, `HistoryStore`, `DurableQueueStore` | Runtime-wide logs; observability history; durable queue (in-memory or SQLite). |
 | `ProcessStore` / `ProcessStorage` | Facet builder and combined storage layers for runtime records and resource facts. |
 | `RunResource`, `HttpClientRunGate`, `HttpApiResource` | Concurrency/throttle gates and typed HttpApi client building blocks. |

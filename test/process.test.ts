@@ -2,7 +2,10 @@ import * as ProcessStorage from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule } from "../src";
+import { Polling, Process, ProcessMakeInvalidLayerArgument } from "../src";
+// Engine schedule constructors live on the `Process` namespace now (the standalone `ProcessSchedule`
+// module was retired): `Process.scheduleInMemory` (call with no args for an empty schedule) +
+// `Process.at` / `Process.window`.
 import { ProcessExecutionStore } from "../src/store/processExecution";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
@@ -51,7 +54,7 @@ describe("Process runtime with schedule windows", () => {
         "test/positional-order",
         Effect.void,
         Polling.spaced(Duration.millis(100)),
-        ProcessSchedule.inMemory([alwaysOnEntry]),
+        Process.scheduleInMemory([alwaysOnEntry]),
       );
 
       const fib = yield* Effect.forkChild(proc.effect);
@@ -84,13 +87,13 @@ describe("Process runtime with schedule windows", () => {
     ),
 );
 
-  it.effect("ProcessSchedule.empty stays disarmed with no ticks", () =>
+  it.effect("Process.scheduleInMemory() stays disarmed with no ticks", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
         const proc = Process.make("test/schedule-empty", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
-          schedule: ProcessSchedule.empty,
+          schedule: Process.scheduleInMemory(),
         });
 
         const fib = yield* Effect.forkChild(proc.effect);
@@ -128,7 +131,7 @@ describe("Process runtime with schedule windows", () => {
     const proc = Process.make("test/run-immediately", {
       effect: Effect.void,
       polling: Polling.spaced(Duration.seconds(10)),
-      schedule: ProcessSchedule.inMemory([alwaysOnEntry]),
+      schedule: Process.scheduleInMemory([alwaysOnEntry]),
     });
 
     return Effect.gen(function* () {
@@ -161,7 +164,7 @@ describe("Process runtime with schedule windows", () => {
       const proc = Process.make("test/driver-no-store", {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(100)),
-        schedule: ProcessSchedule.inMemory([alwaysOnEntry]),
+        schedule: Process.scheduleInMemory([alwaysOnEntry]),
       });
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
@@ -178,8 +181,8 @@ describe("Process runtime with schedule windows", () => {
     Effect.gen(function* () {
         const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
         const proc = Process.make("test/schedule-id", {
-          schedule: ProcessSchedule.inMemory([
-            ProcessSchedule.at("match-101", utcDateFromMillis(0)),
+          schedule: Process.scheduleInMemory([
+            Process.at("match-101", utcDateFromMillis(0)),
           ]),
           effect: Effect.gen(function* () {
             const currentId = yield* Process.currentScheduleId;
@@ -208,8 +211,8 @@ describe("Process runtime with schedule windows", () => {
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) =>
             set([
-              ProcessSchedule.window("first-window", utcDateFromMillis(0), utcDateFromMillis(500)),
-              ProcessSchedule.window("second-window", utcDateFromMillis(2_000), utcDateFromMillis(2_500)),
+              Process.window("first-window", utcDateFromMillis(0), utcDateFromMillis(500)),
+              Process.window("second-window", utcDateFromMillis(2_000), utcDateFromMillis(2_500)),
             ]),
           effect: Effect.gen(function* () {
             const currentId = yield* Process.currentScheduleId;
@@ -316,8 +319,8 @@ describe("Process runtime with schedule windows", () => {
         const seen = yield* Ref.make<ReadonlyArray<Option.Option<string>>>([]);
         const proc = Process.make("test/run-immediately-no-schedule-id", {
           polling: Polling.spaced(Duration.millis(100)),
-          schedule: ProcessSchedule.inMemory([
-            ProcessSchedule.at("scheduled-id", utcDateFromMillis(0)),
+          schedule: Process.scheduleInMemory([
+            Process.at("scheduled-id", utcDateFromMillis(0)),
           ]),
           effect: Effect.gen(function* () {
             const currentId = yield* Process.currentScheduleId;
@@ -339,8 +342,8 @@ describe("Process runtime with schedule windows", () => {
         const proc = Process.make("test/mutation-cancels-stale-pending", {
           schedule: ({ set }) =>
             set([
-              ProcessSchedule.at("mutator", utcDateFromMillis(0)),
-              ProcessSchedule.at("kickoff", utcDateFromMillis(10_000)),
+              Process.at("mutator", utcDateFromMillis(0)),
+              Process.at("kickoff", utcDateFromMillis(10_000)),
             ]),
           effect: Effect.gen(function* () {
             const currentId = yield* Process.currentScheduleId;
@@ -352,7 +355,7 @@ describe("Process runtime with schedule windows", () => {
                   ? Effect.gen(function* () {
                       if (!(yield* Ref.get(mutated))) {
                         yield* Ref.set(mutated, true);
-                        yield* controls.set([ProcessSchedule.at("kickoff", utcDateFromMillis(30_000))]);
+                        yield* controls.set([Process.at("kickoff", utcDateFromMillis(30_000))]);
                       }
                     })
                   : Ref.update(ticks, (n) => n + 1),

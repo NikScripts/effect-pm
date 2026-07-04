@@ -44,9 +44,17 @@ const cases = [
     member: "Tag",
   },
   {
-    name: "ScheduledProcess",
-    entry: "src/internal/scheduledProcessNamespace.ts",
-    engine: ["src/Process.ts"],
+    // `Process` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
+    // / `window`) and the engine (`make` / `layer` / `serve`). A `Process.Tag`-only import must not
+    // retain the engine's separate source files.
+    name: "Process",
+    entry: "src/Process.ts",
+    engine: [
+      "src/internal/processSchedule.ts",
+      "src/ProcessStore.ts",
+      "src/store/processExecution.ts",
+      "src/Polling.ts",
+    ],
     member: "Tag",
   },
 ];

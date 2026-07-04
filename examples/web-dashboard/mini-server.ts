@@ -11,7 +11,7 @@ import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serve as processEntry } from "../../src/ScheduledProcess";
+import { serve as processEntry } from "../../src/Process";
 import * as Resource from "../../src/Resource";
 import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";

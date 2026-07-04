@@ -116,10 +116,6 @@
       "types": "./dist/Group.d.ts",
       "default": "./dist/Group.js"
     },
-    "./ScheduledProcess": {
-      "types": "./dist/ScheduledProcess.d.ts",
-      "default": "./dist/ScheduledProcess.js"
-    },
     "./ApiMetrics": {
       "types": "./dist/ApiMetrics.d.ts",
       "default": "./dist/ApiMetrics.js"

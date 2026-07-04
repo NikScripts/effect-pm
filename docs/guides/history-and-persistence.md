@@ -64,14 +64,14 @@ yield* queue.metricsHistory({ since, until })    // past metric windows (queueMe
 Same shape as the queue — set `captureLogs` on the process layer, provide a `HistoryStore`:
 
 ```ts
-const procLayer = ScheduledProcess.layer(NwslSync, {
+const procLayer = Process.layer(NwslSync, {
   effect,
   captureLogs: true,
 }).pipe(Layer.provide(HistoryStore.layerMemory()));
 
 const proc = yield* NwslSync;
-yield* proc.logs                      // live captured lines
-yield* proc.logHistory({ limit: 100 }) // past captured lines
+yield* proc.logs.live                    // live captured lines
+yield* proc.logs.history({ limit: 100 }) // past captured lines
 ```
 
 ## Runtime-wide (HostLogs)

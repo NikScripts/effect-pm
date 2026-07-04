@@ -22,9 +22,9 @@ Resource.kindOf(SomePlainTag);   // undefined  (a bare Resource.Tag carries no k
 | Contract | `kind` |
 | --- | --- |
 | `QueueResource` (`…/QueueContract`) | `@nikscripts/effect-pm/QueueResource` |
-| `ScheduledProcess` | `@nikscripts/effect-pm/ScheduledProcess` |
+| `Process` (`Process.Tag`) | `@nikscripts/effect-pm/Process` |
+| `Process.Schedule` (standalone schedule) | `@nikscripts/effect-pm/Process/Schedule` |
 | `CustomQueueResource` (`…/CustomQueueContract`) | `@nikscripts/effect-pm/CustomQueueResource` |
-| `ProcessScheduleResource` (`…/ProcessScheduleContract`) | `@nikscripts/effect-pm/ProcessScheduleResource` |
 | `ApiMetrics` | `@nikscripts/effect-pm/ApiMetrics` |
 
 This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Resource.Tag` has no stamped kind; pass `{ kind }` to `Resource.Tag(key, { kind })` / `Resource.tagFor(groupId, spec, { kind })` to give a custom contract its own.
@@ -573,7 +573,7 @@ On the dashboard, the host **health board** (tap the host die) lists degraded re
 Build each layer with **`serve`** (local **and** served — the default) or **`serveRemote`** (served-only, a pure gateway):
 
 - **`Resource.serve(tag, impl)`** / **`Resource.serveRemote(tag, impl)`** — for a **raw** `Resource.Tag`. Both **spec-check** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). `serve` additionally grants `Self | LocalCapability<Self>` from the **same** materialization, so the serving node also `yield*`s the resource in-process; `serveRemote` mounts wire handlers only. Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
-- **`QueueResource.serve(tag, config)`** / **`ScheduledProcess.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Resource.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
+- **`QueueResource.serve(tag, config)`** / **`Process.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Resource.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
 
 ```ts
 Resource.httpServer([

@@ -20,7 +20,7 @@ or `mapSubscribable`) instead of a raw `Stream`; reads become `yield* svc.x.get`
 `svc.x.changes` (was `Resource.changes(svc, s => s.x)`). Queue `size`/`status`/`isEmpty` are now `ref`s.
 
 **Serve-family vocabulary (breaking).** Modes are now protocol-neutral and uniform across `Resource` and
-every contract namespace (`QueueResource`, `CustomQueueResource`, `ScheduledProcess`, `ApiMetrics`,
+every contract namespace (`QueueResource`, `CustomQueueResource`, `Process`, `ApiMetrics`,
 `Telemetry`):
 
 - **`layer(tag, impl)`** — local only (grants `Self | LocalCapability<Self>`).

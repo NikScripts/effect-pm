@@ -1,14 +1,14 @@
 import { expect, it } from "vitest";
 // Import from the package BARREL — exactly what the other repo's UI agent imports.
-import { Group, Resource, ScheduledProcess, specOf, methodMeta } from "../src";
+import { Group, Process, Resource, specOf, methodMeta } from "../src";
 
 // A dashboard/TUI needs three things from the package, all proven here:
 //  1. walk a Group.Tag tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
 //  3. drive it over the wire (Resource.client / httpClient — proven in the node/topology tests).
 class MiniNode extends Resource.Node<MiniNode>("ui/miniNode") {}
-class Roster extends ScheduledProcess.Tag<Roster>()("ui/Roster") {}
-class Poller extends ScheduledProcess.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
+class Roster extends Process.Tag<Roster>()("ui/Roster") {}
+class Poller extends Process.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
 class Nwsl extends Group.Tag<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}
 class Hub extends Group.Tag<Hub>("ui/Hub")({ Nwsl }) {}
 
@@ -43,9 +43,9 @@ it("a UI can introspect each resource's contract to render widgets", () => {
       name,
       ...methodMeta(method),
     }));
-    // read panel, live panel, and a confirm-before button all fall out of the metadata
-    expect(methods.some((m) => m.name === "statusNow" && m.kind === "query")).toBe(true);
+    // live panel, read panel, and a confirm-before button all fall out of the metadata
     expect(methods.some((m) => m.name === "status" && m.streaming)).toBe(true);
+    expect(methods.some((m) => m.name === "logs.history" && m.kind === "query")).toBe(true);
     expect(methods.some((m) => m.name === "stop" && m.destructive)).toBe(true);
     // every method carries a human-readable description for the UI
     expect(methods.every((m) => typeof m.description === "string")).toBe(true);

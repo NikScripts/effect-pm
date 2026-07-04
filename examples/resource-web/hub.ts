@@ -14,7 +14,7 @@ import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Resource from "../../src/Resource";
 import * as QueueResource from "../../src/QueueResource";
-import * as ProcessResource from "../../src/ScheduledProcess";
+import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 
@@ -73,10 +73,12 @@ export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
     Resource.allReady([base, Resource.readinessOf(ScoresDb)]),
   ),
 ) {}
-export class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
+// Owns an inline schedule (seeded empty; `server.ts` seeds the live game windows at startup) so the
+// dashboard can read + edit its run windows through the `schedule` verb group.
+export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
-) {}
+).pipe(Process.schedule([])) {}
 export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   importJob,
