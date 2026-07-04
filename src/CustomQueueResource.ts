@@ -26,7 +26,8 @@ import {
 } from "./internal/queueProjection";
 import type { QueueRuntimeProjection } from "./internal/queueProjection";
 import {
-  QueueResource,
+  buildQueueEngine,
+  queueRateLimiterLayer,
   type EffectContext,
   type InferQueueEnqueueError,
   type InferQueueItem,
@@ -53,7 +54,7 @@ import {
   QueueItemEncodingError,
   QueueItemValidationError,
   makeQueueItemCodecDescriptor,
-} from "./QueueResource";
+} from "./internal/queueResource";
 
 export type { CustomQueueStatus } from "./internal/queueProjection";
 
@@ -353,7 +354,7 @@ const makeCustomQueueEffectWithoutSchema = <
   Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildCustomProjection(config);
-    const engine = yield* QueueResource.buildQueueEngine({
+    const engine = yield* buildQueueEngine({
       config: {
         ...config,
         levelCount: levels.levelCount,
@@ -438,7 +439,7 @@ const makeCustomQueueEffectWithSchema = <
   return Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildCustomProjection(config);
-    const engine = yield* QueueResource.buildQueueEngine({
+    const engine = yield* buildQueueEngine({
       config: {
         ...config,
         levelCount: levels.levelCount,
@@ -534,5 +535,5 @@ function makeCustomQueueEffect(
  */
 export const CustomQueueResource = {
   make: makeCustomQueueEffect,
-  rateLimiterLayer: QueueResource.rateLimiterLayer,
+  rateLimiterLayer: queueRateLimiterLayer,
 } as const;

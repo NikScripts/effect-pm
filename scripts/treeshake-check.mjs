@@ -3,9 +3,15 @@
 // A browser/dashboard bundle that imports only the *light* contract tag (`NS.Tag`) must NOT pull the
 // runtime engine (workers, refill, rate limiter, the supervisor loop). We prove that by bundling a
 // `.Tag`-only consumer straight from each namespace ENTRY source with esbuild (relative imports
-// bundled, everything in node_modules externalized), then asserting the engine source file never
-// enters the module graph. Run after `npm run build`; this reads source, not dist, so it measures the
-// authored structure independent of chunking.
+// bundled, everything in node_modules externalized), then asserting the engine source contributes
+// **zero bytes** to the output. This reads source, not dist, so it measures the authored structure
+// independent of chunking.
+//
+// NB: we inspect `metafile.outputs[*].inputs` (files that contribute *retained* bytes), NOT
+// `metafile.inputs` (every file esbuild *parsed*). A namespace that re-exports engine bindings
+// (`export { … } from "./internal/engine"`) forces esbuild to parse the engine to resolve the
+// namespace, so it always shows up in `metafile.inputs` even when fully tree-shaken away. Only the
+// retained-bytes view reflects what actually ships.
 //
 // Usage: node scripts/treeshake-check.mjs   (exit 1 if any case regresses)
 
@@ -27,14 +33,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cases = [
   {
     name: "QueueResource",
-    entry: "src/internal/queueResourceNamespace.ts",
-    engine: ["src/QueueResource.ts"],
+    entry: "src/QueueResource.ts",
+    engine: ["src/internal/queueResource.ts"],
     member: "Tag",
   },
   {
     name: "CustomQueueResource",
     entry: "src/internal/customQueueResourceNamespace.ts",
-    engine: ["src/CustomQueueResource.ts", "src/QueueResource.ts"],
+    engine: ["src/CustomQueueResource.ts", "src/internal/queueResource.ts"],
     member: "Tag",
   },
   {
@@ -65,7 +71,10 @@ const bundleTagOnly = async (entryAbs, member) => {
     packages: "external",
     logLevel: "silent",
   });
-  const inputs = Object.keys(result.metafile.inputs)
+  // Files that contribute *retained* bytes to the output (post-tree-shake), not the parse graph.
+  const outKey = Object.keys(result.metafile.outputs)[0];
+  const retained = result.metafile.outputs[outKey].inputs;
+  const inputs = Object.keys(retained)
     .filter((p) => !p.startsWith("<") && !p.includes("node_modules"))
     .map((p) => relative(root, resolve(root, p)))
     .sort();

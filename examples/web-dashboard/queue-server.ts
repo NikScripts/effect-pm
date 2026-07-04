@@ -13,7 +13,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serve as queueEntry } from "../../src/QueueContract";
+import { serve as queueEntry } from "../../src/QueueResource";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Resource from "../../src/Resource";
 import {

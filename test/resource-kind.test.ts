@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
-import * as QueueResource from "../src/QueueContract";
+import * as QueueResource from "../src/QueueResource";
 import * as ScheduledProcess from "../src/ScheduledProcess";
 import * as CustomQueueResource from "../src/CustomQueueContract";
 import * as ApiMetrics from "../src/ApiMetrics";

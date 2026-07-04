@@ -6,7 +6,7 @@
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";
-import * as QueueResource from "../../src/internal/queueResourceNamespace";
+import * as QueueResource from "../../src/QueueResource";
 import * as ScheduledProcess from "../../src/internal/scheduledProcessNamespace";
 import * as Resource from "../../src/Resource";
 import * as Group from "../../src/Group";

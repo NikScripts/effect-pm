@@ -14,7 +14,7 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Resource from "../../src/Resource";
-import { serve as queueEntry } from "../../src/QueueContract";
+import { serve as queueEntry } from "../../src/QueueResource";
 import { serve as processEntry } from "../../src/ScheduledProcess";
 import { HistoryStore } from "../../src/HistoryStore";
 import { NodeLogs } from "../../src/NodeLogs";

@@ -13,7 +13,7 @@
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Resource from "../../src/Resource";
-import * as QueueResource from "../../src/QueueContract";
+import * as QueueResource from "../../src/QueueResource";
 import * as ProcessResource from "../../src/ScheduledProcess";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";

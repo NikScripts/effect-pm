@@ -2,7 +2,8 @@ import { describe, expect, it } from "@effect/vitest";
 import { Clock, Duration, Effect, Layer, Ref } from "effect";
 import { Process } from "../src/Process";
 import { foldConfig } from "../src/ResourceConfigure";
-import { type EffectContext, QueueResource } from "../src/QueueResource";
+import * as QueueResource from "../src/QueueResource";
+import type { EffectContext } from "../src/QueueResource";
 
 describe("ResourceConfigure", () => {
   it("foldConfig stacks partial patches and function updaters", () => {

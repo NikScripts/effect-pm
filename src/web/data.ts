@@ -15,7 +15,7 @@ import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
 import { client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
 import * as NodeStatus from "../NodeStatus";
-import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
+import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";

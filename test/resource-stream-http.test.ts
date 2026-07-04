@@ -13,7 +13,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import { groupOf } from "../src/Resource";
-import { queueStatus } from "../src/QueueContract";
+import { queueStatus } from "../src/QueueResource";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a

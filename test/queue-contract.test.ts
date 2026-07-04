@@ -15,7 +15,7 @@ import {
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import { queueControlSpec } from "../src/QueueContract";
+import { queueControlSpec } from "../src/QueueResource";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
 import * as Resource from "../src/Resource";

@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { DurableQueueStore } from "../src/DurableQueueStore";
-import { QueueResource } from "../src/QueueResource";
+import * as QueueResource from "../src/QueueResource";
 import { SQLiteDurableQueueStore } from "../src/storage/sqlite";
 
 // A DurableQueueStore over a shared in-memory SQLite client — the same store can back two queue

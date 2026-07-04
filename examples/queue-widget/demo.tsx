@@ -15,7 +15,7 @@ import { Effect } from "effect";
 import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
 // Import the module directly (not the package barrel) so the browser bundle
 // doesn't drag in Node-only manager code.
-import { QueueResource } from "../../src/QueueResource";
+import * as QueueResource from "../../src/QueueResource";
 import { QueueWidget, type QueueStatus } from "./QueueWidget";
 import {
   RegistryProvider,

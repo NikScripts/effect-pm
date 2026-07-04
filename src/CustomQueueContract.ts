@@ -26,7 +26,7 @@ import type {
   CustomQueueLevelConfig,
   CustomQueueResourceConfigWithItemSchema,
 } from "./CustomQueueResource";
-import type { QueueEnqueueErrors } from "./QueueResource";
+import type { QueueEnqueueErrors } from "./internal/queueResource";
 import {
   historyQuery,
   queueEncodedEntry,
@@ -39,12 +39,12 @@ import {
   queueReleaseEncodingError,
   queueReleaseOptions,
   queueRouteOptions,
-} from "./QueueContract";
+} from "./QueueResource";
 import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
 import type { ConfigPatch } from "./ResourceConfigure";
 
 /** @public Re-export for custom-queue wire schemas. */
-export { queueLogEntry as customQueueLogEntry } from "./QueueContract";
+export { queueLogEntry as customQueueLogEntry } from "./QueueResource";
 
 /**
  * Per-lane pending counts keyed by configured name (or `"0"`, `"1"`, …).

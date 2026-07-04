@@ -4,7 +4,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
-import type { QueueLayerConfig } from "../src/QueueContract";
+import type { QueueLayerConfig } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL toolkit QueueResource engine served over http via

@@ -120,7 +120,7 @@ export { ProcessSchedule } from "./ProcessSchedule";
 // The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
 // member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
-export * as QueueResource from "./internal/queueResourceNamespace";
+export * as QueueResource from "./QueueResource";
 export { RunResource } from "./RunResource";
 export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
@@ -460,7 +460,7 @@ export type {
   InferQueueWorkerError,
   InferQueueWorkerRequirements,
   ConsumeResult,
-} from "./QueueResource";
+} from "./internal/queueResource";
 
 export * as CustomQueueResource from "./internal/customQueueResourceNamespace";
 
@@ -499,7 +499,7 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./QueueResource";
+} from "./internal/queueResource";
 
 // Types - RunResource
 export type {
