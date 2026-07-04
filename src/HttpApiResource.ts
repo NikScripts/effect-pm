@@ -39,7 +39,7 @@ import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
 import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Scope, Semaphore } from "effect";
-import { HttpClientRunGate } from "./HttpClientRunGate";
+import * as HttpClientRunGate from "./HttpClientRunGate";
 import {
   ensureClientUsage,
   recordEndpointUsage as recordRegistryUsage,
@@ -412,29 +412,32 @@ function layerEffect<
 // Public API
 // ============================================================================
 
+// HttpApiResource namespace — typed HTTP API client with transport gating. The module
+// is the namespace (`import * as HttpApiResource`): each entry point is a flat top-level
+// export (`acceptJson` / `instrumentEndpoints` are declared above), so a partial import
+// tree-shakes the unused builders out.
+
 /**
- * HttpApiResource namespace — typed HTTP API client with transport gating.
+ * Class factory: declare a typed HttpApi client with a baked-in `.layer`.
+ *
+ * @example
+ * ```ts
+ * class MyClient extends HttpApiResource.Service<MyClient>()("@app/MyClient", MyApi, {
+ *   baseUrl: "https://api.example.com",
+ *   concurrency: 5,
+ * }) {}
+ * const client = yield* MyClient
+ * ```
  *
  * @public
  */
-export const HttpApiResource = {
-  /**
-   * Class factory: declare a typed HttpApi client with a baked-in `.layer`.
-   *
-   * @example
-   * ```ts
-   * class MyClient extends HttpApiResource.Service<MyClient>()("@app/MyClient", MyApi, {
-   *   baseUrl: "https://api.example.com",
-   *   concurrency: 5,
-   * }) {}
-   * const client = yield* MyClient
-   * ```
-   */
-  Service: httpApiResourceService,
+export const Service = httpApiResourceService;
 
-  /** Functional equivalent of {@link Service} — returns a tag value with `.layer`. */
-  make: makeHttpApiResource,
-  layerEffect,
-  acceptJson,
-  instrumentEndpoints,
-} as const;
+/**
+ * Functional equivalent of {@link Service} — returns a tag value with `.layer`.
+ *
+ * @public
+ */
+export const make = makeHttpApiResource;
+
+export { layerEffect };

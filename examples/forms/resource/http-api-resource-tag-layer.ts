@@ -9,7 +9,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../../../src/ApiMetrics";
-import { HttpApiResource } from "../../../src/HttpApiResource";
+import * as HttpApiResource from "../../../src/HttpApiResource";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const DemoClientId = "examples/jsonplaceholder/DemoApiClient" as const;

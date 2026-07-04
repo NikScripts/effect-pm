@@ -1,7 +1,7 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { it, describe, expect } from "@effect/vitest";
 import { Effect, Layer, Option, Ref } from "effect";
-import { RunResource } from "../src/RunResource";
+import * as RunResource from "../src/RunResource";
 import { RunResourceStore } from "../src/store/runResource";
 import type {
   RunResourceFact,

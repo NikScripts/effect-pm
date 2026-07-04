@@ -475,145 +475,153 @@ const makeRunnerEffect = (config: RunResourceRunnerConfig) => {
 // Public API
 // ============================================================================
 
+// RunResource namespace — concurrency gate for effects. The module is the namespace
+// (`import * as RunResource`): each entry point is a flat top-level export, so
+// `RunResource.Tag` tree-shakes the gate/runner engine (`makeRunGateEffect` /
+// `makeRunnerEffect` below) out of a `Tag`-only import.
+
 /**
- * RunResource namespace — concurrency gate for effects.
+ * Create a scoped Effect that produces a gated callable.
+ *
+ * @example
+ * ```ts
+ * const gate = yield* RunResource.make({
+ *   effect: fetchData(),
+ *   concurrency: 3,
+ * })
+ * const result = yield* gate()
+ * ```
  *
  * @public
  */
-export const RunResource = {
-  /**
-   * Create a scoped Effect that produces a gated callable.
-   *
-   * @example
-   * ```ts
-   * const gate = yield* RunResource.make({
-   *   effect: fetchData(),
-   *   concurrency: 3,
-   * })
-   * const result = yield* gate()
-   * ```
-   */
-  make: makeRunGateEffect,
+export const make = makeRunGateEffect;
 
-  /**
-   * Build a `Layer` from a Context tag and config.
-   *
-   * @example
-   * ```ts
-   * const FetchLayer = RunResource.layer(FetchGate, {
-   *   effect: fetchData(),
-   *   concurrency: 3,
-   * })
-   * ```
-   */
-  layer: <Self, T, A, E>(
-    tag: Context.Key<Self, RunGate<T, A, E>>,
-    config: RunResourceConfig<T, A, E>,
-  ) =>
-    Layer.effect(tag)(
-      foldConfiguredSpec(config.name ?? "anonymous", {
-        ...config,
-        name: config.name ?? "anonymous",
-      }).pipe(Effect.flatMap(makeRunGateEffect)),
-    ),
+/**
+ * Build a `Layer` from a Context tag and config.
+ *
+ * @example
+ * ```ts
+ * const FetchLayer = RunResource.layer(FetchGate, {
+ *   effect: fetchData(),
+ *   concurrency: 3,
+ * })
+ * ```
+ *
+ * @public
+ */
+export const layer = <Self, T, A, E>(
+  tag: Context.Key<Self, RunGate<T, A, E>>,
+  config: RunResourceConfig<T, A, E>,
+) =>
+  Layer.effect(tag)(
+    foldConfiguredSpec(config.name ?? "anonymous", {
+      ...config,
+      name: config.name ?? "anonymous",
+    }).pipe(Effect.flatMap(makeRunGateEffect)),
+  );
 
-  /**
-   * Class factory: creates a Context tag with a baked-in `.layer`.
-   *
-   * The returned value is both a yieldable tag and has a `.layer` property.
-   * Use `typeof MyService` as the Self type at the call site.
-   *
-   * @example
-   * ```ts
-   * // Parameterized gate (with input):
-   * const SendSms = RunResource.Service<{ readonly _tag: "SendSms" }, PhoneNumber, SmsResult, SmsError>()(
-   *   "@app/SendSms",
-   *   { effect: (phone) => smsClient.send(phone), concurrency: 5 },
-   * )
-   * const send = yield* SendSms
-   * yield* send("+1234567890")
-   *
-   * // Unit gate (no input):
-   * const RefreshCache = RunResource.Service<{ readonly _tag: "RefreshCache" }, void, void, never>()(
-   *   "@app/RefreshCache",
-   *   { effect: () => cache.refresh(), concurrency: 1 },
-   * )
-   * const refresh = yield* RefreshCache
-   * yield* refresh(undefined)
-   * ```
-   */
-  Service: <Self, T, A, E = never>() =>
-  <const Name extends string>(
-    name: Name,
-    config: RunResourceConfig<T, A, E>,
-  ) => {
-    const defaultSpec = { ...config, name };
-    const base = Context.Service<Self, RunGate<T, A, E>>()(name);
-    const buildGate = foldConfiguredSpec(name, defaultSpec).pipe(
-      Effect.flatMap(makeRunGateEffect),
-    );
-    return Object.assign(base, {
-      defaultSpec,
-      configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
-        configureLayer(name, patch),
-      wrapGate: (
-        fn: (
-          previous: RunResourceConfig<T, A, E>["effect"],
-        ) => RunResourceConfig<T, A, E>["effect"],
-      ) => configureWrapEffectField(name, fn),
-      layer: Layer.effect(base)(buildGate),
-    });
-  },
+/**
+ * Class factory: creates a Context tag with a baked-in `.layer`.
+ *
+ * The returned value is both a yieldable tag and has a `.layer` property.
+ * Use `typeof MyService` as the Self type at the call site.
+ *
+ * @example
+ * ```ts
+ * // Parameterized gate (with input):
+ * const SendSms = RunResource.Service<{ readonly _tag: "SendSms" }, PhoneNumber, SmsResult, SmsError>()(
+ *   "@app/SendSms",
+ *   { effect: (phone) => smsClient.send(phone), concurrency: 5 },
+ * )
+ * const send = yield* SendSms
+ * yield* send("+1234567890")
+ *
+ * // Unit gate (no input):
+ * const RefreshCache = RunResource.Service<{ readonly _tag: "RefreshCache" }, void, void, never>()(
+ *   "@app/RefreshCache",
+ *   { effect: () => cache.refresh(), concurrency: 1 },
+ * )
+ * const refresh = yield* RefreshCache
+ * yield* refresh(undefined)
+ * ```
+ *
+ * @public
+ */
+export const Service = <Self, T, A, E = never>() =>
+<const Name extends string>(
+  name: Name,
+  config: RunResourceConfig<T, A, E>,
+) => {
+  const defaultSpec = { ...config, name };
+  const base = Context.Service<Self, RunGate<T, A, E>>()(name);
+  const buildGate = foldConfiguredSpec(name, defaultSpec).pipe(
+    Effect.flatMap(makeRunGateEffect),
+  );
+  return Object.assign(base, {
+    defaultSpec,
+    configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
+      configureLayer(name, patch),
+    wrapGate: (
+      fn: (
+        previous: RunResourceConfig<T, A, E>["effect"],
+      ) => RunResourceConfig<T, A, E>["effect"],
+    ) => configureWrapEffectField(name, fn),
+    layer: Layer.effect(base)(buildGate),
+  });
+};
 
-  /**
-   * Class factory: creates a pure identity Context tag (no default layer).
-   *
-   * Use with {@link RunResource.layer} to provide implementations.
-   * Useful for shared contracts, library interfaces, and dependency inversion.
-   *
-   * @example
-   * ```ts
-   * const FetchGate = RunResource.Tag<{ readonly _tag: "FetchGate" }, void, PriceData, FetchError>()(
-   *   "@app/FetchGate",
-   * )
-   * const FetchGateLive = RunResource.layer(FetchGate, {
-   *   effect: () => fetchPriceData(),
-   *   concurrency: 3,
-   * })
-   * ```
-   */
-  Tag: <Self, T, A, E = never>() =>
-  <const Name extends string>(name: Name) =>
-    Context.Service<Self, RunGate<T, A, E>>()(name),
+/**
+ * Class factory: creates a pure identity Context tag (no default layer).
+ *
+ * Use with {@link RunResource.layer} to provide implementations.
+ * Useful for shared contracts, library interfaces, and dependency inversion.
+ *
+ * @example
+ * ```ts
+ * const FetchGate = RunResource.Tag<{ readonly _tag: "FetchGate" }, void, PriceData, FetchError>()(
+ *   "@app/FetchGate",
+ * )
+ * const FetchGateLive = RunResource.layer(FetchGate, {
+ *   effect: () => fetchPriceData(),
+ *   concurrency: 3,
+ * })
+ * ```
+ *
+ * @public
+ */
+export const Tag = <Self, T, A, E = never>() =>
+<const Name extends string>(name: Name) =>
+  Context.Service<Self, RunGate<T, A, E>>()(name);
 
-  /**
-   * Create a generic runner that wraps any effect with concurrency gating.
-   *
-   * Does not publish {@link RunResourceStore} facts or state — only semaphore gating.
-   * Use {@link RunResource.make} when you need durable or in-process run analytics.
-   *
-   * Returns a Context.Service tag with `.layer`.
-   *
-   * @example
-   * ```ts
-   * const ApiGate = RunResource.makeRunner({
-   *   name: "@app/ApiGate",
-   *   concurrency: 10,
-   * })
-   *
-   * const runner = yield* ApiGate
-   * const result = yield* runner(someEffect)
-   * ```
-   */
-  makeRunner: <const Name extends string>(
-    config: RunResourceRunnerConfig & { readonly name: Name },
-  ) => {
-    const tag = Context.Service<
-      RunResourceRunner & { readonly _tag: Name },
-      RunResourceRunner
-    >(config.name);
-    const layer = Layer.effect(tag)(makeRunnerEffect(config));
-    return Object.assign(tag, { layer });
-  },
-} as const;
+/**
+ * Create a generic runner that wraps any effect with concurrency gating.
+ *
+ * Does not publish {@link RunResourceStore} facts or state — only semaphore gating.
+ * Use {@link RunResource.make} when you need durable or in-process run analytics.
+ *
+ * Returns a Context.Service tag with `.layer`.
+ *
+ * @example
+ * ```ts
+ * const ApiGate = RunResource.makeRunner({
+ *   name: "@app/ApiGate",
+ *   concurrency: 10,
+ * })
+ *
+ * const runner = yield* ApiGate
+ * const result = yield* runner(someEffect)
+ * ```
+ *
+ * @public
+ */
+export const makeRunner = <const Name extends string>(
+  config: RunResourceRunnerConfig & { readonly name: Name },
+) => {
+  const tag = Context.Service<
+    RunResourceRunner & { readonly _tag: Name },
+    RunResourceRunner
+  >(config.name);
+  const runnerLayer = Layer.effect(tag)(makeRunnerEffect(config));
+  return Object.assign(tag, { layer: runnerLayer });
+};
 

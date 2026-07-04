@@ -121,15 +121,15 @@ export { ProcessSchedule } from "./ProcessSchedule";
 // member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
 export * as QueueResource from "./QueueResource";
-export { RunResource } from "./RunResource";
-export { HttpClientRunGate } from "./HttpClientRunGate";
+export * as RunResource from "./RunResource";
+export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
-  HttpApiResource,
   acceptJson,
   instrumentEndpoints,
   type HttpApiResourceConfig,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
+export * as HttpApiResource from "./HttpApiResource";
 export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
@@ -255,8 +255,8 @@ export {
   configureLayer,
   foldConfig,
   resourceConfigureTagKey,
-  ResourceConfigure,
 } from "./ResourceConfigure";
+export * as ResourceConfigure from "./ResourceConfigure";
 export type { ConfigPatch } from "./ResourceConfigure";
 
 // CLI

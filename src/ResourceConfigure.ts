@@ -178,19 +178,22 @@ export const configureWrapEffectField = <
     effect: fn(spec.effect),
   }));
 
+// Layer-composed configure patches for resource and process services. The module is the
+// namespace (`import * as ResourceConfigure`): `configureLayer` / `foldConfig` /
+// `foldConfiguredSpec` are the flat exports above; `tagKey` / `wrapEffectField` are aliased
+// below so the namespace members match. Root imports match these bindings.
+// See `docs/guides/resource-configure.md`.
+
 /**
- * Layer-composed configure patches for resource and process services.
- *
- * @remarks
- * Root imports (`configureLayer`, `foldConfig`, …) match {@link ResourceConfigure}
- * members. See `docs/guides/resource-configure.md`.
+ * Deterministic configure tag key for a resource id, aliased as `ResourceConfigure.tagKey`.
  *
  * @public
  */
-export const ResourceConfigure = {
-  configureLayer,
-  foldConfig,
-  foldConfiguredSpec,
-  tagKey: resourceConfigureTagKey,
-  wrapEffectField: configureWrapEffectField,
-} as const;
+export { resourceConfigureTagKey as tagKey };
+
+/**
+ * Wrap a configured spec's `effect` field, aliased as `ResourceConfigure.wrapEffectField`.
+ *
+ * @public
+ */
+export { configureWrapEffectField as wrapEffectField };

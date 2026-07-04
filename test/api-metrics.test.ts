@@ -11,7 +11,7 @@ import type { HttpClientError } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../src/ApiMetrics";
-import { HttpApiResource } from "../src/HttpApiResource";
+import * as HttpApiResource from "../src/HttpApiResource";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 import * as Resource from "../src/Resource";
 
