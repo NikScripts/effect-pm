@@ -24,3 +24,11 @@ materialization (the co-located "expose over RPC AND consume in-process" case). 
 served view and the in-process `yield* Tag` are the same instance — no double materialization, no second
 `peersLayer`. Composes onto a node with `httpServer` like any `serve` layer; a served-only gateway uses
 `serve` directly. Use the `Effect` form when the impl needs a capability (`peers`, a pool) to build.
+
+**Serving is local + served by default (breaking).** A resource is one instance; serving just exposes it
+outward, so the serving node now also gets it in-process. `serveAllHttp` / `serveHttp` build the impl **once**
+and grant `Self | LocalCapability<Self>` alongside the wire handlers — a co-located node serves its resources
+**and** `yield*`s them (read a `Resource.local` member, share `value`/`ref` cells) with no double
+materialization and no second `peersLayer`. `Resource.serverEntry` is local-by-default; new
+**`Resource.remoteEntry`** is served-only (a pure gateway). `serve` / `server` remain the served-only
+primitives, and **`Resource.serveLocal`** is the single-resource local+served combinator for `httpServer`.
