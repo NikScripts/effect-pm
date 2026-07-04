@@ -20,8 +20,8 @@ class B extends Resource.Tag<B>()("proto/B", { read: Resource.effect(Schema.Numb
 const impl = { read: Effect.map(Dep, (value) => value) };
 
 // each resource's handler layer, its own Dep value provided — isolated
-const layerA = Resource.serve(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
-const layerB = Resource.serve(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
+const layerA = Resource.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
+const layerB = Resource.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
 const merged = Resource.groupOf(A).merge(Resource.groupOf(B));
 

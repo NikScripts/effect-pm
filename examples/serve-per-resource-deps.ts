@@ -38,8 +38,8 @@ const impl = { handler: Effect.map(ImportHandlers, (handlers) => handlers.label)
 // httpServer([...serve layers], options) — bundles the provideMerge + registry
 const Node = Resource.httpServer(
   [
-    Resource.serve(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
-    Resource.serve(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
+    Resource.serveRemote(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
+    Resource.serveRemote(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
   ],
   { health: { path: "/health" } },
 ).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: PORT })));

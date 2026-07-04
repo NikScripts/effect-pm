@@ -55,7 +55,7 @@ it("nested hub group: local members + one remote (mini) member, one runtime", ()
         RosterLocal,
         Resource.client(LiveScorePoller).pipe(
           Layer.provide(
-            Resource.connectHttp(MiniNode, {
+            Resource.httpClient(MiniNode, {
               url: `http://127.0.0.1:${portMini}/rpc`,
             }),
           ),

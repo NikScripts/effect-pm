@@ -3,7 +3,7 @@
  *
  * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over
  * http on one port, plus the `NodeStatus` that `serveAllHttp` auto-mounts. The browser dashboard
- * reaches it via `Resource.connectHttp(WnbaNode, …)` (vite proxies `/rpc` here), so the top-right
+ * reaches it via `Resource.httpClient(WnbaNode, …)` (vite proxies `/rpc` here), so the top-right
  * node status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
  * `pnpm run example:resource-web`).
  */

@@ -598,7 +598,7 @@ export const serve = <Self, E = never, R = never>(
   config: ProcessLayerConfig<E, R>,
 ): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R> =>
   Layer.unwrap(
-    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.serveRemote(tag, impl)),
   );
 
 /**

@@ -75,12 +75,12 @@ export const kindOf = (member: unknown): "queue" | "process" => {
 // In Node (the TUI) there's no proxy, so reach the servers directly.
 const inBrowser = typeof window !== "undefined";
 const dropletRpc = inBrowser ? "/rpc" : "http://localhost:7777/rpc";
-/** The Mini node's rpc endpoint (used by `connectHttp`). */
+/** The Mini node's rpc endpoint (used by `httpClient`). */
 export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 
 // One transport per HOST — each node serves its whole group on one /rpc (serveAllHttp),
 // so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini.
-const dropletTransport = Resource.connectHttp(Droplet, { url: dropletRpc });
+const dropletTransport = Resource.httpClient(Droplet, { url: dropletRpc });
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
@@ -97,7 +97,7 @@ export const appLayer = Layer.mergeAll(
   Resource.client(Daily).pipe(Layer.provide(dropletTransport)),
   Resource.client(Weekly).pipe(Layer.provide(dropletTransport)),
   // KeyRotation lives on the Mini node — its own transport, not the Droplet.
-  Resource.client(KeyRotation).pipe(Layer.provide(Resource.connectHttp(MiniNode, { url: miniUrl }))),
+  Resource.client(KeyRotation).pipe(Layer.provide(Resource.httpClient(MiniNode, { url: miniUrl }))),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */

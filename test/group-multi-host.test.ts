@@ -47,14 +47,14 @@ it("a group's members each resolve their own node (mixed nodes, one group)", () 
       const clients = Layer.mergeAll(
         Resource.client(Cluster.Alpha).pipe(
           Layer.provide(
-            Resource.connectHttp(NodeA, {
+            Resource.httpClient(NodeA, {
               url: `http://127.0.0.1:${portA}/rpc`,
             }),
           ),
         ),
         Resource.client(Cluster.Beta).pipe(
           Layer.provide(
-            Resource.connectHttp(NodeB, {
+            Resource.httpClient(NodeB, {
               url: `http://127.0.0.1:${portB}/rpc`,
             }),
           ),

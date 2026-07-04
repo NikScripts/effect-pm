@@ -6,7 +6,7 @@ import * as Resource from "../src/Resource";
 
 // Node-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
 // transport (EdgeNode), the server is one `Resource.serveHttp` call, and the client wires the
-// node with one `Resource.connectHttp`. Ship ONLY the tag — `Resource.client(tag)` resolves
+// node with one `Resource.httpClient`. Ship ONLY the tag — `Resource.client(tag)` resolves
 // where to connect from the node. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
 class EdgeNode extends Resource.Node<EdgeNode>("nodeHttp/edge") {}
@@ -31,7 +31,7 @@ it("drives a node-bearing resource over real http (ship only the tag)", () => {
       Effect.map((server) => server.address),
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
-    const EdgeLive = Resource.connectHttp(EdgeNode, {
+    const EdgeLive = Resource.httpClient(EdgeNode, {
       url: `http://127.0.0.1:${port}/rpc`,
     });
 
@@ -40,7 +40,7 @@ it("drives a node-bearing resource over real http (ship only the tag)", () => {
       expect(yield* echo.ping).toBe("pong");
       expect(yield* echo.shout({ msg: "hi" })).toBe("HI");
     }).pipe(
-      // ship only the tag: client(Echo) requires EdgeNode; connectHttp(EdgeNode, …) supplies it.
+      // ship only the tag: client(Echo) requires EdgeNode; httpClient(EdgeNode, …) supplies it.
       Effect.provide(Resource.client(Echo).pipe(Layer.provide(EdgeLive))),
       Effect.scoped,
     );

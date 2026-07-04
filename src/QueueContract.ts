@@ -837,7 +837,7 @@ export const server = <
 
 /**
  * Serve a toolkit queue **over http** in one call — the engine wired behind the tag and mounted
- * on an http `RpcServer` (ndjson by default, matching {@link Resource.connectHttp}). Provide an
+ * on an http `RpcServer` (ndjson by default, matching {@link Resource.httpClient}). Provide an
  * `HttpServer` (e.g. `NodeHttpServer.layer({ port })`) and you have a remote queue; a
  * {@link Resource.client} + transport drives it as if local.
  *
@@ -873,8 +873,8 @@ export const serveHttp = <
  * ```ts
  * Resource.httpServer().pipe(
  *   Layer.provideMerge(Layer.mergeAll(
- *     QueueResource.serve(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
- *     QueueResource.serve(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
+ *     QueueResource.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
+ *     QueueResource.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
  *   )),
  *   Layer.provide(Resource.servedResourcesLayer),
  *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
@@ -894,7 +894,7 @@ export const serve = <
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
   Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serveRemote(tag, impl)),
   );
 
 /**

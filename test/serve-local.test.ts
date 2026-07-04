@@ -15,7 +15,7 @@ it("serveLocal materializes once and grants the local instance", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const builds = yield* Ref.make(0);
-      const layer = Resource.serveLocal(
+      const layer = Resource.serve(
         Svc,
         Effect.gen(function* () {
           yield* Ref.update(builds, (n) => n + 1); // count materializations

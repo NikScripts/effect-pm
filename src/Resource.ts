@@ -33,7 +33,7 @@
  * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
  * default on both, so client/server can't disagree on the codec):
  * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
- * - {@link Resource.connectHttp} — wire a {@link Resource.Node}'s transport from a `url`.
+ * - {@link Resource.httpClient} — wire a {@link Resource.Node}'s transport from a `url`.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
@@ -135,7 +135,7 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
 }> {}
 
 /** No transport url for a node — neither on the {@link Resource.Node} (`{ url }`) nor passed to
- *  {@link Resource.connectHttp}. @public */
+ *  {@link Resource.httpClient}. @public */
 export class MissingNodeUrl extends Data.TaggedError("MissingNodeUrl")<{
   readonly node: string;
 }> {}
@@ -1929,7 +1929,7 @@ export type ServeRequirements<Impl> = {
  *
  * @public
  */
-export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
+export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   tag: {
     readonly groupId: string;
     readonly [specSym]: FlatSpec;
@@ -1992,7 +1992,7 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  *
  * @public
  */
-export const serveLocal = <Self, S extends Spec, R = never>(
+export const serve = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<S>, never, R> =>
@@ -2003,7 +2003,7 @@ export const serveLocal = <Self, S extends Spec, R = never>(
         // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
         // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
         // `R` was discharged by the Effect form above, so the handlers are requirement-free.
-        serve(tag, built as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
+        serveRemote(tag, built as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
           HandlerContextOf<S>,
           never,
           never
@@ -2159,7 +2159,7 @@ export const provide = <ROut, EL, RL, A, E, R>(
   Layer.mergeAll(...resources).pipe(Layer.provide(dependency));
 
 /**
- * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
+ * Expose a resource over **http** in one call — the server mirror of {@link httpClient}, and
  * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
  * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
  * (default {@link defaultSerialization}, matching the client). The only thing left to provide
@@ -2336,7 +2336,7 @@ type ServeEntriesGrant<Entries extends ReadonlyArray<ServeEntry<any, any>>> =
  * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
  * to {@link serveHttp}. Each resource's procedures are group-id-prefixed, so they coexist on the
  * one `/rpc` endpoint without collision; clients reach each via `Resource.client(Tag)` over a single
- * {@link connectHttp} transport (typically a shared {@link Node}). This is how a whole group runs
+ * {@link httpClient} transport (typically a shared {@link Node}). This is how a whole group runs
  * behind one port.
  *
  * ```ts
@@ -2683,7 +2683,7 @@ const makeNode = <Self>(name: string, options?: { readonly url?: string }) =>
 
 /**
  * Wire a {@link Node}'s transport, **once**, from any RPC client `Protocol` layer — the
- * transport-agnostic primitive (use {@link connectHttp} for the batteries-included http case).
+ * transport-agnostic primitive (use {@link httpClient} for the batteries-included http case).
  * Re-keys that `Protocol` under the node, so {@link Resource.client} resolves it for every tag
  * bound to this node; provide one `Resource.connect(...)` per node an app talks to.
  *
@@ -2703,7 +2703,7 @@ const connectLayer = <Self, RIn>(
   Layer.effect(node, RpcClient.Protocol).pipe(Layer.provide(protocol));
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
- * **streaming** responses, and is shared by {@link connectHttp} + {@link serveHttp} so a
+ * **streaming** responses, and is shared by {@link httpClient} + {@link serveHttp} so a
  * client and server can't silently disagree on the codec. */
 const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
@@ -2715,12 +2715,12 @@ const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
  * (ndjson), matching {@link serveHttp}'s default so the two sides agree by construction.
  *
  * ```ts
- * const EdgeLive = Resource.connectHttp(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
+ * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
  * ```
  *
  * @public
  */
-const connectHttp = <Self>(
+const httpClient = <Self>(
   node: NodeKey<Self> & { readonly url?: string },
   options?: {
     readonly url?: string;
@@ -3346,7 +3346,7 @@ export {
   tagFor,
   makeNode as Node,
   connectLayer as connect,
-  connectHttp,
+  httpClient,
   instance,
   localLayer as layer,
   serverLayer as server,
