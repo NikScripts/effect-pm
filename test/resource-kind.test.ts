@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as QueueResource from "../src/QueueResource";
 import * as ScheduledProcess from "../src/ScheduledProcess";
-import * as CustomQueueResource from "../src/CustomQueueContract";
+import * as CustomQueueResource from "../src/CustomQueueResource";
 import * as ApiMetrics from "../src/ApiMetrics";
 
 // Each contract stamps its canonical kind on the tag, so `Resource.kindOf` classifies a tag

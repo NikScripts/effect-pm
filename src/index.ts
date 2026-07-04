@@ -462,7 +462,7 @@ export type {
   ConsumeResult,
 } from "./internal/queueResource";
 
-export * as CustomQueueResource from "./internal/customQueueResourceNamespace";
+export * as CustomQueueResource from "./CustomQueueResource";
 
 export type {
   CustomQueueHandle,
@@ -473,11 +473,11 @@ export type {
   CustomQueueResourceConfigWithoutItemSchema,
   CustomQueueResourceConfigWithItemSchema,
   CustomQueueStatus,
-} from "./CustomQueueResource";
+} from "./internal/customQueueResource";
 
 export type {
   CustomQueueTagOptions,
-} from "./CustomQueueContract";
+} from "./CustomQueueResource";
 
 export {
   customQueueControlSpec,
@@ -486,7 +486,7 @@ export {
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,
-} from "./CustomQueueContract";
+} from "./CustomQueueResource";
 
 export {
   QueueItemCodecDescriptorSchema,

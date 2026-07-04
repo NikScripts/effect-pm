@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Ref, Stream } from "effect";
-import { CustomQueueResource } from "../src/CustomQueueResource";
+import * as CustomQueueResource from "../src/CustomQueueResource";
 
 const waitUntilCompleted = (
   queue: { readonly completed: Effect.Effect<number> },

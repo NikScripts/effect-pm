@@ -18,7 +18,7 @@ export default defineConfig([
       index: "src/index.ts",
       Process: "src/Process.ts",
       QueueResource: "src/QueueResource.ts",
-      CustomQueueResource: "src/internal/customQueueResourceNamespace.ts",
+      CustomQueueResource: "src/CustomQueueResource.ts",
       Resource: "src/Resource.ts",
       MultiNode: "src/MultiNode.ts",
       ProcessStore: "src/ProcessStore.ts",

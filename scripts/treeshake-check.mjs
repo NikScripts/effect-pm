@@ -39,8 +39,8 @@ const cases = [
   },
   {
     name: "CustomQueueResource",
-    entry: "src/internal/customQueueResourceNamespace.ts",
-    engine: ["src/CustomQueueResource.ts", "src/internal/queueResource.ts"],
+    entry: "src/CustomQueueResource.ts",
+    engine: ["src/internal/customQueueResource.ts", "src/internal/queueResource.ts"],
     member: "Tag",
   },
   {
