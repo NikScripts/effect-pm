@@ -171,6 +171,7 @@
     "build": "tsup",
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json",
     "test": "vitest run",
+    "treeshake": "node scripts/treeshake-check.mjs",
     "test:nwsl": "node scripts/nwsl-local.mjs test",
     "test:watch": "vitest",
     "lint": "eslint . --ignore-pattern repos/**",
