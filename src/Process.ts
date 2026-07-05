@@ -86,7 +86,7 @@ import type {
   FlatSpec,
   HandlerContextOf,
   ImplOf,
-  LocalCapability,
+  Local,
   Method,
   NodeBoundTag,
   NodeKey,
@@ -98,6 +98,10 @@ import type {
 import { HistoryStore } from "./HistoryStore";
 import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import { builtInProcessStoreSpec } from "./internal/store/processStoreSpec";
+import type { StoreScopeTag } from "./internal/store/registration";
+import type { StoreSpec } from "./internal/store/spec";
 // ============================================================================
 // Public types
 // ============================================================================
@@ -2267,7 +2271,7 @@ const buildProcessImpl = <A, E, R>(
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, R>;
+): Layer.Layer<Self | Local<Self>, never, R>;
 export function layer(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
@@ -2286,7 +2290,7 @@ export function layer(
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<ProcessSpec>, never, R>;
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<ProcessSpec>, never, R>;
 export function serve(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
@@ -2334,6 +2338,39 @@ export const configure = <A = void, E = never, R = never>(
   patch: ConfigPatch<ProcessLayerConfig<A, E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
+/**
+ * Register this process on an app {@link Store.Service} — built-in execution analytics with an
+ * optional bare spec object merged in:
+ *
+ * ```ts
+ * Process.store(Daily)
+ * Process.store(Daily, {
+ *   audit: Store.append(auditSchema),
+ * })
+ * ```
+ *
+ * @public
+ */
+export const store: {
+  <const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
+    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInProcessStoreSpec>>
+  >;
+  <
+    const Tag extends StoreScopeTag,
+    const S extends StoreSpec,
+  >(
+    tag: Tag,
+    extended: S,
+  ): ReturnType<
+    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInProcessStoreSpec>, S>
+  >;
+} = (tag: StoreScopeTag, extended?: StoreSpec) => {
+  const builtIn = builtInProcessStoreSpec(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, builtIn)
+    : facetStoreRegistration(tag, builtIn, extended);
+};
+
 // ============================================================================
 // Standalone Schedule resource layer
 // ============================================================================
@@ -2370,7 +2407,7 @@ const buildScheduleImpl = (
 export const scheduleLayer = <Self>(
   tag: ResourceTag<Self, ScheduleResourceSpec>,
   options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
-): Layer.Layer<Self | LocalCapability<Self>> =>
+): Layer.Layer<Self | Local<Self>> =>
   Layer.unwrap(
     Effect.map(buildScheduleImpl(options), (impl) => Resource.layer(tag, impl)),
   );
@@ -2383,7 +2420,7 @@ export const scheduleLayer = <Self>(
 export const scheduleServe = <Self>(
   tag: ResourceTag<Self, ScheduleResourceSpec>,
   options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
-): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<ScheduleResourceSpec>> =>
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<ScheduleResourceSpec>> =>
   Layer.unwrap(
     Effect.map(buildScheduleImpl(options), (impl) => Resource.serve(tag, impl)),
   );

@@ -335,7 +335,7 @@ export const serveRemote = <Self>(
 /**
  * Serve this Telemetry resource **and** grant its local instance from **one** materialization — the
  * counterpart to {@link Resource.serve}. Forks one sampling fiber, mounts the `snapshot`/`live` RPC
- * handlers, and grants `Self | LocalCapability<Self>` so co-located code can `yield* Tag`. Reach it
+ * handlers, and grants `Self | Local<Self>` so co-located code can `yield* Tag`. Reach it
  * remotely with `Resource.client`; a served-**only** edge uses {@link serveRemote}.
  *
  * @public

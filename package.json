@@ -116,6 +116,10 @@
       "types": "./dist/Group.d.ts",
       "default": "./dist/Group.js"
     },
+    "./Store": {
+      "types": "./dist/Store.d.ts",
+      "default": "./dist/Store.js"
+    },
     "./ApiMetrics": {
       "types": "./dist/ApiMetrics.d.ts",
       "default": "./dist/ApiMetrics.js"

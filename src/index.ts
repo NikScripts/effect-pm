@@ -151,10 +151,14 @@ export * as Resource from "./Resource";
 export type {
   AnyLocalMethod,
   AnyMethod,
+  Local,
+  LocalEffect,
+  LocalMethod,
+  LocalShape,
+  LocalShapeOf,
   NodeKey,
   NodeTagFactory,
-  LocalCapability,
-  LocalMethod,
+  Of,
   Method,
   MethodAnnotations,
   MethodKind,
@@ -162,9 +166,14 @@ export type {
   ResourceInstance,
   ResourceTag,
   ServiceOf,
+  Shape,
+  ShapeOf,
   Spec,
   TagFactory,
   TagHandlers,
+  Wire,
+  WireOf,
+  WireShape,
 } from "./Resource";
 export * as ProcessStorage from "./ProcessStorage";
 
@@ -296,6 +305,7 @@ export type {
   OfferResult,
 } from "./DurableQueueStore";
 export * as Group from "./Group";
+export * as Store from "./Store";
 export {
   LogAnnotationKeys,
   withNodeLogAnnotations,

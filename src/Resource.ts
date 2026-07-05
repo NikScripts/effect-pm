@@ -127,7 +127,7 @@ export class MissingContractMethod extends Data.TaggedError(
 
 /**
  * A {@link Resource.local} (local-only) method was reached through a client. Unreachable by
- * construction — the {@link LocalCapability} it requires is never granted to a client.
+ * construction — the {@link Local} it requires is never granted to a client.
  *
  * @public
  */
@@ -240,20 +240,29 @@ export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
   marked(method, { fleet: true as const });
 
 /** @internal */
-declare const localCapabilityTypeId: unique symbol;
+declare const localTypeId: unique symbol;
 
 /**
- * A phantom **capability**, granted *only* by a resource's local layer
- * ({@link Resource.layer}) — never by {@link Resource.client}. A {@link LocalMethod} carries
- * it in its requirement channel, so calling a non-serializable method against a client is a
- * **compile error** (unsatisfied requirement); the same call resolves when the local layer
- * is provided. Branded by `Self` so one resource's local layer can't unlock another's.
+ * Granted *only* by a resource's local layer ({@link Resource.layer} / {@link serve}) — never by
+ * {@link Resource.client}. Local to **this runtime's materialized impl** for the tag (not a remote
+ * client, not a peer). A {@link LocalMethod} carries it in its requirement channel, so calling a
+ * non-serializable method against a client is a **compile error** (unsatisfied requirement); the
+ * same call resolves when the local layer is provided. Branded by `Self` so one resource's local
+ * layer can't unlock another's.
  *
  * @public
  */
-export interface LocalCapability<in out Self> {
-  readonly [localCapabilityTypeId]: Self;
+export interface Local<in out Self> {
+  readonly [localTypeId]: Self;
 }
+
+/**
+ * A local-only member as surfaced in {@link ServiceOf} — `Effect` requiring {@link Local} to
+ * obtain the value.
+ *
+ * @public
+ */
+export type LocalEffect<A, E = never, Self = unknown> = Effect.Effect<A, E, Local<Self>>;
 
 /** Identity brand for a {@link LocalMethod} (Effect-style string `TypeId`) — distinguishes an off-wire
  *  local member from a wire {@link Method}. */
@@ -264,14 +273,14 @@ const LocalMethodTypeId = "~nikscripts/effect-pm/Resource/LocalMethod" as const;
  * *not* part of the wire contract (no schema, no rpc): use it for things that can't cross
  * RPC simply (a returned function, a raw `Fiber`/`Scope`/`Ref`, a callback). Its declared
  * type `T` is given directly. In the service it surfaces as
- * `Effect<T, never, LocalCapability<Self>>` — you `yield*` it to obtain the value, which
- * requires the local layer's capability.
+ * `Effect<T, never, Local<Self>>` — you `yield*` it to obtain the value, which requires the
+ * local layer ({@link Local}).
  *
  * @public
  */
 export interface LocalMethod<T> {
   readonly [LocalMethodTypeId]: typeof LocalMethodTypeId;
-  /** Phantom carrier of the member's local type — type-level only, never set at runtime. */
+  /** Phantom default at declaration — type-level / documentation; not on the wire. */
   readonly value?: T;
 }
 
@@ -416,14 +425,20 @@ const setPath = (
  * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
  * not in the wire contract; usable only when the local layer is provided.
  *
+ * Pass an optional `default` so the call is not an empty `()` — it documents or seeds the
+ * local value without changing the wire contract.
+ *
  * ```ts
- * subscribe: Resource.local<(cb: (x: number) => void) => Effect.Effect<void>>(),
+ * subscribe: Resource.local<(cb: (x: number) => void) => Effect.Effect<void>>(
+ *   () => () => Effect.void,
+ * ),
  * ```
  *
  * @public
  */
-export const local = <T>(): LocalMethod<T> => ({
+export const local = <T>(defaultValue?: T): LocalMethod<T> => ({
   [LocalMethodTypeId]: LocalMethodTypeId,
+  ...(defaultValue !== undefined ? { value: defaultValue } : {}),
 });
 
 /**
@@ -617,6 +632,15 @@ export const ref = <Su extends Schema.Top>(
   success: Su,
 ): RefField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
   marked(stream(success), { _tag: "ref" as const });
+
+/**
+ * Narrow a resource contract object through the builder (prefer over `as const satisfies`).
+ *
+ * @public
+ */
+export const contract = <const S extends Spec>(spec: S): S => spec;
+
+export { store } from "./Store";
 
 /**
  * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream
@@ -882,8 +906,8 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
  * `Effect`/function members; off-wire {@link LocalMethod}s surface as
- * `Effect<T, never, LocalCapability<Self>>` — `yield*` to obtain the value, requiring the
- * local layer's capability (so they're uncallable through {@link Resource.client}).
+ * `Effect<T, never, Local<Self>>` — `yield*` to obtain the value, requiring the local layer
+ * ({@link Local}) (so they're uncallable through {@link Resource.client}).
  *
  * @public
  */
@@ -898,7 +922,7 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 // spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
 export type ServiceOf<S extends Spec, Self = unknown> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
-    ? Effect.Effect<T, never, LocalCapability<Self>>
+    ? LocalEffect<T, never, Self>
     : S[K] extends { readonly _tag: "constant" }
       ? SuccessOf<AsMethod<S[K]>>
       : S[K] extends { readonly _tag: "ref" }
@@ -910,7 +934,7 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
             : never;
 };
 
-/** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
+/** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). @internal */
 type WireServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
     readonly _tag: "ref";
@@ -922,6 +946,9 @@ type WireServiceOf<S extends Spec> = {
         ? WireServiceOf<S[K]>
         : never;
 };
+
+/** Wire-only {@link ServiceOf} — local members stripped. @public */
+export type Wire<S extends Spec> = WireServiceOf<S>;
 
 /** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
  *  {@link FleetField}s and {@link LocalMethod}s are excluded, so a fold can't recurse into a peer's
@@ -945,7 +972,7 @@ type PeerServiceOf<S extends Spec> = {
 /**
  * The **implementation** a {@link localLayer} / {@link serve} expects: wire members are their
  * `Effect`/`Stream`/function, and each {@link LocalMethod} is its **raw** value `T` (the toolkit wraps
- * it to require the {@link LocalCapability}). When an impl needs a capability (e.g. {@link peers}) to
+ * it to require the {@link Local}). When an impl needs a capability (e.g. {@link peers}) to
  * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serve}
  * — resolve it once, and the members close over it.
  *
@@ -1242,7 +1269,7 @@ export interface ResourceTag<Self, S extends Spec>
   readonly [specTypeSym]?: S;
   readonly [groupSym]: RpcGroupOf<S>;
   readonly [localCapSym]: Context.Key<
-    LocalCapability<Self>,
+    Local<Self>,
     { readonly granted: true }
   >;
   /**
@@ -1268,6 +1295,147 @@ export interface ResourceTag<Self, S extends Spec>
   readonly [selfNodeSym]: Context.Key<SelfNodeId<Self>, string>;
   /** The fleet — the tag's `distributed` set, if declared (via {@link distributed}); else `undefined`. */
   readonly [nodesSym]?: ReadonlyArray<AnyNode>;
+}
+
+/** A resource tag identifier — {@link Context.Service} tags carry `Service` and `Spec`. @internal */
+type TagIdentifier = { readonly Service: unknown };
+
+/** Spec carried by tag identifier `T`. @internal */
+type SpecOfTag<T> = T extends ResourceTag<any, infer S extends Spec> ? S : SpecOf<T>;
+
+/** Strip {@link Local} from an effect requirement. @internal */
+type ExcludeLocal<R> = [Extract<R, Local<any>>] extends [never]
+  ? R
+  : Exclude<R, Local<any>>;
+
+/** Map a service member to its {@link LocalShape} form ({@link Local} requirement removed). @internal */
+type LocalizeMember<V> = V extends Effect.Effect<infer A, infer E, infer R>
+  ? [ExcludeLocal<R>] extends [never]
+    ? Effect.Effect<A, E>
+    : Effect.Effect<A, E, ExcludeLocal<R>>
+  : V extends object
+    ? { readonly [K in keyof V]: LocalizeMember<V[K]> }
+    : V;
+
+/**
+ * Materialized service shape for tag `T` — `Resource.Shape<Test>` ≡ `Test["Service"]`.
+ *
+ * @public
+ */
+export type Shape<T extends TagIdentifier> = T["Service"];
+
+/**
+ * Materialized service shape from a {@link Spec} — `Resource.ShapeOf<typeof mySpec, MyTag>`.
+ *
+ * @public
+ */
+export type ShapeOf<S extends Spec, Self = unknown> = ServiceOf<S, Self>;
+
+/**
+ * {@link ShapeOf} with {@link Local} stripped from local-member effects — for callers that
+ * already hold the local layer.
+ *
+ * @public
+ */
+export type LocalShape<S extends Spec, Self = unknown> = LocalizeMember<ServiceOf<S, Self>>;
+
+/**
+ * {@link Shape} with {@link Local} stripped from local-member effects.
+ *
+ * @public
+ */
+export type LocalShapeOf<T extends TagIdentifier> = LocalizeMember<T["Service"]>;
+
+/**
+ * Wire-only {@link ShapeOf} — local members removed entirely.
+ *
+ * @public
+ */
+export type WireShape<S extends Spec> = Wire<S>;
+
+/**
+ * Wire-only {@link Shape} for tag `T`.
+ *
+ * @public
+ */
+export type WireOf<T extends TagIdentifier> = Wire<SpecOfTag<T>>;
+
+/**
+ * `yield* Tag` — mirrors {@link Effect.Effect | `Effect.Effect`}. Prefer the spec form for
+ * readable hovers: `Resource.Resource<typeof mySpec>`. Tag form: {@link Of | `Resource.Of<Test>`}.
+ *
+ * `Self` is the tag identifier (requirement channel); omit it when declaring against a spec only.
+ * Extra requirements beyond the tag go in `R`.
+ *
+ * @example
+ * ```ts
+ * const spec = { current: Resource.effect(Schema.Number) } as const;
+ * type Acquire = Resource.Resource<typeof spec>;
+ *
+ * class Counter extends Resource.Tag<Counter>()("@app/Counter", spec) {}
+ * type AcquireTag = Resource.Of<Counter>;
+ * ```
+ *
+ * @public
+ */
+export type Resource<
+  S extends Spec,
+  E = never,
+  R = never,
+  Self = unknown,
+> = Effect.Effect<ServiceOf<S, Self>, E, Self | R>;
+
+/**
+ * `yield* Tag` inferred from the tag identifier — `Resource.Of<Counter>`.
+ *
+ * @public
+ */
+export type Of<T extends TagIdentifier, E = never, R = never> = Effect.Effect<T["Service"], E, T | R>;
+
+/**
+ * Resource types — use {@link Resource.Resource} like {@link Effect.Effect | `Effect.Effect`}.
+ *
+ * @public
+ */
+export declare namespace Resource {
+  /** @inheritdoc */
+  export type Shape<T extends TagIdentifier> = T["Service"];
+
+  /** @inheritdoc */
+  export type ShapeOf<S extends Spec, Self = unknown> = ServiceOf<S, Self>;
+
+  /** @inheritdoc */
+  export type LocalEffect<A, E = never, Self = unknown> = Effect.Effect<A, E, Local<Self>>;
+
+  /** @inheritdoc */
+  export type LocalShape<S extends Spec, Self = unknown> = LocalizeMember<ServiceOf<S, Self>>;
+
+  /** @inheritdoc */
+  export type LocalShapeOf<T extends TagIdentifier> = LocalizeMember<T["Service"]>;
+
+  /** @inheritdoc */
+  export type Wire<S extends Spec> = WireServiceOf<S>;
+
+  /** @inheritdoc */
+  export type WireOf<T extends TagIdentifier> = Wire<SpecOfTag<T>>;
+
+  /** @inheritdoc */
+  export type WireShape<S extends Spec> = WireServiceOf<S>;
+
+  /** @inheritdoc */
+  export type Resource<
+    S extends Spec,
+    E = never,
+    R = never,
+    Self = unknown,
+  > = Effect.Effect<ServiceOf<S, Self>, E, Self | R>;
+
+  /** @inheritdoc */
+  export type Of<T extends TagIdentifier, E = never, R = never> = Effect.Effect<
+    T["Service"],
+    E,
+    T | R
+  >;
 }
 
 /**
@@ -1471,8 +1639,8 @@ const buildInstanceTag = <Self, S extends Spec>(
   claimedKeys.add(key);
   const base = Context.Service<Self, ServiceOf<S, Self>>()(key);
   // per-resource local capability — granted only by localLayer, never the client.
-  const localCap: Context.Key<LocalCapability<Self>, { readonly granted: true }> =
-    Context.Service<LocalCapability<Self>, { readonly granted: true }>()(
+  const localCap: Context.Key<Local<Self>, { readonly granted: true }> =
+    Context.Service<Local<Self>, { readonly granted: true }>()(
       `${key}/__local`,
     );
   // per-resource peer capability — its value is this resource's other-node clients, provided
@@ -1687,7 +1855,7 @@ const clientSubscribable = <A>(
 
 /**
  * The **local** layer for a resource: provide a real implementation of its service. Grants
- * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
+ * the resource's {@link Local}, so any {@link Resource.local} (local-only) members
  * become callable here — they're a compile error under {@link Resource.client}.
  *
  * Two forms, mirroring {@link serve}: a **record** impl, or an **`Effect`** that builds the impl
@@ -1705,7 +1873,7 @@ const buildLocalContext = <Self>(
   tag: {
     readonly [specSym]: FlatSpec;
     readonly [localCapSym]: Context.Key<
-      LocalCapability<Self>,
+      Local<Self>,
       { readonly granted: true }
     >;
   },
@@ -1717,7 +1885,7 @@ const buildLocalContext = <Self>(
     const members = flattenImpl(builtImpl, spec);
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
-      // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
+      // local members surface as `Effect<T, never, Local>` (require Local to obtain the
       // value); constant fields are resolved once here into a plain value; ref fields and other wire
       // members (their `Subscribable` / `Effect` / `Stream` / function) pass through unchanged.
       if (isLocalMethod(m)) {
@@ -1737,22 +1905,22 @@ const buildLocalContext = <Self>(
 function localLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S>,
-): Layer.Layer<Self | LocalCapability<Self>>;
+): Layer.Layer<Self | Local<Self>>;
 function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>>;
+): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>>;
 function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, Exclude<R, Scope.Scope>> {
+): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> {
   // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
   const build = Effect.flatMap(
     Effect.isEffect(impl) ? impl : Effect.succeed(impl),
     (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
   );
   return Layer.effectContext(build) as Layer.Layer<
-    Self | LocalCapability<Self>,
+    Self | Local<Self>,
     never,
     Exclude<R, Scope.Scope>
   >;
@@ -1888,7 +2056,7 @@ export type ServeRequirements<Impl> = {
 /**
  * A resource's **served-only handler layer** — mounts the tag's group handlers (wire members only,
  * **no** local grant), with the handlers' requirement `R` **preserved** (not erased). This is the
- * served-only counterpart to {@link serve}, which additionally grants the {@link LocalCapability} so
+ * served-only counterpart to {@link serve}, which additionally grants {@link Local} so
  * members stay callable in-process. `serveRemote`'s `R` rides the layer's requirement channel, so a
  * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
  *
@@ -1968,7 +2136,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
 export const serve = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | LocalCapability<Self> | HandlerContextOf<S>, never, R> =>
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> =>
   Layer.unwrap(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) =>
       Layer.merge(
@@ -2691,7 +2859,7 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
 /**
  * Build the client-side service for a tag from a wired RPC client: forward every wire method
  * (group-prefixed, id-pinned), and stub each {@link Resource.local} member with a value that
- * requires the never-granted {@link LocalCapability} (so calling one through a client is a
+ * requires the never-granted {@link Local} (so calling one through a client is a
  * compile error, and unreachable at runtime). Shared by both {@link clientLayer} paths.
  */
 const buildClientService = <Self, S extends Spec>(

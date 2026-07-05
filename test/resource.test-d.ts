@@ -44,6 +44,41 @@ void _tail;
 const _notEffect: Effect.Effect<number> = ss.changes;
 void _notEffect;
 
+// ── Resource.Resource — `yield* Tag` like Effect.Effect ──
+class CounterForResourceType extends Resource.Tag<CounterForResourceType>()("Counter", {
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  reset: Resource.effectFn(Schema.Void),
+  current: Resource.effect(Schema.Number),
+}) {}
+
+const counterSpec = {
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  reset: Resource.effectFn(Schema.Void),
+  current: Resource.effect(Schema.Number),
+} as const;
+
+type CounterShape = Resource.Shape<CounterForResourceType>;
+type CounterResource = Resource.Resource<typeof counterSpec, never, never, CounterForResourceType>;
+type CounterInferred = Resource.Of<CounterForResourceType>;
+
+declare const counterShape: CounterShape;
+declare const _counterResource: CounterResource;
+declare const _counterInferred: CounterInferred;
+void counterShape;
+void _counterResource;
+void _counterInferred;
+
+const _counterResourceUse = Effect.gen(function* () {
+  const c: Resource.Shape<CounterForResourceType> = yield* CounterForResourceType;
+  yield* c.increment({ by: 1 });
+  return yield* c.current;
+});
+void _counterResourceUse;
+
+// Tag is assignable to Resource.Of<typeof Tag> (Context.Service is an Effect).
+const _tagIsResource: CounterInferred = CounterForResourceType;
+void _tagIsResource;
+
 // ── Slice 2: Tag + `yield*` + local layer ──
 class Counter extends Resource.Tag<Counter>()("Counter", {
   increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
@@ -108,9 +143,9 @@ const _remoteRun: Promise<string> = Effect.runPromise(
 );
 void _remoteRun;
 
-// ── local-only methods: a non-serializable member gated by a LocalCapability ──
+// ── local-only methods: a non-serializable member gated by Local ──
 // A method that returns a function can't cross RPC. Declared with Resource.local, it
-// surfaces as `Effect<T, never, LocalCapability<Box>>` — callable only when the LOCAL
+// surfaces as `Effect<T, never, Local<Box>>` — callable only when the LOCAL
 // layer (which grants the capability) is provided, a compile error under the client.
 class Box extends Resource.Tag<Box>()("test/Box", {
   read: Resource.effect(Schema.Number),
@@ -126,7 +161,7 @@ const boxImpl = {
 // a program that uses the local-only member
 const useLocal = Effect.gen(function* () {
   const b = yield* Box;
-  const subscribe = yield* b.onChange; // requires LocalCapability<Box>
+  const subscribe = yield* b.onChange; // requires Local<Box>
   yield* subscribe(() => {});
 });
 
@@ -136,7 +171,7 @@ const _localOk: Promise<void> = Effect.runPromise(
 );
 void _localOk;
 
-// CLIENT layer never grants the capability → LocalCapability<Box> stays unsatisfied.
+// CLIENT layer never grants Local → Local<Box> stays unsatisfied.
 // Negative test: the missing context IS the point, so both the TS error and the LSP
 // missing-context diagnostic on `runPromise` are expected and intentionally suppressed.
 const localViaClient = useLocal.pipe(
@@ -145,7 +180,7 @@ const localViaClient = useLocal.pipe(
 // Region toggle (not -next-line): the `@ts-expect-error` must sit directly above the code, so the
 // effect directive can't also be adjacent — a region off/restore covers the statement regardless.
 // @effect-diagnostics missingEffectContext:off
-// @ts-expect-error — onChange is local-only; LocalCapability<Box> unsatisfied via the client.
+// @ts-expect-error — onChange is local-only; Local<Box> unsatisfied via the client.
 const _localViaClient: Promise<void> = Effect.runPromise(localViaClient);
 // @effect-diagnostics missingEffectContext:error
 void _localViaClient;

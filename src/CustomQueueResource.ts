@@ -19,7 +19,7 @@ import type {
   HandlerContextOf,
   NodeKey,
   ImplOf,
-  LocalCapability,
+  Local,
   Method,
   MethodAnnotations,
   NodeBoundTag,
@@ -563,7 +563,7 @@ export const layer = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | LocalCapability<Self>, never, R | RR> =>
+): Layer.Layer<Self | Local<Self>, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
   );
@@ -596,7 +596,7 @@ export const serveRemote = <
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the
  * engine-running counterpart to {@link Resource.serve}. Mounts the queue's RPC handlers, registers into
- * {@link Resource.servedResourcesLayer}, **and** grants `Self | LocalCapability<Self>` so co-located code
+ * {@link Resource.servedResourcesLayer}, **and** grants `Self | Local<Self>` so co-located code
  * can `yield* Tag`; the served cells *are* the in-process instance. A served-**only** gateway uses
  * {@link serveRemote}.
  *
@@ -612,7 +612,7 @@ export const serve = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | LocalCapability<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
   never,
   R | RR
 > =>

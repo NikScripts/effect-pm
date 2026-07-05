@@ -41,7 +41,7 @@ import type {
   HandlerContextOf,
   NodeKey,
   ImplOf,
-  LocalCapability,
+  Local,
   NodeBoundTag,
   ResourceTag,
 } from "./Resource";
@@ -53,6 +53,12 @@ import {
 } from "./internal/queueSchema";
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
 import { makeQueueEffect } from "./internal/queueResource";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import {
+  builtInQueueStoreSpec,
+  type QueueStoreTag,
+} from "./internal/store/queueStoreSpec";
+import type { StoreSpec } from "./internal/store/spec";
 import type {
   QueueEnqueueErrors,
   QueueHandle,
@@ -816,7 +822,7 @@ export const layer = <
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | LocalCapability<Self>, never, R | RR> =>
+): Layer.Layer<Self | Local<Self>, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
   );
@@ -857,7 +863,7 @@ export const serveRemote = <
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
  * refill / `persist` / `captureLogs` engine behind the tag, mount its RPC handlers, register into
- * {@link Resource.servedResourcesLayer}, **and** grant `Self | LocalCapability<Self>` so co-located code
+ * {@link Resource.servedResourcesLayer}, **and** grant `Self | Local<Self>` so co-located code
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
  * worker requirement `R` is preserved for per-resource `Layer.provide`. This is the queue's counterpart
  * to {@link Resource.serve}; a served-**only** gateway uses {@link serveRemote}.
@@ -881,7 +887,7 @@ export const serve = <
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | LocalCapability<Self> | HandlerContextOf<QueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>>,
   never,
   R | RR
 > =>
@@ -923,6 +929,40 @@ export const configure = <
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
+
+/**
+ * Register this queue on an app {@link Store.Service} — built-in analytics spec with the tag's
+ * `itemSchema` injected. Pass a bare spec object to add app-specific methods (merged with built-in):
+ *
+ * ```ts
+ * QueueResource.store(Mail)
+ * QueueResource.store(Mail, {
+ *   campaignAudit: Store.append(campaignAuditSchema),
+ *   auditsByCampaign: Store.query({ payload: campaignQuery, result: Schema.Array(campaignAuditSchema) }),
+ * })
+ * ```
+ *
+ * @public
+ */
+export const store: {
+  <const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
+    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInQueueStoreSpec>>
+  >;
+  <
+    const Tag extends QueueStoreTag,
+    const S extends StoreSpec,
+  >(
+    tag: Tag,
+    extended: S,
+  ): ReturnType<
+    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInQueueStoreSpec>, S>
+  >;
+} = (tag: QueueStoreTag, extended?: StoreSpec) => {
+  const builtIn = builtInQueueStoreSpec(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, builtIn)
+    : facetStoreRegistration(tag, builtIn, extended);
+};
 
 // The light `Tag` lives here (no engine) so `QueueResource.Tag` member access tree-shakes.
 // DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` → `QueueResource.Tag`.

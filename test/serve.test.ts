@@ -3,7 +3,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
-// `serve` grants Self + LocalCapability AND mounts the wire handlers from ONE materialization — the
+// `serve` grants Self + Local AND mounts the wire handlers from ONE materialization — the
 // co-located "serve it AND consume it here" case. The impl generator runs exactly ONCE (the wow report's
 // "materialized twice" regression), and the in-process yield reads the same instance that's served.
 class Svc extends Resource.Tag<Svc>()("serve/Svc", {
