@@ -2,30 +2,69 @@
  * **Store** — scoped append/query persistence registrations backed by a shared {@link Service}.
  *
  * @remarks
- * Declare an aggregate with {@link Service} (class extends) when related scopes share one database.
- * For a single resource scope, prefer standalone {@link store} (`yield* myResourceStore`).
+ * ## Mental model
+ *
+ * A **contract** declares named **shapes** (row schema + optional read payload). Each shape becomes
+ * `store.<shape>.append` and `store.<shape>.read` on the materialized handle. Part 2 of
+ * {@link contract} may add flat aliases, bare {@link Effect}s, or effect functions — never raw
+ * `readWith` helpers.
+ *
+ * ## Layers
+ *
+ * - {@link Service.layerMemory} / {@link store.layerMemory} — `EventJournal.layerMemory` (process-local).
+ * - {@link Service.layer} / {@link store.layer} with `{ filename }` — SQLite via `SqlEventJournal`
+ *   (`effect/unstable/eventlog`) on `@effect/sql-sqlite-node`. Omit `filename` for
+ *   `EventJournal.layerMemory`.
+ *
+ * ## Registration
+ *
+ * Register scopes on an aggregate with {@link register} or `Resource.store(tag, contract)`.
+ * Resolve handles with `yield* MyStore.at(Tag)` (tag-first) or `yield* tag.store` when the tag
+ * carries a `.store` attachment. Standalone {@link store} yields a single-scope handle directly.
+ *
+ * ## Observability
+ *
+ * {@link changes} streams {@link StoreChangeEvent} on every successful append (operator plumbing).
+ * {@link retention} caps row count per registration — oldest rows drop after each append.
  *
  * @example Shape-first contract
  * ```ts
+ * import * as Store from "@nikscripts/effect-pm/Store";
+ * import * as Schema from "effect/Schema";
+ *
  * const thermometerContract = Store.contract({
- *   readings: Store.shape(readingSchema, Schema.Struct({
- *     limit: Schema.optional(Schema.Number),
- *   })),
+ *   readings: Store.shape(
+ *     Schema.Struct({ value: Schema.Number }),
+ *     Schema.Struct({ limit: Schema.optional(Schema.Number) }),
+ *   ),
  * });
  *
- * const store = yield* Resource.store("store", thermometerContract);
- * yield* store.readings.append({ value: 72 });
- * yield* store.readings.read({ limit: 10 });
+ * class AppStore extends Store.Service<AppStore>("@app/Store")(
+ *   Store.register("thermometer", thermometerContract),
+ * ) {}
  *
- * // Optional flat aliases or custom Effects in part 2:
- * // listAudits: audit.read
- * // snapshot: audit.read()
+ * const program = Effect.gen(function* () {
+ *   const handle = yield* AppStore.at("thermometer");
+ *   yield* handle.readings.append({ value: 72 });
+ *   const rows = yield* handle.readings.read({ limit: 10 });
+ * });
+ *
+ * Effect.provide(program, AppStore.layerMemory);
+ * ```
+ *
+ * @example SQLite persistence
+ * ```ts
+ * Effect.provide(
+ *   program,
+ *   AppStore.layer({ filename: ".effect-pm/data.sqlite" }),
+ * );
  * ```
  *
  * @module Store
  */
 
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Stream } from "effect";
+import type { Scope } from "effect/Scope";
 import {
   applyStoreDefaultLogLevel,
   defineStandaloneStore,
@@ -37,7 +76,7 @@ import {
   type StoreServiceClass,
   type StoreTagClass,
 } from "./internal/store/defineStore";
-import { StoreScopeNotRegistered } from "./internal/store/errors";
+import { StoreScopeNotRegistered, StoreChangeEvent, type StoreJournalDecodeError } from "./internal/store/errors";
 import {
   makeRegistration,
   type RegisteredWithContract,
@@ -45,6 +84,7 @@ import {
   type StoreRegistrationAny,
   type StoreScopeTag,
   withRegistrationLogLevel,
+  withRegistrationRetention,
 } from "./internal/store/registration";
 import {
   emptyPayloadSchema,
@@ -69,7 +109,7 @@ export type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreHandleFromContract } from "./internal/store/spec";
 export type { MergedCustom, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
 
-export { StoreDuplicateScopeKey, StoreScopeNotRegistered } from "./internal/store/errors";
+export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent } from "./internal/store/errors";
 
 /**
  * A pipeable store contract — shapes plus optional custom methods.
@@ -120,7 +160,20 @@ export function shape(
  * Declare store shapes and optional custom methods.
  *
  * Part 1 declares row shapes (each becomes `store.<shape>.append` / `.read`).
- * Part 2 optionally adds flat aliases, bare Effects, or effect functions.
+ * Part 2 optionally adds flat aliases, bare Effects, or effect functions — not `readWith` helpers.
+ *
+ * @example Part 1 only
+ * ```ts
+ * const c = Store.contract({ readings: readingSchema });
+ * ```
+ *
+ * @example Part 1 + part 2
+ * ```ts
+ * const c = Store.contract(
+ *   { readings: readingSchema },
+ *   ({ readings }) => ({ latest: readings.read }),
+ * );
+ * ```
  *
  * @public
  */
@@ -269,6 +322,55 @@ export const logLevelNone = <R extends StoreRegistrationAny>(registration: R): R
 export const logLevel = logLevelAll;
 
 // ============================================================================
+// Retention pipe modifiers
+// ============================================================================
+
+/**
+ * Cap how many rows a scope keeps — oldest rows are trimmed after each append.
+ *
+ * @example
+ * ```ts
+ * Store.register("events", contract).pipe(Store.retention(500))
+ * ```
+ *
+ * @public
+ */
+export const retention =
+  (maxRows: number) =>
+  <R extends StoreRegistrationAny>(registration: R): R =>
+    withRegistrationRetention(registration, maxRows);
+
+// ============================================================================
+// Change stream
+// ============================================================================
+
+/**
+ * Stream append events for a registered scope — one {@link StoreChangeEvent} per successful append.
+ *
+ * Requires a {@link Service.layer} / {@link store.layer} that installed the scope bridge.
+ *
+ * @example
+ * ```ts
+ * const events = yield* Store.changes("thermometer");
+ * yield* Stream.runForEach(events, (event) =>
+ *   Effect.log(`append ${event.method} on ${event.scopeKey}`),
+ * );
+ * ```
+ *
+ * @public
+ */
+export const changes = (
+  scope: string | StoreScopeTag,
+): Effect.Effect<
+  Stream.Stream<StoreChangeEvent, StoreJournalDecodeError>,
+  StoreScopeNotRegistered,
+  StoreScopeBridgeTag | Scope
+> =>
+  Effect.flatMap(StoreScopeBridgeTag, (bridge) =>
+    bridge.changes(typeof scope === "string" ? scope : scope.key),
+  );
+
+// ============================================================================
 // Aggregate factories
 // ============================================================================
 
@@ -286,6 +388,17 @@ export type TagClass<
 
 /**
  * Declare an aggregate store bundle — **class extends** with {@link layerMemory} / {@link layer}.
+ *
+ * `layerMemory` uses in-memory refs. `layer({ filename })` persists to SQLite; omit `filename` for memory.
+ *
+ * @example
+ * ```ts
+ * class AppStore extends Store.Service<AppStore>("@app/Store")(
+ *   Store.register("metrics", contract),
+ * ) {}
+ *
+ * Effect.provide(program, AppStore.layer({ filename: "data.sqlite" }));
+ * ```
  *
  * @public
  */
@@ -342,6 +455,9 @@ export type Standalone<
 
 /**
  * Standalone store for one scope, or attach a public spec to a resource tag (pipe form).
+ *
+ * Standalone classes expose `layerMemory` and `layer({ filename? })` like {@link Service}.
+ * Tag attachment adds `yield* Tag.store` resolved through the aggregate bridge.
  *
  * @public
  */

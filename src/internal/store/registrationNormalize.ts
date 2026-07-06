@@ -32,6 +32,7 @@ export interface NormalizedStoreRegistration<
   readonly contract?: StoreContractValue;
   readonly tag?: StoreRegistrationAny["tag"];
   readonly logLevel?: StoreRegistrationAny["logLevel"];
+  readonly maxRows?: number;
 }
 
 /** @internal */
@@ -92,6 +93,7 @@ const fromRegistration = (
   contract: registration.contract,
   tag: registration.tag,
   logLevel: registration.logLevel,
+  maxRows: registration.maxRows,
 });
 
 /** @internal */

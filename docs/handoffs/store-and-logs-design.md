@@ -1,8 +1,7 @@
 # Design: Store, platform logs, and live vs durable observability
 
-**Status:** Store contract API + memory layer **shipped on branch** `cursor/store-and-logs-design`
-(2026-07-05). Platform logs, durable SQLite adapter, `Store.changes`, retention, and implicit log facets
-are **not** implemented — see §Migration targets and §Open questions below.
+**Status:** Store contract API shipped. **Backing:** `effect/unstable/eventlog` (`EventJournal` +
+`SqlEventJournal`) — see `docs/guides/store-backing.md`. Platform logs remain future work.
 
 Companion to the Store API consensus (Thermometer, `Store.append` / `Store.query`, `Resource.store`,
 `Store.Service` backing). This doc covers **platform logs**, **naming**, **tag accessors**, **log-level

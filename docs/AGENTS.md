@@ -22,7 +22,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
 | `src/HostLogs.ts` | Runtime-wide log capture + stream (`HostLogs`). |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
-| `src/Store.ts` | Shape-first store contracts (`Store.contract` / `Store.shape`), `Store.Service` / `Store.Tag` aggregates, memory `layerMemory` — `@nikscripts/effect-pm/Store`. |
+| `src/Store.ts` | Shape-first store contracts; `EventJournal`-backed `layerMemory` / `SqlEventJournal` `layer` — see `docs/guides/store-backing.md`. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
 | `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations (`LogAnnotationKeys`) + NDJSON log entries (`LogEntry` / `LogEntrySchema`) — the structured-logging core. |
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
@@ -32,7 +32,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
-| `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
+| `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |

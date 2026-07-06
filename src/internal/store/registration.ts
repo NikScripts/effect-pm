@@ -34,6 +34,7 @@ export interface StoreRegistration<
   readonly contract?: StoreContractValue;
   readonly tag?: StoreScopeTag;
   readonly logLevel?: StoreLogLevel;
+  readonly maxRows?: number;
 }
 
 /** @internal */
@@ -155,6 +156,12 @@ export const withRegistrationLogLevel = <R extends StoreRegistrationAny>(
   registration: R,
   logLevel: StoreLogLevel,
 ): R => Object.assign({}, registration, { logLevel });
+
+/** @internal */
+export const withRegistrationRetention = <R extends StoreRegistrationAny>(
+  registration: R,
+  maxRows: number,
+): R => Object.assign({}, registration, { maxRows });
 
 /** @internal */
 export const isRegistrationPipeTarget = (

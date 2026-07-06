@@ -5,12 +5,12 @@
  * @internal
  */
 
-import { Effect, Pipeable, Ref, Schema } from "effect";
+import { Effect, Pipeable, Schema } from "effect";
 import type { Simplify } from "effect/Types";
 import { storeAppend, storeQuery } from "./builders";
 import { StoreShapeNotMaterialized } from "./errors";
 import { makeScopeHandle } from "./memoryScope";
-import type { StoredRow } from "./memoryScope";
+import type { AppendSideEffects } from "./memoryScope";
 import type { StoreSpec } from "./spec";
 
 export const storeContractSym = Symbol.for("@nikscripts/effect-pm/Store/contractDef");
@@ -518,9 +518,9 @@ export const mergeStoreContracts = <
 /** @internal */
 export const materializeContractHandle = (
   contract: StoreContractValue,
-  rows: Ref.Ref<ReadonlyArray<StoredRow>>,
+  sideEffects: AppendSideEffects,
 ): Record<string, unknown> => {
-  const flat = makeScopeHandle(contract.spec, rows) as Record<
+  const flat = makeScopeHandle(contract.spec, sideEffects) as Record<
     string,
     (payload: unknown) => Effect.Effect<unknown>
   >;
