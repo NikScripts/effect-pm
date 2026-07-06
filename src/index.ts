@@ -508,16 +508,26 @@ export {
 
 // Types - RunResource
 export type {
-  RunResourceConfig,
   RunGate,
   RunGateHandle,
   RunGateStatus,
+  RunResourceConfig,
   RunResourceHandle,
+  RunResourceLayerConfig,
   RunResourceRunner,
   RunResourceRunnerConfig,
   RunResourceServiceDefinition,
   RunResourceStaticRun,
   RunResourceTagDefinition,
+  RunInstanceSpec,
+} from "./RunResource";
+export {
+  runGateStatus,
+  runSpec,
+  kind as runResourceKind,
+  layer as runResourceLayer,
+  serve as runResourceServe,
+  serveRemote as runResourceServeRemote,
 } from "./RunResource";
 
 // Types - Control Service

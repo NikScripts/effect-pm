@@ -7,22 +7,22 @@
 
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
-import { Effect, FileSystem, Layer, Path } from "effect";
+import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { RunResource } from "../../../src";
 import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
 import { layerProcessStore } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-class SqliteDemoGate extends RunResource.Service<
-  SqliteDemoGate,
-  number,
-  number,
-  never
->()("examples/SqliteBackedGate", {
-  effect: (n: number) => Effect.succeed(n + 1),
-  concurrency: 1,
-}) {}
+class SqliteDemoGate extends RunResource.Service<SqliteDemoGate>()(
+  "examples/SqliteBackedGate",
+  Schema.Number,
+  Schema.Number,
+  {
+    effect: (n: number) => Effect.succeed(n + 1),
+    concurrency: 1,
+  },
+) {}
 
 const program = Effect.gen(function* () {
   const path = yield* Path.Path;

@@ -42,7 +42,11 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", jobSchema) {}
 
-class FetchGate extends RunResource.Tag<FetchGate, string, number>()("@app/FetchGate") {}
+class FetchGate extends RunResource.Tag<FetchGate>()(
+  "@app/FetchGate",
+  Schema.String,
+  Schema.Number,
+) {}
 
 const fetchGateRegistration = RunResource.store(FetchGate);
 

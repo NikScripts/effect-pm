@@ -1,5 +1,5 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Effect, Layer, Ref } from "effect";
+import { Effect, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
@@ -82,13 +82,12 @@ describe("RunResource.Service", () => {
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
-      const tag = RunResource.Tag<
-        { readonly _tag: "SlowGate" },
-        string,
-        string,
-        never
-      >()("@test/SlowGate");
-      const gateLayer = RunResource.layer(tag, {
+      const SlowGate = RunResource.Tag<{ readonly _tag: "SlowGate" }>()(
+        "@test/SlowGate",
+        Schema.String,
+        Schema.String,
+      );
+      const gateLayer = RunResource.layer(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
             const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -102,10 +101,11 @@ describe("RunResource.Service", () => {
       });
 
       yield* Effect.gen(function* () {
-        const gate = yield* tag;
+        const gate = yield* SlowGate;
         yield* Effect.all(
           Array.from({ length: 20 }, (_, i) => gate.run(`item-${String(i)}`)),
-          { concurrency: "unbounded" },
+          { concurrency: "unbounded",
+          },
         );
         const p = yield* Ref.get(peak);
         expect(p).toBeLessThanOrEqual(2);
@@ -113,15 +113,15 @@ describe("RunResource.Service", () => {
     }),
   );
 
-  class SlowGate extends RunResource.Service<
-    SlowGate,
-    string,
-    string,
-    never
-  >()("@test/SlowGateService", {
-    effect: (s: string) => Effect.succeed(s.toUpperCase()),
-    concurrency: 2,
-  }) {}
+  class SlowGate extends RunResource.Service<SlowGate>()(
+    "@test/SlowGateService",
+    Schema.String,
+    Schema.String,
+    {
+      effect: (s: string) => Effect.succeed(s.toUpperCase()),
+      concurrency: 2,
+    },
+  ) {}
 
   const slowLayer = SlowGate.layer;
 
@@ -148,12 +148,11 @@ describe("RunResource.Service", () => {
 });
 
 describe("RunResource.Tag + layer", () => {
-  const TestGate = RunResource.Tag<
-    { readonly _tag: "TestGate" },
-    number,
-    number,
-    never
-  >()("@test/TestGate");
+  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()(
+    "@test/TestGate",
+    Schema.Number,
+    Schema.Number,
+  );
 
   const testLayer = RunResource.layer(TestGate, {
     effect: (n: number) => Effect.succeed(n + 100),
@@ -161,13 +160,7 @@ describe("RunResource.Tag + layer", () => {
   });
 
   it("Tag produces valid service key", () => {
-    const tag = RunResource.Tag<
-      { readonly _tag: "TestGate" },
-      number,
-      number,
-      never
-    >()("@test/TestGate");
-    expect(tag.key).toBe("@test/TestGate");
+    expect(TestGate.key).toBe("@test/TestGate");
   });
 
   it.live("layer provides observable handle", () =>

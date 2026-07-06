@@ -12,40 +12,47 @@
  * |----------|---------|
  * | `RunResource.make` | Scoped handle with `.run` only (no observation) |
  * | `RunResource.layer` | Builds a `Layer` from tag + config (observable handle) |
+ * | `RunResource.serve` / `serveRemote` | RPC server layers (same config as {@link layer}) |
  * | `RunResource.Service` | Tag + baked-in `.layer` + `.configure` |
- * | `RunResource.Tag` | Identity tag — pair with {@link layer} |
+ * | `RunResource.Tag` | Identity tag + wire schemas — pair with {@link layer} |
  * | `RunResource.configure` | Config patch layer for a tag (Tag path) |
  * | `RunResource.store` | Register built-in run facts + state history on an app {@link Store.Service} |
  * | `RunResource.makeRunner` | Generic runner (wraps arbitrary effects) |
  *
+ * ## Remote usage
+ *
+ * Declare wire schemas on the tag, then serve or connect like {@link QueueResource} / {@link Process}:
+ *
+ * ```ts
+ * class FetchGate extends RunResource.Tag<FetchGate>()(
+ *   "@app/FetchGate",
+ *   SymbolSchema,
+ *   PriceSchema,
+ *   FetchErrSchema,
+ * ) {}
+ *
+ * Resource.httpServer([RunResource.serve(FetchGate, { effect: fetch, concurrency: 3 })])
+ * // client: Resource.client(FetchGate) — same `yield* Tag` surface
+ * ```
+ *
  * ## Observable handles (Tag / Service / layer)
  *
- * `yield* Tag` returns a handle with `.run` plus {@link Subscribable} views
+ * `yield* Tag` returns a toolkit service with `.run` plus {@link Subscribable} views
  * (`status`, `waiting`, `inFlight`, `completed`, …). Read with `yield* handle.waiting.get`
  * or subscribe via `handle.waiting.changes`.
  *
- * Tag and Service also expose a static {@link RunResourceTagDefinition.run} shortcut that
- * requires the tag in `R` (unlike `Effect.use`, which does not add a service requirement).
- *
- * ## Usage
- *
- * ```ts
- * class FetchGate extends RunResource.Service<FetchGate, string, Price, FetchErr>()(
- *   "@app/FetchGate",
- *   { effect: (symbol) => fetch(symbol), concurrency: 3 },
- * ) {}
- *
- * yield* FetchGate.run("AAPL")           // static shortcut
- * const gate = yield* FetchGate
- * yield* gate.run("GOOG")                // handle method
- * yield* gate.waiting.get                // one-shot read
- * gate.status.changes.pipe(Stream.runForEach(...))
- * ```
+ * Tag and Service also expose a static `.run` shortcut that requires the tag in `R`.
  *
  * @module RunResource
  */
 
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema, Scope } from "effect";
+import * as Resource from "./Resource";
+import type {
+  HandlerContextOf,
+  Local,
+  ResourceTag,
+} from "./Resource";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   builtInRunResourceStoreContract,
@@ -60,6 +67,40 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import * as internal from "./internal/runResource";
+import {
+  runGateStatus,
+  runSpec,
+  type RunInstanceSpec,
+} from "./internal/runResourceSchema";
+
+// ============================================================================
+// Public wire schemas + spec
+// ============================================================================
+
+/**
+ * Live gate counters on the wire — element of the reactive `status` ref.
+ *
+ * @public
+ */
+export { runGateStatus };
+
+/**
+ * This contract's canonical **kind** — stamped on every run-gate tag.
+ *
+ * @public
+ */
+export const kind = "@nikscripts/effect-pm/RunResource";
+
+/**
+ * Build a run-gate **instance** spec from wire schemas — pass to {@link Resource.Tag} or use via
+ * {@link Tag} / {@link Service}.
+ *
+ * @public
+ */
+export { runSpec };
+
+/** @public */
+export type { RunInstanceSpec };
 
 // ============================================================================
 // Public Types
@@ -80,8 +121,8 @@ export type RunGateStatus = internal.RunGateStatus;
 export type RunGateHandle<T, A, E> = internal.RunGateHandle<T, A, E>;
 
 /**
- * Observable handle from {@link RunResource.layer}, {@link RunResource.Service},
- * or {@link RunResource.Tag} when a layer is provided.
+ * Observable handle from {@link RunResource.make} with observation disabled, or the local-only
+ * engine handle. Prefer the toolkit service from {@link Tag} / {@link Service} for RPC.
  *
  * @public
  */
@@ -92,27 +133,109 @@ export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
  *
  * @public
  */
-export type RunResourceStaticRun<T, A, E, Self> = [T] extends [void]
+export type RunResourceStaticRun<I, A, E, Self> = Schema.Schema.Type<I> extends void
   ? () => Effect.Effect<A, E, Self>
-  : (input: T) => Effect.Effect<A, E, Self>;
+  : (input: Schema.Schema.Type<I>) => Effect.Effect<A, E, Self>;
 
 /**
- * Configuration for {@link RunResource.make}, {@link layer}, and {@link Service}.
+ * Service factory result — tag surface plus baked-in layer and configure helpers.
  *
  * @public
  */
-export interface RunResourceConfig<T, A, E> {
-  /** Service name used for log annotations and status `resourceId`. */
+export interface RunResourceServiceDefinition<
+  Self,
+  Name extends string,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+> extends RunResourceTagDefinition<Self, I, A, E> {
+  readonly defaultSpec: RunResourceLayerConfig<
+    Schema.Schema.Type<I>,
+    Schema.Schema.Type<A>,
+    Schema.Schema.Type<E>,
+    R
+  > & {
+    readonly name: Name;
+    readonly inputSchema: I;
+    readonly successSchema: A;
+    readonly errorSchema: E;
+  };
+  readonly layer: Layer.Layer<Self, never, R>;
+  readonly configure: (
+    patch: ConfigPatch<
+      RunResourceLayerConfig<
+        Schema.Schema.Type<I>,
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>,
+        R
+      >
+    >,
+  ) => Layer.Layer<never>;
+  readonly wrapGate: (
+    fn: (
+      previous: RunResourceLayerConfig<
+        Schema.Schema.Type<I>,
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>,
+        R
+      >["effect"],
+    ) => RunResourceLayerConfig<
+      Schema.Schema.Type<I>,
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      R
+    >["effect"],
+  ) => Layer.Layer<never>;
+}
+
+/** Tag + static `.run` shortcut. @internal */
+type RunTagWithStaticRun<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = ResourceTag<Self, RunInstanceSpec<I, A, E>> & {
+  readonly run: RunResourceStaticRun<I, A, E, Self>;
+};
+
+/**
+ * Tag factory result — Resource tag + wire schemas + static {@link RunResourceStaticRun}.
+ *
+ * @public
+ */
+export type RunResourceTagDefinition<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = RunTagWithStaticRun<Self, I, A, E>;
+
+/**
+ * Layer / serve config — the tag carries wire schemas; this supplies the gated effect.
+ *
+ * @public
+ */
+export interface RunResourceLayerConfig<I, A, E, R> {
+  /** Override telemetry / status `resourceId`; defaults to the tag key. */
   readonly name?: string;
-  /**
-   * The effect to gate. A function receiving the input and returning the effect.
-   * For unit gates (no input), use `() => myEffect`.
-   */
-  readonly effect: (input: T) => Effect.Effect<A, E>;
+  /** The effect to gate. For unit gates (`Schema.Void` input), use `() => myEffect`. */
+  readonly effect: (input: I) => Effect.Effect<A, E, R>;
   /**
    * Max concurrent executions through this gate.
    * @default 1
    */
+  readonly concurrency?: number;
+}
+
+/**
+ * Configuration for {@link RunResource.make} — local scoped handle, no RPC.
+ *
+ * @public
+ */
+export interface RunResourceConfig<T, A, E> {
+  readonly name?: string;
+  readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
 }
 
@@ -134,45 +257,7 @@ export interface RunResourceRunnerConfig {
 export type RunResourceRunner = internal.RunResourceRunner;
 
 /**
- * Tag factory result — identity + static {@link RunResourceStaticRun}.
- *
- * @public
- */
-export type RunResourceTagDefinition<
-  Self,
-  T,
-  A,
-  E,
-> = Context.Service<Self, RunResourceHandle<T, A, E>> & {
-  readonly run: RunResourceStaticRun<T, A, E, Self>;
-};
-
-/**
- * Service factory result — tag surface plus baked-in layer and configure helpers.
- *
- * @public
- */
-export interface RunResourceServiceDefinition<
-  Self,
-  Name extends string,
-  T,
-  A,
-  E,
-> extends RunResourceTagDefinition<Self, T, A, E> {
-  readonly defaultSpec: RunResourceConfig<T, A, E> & { readonly name: Name };
-  readonly layer: Layer.Layer<Self>;
-  readonly configure: (
-    patch: ConfigPatch<RunResourceConfig<T, A, E>>,
-  ) => Layer.Layer<never>;
-  readonly wrapGate: (
-    fn: (
-      previous: RunResourceConfig<T, A, E>["effect"],
-    ) => RunResourceConfig<T, A, E>["effect"],
-  ) => Layer.Layer<never>;
-}
-
-/**
- * @deprecated Callable gates are replaced by {@link RunGateHandle.run}. Will be removed.
+ * @deprecated Callable gates are replaced by handle `.run`. Will be removed.
  * @public
  */
 export type RunGate<T, A, E> = RunGateHandle<T, A, E>;
@@ -181,23 +266,136 @@ export type RunGate<T, A, E> = RunGateHandle<T, A, E>;
 // Internal helpers
 // ============================================================================
 
-const makeStaticRun = <Self, T, A, E, Name extends string>(
-  tag: Context.ServiceClass<Self, Name, RunResourceHandle<T, A, E>>,
-): RunResourceStaticRun<T, A, E, Self> =>
-  ((...args: [T] extends [void] ? readonly [] : readonly [T]) =>
+const makeStaticRun = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+): RunResourceStaticRun<I, A, E, Self> =>
+  ((input?: Schema.Schema.Type<I>) =>
     Effect.gen(function* () {
-      const handle = yield* tag;
-      return args.length === 0
-        ? yield* (handle.run as () => Effect.Effect<A, E>)()
-        : yield* handle.run(args[0] as T);
-    })) as RunResourceStaticRun<T, A, E, Self>;
+      const svc = yield* tag;
+      const run = svc.run;
+      if (input === undefined) {
+        if (typeof run === "function") {
+          return yield* (run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)();
+        }
+        return yield* (run as Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>);
+      }
+      return yield* (run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>
+      >)(input);
+    })) as RunResourceStaticRun<I, A, E, Self>;
+
+/**
+ * Build the live gate behind `tag` and map it onto the toolkit service impl — shared by
+ * {@link layer} / {@link serve} / {@link serveRemote}.
+ *
+ * @internal
+ */
+const buildRunImpl = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+  R,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Effect.Effect<any, never, R | Scope.Scope> =>
+  Effect.gen(function* () {
+    const context = yield* Effect.context<R>();
+    const provideR = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+    const effectiveConfig = yield* foldConfiguredSpec<
+      RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
+    >(tag.key, { ...config, name: tag.key });
+    const handle = yield* internal.makeRunResourceHandleEffect({
+      name: effectiveConfig.name ?? tag.key,
+      effect: (input: Schema.Schema.Type<I>) => provideR(effectiveConfig.effect(input)),
+      concurrency: effectiveConfig.concurrency,
+    });
+
+    const statusSub = {
+      get: handle.status.get,
+      changes: handle.status.changes,
+    };
+    const impl = {
+      status: statusSub,
+      waiting: handle.waiting,
+      inFlight: handle.inFlight,
+      completed: handle.completed,
+      failed: handle.failed,
+      interrupted: handle.interrupted,
+      run: (input?: Schema.Schema.Type<I>) =>
+        input === undefined
+          ? (handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)()
+          : handle.run(input as Schema.Schema.Type<I>),
+    };
+    return impl;
+  });
+
+const runTag = <Self>() => {
+  function build<I extends Schema.Top, A extends Schema.Top>(
+    key: string,
+    inputSchema: I,
+    successSchema: A,
+    options?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+  >(
+    key: string,
+    inputSchema: I,
+    successSchema: A,
+    errorSchema: E,
+    options?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, I, A, E>;
+  function build(
+    key: string,
+    inputSchema: Schema.Top,
+    successSchema: Schema.Top,
+    errorOrOptions?: Schema.Top | { readonly description?: string },
+    maybeOptions?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, any, any, any> {
+    const hasErrorSchema =
+      errorOrOptions !== undefined &&
+      typeof errorOrOptions === "object" &&
+      "ast" in errorOrOptions;
+    const errorSchema = hasErrorSchema ? errorOrOptions : Schema.Never;
+    const options = hasErrorSchema ? maybeOptions : errorOrOptions as
+      | { readonly description?: string }
+      | undefined;
+    const spec = runSpec(inputSchema, successSchema, errorSchema);
+    const tag = Resource.Tag<Self>()(key, spec, {
+      description: options?.description,
+      kind,
+    });
+    const ready = Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.status.get, () => ({ ready: true })),
+    );
+    return Object.assign(ready, { run: makeStaticRun(ready) }) as RunTagWithStaticRun<
+      Self,
+      any,
+      any,
+      any
+    >;
+  }
+  return build;
+};
 
 // ============================================================================
 // Public API
 // ============================================================================
 
 /**
- * Create a scoped handle with `.run` only — no live observation.
+ * Create a scoped handle with `.run` only — no live observation, no RPC.
  *
  * @public
  */
@@ -208,81 +406,177 @@ export const make = internal.makeRunGateHandleEffect;
  *
  * @public
  */
-export const configure = <Self, T, A, E>(
-  tag: Context.Service<Self, RunResourceHandle<T, A, E>>,
-  patch: ConfigPatch<RunResourceConfig<T, A, E>>,
+export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  patch: ConfigPatch<
+    RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, never>
+  >,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 /**
- * Build a `Layer` from a tag and config — yields an observable handle.
+ * Build a `Layer` from a tag and config — yields an observable toolkit service.
  *
  * @public
  */
-export const layer = <Self, T, A, E>(
-  tag: Context.Service<Self, RunResourceHandle<T, A, E>>,
-  config: RunResourceConfig<T, A, E>,
-) => {
-  const resourceId = config.name ?? tag.key;
-  return Layer.effect(tag)(
-    foldConfiguredSpec(resourceId, {
-      ...config,
-      name: resourceId,
-    }).pipe(Effect.flatMap(internal.makeRunResourceHandleEffect)),
+export const layer = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<Self | Local<Self>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildRunImpl(tag, config), (impl) => Resource.layer(tag, impl)),
   );
+
+/**
+ * Serve this run gate **remotely (served-only)** — RPC handlers without granting the local instance.
+ *
+ * @public
+ */
+export function serveRemote<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>>, never, R>;
+export function serveRemote(
+  tag: ResourceTag<any, any>,
+  config: RunResourceLayerConfig<any, any, any, any>,
+): Layer.Layer<any, any, any> {
+  return Layer.unwrap(
+    Effect.map(
+      buildRunImpl(tag, config),
+      (impl) =>
+        Resource.serveRemote(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
+    ),
+  ) as Layer.Layer<any, any, any>;
+}
+
+/**
+ * Serve this run gate **and** grant its local instance from one materialization.
+ *
+ * @public
+ */
+export function serve<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>>,
+  never,
+  R
+>;
+export function serve(
+  tag: ResourceTag<any, any>,
+  config: RunResourceLayerConfig<any, any, any, any>,
+): Layer.Layer<any, any, any> {
+  return Layer.unwrap(
+    Effect.map(
+      buildRunImpl(tag, config),
+      (impl) => Resource.serve(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
+    ),
+  ) as Layer.Layer<any, any, any>;
+}
+
+/**
+ * Class factory: tag + wire schemas + baked-in `.layer` + `.configure`.
+ *
+ * @public
+ */
+export const Service = <Self>() => {
+  function build<
+    const Name extends string,
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top = typeof Schema.Never,
+    R = never,
+  >(
+    name: Name,
+    inputSchema: I,
+    successSchema: A,
+    config: RunResourceLayerConfig<
+      Schema.Schema.Type<I>,
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      R
+    > & { readonly errorSchema?: E },
+  ) {
+    const errorSchema = (config.errorSchema ?? Schema.Never) as E;
+    const tag = runTag<Self>()(name, inputSchema, successSchema, errorSchema);
+    const defaultSpec = {
+      name,
+      inputSchema,
+      successSchema,
+      errorSchema,
+      effect: config.effect,
+      concurrency: config.concurrency,
+    };
+    const layerConfig = {
+      effect: config.effect,
+      concurrency: config.concurrency,
+      name,
+    };
+    return Object.assign(tag, {
+      defaultSpec,
+      configure: (
+        patch: ConfigPatch<
+          RunResourceLayerConfig<
+            Schema.Schema.Type<I>,
+            Schema.Schema.Type<A>,
+            Schema.Schema.Type<E>,
+            R
+          >
+        >,
+      ) => configureLayer(name, patch),
+      wrapGate: (
+        fn: (
+          previous: RunResourceLayerConfig<
+            Schema.Schema.Type<I>,
+            Schema.Schema.Type<A>,
+            Schema.Schema.Type<E>,
+            R
+          >["effect"],
+        ) => RunResourceLayerConfig<
+          Schema.Schema.Type<I>,
+          Schema.Schema.Type<A>,
+          Schema.Schema.Type<E>,
+          R
+        >["effect"],
+      ) => configureWrapEffectField(name, fn),
+      layer: Layer.unwrap(
+        Effect.map(
+          buildRunImpl(tag as ResourceTag<any, any>, layerConfig),
+          (impl) => Resource.layer(tag as ResourceTag<any, any>, impl),
+        ),
+      ) as Layer.Layer<Self, never, R>,
+      run: makeStaticRun(tag),
+    });
+  }
+  return build;
 };
 
 /**
- * Class factory: tag + baked-in `.layer` + `.configure`.
+ * Class factory: identity tag + wire schemas — pair with {@link layer}.
  *
  * @public
  */
-export const Service = <Self, T, A, E = never>() =>
-<const Name extends string>(
-  name: Name,
-  config: RunResourceConfig<T, A, E>,
-) => {
-  const defaultSpec = { ...config, name };
-  const base = Context.Service<Self, RunResourceHandle<T, A, E>>()(name);
-  const buildHandle = foldConfiguredSpec(name, defaultSpec).pipe(
-    Effect.flatMap(internal.makeRunResourceHandleEffect),
-  );
-  return Object.assign(base, {
-    defaultSpec,
-    configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
-      configureLayer(name, patch),
-    wrapGate: (
-      fn: (
-        previous: RunResourceConfig<T, A, E>["effect"],
-      ) => RunResourceConfig<T, A, E>["effect"],
-    ) => configureWrapEffectField(name, fn),
-    layer: Layer.effect(base)(buildHandle),
-    run: makeStaticRun(base),
-  });
-};
-
-/**
- * Class factory: identity tag only — pair with {@link layer}.
- *
- * @public
- */
-export const Tag = <Self, T, A, E = never>() =>
-<const Name extends string>(name: Name) => {
-  const base = Context.Service<Self, RunResourceHandle<T, A, E>>()(name);
-  return Object.assign(base, { run: makeStaticRun(base) });
-};
+export { runTag as Tag };
 
 /**
  * Register this run gate on an app {@link Store.Service} — built-in fact and state-history shapes.
- * Pass a bare spec object to add app-specific methods (merged with built-in):
- *
- * ```ts
- * RunResource.store(FetchGate)
- * RunResource.store(FetchGate, {
- *   audit: auditSchema,
- * }, ({ audit, fact }) => ({
- *   appendAudit: audit.append,
- * }))
- * ```
  *
  * @public
  */
@@ -307,7 +601,7 @@ export function store(tag: StoreScopeTag, extended?: StoreShapes) {
 }
 
 /**
- * Generic runner tag + layer — no observation, no handle shape.
+ * Generic runner tag + layer — no observation, no handle shape, no RPC.
  *
  * @public
  */

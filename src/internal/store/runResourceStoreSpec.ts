@@ -11,22 +11,12 @@
 import { Schema } from "effect";
 import type { Effect } from "effect";
 import * as Store from "../../Store";
+import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
 
 /** Live gate counters persisted on state transitions. @internal */
-export const runStateSchema = Schema.Struct({
-  resourceId: Schema.String,
-  observedAt: Schema.Number,
-  configVersion: Schema.Number,
-  concurrency: Schema.Number,
-  waiting: Schema.Number,
-  inFlight: Schema.Number,
-  completed: Schema.Number,
-  failed: Schema.Number,
-  interrupted: Schema.Number,
-  totalDurationMs: Schema.Number,
-});
+export const runStateSchema = runGateStatus;
 
 /** @internal */
 export const runStartedFactSchema = Schema.Struct({

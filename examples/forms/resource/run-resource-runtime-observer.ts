@@ -7,19 +7,20 @@
  * Run: `npx tsx examples/forms/resource/run-resource-runtime-observer.ts`
  */
 
-import { Effect, Ref, Stream } from "effect";
+import { Effect, Ref, Schema, Stream } from "effect";
 import { RunResource } from "../../../src";
 
-class ObservedRunGate extends RunResource.Service<
-  ObservedRunGate,
-  number,
-  number,
-  string
->()("examples/ObservedRunGate", {
-  effect: (n: number) =>
-    n >= 0 ? Effect.succeed(n + 1) : Effect.fail("negative input"),
-  concurrency: 1,
-}) {}
+const ObservedRunGate = RunResource.Service<{ readonly _tag: "ObservedRunGate" }>()(
+  "examples/ObservedRunGate",
+  Schema.Number,
+  Schema.Number,
+  {
+    effect: (n: number) =>
+      n >= 0 ? Effect.succeed(n + 1) : Effect.fail("negative input"),
+    concurrency: 1,
+    errorSchema: Schema.String,
+  },
+);
 
 const program = Effect.gen(function* () {
   yield* Effect.gen(function* () {
