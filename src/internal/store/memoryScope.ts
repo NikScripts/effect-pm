@@ -6,8 +6,14 @@
  */
 
 import { Effect, Ref, Schema } from "effect";
-import { StoreScopeNotRegistered } from "./aggregateService";
-import { APPEND_TAG, QUERY_TAG, type StoreHandleOf, type StoreSpec } from "./spec";
+import { StoreScopeNotRegistered } from "./defineStore";
+import {
+  isStoreContractValue,
+  materializeContractHandle,
+  type StoreContractValue,
+} from "./contractDef";
+import { applyQueryOpts, queryOptsFromReadPayload } from "./helpers";
+import { APPEND_TAG, QUERY_TAG, type FlatStoreHandleOf, type StoreHandleOf, type StoreSpec } from "./spec";
 
 /** @internal */
 export interface StoredRow {
@@ -18,6 +24,7 @@ export interface StoredRow {
 /** @internal */
 export interface ScopeState {
   readonly spec: StoreSpec;
+  readonly contract?: StoreContractValue;
   readonly rows: Ref.Ref<ReadonlyArray<StoredRow>>;
 }
 
@@ -44,7 +51,7 @@ const querySourceKeys = (
 export const makeScopeHandle = <S extends StoreSpec>(
   spec: S,
   rows: Ref.Ref<ReadonlyArray<StoredRow>>,
-): StoreHandleOf<S> => {
+): FlatStoreHandleOf<S> => {
   const handle = {} as StoreHandleOf<S>;
 
   for (const [name, entry] of Object.entries(spec)) {
@@ -61,28 +68,43 @@ export const makeScopeHandle = <S extends StoreSpec>(
       const sourceKeys = querySourceKeys(spec, entry);
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          yield* Schema.decodeUnknownEffect(entry.payload)(payload);
+          const decodedPayload = yield* Schema.decodeUnknownEffect(entry.payload)(payload);
           const current = yield* Ref.get(rows);
-          const matched = current
-            .filter((row) => sourceKeys.has(row.method))
-            .map((row) => row.payload);
+          const matched = applyQueryOpts(
+            current
+              .filter((row) => sourceKeys.has(row.method))
+              .map((row) => row.payload),
+            queryOptsFromReadPayload(decodedPayload),
+            () => 0,
+          );
           return yield* Schema.decodeUnknownEffect(entry.result)(matched);
         });
     }
   }
 
-  return handle;
+  return handle as FlatStoreHandleOf<S>;
 };
 
 /** @internal */
-export const acquireFromScopes = <S extends StoreSpec>(
+export const materializeStoreHandle = (
+  input: StoreSpec | StoreContractValue,
+  rows: Ref.Ref<ReadonlyArray<StoredRow>>,
+): StoreHandleOf<StoreSpec | StoreContractValue> => {
+  if (isStoreContractValue(input)) {
+    return materializeContractHandle(input, rows) as StoreHandleOf<StoreContractValue>;
+  }
+  return makeScopeHandle(input, rows) as StoreHandleOf<StoreSpec>;
+};
+
+/** @internal */
+export const acquireFromScopes = <Input extends StoreSpec | StoreContractValue>(
   scopes: ReadonlyMap<string, ScopeState>,
   key: string,
-  spec: S,
-): Effect.Effect<StoreHandleOf<S>, StoreScopeNotRegistered> => {
+  input: Input,
+): Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered> => {
   const scope = scopes.get(key);
   if (scope === undefined) {
     return Effect.fail(new StoreScopeNotRegistered({ key }));
   }
-  return Effect.succeed(makeScopeHandle(spec, scope.rows) as StoreHandleOf<S>);
+  return Effect.succeed(materializeStoreHandle(input, scope.rows) as StoreHandleOf<Input>);
 };

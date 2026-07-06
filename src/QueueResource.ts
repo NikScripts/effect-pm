@@ -55,10 +55,11 @@ import {
 import { makeQueueEffect } from "./internal/queueResource";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
-  builtInQueueStoreSpec,
+  builtInQueueStoreContract,
+  type BuiltInQueueContract,
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
-import type { StoreSpec } from "./internal/store/spec";
+import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueueErrors,
   QueueHandle,
@@ -937,32 +938,33 @@ export const configure = <
  * ```ts
  * QueueResource.store(Mail)
  * QueueResource.store(Mail, {
- *   campaignAudit: Store.append(campaignAuditSchema),
- *   auditsByCampaign: Store.query({ payload: campaignQuery, result: Schema.Array(campaignAuditSchema) }),
- * })
+ *   campaignAudit: campaignAuditSchema,
+ * }, ({ campaignAudit, entry }) => ({
+ *   appendCampaignAudit: campaignAudit.append,
+ * }))
  * ```
  *
  * @public
  */
-export const store: {
-  <const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
-    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInQueueStoreSpec>>
-  >;
-  <
-    const Tag extends QueueStoreTag,
-    const S extends StoreSpec,
-  >(
-    tag: Tag,
-    extended: S,
-  ): ReturnType<
-    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInQueueStoreSpec>, S>
-  >;
-} = (tag: QueueStoreTag, extended?: StoreSpec) => {
-  const builtIn = builtInQueueStoreSpec(tag);
+export function store<const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, BuiltInQueueContract<Tag>>
+>;
+export function store<
+  const Tag extends QueueStoreTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<
+    Tag,
+    BuiltInQueueContract<Tag>,
+    Shapes
+  >
+>;
+export function store(tag: QueueStoreTag, extended?: StoreShapes) {
+  const builtIn = builtInQueueStoreContract(tag);
   return extended === undefined
     ? facetStoreRegistration(tag, builtIn)
     : facetStoreRegistration(tag, builtIn, extended);
-};
+}
 
 // The light `Tag` lives here (no engine) so `QueueResource.Tag` member access tree-shakes.
 // DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` → `QueueResource.Tag`.

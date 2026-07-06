@@ -99,9 +99,9 @@ import { HistoryStore } from "./HistoryStore";
 import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
-import { builtInProcessStoreSpec } from "./internal/store/processStoreSpec";
+import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
-import type { StoreSpec } from "./internal/store/spec";
+import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
 // Public types
 // ============================================================================
@@ -2345,31 +2345,33 @@ export const configure = <A = void, E = never, R = never>(
  * ```ts
  * Process.store(Daily)
  * Process.store(Daily, {
- *   audit: Store.append(auditSchema),
- * })
+ *   audit: auditSchema,
+ * }, ({ audit, execution }) => ({
+ *   appendAudit: audit.append,
+ * }))
  * ```
  *
  * @public
  */
-export const store: {
-  <const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
-    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInProcessStoreSpec>>
-  >;
-  <
-    const Tag extends StoreScopeTag,
-    const S extends StoreSpec,
-  >(
-    tag: Tag,
-    extended: S,
-  ): ReturnType<
-    typeof facetStoreRegistration<Tag, ReturnType<typeof builtInProcessStoreSpec>, S>
-  >;
-} = (tag: StoreScopeTag, extended?: StoreSpec) => {
-  const builtIn = builtInProcessStoreSpec(tag);
+export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, BuiltInProcessContract>
+>;
+export function store<
+  const Tag extends StoreScopeTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<
+    Tag,
+    BuiltInProcessContract,
+    Shapes
+  >
+>;
+export function store(tag: StoreScopeTag, extended?: StoreShapes) {
+  const builtIn = builtInProcessStoreContract(tag);
   return extended === undefined
     ? facetStoreRegistration(tag, builtIn)
     : facetStoreRegistration(tag, builtIn, extended);
-};
+}
 
 // ============================================================================
 // Standalone Schedule resource layer

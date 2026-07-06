@@ -119,7 +119,8 @@
     "src/**/*.ts",
     "test/**/*.ts",
     "examples/**/*.ts",
-    "examples/shared/**/*.ts"
+    "examples/shared/**/*.ts",
+    "scratchpad/**/*.ts"
   ],
   "exclude": [
     "node_modules",

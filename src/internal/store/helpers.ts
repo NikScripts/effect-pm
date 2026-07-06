@@ -95,6 +95,37 @@ export const toJsonValue = (value: unknown): JsonValue => {
 };
 
 /**
+ * Extract {@link QueryOpts} fields present on a decoded read payload.
+ *
+ * @internal
+ */
+export const queryOptsFromReadPayload = (
+  payload: unknown,
+): QueryOpts | undefined => {
+  if (typeof payload !== "object" || payload === null) {
+    return undefined;
+  }
+  const record = payload as {
+    readonly limit?: unknown;
+    readonly before?: unknown;
+    readonly after?: unknown;
+  };
+  const opts: QueryOpts = {};
+  if (typeof record.limit === "number") {
+    opts.limit = record.limit;
+  }
+  if (typeof record.before === "number") {
+    opts.before = record.before;
+  }
+  if (typeof record.after === "number") {
+    opts.after = record.after;
+  }
+  return opts.limit === undefined && opts.before === undefined && opts.after === undefined
+    ? undefined
+    : opts;
+};
+
+/**
  * Strip `limit` from {@link QueryOpts} while preserving the `before` /
  * `after` time window.
  *

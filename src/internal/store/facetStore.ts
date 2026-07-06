@@ -5,38 +5,77 @@
  * @internal
  */
 
-import { makeRegistration, type StoreRegistration, type StoreScopeTag } from "./registration";
-import { mergeSpecs, type MergeSpecs } from "./specMerge";
-import type { StoreSpec } from "./spec";
+import {
+  mergeStoreContracts,
+  type MergedCustom,
+  type StoreContractValue,
+  type StoreMethodsFn,
+  type StoreShapes,
+} from "./contractDef";
+import {
+  makeRegistration,
+  type RegisteredWithContract,
+  type ScopeKeyOf,
+  type StoreRegistration,
+  type StoreScopeTag,
+} from "./registration";
 
 /** @internal */
 export function facetStoreRegistration<
   const Tag extends StoreScopeTag,
-  const BuiltIn extends StoreSpec,
+  const BuiltIn extends StoreContractValue,
 >(
   tag: Tag,
   builtIn: BuiltIn,
-): StoreRegistration<Tag["key"], BuiltIn>;
+): RegisteredWithContract<ScopeKeyOf<Tag>, BuiltIn["spec"], BuiltIn, Tag>;
 
 /** @internal */
 export function facetStoreRegistration<
   const Tag extends StoreScopeTag,
-  const BuiltIn extends StoreSpec,
-  const Extended extends StoreSpec,
+  const BuiltIn extends StoreContractValue,
+  const Extended extends StoreShapes,
 >(
   tag: Tag,
   builtIn: BuiltIn,
   extended: Extended,
-): StoreRegistration<Tag["key"], MergeSpecs<BuiltIn, Extended>>;
+): RegisteredWithContract<
+  ScopeKeyOf<Tag>,
+  BuiltIn["spec"],
+  StoreContractValue<BuiltIn["shapes"] & Extended, BuiltIn["custom"]>,
+  Tag
+>;
+
+/** @internal */
+export function facetStoreRegistration<
+  const Tag extends StoreScopeTag,
+  const BuiltIn extends StoreContractValue,
+  const Extended extends StoreShapes,
+  const Methods extends StoreMethodsFn<BuiltIn["shapes"] & Extended>,
+>(
+  tag: Tag,
+  builtIn: BuiltIn,
+  extended: Extended,
+  methods: Methods,
+): RegisteredWithContract<
+  ScopeKeyOf<Tag>,
+  BuiltIn["spec"],
+  StoreContractValue<
+    BuiltIn["shapes"] & Extended,
+    MergedCustom<BuiltIn, Methods>
+  >,
+  Tag
+>;
 
 /** @internal */
 export function facetStoreRegistration(
   tag: StoreScopeTag,
-  builtIn: StoreSpec,
-  extended?: StoreSpec,
+  builtIn: StoreContractValue,
+  extended?: StoreShapes,
+  methods?: StoreMethodsFn<StoreShapes>,
 ): StoreRegistration {
-  return makeRegistration(
-    tag,
-    extended === undefined ? builtIn : mergeSpecs(builtIn, extended),
-  );
+  const contract =
+    extended === undefined
+      ? builtIn
+      : mergeStoreContracts(builtIn, extended, methods);
+  return makeRegistration(tag, contract);
 }

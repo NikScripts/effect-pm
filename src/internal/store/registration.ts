@@ -6,7 +6,14 @@
  */
 
 import type { StoreLogLevel } from "./types";
-import type { StoreSpec } from "./spec";
+import {
+  contractSpec,
+  isStoreContractValue,
+  isStoreShapeMap,
+  toStoreContract,
+  type StoreContractValue,
+} from "./contractDef";
+import type { StoreSpec, AsStoreSpec } from "./spec";
 import { isStoreSpec } from "./spec";
 
 export const storeRegSym = Symbol.for("@nikscripts/effect-pm/Store/registration");
@@ -24,6 +31,7 @@ export interface StoreRegistration<
   readonly [storeRegSym]: typeof storeRegSym;
   readonly scopeKey: K;
   readonly spec: S;
+  readonly contract?: StoreContractValue;
   readonly tag?: StoreScopeTag;
   readonly logLevel?: StoreLogLevel;
 }
@@ -54,25 +62,68 @@ export const normalizeRegistrations = (
 /** @internal */
 export type ScopeKeyOf<Scope extends string | StoreScopeTag> = Scope extends string
   ? Scope
-  : Scope extends StoreScopeTag
-    ? Scope["key"]
+  : Scope extends { readonly key: infer Id extends string }
+    ? Id
     : never;
+
+/**
+ * Resolve a scope key from a string, tag instance, or tag class (`Tag.key`).
+ *
+ * @internal
+ */
+export type ScopeKeyFromLookup<K> = K extends { readonly key: infer Id extends string }
+  ? Id
+  : K extends string
+    ? K
+    : never;
+
+/** Registration with a concrete contract attached (no optional widening). @internal */
+export type RegisteredWithContract<
+  K extends string,
+  S extends StoreSpec,
+  C extends StoreContractValue,
+  Tag extends StoreScopeTag | undefined = undefined,
+> = Omit<StoreRegistration<K, S>, "contract" | "tag"> & {
+  readonly contract: C;
+} & (Tag extends undefined ? {} : { readonly tag: Tag });
+
+/** Tag type carried on a registration, if any. @internal */
+export type RegTag<R> = R extends { readonly tag?: infer T extends StoreScopeTag } ? T : undefined;
 
 /** @internal */
 export const makeRegistration = <
   const Scope extends string | StoreScopeTag,
-  const S extends StoreSpec,
+  const Input,
 >(
   scope: Scope,
-  spec: S,
-): StoreRegistration<ScopeKeyOf<Scope>, S> => {
+  spec: Input & {},
+): Input extends StoreContractValue
+  ? Scope extends StoreScopeTag
+    ? RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input, Scope>
+    : RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input>
+  : Scope extends StoreScopeTag
+    ? StoreRegistration<ScopeKeyOf<Scope>, AsStoreSpec<Input>> & { readonly tag: Scope }
+    : StoreRegistration<ScopeKeyOf<Scope>, AsStoreSpec<Input>> => {
   const scopeKey = (typeof scope === "string" ? scope : scope.key) as ScopeKeyOf<Scope>;
+  const contract =
+    isStoreContractValue(spec) || isStoreShapeMap(spec)
+      ? toStoreContract(spec as StoreContractValue | StoreContractValue["shapes"])
+      : undefined;
   return {
     [storeRegSym]: storeRegSym,
     scopeKey,
-    spec,
+    spec: (contract !== undefined ? contractSpec(contract) : spec) as Input extends StoreContractValue
+      ? Input["spec"]
+      : AsStoreSpec<Input>,
+    ...(contract !== undefined ? { contract } : {}),
     ...(typeof scope === "string" ? {} : { tag: scope }),
-  };
+  } as unknown as Input extends StoreContractValue
+    ? Scope extends StoreScopeTag
+      ? RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input, Scope>
+      : RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input>
+    : Scope extends StoreScopeTag
+      ? StoreRegistration<ScopeKeyOf<Scope>, AsStoreSpec<Input>> & { readonly tag: Scope }
+      : StoreRegistration<ScopeKeyOf<Scope>, AsStoreSpec<Input>>;
 };
 
 /** @internal */
@@ -106,5 +157,7 @@ export const withRegistrationLogLevel = <R extends StoreRegistrationAny>(
 ): R => Object.assign({}, registration, { logLevel });
 
 /** @internal */
-export const isRegistrationPipeTarget = (value: unknown): value is StoreRegistrationAny | StoreSpec =>
-  isStoreRegistration(value) || isStoreSpec(value);
+export const isRegistrationPipeTarget = (
+  value: unknown,
+): value is StoreRegistrationAny | StoreSpec | StoreContractValue =>
+  isStoreRegistration(value) || isStoreSpec(value) || isStoreContractValue(value);
