@@ -12,13 +12,13 @@ import { RunResource } from "../../../src";
 
 const ObservedRunGate = RunResource.Service<{ readonly _tag: "ObservedRunGate" }>()(
   "examples/ObservedRunGate",
-  Schema.Number,
-  Schema.Number,
   {
+    inputSchema: Schema.Number,
+    successSchema: Schema.Number,
+    errorSchema: Schema.String,
     effect: (n: number) =>
       n >= 0 ? Effect.succeed(n + 1) : Effect.fail("negative input"),
     concurrency: 1,
-    errorSchema: Schema.String,
   },
 );
 

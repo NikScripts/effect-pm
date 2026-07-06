@@ -8,34 +8,28 @@ import { Clock, Duration, Effect, Layer, Schema } from "effect";
 import { RunResource } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-class TimedWorkGate extends RunResource.Service<TimedWorkGate>()(
-  "examples/TimedWorkGate",
-  Schema.Void,
-  Schema.Number,
-  {
-    effect: () =>
-      Effect.gen(function* () {
-        const startedAt = yield* Clock.currentTimeMillis;
-        yield* Effect.sleep(Duration.millis(45));
-        return startedAt;
-      }),
-    concurrency: 3,
-  },
-) {}
+class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/TimedWorkGate", {
+  inputSchema: Schema.Void,
+  successSchema: Schema.Number,
+  effect: () =>
+    Effect.gen(function* () {
+      const startedAt = yield* Clock.currentTimeMillis;
+      yield* Effect.sleep(Duration.millis(45));
+      return startedAt;
+    }),
+  concurrency: 3,
+}) {}
 
-class DoubleGate extends RunResource.Service<DoubleGate>()(
-  "examples/DoubleGate",
-  Schema.Number,
-  Schema.Number,
-  {
-    effect: (n: number) =>
-      Effect.gen(function* () {
-        yield* Effect.sleep(Duration.millis(8));
-        return n * 2;
-      }),
-    concurrency: 2,
-  },
-) {}
+class DoubleGate extends RunResource.Service<DoubleGate>()("examples/DoubleGate", {
+  inputSchema: Schema.Number,
+  successSchema: Schema.Number,
+  effect: (n: number) =>
+    Effect.gen(function* () {
+      yield* Effect.sleep(Duration.millis(8));
+      return n * 2;
+    }),
+  concurrency: 2,
+}) {}
 
 const median = (xs: ReadonlyArray<number>): number => {
   if (xs.length === 0) return 0;

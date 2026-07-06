@@ -14,15 +14,12 @@ import { layerProcessStore } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-class SqliteDemoGate extends RunResource.Service<SqliteDemoGate>()(
-  "examples/SqliteBackedGate",
-  Schema.Number,
-  Schema.Number,
-  {
-    effect: (n: number) => Effect.succeed(n + 1),
-    concurrency: 1,
-  },
-) {}
+class SqliteDemoGate extends RunResource.Service<SqliteDemoGate>()("examples/SqliteBackedGate", {
+  inputSchema: Schema.Number,
+  successSchema: Schema.Number,
+  effect: (n: number) => Effect.succeed(n + 1),
+  concurrency: 1,
+}) {}
 
 const program = Effect.gen(function* () {
   const path = yield* Path.Path;

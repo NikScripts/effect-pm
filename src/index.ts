@@ -516,9 +516,12 @@ export type {
   RunResourceLayerConfig,
   RunResourceRunner,
   RunResourceRunnerConfig,
+  RunResourceServiceConfig,
   RunResourceServiceDefinition,
   RunResourceStaticRun,
   RunResourceTagDefinition,
+  RunResourceTagSchemas,
+  RunResourceWireSchemas,
   RunInstanceSpec,
 } from "./RunResource";
 export {
