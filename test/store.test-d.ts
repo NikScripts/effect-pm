@@ -1,8 +1,13 @@
 import { Effect, Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
+import * as RunResource from "../src/RunResource";
 import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
 import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
+import {
+  builtInRunResourceStoreContract,
+  type RunFact,
+} from "../src/internal/store/runResourceStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 
@@ -35,6 +40,8 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", jobSchema) {}
 
+class FetchGate extends RunResource.Tag<FetchGate, string, number>()("@app/FetchGate") {}
+
 const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
   Store.extend({ campaignAudit: Schema.Struct({ campaignId: Schema.String }) }),
 );
@@ -56,6 +63,50 @@ type QueueEventsResult = ReturnType<MailQueueHandle["events"]> extends Effect.Ef
   : never;
 
 void ({} as QueueEventsResult satisfies ReadonlyArray<QueueEvent>);
+
+const runGateContract = builtInRunResourceStoreContract(FetchGate);
+type RunGateHandle = Store.HandleOf<typeof runGateContract>;
+
+declare const _runGateHandle: RunGateHandle;
+void _runGateHandle.record({
+  id: "run-1/started",
+  resourceId: FetchGate.key,
+  runId: "run-1",
+  type: "run-resource.run.started",
+  occurredAt: 1,
+  concurrency: 2,
+});
+void _runGateHandle.facts();
+void _runGateHandle.recordStateChange({
+  id: "state-1",
+  resourceId: FetchGate.key,
+  changedAt: 2,
+  reason: "run-resource.run.started",
+  previous: null,
+  current: {
+    resourceId: FetchGate.key,
+    observedAt: 2,
+    configVersion: 1,
+    concurrency: 2,
+    waiting: 0,
+    inFlight: 1,
+    completed: 0,
+    failed: 0,
+    interrupted: 0,
+    totalDurationMs: 0,
+  },
+});
+void _runGateHandle.stateHistory();
+
+type RunFactsResult = ReturnType<RunGateHandle["facts"]> extends Effect.Effect<
+  infer A,
+  infer _E,
+  infer _R
+>
+  ? A
+  : never;
+
+void ({} as RunFactsResult satisfies ReadonlyArray<RunFact>);
 
 type _QueueReadPayload = Parameters<MailQueueHandle["events"]>[0];
 void ({} as _QueueReadPayload satisfies { readonly limit?: number } | undefined);

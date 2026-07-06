@@ -15,6 +15,7 @@
  * | `RunResource.Service` | Tag + baked-in `.layer` + `.configure` |
  * | `RunResource.Tag` | Identity tag — pair with {@link layer} |
  * | `RunResource.configure` | Config patch layer for a tag (Tag path) |
+ * | `RunResource.store` | Register built-in run facts + state history on an app {@link Store.Service} |
  * | `RunResource.makeRunner` | Generic runner (wraps arbitrary effects) |
  *
  * ## Observable handles (Tag / Service / layer)
@@ -45,6 +46,13 @@
  */
 
 import { Context, Effect, Layer } from "effect";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import {
+  builtInRunResourceStoreContract,
+  type BuiltInRunResourceContract,
+} from "./internal/store/runResourceStoreSpec";
+import type { StoreShapes } from "./internal/store/contractDef";
+import type { StoreScopeTag } from "./internal/store/registration";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -262,6 +270,41 @@ export const Tag = <Self, T, A, E = never>() =>
   const base = Context.Service<Self, RunResourceHandle<T, A, E>>()(name);
   return Object.assign(base, { run: makeStaticRun(base) });
 };
+
+/**
+ * Register this run gate on an app {@link Store.Service} — built-in fact and state-history shapes.
+ * Pass a bare spec object to add app-specific methods (merged with built-in):
+ *
+ * ```ts
+ * RunResource.store(FetchGate)
+ * RunResource.store(FetchGate, {
+ *   audit: auditSchema,
+ * }, ({ audit, fact }) => ({
+ *   appendAudit: audit.append,
+ * }))
+ * ```
+ *
+ * @public
+ */
+export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, BuiltInRunResourceContract>
+>;
+export function store<
+  const Tag extends StoreScopeTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<
+    Tag,
+    BuiltInRunResourceContract,
+    Shapes
+  >
+>;
+export function store(tag: StoreScopeTag, extended?: StoreShapes) {
+  const builtIn = builtInRunResourceStoreContract(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, builtIn)
+    : facetStoreRegistration(tag, builtIn, extended);
+}
 
 /**
  * Generic runner tag + layer — no observation, no handle shape.

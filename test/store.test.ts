@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
+import * as RunResource from "../src/RunResource";
 import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
@@ -41,6 +42,10 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", jobSchema) {}
 
+class FetchGate extends RunResource.Tag<FetchGate, string, number>()("@app/FetchGate") {}
+
+const fetchGateRegistration = RunResource.store(FetchGate);
+
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 
 const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
@@ -66,6 +71,10 @@ class NamedDropletStore extends Store.Service<NamedDropletStore>("@repo/app/Name
 }) {}
 
 class QueueStore extends Store.Service<QueueStore>("@repo/app/QueueStore")(mailQueueRegistration) {}
+
+class RunGateStore extends Store.Service<RunGateStore>("@repo/app/RunGateStore")(
+  fetchGateRegistration,
+) {}
 
 const extendedThermometerContract = thermometerContract.pipe(
   Store.extend({
@@ -195,6 +204,55 @@ describe("Store.Service", () => {
       const cleared = events.find((e) => e._tag === "Cleared");
       expect(cleared).toMatchObject({ queueId: MailQueue.key, count: 3 });
     }).pipe(Effect.provide(QueueStore.layerMemory), Effect.scoped),
+  );
+
+  it.effect("RunResource.store exposes typed fact + stateHistory methods", () =>
+    Effect.gen(function* () {
+      const store = yield* RunGateStore.at(FetchGate);
+      const keys = Object.keys(store);
+      expect(keys).toContain("record");
+      expect(keys).toContain("facts");
+      expect(keys).toContain("recordStateChange");
+      expect(keys).toContain("stateHistory");
+
+      yield* store.record({
+        id: "run-1/started",
+        resourceId: FetchGate.key,
+        runId: "run-1",
+        type: "run-resource.run.started",
+        occurredAt: 1,
+        concurrency: 2,
+      });
+      yield* store.recordStateChange({
+        id: "state-1",
+        resourceId: FetchGate.key,
+        changedAt: 2,
+        reason: "run-resource.run.started",
+        previous: null,
+        current: {
+          resourceId: FetchGate.key,
+          observedAt: 2,
+          configVersion: 1,
+          concurrency: 2,
+          waiting: 0,
+          inFlight: 1,
+          completed: 0,
+          failed: 0,
+          interrupted: 0,
+          totalDurationMs: 0,
+        },
+      });
+
+      const facts = yield* store.facts();
+      expect(facts).toHaveLength(1);
+      expect(facts[0]).toMatchObject({
+        type: "run-resource.run.started",
+        runId: "run-1",
+      });
+      const history = yield* store.stateHistory();
+      expect(history).toHaveLength(1);
+      expect(history[0]?.reason).toBe("run-resource.run.started");
+    }).pipe(Effect.provide(RunGateStore.layerMemory), Effect.scoped),
   );
 
   it.effect("Store.extend adds shapes and keeps pipe", () =>
