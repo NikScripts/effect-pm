@@ -1,5 +1,28 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.28
+
+### Minor Changes
+
+- **Queue durability is now presence-driven — the `persist` config field is removed (breaking).** A queue becomes
+  durable when a `DurableQueueStore` layer is in context (with an `itemSchema` so the payload serializes) —
+  providing the layer is the switch. An in-memory "durable" store is a contradiction, so durability is
+  intentionally not a baked-in default; absence of the layer is the normal ephemeral in-memory queue. Removed the
+  `persist` field on `QueueResourceConfig` and the `QueuePersistOptions` type. Migration: delete `persist: true`
+  and provide the `DurableQueueStore` layer; `persist: { maxAttempts: n }` → set the queue's `attempts` (the
+  dead-letter budget derives to `attempts + 1`); lease/poll use engine defaults for now; to keep one queue
+  ephemeral while others are durable, scope the layer so that queue does not receive it.
+
+- **Add shape-first `Store` contract API with EventJournal-backed persistence.** New `@nikscripts/effect-pm/Store`
+  surface: `Store.contract` / `Store.shape` (part 1 shapes + optional part 2 custom methods), `Store.Service` /
+  `Store.Tag` aggregates with `at(tag)` lookup, standalone `Store.store`, `Resource.store` tag attachment, and
+  built-in `QueueResource.store` / `Process.store` facet registrations. Handles are fully typed
+  (`store.<shape>.append` / `.read`, flat aliases). `layerMemory` uses `EventJournal.layerMemory`;
+  `layer({ filename })` persists via `SqliteClient` + `SqlEventJournal`. `Store.changes` streams append events;
+  `Store.retention(maxRows)` trims oldest rows per scope. The built-in `QueueResource.store` persists the same
+  `QueueEvent` union the live `.events` stream carries (one event model for wire + persistence). Platform log
+  facets remain future work.
+
 ## 0.8.0-beta.27
 
 ### Minor Changes

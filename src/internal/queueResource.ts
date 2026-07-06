@@ -135,7 +135,6 @@ import type {
 } from "./takeAlgorithm";
 import type {
   DurableEntry,
-  DurableQueueStoreShape,
   OfferResult,
 } from "../DurableQueueStore";
 import {
@@ -1003,33 +1002,15 @@ export interface QueueResourceConfigBase<T> {
    * @default undefined (off; `logs` is an empty stream)
    */
   readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
-  /**
-   * Durability — back this queue with a {@link DurableQueueStore} (provide the backend layer, e.g.
-   * `SQLiteDurableQueueStore.layer`). When on, the store is the **source of truth**: enqueue
-   * persists, a feeder leases work into the workers, completion/failure update the store, and a
-   * restart recovers in-flight work (**at-least-once** + dedup key). Requires `itemSchema`
-   * (the payload must serialize). Off by default (in-memory only).
-   *
-   * - `true` — defaults.
-   * - `{ … }` — tune `leaseMillis` (visibility timeout), `maxAttempts` (before dead-letter),
-   *   `pollIntervalMillis` (feeder idle poll).
-   */
-  readonly persist?: boolean | QueuePersistOptions;
 }
 
-/**
- * Tuning for {@link QueueResourceConfigBase.persist}.
- *
- * @public
- */
-export interface QueuePersistOptions {
-  /** Lease (visibility timeout) per taken item, ms. Keep above max processing time. @default 300000 */
-  readonly leaseMillis?: number;
-  /** Attempts before an item is dead-lettered. @default the queue's `attempts`, else 1 */
-  readonly maxAttempts?: number;
-  /** Feeder poll interval while the store is empty, ms. @default 100 */
-  readonly pollIntervalMillis?: number;
-}
+// Durability is **presence-driven**, with no config field: provide a `DurableQueueStore` layer
+// and, with an `itemSchema` present, the store becomes the source of truth — enqueue persists, a
+// feeder leases work into the workers, completion/failure update the store, a restart recovers
+// in-flight work (at-least-once + dedup key). Absence of the layer = the normal ephemeral in-memory
+// queue; to keep one queue ephemeral in an app with a durable store, scope the layer so that queue
+// doesn't receive it. The dead-letter budget derives from the queue's `attempts` (SSOT);
+// lease/poll use engine defaults for now (moving onto the backend layer next).
 
 /**
  * Per-error disposition returned by {@link QueueResourceConfigWithoutItemSchema.onFailure}.
@@ -1837,45 +1818,27 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // rest of the engine drives it lane-agnostically through the `LaneStore` interface.
     const laneStore = yield* makeLaneStore(capacity);
 
-    // ─── Durability (opt-in: `persist` + a DurableQueueStore + itemSchema) ───
-    // When on, the store is the source of truth: enqueue persists, a feeder leases work into the
-    // lanes, completion/failure update the store, and boot recovers in-flight work. Off (or no
-    // store/codec) → the in-memory lanes are the queue, exactly as before.
-    const persistOptions =
-      config.persist === true
-        ? {}
-        : config.persist === undefined || config.persist === false
-          ? undefined
-          : config.persist;
-    const durableStoreOption =
-      persistOptions !== undefined && persistCodec !== undefined
-        ? yield* Effect.serviceOption(DurableQueueStore)
-        : Option.none<DurableQueueStoreShape>();
-    if (persistOptions !== undefined && persistCodec === undefined) {
+    // ─── Durability (presence-driven: a DurableQueueStore in context) ───
+    // The layer is the switch — no config flag. A `DurableQueueStore` in context makes the store
+    // the source of truth (enqueue persists, a feeder leases work into the lanes, completion/failure
+    // update the store, boot recovers in-flight work). It requires an `itemSchema` so the payload
+    // can serialize; a store in context without a codec is a misconfiguration we surface. No store
+    // → the in-memory lanes are the queue, exactly as before. In-memory durability is a
+    // contradiction, so this stays serviceOption rather than a baked-in default.
+    const durableStoreOption = yield* Effect.serviceOption(DurableQueueStore);
+    if (Option.isSome(durableStoreOption) && persistCodec === undefined) {
       yield* Effect.logWarning(
-        `Queue "${queueName}" persist ignored: requires an itemSchema (payload must serialize)`,
-      );
-    }
-    if (
-      persistOptions !== undefined &&
-      persistCodec !== undefined &&
-      Option.isNone(durableStoreOption)
-    ) {
-      yield* Effect.logWarning(
-        `Queue "${queueName}" persist ignored: no DurableQueueStore layer provided`,
+        `Queue "${queueName}" not durable: a DurableQueueStore is in context but the queue has no itemSchema (the payload must serialize)`,
       );
     }
     const persist =
-      persistOptions !== undefined &&
-      persistCodec !== undefined &&
-      Option.isSome(durableStoreOption)
+      Option.isSome(durableStoreOption) && persistCodec !== undefined
         ? {
             store: durableStoreOption.value,
             codec: persistCodec,
-            leaseMillis: persistOptions.leaseMillis ?? 300_000,
-            maxAttempts:
-              persistOptions.maxAttempts ?? (config.attempts ?? 0) + 1,
-            pollInterval: Duration.millis(persistOptions.pollIntervalMillis ?? 100),
+            leaseMillis: 300_000,
+            maxAttempts: (config.attempts ?? 0) + 1,
+            pollInterval: Duration.millis(100),
           }
         : undefined;
 

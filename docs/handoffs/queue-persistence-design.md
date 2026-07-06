@@ -1,5 +1,44 @@
 # Queue persistence — design
 
+---
+
+## Decisions locked (2026-07-05) — optionality model
+
+The two planes take **opposite** optionality models, and it's principled, not inconsistent:
+an in-memory form is *coherent* for observability but a *contradiction* for durability.
+
+**Observability plane → baked-in default store (no serviceOption).**
+- The queue **always** holds an event/metric store; the default backing is **in-memory, bounded**.
+  Absence is never a state the engine reasons about — there is always a store.
+- Override by supplying the in-memory backing with different options (retention, etc.), including
+  **retain-nothing**. Swap the backing to SQL for durable history.
+- Appends are **buffered off the worker hot path** (bounded, lossy-under-load by design).
+- A dedicated `none` backing combinator (true no-op appends for a hot queue) is **deferred** — a
+  bounded in-memory ring is already near-zero cost; add `none` when a real need appears.
+
+**Durability plane → serviceOption (presence-driven).**
+- Durability can't have a meaningful in-memory default (the whole point is surviving restart), so
+  it is **not** baked in. A `DurableQueueStore` in context **+ an `itemSchema`** ⇒ durable; nothing
+  in context ⇒ the normal ephemeral in-memory queue. **Providing the layer is the switch** — no
+  `persist: true`.
+- The retained `persist` field is now escape-hatch/tuning only: `false` = opt this queue out even
+  when a store is in context; `{ … }` = lease/maxAttempts/poll tuning; `true` = legacy no-op enabler.
+
+**Status:**
+- ✅ *Shipped in the engine:* durability is presence-driven via `serviceOption(DurableQueueStore)`.
+  The **public `persist` field and `QueuePersistOptions` are removed** — the layer is the only
+  switch; opting a queue out = scope the layer so it doesn't receive it; the dead-letter budget
+  derives from the queue's `attempts` (SSOT). Typecheck (both projects) + Effect LS clean;
+  `queue-durable.sqlite` + `queue-resource` green (81 tests, durable test uses the layer alone).
+  **Breaking — needs a changeset.**
+- ⏳ *Follow-ups (reviewed, not built):* the SQL priority-native durable table (below) replacing the
+  current `DurableQueueStore` impl (also fixes the sync-codec-defect that wedges a queue on one bad
+  row); lease/poll tuning onto the backend layer (engine defaults for now); the baked-in in-memory
+  observability store (waits on the new `Store`/EventJournal landing).
+
+---
+
+
 The optimal-from-first-principles design for persisting a `QueueResource` (durability +
 observability), and the decision on whether to build on Effect's `PersistedQueue` or
 take it as inspiration.

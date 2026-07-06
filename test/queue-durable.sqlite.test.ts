@@ -34,7 +34,6 @@ describe("QueueResource persist (SQLite durability)", () => {
           name: "dq-basic",
           itemSchema: Schema.Number,
           effect: (n: number) => Ref.update(results, (a) => [...a, n]),
-          persist: true,
         });
         yield* queue.add([1, 2, 3]);
         yield* waitUntil(Effect.map(queue.completed, (c) => c >= 3));
@@ -54,7 +53,6 @@ describe("QueueResource persist (SQLite durability)", () => {
           name: "dq-recover",
           itemSchema: Schema.Number,
           effect: (_n: number) => Effect.void,
-          persist: true,
           autoStart: false,
         });
         yield* queue.add([10, 20, 30]);
@@ -68,7 +66,6 @@ describe("QueueResource persist (SQLite durability)", () => {
           name: "dq-recover",
           itemSchema: Schema.Number,
           effect: (n: number) => Ref.update(results, (a) => [...a, n]),
-          persist: true,
         });
         yield* waitUntil(Effect.map(queue.completed, (c) => c >= 3));
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
@@ -89,8 +86,7 @@ describe("QueueResource persist (SQLite durability)", () => {
             Effect.flatMap(Ref.update(runs, (n) => n + 1), () =>
               Effect.fail("boom" as const),
             ),
-          attempts: 1, // enable auto re-enqueue
-          persist: { maxAttempts: 2 },
+          attempts: 1, // enable auto re-enqueue; maxAttempts (before dead-letter) derives to attempts + 1 = 2
         });
         yield* queue.add(1);
         yield* waitUntil(Effect.map(Ref.get(runs), (n) => n >= 2));
@@ -109,7 +105,6 @@ describe("QueueResource persist (SQLite durability)", () => {
           name: "dq-release",
           itemSchema: Schema.Number,
           effect: (_n: number) => Effect.void,
-          persist: true,
           autoStart: false, // keep the backlog available (not leased) for release
         });
         yield* queue.add([1, 2, 3]);
@@ -129,7 +124,6 @@ describe("QueueResource persist (SQLite durability)", () => {
           itemSchema: Schema.Number,
           key: (n: number) => String(n),
           effect: (_n: number) => Effect.void,
-          persist: true,
           autoStart: false,
         });
         yield* queue.add([1, 2, 3]);

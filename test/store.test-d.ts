@@ -2,8 +2,7 @@ import { Effect, Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
-import { builtInQueueStoreContract, type QueueEntryRowSchema } from "../src/internal/store/queueStoreSpec";
-import type { SchemaDecoded } from "../src/internal/store/contractDef";
+import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 
@@ -42,21 +41,13 @@ const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
 type MailQueueHandle = Store.HandleOf<typeof mailQueueContract>;
 
 declare const _queueHandle: MailQueueHandle;
-void _queueHandle.entry.append({
-  queueId: MailQueue.key,
-  entryId: "e1",
-  item: { id: "job" },
-});
-void _queueHandle.entries();
-void _queueHandle.recordEntry({
-  queueId: MailQueue.key,
-  entryId: "e2",
-  item: { id: "job-2" },
-});
+void _queueHandle.record({ _tag: "Start", queueId: MailQueue.key });
+void _queueHandle.record({ _tag: "Cleared", queueId: MailQueue.key, count: 3 });
+void _queueHandle.events();
 
-type QueueEntryRow = SchemaDecoded<QueueEntryRowSchema<typeof MailQueue>>;
+type QueueEvent = QueueEventOf<typeof MailQueue>;
 
-type QueueEntriesResult = ReturnType<MailQueueHandle["entries"]> extends Effect.Effect<
+type QueueEventsResult = ReturnType<MailQueueHandle["events"]> extends Effect.Effect<
   infer A,
   infer _E,
   infer _R
@@ -64,13 +55,9 @@ type QueueEntriesResult = ReturnType<MailQueueHandle["entries"]> extends Effect.
   ? A
   : never;
 
-void ({} as QueueEntriesResult satisfies ReadonlyArray<QueueEntryRow>);
+void ({} as QueueEventsResult satisfies ReadonlyArray<QueueEvent>);
 
-declare const _entryRead: MailQueueHandle["entry"]["read"];
-void _entryRead({ limit: 5 });
-void _entryRead();
-
-type _QueueReadPayload = Parameters<MailQueueHandle["entries"]>[0];
+type _QueueReadPayload = Parameters<MailQueueHandle["events"]>[0];
 void ({} as _QueueReadPayload satisfies { readonly limit?: number } | undefined);
 
 type DropletRegs = RegsOfStoreInput<
@@ -83,12 +70,8 @@ type DropletRegs = RegsOfStoreInput<
 type QueueAtHandle = StoreHandleAtKey<DropletRegs, typeof MailQueue>;
 
 declare const _queueAtHandle: QueueAtHandle;
-void _queueAtHandle.entry.append({
-  queueId: MailQueue.key,
-  entryId: "e1",
-  item: { id: "job" },
-});
-void _queueAtHandle.entries();
+void _queueAtHandle.record({ _tag: "Start", queueId: MailQueue.key });
+void _queueAtHandle.events();
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 
@@ -104,16 +87,10 @@ type FacetQueueRegs = RegsOfStoreInput<
 >;
 type FacetQueueAtHandle = StoreHandleAtKey<FacetQueueRegs, typeof MailQueue>;
 
-type FacetEntryRow = Parameters<FacetQueueAtHandle["entry"]["append"]>[0] extends infer R
-  ? R extends ReadonlyArray<unknown>
-    ? never
-    : R
-  : never;
-void ({} as FacetEntryRow satisfies {
-  readonly queueId: string;
-  readonly entryId: string;
-  readonly item: { readonly id: string };
-});
+// `record` accepts the shared QueueEvent union (the item is typed through its entry-bearing variants).
+declare const _facetRecord: FacetQueueAtHandle["record"];
+void _facetRecord({ _tag: "Start", queueId: "q" });
+void _facetRecord({ _tag: "Cleared", queueId: "q", count: 0 });
 
 type FacetCampaignAuditRow = Parameters<FacetQueueAtHandle["campaignAudit"]["append"]>[0] extends infer R
   ? R extends ReadonlyArray<unknown>
@@ -152,11 +129,7 @@ void Effect.gen(function* () {
   const tagStore = yield* LabThermometer.store;
   yield* mail.readings.append({ value: 1 });
   yield* custom.listReadings();
-  yield* queue.entry.append({
-    queueId: MailQueue.key,
-    entryId: "e1",
-    item: { id: "job" },
-  });
+  yield* queue.record({ _tag: "Start", queueId: MailQueue.key });
   return { stores, mail, custom, queue, tagStore };
 });
 
@@ -190,7 +163,7 @@ void _shaped.readings.read();
 
 void Effect.gen(function* () {
   const queue = yield* DropletStore.at(MailQueue);
-  yield* queue.entries();
+  yield* queue.events();
   return queue;
 });
 

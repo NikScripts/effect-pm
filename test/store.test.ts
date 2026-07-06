@@ -178,42 +178,22 @@ describe("Store.Service", () => {
     ).toThrow();
   });
 
-  it.effect("QueueResource.store merges built-in and extended shapes", () =>
+  it.effect("QueueResource.store exposes typed emit effects + extended shapes", () =>
     Effect.gen(function* () {
       const store = yield* QueueStore.at(MailQueue);
-      expect(Object.keys(store).sort()).toEqual([
-        "campaignAudit",
-        "entries",
-        "entry",
-        "recordEntry",
-      ]);
-      expect(Object.keys(store.campaignAudit).sort()).toEqual(["append", "read"]);
-      expect(Object.keys(store.entry).sort()).toEqual(["append", "read"]);
+      // record persists the same QueueEvent the live stream carries; events reads them back.
+      const keys = Object.keys(store);
+      expect(keys).toContain("record");
+      expect(keys).toContain("events");
+      expect(keys).toContain("campaignAudit");
 
-      yield* store.entry.append({
-        queueId: MailQueue.key,
-        entryId: "e1",
-        item: { id: "job-1" },
-      });
-      yield* store.entry.append({
-        queueId: MailQueue.key,
-        entryId: "e2",
-        item: { id: "job-2" },
-      });
+      yield* store.record({ _tag: "Start", queueId: MailQueue.key });
+      yield* store.record({ _tag: "Cleared", queueId: MailQueue.key, count: 3 });
 
-      const entries = yield* store.entries();
-      expect(entries).toEqual([
-        {
-          queueId: MailQueue.key,
-          entryId: "e1",
-          item: { id: "job-1" },
-        },
-        {
-          queueId: MailQueue.key,
-          entryId: "e2",
-          item: { id: "job-2" },
-        },
-      ]);
+      const events = yield* store.events();
+      expect(events.map((e) => e._tag)).toEqual(["Start", "Cleared"]);
+      const cleared = events.find((e) => e._tag === "Cleared");
+      expect(cleared).toMatchObject({ queueId: MailQueue.key, count: 3 });
     }).pipe(Effect.provide(QueueStore.layerMemory), Effect.scoped),
   );
 

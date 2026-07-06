@@ -107,6 +107,8 @@
     "web-real-dashboard",
     "web-widgets",
     "withreadiness-data-first-host-bound",
-    "withreadiness-host-bound-class"
+    "withreadiness-host-bound-class",
+    "queue-durability-presence-driven",
+    "store-contract-api"
   ]
 }
