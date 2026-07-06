@@ -38,7 +38,7 @@
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
-import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Scope, Semaphore } from "effect";
+import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Scope } from "effect";
 import * as HttpClientRunGate from "./HttpClientRunGate";
 import {
   ensureClientUsage,
@@ -47,6 +47,7 @@ import {
   usageExit,
 } from "./internal/apiUsageRegistry";
 import type { RunResourceRunner } from "./RunResource";
+import { makeRunnerFromConcurrency } from "./internal/runResource";
 
 // ============================================================================
 // Public Types
@@ -264,17 +265,6 @@ const makeInFlightTransform = (
 // ============================================================================
 // Internal: build the runner from concurrency config
 // ============================================================================
-
-const makeRunnerFromConcurrency = (
-  concurrency: number | undefined,
-): Effect.Effect<RunResourceRunner, never, never> =>
-  concurrency === undefined
-    ? Effect.succeed(<A, E, R>(effect: Effect.Effect<A, E, R>) => effect)
-    : Effect.map(
-        Semaphore.make(concurrency),
-        (sem): RunResourceRunner =>
-          <A, E, R>(effect: Effect.Effect<A, E, R>) => sem.withPermits(1)(effect),
-      );
 
 const applyTransportMiddleware = (
   client: HttpClient.HttpClient,

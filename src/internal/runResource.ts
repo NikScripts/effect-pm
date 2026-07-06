@@ -1,0 +1,276 @@
+/**
+ * RunResource engine — semaphore gate handles with optional live observation.
+ *
+ * @internal
+ */
+
+import {
+  Cause,
+  Clock,
+  Effect,
+  Semaphore,
+  SubscriptionRef,
+} from "effect";
+import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+
+// ============================================================================
+// Engine types
+// ============================================================================
+
+/** Live counters for a gated resource handle. @internal */
+export interface RunGateStatus {
+  readonly resourceId: string;
+  readonly observedAt: number;
+  readonly configVersion: number;
+  readonly concurrency: number;
+  readonly waiting: number;
+  readonly inFlight: number;
+  readonly completed: number;
+  readonly failed: number;
+  readonly interrupted: number;
+  readonly totalDurationMs: number;
+}
+
+type RunGateRun<T, A, E> = [T] extends [void]
+  ? () => Effect.Effect<A, E>
+  : (input: T) => Effect.Effect<A, E>;
+
+/** Minimal handle from {@link makeRunGateHandleEffect} — run only. @internal */
+export type RunGateHandle<T, A, E> = {
+  readonly run: RunGateRun<T, A, E>;
+};
+
+/** Observable handle from {@link makeRunResourceHandleEffect}. @internal */
+export type RunResourceHandle<T, A, E> = RunGateHandle<T, A, E> & {
+  readonly status: Subscribable<RunGateStatus>;
+  readonly waiting: Subscribable<number>;
+  readonly inFlight: Subscribable<number>;
+  readonly completed: Subscribable<number>;
+  readonly failed: Subscribable<number>;
+  readonly interrupted: Subscribable<number>;
+};
+
+/** @internal */
+export interface RunResourceConfig<T, A, E> {
+  readonly name?: string;
+  readonly effect: (input: T) => Effect.Effect<A, E>;
+  readonly concurrency?: number;
+}
+
+/** @internal */
+export interface RunResourceRunnerConfig {
+  readonly name?: string;
+  readonly concurrency?: number;
+}
+
+/** @internal */
+export interface RunResourceRunner {
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>;
+}
+
+const makeInitialStatus = (
+  resourceId: string,
+  concurrency: number,
+  observedAt: number,
+): RunGateStatus => ({
+  resourceId,
+  observedAt,
+  configVersion: 1,
+  concurrency,
+  waiting: 0,
+  inFlight: 0,
+  completed: 0,
+  failed: 0,
+  interrupted: 0,
+  totalDurationMs: 0,
+});
+
+const makeStatusSubscribables = (
+  statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
+) => {
+  const status = subscribable(statusRef);
+  return {
+    status,
+    waiting: mapSubscribable(status, (s) => s.waiting),
+    inFlight: mapSubscribable(status, (s) => s.inFlight),
+    completed: mapSubscribable(status, (s) => s.completed),
+    failed: mapSubscribable(status, (s) => s.failed),
+    interrupted: mapSubscribable(status, (s) => s.interrupted),
+  } as const;
+};
+
+const makeSimpleRun = <T, A, E>(
+  sem: Semaphore.Semaphore,
+  effect: (input: T) => Effect.Effect<A, E>,
+): RunGateRun<T, A, E> =>
+  ((input?: T) =>
+    sem.withPermits(1)(effect(input as T))) as RunGateRun<T, A, E>;
+
+const makeObservedRun =
+  <T, A, E>(
+    sem: Semaphore.Semaphore,
+    effect: (input: T) => Effect.Effect<A, E>,
+    statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
+  ): RunGateRun<T, A, E> => {
+  const publishStatus = (
+    update: (state: RunGateStatus, observedAt: number) => RunGateStatus,
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const observedAt = yield* Clock.currentTimeMillis;
+      const current = yield* SubscriptionRef.get(statusRef);
+      yield* SubscriptionRef.set(statusRef, update(current, observedAt));
+    });
+
+  const runBody = (input: T) => {
+    const acquirePermit = Effect.gen(function* () {
+      yield* publishStatus((state, observedAt) => ({
+        ...state,
+        observedAt,
+        waiting: state.waiting + 1,
+      }));
+      yield* sem.take(1).pipe(
+        Effect.onInterrupt(() =>
+          publishStatus((state, observedAt) => ({
+            ...state,
+            observedAt,
+            waiting: Math.max(0, state.waiting - 1),
+            interrupted: state.interrupted + 1,
+          })),
+        ),
+      );
+    });
+
+    return Effect.acquireUseRelease(
+      acquirePermit,
+      () =>
+        Effect.gen(function* () {
+          const startedAt = yield* Clock.currentTimeMillis;
+          yield* publishStatus((state, observedAt) => ({
+            ...state,
+            observedAt,
+            waiting: Math.max(0, state.waiting - 1),
+            inFlight: state.inFlight + 1,
+          }));
+
+          return yield* Effect.matchCauseEffect(effect(input), {
+            onFailure: (cause) =>
+              Effect.gen(function* () {
+                const failedAt = yield* Clock.currentTimeMillis;
+                const durationMs = Math.max(0, failedAt - startedAt);
+                const wasInterrupted = Cause.hasInterrupts(cause);
+                yield* publishStatus((state, observedAt) => ({
+                  ...state,
+                  observedAt,
+                  inFlight: Math.max(0, state.inFlight - 1),
+                  failed: wasInterrupted ? state.failed : state.failed + 1,
+                  interrupted: wasInterrupted
+                    ? state.interrupted + 1
+                    : state.interrupted,
+                  totalDurationMs: state.totalDurationMs + durationMs,
+                }));
+                return yield* Effect.failCause(cause);
+              }),
+            onSuccess: (value) =>
+              Effect.gen(function* () {
+                const completedAt = yield* Clock.currentTimeMillis;
+                const durationMs = Math.max(0, completedAt - startedAt);
+                yield* publishStatus((state, observedAt) => ({
+                  ...state,
+                  observedAt,
+                  inFlight: Math.max(0, state.inFlight - 1),
+                  completed: state.completed + 1,
+                  totalDurationMs: state.totalDurationMs + durationMs,
+                }));
+                return value;
+              }),
+          });
+        }),
+      () => Effect.asVoid(sem.release(1)),
+    );
+  };
+
+  return ((input?: T) => runBody(input as T)) as RunGateRun<T, A, E>;
+};
+
+/**
+ * Scoped gate handle with `.run` only — no live observation.
+ *
+ * @internal
+ */
+export const makeRunGateHandleEffect = <T, A, E>(
+  config: RunResourceConfig<T, A, E>,
+): Effect.Effect<RunGateHandle<T, A, E>> => {
+  const concurrency = config.concurrency ?? 1;
+  const resourceId = config.name ?? "anonymous";
+
+  return Effect.gen(function* () {
+    const sem = yield* Semaphore.make(concurrency);
+    yield* Effect.logDebug(
+      `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
+    );
+    return {
+      run: makeSimpleRun(sem, config.effect),
+    };
+  });
+};
+
+/**
+ * Scoped observable gate handle — {@link SubscriptionRef}-backed status and scalar views.
+ *
+ * @internal
+ */
+export const makeRunResourceHandleEffect = <T, A, E>(
+  config: RunResourceConfig<T, A, E>,
+): Effect.Effect<RunResourceHandle<T, A, E>> => {
+  const concurrency = config.concurrency ?? 1;
+  const resourceId = config.name ?? "anonymous";
+
+  return Effect.gen(function* () {
+    const sem = yield* Semaphore.make(concurrency);
+    const initializedAt = yield* Clock.currentTimeMillis;
+    const statusRef = yield* SubscriptionRef.make(
+      makeInitialStatus(resourceId, concurrency, initializedAt),
+    );
+    yield* Effect.logDebug(
+      `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
+    );
+    return {
+      run: makeObservedRun(sem, config.effect, statusRef),
+      ...makeStatusSubscribables(statusRef),
+    };
+  });
+};
+
+/**
+ * Allocate a counting semaphore runner — shared by {@link makeRunner} and HTTP gating.
+ *
+ * @internal
+ */
+export const makeGateInternal = (concurrency: number) =>
+  Effect.map(
+    Semaphore.make(concurrency),
+    (sem): RunResourceRunner =>
+      <A, E, R>(effect: Effect.Effect<A, E, R>) => sem.withPermits(1)(effect),
+  );
+
+/** @internal */
+export const makeRunnerEffect = (
+  config: RunResourceRunnerConfig,
+): Effect.Effect<RunResourceRunner> => {
+  const concurrency = config.concurrency ?? 1;
+  return makeGateInternal(concurrency).pipe(
+    Effect.tap(() =>
+      Effect.logDebug(
+        `RunResource runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
+      ),
+    ),
+  );
+};
+
+/** @internal */
+export const makeRunnerFromConcurrency = (
+  concurrency: number | undefined,
+): Effect.Effect<RunResourceRunner, never, never> =>
+  concurrency === undefined
+    ? Effect.succeed(<A, E, R>(effect: Effect.Effect<A, E, R>) => effect)
+    : makeGateInternal(concurrency);

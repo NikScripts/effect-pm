@@ -510,8 +510,14 @@ export {
 export type {
   RunResourceConfig,
   RunGate,
+  RunGateHandle,
+  RunGateStatus,
+  RunResourceHandle,
   RunResourceRunner,
   RunResourceRunnerConfig,
+  RunResourceServiceDefinition,
+  RunResourceStaticRun,
+  RunResourceTagDefinition,
 } from "./RunResource";
 
 // Types - Control Service

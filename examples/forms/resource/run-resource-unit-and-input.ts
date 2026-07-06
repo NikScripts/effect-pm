@@ -8,7 +8,6 @@ import { Clock, Duration, Effect, Layer } from "effect";
 import { RunResource } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-// void input — callable as gate(undefined)
 class TimedWorkGate extends RunResource.Service<TimedWorkGate, void, number, never>()("examples/TimedWorkGate", {
   effect: () =>
     Effect.gen(function* () {
@@ -19,7 +18,6 @@ class TimedWorkGate extends RunResource.Service<TimedWorkGate, void, number, nev
   concurrency: 3,
 }) {}
 
-// parameterized input — callable as gate(n)
 class DoubleGate extends RunResource.Service<DoubleGate, number, number, never>()("examples/DoubleGate", {
   effect: (n: number) =>
     Effect.gen(function* () {
@@ -42,7 +40,7 @@ const program = Effect.gen(function* () {
 
   const timed = yield* TimedWorkGate;
   const startTimes = yield* Effect.all(
-    Array.from({ length: 15 }, () => timed(undefined)),
+    Array.from({ length: 15 }, () => timed.run()),
     { concurrency: "unbounded" },
   );
 
@@ -55,12 +53,15 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`First gaps (ms): ${gapsMs.slice(0, 8).join(", ")}`);
 
   yield* Effect.log("");
-  yield* Effect.log("=== DoubleGate: parameterized effect ===");
+  yield* Effect.log("=== DoubleGate: parameterized effect + static .run shortcut ===");
 
   const dbl = yield* DoubleGate;
-  const x = yield* dbl(11);
-  const y = yield* dbl(21);
+  const x = yield* dbl.run(11);
+  const y = yield* DoubleGate.run(21);
   yield* Effect.log(`run(11) => ${String(x)}, run(21) => ${String(y)}`);
+
+  const inFlight = yield* dbl.inFlight.get;
+  yield* Effect.log(`DoubleGate inFlight after runs: ${String(inFlight)}`);
   yield* Effect.log("");
 });
 
