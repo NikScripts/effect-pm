@@ -299,12 +299,6 @@ export interface RunResourceRunnerConfig {
  */
 export type RunResourceRunner = internal.RunResourceRunner;
 
-/**
- * @deprecated Callable gates are replaced by handle `.run`. Will be removed.
- * @public
- */
-export type RunGate<T, A, E> = RunGateHandle<T, A, E>;
-
 // ============================================================================
 // Internal helpers
 // ============================================================================
@@ -396,6 +390,7 @@ const buildRunImpl = <
     >(tag.key, { ...config, name: tag.key });
     const handle = yield* internal.makeRunResourceHandleEffect({
       name: effectiveConfig.name ?? tag.key,
+      scopeKey: tag.key,
       effect: (input: Schema.Schema.Type<I>) => provideR(effectiveConfig.effect(input)),
       concurrency: effectiveConfig.concurrency,
     });

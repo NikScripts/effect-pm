@@ -117,7 +117,3 @@ export const builtInRunResourceStoreContract = (
       stateHistory: state.read,
     }),
   ) as BuiltInRunResourceContract;
-
-/** @deprecated Internal flat spec — use {@link builtInRunResourceStoreContract}. @internal */
-export const builtInRunResourceStoreSpec = (tag: StoreScopeTag) =>
-  builtInRunResourceStoreContract(tag).spec;

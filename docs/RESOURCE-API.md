@@ -369,31 +369,32 @@ Concurrency gate (semaphore) around any effect. No queues, no workers — just b
 #### Class declaration (parameterized gate)
 
 ```typescript
-class SendSms extends RunResource.Service<SendSms, PhoneNumber, SmsResult, SmsError>()(
-  "@app/SendSms",
-  {
-    effect: (phone) => twilioClient.send(phone),
-    concurrency: 5,
-  },
-) {}
+class SendSms extends RunResource.Service<SendSms>()("@app/SendSms", {
+  inputSchema: PhoneNumberSchema,
+  successSchema: SmsResultSchema,
+  errorSchema: SmsErrorSchema,
+  effect: (phone) => twilioClient.send(phone),
+  concurrency: 5,
+}) {}
 
 const send = yield* SendSms
-const result = yield* send("+1234567890")
+const result = yield* send.run("+1234567890")
+// or: yield* SendSms.run("+1234567890")
 ```
 
 #### Class declaration (unit gate — no input)
 
 ```typescript
-class RefreshPrices extends RunResource.Service<RefreshPrices, void, PriceData, FetchError>()(
-  "@app/RefreshPrices",
-  {
-    effect: () => fetchLatestPrices(),
-    concurrency: 1,  // only one refresh at a time
-  },
-) {}
+class RefreshPrices extends RunResource.Service<RefreshPrices>()("@app/RefreshPrices", {
+  inputSchema: Schema.Void,
+  successSchema: PriceDataSchema,
+  errorSchema: FetchErrorSchema,
+  effect: () => fetchLatestPrices(),
+  concurrency: 1,  // only one refresh at a time
+}) {}
 
 const refresh = yield* RefreshPrices
-const prices = yield* refresh(undefined)
+const prices = yield* refresh.run()
 ```
 
 #### Generic runner (wraps any effect)
@@ -412,9 +413,12 @@ const orders = yield* runner(db.query("SELECT * FROM orders"))
 #### Tag + layer (dependency inversion)
 
 ```typescript
-class ApiGate extends RunResource.Tag<ApiGate, Request, Response, ApiError>()(
+const ApiGate = RunResource.Tag<ApiGate>()(
   "@app/ApiGate",
-) {}
+  RequestSchema,
+  ResponseSchema,
+  ApiErrorSchema,
+)
 
 // Dev: no limit
 const ApiGateDev = RunResource.layer(ApiGate, {
@@ -427,16 +431,23 @@ const ApiGateProd = RunResource.layer(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 10,
 })
+
+const gate = yield* ApiGate
+yield* gate.run(request)
 ```
+
+When `ProcessStorage.layer` or `RunResource.store(tag)` is composed, the engine automatically
+persists run facts and state transitions (same optional semantics as `QueueResource`).
 
 #### Raw make (no tag)
 
 ```typescript
 const gate = yield* RunResource.make({
+  name: "@app/Multiplier",
   effect: (n: number) => Effect.succeed(n * 2),
   concurrency: 3,
 })
-const result = yield* gate(21)  // 42
+const result = yield* gate.run(21)  // 42
 ```
 
 ---

@@ -51,7 +51,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | File | Teaches |
 |------|---------|
 | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunResource.make` unit and input forms + concurrency |
-| [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | `RunResourceStore` per-type facts + `RunResourceState` transitions |
+| [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiResource.Service` + `ApiMetrics.Tag` |
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar capture |

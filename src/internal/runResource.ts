@@ -8,10 +8,17 @@ import {
   Cause,
   Clock,
   Effect,
+  Ref,
   Semaphore,
   SubscriptionRef,
 } from "effect";
+import type { RunResourceStateChangeReason } from "../store/runResource";
 import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+import {
+  makeRunResourceStoreTap,
+  nextRunId,
+  type RunResourceStoreTap,
+} from "./runResourceStoreTap";
 
 // ============================================================================
 // Engine types
@@ -53,6 +60,7 @@ export type RunResourceHandle<T, A, E> = RunGateHandle<T, A, E> & {
 /** @internal */
 export interface RunResourceConfig<T, A, E> {
   readonly name?: string;
+  readonly scopeKey?: string;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
 }
@@ -99,43 +107,50 @@ const makeStatusSubscribables = (
   } as const;
 };
 
-const makeSimpleRun = <T, A, E>(
-  sem: Semaphore.Semaphore,
-  effect: (input: T) => Effect.Effect<A, E>,
-): RunGateRun<T, A, E> =>
-  ((input?: T) =>
-    sem.withPermits(1)(effect(input as T))) as RunGateRun<T, A, E>;
-
 const makeObservedRun =
   <T, A, E>(
     sem: Semaphore.Semaphore,
     effect: (input: T) => Effect.Effect<A, E>,
     statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
+    storeTap: RunResourceStoreTap,
+    runSeqRef: Ref.Ref<number>,
+    concurrency: number,
   ): RunGateRun<T, A, E> => {
   const publishStatus = (
     update: (state: RunGateStatus, observedAt: number) => RunGateStatus,
+    reason?: RunResourceStateChangeReason,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
       const observedAt = yield* Clock.currentTimeMillis;
-      const current = yield* SubscriptionRef.get(statusRef);
-      yield* SubscriptionRef.set(statusRef, update(current, observedAt));
+      const previous = yield* SubscriptionRef.get(statusRef);
+      const current = update(previous, observedAt);
+      yield* SubscriptionRef.set(statusRef, current);
+      if (reason !== undefined) {
+        yield* storeTap.recordStateChange(reason, previous, current);
+      }
     });
 
   const runBody = (input: T) => {
     const acquirePermit = Effect.gen(function* () {
-      yield* publishStatus((state, observedAt) => ({
-        ...state,
-        observedAt,
-        waiting: state.waiting + 1,
-      }));
+      yield* publishStatus(
+        (state, observedAt) => ({
+          ...state,
+          observedAt,
+          waiting: state.waiting + 1,
+        }),
+        "run-resource.run.waiting",
+      );
       yield* sem.take(1).pipe(
         Effect.onInterrupt(() =>
-          publishStatus((state, observedAt) => ({
-            ...state,
-            observedAt,
-            waiting: Math.max(0, state.waiting - 1),
-            interrupted: state.interrupted + 1,
-          })),
+          publishStatus(
+            (state, observedAt) => ({
+              ...state,
+              observedAt,
+              waiting: Math.max(0, state.waiting - 1),
+              interrupted: state.interrupted + 1,
+            }),
+            "run-resource.run.wait.interrupted",
+          ),
         ),
       );
     });
@@ -145,12 +160,21 @@ const makeObservedRun =
       () =>
         Effect.gen(function* () {
           const startedAt = yield* Clock.currentTimeMillis;
-          yield* publishStatus((state, observedAt) => ({
-            ...state,
-            observedAt,
-            waiting: Math.max(0, state.waiting - 1),
-            inFlight: state.inFlight + 1,
-          }));
+          const runSeq = yield* Ref.updateAndGet(runSeqRef, (n) => n + 1);
+          const runId = nextRunId(
+            (yield* SubscriptionRef.get(statusRef)).resourceId,
+            runSeq,
+          );
+          yield* storeTap.recordRunStarted(runId, startedAt, concurrency);
+          yield* publishStatus(
+            (state, observedAt) => ({
+              ...state,
+              observedAt,
+              waiting: Math.max(0, state.waiting - 1),
+              inFlight: state.inFlight + 1,
+            }),
+            "run-resource.run.started",
+          );
 
           return yield* Effect.matchCauseEffect(effect(input), {
             onFailure: (cause) =>
@@ -158,29 +182,48 @@ const makeObservedRun =
                 const failedAt = yield* Clock.currentTimeMillis;
                 const durationMs = Math.max(0, failedAt - startedAt);
                 const wasInterrupted = Cause.hasInterrupts(cause);
-                yield* publishStatus((state, observedAt) => ({
-                  ...state,
-                  observedAt,
-                  inFlight: Math.max(0, state.inFlight - 1),
-                  failed: wasInterrupted ? state.failed : state.failed + 1,
-                  interrupted: wasInterrupted
-                    ? state.interrupted + 1
-                    : state.interrupted,
-                  totalDurationMs: state.totalDurationMs + durationMs,
-                }));
+                if (wasInterrupted) {
+                  yield* publishStatus(
+                    (state, observedAt) => ({
+                      ...state,
+                      observedAt,
+                      inFlight: Math.max(0, state.inFlight - 1),
+                      interrupted: state.interrupted + 1,
+                      totalDurationMs: state.totalDurationMs + durationMs,
+                    }),
+                    "run-resource.run.interrupted",
+                  );
+                } else {
+                  const causeText = Cause.pretty(cause);
+                  yield* storeTap.recordRunFailed(runId, failedAt, durationMs, causeText);
+                  yield* publishStatus(
+                    (state, observedAt) => ({
+                      ...state,
+                      observedAt,
+                      inFlight: Math.max(0, state.inFlight - 1),
+                      failed: state.failed + 1,
+                      totalDurationMs: state.totalDurationMs + durationMs,
+                    }),
+                    "run-resource.run.failed",
+                  );
+                }
                 return yield* Effect.failCause(cause);
               }),
             onSuccess: (value) =>
               Effect.gen(function* () {
                 const completedAt = yield* Clock.currentTimeMillis;
                 const durationMs = Math.max(0, completedAt - startedAt);
-                yield* publishStatus((state, observedAt) => ({
-                  ...state,
-                  observedAt,
-                  inFlight: Math.max(0, state.inFlight - 1),
-                  completed: state.completed + 1,
-                  totalDurationMs: state.totalDurationMs + durationMs,
-                }));
+                yield* storeTap.recordRunCompleted(runId, completedAt, durationMs);
+                yield* publishStatus(
+                  (state, observedAt) => ({
+                    ...state,
+                    observedAt,
+                    inFlight: Math.max(0, state.inFlight - 1),
+                    completed: state.completed + 1,
+                    totalDurationMs: state.totalDurationMs + durationMs,
+                  }),
+                  "run-resource.run.completed",
+                );
                 return value;
               }),
           });
@@ -199,20 +242,10 @@ const makeObservedRun =
  */
 export const makeRunGateHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunGateHandle<T, A, E>> => {
-  const concurrency = config.concurrency ?? 1;
-  const resourceId = config.name ?? "anonymous";
-
-  return Effect.gen(function* () {
-    const sem = yield* Semaphore.make(concurrency);
-    yield* Effect.logDebug(
-      `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
-    );
-    return {
-      run: makeSimpleRun(sem, config.effect),
-    };
-  });
-};
+): Effect.Effect<RunGateHandle<T, A, E>> =>
+  Effect.map(makeRunResourceHandleEffect(config), (handle) => ({
+    run: handle.run,
+  }));
 
 /**
  * Scoped observable gate handle — {@link SubscriptionRef}-backed status and scalar views.
@@ -224,6 +257,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
 ): Effect.Effect<RunResourceHandle<T, A, E>> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
+  const scopeKey = config.scopeKey ?? resourceId;
 
   return Effect.gen(function* () {
     const sem = yield* Semaphore.make(concurrency);
@@ -231,11 +265,20 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
+    const storeTap = yield* makeRunResourceStoreTap(resourceId, scopeKey);
+    const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
       `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
     );
     return {
-      run: makeObservedRun(sem, config.effect, statusRef),
+      run: makeObservedRun(
+        sem,
+        config.effect,
+        statusRef,
+        storeTap,
+        runSeqRef,
+        concurrency,
+      ),
       ...makeStatusSubscribables(statusRef),
     };
   });

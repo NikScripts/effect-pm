@@ -298,8 +298,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Unit vs parameterized gates
 
-- **Parameterized** — `T` input, call `gate(input)`.
-- **Unit** — `void` input, call `gate(undefined)`.
+- **Parameterized** — `T` input, call `gate.run(input)`.
+- **Unit** — `void` input, call `gate.run()`.
 
 ### `RunResourceState` (observer snapshot)
 

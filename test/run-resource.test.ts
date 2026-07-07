@@ -1,6 +1,9 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Effect, Layer, Ref, Schema } from "effect";
+import { Duration, Effect, Layer, Ref, Schema } from "effect";
+import * as ProcessStorage from "../src/ProcessStorage";
 import * as RunResource from "../src/RunResource";
+import * as Store from "../src/Store";
+import { RunResourceStore } from "../src/store/runResource";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -216,6 +219,65 @@ describe("RunResource.Tag + layer", () => {
         expect(p).toBeLessThanOrEqual(3);
       }).pipe(Effect.provide(live));
     }),
+  );
+});
+
+describe("RunResource.make — ProcessStore records", () => {
+  it.live("writes run facts when ProcessStorage is provided", () =>
+    Effect.gen(function* () {
+      const gate = yield* RunResource.make({
+        name: "test-run-store-records",
+        effect: (n: number) => Effect.succeed(n),
+        concurrency: 1,
+      });
+      yield* gate.run(1);
+      yield* Effect.sleep(Duration.millis(20));
+
+      const store = yield* RunResourceStore;
+      const facts = yield* store.facts({ resourceId: "test-run-store-records" });
+      expect(facts.map((row) => row.type).sort()).toEqual([
+        "run-resource.run.completed",
+        "run-resource.run.started",
+      ]);
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+});
+
+describe("RunResource.layer — RunResource.store records", () => {
+  const StoreGate = RunResource.Tag<{ readonly _tag: "StoreGate" }>()(
+    "@test/StoreGate",
+    Schema.Number,
+    Schema.Number,
+  );
+
+  const storeGateRegistration = RunResource.store(StoreGate);
+
+  class TestRunStore extends Store.Service<TestRunStore>("@test/RunStore")(
+    storeGateRegistration,
+  ) {}
+
+  const live = Layer.mergeAll(
+    RunResource.layer(StoreGate, {
+      effect: (n: number) => Effect.succeed(n * 2),
+      concurrency: 1,
+    }),
+    TestRunStore.layerMemory,
+  );
+
+  it.effect("writes facts when the gate runs", () =>
+    Effect.gen(function* () {
+      const gate = yield* StoreGate;
+      yield* gate.run(21);
+      const store = yield* TestRunStore.at(StoreGate);
+      const facts = yield* store.facts();
+      expect(facts.map((row) => row.type).sort()).toEqual([
+        "run-resource.run.completed",
+        "run-resource.run.started",
+      ]);
+      expect(facts.find((row) => row.type === "run-resource.run.completed")).toMatchObject({
+        durationMs: expect.any(Number),
+      });
+    }).pipe(Effect.provide(live), Effect.scoped),
   );
 });
 

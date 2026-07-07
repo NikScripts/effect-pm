@@ -508,7 +508,6 @@ export {
 
 // Types - RunResource
 export type {
-  RunGate,
   RunGateHandle,
   RunGateStatus,
   RunResourceConfig,
