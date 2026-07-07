@@ -88,8 +88,21 @@ yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, re
 const rows = yield* store.events({ limit: 10 });
 ```
 
-Engine wiring to the new store (replacing `ProcessExecutionStore`) is pending default in-memory
-store backing — see [../handoffs/2026-07-06-processstore-removal.md](../handoffs/2026-07-06-processstore-removal.md).
+On the **`Process.layer`** path, the engine auto-appends terminal runs to **`Process.store(tag)`**
+when the app provides **`StoreScopeBridgeTag`** (see
+[../handoffs/store-cutover-process.md](../handoffs/store-cutover-process.md)). Legacy
+**`ProcessExecutionStore`** rows are still written when that facet is composed.
+
+```ts
+import { Layer } from "effect";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(Prices),
+) {}
+
+Process.layer(Prices, { effect: poll }).pipe(Layer.provide(AppStore.layerMemory));
+```
 
 ## See also
 

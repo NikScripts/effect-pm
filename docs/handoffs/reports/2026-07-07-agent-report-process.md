@@ -1,80 +1,63 @@
 # Agent report: Process
 
-**Branch:** `cursor/integration-result-schema-a3ad` (Process tag + store contract) + merge RunResource branch  
+**Branch:** `cursor/process-store-cutover-a3ad` (targets `cursor/integration-result-schema-a3ad`)  
 **Agent:** Process owner  
-**Priority:** **High** — rename landed; behavior and engine gaps remain.
+**Priority:** **Medium** — B3 engine tap landed; facet retirement + cast removal remain.
 
 ---
 
-## Shipped
+## Shipped (2026-07-07)
 
 | Area | Status | Key files |
 |------|--------|-----------|
-| Tag positional `success` / `error` | ✅ | `src/Process.ts`, `src/internal/processTagSchemas.ts` (`successSym`, `errorSym`) |
+| Tag positional `success` / `error` | ✅ | `src/Process.ts`, `src/internal/processTagSchemas.ts` |
 | Config object `{ success?, error?, … }` | ✅ | `ProcessTagOptions` |
 | Store contract (queue-aligned) | ✅ | `src/internal/store/processStoreSpec.ts`, `processEvent.ts` |
-| `Process.store(tag)` registration | ✅ | `builtInProcessStoreContract(tag)` reads `successOf(tag)` |
+| `error` on store union | ✅ | `makeProcessExecutionEvent(success, error)` |
+| `Process.store(tag)` registration | ✅ | `builtInProcessStoreContract(tag)` |
+| Engine store tap (layer path) | ✅ | `src/internal/processStoreTap.ts` — declared `StoreScopeBridgeTag`, buffered `record` |
+| Dual-write legacy facet | ✅ | `ProcessExecutionStore` + new store on terminal events |
+| `RunCompleted.result` population | ✅ | From `SubscriptionRef` when `success` stamped |
+| `hasPriorExecutions` via store | ✅ | When execution recorder present (layer path) |
+| `Process.result` removed | ✅ | Positional `success` only |
 | Store contract tests | ✅ | `test/process-store-contract.test.ts` |
+| Engine integration tests | ✅ | `test/process-store-engine.test.ts` |
 | Guide update | ✅ | `docs/guides/process.md` |
 
 ---
 
-## Open issues (critical)
+## Open issues
 
-### 1. `error` slot is decorative — **must fix or remove**
+### 1. Cast on `builtInProcessStoreContract`
 
-`Process.Tag()(key, success, error)` stamps `errorSym` on the tag and exports `errorOf`, but **nothing consumes it**:
+`makeProcessStoreContract(...) as BuiltInProcessContract` — type variance when `success`/`error` schemas vary per tag. Mirror queue's tag-parameterized contract when time allows.
 
-| Consumer | Uses `error`? |
-|----------|----------------|
-| Supervisor / `buildProcessImpl` | ❌ |
-| RPC spec / wire | ❌ |
-| Store `RunFailed` | ❌ — still `error: Schema.String` |
-| `ProcessExecutionStore` | ❌ |
+### 2. Facet retirement (Stage 5)
 
-**Minimum bar:** wire `error` into RPC effect error channel and/or typed `RunFailed` payload in `makeProcessExecutionEvent`. **Alternative:** remove `error` from public Tag API until wired (prefer wiring in same sprint).
+Engine still dual-writes **`ProcessExecutionStore`**. Delete facet emit/read after Queue + RunResource cutovers stabilize.
 
-### 2. Engine does not write to `Process.store` — asymmetry vs RunResource
+### 3. `Process.make` path (no layer)
 
-RunResource engine auto-appends via `runResourceStoreTap.ts` (legacy facet + `Process.store` bridge).
+`Process.make` / direct supervisor without `_executionRecorder` still uses `serviceOption(ProcessExecutionStore)` for startup-run detection. Acceptable until `make` is deprecated or gains optional store bridge.
 
-Process supervisor still writes **only** `ProcessExecutionStore.recordCompleted` / `recordFailed` / `recordInterrupted` (`Process.ts` ~537).
+### 4. Owner decision deferred
 
-**Task:** add `processStoreTap.ts` (mirror RunResource):
+**`RunFailed.error` encoding** when `error` schema is stamped: raw failure value (journal encodes on append) vs pre-encoded payload.
 
-- On run terminal events → `ProcessExecutionStore` static emitters (keep)
-- When `StoreScopeBridgeTag` + registered scope → `store.record(event)` on built-in contract
-- Lazy bridge resolution at **write time** (same layer-order fix as RunResource)
+### 5. App requirement (breaking)
 
-**Do not** block tag rename on this, but **do not** claim storage parity in docs until done.
-
-### 3. `Process.result` pipe still exists
-
-`Process.result` is `@deprecated` but **not removed**. Dual API violates project policy (no shims).
-
-**Task:** delete `Process.result`, migrate any remaining callsites to `Tag()(key, success)`, update CHANGELOG / changeset.
-
-### 4. Symbol stamp is breaking — document in changeset
-
-`Symbol.for("@nikscripts/effect-pm/Process/success")` replaced `…/resultSchema`. External readers of symbols break. Note in release notes.
-
-### 5. No `payload` on Process tag (by design)
-
-Process effect has no per-invocation RPC payload schema. Tag is **two-slot** (`success`, `error`). Do not add `payload` without a product decision.
+**`Process.layer` / `serve` / `serveRemote`** require **`StoreScopeBridgeTag`**. Apps provide `Store.Service.layerMemory` (or equivalent) at the root via `Layer.provide` — see `store-cutover-00` §2.
 
 ---
 
-## Files to touch
+## Files to touch next
 
 | File | Work |
 |------|------|
-| `src/Process.ts` | Remove `Process.result`; wire `error` into spec if kept |
-| `src/internal/processEvent.ts` | Optional typed `RunFailed` from `errorOf(tag)` |
-| `src/internal/processStoreTap.ts` | **New** — engine persistence to Store |
-| `src/internal/store/processStoreSpec.ts` | Extend if failed events need typed error |
-| `test/process-toolkit.test.ts` | Engine → store integration test |
-| `test/process-store-contract.test.ts` | Extend for auto-write |
-| `docs/PROCESS-API.md`, `docs/STORAGE.md` | Asymmetry until tap lands |
+| `src/internal/store/processStoreSpec.ts` | Drop `as BuiltInProcessContract` if types align |
+| `src/Process.ts` | Remove `ProcessExecutionStore` dual-write when approved |
+| `docs/PROCESS-API.md`, `docs/STORAGE.md` | Document new store path + layer requirement |
+| `.changeset/process-tag-store-cutover.md` | Consolidate with platform rename changeset at release |
 
 ---
 
@@ -83,13 +66,13 @@ Process effect has no per-invocation RPC payload schema. Tag is **two-slot** (`s
 ```bash
 pnpm run typecheck
 pnpm exec vitest run test/process-toolkit.test.ts test/process-store-contract.test.ts \
-  test/process-contract-shape.test-d.ts
+  test/process-store-engine.test.ts test/process-contract-shape.test-d.ts
 ```
 
 ---
 
 ## Coordination
 
-- **Store agent:** bridge typing from `4597ee1` before adding tap.
-- **Docs agent:** PROCESS-API persistence section after tap or explicit “legacy facet only” wording.
-- **Queue agent:** align positional arity `Tag()(key, payload, success?, error?)` — Process omits `payload`.
+- **Store agent:** `layerDefaultMemory` shipped; Process does not bake it into resource layers.
+- **Docs agent:** CHANGELOG + PROCESS-API persistence section.
+- **Queue agent:** engine cutover pattern should match declared `StoreScopeBridgeTag` (no `storeTap.ts`).

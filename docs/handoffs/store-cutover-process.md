@@ -42,6 +42,6 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
 - [x] `hasPriorExecutions` reads store when recorder present (layer path).
 - [x] Populate `result` on `RunCompleted` from `SubscriptionRef` when tag carries `success`.
 - [x] Remove `Process.result`.
-- [ ] Drop `as BuiltInProcessContract` cast (still present — type variance).
+- [ ] Drop `as BuiltInProcessContract` cast (type variance — deferred).
 - [ ] Owner decision deferred: `RunFailed` stores raw `error` value when schema stamped (journal encodes on append) vs pre-encoded payload.
 - **App requirement:** `Process.layer` / `serve` / `serveRemote` now require `StoreScopeBridgeTag` in context — provide `layerDefaultMemory` or `Store.Service.layerMemory` at the app root (`Layer.provide`, not baked into resource layer).

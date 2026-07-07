@@ -13,12 +13,12 @@
  *
  * Default overlap policy is **parallel** because the driver forks each instance.
  *
- * ## Optional execution analytics
+ * ## Execution analytics (toolkit `layer` path)
  *
- * When a store layer is composed at the app or `layerProcessStore`
- * boundary, finished runs emit `process.execution.completed` rows. Without a store,
- * supervisor behavior is unchanged — writes are silent no-ops. Target integration is
- * {@link ProcessExecutionStore} when composed at app or group boundaries.
+ * When an app provides **`StoreScopeBridgeTag`** (via `Store.Service.layerMemory` or the
+ * built-in default store layer) and registers **`Process.store(tag)`**, finished runs append to
+ * the built-in execution contract. Legacy **`ProcessExecutionStore`** rows are still written when
+ * that facet is composed (dual-write until facet removal).
  *
  * ## Two surfaces, one namespace
  *

@@ -9,7 +9,7 @@ Separate handoffs for **parallel agents**. Each report is scoped to one module (
 | Report | Agent scope | Priority |
 |--------|-------------|----------|
 | [RunResource](./2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep | **Low** — mostly done; finish + verify |
-| [Process](./2026-07-07-agent-report-process.md) | Tag wire slots, `error` wiring, engine store tap | **High** |
+| [Process](./2026-07-07-agent-report-process.md) | Tag wire slots, store engine tap, facet retirement | **Medium** — B3 landed; facet removal open |
 | [QueueResource + CustomQueueResource](./2026-07-07-agent-report-queue-resource.md) | `success`/`error` triplet, engine cutover | **High** — see corrections in integration-sync |
 | [Store](./2026-07-07-agent-report-store.md) | Bridge typing, engine wiring gaps | **Medium** — Stage 1 details in store-cutover |
 | [Docs + release](./2026-07-07-agent-report-docs-release.md) | Changesets, stale docs, examples README | **Medium** (after module PRs land) |

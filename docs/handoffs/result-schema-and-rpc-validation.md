@@ -177,9 +177,9 @@ fingerprints or version stamps.
 | Step | Scope | Agent now? |
 |------|-------|------------|
 | **A** | This handoff + align queue branch agents on config-object overload | Done (doc) |
-| **B** | Process tag positional `success` / `error` + config overload; deprecate `Process.result` | **Done** |
+| **B** | Process tag positional `success` / `error` + config overload; remove `Process.result` | **Done** |
 | **B2** | `processStoreSpec` queue-aligned (`event` + `record` / `events`) | **Done** |
-| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Blocked** — Store Stage 1 |
+| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Partial** — dual-write on layer path (`processStoreTap.ts`); facet not removed |
 | **C** | QR / CQR `payload` / `success` / `error` on Tag (coordinate queue branches) | **In progress** |
 | **D** | RR `payload` / `success` / `error` on Tag | **Done** (run-resource branch) |
 | **E** | `success` on store contracts (`processStoreSpec`, `queueStoreSpec`) | After Store Stage 1 |
@@ -200,7 +200,7 @@ fingerprints or version stamps.
 
 1. **CQR arity** — where does `{ payload, success }` sit relative to lane count / named levels?
 2. **Observation field name** — `result` (Process parity) vs `lastResult` (queue worker semantics)?
-3. **`Process.result` removal** — breaking changeset when tag positional API ships?
+3. **`Process.result` removal** — **done** on `cursor/process-store-cutover-a3ad`; consolidate changeset at release.
 4. **buildId source** — CI env var vs `package.json` version vs explicit `Node({ buildId })`?
 5. **Internal layer override** — remove from types entirely vs `@internal` + runtime `Effect.die` if
    tag vs config mismatch?
@@ -280,7 +280,7 @@ class Jobs extends CustomQueueResource.Tag<Jobs>()(
 
 ## References
 
-- `Process.result` — **to deprecate** (`src/Process.ts`)
+- `Process.result` — **removed** (use positional `success` on `Tag`)
 - `schemaVersionOf` / `makeQueueItemCodecDescriptor` — `src/internal/queueResource.ts`
 - `Resource.Node` / `NodeKey` — `src/Resource.ts`
 - Queue store contract — `src/internal/store/queueStoreSpec.ts` (`queueEvent(itemSchema)`)

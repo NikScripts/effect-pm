@@ -1,5 +1,11 @@
 # @nikscripts/effect-pm
 
+## Unreleased (integration / `cursor/process-store-cutover-a3ad`)
+
+### Minor Changes
+
+- **Process tag wire schemas and store engine tap (breaking).** `Process.Tag` uses positional **`success`** / **`error`** (no `Process.result` pipe). Symbol `successSym` replaces `resultSchemaSym`. `Process.layer` / `serve` / `serveRemote` require **`StoreScopeBridgeTag`** — provide `Store.Service.layerMemory` at the app root. Engine dual-writes terminal runs to **`Process.store(tag)`** and legacy **`ProcessExecutionStore`**.
+
 ## 0.8.0-beta.28
 
 ### Minor Changes

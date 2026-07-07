@@ -48,7 +48,7 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Shared **`storeTap.ts`** (queue prototypes) |
+| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Queue/RunResource engine cutover; Process **done** on layer path |
 | Effect Msgpack journal (no direct `msgpackr`) | Wire default store into resource `layer`/`serve` |
 | Cast-free queue contract (reference) | Process/RunResource cast removal on contracts |
 
@@ -127,7 +127,7 @@ Two report sets exist — use **both**, for different layers:
 | 1 | **Store event taxonomy (queue)** | entry-only vs lifecycle vs full facet port | Blocks queue store contract final shape |
 | 2 | **`error` on Process tag** | Wire to RPC + typed `RunFailed` vs remove until wired | Stamped today, consumed nowhere |
 | 3 | **Shared `storeTap.ts`** | ~~Queue prototypes~~ **Discarded** — declared `StoreScopeBridgeTag` dependency per `store-cutover-00` §1 | Process engine uses `internal/processStoreTap.ts` (buffered `record`, no `serviceOption`) |
-| 4 | **Default store in resource layers** | Auto-merge `layerDefaultMemory` in `Process.layer` / `QueueResource.layer` / `RunResource.layer` | Stage 1 exists but not composed |
+| 4 | **Default store in resource layers** | App provides `layerDefaultMemory` / `Store.Service` at root (`Layer.provide`) | Process **requires** `StoreScopeBridgeTag` in `RIn`; not auto-merged into resource layer |
 | 5 | **Legacy facet dual-write** | Keep until all engines cut over vs stop new dual-write | RunResource + future Process tap |
 | 6 | **CQR tag arity** | Trailing `{ success?, error? }` after lanes | [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) |
 

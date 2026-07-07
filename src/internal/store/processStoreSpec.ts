@@ -52,18 +52,18 @@ export type BuiltInProcessContract =
   >;
 
 /** Build the process store contract (optional success / error schemas). @internal */
-export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
-  success?: R extends Schema.Top ? R : never,
+export const makeProcessStoreContract = (
+  success?: Schema.Top,
   error?: Schema.Top,
-) => {
-  const eventSchema =
-    success === undefined && error === undefined
-      ? processExecutionEventVoid
-      : makeProcessExecutionEvent(success, error);
-
-  return Store.contract(
+) =>
+  Store.contract(
     {
-      event: Store.shape(eventSchema, processEventReadPayload),
+      event: Store.shape(
+        success === undefined && error === undefined
+          ? processExecutionEventVoid
+          : makeProcessExecutionEvent(success, error),
+        processEventReadPayload,
+      ),
     },
     ({ event }) => ({
       record: event.append,
@@ -72,7 +72,6 @@ export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
         Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
     }),
   );
-};
 
 /** Built-in process store contract for a tag (reads `success` / `error` from tag). @internal */
 export const builtInProcessStoreContract = (

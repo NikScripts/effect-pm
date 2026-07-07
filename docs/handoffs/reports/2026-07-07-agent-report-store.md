@@ -38,7 +38,7 @@ From `2026-07-06-processstore-removal.md`:
 | Resource | New Store tap | Legacy facet |
 |----------|---------------|--------------|
 | RunResource | ✅ `runResourceStoreTap.ts` | ✅ `RunResourceStore` |
-| Process | ❌ | ✅ `ProcessExecutionStore` |
+| Process | ✅ dual-write (`processStoreTap.ts`) | ✅ `ProcessExecutionStore` (retire later) |
 | QueueResource | ❌ | ✅ `QueueResourceStore` |
 
 Store agent **does not** own business events — resource agents add taps — but Store agent owns:
