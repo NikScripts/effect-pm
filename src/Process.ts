@@ -15,9 +15,10 @@
  *
  * ## Execution analytics (toolkit `layer` path)
  *
- * When an app provides **`StoreScopeBridgeTag`** (via `Store.Service.layerMemory` or the
- * built-in default store layer) and registers **`Process.store(tag)`**, finished runs append to
- * the built-in execution contract via **`Process.store(tag)`**.
+ * {@link layer}, {@link serve}, and {@link serveRemote} include a **baked-in default in-memory store**
+ * (`layerDefaultMemory`). Finished runs auto-append to the built-in execution contract. Override at
+ * the app root with `Layer.provideMerge(AppStore.layerMemory)` or `AppStore.layer({ filename })` when
+ * you register {@link store}.
  *
  * ## Two surfaces, one namespace
  *
@@ -105,6 +106,7 @@ import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import { StoreScopeBridgeTag } from "./internal/store/bridge";
+import { layerDefaultMemory } from "./internal/store/scopeBridge";
 import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
 import { makeProcessExecutionPersist } from "./internal/processExecutionPersist";
@@ -159,9 +161,9 @@ export interface Process<out R> {
   readonly type: "managed";
   /**
    * Long-running trigger driver that spawns run instances.
-   * Execution history is recorded on the **`Process.layer`** path via **`Process.store(tag)`**
-   * when the app provides **`StoreScopeBridgeTag`**. The direct **`make`** path does not write
-   * legacy storage facets.
+   * Execution history is recorded on the **`Process.layer`** path via the baked-in default store
+   * (override with an app {@link Store.Service} at the root). The direct **`make`** path does not
+   * persist runs.
    */
   readonly effect: Effect.Effect<void, never, R>;
   /**
@@ -2334,6 +2336,12 @@ const buildProcessImpl = <A, E, R>(
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
 // names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
 
+/** Baked-in default store — always present; app `Store.Service` overrides via `Layer.provideMerge`. @internal */
+const withBakedInDefaultStore = <A, E, R>(
+  layer: Layer.Layer<A, E, R>,
+): Layer.Layer<A | StoreScopeBridgeTag, E, R> =>
+  layer.pipe(Layer.provideMerge(layerDefaultMemory));
+
 /**
  * The **local** layer for a process: build its driver (auto-started) and provide its service.
  *
@@ -2342,14 +2350,16 @@ const buildProcessImpl = <A, E, R>(
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self>, never, R | StoreScopeBridgeTag>;
+): Layer.Layer<Self | Local<Self> | StoreScopeBridgeTag, never, R>;
 export function layer(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return Layer.unwrap(
-    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(baseTag, impl)),
+  return withBakedInDefaultStore(
+    Layer.unwrap(
+      Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(baseTag, impl)),
+    ),
   );
 }
 
@@ -2361,16 +2371,22 @@ export function layer(
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self> | HandlerContextOf<ProcessSpec>, never, R | StoreScopeBridgeTag>;
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<ProcessSpec> | StoreScopeBridgeTag,
+  never,
+  R
+>;
 export function serve(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return Layer.unwrap(
-    Effect.map(
-      buildProcessImpl(tag, config),
-      (impl): Layer.Layer<any, any, any> => Resource.serve(baseTag, impl),
+  return withBakedInDefaultStore(
+    Layer.unwrap(
+      Effect.map(
+        buildProcessImpl(tag, config),
+        (impl): Layer.Layer<any, any, any> => Resource.serve(baseTag, impl),
+      ),
     ),
   );
 }
@@ -2384,16 +2400,18 @@ export function serve(
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R | StoreScopeBridgeTag>;
+): Layer.Layer<HandlerContextOf<ProcessSpec> | StoreScopeBridgeTag, never, R>;
 export function serveRemote(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return Layer.unwrap(
-    Effect.map(
-      buildProcessImpl(tag, config),
-      (impl): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, impl),
+  return withBakedInDefaultStore(
+    Layer.unwrap(
+      Effect.map(
+        buildProcessImpl(tag, config),
+        (impl): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, impl),
+      ),
     ),
   );
 }

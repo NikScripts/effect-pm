@@ -88,8 +88,9 @@ yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, re
 const rows = yield* store.events({ limit: 10 });
 ```
 
-On the **`Process.layer`** path, the engine auto-appends terminal runs to **`Process.store(tag)`**
-when the app provides **`StoreScopeBridgeTag`**.
+On the **`Process.layer`** path, the engine auto-appends terminal runs. The layer includes a
+**baked-in default in-memory store**; override with `Layer.provideMerge(AppStore.layerMemory)` when
+you register the tag on an app store.
 
 ```ts
 import { Layer } from "effect";
@@ -99,7 +100,10 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(Prices),
 ) {}
 
-Process.layer(Prices, { effect: poll }).pipe(Layer.provide(AppStore.layerMemory));
+const live = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(Prices, { effect: poll }),
+);
 ```
 
 ## See also

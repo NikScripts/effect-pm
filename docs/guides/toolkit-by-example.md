@@ -178,9 +178,8 @@ const armWindows = Effect.gen(function* () {
 
 ## 7b. Process execution store (auto-write on `Process.layer`)
 
-Register **`Process.store(tag)`** on an app `Store.Service` and provide **`StoreScopeBridgeTag`**
-at the root (`Store.Service.layerMemory` or the built-in default). On **`Process.layer`**, the engine
-auto-appends terminal runs (`RunCompleted` / `RunFailed`) to the built-in execution contract.
+**`Process.layer`** includes a baked-in default in-memory store. Override with an app
+**`Store.Service`** when you need durable storage or registered query handles:
 
 ```ts
 import { Duration, Effect, Layer, Schema } from "effect";
@@ -195,10 +194,13 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(Prices),
 ) {}
 
-const pricesLayer = Process.layer(Prices, {
-  effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
-  polling: Polling.spaced(Duration.seconds(30)),
-}).pipe(Layer.provide(AppStore.layerMemory));
+const pricesLayer = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(Prices, {
+    effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
+    polling: Polling.spaced(Duration.seconds(30)),
+  }),
+);
 
 // query persisted runs
 const readRuns = Effect.gen(function* () {

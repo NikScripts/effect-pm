@@ -1,8 +1,8 @@
 /**
  * @module examples/forms/process-store/process-layer-store-auto-write
  *
- * Process.layer auto-writes terminal runs to Process.store(tag) when the app
- * registers the tag and provides StoreScopeBridgeTag.
+ * Process.layer auto-writes terminal runs to Process.store(tag). The layer includes a baked-in
+ * default in-memory store; override with AppStore.layerMemory via Layer.provideMerge.
  * Run: `pnpm run example:process-layer-store-auto-write`
  */
 
@@ -11,7 +11,6 @@ import { TestClock } from "effect/testing";
 import * as Process from "../../../src/Process";
 import * as Store from "../../../src/Store";
 import { Polling } from "../../../src/Polling";
-import { layerDefaultMemory } from "../../../src/internal/store/scopeBridge";
 import { builtInProcessStoreContract } from "../../../src/internal/store/processStoreSpec";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
@@ -23,17 +22,16 @@ class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
   Store.register(PricesProcess, builtInProcessStoreContract(PricesProcess)),
 ) {}
 
-const storeEnv = Layer.mergeAll(
-  DemoStore.layerMemory,
-  TestClock.layer(),
-  layerDefaultMemory,
-);
+const storeEnv = Layer.mergeAll(DemoStore.layerMemory, TestClock.layer());
 
 const program = Effect.gen(function* () {
-  const live = Process.layer(PricesProcess, {
-    effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
-    polling: Polling.spaced(Duration.millis(50)),
-  }).pipe(Layer.provide(DemoStore.layerMemory), Layer.provide(layerDefaultMemory));
+  const live = Layer.provideMerge(
+    DemoStore.layerMemory,
+    Process.layer(PricesProcess, {
+      effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
+      polling: Polling.spaced(Duration.millis(50)),
+    }),
+  );
 
   yield* Effect.gen(function* () {
     yield* PricesProcess;

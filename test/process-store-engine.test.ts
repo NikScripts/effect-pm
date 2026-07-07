@@ -4,7 +4,6 @@ import { TestClock } from "effect/testing";
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
 import { Polling } from "../src/Polling";
-import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
@@ -26,10 +25,10 @@ class EngineStore extends Store.Service<EngineStore>("@test/EngineStore")(
   Store.register(FailingExec, builtInProcessStoreContract(FailingExec)),
 ) {}
 
-const storeAndClock = Layer.mergeAll(EngineStore.layerMemory, TestClock.layer());
-
 const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  layer.pipe(Layer.provide(EngineStore.layerMemory), Layer.provide(layerDefaultMemory));
+  Layer.provideMerge(EngineStore.layerMemory, layer);
+
+const storeAndClock = Layer.mergeAll(EngineStore.layerMemory, TestClock.layer());
 
 describe("Process.layer — Process.store auto-write", () => {
   it.effect("records void run completion via the built-in store contract", () =>

@@ -26,7 +26,9 @@ cutover (B3) is **done** on `cursor/process-store-cutover-a3ad`.
 ## Open
 
 - [ ] Owner decision: `RunFailed.error` encoding — raw failure value (journal encodes) vs pre-encoded.
-- **App requirement:** `Process.layer` / `serve` / `serveRemote` require `StoreScopeBridgeTag` at root.
+- **✅ Baked-in default store:** `Process.layer` / `serve` / `serveRemote` merge `layerDefaultMemory`
+  internally. Override at the app root with `Layer.provideMerge(AppStore.layerMemory)` or
+  `AppStore.layer({ filename })`.
 
 ## Verify
 

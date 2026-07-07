@@ -173,8 +173,8 @@ void Effect.runPromise(program.pipe(Effect.provide(ProcessStorage.layer)));
 ### `Process.store` (built-in execution contract)
 
 On **`Process.layer`** / **`serve`** / **`serveRemote`**, the engine auto-appends terminal runs to
-**`Process.store(tag)`** when the app provides **`StoreScopeBridgeTag`** (via `Store.Service.layerMemory`
-at the root). Register the tag on an app store:
+**`Process.store(tag)`** via a **baked-in default in-memory store**. Override with an app
+**`Store.Service`** at the root when you need durable storage or registered query handles:
 
 ```typescript
 import * as Store from "@nikscripts/effect-pm/Store";
@@ -183,7 +183,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
 ) {}
 
-Process.layer(MyProcess, { effect, polling }).pipe(Layer.provide(AppStore.layerMemory));
+Layer.provideMerge(AppStore.layerMemory, Process.layer(MyProcess, { effect, polling }));
 ```
 
 Query execution events via `yield* MyProcess.store` → `events()`.

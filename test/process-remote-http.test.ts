@@ -5,8 +5,6 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
-import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
-
 // The full remote path: a REAL toolkit Process driver served over http via
 // `httpServer([Process.serve(...)])`, driven by `Resource.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
@@ -31,7 +29,6 @@ const withServer = <A, E>(
   const server = Resource.httpServer([
     Process.serve(RemoteProc, config),
   ]).pipe(
-    Layer.provide(layerDefaultMemory),
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {

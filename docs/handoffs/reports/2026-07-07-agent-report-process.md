@@ -47,9 +47,11 @@ append.
 
 **`RunFailed.error` encoding** when `error` schema is stamped: raw failure value (journal encodes on append) vs pre-encoded payload.
 
-### 5. App requirement (breaking)
+### 5. Baked-in default store
 
-**`Process.layer` / `serve` / `serveRemote`** require **`StoreScopeBridgeTag`**. Apps provide `Store.Service.layerMemory` (or equivalent) at the root via `Layer.provide` — see `store-cutover-00` §2.
+**`Process.layer` / `serve` / `serveRemote`** merge **`layerDefaultMemory`** internally — no external
+`StoreScopeBridgeTag` layer required. Override with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))`
+when you register `Process.store(tag)` on an app store.
 
 ---
 

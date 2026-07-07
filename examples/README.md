@@ -68,7 +68,7 @@ Storage options:
 
 - `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
 - `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
-- `Store.Service` + `Process.store(tag)` — built-in execution contract; engine auto-writes on `Process.layer` when `StoreScopeBridgeTag` is provided.
+- `Store.Service` + `Process.store(tag)` — built-in execution contract; engine auto-writes on `Process.layer` (default in-memory store baked in; override with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))`).
 - `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
 - `QueueResourceStore` — queue semantic storage facet.
 
