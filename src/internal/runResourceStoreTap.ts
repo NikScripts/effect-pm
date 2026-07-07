@@ -13,11 +13,15 @@ import { catchErrorAndLog } from "./store/helpers";
 import type { StoreScopeNotRegistered } from "./store/errors";
 import type { RunGateStatus } from "./runResource";
 import {
+  makeRunCompletedFact,
+  makeRunFailedFact,
+  makeRunStartedFact,
+  makeRunStateChange,
+} from "./runResourceFacts";
+import {
   builtInRunResourceStoreContract,
   type BuiltInRunResourceContract,
-  type RunFact,
   type RunResourceStateChangeReason,
-  type RunStateChange,
 } from "./store/runResourceStoreSpec";
 import type { StoreHandleFromContract } from "./store/spec";
 
@@ -50,19 +54,6 @@ type RunStoreHandle = Pick<
   StoreHandleFromContract<BuiltInRunResourceContract>,
   "record" | "recordStateChange"
 >;
-
-const toResourceState = (status: RunGateStatus): RunStateChange["current"] => ({
-  resourceId: status.resourceId,
-  observedAt: status.observedAt,
-  configVersion: status.configVersion,
-  concurrency: status.concurrency,
-  waiting: status.waiting,
-  inFlight: status.inFlight,
-  completed: status.completed,
-  failed: status.failed,
-  interrupted: status.interrupted,
-  totalDurationMs: status.totalDurationMs,
-});
 
 const scopeTagForKey = (scopeKey: string) => ({ key: scopeKey });
 
@@ -106,14 +97,14 @@ export const makeRunResourceStoreTap = (
       current: RunGateStatus,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const change: RunStateChange = {
+        const change = makeRunStateChange({
           id: yield* nextStateId(),
           resourceId,
           changedAt: current.observedAt,
           reason,
-          previous: previous === null ? null : toResourceState(previous),
-          current: toResourceState(current),
-        };
+          previous,
+          current,
+        });
         yield* recordWrite(`state ${reason}`, store.recordStateChange(change));
       });
 
@@ -123,14 +114,13 @@ export const makeRunResourceStoreTap = (
       concurrency: number,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const fact: RunFact = {
+        const fact = makeRunStartedFact({
           id: yield* nextFactId(runId, "run-resource.run.started"),
           resourceId,
           runId,
-          type: "run-resource.run.started",
           occurredAt,
           concurrency,
-        };
+        });
         yield* recordWrite(`fact started ${runId}`, store.record(fact));
       });
 
@@ -140,14 +130,13 @@ export const makeRunResourceStoreTap = (
       durationMs: number,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const fact: RunFact = {
+        const fact = makeRunCompletedFact({
           id: yield* nextFactId(runId, "run-resource.run.completed"),
           resourceId,
           runId,
-          type: "run-resource.run.completed",
           occurredAt,
           durationMs,
-        };
+        });
         yield* recordWrite(`fact completed ${runId}`, store.record(fact));
       });
 
@@ -158,15 +147,14 @@ export const makeRunResourceStoreTap = (
       cause: string,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const fact: RunFact = {
+        const fact = makeRunFailedFact({
           id: yield* nextFactId(runId, "run-resource.run.failed"),
           resourceId,
           runId,
-          type: "run-resource.run.failed",
           occurredAt,
           durationMs,
           cause,
-        };
+        });
         yield* recordWrite(`fact failed ${runId}`, store.record(fact));
       });
 

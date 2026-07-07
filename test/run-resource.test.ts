@@ -1,8 +1,9 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Effect, Layer, Ref, Schema } from "effect";
+import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
-import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
+import { StoreScopeBridgeTag, type StoreScopeBridge } from "../src/internal/store/bridge";
+import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
@@ -355,5 +356,100 @@ describe("RunResource.makeRunner", () => {
       const p = yield* Ref.get(peak);
       expect(p).toBeLessThanOrEqual(2);
     }).pipe(Effect.provide(Runner.layer)),
+  );
+});
+
+describe("RunResource — unit gates and interrupts", () => {
+  class UnitGate extends RunResource.Service<UnitGate>()("@test/UnitGate", {
+    payload: Schema.Void,
+    success: Schema.Number,
+    effect: () => Effect.succeed(42),
+    concurrency: 1,
+  }) {}
+
+  const unitLayer = UnitGate.layer;
+
+  it.live("Service.run() accepts no input for Schema.Void payload", () =>
+    Effect.gen(function* () {
+      const gate = yield* UnitGate;
+      const fromHandle = yield* gate.run();
+      const fromStatic = yield* UnitGate.run();
+      expect(fromHandle).toBe(42);
+      expect(fromStatic).toBe(42);
+    }).pipe(Effect.provide(unitLayer)),
+  );
+
+  const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {
+    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(
+      key,
+      Schema.Void,
+      Schema.Void,
+    );
+    return {
+      tag: HoldGate,
+      layer: RunResource.layer(HoldGate, {
+        effect: () => Deferred.await(hold),
+        concurrency: 1,
+      }),
+    };
+  };
+
+  // Waiting-acquire interrupt accounting is covered by `test/run-resource-pure.test.ts`
+  // (`interruptWaitingAcquire`). Live sem.take + Fiber.interrupt is scheduler-sensitive in Effect v4.
+
+  it.live("in-flight interrupt increments interrupted without failing the gate service", () =>
+    Effect.gen(function* () {
+      const hold = yield* Deferred.make<void, never>();
+      const { tag: HoldGate, layer } = holdLayer(hold, "@test/HoldGate/in-flight-interrupt");
+
+      yield* Effect.gen(function* () {
+        const gate = yield* HoldGate;
+        const inFlight = yield* Effect.forkChild(gate.run());
+        yield* Effect.yieldNow;
+        expect(yield* gate.inFlight.get).toBe(1);
+        yield* Fiber.interrupt(inFlight);
+        yield* Fiber.await(inFlight);
+        expect(yield* gate.interrupted.get).toBe(1);
+        expect(yield* gate.inFlight.get).toBe(0);
+        yield* Deferred.succeed(hold, undefined);
+      }).pipe(Effect.provide(layer));
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("RunResource.layer — store failure isolation", () => {
+  const scopeKey = "@test/store-failure-gate";
+
+  const FailingBridgeGate = RunResource.Tag<{ readonly _tag: "FailingBridgeGate" }>()(
+    scopeKey,
+    Schema.Number,
+    Schema.Number,
+  );
+
+  const failingBridgeLayer = Layer.succeed(StoreScopeBridgeTag, {
+    at: () =>
+      Effect.succeed({
+        record: () =>
+          Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-fact" })),
+        recordStateChange: () =>
+          Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-state" })),
+        facts: () => Effect.succeed([]),
+        stateHistory: () => Effect.succeed([]),
+      }),
+    changes: () => Effect.die(new Error("unused")),
+  } as unknown as StoreScopeBridge);
+
+  const live = RunResource.layer(FailingBridgeGate, {
+    effect: (n: number) => Effect.succeed(n + 1),
+    concurrency: 1,
+  }).pipe(Layer.provideMerge(failingBridgeLayer));
+
+  it.effect("gate.run succeeds when store writes fail", () =>
+    Effect.gen(function* () {
+      const gate = yield* FailingBridgeGate;
+      const result = yield* gate.run(10);
+      expect(result).toBe(11);
+      expect(yield* gate.completed.get).toBe(1);
+    }).pipe(Effect.provide(live), Effect.scoped),
   );
 });

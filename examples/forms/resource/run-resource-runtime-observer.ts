@@ -2,7 +2,8 @@
  * @module examples/forms/resource/run-resource-runtime-observer
  *
  * Live observation on {@link RunResource.Service} handles via {@link Subscribable}
- * views (`status`, `waiting`, `completed`, …).
+ * views (`status`, `waiting`, `completed`, …). `Service.layer` already merges the
+ * default store bridge — no extra `Store.layerDefaultMemory` is required here.
  *
  * Run: `npx tsx examples/forms/resource/run-resource-runtime-observer.ts`
  */
@@ -51,6 +52,7 @@ const program = Effect.gen(function* () {
 
   yield* Effect.log("");
   yield* Effect.log("=== make: run-only handle (no observation) ===");
+  yield* Effect.log("(RunResource.make still needs Store.layerDefaultMemory on the effect — see below)");
 
   const unobserved = yield* RunResource.make({
     name: "examples/UnobservedRunGate",

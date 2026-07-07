@@ -8,6 +8,7 @@ import {
   Cause,
   Clock,
   Effect,
+  Exit,
   Ref,
   Semaphore,
   SubscriptionRef,
@@ -21,6 +22,7 @@ import {
   nextRunId,
   type RunResourceStoreTap,
 } from "./runResourceStoreTap";
+import { runStatusTransitions } from "./runResourceStatus";
 
 // ============================================================================
 // Engine types
@@ -119,40 +121,32 @@ const makeObservedRun =
     concurrency: number,
   ): RunGateRun<T, A, E> => {
   const publishStatus = (
-    update: (state: RunGateStatus, observedAt: number) => RunGateStatus,
-    reason?: RunResourceStateChangeReason,
+    update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
+    reason: RunResourceStateChangeReason,
+    durationMs?: number,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
       const observedAt = yield* Clock.currentTimeMillis;
       const previous = yield* SubscriptionRef.get(statusRef);
-      const current = update(previous, observedAt);
+      const current = update(previous, observedAt, durationMs);
       yield* SubscriptionRef.set(statusRef, current);
-      if (reason !== undefined) {
-        yield* storeTap.recordStateChange(reason, previous, current);
-      }
+      yield* storeTap.recordStateChange(reason, previous, current);
     });
 
   const runBody = (input: T) => {
     const acquirePermit = Effect.gen(function* () {
-      yield* publishStatus(
-        (state, observedAt) => ({
-          ...state,
-          observedAt,
-          waiting: state.waiting + 1,
-        }),
-        "run-resource.run.waiting",
-      );
+      const waiting = runStatusTransitions.waiting;
+      yield* publishStatus(waiting.update, waiting.reason);
       yield* sem.take(1).pipe(
-        Effect.onInterrupt(() =>
-          publishStatus(
-            (state, observedAt) => ({
-              ...state,
-              observedAt,
-              waiting: Math.max(0, state.waiting - 1),
-              interrupted: state.interrupted + 1,
-            }),
-            "run-resource.run.wait.interrupted",
-          ),
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
+            ? Effect.uninterruptible(
+                publishStatus(
+                  runStatusTransitions.waitInterrupted.update,
+                  runStatusTransitions.waitInterrupted.reason,
+                ),
+              )
+            : Effect.void,
         ),
       );
     });
@@ -168,67 +162,36 @@ const makeObservedRun =
             runSeq,
           );
           yield* storeTap.recordRunStarted(runId, startedAt, concurrency);
-          yield* publishStatus(
-            (state, observedAt) => ({
-              ...state,
-              observedAt,
-              waiting: Math.max(0, state.waiting - 1),
-              inFlight: state.inFlight + 1,
-            }),
-            "run-resource.run.started",
-          );
+          const started = runStatusTransitions.started;
+          yield* publishStatus(started.update, started.reason);
 
-          return yield* Effect.matchCauseEffect(effect(input), {
-            onFailure: (cause) =>
-              Effect.gen(function* () {
-                const failedAt = yield* Clock.currentTimeMillis;
-                const durationMs = Math.max(0, failedAt - startedAt);
-                const wasInterrupted = Cause.hasInterrupts(cause);
-                if (wasInterrupted) {
-                  yield* publishStatus(
-                    (state, observedAt) => ({
-                      ...state,
-                      observedAt,
-                      inFlight: Math.max(0, state.inFlight - 1),
-                      interrupted: state.interrupted + 1,
-                      totalDurationMs: state.totalDurationMs + durationMs,
-                    }),
-                    "run-resource.run.interrupted",
-                  );
-                } else {
-                  const causeText = Cause.pretty(cause);
-                  yield* storeTap.recordRunFailed(runId, failedAt, durationMs, causeText);
-                  yield* publishStatus(
-                    (state, observedAt) => ({
-                      ...state,
-                      observedAt,
-                      inFlight: Math.max(0, state.inFlight - 1),
-                      failed: state.failed + 1,
-                      totalDurationMs: state.totalDurationMs + durationMs,
-                    }),
-                    "run-resource.run.failed",
-                  );
-                }
-                return yield* Effect.failCause(cause);
-              }),
-            onSuccess: (value) =>
-              Effect.gen(function* () {
-                const completedAt = yield* Clock.currentTimeMillis;
-                const durationMs = Math.max(0, completedAt - startedAt);
-                yield* storeTap.recordRunCompleted(runId, completedAt, durationMs);
-                yield* publishStatus(
-                  (state, observedAt) => ({
-                    ...state,
-                    observedAt,
-                    inFlight: Math.max(0, state.inFlight - 1),
-                    completed: state.completed + 1,
-                    totalDurationMs: state.totalDurationMs + durationMs,
-                  }),
-                  "run-resource.run.completed",
-                );
-                return value;
-              }),
-          });
+          return yield* effect(input).pipe(
+            Effect.onExit((exit) =>
+              Effect.uninterruptible(
+                Effect.gen(function* () {
+                  const endedAt = yield* Clock.currentTimeMillis;
+                  const durationMs = Math.max(0, endedAt - startedAt);
+                  if (Exit.isSuccess(exit)) {
+                    yield* storeTap.recordRunCompleted(runId, endedAt, durationMs);
+                    const completed = runStatusTransitions.completed;
+                    yield* publishStatus(completed.update, completed.reason, durationMs);
+                  } else if (Cause.hasInterrupts(exit.cause)) {
+                    const interrupted = runStatusTransitions.interrupted;
+                    yield* publishStatus(
+                      interrupted.update,
+                      interrupted.reason,
+                      durationMs,
+                    );
+                  } else {
+                    const causeText = Cause.pretty(exit.cause);
+                    yield* storeTap.recordRunFailed(runId, endedAt, durationMs, causeText);
+                    const failed = runStatusTransitions.failed;
+                    yield* publishStatus(failed.update, failed.reason, durationMs);
+                  }
+                }),
+              ),
+            ),
+          );
         }),
       () => Effect.asVoid(sem.release(1)),
     );
