@@ -43,8 +43,8 @@ Process supervisor still writes **only** `ProcessExecutionStore.recordCompleted`
 **Task:** add `processStoreTap.ts` (mirror RunResource):
 
 - On run terminal events → `ProcessExecutionStore` static emitters (keep)
-- When `StoreScopeBridgeTag` + registered scope → `store.record(event)` on built-in contract
-- Lazy bridge resolution at **write time** (same layer-order fix as RunResource)
+- Resolve `StoreScopeBridgeTag` once at tap build → `bridge.at(scopeKey, builtInProcessStoreContract(tag))`
+- App provides `Store.layerDefaultMemory` at root (same as RunResource — no `serviceOption`)
 
 **Do not** block tag rename on this, but **do not** claim storage parity in docs until done.
 

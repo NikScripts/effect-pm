@@ -53,7 +53,7 @@ Known stale (fix or assign to module agent):
 
 | File | Issue |
 |------|-------|
-| `docs/CODEBASE-INVENTORY.md` | RunResource Service line may still say `inputSchema` |
+| `docs/CODEBASE-INVENTORY.md` | ✅ RunResource Service line uses `payload` / `success` |
 | `docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md` | Mark rename **done** for RR/Process; open for Queue |
 | `docs/handoffs/result-schema-and-rpc-validation.md` | Keep fingerprint design; status table |
 | `CHANGELOG.md` | Still documents `Process.result` as current |

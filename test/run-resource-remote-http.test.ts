@@ -28,7 +28,7 @@ const withServer = <A, E>(
       effect: (n: number) =>
         n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
       concurrency: 2,
-    }) as Layer.Layer<any, never, any>,
+    }),
   ]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
     Layer.provideMerge(Store.layerDefaultMemory),

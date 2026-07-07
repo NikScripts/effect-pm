@@ -10,7 +10,7 @@
 | Commit | Owner / area | Summary |
 |--------|----------------|---------|
 | `4597ee1` | **Store** | Generic `bridge.at<Input>` → precise `StoreHandleOf<Input>`; `Tag.store` typed; consumer casts removed |
-| `1c76643` | **Queue** | **Store cutover** handoffs (`store-cutover-00` … `store-cutover-customqueue.md`) — Stage 1 default store **done**, shared `storeTap.ts` plan, per-module cutover tasks |
+| `1c76643` | **Queue** | **Store cutover** handoffs (`store-cutover-00` … `store-cutover-customqueue.md`) — Stage 1 default store **done**, declared-dependency engine policy |
 | `997a89d` | **RunResource** | RPC naming handoff (`2026-07-07-rpc-schema-names-payload-success-error.md`) |
 | `4d45702` | **RunResource** | **Agent reports** under `docs/handoffs/reports/` (Process, Queue, RunResource, Store, docs-release) |
 | `ef914ab` | **Integration** | Merge of run-resource reports + store-cutover docs on one branch |
@@ -48,11 +48,11 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Shared **`storeTap.ts`** (queue prototypes) |
-| Effect Msgpack journal (no direct `msgpackr`) | Wire default store into resource `layer`/`serve` |
-| Cast-free queue contract (reference) | Process/RunResource cast removal on contracts |
+| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Process/Queue engine cutover (declared dependency) |
+| Effect Msgpack journal (no direct `msgpackr`) | App-root `Store.layerDefaultMemory` in examples/docs |
+| Cast-free queue + run-resource contracts | Process contract cast removal |
 
-**Discuss / approve:** Forked-fiber eager resolve vs any remaining lazy path; whether `success` value is persisted on store completion rows (store-core TODO §3).
+**Discuss / approve:** Whether `success` value is persisted on store completion rows (store-core TODO §3).
 
 ---
 
@@ -64,7 +64,7 @@ Two report sets exist — use **both**, for different layers:
 |---------|------|
 | `Tag(key, success?, error?)`, `successOf`/`errorOf` | **`error` stamped but unused** (RPC + store still `String`) |
 | `builtInProcessStoreContract`, `Process.store` | Engine still **`ProcessExecutionStore` only** |
-| `process-store-contract.test.ts` | `processStoreTap.ts` + shared `storeTap.ts` |
+| `process-store-contract.test.ts` | `processStoreTap.ts` (mirror RunResource declared dependency) |
 | `Process.result` deprecated | Remove `Process.result` (no shim policy) |
 
 **Discuss / approve:** Wire `error` into typed `RunFailed` vs drop from Tag until wired; dual-write vs cutover for execution events; symbol rename in changeset.
@@ -81,11 +81,11 @@ Two report sets exist — use **both**, for different layers:
 |---------|------|
 | `Tag(key, payload)` positional rename | `success` / `error` on Tag + stamps |
 | `builtInQueueStoreContract` (cast-free) | Config-object `{ payload, success?, error? }` |
-| Store typing + default bridge | **Build-time store resolve deadlocks** — use `storeTap.ts` |
+| Store typing + default bridge | Engine cutover: declared `StoreScopeBridgeTag`, app-root `layerDefaultMemory` |
 | | Engine: `publishEvent` → store, drop facet tier |
 | | Event taxonomy: entry-only vs full lifecycle (**owner decision**) |
 
-**Discuss / approve:** Queue agent owns `storeTap.ts` prototype; CQR trailing `{ success?, error? }` arity (see customqueue handoff).
+**Discuss / approve:** CQR trailing `{ success?, error? }` arity (see customqueue handoff).
 
 **Blind spot (Process agent):** WIP `queue-store-wiring` on branch `queue-store-wiring` — do not merge build-time resolution.
 
@@ -101,7 +101,7 @@ Two report sets exist — use **both**, for different layers:
 | `RunResource.store`, dual-write (facet + Store) | Drop legacy facet (**owner decision**) |
 | Declared-dependency store tap + cast-free contract | Optional write-path buffer (queue may add) |
 | `Store.layerDefaultMemory` public export | Wire default store into Process/Queue layers (their agents) |
-| Remote HTTP test, changeset draft | `Resource.httpServer` overload vs `StoreScopeNotRegistered` |
+| Remote HTTP test, changeset draft | Consolidated platform changeset |
 
 **Discuss / approve:** When to drop legacy `RunResourceStore` facet (after Process/Queue cutover?).
 
@@ -127,8 +127,8 @@ Two report sets exist — use **both**, for different layers:
 |---|--------|---------|-------|
 | 1 | **Store event taxonomy (queue)** | entry-only vs lifecycle vs full facet port | Blocks queue store contract final shape |
 | 2 | **`error` on Process tag** | Wire to RPC + typed `RunFailed` vs remove until wired | Stamped today, consumed nowhere |
-| 3 | **Shared `storeTap.ts`** | Queue prototypes; Process + RunResource adopt | Replaces lazy + build-time resolve |
-| 4 | **Default store in resource layers** | Auto-merge `layerDefaultMemory` in `Process.layer` / `QueueResource.layer` / `RunResource.layer` | Stage 1 exists but not composed |
+| 3 | **Engine store tap pattern** | Declared `StoreScopeBridgeTag` + app-root `layerDefaultMemory` | RunResource ✅; Process + Queue adopt same shape (no `serviceOption`, no build-time resolve) |
+| 4 | **Default store in resource layers** | ~~Auto-merge inside resource layer~~ **Rejected** — app provides at root via `Layer.provideMerge` | Stage 1 exists; RunResource docs/examples updated |
 | 5 | **Legacy facet dual-write** | Keep until all engines cut over vs stop new dual-write | RunResource + future Process tap |
 | 6 | **CQR tag arity** | Trailing `{ success?, error? }` after lanes | [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) |
 

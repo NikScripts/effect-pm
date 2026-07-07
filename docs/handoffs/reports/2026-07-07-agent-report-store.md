@@ -29,7 +29,7 @@ From `2026-07-06-processstore-removal.md`:
 - `Tag.store` / engine tap **fail** with `StoreScopeNotRegistered` when no `Store.Service` layer is provided.
 - Agreed direction: **bounded default in-memory store** so engines always have a handle (no `serviceOption` branching).
 
-**RunResource** worked around absence via lazy `Effect.option` on bridge + legacy facet. **Long-term:** default store in `layerDefaultMemory` / scope bridge.
+**RunResource** previously used lazy `Effect.option` on the bridge — **fixed** on run-resource branch (`d166abc`): declared dependency + public `Store.layerDefaultMemory`.
 
 **Task:** implement or confirm status of default store in `src/internal/store/scopeBridge.ts` / `memoryScope.ts`; update handoff when done.
 
@@ -83,5 +83,5 @@ pnpm exec vitest run test/store.test.ts test/store-default.test.ts test/store.sq
 ## Coordination
 
 - **RunResource agent:** re-merge integration; drop tap cast if still present.
-- **Process agent:** new `processStoreTap.ts` uses same lazy `bridge.at(scopeKey, contract.spec, contract)` pattern as RunResource.
+- **Process agent:** new `processStoreTap.ts` uses declared `StoreScopeBridgeTag` (mirror RunResource after `d166abc`).
 - **Queue agent:** after rename, `builtInQueueStoreContract` reads `payloadOf(tag)`.

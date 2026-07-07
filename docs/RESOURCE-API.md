@@ -436,8 +436,21 @@ const gate = yield* ApiGate
 yield* gate.run(request)
 ```
 
-When `ProcessStorage.layer` or `RunResource.store(tag)` is composed, the engine automatically
+When `ProcessStorage.layer`, `RunResource.store(tag)`, or the default store bridge is composed, the engine automatically
 persists run facts and state transitions (same optional semantics as `QueueResource`).
+
+**Store provision:** `RunResource.layer`, `RunResource.serve`, `RunResource.Service.layer`, and `RunResource.make` require
+`StoreScopeBridgeTag` in the environment. Provide {@link Store.layerDefaultMemory} at the **app root** (or a real
+{@link Store.Service} that overrides it):
+
+```typescript
+import * as Store from "@nikscripts/effect-pm/Store";
+
+const AppLayer = RunResource.layer(ApiGate, {
+  effect: (req) => httpFetch(req),
+  concurrency: 10,
+}).pipe(Layer.provideMerge(Store.layerDefaultMemory))
+```
 
 #### Raw make (no tag)
 

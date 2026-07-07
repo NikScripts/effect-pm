@@ -74,7 +74,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch`. Worker emits `added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `released` on completion, `release`, drop, dead-letter, and `clear`. The `hydrated` variant is decode-only — defined for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
 | `queue.ratelimit.exceeded` × 1 | `QueueResource` worker when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
 
-**RunResource engine:** when a gate runs and storage is composed, the worker calls the same static emitters (`RunResourceStore.recordRun*`, `recordStateChange`) and/or **`RunResource.store(tag)`** append methods — no manual writes at call sites.
+**RunResource engine:** when a gate runs, the worker dual-writes to the legacy facet (`RunResourceStore.recordRun*`, `recordStateChange`) **and** the new Store bridge (`RunResource.store(tag)` append methods) when `StoreScopeBridgeTag` is in context. Apps provide {@link Store.layerDefaultMemory} at the root (or a registered {@link Store.Service}). **Process and Queue engines still write legacy facets only** until their store taps land.
 
 ---
 
