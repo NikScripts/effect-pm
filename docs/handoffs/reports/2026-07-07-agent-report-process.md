@@ -41,7 +41,7 @@ append.
 
 ### 3. `Process.make` path (no layer)
 
-`Process.make` does not write execution history (no `_executionRecorder`). Use **`Process.layer`** for store-backed runs.
+`Process.make` does not write to the store (no `_storeTap`). Use **`Process.layer`** for auto-append.
 
 ### 4. Owner decision deferred
 

@@ -111,11 +111,7 @@ import { StoreScopeBridgeTag } from "./internal/store/bridge";
 import { layerDefaultMemory } from "./internal/store/scopeBridge";
 import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
-import { makeProcessExecutionPersist } from "./internal/processExecutionPersist";
-import {
-  makeProcessExecutionRecorder,
-  type ProcessExecutionRecorder,
-} from "./internal/processStoreTap";
+import { makeProcessStorePersist, makeProcessStoreTap, type ProcessStoreTap } from "./internal/processStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
 // Public types
@@ -359,8 +355,8 @@ interface ProcessBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
   readonly scheduleInitializer?: ProcessScheduleInitializer<RUser>;
-  /** @internal Store-backed execution history when built via {@link layer}. */
-  readonly executionRecorder?: ProcessExecutionRecorder;
+  /** @internal Store tap when built via {@link layer}. */
+  readonly storeTap?: ProcessStoreTap;
 }
 
 export interface ProcessScheduleControls {
@@ -507,7 +503,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     clear: Effect.void,
   };
 
-  const { name, userEffect, executionRecorder } = state;
+  const { name, userEffect, storeTap } = state;
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
@@ -522,14 +518,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     lastRunDurationMillis: MutableRef.make<Option.Option<number>>(Option.none()),
   };
 
-  const executionPersist = makeProcessExecutionPersist({
-    recorder: executionRecorder,
-  });
+  const storePersist = makeProcessStorePersist({ storeTap });
 
-  const recordExecutionCompleted = executionPersist.recordCompleted;
-  const recordExecutionFailed = executionPersist.recordFailed;
-  const recordExecutionInterrupted = executionPersist.recordInterrupted;
-  const readHasPriorExecutions = executionPersist.hasPriorExecutions;
+  const recordStoreCompleted = storePersist.recordCompleted;
+  const recordStoreFailed = storePersist.recordFailed;
+  const recordStoreInterrupted = storePersist.recordInterrupted;
+  const readHasPriorExecutions = storePersist.hasPriorExecutions;
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
@@ -558,7 +552,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
                 mirror.lastRunDurationMillis,
                 Option.some(completedAt - executedAt),
               );
-              yield* recordExecutionInterrupted({
+              yield* recordStoreInterrupted({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
                 completedAt,
@@ -590,7 +584,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             const error = Option.getOrElse(Cause.findErrorOption(cause), () =>
               Cause.squash(cause),
             );
-            yield* recordExecutionFailed({
+            yield* recordStoreFailed({
               scheduleKey: Option.getOrNull(scheduleIdentifier),
               startedAt: executedAt,
               completedAt,
@@ -608,7 +602,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             mirror.lastRunDurationMillis,
             Option.some(completedAt - executedAt),
           );
-          yield* recordExecutionCompleted({
+          yield* recordStoreCompleted({
             scheduleKey: Option.getOrNull(scheduleIdentifier),
             startedAt: executedAt,
             completedAt,
@@ -1004,7 +998,7 @@ export interface ProcessMakeOptions<E, RUser> {
    * @internal Wired by {@link layer} for store-backed execution history.
    * Not part of the public {@link make} API.
    */
-  readonly _executionRecorder?: ProcessExecutionRecorder;
+  readonly _storeTap?: ProcessStoreTap;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
   /**
@@ -1059,7 +1053,7 @@ const buildProcess = <E, RUser>(
       pollingLayer: config.polling,
       scheduleLayer,
       scheduleInitializer,
-      executionRecorder: config._executionRecorder,
+      storeTap: config._storeTap,
     });
   }
   return createProcess({
@@ -1067,7 +1061,7 @@ const buildProcess = <E, RUser>(
     userEffect: config.effect,
     scheduleLayer,
     scheduleInitializer,
-    executionRecorder: config._executionRecorder,
+    storeTap: config._storeTap,
   });
 };
 
@@ -2268,7 +2262,7 @@ const buildProcessImpl = <A, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
-    const executionRecorder = yield* makeProcessExecutionRecorder({
+    const storeTap = yield* makeProcessStoreTap({
       scopeKey: tag.key,
       tag,
       resultRef,
@@ -2278,7 +2272,7 @@ const buildProcessImpl = <A, E, R>(
       effect: captured,
       ...(config.polling !== undefined ? { polling: config.polling } : {}),
       scheduleLayer: Layer.succeedContext(scheduleCtx),
-      _executionRecorder: executionRecorder,
+      _storeTap: storeTap,
     });
 
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);

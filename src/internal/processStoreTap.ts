@@ -1,6 +1,6 @@
 /**
- * Buffered execution persistence for the process supervisor — writes to the built-in
- * {@link Process} store contract via a declared {@link StoreScopeBridgeTag} dependency.
+ * Buffered engine writes to the built-in {@link Process} {@link Store} contract
+ * (`builtInProcessStoreContract`) via {@link StoreScopeBridgeTag}.
  *
  * @module internal/processStoreTap
  * @internal
@@ -24,8 +24,8 @@ import type { StoreScopeTag } from "./store/registration";
 
 const bufferCapacity = 256;
 
-/** Supervisor-facing execution persistence (buffered off the run hot path). @internal */
-export interface ProcessExecutionRecorder {
+/** Buffered writes to the built-in {@link Process} store contract (supervisor hot path). @internal */
+export interface ProcessStoreTap {
   readonly recordCompleted: (input: {
     readonly scheduleKey: string | null;
     readonly startedAt: number;
@@ -60,7 +60,7 @@ const readOptionalResult = (
 
 const buildCompletedEvent = (
   processId: string,
-  input: Parameters<ProcessExecutionRecorder["recordCompleted"]>[0],
+  input: Parameters<ProcessStoreTap["recordCompleted"]>[0],
   result: unknown | undefined,
 ): ProcessStoreEventRow => ({
   _tag: "RunCompleted",
@@ -76,7 +76,7 @@ const buildCompletedEvent = (
 const buildFailedEvent = (
   processId: string,
   encodedError: unknown,
-  input: Parameters<ProcessExecutionRecorder["recordFailed"]>[0],
+  input: Parameters<ProcessStoreTap["recordFailed"]>[0],
 ): ProcessStoreEventRow => ({
   _tag: "RunFailed",
   processId,
@@ -90,7 +90,7 @@ const buildFailedEvent = (
 
 const buildInterruptedEvent = (
   processId: string,
-  input: Parameters<ProcessExecutionRecorder["recordInterrupted"]>[0],
+  input: Parameters<ProcessStoreTap["recordInterrupted"]>[0],
 ): ProcessStoreEventRow => ({
   _tag: "RunInterrupted",
   processId,
@@ -102,16 +102,16 @@ const buildInterruptedEvent = (
 });
 
 /**
- * Resolve the built-in process store once and return a buffered recorder.
+ * Resolve the built-in process store once and return a buffered store tap.
  * Requires {@link StoreScopeBridgeTag} as a declared dependency (never `serviceOption`).
  *
  * @internal
  */
-export const makeProcessExecutionRecorder = (options: {
+export const makeProcessStoreTap = (options: {
   readonly scopeKey: string;
   readonly tag: StoreScopeTag;
   readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
-}): Effect.Effect<ProcessExecutionRecorder, never, StoreScopeBridgeTag | Scope.Scope> =>
+}): Effect.Effect<ProcessStoreTap, never, StoreScopeBridgeTag | Scope.Scope> =>
   Effect.gen(function* () {
     const bridge = yield* StoreScopeBridgeTag;
     const contract = builtInProcessStoreContract(options.tag);
@@ -165,3 +165,63 @@ export const makeProcessExecutionRecorder = (options: {
       hasPriorExecutions: () => store.hasPriorExecutions(),
     };
   });
+
+/** Arguments for a terminal process run store write. @internal */
+export type ProcessStoreFinishArgs = {
+  readonly scheduleKey: string | null;
+  readonly startedAt: number;
+  readonly completedAt: number;
+  readonly error?: unknown;
+  readonly isStartupRun: boolean;
+};
+
+const whenStoreTap = (
+  storeTap: ProcessStoreTap | undefined,
+  write: (tap: ProcessStoreTap) => Effect.Effect<void>,
+): Effect.Effect<void> =>
+  storeTap === undefined ? Effect.void : write(storeTap).pipe(Effect.asVoid);
+
+/**
+ * Optional store-tap delegates for the supervisor — no-op when {@link layer} did not wire a tap.
+ *
+ * @internal
+ */
+export const makeProcessStorePersist = (options: {
+  readonly storeTap?: ProcessStoreTap;
+}) => ({
+  recordCompleted: (args: ProcessStoreFinishArgs): Effect.Effect<void> =>
+    whenStoreTap(options.storeTap, (tap) =>
+      tap.recordCompleted({
+        scheduleKey: args.scheduleKey,
+        startedAt: args.startedAt,
+        completedAt: args.completedAt,
+        isStartupRun: args.isStartupRun,
+      }),
+    ),
+
+  recordFailed: (args: ProcessStoreFinishArgs): Effect.Effect<void> =>
+    whenStoreTap(options.storeTap, (tap) =>
+      tap.recordFailed({
+        scheduleKey: args.scheduleKey,
+        startedAt: args.startedAt,
+        completedAt: args.completedAt,
+        isStartupRun: args.isStartupRun,
+        error: args.error,
+      }),
+    ),
+
+  recordInterrupted: (args: ProcessStoreFinishArgs): Effect.Effect<void> =>
+    whenStoreTap(options.storeTap, (tap) =>
+      tap.recordInterrupted({
+        scheduleKey: args.scheduleKey,
+        startedAt: args.startedAt,
+        completedAt: args.completedAt,
+        isStartupRun: args.isStartupRun,
+      }),
+    ),
+
+  hasPriorExecutions: (): Effect.Effect<boolean> =>
+    options.storeTap !== undefined
+      ? options.storeTap.hasPriorExecutions()
+      : Effect.succeed(false),
+});
