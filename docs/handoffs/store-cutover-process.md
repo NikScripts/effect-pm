@@ -34,3 +34,14 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
 
 ## Verify
 `pnpm typecheck` (both projects) + `test/process-store-contract.test.ts` + the process suites.
+
+## Review 2026-07-07 (shipped on `cursor/process-store-cutover-a3ad`)
+
+- [x] Wire `error` into store contract (`makeProcessExecutionEvent(success, error)`; typed `RunFailed` when `errorOf(tag)` set).
+- [x] Engine dual-write: `makeProcessExecutionRecorder` resolves `StoreScopeBridgeTag` once, buffers to `store.record`; legacy `ProcessExecutionStore` kept.
+- [x] `hasPriorExecutions` reads store when recorder present (layer path).
+- [x] Populate `result` on `RunCompleted` from `SubscriptionRef` when tag carries `success`.
+- [x] Remove `Process.result`.
+- [ ] Drop `as BuiltInProcessContract` cast (still present — type variance).
+- [ ] Owner decision deferred: `RunFailed` stores raw `error` value when schema stamped (journal encodes on append) vs pre-encoded payload.
+- **App requirement:** `Process.layer` / `serve` / `serveRemote` now require `StoreScopeBridgeTag` in context — provide `layerDefaultMemory` or `Store.Service.layerMemory` at the app root (`Layer.provide`, not baked into resource layer).

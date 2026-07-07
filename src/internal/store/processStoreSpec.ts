@@ -15,52 +15,51 @@ import {
   processEventReadPayload,
   processExecutionEventVoid,
 } from "../processEvent";
-import { successOf } from "../processTagSchemas";
+import { errorOf, successOf } from "../processTagSchemas";
 import * as Store from "../../Store";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
 
-/** Execution event type for a void process. @internal */
-export type ProcessExecutionEventVoid = typeof processExecutionEventVoid.Type;
+/** Row accepted by the built-in process store handle (schema validates on append). @internal */
+export type ProcessStoreEventRow = {
+  readonly _tag: "RunCompleted" | "RunFailed" | "RunInterrupted";
+  readonly processId: string;
+  readonly scheduleKey: string | null;
+  readonly startedAt: number;
+  readonly completedAt: number;
+  readonly durationMs: number;
+  readonly isStartupRun: boolean;
+  readonly result?: unknown;
+  readonly error?: unknown;
+};
 
 /** Built-in process store contract — one `event` shape. @internal */
-export type BuiltInProcessContract<R extends Schema.Top | void = void> =
+export type BuiltInProcessContract =
   StoreContractValue<
     {
       readonly event: StoreShapeDef<
-        R extends Schema.Top
-          ? ReturnType<typeof makeProcessExecutionEvent<R>>
-          : typeof processExecutionEventVoid,
+        typeof processExecutionEventVoid,
         typeof processEventReadPayload
       >;
     },
     {
-      readonly record: (
-        event: R extends Schema.Top
-          ? ReturnType<typeof makeProcessExecutionEvent<R>>["Type"]
-          : ProcessExecutionEventVoid,
-      ) => Effect.Effect<void>;
+      readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void>;
       readonly events: (
         payload?: { readonly limit?: number },
-      ) => Effect.Effect<
-        ReadonlyArray<
-          R extends Schema.Top
-            ? ReturnType<typeof makeProcessExecutionEvent<R>>["Type"]
-            : ProcessExecutionEventVoid
-        >
-      >;
+      ) => Effect.Effect<ReadonlyArray<ProcessStoreEventRow>>;
       readonly hasPriorExecutions: () => Effect.Effect<boolean>;
     }
   >;
 
-/** Build the process store contract (optional result schema). @internal */
+/** Build the process store contract (optional success / error schemas). @internal */
 export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
   success?: R extends Schema.Top ? R : never,
+  error?: Schema.Top,
 ) => {
   const eventSchema =
-    success === undefined
+    success === undefined && error === undefined
       ? processExecutionEventVoid
-      : makeProcessExecutionEvent(success);
+      : makeProcessExecutionEvent(success, error);
 
   return Store.contract(
     {
@@ -75,11 +74,11 @@ export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
   );
 };
 
-/** Built-in process store contract for a tag (reads `success` from tag). @internal */
+/** Built-in process store contract for a tag (reads `success` / `error` from tag). @internal */
 export const builtInProcessStoreContract = (
   tag: StoreScopeTag,
 ): BuiltInProcessContract =>
-  makeProcessStoreContract(successOf(tag)) as BuiltInProcessContract;
+  makeProcessStoreContract(successOf(tag), errorOf(tag)) as BuiltInProcessContract;
 
 /** @deprecated Internal flat spec — use {@link builtInProcessStoreContract}. @internal */
 export const builtInProcessStoreSpec = (tag: StoreScopeTag) =>

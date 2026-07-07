@@ -55,8 +55,6 @@ class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
 }) {}
 ```
 
-`Process.result(Schema)` is **deprecated** — use positional `success` instead.
-
 ### Schedule (still pipeable)
 
 ```ts

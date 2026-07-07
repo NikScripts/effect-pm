@@ -34,7 +34,7 @@ Two report sets exist — use **both**, for different layers:
 **Supersedes / corrections (read before trusting older agent report lines):**
 
 1. **Store Stage 1** — `store-cutover-00` says **done** (`layerDefaultMemory`, `buildDefaultScopeBridge`). The Store agent report still says “blocked” — **ignore that**; engines still need to **compose** the default layer (not wired into `Process.layer` / `QueueResource.layer` yet).
-2. **Lazy store resolution** — RunResource agent report treats lazy bridge as acceptable long-term. **`store-cutover-00` rejects it** — all engines migrate to shared `internal/store/storeTap.ts` (eager resolve once in forked fiber). RunResource `runResourceStoreTap.ts` is a **stopgap**.
+2. **Lazy store resolution** — RunResource agent report treats lazy bridge as acceptable long-term. **`store-cutover-00` rejects it** — resolve `StoreScopeBridgeTag` as a **declared dependency** (`yield* StoreScopeBridgeTag`; app provides `layerDefaultMemory` at root). No `serviceOption`, no forked-fiber `storeTap.ts` helper (discarded in `b4bf1de`).
 3. **Queue Tag `payload`** — Integration **already** renamed `QueueResource.Tag(key, itemSchema)` → `Tag(key, payload)` (positional). Queue agent report “not renamed” is **stale**. Still open: **`success`/`error` triplet**, config-object overload, tag stamps, engine cutover.
 4. **Process symbols** — `successSym` / `successOf` (not `resultSchemaSym`). `store-cutover-process.md` still mentions `resultSchemaOf` in one bullet — treat as `successOf`.
 
@@ -63,9 +63,9 @@ Two report sets exist — use **both**, for different layers:
 | Shipped | Open |
 |---------|------|
 | `Tag(key, success?, error?)`, `successOf`/`errorOf` | **`error` stamped but unused** (RPC + store still `String`) |
-| `builtInProcessStoreContract`, `Process.store` | Engine still **`ProcessExecutionStore` only** |
-| `process-store-contract.test.ts` | `processStoreTap.ts` + shared `storeTap.ts` |
-| `Process.result` deprecated | Remove `Process.result` (no shim policy) |
+| `builtInProcessStoreContract`, `Process.store` | Engine dual-write to Store + legacy facet (`processStoreTap.ts`) |
+| `process-store-contract.test.ts` | Drop facet dual-write; remove `ProcessExecutionStore` reads |
+| ~~`Process.result` deprecated~~ | **Removed** on `cursor/process-store-cutover-a3ad` |
 
 **Discuss / approve:** Wire `error` into typed `RunFailed` vs drop from Tag until wired; dual-write vs cutover for execution events; symbol rename in changeset.
 
@@ -126,7 +126,7 @@ Two report sets exist — use **both**, for different layers:
 |---|--------|---------|-------|
 | 1 | **Store event taxonomy (queue)** | entry-only vs lifecycle vs full facet port | Blocks queue store contract final shape |
 | 2 | **`error` on Process tag** | Wire to RPC + typed `RunFailed` vs remove until wired | Stamped today, consumed nowhere |
-| 3 | **Shared `storeTap.ts`** | Queue prototypes; Process + RunResource adopt | Replaces lazy + build-time resolve |
+| 3 | **Shared `storeTap.ts`** | ~~Queue prototypes~~ **Discarded** — declared `StoreScopeBridgeTag` dependency per `store-cutover-00` §1 | Process engine uses `internal/processStoreTap.ts` (buffered `record`, no `serviceOption`) |
 | 4 | **Default store in resource layers** | Auto-merge `layerDefaultMemory` in `Process.layer` / `QueueResource.layer` / `RunResource.layer` | Stage 1 exists but not composed |
 | 5 | **Legacy facet dual-write** | Keep until all engines cut over vs stop new dual-write | RunResource + future Process tap |
 | 6 | **CQR tag arity** | Trailing `{ success?, error? }` after lanes | [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) |

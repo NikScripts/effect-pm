@@ -1,6 +1,10 @@
-import { DateTime, Duration, Effect, Option, Ref, Schema } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, Ref, Schema } from "effect";
 import { expect, it } from "vitest";
 import * as Process from "../src/Process";
+import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
+
+const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  layer.pipe(Layer.provide(layerDefaultMemory));
 
 // The revamped `Process` toolkit: one namespace whose light contract (`Tag` / `Schedule` / `schedule`
 // / `result`) is shaped by pipeable combinators and driven by the heavy layers (`layer` / `serve`).
@@ -39,7 +43,9 @@ it("base process arms and runs its effect immediately (default schedule)", () =>
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
         Effect.provide(
-          Process.layer(BaseProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          withDefaultStore(
+            Process.layer(BaseProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          ),
         ),
       );
     }),
@@ -56,7 +62,7 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Process.layer(BaseProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(withDefaultStore(Process.layer(BaseProc, { effect: Effect.void })))),
   ));
 
 it("inline schedule verb group round-trips through set/add/clear and the entries ref", () =>
@@ -78,7 +84,7 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
 
       yield* proc.schedule.clear;
       expect(yield* proc.schedule.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Process.layer(SchedProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(withDefaultStore(Process.layer(SchedProc, { effect: Effect.void })))),
   ));
 
 it("result captures the latest success (absent before the first run)", () =>
@@ -97,9 +103,11 @@ it("result captures the latest success (absent before the first run)", () =>
       }
     }).pipe(
       Effect.provide(
-        Process.layer(Priced, {
-          effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
-        }),
+        withDefaultStore(
+          Process.layer(Priced, {
+            effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
+          }),
+        ),
       ),
     ),
   ));

@@ -2,6 +2,10 @@ import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
 import { HistoryStore } from "../src";
 import * as Process from "../src/Process";
+import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
+
+const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  layer.pipe(Layer.provide(layerDefaultMemory));
 
 // A process started disarmed (an empty inline schedule) so it only runs on runImmediately; with
 // captureLogs + a HistoryStore, its logged line is captured, persisted, and read via logs.history.
@@ -28,10 +32,12 @@ it("process logs.history reads back captured logs (captureLogs + HistoryStore)",
       );
     }).pipe(
       Effect.provide(
-        Process.layer(LogProc, {
-          effect: Effect.logInfo("process tick"),
-          captureLogs: true,
-        }).pipe(Layer.provide(HistoryStore.layerMemory())),
+        withDefaultStore(
+          Process.layer(LogProc, {
+            effect: Effect.logInfo("process tick"),
+            captureLogs: true,
+          }),
+        ).pipe(Layer.provide(HistoryStore.layerMemory())),
       ),
       Effect.scoped,
     ),
@@ -46,10 +52,12 @@ it("process logs.history is empty without a HistoryStore (graceful, opt-in)", ()
       expect(yield* proc.logs.history({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Process.layer(LogProc, {
-          effect: Effect.logInfo("process tick"),
-          captureLogs: true,
-        }),
+        withDefaultStore(
+          Process.layer(LogProc, {
+            effect: Effect.logInfo("process tick"),
+            captureLogs: true,
+          }),
+        ),
       ),
       Effect.scoped,
     ),

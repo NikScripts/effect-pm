@@ -24,26 +24,47 @@ const runFinishedBase = {
 /**
  * Build the execution event union for a process store contract.
  * When `success` is set, `RunCompleted` carries an optional encoded `result`.
+ * When `error` is set, `RunFailed.error` uses that schema; otherwise `Schema.String`.
  *
  * @internal
  */
-export const makeProcessExecutionEvent = <R extends Schema.Top>(
-  success?: R,
+export const makeProcessExecutionEvent = <
+  Success extends Schema.Top | void = void,
+  Error extends Schema.Top | void = void,
+>(
+  success?: Success extends Schema.Top ? Success : never,
+  error?: Error extends Schema.Top ? Error : never,
 ) => {
   const completedFields =
     success === undefined
       ? runFinishedBase
       : { ...runFinishedBase, result: Schema.optional(success) };
 
+  const failedFields = {
+    ...runFinishedBase,
+    error: error === undefined ? Schema.String : error,
+  };
+
   return Schema.Union([
     Schema.TaggedStruct("RunCompleted", completedFields),
-    Schema.TaggedStruct("RunFailed", {
-      ...runFinishedBase,
-      error: Schema.String,
-    }),
+    Schema.TaggedStruct("RunFailed", failedFields),
     Schema.TaggedStruct("RunInterrupted", runFinishedBase),
   ]);
 };
 
 /** Void-process execution events (no `result` field). @internal */
 export const processExecutionEventVoid = makeProcessExecutionEvent();
+
+/** Execution event type for a void process. @internal */
+export type ProcessExecutionEventVoid = typeof processExecutionEventVoid.Type;
+
+/** Execution event type parameterized by optional success / error schemas. @internal */
+export type ProcessExecutionEvent<
+  Success extends Schema.Top | void = void,
+  Error extends Schema.Top | void = void,
+> = ReturnType<
+  typeof makeProcessExecutionEvent<
+    Success extends Schema.Top ? Success : void,
+    Error extends Schema.Top ? Error : void
+  >
+>["Type"];

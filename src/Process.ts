@@ -45,7 +45,6 @@ import {
   Duration,
   Effect,
   Fiber,
-  Function as Fn,
   Layer,
   Logger,
   MutableRef,
@@ -111,8 +110,13 @@ import { HistoryStore } from "./HistoryStore";
 import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
+import { StoreScopeBridgeTag } from "./internal/store/bridge";
 import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
+import {
+  makeProcessExecutionRecorder,
+  type ProcessExecutionRecorder,
+} from "./internal/processStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
 // Public types
@@ -355,6 +359,8 @@ interface ProcessBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
   readonly scheduleInitializer?: ProcessScheduleInitializer<RUser>;
+  /** @internal Store-backed execution history when built via {@link layer}. */
+  readonly executionRecorder?: ProcessExecutionRecorder;
 }
 
 export interface ProcessScheduleControls {
@@ -501,7 +507,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     clear: Effect.void,
   };
 
-  const { name, userEffect } = state;
+  const { name, userEffect, executionRecorder } = state;
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
@@ -534,24 +540,66 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const recordExecutionCompleted = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessExecutionStore.recordCompleted(finishInput(args)).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "ProcessExecutionStore write failed for completed run",
-        level: "warning",
-        annotations: { processId: name },
-      }),
-    );
+    Effect.gen(function* () {
+      if (executionRecorder !== undefined) {
+        yield* executionRecorder.recordCompleted({
+          scheduleKey: args.scheduleKey,
+          startedAt: args.startedAt,
+          completedAt: args.completedAt,
+          isStartupRun: args.isStartupRun,
+        });
+      }
+      yield* ProcessExecutionStore.recordCompleted(finishInput(args)).pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "ProcessExecutionStore write failed for completed run",
+          level: "warning",
+          annotations: { processId: name },
+        }),
+      );
+    });
 
   const recordExecutionFailed = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessExecutionStore.recordFailed(finishInput(args)).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "ProcessExecutionStore write failed for failed run",
-        level: "warning",
-        annotations: { processId: name },
-      }),
-    );
+    Effect.gen(function* () {
+      if (executionRecorder !== undefined) {
+        yield* executionRecorder.recordFailed({
+          scheduleKey: args.scheduleKey,
+          startedAt: args.startedAt,
+          completedAt: args.completedAt,
+          isStartupRun: args.isStartupRun,
+          error: args.error,
+        });
+      }
+      yield* ProcessExecutionStore.recordFailed(finishInput(args)).pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "ProcessExecutionStore write failed for failed run",
+          level: "warning",
+          annotations: { processId: name },
+        }),
+      );
+    });
+
+  const readHasPriorExecutions = (): Effect.Effect<boolean> =>
+    executionRecorder !== undefined
+      ? executionRecorder.hasPriorExecutions()
+      : Effect.serviceOption(ProcessExecutionStore).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed(false),
+              onSome: (store) =>
+                store.hasPriorExecutions(name).pipe(
+                  Effect.catch((error: unknown) =>
+                    Effect.logWarning("Process storage read failed while checking startup run").pipe(
+                      Effect.annotateLogs("processId", name),
+                      Effect.annotateLogs("error", String(error)),
+                      Effect.as(false),
+                    ),
+                  ),
+                ),
+            }),
+          ),
+        );
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
@@ -564,23 +612,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
         mirror.lastRunStartedAt,
         Option.some(DateTime.toDateUtc(DateTime.makeUnsafe(executedAt))),
       );
-      const hasPrior = yield* Effect.serviceOption(ProcessExecutionStore).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () => Effect.succeed(false),
-            onSome: (store) =>
-              store.hasPriorExecutions(name).pipe(
-                Effect.catch((error: unknown) =>
-                  Effect.logWarning("Process storage read failed while checking startup run").pipe(
-                    Effect.annotateLogs("processId", name),
-                    Effect.annotateLogs("error", String(error)),
-                    Effect.as(false),
-                  )
-                ),
-              ),
-          }),
-        ),
-      );
+      const hasPrior = yield* readHasPriorExecutions();
       const isStartupRun = !hasPrior;
 
       yield* Effect.matchEffect(
@@ -1011,6 +1043,11 @@ export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<unknown, 
  */
 export interface ProcessMakeOptions<E, RUser> {
   readonly effect: Effect.Effect<void, E, RUser>;
+  /**
+   * @internal Wired by {@link layer} for store-backed execution history.
+   * Not part of the public {@link make} API.
+   */
+  readonly _executionRecorder?: ProcessExecutionRecorder;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
   /**
@@ -1065,6 +1102,7 @@ const buildProcess = <E, RUser>(
       pollingLayer: config.polling,
       scheduleLayer,
       scheduleInitializer,
+      executionRecorder: config._executionRecorder,
     });
   }
   return createProcess({
@@ -1072,6 +1110,7 @@ const buildProcess = <E, RUser>(
     userEffect: config.effect,
     scheduleLayer,
     scheduleInitializer,
+    executionRecorder: config._executionRecorder,
   });
 };
 
@@ -1929,26 +1968,6 @@ export function schedule(
   return (tag) => Object.assign(tag, { [scheduleModeSym]: mode });
 }
 
-/**
- * @deprecated Use {@link Tag} with a positional `success` or {@link ProcessTagOptions} instead.
- * Mark a process as **value-returning**: grafts reactive `result` and stamps `successSym`.
- *
- * @public
- */
-export const result: {
-  <A extends Schema.Top>(
-    schema: A,
-  ): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S & ResultGroupSpec<A>>;
-  <Self, S extends Spec, A extends Schema.Top>(
-    tag: ResourceTag<Self, S>,
-    schema: A,
-  ): ResourceTag<any, S & ResultGroupSpec<A>>;
-} = Fn.dual(
-  2,
-  (tag: ResourceTag<any, any>, schema: Schema.Top): ResourceTag<any, any> =>
-    applyProcessTagSchemas(tag, { success: schema }),
-);
-
 // ============================================================================
 // Tag factories
 // ============================================================================
@@ -2218,7 +2237,7 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
 const buildProcessImpl = <A, E, R>(
   tag: ResourceTag<any, any>,
   baseConfig: ProcessLayerConfig<A, E, R>,
-): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope> =>
+): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope | StoreScopeBridgeTag> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
@@ -2236,7 +2255,7 @@ const buildProcessImpl = <A, E, R>(
     const successSchema = successOf(tag);
     const resultRef =
       successSchema !== undefined
-        ? yield* SubscriptionRef.make<Option.Option<A>>(Option.none())
+        ? yield* SubscriptionRef.make<Option.Option<unknown>>(Option.none())
         : undefined;
     const captured: Effect.Effect<void, E, R> =
       resultRef !== undefined
@@ -2310,10 +2329,17 @@ const buildProcessImpl = <A, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
+    const executionRecorder = yield* makeProcessExecutionRecorder({
+      scopeKey: tag.key,
+      tag,
+      resultRef,
+    });
+
     const handle = make(tag.key, {
       effect: captured,
       ...(config.polling !== undefined ? { polling: config.polling } : {}),
       scheduleLayer: Layer.succeedContext(scheduleCtx),
+      _executionRecorder: executionRecorder,
     });
 
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
@@ -2409,7 +2435,7 @@ const buildProcessImpl = <A, E, R>(
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self>, never, R>;
+): Layer.Layer<Self | Local<Self>, never, R | StoreScopeBridgeTag>;
 export function layer(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
@@ -2428,7 +2454,7 @@ export function layer(
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self> | HandlerContextOf<ProcessSpec>, never, R>;
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<ProcessSpec>, never, R | StoreScopeBridgeTag>;
 export function serve(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
@@ -2451,7 +2477,7 @@ export function serve(
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R>;
+): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R | StoreScopeBridgeTag>;
 export function serveRemote(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,

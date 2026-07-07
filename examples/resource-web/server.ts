@@ -20,6 +20,7 @@ import { HistoryStore } from "../../src/HistoryStore";
 import * as NodeLogs from "../../src/NodeLogs";
 import { Polling } from "../../src/Polling";
 import * as ProcessStorage from "../../src/ProcessStorage";
+import { layerDefaultMemory } from "../../src/internal/store/scopeBridge";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { Combine, combineQuery } from "../../src/MultiNode";
@@ -243,6 +244,7 @@ const liveNode = Resource.httpServer([
   Layer.provideMerge(NodeLogs.persistLayer("live")),
   Layer.provideMerge(logStorageDemo),
   Layer.provide(ProcessStorage.layer),
+  Layer.provide(layerDefaultMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 

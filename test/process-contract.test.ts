@@ -1,6 +1,10 @@
-import { DateTime, Duration, Effect, Ref } from "effect";
+import { DateTime, Duration, Effect, Layer, Ref } from "effect";
 import { expect, it } from "vitest";
 import * as Process from "../src/Process";
+import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
+
+const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  layer.pipe(Layer.provide(layerDefaultMemory));
 
 // A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
 // remote consumer uses (only the provided layer differs). A base `Process.Tag` is armed and runs
@@ -26,7 +30,9 @@ it("with the default schedule a process arms and runs its effect immediately", (
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
         Effect.provide(
-          Process.layer(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          withDefaultStore(
+            Process.layer(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          ),
         ),
       );
     }),
@@ -55,7 +61,9 @@ it("runImmediately runs the effect once (disarmed via an empty inline schedule)"
         expect(typeof after.lastRunDurationMillis).toBe("number");
       }).pipe(
         Effect.provide(
-          Process.layer(ScheduledProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          withDefaultStore(
+            Process.layer(ScheduledProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          ),
         ),
       );
     }),
@@ -79,7 +87,7 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
       entries = yield* proc.schedule.entries.get;
       expect(entries).toEqual([]);
     }).pipe(
-      Effect.provide(Process.layer(ScheduledProc, { effect: Effect.void })),
+      Effect.provide(withDefaultStore(Process.layer(ScheduledProc, { effect: Effect.void }))),
     ),
   ));
 
@@ -95,6 +103,6 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
       yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
     }).pipe(
-      Effect.provide(Process.layer(ArmedProc, { effect: Effect.void })),
+      Effect.provide(withDefaultStore(Process.layer(ArmedProc, { effect: Effect.void }))),
     ),
   ));
