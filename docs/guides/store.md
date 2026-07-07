@@ -120,19 +120,22 @@ Oldest journal rows per `scopeKey` are deleted after each append when SQL is act
 
 ## Default store (`layerDefaultMemory`)
 
-Resource engines require `StoreScopeBridgeTag` in the environment.
+Resource engines require **`Store.Storage`** in the environment.
 
-**RunResource:** {@link RunResource.layer}, {@link RunResource.serve}, and {@link RunResource.Service.layer}
-merge {@link Store.layerDefaultMemory} automatically via `Layer.provideMerge`. Override with a real
+**Process:** {@link Process.layer}, {@link Process.serve}, and {@link Process.serveRemote} merge
+{@link Store.layerDefaultMemory} automatically via `Layer.provideMerge`. Override with a real
 `AppStore.layerMemory` / `AppStore.layer({ filename })` at the app root — plain merge wins over the default.
 
-**Process / Queue (until their cutover):** provide {@link Store.layerDefaultMemory} at the app root when you
-do not compose a custom {@link Store.Service}:
+**RunResource:** {@link RunResource.layer}, {@link RunResource.serve}, and {@link RunResource.Service.layer}
+merge {@link Store.layerDefaultMemory} automatically via `Layer.provideMerge`. Override the same way.
+
+**Queue:** provide {@link Store.layerDefaultMemory} at the app root when you do not compose a custom
+{@link Store.Service} (engine cutover in progress):
 
 ```ts
 import * as Store from "@nikscripts/effect-pm/Store";
 
-const AppLayer = MyProcess.layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+const AppLayer = MyQueue.layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
 ```
 
 **`RunResource.make`:** still an `Effect`, not a layer — provide {@link Store.layerDefaultMemory} on the

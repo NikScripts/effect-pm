@@ -17,10 +17,9 @@ import {
 } from "../processEvent";
 import { errorOf, successOf } from "../processTagSchemas";
 import * as Store from "../../Store";
-import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
 
-/** Row accepted by the built-in process store handle (schema validates on append). @internal */
+/** Row accepted by the built-in process store tap; journal encodes on append. @internal */
 export type ProcessStoreEventRow = {
   readonly _tag: "RunCompleted" | "RunFailed" | "RunInterrupted";
   readonly processId: string;
@@ -33,44 +32,41 @@ export type ProcessStoreEventRow = {
   readonly error?: unknown;
 };
 
+const processEventSchema = (
+  success?: Schema.Top,
+  error?: Schema.Top,
+) =>
+  success === undefined && error === undefined
+    ? processExecutionEventVoid
+    : makeProcessExecutionEvent(success, error);
+
+/** Event union schema for a process store contract. @internal */
+export const processStoreEventSchema = processEventSchema;
+
 /** Built-in process store contract — one `event` shape. @internal */
-export type BuiltInProcessContract = StoreContractValue<
-  {
-    readonly event: StoreShapeDef<
-      Schema.Schema<unknown>,
-      typeof processEventReadPayload
-    >;
-  },
-  {
-    readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void>;
-    readonly events: (
-      payload?: { readonly limit?: number },
-    ) => Effect.Effect<ReadonlyArray<ProcessStoreEventRow>>;
-    readonly hasPriorExecutions: () => Effect.Effect<boolean>;
-  }
->;
+export type BuiltInProcessContract = ReturnType<typeof makeProcessStoreContract>;
 
 /** Build the process store contract (optional success / error schemas). @internal */
 export const makeProcessStoreContract = (
   success?: Schema.Top,
   error?: Schema.Top,
-): BuiltInProcessContract =>
+) =>
   Store.contract(
     {
-      event: Store.shape(
-        success === undefined && error === undefined
-          ? processExecutionEventVoid
-          : makeProcessExecutionEvent(success, error),
-        processEventReadPayload,
-      ),
+      event: Store.shape(processEventSchema(success, error), processEventReadPayload),
     },
-    ({ event }) => ({
-      record: event.append,
-      events: event.read,
-      hasPriorExecutions: () =>
-        Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
-    }),
-  ) as BuiltInProcessContract;
+    ({ event }) => {
+      const appendRow = event.append as (
+        row: ProcessStoreEventRow,
+      ) => Effect.Effect<void>;
+      return {
+        record: appendRow,
+        events: event.read,
+        hasPriorExecutions: () =>
+          Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
+      };
+    },
+  );
 
 /** Built-in process store contract for a tag (reads `success` / `error` from tag). @internal */
 export const builtInProcessStoreContract = (

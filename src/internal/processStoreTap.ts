@@ -119,19 +119,18 @@ export const makeProcessStoreTap = (options: {
     const errorSchema = errorOf(options.tag);
     const queue = yield* Queue.bounded<ProcessStoreEventRow>(bufferCapacity);
 
-    const drain = Effect.forever(
-      Queue.take(queue).pipe(
-        Effect.flatMap((event) =>
-          store.record(event).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("Process store write failed").pipe(
-                Effect.annotateLogs("processId", options.scopeKey),
-                Effect.annotateLogs("cause", Cause.pretty(cause)),
-              ),
-            ),
+    const appendEvent = (event: ProcessStoreEventRow): Effect.Effect<void> =>
+      store.record(event).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("Process store write failed").pipe(
+            Effect.annotateLogs("processId", options.scopeKey),
+            Effect.annotateLogs("cause", Cause.pretty(cause)),
           ),
         ),
-      ),
+      );
+
+    const drain: Effect.Effect<void, never, never> = Effect.forever(
+      Queue.take(queue).pipe(Effect.flatMap(appendEvent)),
     );
 
     yield* Effect.forkIn(drain, scope);

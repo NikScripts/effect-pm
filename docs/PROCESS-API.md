@@ -213,7 +213,7 @@ documented as a compatibility path.
 | `(yield* store).recordStateChange(change)` | Append a gate state transition row. |
 | `(yield* store).stateHistory(payload?)` | Read persisted state transitions. |
 
-The gate engine writes automatically when **`StoreScopeBridgeTag`** is in context (via
+The gate engine writes automatically when **`Store.Storage`** is in context (via
 **`Store.layerDefaultMemory`** or a real **`Store.Service`**). Writes use
 **`ProcessStore.catchErrorAndLog`** so storage failures do not fail gated work.
 
