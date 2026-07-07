@@ -36,5 +36,6 @@ cutover (B3) is **done** on `cursor/process-store-cutover-a3ad`.
 pnpm run typecheck
 pnpm run build
 pnpm exec vitest run test/process-toolkit.test.ts test/process-store-contract.test.ts \
-  test/process-store-engine.test.ts test/process-contract-shape.test-d.ts
+  test/process-store-engine.test.ts test/process-store-default-override.test.ts \
+  test/process-contract-shape.test-d.ts
 ```

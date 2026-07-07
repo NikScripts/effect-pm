@@ -78,6 +78,6 @@ pnpm exec vitest run test/process-toolkit.test.ts test/process-store-contract.te
 
 ## Coordination
 
-- **Store agent:** `layerDefaultMemory` shipped; Process does not bake it into resource layers.
+- **Store agent:** `layerDefaultMemory` shipped; **Process** merges it on toolkit layers (`withDefaultMemory`). Queue / RunResource still app-root until their cutover.
 - **Docs agent:** CHANGELOG + PROCESS-API persistence section.
-- **Queue agent:** engine cutover pattern should match declared `StoreScopeBridgeTag` (no `storeTap.ts`).
+- **Queue agent:** engine cutover pattern should match declared `StoreScopeBridgeTag` (no `storeTap.ts`); consider Process-style `withDefaultMemory` when baking default in.

@@ -76,8 +76,9 @@ yield* proc.logs.history({ limit: 100 }) // past captured lines
 
 ### Execution analytics (`Process.store`)
 
-On **`Process.layer`**, finished runs auto-append to **`Process.store(tag)`** when the app registers
-the tag on a `Store.Service` and provides **`StoreScopeBridgeTag`**. Query via `yield* Tag.store`.
+On **`Process.layer`** / **`serve`** / **`serveRemote`**, finished runs auto-append to the built-in
+execution contract via a **default in-memory store** merged into the layer. Override with an app
+**`Store.Service`** when you need durable storage or a registered `Tag.store` handle:
 
 ```ts
 import { Layer } from "effect";
@@ -88,8 +89,9 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(NwslSync),
 ) {}
 
-const procLayer = Process.layer(NwslSync, { effect, polling }).pipe(
-  Layer.provide(AppStore.layerMemory),
+const procLayer = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(NwslSync, { effect, polling }),
 );
 
 const store = yield* NwslSync.store;

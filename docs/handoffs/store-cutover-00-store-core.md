@@ -32,12 +32,17 @@ a concurrent `AppStore.at(tag)` and locks the scoped `EventJournal` (verified on
 dependency** is built in topological order and memoized, so the store builds first and every reader reuses
 the same instance — no race, no forked-fiber trick, no lazy per-event resolution.
 
-### 2. Provision — app root, not baked into the resource layer
+### 2. Provision — app root by default; Process toolkit exception
 
-The resource layer **requires** `StoreScopeBridgeTag` (its `RIn` includes it — no longer `never`). The **app**
-provides one at the root: `layerDefaultMemory` (default) **or** its own `Store.Service` (override). Do **not**
-`Layer.provide(layerDefaultMemory)` *inside* the resource layer — that hard-provides and blocks the app from
-overriding.
+**Default (Queue, RunResource, CustomQueue — pending cutover):** the resource layer **requires**
+`StoreScopeBridgeTag` in its dependency graph. The **app** provides one at the root:
+`layerDefaultMemory` (default) **or** its own `Store.Service` (override). Do **not** bake
+`layerDefaultMemory` into those resource layers until the module owner approves the override story.
+
+**Process toolkit (shipped on `cursor/process-store-cutover-a3ad`):** `Process.layer` / `serve` /
+`serveRemote` merge `layerDefaultMemory` internally via `withDefaultMemory`. Apps override at the
+root with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))` (later layer wins on
+`StoreScopeBridgeTag`). `RIn` for user deps stays `R` only.
 
 ### 3. Tag is the SSOT for wire schemas (`payload`/`success`/`error`)
 

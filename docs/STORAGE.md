@@ -71,7 +71,9 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch`. Worker emits `added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `released` on completion, `release`, drop, dead-letter, and `clear`. The `hydrated` variant is decode-only — defined for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
 | `queue.ratelimit.exceeded` × 1 | `QueueResource` worker when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
 
-**Process execution history:** register **`Process.store(tag)`** on an app **`Store.Service`**; the **`Process.layer`** engine appends `RunCompleted` / `RunFailed` events. Query via `yield* Tag.store` → `events()`.
+**Process execution history:** **`Process.layer`** / **`serve`** / **`serveRemote`** auto-append
+`RunCompleted` / `RunFailed` via a baked-in default in-memory store. Register **`Process.store(tag)`**
+on an app **`Store.Service`** when you need durable storage or `yield* Tag.store` query handles.
 
 **RunResource engine:** when a gate runs and storage is composed, the worker calls the same static emitters (`RunResourceStore.recordRun*`, `recordStateChange`) and/or **`RunResource.store(tag)`** append methods — no manual writes at call sites.
 
@@ -80,6 +82,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 ## Usage
 
 ```ts
+import { Layer } from "effect";
 import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
 import * as Store from "@nikscripts/effect-pm/Store";
 import { Process } from "@nikscripts/effect-pm";
@@ -88,8 +91,13 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
 ) {}
 
+const live = Layer.provideMerge(
+  AppStore.layer({ filename: ".effect-pm/process.db" }),
+  Process.layer(MyProcess, { effect, polling }),
+);
+
 const store = yield* MyProcess.store;
-const events = yield* store.events({ processId: MyProcess.key, limit: 50 });
+const events = yield* store.events({ limit: 50 });
 ```
 
 ```ts
