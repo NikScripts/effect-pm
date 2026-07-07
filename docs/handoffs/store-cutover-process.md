@@ -1,0 +1,35 @@
+# Store cutover — Process
+
+Prereq: `store-cutover-00-store-core.md` (shared decisions). Context: `result-schema-and-rpc-validation.md`
+(§B/B2/B3/E). The tag-schema + store-contract work (B/B2) is **done** on the integration branch; this is
+the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 default backing shipped).
+
+## Review findings to fix
+
+1. **🔴 Remove the cast.** `internal/store/processStoreSpec.ts` — `makeProcessStoreContract(...) as
+   BuiltInProcessContract`. The Store tightening makes this unnecessary; mirror `builtInQueueStoreContract`
+   (cast-free). Align `BuiltInProcessContract`'s `record`/`events` method types to the value union so the
+   inferred type is assignable without the `as`.
+2. **🟡 `ResourceTag<any, any>` in the graft helpers** (`applyProcessTagSchemas`, `graftResultRefAndSchemas`
+   in `Process.ts`). Tighten where possible; a few `any` at heterogeneous tag-mutation boundaries may be
+   unavoidable, but this is public-surface-adjacent — minimize.
+3. **🟡 `processTagSchemas.ts` — DRY.** `resultSchemaOf` / `errorSchemaOf` are near-identical and each
+   casts `tag as { [sym]?: Schema.Top }`. Collapse to one `schemaOf(tag, sym)` → one introspection cast,
+   not two.
+4. **🟡 Confirm `errorSchema` is consumed, not just stamped.** It's stamped (`errorSchemaSym`) and in the
+   `Tag` signature, but the store `RunFailed` row uses `error: Schema.String`. If its only real use is RPC
+   error validation, verify that path exists — otherwise it's a stamped-but-dead field.
+
+## Cutover (B3 — now unblocked)
+
+- [ ] `createProcess` (supervisor terminal) writes execution events via **`tag.store`** (the built-in
+      process contract's `record`), not the legacy `ProcessExecutionStore` facet. Use the shared
+      `internal/store/storeTap.ts` helper (see store-core report) — resolve once, buffered, no `serviceOption`.
+- [ ] `getStatus` / `hasPriorExecutions` read via the store contract's `events` / `hasPriorExecutions`
+      (the contract already exposes `hasPriorExecutions`).
+- [ ] Delete the `ProcessExecutionStore` emit/read calls in `Process.ts` once the above lands.
+- [ ] (Doc step E) When the tag carries `success`, `RunCompleted` already carries the optional `result`
+      (via `makeProcessExecutionEvent(resultSchema)`) — confirm the supervisor populates it.
+
+## Verify
+`pnpm typecheck` (both projects) + `test/process-store-contract.test.ts` + the process suites.
