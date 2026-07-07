@@ -60,8 +60,6 @@ import {
   errorOf,
 } from "./internal/queueTagSchemas";
 import * as Store from "./Store";
-import { StoreScopeBridgeTag } from "./internal/store/bridge";
-import { layerDefaultMemory } from "./internal/store/scopeBridge";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   builtInQueueStoreContract,
@@ -943,12 +941,12 @@ export const layer = <
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self> | StoreScopeBridgeTag, never, R | RR> =>
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
     // The observability store is baked in: the in-memory default backs every queue unless the app
-    // provided its own, and it's exposed so persisted events read back via `StoreScopeBridgeTag`.
-  ).pipe(Layer.provideMerge(layerDefaultMemory));
+    // provided its own, and it's exposed so persisted events read back via `Storage`.
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist` / `captureLogs`
@@ -981,7 +979,7 @@ export const serveRemote = <
 ) =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serveRemote(tag, impl)),
-  ).pipe(Layer.provideMerge(layerDefaultMemory));
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
@@ -1010,13 +1008,13 @@ export const serve = <
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | StoreScopeBridgeTag,
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
 > =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serve(tag, impl)),
-  ).pipe(Layer.provideMerge(layerDefaultMemory));
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

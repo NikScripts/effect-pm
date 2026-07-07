@@ -1,8 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import * as Store from "../src/Store";
-import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
-import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
+import { Storage, layerDefaultMemory } from "../src/Store";
 
 // The baked-in default store: with NO app `Store.Service` provided, the bridge still resolves any
 // scope on demand against a process-local in-memory journal. This is what lets the queue engine
@@ -15,7 +14,7 @@ const readingsContract = Store.contract({
 describe("baked-in default store (layerDefaultMemory)", () => {
   it.effect("resolves + round-trips a scope with no app Store.Service provided", () =>
     Effect.gen(function* () {
-      const bridge = yield* StoreScopeBridgeTag;
+      const bridge = yield* Storage;
       const handle = yield* bridge.at("scope-a", readingsContract);
 
       yield* handle.readings.append({ value: 42 });
@@ -27,7 +26,7 @@ describe("baked-in default store (layerDefaultMemory)", () => {
 
   it.effect("keeps scopes isolated by scopeKey (one journal, keyed rows — no 'sharing')", () =>
     Effect.gen(function* () {
-      const bridge = yield* StoreScopeBridgeTag;
+      const bridge = yield* Storage;
       const a = yield* bridge.at("scope-a", readingsContract);
       const b = yield* bridge.at("scope-b", readingsContract);
 

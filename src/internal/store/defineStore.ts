@@ -5,10 +5,9 @@
  * @internal
  */
 
-import { Context, Effect, Layer, type Scope } from "effect";
+import { Context, Effect } from "effect";
 import type { Simplify } from "effect/Types";
-import { StoreScopeBridgeTag } from "./bridge";
-import { StoreScopeNotRegistered, type StoreSqliteConnectionError } from "./errors";
+import { StoreScopeNotRegistered } from "./errors";
 import type { ScopeKeyFromLookup, ScopeKeyOf, StoreScopeTag } from "./registration";
 import {
   normalizeStoreRegistrations,
@@ -17,25 +16,16 @@ import {
 } from "./registrationNormalize";
 import type { RegsOfStoreInput } from "./registrationTypes";
 import {
-  buildMemoryLayerForAggregate as memoryLayerForAggregate,
-  buildStandaloneLayer,
-  buildStandaloneMemoryLayer,
-  buildSqliteLayerForAggregate,
-} from "./sqliteLayer";
-import {
   type FlatStoreHandleOf,
   type StoreHandleFromContract,
   type StoreSpec,
 } from "./spec";
 import type { StoreContractValue } from "./contractDef";
-import type { StoreLayerOptions, StoreLogLevel } from "./types";
+import type { StoreLogLevel } from "./types";
 
 export const storeRegsSym = Symbol.for("@nikscripts/effect-pm/Store/registrations");
 export const storeDefaultLogLevelSym = Symbol.for("@nikscripts/effect-pm/Store/defaultLogLevel");
 export const storeNamedSym = Symbol.for("@nikscripts/effect-pm/Store/named");
-
-export { StoreScopeBridgeTag } from "./bridge";
-export type { StoreScopeBridge } from "./bridge";
 
 /** @internal */
 export type RegistrationHandleOf<R> =
@@ -163,26 +153,24 @@ export type StoreAggregateBase<
   readonly at: StoreAtMethod<Self, Regs>;
 };
 
-/** @internal */
-export type StoreServiceClass<
-  Self = unknown,
-  Id extends string = string,
-  Regs = ReadonlyArray<NormalizedStoreRegistration>,
-> = StoreAggregateBase<Self, Id, Regs> & {
-  readonly layerMemory: Layer.Layer<Self | StoreScopeBridgeTag>;
-  readonly layer: (
-    options?: StoreLayerOptions,
-  ) => Layer.Layer<Self | StoreScopeBridgeTag, StoreSqliteConnectionError, Scope.Scope>;
-};
-
-/** @internal */
+/**
+ * Registration-only aggregate — no layers. `src/Store.ts` attaches `layerMemory` / `layer`
+ * (`StoreServiceClass`) via the co-located `Storage` layer builders.
+ *
+ * @internal
+ */
 export type StoreTagClass<
   Self = unknown,
   Id extends string = string,
   Regs = ReadonlyArray<NormalizedStoreRegistration>,
 > = StoreAggregateBase<Self, Id, Regs>;
 
-/** @internal */
+/**
+ * Standalone single-scope store class — no layers. `src/Store.ts` attaches `layerMemory` /
+ * `layer` via the co-located `Storage` layer builders.
+ *
+ * @internal
+ */
 export type StandaloneStoreClass<
   Self,
   Id extends string,
@@ -194,32 +182,9 @@ export type StandaloneStoreClass<
   readonly scopeKey: K;
   readonly spec: C["spec"];
   readonly contract: C;
-} & (Tag extends undefined ? {} : { readonly tag: Tag }) & {
-  readonly layerMemory: Layer.Layer<Self | StoreScopeBridgeTag>;
-  readonly layer: (
-    options?: StoreLayerOptions,
-  ) => Layer.Layer<Self | StoreScopeBridgeTag, StoreSqliteConnectionError, Scope.Scope>;
-};
+} & (Tag extends undefined ? {} : { readonly tag: Tag });
 
 export { isStandaloneStoreClass } from "./registrationNormalize";
-
-/** @internal */
-const buildLayerForAggregate = <
-  Self,
-  Id extends string,
-  Regs,
->(
-  tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
-  registrations: ReadonlyArray<NormalizedStoreRegistration>,
-  options?: StoreLayerOptions,
-): Layer.Layer<Self | StoreScopeBridgeTag, StoreSqliteConnectionError, Scope.Scope> =>
-  options?.filename !== undefined
-    ? buildSqliteLayerForAggregate(tag, registrations, options.filename)
-    : (memoryLayerForAggregate(tag, registrations) as Layer.Layer<
-        Self | StoreScopeBridgeTag,
-        StoreSqliteConnectionError,
-        Scope.Scope
-      >);
 
 /** @internal */
 const resolveLookupKey = (
@@ -264,9 +229,14 @@ type InputOfArgs<Args extends ReadonlyArray<unknown>> = Args extends readonly [i
   ? Only
   : Args;
 
-/** @internal */
+/**
+ * Build the registration-only aggregate class (regs + `at`, no layers). `src/Store.ts` attaches
+ * the `Storage`-providing layers to produce a `StoreServiceClass`.
+ *
+ * @internal
+ */
 const defineStoreAggregateInner =
-  <Self, const Id extends string>(id: Id, options: { readonly withLayers: boolean }) =>
+  <Self, const Id extends string>(id: Id) =>
   <const Input>(input: Input) => {
     type Regs = RegsOfStoreInput<Input>;
     const { registrations: normalized, named } = normalizeStoreRegistrations(input);
@@ -274,23 +244,13 @@ const defineStoreAggregateInner =
     const base = Context.Service<Self, StoreBundle<Regs>>()(id);
     const at = makeAt(base, registrations);
 
-    const layerMemory = options.withLayers
-      ? memoryLayerForAggregate(base, registrations)
-      : undefined;
-
-    const layer = options.withLayers
-      ? (layerOptions?: StoreLayerOptions) =>
-          buildLayerForAggregate(base, registrations, layerOptions)
-      : undefined;
-
     class StoreAggregate extends base {}
 
     return Object.assign(StoreAggregate, {
       [storeRegsSym]: registrations,
       [storeNamedSym]: named,
       at,
-      ...(options.withLayers ? { layerMemory, layer } : {}),
-    }) as StoreServiceClass<Self, Id, Regs> | StoreTagClass<Self, Id, Regs>;
+    }) as StoreTagClass<Self, Id, Regs>;
   };
 
 /** @internal */
@@ -298,7 +258,7 @@ export const defineStoreTag = <Self, const Id extends string>(id: Id) => {
   const define = <const Args extends ReadonlyArray<unknown>>(...args: Args) => {
     type Input = InputOfArgs<Args>;
     const input = (args.length === 1 ? args[0]! : args) as Input;
-    return defineStoreAggregateInner<Self, Id>(id, { withLayers: false })(input) as StoreTagClass<
+    return defineStoreAggregateInner<Self, Id>(id)(input) as StoreTagClass<
       Self,
       Id,
       RegsOfStoreInput<Input>
@@ -307,18 +267,27 @@ export const defineStoreTag = <Self, const Id extends string>(id: Id) => {
   return define;
 };
 
-/** @internal */
-export const defineStoreService = <Self, const Id extends string>(id: Id) => {
-  const define = <const Args extends ReadonlyArray<unknown>>(...args: Args) => {
-    type Input = InputOfArgs<Args>;
-    const input = (args.length === 1 ? args[0]! : args) as Input;
-    return defineStoreAggregateInner<Self, Id>(id, { withLayers: true })(input) as StoreServiceClass<
-      Self,
-      Id,
-      RegsOfStoreInput<Input>
-    >;
+/**
+ * Normalized registration for a standalone store — shared by {@link defineStandaloneStore} and
+ * the layer attachment in `src/Store.ts` (single source for the standalone → registration shape).
+ *
+ * @internal
+ */
+export const buildStandaloneRegistration = <
+  const Scope extends string | StoreScopeTag,
+  const C extends StoreContractValue,
+>(
+  scope: Scope,
+  contract: C,
+): NormalizedStoreRegistration => {
+  const scopeKey = typeof scope === "string" ? scope : scope.key;
+  return {
+    scopeKey,
+    accessor: scopeKey,
+    spec: contract.spec,
+    contract,
+    ...(typeof scope === "string" ? {} : { tag: scope }),
   };
-  return define;
 };
 
 /** @internal */
@@ -344,26 +313,12 @@ export const defineStandaloneStore = <
 
   const base = Context.Service<Self, StoreHandleFromContract<C>>()(id);
 
-  const registration: NormalizedStoreRegistration = {
-    scopeKey,
-    accessor: scopeKey,
-    spec: plainSpec,
-    contract,
-    ...(typeof scope === "string" ? {} : { tag: scope }),
-  };
-
-  const layerMemory = buildStandaloneMemoryLayer(base, registration);
-  const layer = (layerOptions?: StoreLayerOptions) =>
-    buildStandaloneLayer(base, registration, layerOptions);
-
   return Object.assign(base, {
     [storeStandaloneSym]: true as const,
     scopeKey,
     spec: plainSpec,
     contract,
     tag: typeof scope === "string" ? undefined : scope,
-    layerMemory,
-    layer,
   }) as unknown as StandaloneStoreClass<
     Self,
     Id,
@@ -374,30 +329,7 @@ export const defineStandaloneStore = <
 };
 
 /** @internal */
-export const applyStoreDefaultLogLevel = <
-  Self,
-  Id extends string,
-  Regs,
->(
-  storeClass: StoreServiceClass<Self, Id, Regs>,
-  logLevel: StoreLogLevel,
-): StoreServiceClass<Self, Id, Regs> =>
-  Object.assign(storeClass, {
-    [storeDefaultLogLevelSym]: logLevel,
-    layerMemory: memoryLayerForAggregate(
-      storeClass,
-      storeClass[storeRegsSym] as ReadonlyArray<NormalizedStoreRegistration>,
-    ),
-    layer: (options?: StoreLayerOptions) =>
-      buildLayerForAggregate(
-        storeClass,
-        storeClass[storeRegsSym] as ReadonlyArray<NormalizedStoreRegistration>,
-        { ...options, logLevel: options?.logLevel ?? logLevel },
-      ),
-  });
-
-/** @internal */
-export const isStoreServiceClass = (value: unknown): value is StoreServiceClass =>
+export const isStoreServiceClass = (value: unknown): value is StoreTagClass =>
   typeof value === "function" && storeRegsSym in value;
 
 export { StoreScopeNotRegistered } from "./errors";

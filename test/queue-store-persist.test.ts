@@ -1,12 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
-import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
+import { Storage } from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 
 // The observability store is baked into QueueResource.layer (layerDefaultMemory, exposed). The engine
 // persists its lifecycle events there via a plain declared dependency (no serviceOption), and they
-// read back through the exposed StoreScopeBridgeTag — no separate app Store.Service, and (the point)
+// read back through the exposed Storage — no separate app Store.Service, and (the point)
 // no deadlock, because a declared dependency is built in order and memoized. `it.live` = real clock.
 
 const jobSchema = Schema.Struct({ id: Schema.String });
@@ -20,7 +20,7 @@ describe("QueueResource → baked store persistence", () => {
       yield* queue.add([{ id: "j1" }, { id: "j2" }]);
 
       // Read via the SAME bridge the layer baked in + exposed.
-      const bridge = yield* StoreScopeBridgeTag;
+      const bridge = yield* Storage;
       const store = yield* bridge.at(
         "@app/EmailQueue",
         builtInQueueStoreContract(EmailQueue),

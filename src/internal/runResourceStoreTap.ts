@@ -16,7 +16,7 @@ import type {
   RunResourceStateChange,
   RunResourceStateChangeReason,
 } from "../store/runResource";
-import { StoreScopeBridgeTag } from "./store/bridge";
+import { Storage } from "../Store";
 import type { StoreScopeTag } from "./store/registration";
 import type { RunGateStatus } from "./runResource";
 import type { StoreHandleFromContract } from "./store/spec";
@@ -77,7 +77,7 @@ const resolveNewStoreHandle = (
   scopeKey: string,
 ): Effect.Effect<Option.Option<NewRunStoreHandle>> =>
   Effect.gen(function* () {
-    const bridge = yield* Effect.serviceOption(StoreScopeBridgeTag);
+    const bridge = yield* Effect.serviceOption(Storage);
     if (Option.isNone(bridge)) {
       return Option.none();
     }
