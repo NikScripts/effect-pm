@@ -59,6 +59,8 @@ import {
   successOf,
   errorOf,
 } from "./internal/queueTagSchemas";
+import { StoreScopeBridgeTag } from "./internal/store/bridge";
+import { layerDefaultMemory } from "./internal/store/scopeBridge";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   builtInQueueStoreContract,
@@ -68,6 +70,7 @@ import {
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueueErrors,
+  QueueEvent,
   QueueHandle,
   QueueResourceConfigWithItemSchema,
 } from "./internal/queueResource";
@@ -786,6 +789,28 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     const effectiveConfig = yield* foldConfiguredSpec<
       QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
+    // Persist the queue's lifecycle events to its store (the observability plane). The store is a
+    // defaulted service — always in context, baked into `layer`/`serve` via `layerDefaultMemory` —
+    // so it is resolved as a plain **declared dependency** (`yield* StoreScopeBridgeTag`), never
+    // `serviceOption`. The recorder runs at the source in `publishEvent`, so no event burst is
+    // dropped (a late `Stream.fromPubSub` fork would miss the first events).
+    const storeBridge = yield* StoreScopeBridgeTag;
+    const noPersist = (_event: QueueEvent<Schema.Struct<F>["Type"], E>) => Effect.void;
+    const recordEvent = yield* storeBridge
+      .at(tag.key, builtInQueueStoreContract(tag))
+      .pipe(
+        Effect.map(
+          (eventStore) => (event: QueueEvent<Schema.Struct<F>["Type"], E>) =>
+            eventStore.record(event).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning(`Queue "${tag.key}" event persist failed`, cause),
+              ),
+            ),
+        ),
+        // The baked default registers any scope on demand; a custom store missing this queue's
+        // registration simply skips persistence.
+        Effect.catchTag("StoreScopeNotRegistered", () => Effect.succeed(noPersist)),
+      );
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
@@ -793,6 +818,7 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
       name: tag.key,
       ...effectiveConfig,
       itemSchema,
+      recordEvent,
     } as QueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R | RR>,
@@ -921,10 +947,12 @@ export const layer = <
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self>, never, R | RR> =>
+): Layer.Layer<Self | Local<Self> | StoreScopeBridgeTag, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
-  );
+    // The observability store is baked in: the in-memory default backs every queue unless the app
+    // provided its own, and it's exposed so persisted events read back via `StoreScopeBridgeTag`.
+  ).pipe(Layer.provideMerge(layerDefaultMemory));
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist` / `captureLogs`
@@ -957,7 +985,7 @@ export const serveRemote = <
 ) =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serveRemote(tag, impl)),
-  );
+  ).pipe(Layer.provideMerge(layerDefaultMemory));
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
@@ -986,13 +1014,13 @@ export const serve = <
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | StoreScopeBridgeTag,
   never,
   R | RR
 > =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serve(tag, impl)),
-  );
+  ).pipe(Layer.provideMerge(layerDefaultMemory));
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

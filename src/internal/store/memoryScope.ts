@@ -116,10 +116,13 @@ export const makeScopeHandle = <S extends StoreSpec>(
     if (entry._tag === APPEND_TAG) {
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          const decoded = yield* Schema.decodeUnknownEffect(entry.schema)(payload);
-          const inputs = Array.isArray(decoded) ? decoded : [decoded];
+          const inputs = Array.isArray(payload) ? payload : [payload];
           for (const one of inputs) {
-            const encoded = yield* encodeJournalPayload(one);
+            // `append` receives DECODED domain values. `Schema.toCodecJson` is Effect's own
+            // schema→JSON codec — it serializes rich types (`DateTime`, `Exit`, `Cause`, `Duration`)
+            // to a JSON-safe form and decodes them back, which the naive object walk cannot.
+            const wire = yield* Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one);
+            const encoded = yield* encodeJournalPayload(wire);
             yield* sideEffects.journal.write({
               event: name,
               primaryKey: sideEffects.scopeKey,
@@ -147,7 +150,7 @@ export const makeScopeHandle = <S extends StoreSpec>(
             queryOptsFromReadPayload(decodedPayload),
             (row) => row.occurredAtMillis,
           ).map((row) => row.payload);
-          return yield* Schema.decodeUnknownEffect(entry.result)(matched);
+          return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(entry.result))(matched);
         });
     }
   }
