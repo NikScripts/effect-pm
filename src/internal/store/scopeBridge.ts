@@ -6,7 +6,7 @@
  */
 
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
-import { Effect, Stream } from "effect";
+import { Effect, Function, Stream } from "effect";
 import {
   changesFromScopes,
   materializeStoreHandle,
@@ -18,39 +18,29 @@ import type { StoreHandleOf, StoreSpec } from "./spec";
 import { decodeJournalPayload } from "./journalCodec";
 import { StoreChangeEvent, StoreScopeNotRegistered } from "./errors";
 
-/** Per-scope cache of materialized handles, keyed by the input (spec/contract) reference. @internal */
-type AtCache = Map<string, WeakMap<object, unknown>>;
-
 /**
- * Materialize a scope handle at most once per `(scopeKey, input reference)`. The handle is **stable per
- * scope** — its append/read close over the stable journal — so it is write-once, no invalidation; a racy
- * double-build is fine because materialization is pure/idempotent. Non-object inputs (which the types
- * forbid, but guarded defensively) bypass the cache. @internal
+ * Reference-keyed, per-scope handle cache. For each `scopeKey`, {@link Function.memoize} (Effect's
+ * `WeakMap` memoizer) memoizes handle construction on the input (spec/contract) **reference**. The handle
+ * is **stable per scope** — its append/read close over the stable journal — so this is write-once, no
+ * invalidation; a racy double-build is harmless because materialization is pure/idempotent. @internal
  */
-const materializeMemoized = <Input extends StoreSpec | StoreContractValue>(
-  cache: AtCache,
-  scopeKey: string,
-  input: Input,
-  build: (input: Input) => StoreHandleOf<Input>,
-): StoreHandleOf<Input> => {
-  if (typeof input !== "object") {
-    return build(input);
-  }
-  let perScope = cache.get(scopeKey);
-  if (perScope === undefined) {
-    perScope = new WeakMap<object, unknown>();
-    cache.set(scopeKey, perScope);
-  }
-  const cached = perScope.get(input);
-  if (cached !== undefined) {
-    // Boundary: the cache is heterogeneous (`Input` varies per entry), but each `input` reference always
-    // maps to its own `StoreHandleOf<Input>` — the same dynamic-construction boundary as
-    // `materializeStoreHandle`'s own assertion.
-    return cached as StoreHandleOf<Input>;
-  }
-  const handle = build(input);
-  perScope.set(input, handle);
-  return handle;
+const memoizedAt = (
+  materialize: (scopeKey: string, input: StoreSpec | StoreContractValue) => unknown,
+) => {
+  const perScope = new Map<string, (input: StoreSpec | StoreContractValue) => unknown>();
+  return <Input extends StoreSpec | StoreContractValue>(
+    scopeKey: string,
+    input: Input,
+  ): StoreHandleOf<Input> => {
+    let memo = perScope.get(scopeKey);
+    if (memo === undefined) {
+      memo = Function.memoize((one: StoreSpec | StoreContractValue) => materialize(scopeKey, one));
+      perScope.set(scopeKey, memo);
+    }
+    // Heterogeneous boundary: each input reference maps to its own `StoreHandleOf<Input>` — the same
+    // dynamic-construction boundary as `materializeStoreHandle`'s own assertion.
+    return memo(input) as StoreHandleOf<Input>;
+  };
 };
 
 /** @internal */
@@ -58,22 +48,18 @@ export const buildScopeBridge = (
   scopes: ReadonlyMap<string, ScopeState>,
   journal: EventJournal.EventJournal["Service"],
 ): StorageApi => {
-  const atCache: AtCache = new Map();
+  const at = memoizedAt((scopeKey, input) =>
+    materializeStoreHandle(input, {
+      journal,
+      scopeKey,
+      maxRows: scopes.get(scopeKey)?.maxRows,
+    }),
+  );
   return {
-    at: (scopeKey, input) => {
-      const scope = scopes.get(scopeKey);
-      return scope === undefined
-        ? Effect.fail(new StoreScopeNotRegistered({ key: scopeKey }))
-        : Effect.succeed(
-            materializeMemoized(atCache, scopeKey, input, (resolvedInput) =>
-              materializeStoreHandle(resolvedInput, {
-                journal,
-                scopeKey,
-                maxRows: scope.maxRows,
-              }),
-            ),
-          );
-    },
+    at: (scopeKey, input) =>
+      scopes.has(scopeKey)
+        ? Effect.succeed(at(scopeKey, input))
+        : Effect.fail(new StoreScopeNotRegistered({ key: scopeKey })),
     changes: (scopeKey) =>
       changesFromScopes(scopes, scopeKey).pipe(
         Effect.provideService(EventJournal.EventJournal, journal),
@@ -93,18 +79,15 @@ export const buildDefaultScopeBridge = (
   journal: EventJournal.EventJournal["Service"],
   maxRows?: number,
 ): StorageApi => {
-  const atCache: AtCache = new Map();
+  const at = memoizedAt((scopeKey, input) =>
+    materializeStoreHandle(input, {
+      journal,
+      scopeKey,
+      maxRows,
+    }),
+  );
   return {
-    at: (scopeKey, input) =>
-      Effect.succeed(
-        materializeMemoized(atCache, scopeKey, input, (resolvedInput) =>
-          materializeStoreHandle(resolvedInput, {
-            journal,
-            scopeKey,
-            maxRows,
-          }),
-        ),
-      ),
+    at: (scopeKey, input) => Effect.succeed(at(scopeKey, input)),
     changes: (scopeKey) =>
       Effect.map(journal.changes, (subscription) =>
         Stream.fromSubscription(subscription).pipe(
