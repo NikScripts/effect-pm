@@ -53,6 +53,12 @@ import {
 } from "./internal/queueSchema";
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
 import { makeQueueEffect } from "./internal/queueResource";
+import {
+  successSym,
+  errorSym,
+  successOf,
+  errorOf,
+} from "./internal/queueTagSchemas";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   builtInQueueStoreContract,
@@ -559,33 +565,121 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
 export const kind = "@nikscripts/effect-pm/QueueResource";
 
+/**
+ * Config-object form of {@link Tag}. `payload` is the item schema (required); `success` (worker
+ * return) and `error` (worker failure channel) are the optional wire slots, stamped for the engine
+ * + store to read as the tag SSOT.
+ *
+ * @public
+ */
+export interface QueueTagConfig<F extends Schema.Struct.Fields> {
+  readonly payload: Schema.Struct<F>;
+  readonly success?: Schema.Top;
+  readonly error?: Schema.Top;
+  readonly description?: string;
+  readonly node?: NodeKey<unknown>;
+}
+
+/** The legacy positional 3rd arg — `{ description?, node? }` — kept for the non-wire form. */
+interface QueueTagPositionalOptions {
+  readonly description?: string;
+  readonly node?: NodeKey<unknown>;
+}
+
+/**
+ * Stamp `success` / `error` schemas onto a queue tag (mutates the freshly-built tag in place — no
+ * cast, no `any`). Read back by {@link successOf} / {@link errorOf}.
+ */
+const stampQueueWireSchemas = <T extends object>(
+  tag: T,
+  schemas: { readonly success?: Schema.Top; readonly error?: Schema.Top },
+): T => {
+  if (schemas.success !== undefined) {
+    Object.assign(tag, { [successSym]: schemas.success });
+  }
+  if (schemas.error !== undefined) {
+    Object.assign(tag, { [errorSym]: schemas.error });
+  }
+  return tag;
+};
+
+/** The 2nd arg is the config-object form (not a payload schema). */
+const isQueueTagConfig = <F extends Schema.Struct.Fields>(
+  value: Schema.Struct<F> | QueueTagConfig<F>,
+): value is QueueTagConfig<F> => !Schema.isSchema(value);
+
 const queueTag = <Self>() => {
+  // (key, payload, { description?, node }) — node-bound
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     payload: Schema.Struct<F>,
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
+  // (key, payload, success, error?) — wire slots (success is a schema; ordered before the options
+  // overload so a Schema.Top 3rd arg is never mistaken for an options bag)
+  function build<F extends Schema.Struct.Fields>(
+    key: string,
+    payload: Schema.Struct<F>,
+    success: Schema.Top,
+    error?: Schema.Top,
+  ): ResourceTag<Self, QueueInstanceSpec<F>>;
+  // (key, payload, { description? }?) — legacy options, no wire slots
   function build<F extends Schema.Struct.Fields>(
     key: string,
     payload: Schema.Struct<F>,
     options?: { readonly description?: string },
   ): ResourceTag<Self, QueueInstanceSpec<F>>;
+  // (key, { payload, success?, error?, description?, node }) — config object, node-bound
+  function build<F extends Schema.Struct.Fields, HSelf>(
+    key: string,
+    config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
+  // (key, { payload, success?, error?, description? }) — config object
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    payload: Schema.Struct<F>,
-    options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
+    config: QueueTagConfig<F>,
+  ): ResourceTag<Self, QueueInstanceSpec<F>>;
+  function build<F extends Schema.Struct.Fields>(
+    key: string,
+    second: Schema.Struct<F> | QueueTagConfig<F>,
+    third?: Schema.Top | QueueTagPositionalOptions,
+    fourth?: Schema.Top,
   ): ResourceTag<Self, QueueInstanceSpec<F>> {
-    const spec = queueSpec(payload);
-    const node = options?.node;
-    const tagOptions = { description: options?.description, kind };
+    // Resolve the five inputs from the positional or config-object form. Positional 3rd arg is the
+    // wire `success` schema (then 4th = `error`) when it is a schema, else the legacy options bag.
+    const resolved = isQueueTagConfig(second)
+      ? {
+          payload: second.payload,
+          success: second.success,
+          error: second.error,
+          description: second.description,
+          node: second.node,
+        }
+      : Schema.isSchema(third)
+        ? {
+            payload: second,
+            success: third,
+            error: fourth,
+            description: undefined,
+            node: undefined,
+          }
+        : {
+            payload: second,
+            success: undefined,
+            error: undefined,
+            description: third?.description,
+            node: third?.node,
+          };
+    const spec = queueSpec(resolved.payload);
+    const tagOptions = { description: resolved.description, kind };
     // node rides the inferring call; `makeTag`'s inner overload narrows the tag's node.
-    const tag =
-      node === undefined
+    const base =
+      resolved.node === undefined
         ? Resource.Tag<Self>()(key, spec, tagOptions)
-        : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
+        : Resource.Tag<Self>()(key, spec, { ...tagOptions, node: resolved.node });
     // Readiness derived from the queue's own status (SSOT): ready iff the worker pool is running.
     // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
-    return Resource.withReadiness(tag, (svc) =>
+    const ready = Resource.withReadiness(base, (svc) =>
       Effect.map(svc.status.get, (status) => ({
         ready: status.phase === "running",
         ...(status.phase === "running"
@@ -593,6 +687,10 @@ const queueTag = <Self>() => {
           : { detail: `phase: ${status.phase}` }),
       })),
     );
+    return stampQueueWireSchemas(ready, {
+      success: resolved.success,
+      error: resolved.error,
+    });
   }
   return build;
 };
@@ -969,6 +1067,14 @@ export function store(tag: QueueStoreTag, extended?: StoreShapes) {
 // The light `Tag` lives here (no engine) so `QueueResource.Tag` member access tree-shakes.
 // DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` → `QueueResource.Tag`.
 export { queueTag as Tag };
+
+/**
+ * Read the `success` / `error` wire schemas stamped on a {@link Tag}, if declared. `undefined` when
+ * the queue was defined without that slot. Used by the engine + store contract to read the tag SSOT.
+ *
+ * @public
+ */
+export { successOf, errorOf };
 
 // ============================================================================
 // Engine surface
