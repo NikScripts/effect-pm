@@ -3,6 +3,20 @@
 Prereq: `store-cutover-00-store-core.md` (shared decisions — **the store is a defaulted service; resolve it
 as a declared dependency; NEVER `serviceOption`**).
 
+## Owner decisions LOCKED (2026-07-06)
+
+1. **Event taxonomy = full lifecycle.** The store persists the whole `QueueEvent<T>` union the live
+   `.events` stream carries (per-entry + `Start`/`Drained`/`Cleared`/`Shutdown*` lifecycle + `RateLimitExceeded`).
+   Not entry-only. SSOT — persisted == streamed. `builtInQueueStoreContract` already does this.
+2. **`success`/`error` = full capture, presence-driven by the tag schema.** When the tag declares a
+   `success` schema, the worker's return value **is captured onto `Completed`** (a `result` field, threaded
+   from `success`) and persisted; when it declares `error`, `Failed` carries the decoded typed error. No
+   schema → current behavior (`Completed {entry, elapsed}`, `Failed {entry, cause, elapsed}`). This mirrors
+   `makeProcessExecutionEvent(successSchema)` — optional field appears iff the schema is present.
+3. **CustomQueue does NOT take the triplet** — config-object only, no `success`/`error` (see
+   `store-cutover-customqueue.md`).
+4. **Always write thorough tests** — no approval needed for tests, ever.
+
 ## Done
 
 - `builtInQueueStoreContract(tag)` — one `event` shape persisting the shared `QueueEvent<T>` union
