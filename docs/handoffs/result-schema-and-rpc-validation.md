@@ -1,8 +1,15 @@
 # Tag wire schemas (`payload` / `success` / `error`) + RPC validation
 
 **Status:** Design locked (2026-07-07). Tag factories use **Effect `Resource.Method` slot names** —
-`payload`, `success`, `error` — with **no `Schema` suffix**. Process + RunResource implemented on
-integration branches; Queue `Tag` positional `payload` renamed; full QR triplet pending queue agents.
+`payload`, `success`, `error` — with **no `Schema` suffix**.
+
+**Integration branch (merge target):** `cursor/integration-result-schema-a3ad` — Process tag +
+store contract, RunResource handle/RPC/store, `payload`/`success`/`error` naming, handoff doc.
+Branch feature work here or merge into this branch before `main`.
+
+**Shipped on integration:** Process (`success`/`error`), RunResource (`payload`/`success`/`error`),
+Queue `Tag` positional `payload` rename. **Pending:** QR/CQR full triplet on tag, Store Stage 1
+default backing, engine cutover off legacy facets.
 
 Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
 [`queue-persistence-design.md`](./queue-persistence-design.md),

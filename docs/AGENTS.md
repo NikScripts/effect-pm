@@ -33,6 +33,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
 | `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
+| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Start with [`handoffs/result-schema-and-rpc-validation.md`](./handoffs/result-schema-and-rpc-validation.md); merge target branch `cursor/integration-result-schema-a3ad`. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
