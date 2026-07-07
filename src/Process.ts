@@ -26,9 +26,10 @@
  * access tree-shakes. It carries two cooperating surfaces:
  * - **Engine** — {@link make} (+ {@link Service}, {@link currentScheduleId}, {@link scheduleControls},
  *   {@link Errors}): construct and run a supervised process directly.
- * - **Resource toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} / {@link result} /
- *   {@link window} / {@link at} shape a process as a {@link Resource}; {@link layer} / {@link serve} /
- *   {@link serveRemote} / {@link configure} run it, driven locally or remotely over RPC through the
+ * - **Resource toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a process as a
+ *   {@link Resource}; declare optional {@link ProcessTagOptions.resultSchema} and
+ *   {@link ProcessTagOptions.errorSchema} on {@link Tag} (positional or config object). Use
+ *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over
  *   toolkit's location-transparent layers (the same `yield* Tag` runs local or remote; only the layer
  *   changes). This mirrors `QueueResource`: the light `Process.Tag` path pulls no engine code, and the
  *   engine loads only when a runtime verb (`make` / `layer` / `serve`) is referenced.
@@ -63,6 +64,17 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
+import {
+  makeProcessExecutionEvent,
+  processEventReadPayload,
+  processExecutionEventVoid,
+} from "./internal/processEvent";
+import {
+  errorSchemaOf,
+  errorSchemaSym,
+  resultSchemaOf,
+  resultSchemaSym,
+} from "./internal/processTagSchemas";
 import { LogAnnotationKeys, withProcessLogAnnotations } from "./LogContext";
 import {
   ProcessExecutionStore,
@@ -1374,6 +1386,30 @@ export const processStatus = Schema.Struct({
 export const processLogEntry = LogEntrySchema;
 
 /**
+ * Read payload for process store `events` queries.
+ *
+ * @public
+ */
+export { processEventReadPayload };
+
+/**
+ * Execution event union for void processes (no `result` field on `RunCompleted`).
+ *
+ * @public
+ */
+export const processExecutionEvent = processExecutionEventVoid;
+
+/** @public */
+export type ProcessExecutionEvent = typeof processExecutionEventVoid.Type;
+
+/**
+ * Build an execution event union when the process tag carries a {@link ProcessTagOptions.resultSchema}.
+ *
+ * @public
+ */
+export const processExecutionEventFor = makeProcessExecutionEvent;
+
+/**
  * Payload fields for `logs.history` — newest `limit` entries within an optional `[since, until]`
  * window.
  *
@@ -1456,6 +1492,26 @@ export const processSpec = {
 
 /** The base (schedule-less, result-less) process spec. @public */
 export type ProcessSpec = typeof processSpec;
+
+// ============================================================================
+// Tag options + schema stamps
+// ============================================================================
+
+/**
+ * Options for {@link Tag} — use as the sole 2nd argument (config-object overload) or merge with
+ * positional `resultSchema` / `errorSchema` args.
+ *
+ * @public
+ */
+export type ProcessTagOptions = {
+  readonly description?: string;
+  readonly resultSchema?: Schema.Top;
+  readonly errorSchema?: Schema.Top;
+  readonly node?: NodeKey<unknown>;
+};
+
+/** Read the result schema stamped on a process tag, if any. @public */
+export { resultSchemaOf, errorSchemaOf };
 
 // ============================================================================
 // The `schedule` verb group (grafted onto a process that owns an inline schedule)
@@ -1708,10 +1764,83 @@ export const scheduleDefine = (
 const scheduleModeSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Process/scheduleMode",
 );
-/** Where a value-returning process tag's result schema is stowed. @internal */
-const resultSchemaSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Process/resultSchema",
-);
+
+/** @internal */
+const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
+  typeof value === "object" &&
+  value !== null &&
+  !Schema.isSchema(value) &&
+  ("description" in value ||
+    "node" in value ||
+    "resultSchema" in value ||
+    "errorSchema" in value);
+
+/** Graft `result` ref + stamp schemas on a process tag. @internal */
+const applyProcessTagSchemas = (
+  tag: ResourceTag<any, any>,
+  schemas: {
+    readonly resultSchema?: Schema.Top;
+    readonly errorSchema?: Schema.Top;
+  },
+): ResourceTag<any, any> => {
+  let next = tag;
+  const stamp: Partial<Record<typeof resultSchemaSym | typeof errorSchemaSym, Schema.Top>> =
+    {};
+  if (schemas.resultSchema !== undefined) {
+    next = augmentTag(
+      next,
+      {
+        result: Resource.ref(Schema.Option(schemas.resultSchema)).annotate({
+          description:
+            "The latest value the process effect resolved to (absent until the first run completes).",
+        }),
+      },
+      {},
+    );
+    stamp[resultSchemaSym] = schemas.resultSchema;
+  }
+  if (schemas.errorSchema !== undefined) {
+    stamp[errorSchemaSym] = schemas.errorSchema;
+  }
+  const hasStamp =
+    schemas.resultSchema !== undefined || schemas.errorSchema !== undefined;
+  return hasStamp ? Object.assign(next, stamp) : next;
+};
+
+/** @internal */
+const withProcessReadiness = (
+  tag: ResourceTag<any, ProcessSpec>,
+): ResourceTag<any, ProcessSpec> =>
+  Resource.withReadiness(tag, (svc: ImplOf<ProcessSpec>) =>
+    Effect.map(svc.status.get, (s) => ({
+      ready: s.supervising,
+      ...(s.supervising ? {} : { detail: "not supervising" }),
+    })),
+  );
+
+/** @internal */
+const buildProcessTag = <Self>(
+  key: string,
+  options: ProcessTagOptions | undefined,
+  positional: {
+    readonly resultSchema?: Schema.Top;
+    readonly errorSchema?: Schema.Top;
+  } = {},
+): ResourceTag<any, any> | NodeBoundTag<any, any, unknown> => {
+  const node = options?.node;
+  const tagOptions = { description: options?.description, kind };
+  const base: ResourceTag<any, any> =
+    node === undefined
+      ? Resource.Tag<Self>()(key, processSpec, tagOptions)
+      : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
+  const resultSchema = positional.resultSchema ?? options?.resultSchema;
+  const errorSchema = positional.errorSchema ?? options?.errorSchema;
+  const stamped: ResourceTag<any, any> =
+    resultSchema === undefined && errorSchema === undefined
+      ? base
+      : applyProcessTagSchemas(base, { resultSchema, errorSchema });
+  return withProcessReadiness(stamped);
+};
 
 /** How a process is scheduled — read by the runtime to build the right impl. @internal */
 type ScheduleMode =
@@ -1723,15 +1852,6 @@ const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && scheduleModeSym in tag) {
     const value = (tag as { readonly [scheduleModeSym]?: unknown })[scheduleModeSym];
     return value as ScheduleMode | undefined;
-  }
-  return undefined;
-};
-
-/** Read a value-returning process tag's result schema, if any (set by {@link result}). @internal */
-const resultSchemaOf = (tag: unknown): Schema.Top | undefined => {
-  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && resultSchemaSym in tag) {
-    const value = (tag as { readonly [resultSchemaSym]?: unknown })[resultSchemaSym];
-    return value as Schema.Top | undefined;
   }
   return undefined;
 };
@@ -1810,16 +1930,8 @@ export function schedule(
 }
 
 /**
- * Mark a process as **value-returning** (pipeable): its effect resolves to a value of `schema`, and
- * its contract gains a reactive `result` holding the latest success (an `Option`, absent until the
- * first run completes).
- *
- * ```ts
- * class Prices extends Process.Tag<Prices>()("app/Prices").pipe(
- *   Process.result(Schema.Struct({ symbol: Schema.String, usd: Schema.Number })),
- * ) {}
- * const latest = yield* (yield* Prices).result.get; // Option<{ symbol; usd }>
- * ```
+ * @deprecated Use {@link Tag} with a positional `resultSchema` or {@link ProcessTagOptions} instead.
+ * Mark a process as **value-returning**: grafts reactive `result` and stamps `resultSchemaSym`.
  *
  * @public
  */
@@ -1834,67 +1946,93 @@ export const result: {
 } = Fn.dual(
   2,
   (tag: ResourceTag<any, any>, schema: Schema.Top): ResourceTag<any, any> =>
-    augmentTag(
-      tag,
-      {
-        result: Resource.ref(Schema.Option(schema)).annotate({
-          description:
-            "The latest value the process effect resolved to (absent until the first run completes).",
-        }),
-      },
-      { [resultSchemaSym]: schema },
-    ),
+    applyProcessTagSchemas(tag, { resultSchema: schema }),
 );
 
 // ============================================================================
 // Tag factories
 // ============================================================================
 
+/** Callable shape for {@link Tag} — overloads for positional schemas + config object. @public */
+export type ProcessTagBuild<Self> = {
+  (key: string): ResourceTag<Self, ProcessSpec>;
+  <A extends Schema.Top>(
+    key: string,
+    resultSchema: A,
+  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  <A extends Schema.Top, E extends Schema.Top>(
+    key: string,
+    resultSchema: A,
+    errorSchema: E,
+  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  <HSelf>(
+    key: string,
+    options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, ProcessSpec, HSelf>;
+  (key: string, options: ProcessTagOptions): ResourceTag<Self, ProcessSpec>;
+};
+
 /**
  * Define a managed process as a toolkit resource. `Self` is given explicitly (Effect's `()`
- * two-stage form). The base tag carries only observation + lifecycle; add a schedule with
- * `.pipe(`{@link schedule}`(…))` and a result with `.pipe(`{@link result}`(…))`. Pass `options.node`
- * to bind the process to a {@link Resource.Node} (ship only the tag; see {@link Resource.client} /
- * {@link Resource.connect}).
+ * two-stage form). The base tag carries observation + lifecycle; add a schedule with
+ * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
  * ```ts
  * class Health extends Process.Tag<Health>()("app/Health") {}
- * const p = yield* Health;
- * yield* p.runImmediately;
- * const s = yield* p.status.get;
+ *
+ * class Prices extends Process.Tag<Prices>()("app/Prices", PriceSchema) {}
+ *
+ * class PricesE extends Process.Tag<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
+ *
+ * class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
+ *   resultSchema: PriceSchema,
+ *   errorSchema: FetchErr,
+ * }) {}
  * ```
+ *
+ * Pass `options.node` to bind the process to a {@link Resource.Node}.
  *
  * @public
  */
 export const Tag = <Self>() => {
+  function build(key: string): ResourceTag<Self, ProcessSpec>;
+  function build<A extends Schema.Top>(
+    key: string,
+    resultSchema: A,
+  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  function build<A extends Schema.Top, E extends Schema.Top>(
+    key: string,
+    resultSchema: A,
+    errorSchema: E,
+  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
   function build<HSelf>(
     key: string,
-    options: { readonly description?: string; readonly node: NodeKey<HSelf> },
+    options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, ProcessSpec, HSelf>;
   function build(
     key: string,
-    options?: { readonly description?: string },
+    options: ProcessTagOptions,
   ): ResourceTag<Self, ProcessSpec>;
   function build(
     key: string,
-    options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
-  ): ResourceTag<Self, ProcessSpec> {
-    const node = options?.node;
-    const tagOptions = { description: options?.description, kind };
-    const tag =
-      node === undefined
-        ? Resource.Tag<Self>()(key, processSpec, tagOptions)
-        : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
-    // Readiness from the process's own status (SSOT): ready iff its trigger driver is supervising.
-    // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
-    return Resource.withReadiness(tag, (svc) =>
-      Effect.map(svc.status.get, (s) => ({
-        ready: s.supervising,
-        ...(s.supervising ? {} : { detail: "not supervising" }),
-      })),
-    );
+    second?: Schema.Top | ProcessTagOptions,
+    third?: Schema.Top,
+  ) {
+    if (second === undefined) {
+      return buildProcessTag<Self>(key, undefined);
+    }
+    if (Schema.isSchema(second)) {
+      return buildProcessTag<Self>(key, undefined, {
+        resultSchema: second,
+        errorSchema: third,
+      });
+    }
+    if (isProcessTagOptions(second)) {
+      return buildProcessTag<Self>(key, second);
+    }
+    return buildProcessTag<Self>(key, undefined);
   }
-  return build;
+  return build as ProcessTagBuild<Self>;
 };
 
 /**
@@ -2346,7 +2484,7 @@ export const configure = <A = void, E = never, R = never>(
  * Process.store(Daily)
  * Process.store(Daily, {
  *   audit: auditSchema,
- * }, ({ audit, execution }) => ({
+ * }, ({ audit, event }) => ({
  *   appendAudit: audit.append,
  * }))
  * ```

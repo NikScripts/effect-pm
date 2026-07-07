@@ -5,85 +5,95 @@ each **repeat**, driven by a long-lived supervisor that coordinates **polling** 
 repeats while armed) and **schedule** (whether repeats are allowed now). It's a location-transparent
 `Resource` — lifecycle + observability + schedule control behind one `Tag`.
 
-`Process` is one module: the toolkit contract (`Process.Tag` / `Process.Schedule` / the pipeable
-combinators) plus the engine (`Process.make` / `layer` / `serve`) over **`Polling`** and the internal
-schedule primitive. A `Process.Tag`-only import pulls **zero** engine code (proven by the tree-shake
-check); the engine loads only when you call `make` / `layer` / `serve`. See
-[../PROCESS-API.md](../PROCESS-API.md) for the spec tables.
+`Process` is one module: the toolkit contract (`Process.Tag` / `Process.Schedule` / {@link ProcessTagOptions})
+plus the engine (`Process.make` / `layer` / `serve`) over **`Polling`** and the internal schedule
+primitive. A `Process.Tag`-only import pulls **zero** engine code; the engine loads when you call
+`make` / `layer` / `serve`. See [../PROCESS-API.md](../PROCESS-API.md) and
+[../handoffs/result-schema-and-rpc-validation.md](../handoffs/result-schema-and-rpc-validation.md).
 
 ## Define
 
 ```ts
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Process } from "@nikscripts/effect-pm";
 
 class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 
 const layer = Process.layer(LiveScores, {
-  effect: pollLiveScores, // one repeat body
-  // polling: …           // cadence between repeats (Polling layer)
-  // captureLogs: true     // feed `logs.live` / `logs.history`
+  effect: pollLiveScores,
+  // polling: …
+  // captureLogs: true
 });
 ```
 
 - **`Process.layer(Tag, config)`** — local (auto-starts the driver).
-- **`Process.serve(Tag, config)`** / **`serveRemote`** — host over RPC (compose with `Resource.httpServer`).
+- **`Process.serve(Tag, config)`** / **`serveRemote`** — host over RPC.
 - **`Resource.client(Tag)`** — remote handle.
 
-A base `Process.Tag` is **always-armed** (runs immediately). Add a **schedule** at definition time
-with the pipeable combinator:
+### Tag schemas (result / error)
+
+Declare on the tag — positional or config object. **No pipe combinator** (see handoff).
 
 ```ts
-// inline windows — the tag also gains the `schedule` verb group (read + CRUD)
-class Matches extends Process.Tag<Matches>()("nwsl/Matches").pipe(
-  Process.schedule([
-    Process.window(gameStart, gameEnd),        // nameless window
-    Process.window("playoffs", start, stop),   // named window
-  ]),
-) {}
+const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
+const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-// seed empty (disarmed) — arm it later via the `schedule` verbs or `runImmediately`
-class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule([])) {}
+// void
+class Health extends Process.Tag<Health>()("app/Health") {}
+
+// value-returning
+class Prices extends Process.Tag<Prices>()("app/Prices", Price) {}
+
+// value + typed error channel (stamped for RPC / store; wire policy TBD)
+class PricesE extends Process.Tag<PricesE>()("app/Prices", Price, FetchErr) {}
+
+// config object overload
+class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
+  resultSchema: Price,
+  errorSchema: FetchErr,
+}) {}
 ```
 
-A process that returns a value exposes it reactively — add `Process.result(Schema)`:
+`Process.result(Schema)` is **deprecated** — use positional `resultSchema` instead.
+
+### Schedule (still pipeable)
 
 ```ts
-class Price extends Process.Tag<Price>()("app/Price").pipe(Process.result(Schema.Number)) {}
-// yield* (yield* Price).result.get  →  Option<number> (None before the first successful run)
+class Matches extends Process.Tag<Matches>()("nwsl/Matches").pipe(
+  Process.schedule([Process.window(gameStart, gameEnd)]),
+) {}
+
+class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule([])) {}
 ```
 
 ## Handle surface (`yield* Tag`)
 
-- **Lifecycle:** `start`, `stop`, `runImmediately` (one tracked run even when disarmed).
-- **Observe:** `status` — a reactive `ref` (`status.get` reads the snapshot: `supervising`, `armed`,
-  `activeInstances`, run metrics, next transitions; `status.changes` streams it) — plus `logs.live`
-  and `logs.history` (durable; needs `captureLogs` + a `HistoryStore`).
-- **Schedule** (only on a tag given `Process.schedule(…)`): `schedule.entries` (a reactive `ref`),
-  `schedule.set` / `schedule.add` / `schedule.clear`.
-- **Result** (only on a tag given `Process.result(…)`): `result` (a reactive `ref`; `Option` until the
-  first successful run).
+- **Lifecycle:** `start`, `stop`, `runImmediately`.
+- **Observe:** `status` (`status.get` / `status.changes`), `logs.live`, `logs.history`.
+- **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
+- **Result** (when `resultSchema` on tag): `result.get` / `result.changes` — `Option` until first success.
 
-> Over RPC a `ref`'s `.get` reads a client-side cache fed by its `.changes` stream, so a
-> mutate-then-immediately-read is eventually consistent — observe `.changes` (with a predicate) to
-> see a control-plane effect land, exactly as the queue does.
+## Store
 
-## Standalone schedule resource
-
-For a reusable window manager that **one or more** processes can be gated by — with full CRUD, a
-`changes` stream, and RPC — define a `Process.Schedule` and reference it:
+Register execution events on an app `Store.Service`:
 
 ```ts
-class SeasonSchedule extends Process.Schedule<SeasonSchedule>()("nwsl/SeasonSchedule") {}
-class Poller extends Process.Tag<Poller>()("nwsl/Poller").pipe(Process.schedule(SeasonSchedule)) {}
+import * as Store from "@nikscripts/effect-pm/Store";
 
-// provide / serve the schedule resource:
-Process.scheduleLayer(SeasonSchedule, { initial: [Process.window("wk1", start, stop)] });
-Process.scheduleServe(SeasonSchedule);
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(Prices),
+) {}
+
+const store = yield* Prices.store;
+yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, result: { … } });
+const rows = yield* store.events({ limit: 10 });
 ```
+
+Engine wiring to the new store (replacing `ProcessExecutionStore`) is pending default in-memory
+store backing — see [../handoffs/2026-07-06-processstore-removal.md](../handoffs/2026-07-06-processstore-removal.md).
 
 ## See also
 
-- [toolkit-by-example.md](./toolkit-by-example.md) — full patterns (local, remote, groups, UI)
-- [../PROCESS-API.md](../PROCESS-API.md) — `Process` / `Polling` spec tables
-- [queue-resource.md](./queue-resource.md) — the queue resource
+- [toolkit-by-example.md](./toolkit-by-example.md)
+- [../PROCESS-API.md](../PROCESS-API.md)
+- [queue-resource.md](./queue-resource.md)
