@@ -1,8 +1,11 @@
 # Tag wire schemas (`payload` / `success` / `error`) + RPC validation
 
+> **Agent handoff (critical notes, checklist, asymmetries):** [`2026-07-07-rpc-schema-names-payload-success-error.md`](./2026-07-07-rpc-schema-names-payload-success-error.md)
+
 **Status:** Design locked (2026-07-07). Tag factories use **Effect `Resource.Method` slot names** —
 `payload`, `success`, `error` — with **no `Schema` suffix**. Process + RunResource implemented on
 integration branches; Queue `Tag` positional `payload` renamed; full QR triplet pending queue agents.
+Complete rename + doc sweep tracked in the handoff above.
 
 Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
 [`queue-persistence-design.md`](./queue-persistence-design.md),
