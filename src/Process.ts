@@ -38,12 +38,14 @@
  */
 
 import {
+  Cause,
   Clock,
   Context,
   Data,
   DateTime,
   Duration,
   Effect,
+  Exit,
   Fiber,
   Layer,
   Logger,
@@ -526,6 +528,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const recordExecutionCompleted = executionPersist.recordCompleted;
   const recordExecutionFailed = executionPersist.recordFailed;
+  const recordExecutionInterrupted = executionPersist.recordInterrupted;
   const readHasPriorExecutions = executionPersist.hasPriorExecutions;
 
   const trackedProgram = (
@@ -542,52 +545,79 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       const hasPrior = yield* readHasPriorExecutions();
       const isStartupRun = !hasPrior;
 
-      yield* Effect.matchEffect(
-        userEffect.pipe(
-          Effect.provideService(ProcessScheduleContextTag, {
-            id: scheduleIdentifier,
-          }),
-          Effect.provideService(ProcessScheduleControlsTag, controls),
-        ),
-        {
-          onFailure: (error) =>
+      const runUserEffect = userEffect.pipe(
+        Effect.provideService(ProcessScheduleContextTag, {
+          id: scheduleIdentifier,
+        }),
+        Effect.provideService(ProcessScheduleControlsTag, controls),
+        Effect.onInterrupt(() =>
+          Effect.uninterruptible(
             Effect.gen(function* () {
               const completedAt = yield* Clock.currentTimeMillis;
-              MutableRef.update(mirror.runsFailed, (n) => n + 1);
               MutableRef.set(
                 mirror.lastRunDurationMillis,
                 Option.some(completedAt - executedAt),
               );
-              yield* recordExecutionFailed({
-                scheduleKey: Option.getOrNull(scheduleIdentifier),
-                startedAt: executedAt,
-                completedAt,
-                error,
-                isStartupRun,
-              });
-              yield* Effect.logError(
-                `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
-              );
-            }),
-          onSuccess: () =>
-            Effect.gen(function* () {
-              const completedAt = yield* Clock.currentTimeMillis;
-              MutableRef.update(mirror.runsSucceeded, (n) => n + 1);
-              MutableRef.set(
-                mirror.lastRunDurationMillis,
-                Option.some(completedAt - executedAt),
-              );
-              yield* recordExecutionCompleted({
+              yield* recordExecutionInterrupted({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
                 completedAt,
                 isStartupRun,
               });
               yield* Effect.logDebug(
-                `✅ Process '${name}' run completed at ${String(executedAt)}`,
+                `⏹ Process '${name}' run interrupted at ${String(executedAt)}`,
               );
             }),
-        },
+          ),
+        ),
+      );
+
+      const exit = yield* Effect.exit(runUserEffect);
+
+      yield* Effect.uninterruptible(
+        Effect.gen(function* () {
+          if (Exit.isFailure(exit)) {
+            const cause = exit.cause;
+            if (Cause.hasInterrupts(cause)) {
+              return;
+            }
+            const completedAt = yield* Clock.currentTimeMillis;
+            MutableRef.update(mirror.runsFailed, (n) => n + 1);
+            MutableRef.set(
+              mirror.lastRunDurationMillis,
+              Option.some(completedAt - executedAt),
+            );
+            const error = Option.getOrElse(Cause.findErrorOption(cause), () =>
+              Cause.squash(cause),
+            );
+            yield* recordExecutionFailed({
+              scheduleKey: Option.getOrNull(scheduleIdentifier),
+              startedAt: executedAt,
+              completedAt,
+              error,
+              isStartupRun,
+            });
+            yield* Effect.logError(
+              `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
+            );
+            return;
+          }
+          const completedAt = yield* Clock.currentTimeMillis;
+          MutableRef.update(mirror.runsSucceeded, (n) => n + 1);
+          MutableRef.set(
+            mirror.lastRunDurationMillis,
+            Option.some(completedAt - executedAt),
+          );
+          yield* recordExecutionCompleted({
+            scheduleKey: Option.getOrNull(scheduleIdentifier),
+            startedAt: executedAt,
+            completedAt,
+            isStartupRun,
+          });
+          yield* Effect.logDebug(
+            `✅ Process '${name}' run completed at ${String(executedAt)}`,
+          );
+        }),
       );
     });
 

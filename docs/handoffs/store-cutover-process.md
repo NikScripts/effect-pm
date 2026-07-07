@@ -25,6 +25,7 @@ cutover (B3) is **done** on `cursor/process-store-cutover-a3ad`.
 
 ## Open
 
+- [x] `RunInterrupted` recorded via `Effect.onInterrupt` when a tracked run is cancelled (`stop` / fiber interrupt).
 - [ ] Owner decision: `RunFailed.error` encoding — raw failure value (journal encodes) vs pre-encoded.
 - **✅ Baked-in default store:** `Process.layer` / `serve` / `serveRemote` merge `layerDefaultMemory`
   internally. Override at the app root with `Layer.provideMerge(AppStore.layerMemory)` or

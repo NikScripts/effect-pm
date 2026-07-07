@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Layer, Schema } from "effect";
+import { Deferred, Duration, Effect, Layer, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
@@ -19,10 +19,13 @@ class FailingExec extends Process.Tag<FailingExec>()(
   FetchErr,
 ) {}
 
+class InterruptExec extends Process.Tag<InterruptExec>()("test/engine/Interrupt") {}
+
 class EngineStore extends Store.Service<EngineStore>("@test/EngineStore")(
   Store.register(VoidExec, builtInProcessStoreContract(VoidExec)),
   Store.register(PricedExec, builtInProcessStoreContract(PricedExec)),
   Store.register(FailingExec, builtInProcessStoreContract(FailingExec)),
+  Store.register(InterruptExec, builtInProcessStoreContract(InterruptExec)),
 ) {}
 
 const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
@@ -96,6 +99,37 @@ describe("Process.layer — Process.store auto-write", () => {
         const failed = events.find((row) => row._tag === "RunFailed");
         expect(failed).toMatchObject({
           error: { _tag: "FetchError", status: 503 },
+        });
+      }).pipe(Effect.provide(live), Effect.scoped);
+    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+  );
+
+  it.effect("records RunInterrupted when a run is interrupted mid-effect", () =>
+    Effect.gen(function* () {
+      const entered = yield* Deferred.make<void, never>();
+      const hold = yield* Deferred.make<void, never>();
+      const live = processLayer(
+        Process.layer(InterruptExec, {
+          effect: Effect.gen(function* () {
+            yield* Deferred.succeed(entered, void 0);
+            yield* Deferred.await(hold);
+          }),
+          polling: Polling.spaced(Duration.millis(50)),
+        }),
+      );
+      yield* Effect.gen(function* () {
+        const proc = yield* InterruptExec;
+        yield* TestClock.adjust(Duration.millis(100));
+        yield* Deferred.await(entered);
+        yield* proc.stop;
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+        const store = yield* EngineStore.at(InterruptExec);
+        const events = yield* store.events();
+        const interrupted = events.find((row) => row._tag === "RunInterrupted");
+        expect(interrupted).toMatchObject({
+          processId: InterruptExec.key,
+          isStartupRun: true,
         });
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),

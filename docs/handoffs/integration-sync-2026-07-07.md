@@ -64,7 +64,7 @@ Two report sets exist — use **both**, for different layers:
 |---------|------|
 | `Tag(key, success?, error?)`, `successOf`/`errorOf` | Owner decision: `RunFailed.error` encoding when tag has no `error` schema |
 | `builtInProcessStoreContract`, `Process.store`, engine tap | Cast removal on `makeProcessStoreContract` |
-| `withDefaultMemory` on `layer` / `serve` / `serveRemote` | `RunInterrupted` in schema but not emitted yet |
+| `withDefaultMemory` on `layer` / `serve` / `serveRemote` | Cast removal on `makeProcessStoreContract` |
 | `ProcessExecutionStore` facet deleted; `Process.result` removed | |
 | `process-store-contract.test.ts`, `process-store-default-override.test.ts` | |
 

@@ -52,6 +52,16 @@ export const makeProcessExecutionPersist = (options: {
       }),
     ),
 
+  recordInterrupted: (args: ProcessExecutionFinishArgs): Effect.Effect<void> =>
+    whenRecorder(options.recorder, (recorder) =>
+      recorder.recordInterrupted({
+        scheduleKey: args.scheduleKey,
+        startedAt: args.startedAt,
+        completedAt: args.completedAt,
+        isStartupRun: args.isStartupRun,
+      }),
+    ),
+
   hasPriorExecutions: (): Effect.Effect<boolean> =>
     options.recorder !== undefined
       ? options.recorder.hasPriorExecutions()

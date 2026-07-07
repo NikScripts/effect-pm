@@ -39,6 +39,12 @@ export interface ProcessExecutionRecorder {
     readonly isStartupRun: boolean;
     readonly error: unknown;
   }) => Effect.Effect<void>;
+  readonly recordInterrupted: (input: {
+    readonly scheduleKey: string | null;
+    readonly startedAt: number;
+    readonly completedAt: number;
+    readonly isStartupRun: boolean;
+  }) => Effect.Effect<void>;
   readonly hasPriorExecutions: () => Effect.Effect<boolean>;
 }
 
@@ -80,6 +86,19 @@ const buildFailedEvent = (
   durationMs: input.completedAt - input.startedAt,
   isStartupRun: input.isStartupRun,
   error: encodedError,
+});
+
+const buildInterruptedEvent = (
+  processId: string,
+  input: Parameters<ProcessExecutionRecorder["recordInterrupted"]>[0],
+): ProcessStoreEventRow => ({
+  _tag: "RunInterrupted",
+  processId,
+  scheduleKey: input.scheduleKey,
+  startedAt: input.startedAt,
+  completedAt: input.completedAt,
+  durationMs: input.completedAt - input.startedAt,
+  isStartupRun: input.isStartupRun,
 });
 
 /**
@@ -141,6 +160,8 @@ export const makeProcessExecutionRecorder = (options: {
             input,
           ),
         ),
+      recordInterrupted: (input) =>
+        offerLossy(queue, buildInterruptedEvent(options.scopeKey, input)),
       hasPriorExecutions: () => store.hasPriorExecutions(),
     };
   });
