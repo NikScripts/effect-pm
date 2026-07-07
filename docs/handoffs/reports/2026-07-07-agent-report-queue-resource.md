@@ -1,8 +1,10 @@
 # Agent report: QueueResource + CustomQueueResource
 
-**Branch:** `cursor/integration-result-schema-a3ad` (coordination) — **rename not landed here**  
+**Branch:** `cursor/integration-result-schema-a3ad`  
 **Agent:** Queue owner (owns CQR in same PR)  
-**Priority:** **High** — largest remaining rename gap.
+**Priority:** **High** — triplet + engine cutover remain.
+
+> **Correction (2026-07-07):** Tag positional arg is already **`payload`** on integration (`QueueResource.Tag(key, payload)`). This report’s “`itemSchema` not renamed” row is stale. Still open: `success`/`error`, config-object overload, stamps, engine `storeTap`.
 
 ---
 
@@ -10,7 +12,7 @@
 
 | Area | Status |
 |------|--------|
-| Tag factory uses `itemSchema` | ❌ not renamed to `payload` |
+| Tag factory uses `itemSchema` | ✅ positional → **`payload`** on integration; config object + triplet **open** |
 | Tag triplet `payload` / `success` / `error` | ❌ not on public Tag API |
 | Engine internal `itemSchema` in layer config | ⚠️ legacy — should read from tag stamp |
 | `QueueResource.store(tag)` | ✅ built-in contract exists |

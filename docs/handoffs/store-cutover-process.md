@@ -13,10 +13,8 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
 2. **🟡 `ResourceTag<any, any>` in the graft helpers** (`applyProcessTagSchemas`, `graftResultRefAndSchemas`
    in `Process.ts`). Tighten where possible; a few `any` at heterogeneous tag-mutation boundaries may be
    unavoidable, but this is public-surface-adjacent — minimize.
-3. **🟡 `processTagSchemas.ts` — DRY.** `resultSchemaOf` / `errorSchemaOf` are near-identical and each
-   casts `tag as { [sym]?: Schema.Top }`. Collapse to one `schemaOf(tag, sym)` → one introspection cast,
-   not two.
-4. **🟡 Confirm `errorSchema` is consumed, not just stamped.** It's stamped (`errorSchemaSym`) and in the
+3. **🟡 `processTagSchemas.ts` — DRY.** `successOf` / `errorOf` are near-identical — collapse to one `schemaOf(tag, sym)` if touching this file.
+4. **🟡 Confirm `error` is consumed, not just stamped.** It's stamped (`errorSym`) and in the
    `Tag` signature, but the store `RunFailed` row uses `error: Schema.String`. If its only real use is RPC
    error validation, verify that path exists — otherwise it's a stamped-but-dead field.
 
@@ -29,7 +27,7 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
       (the contract already exposes `hasPriorExecutions`).
 - [ ] Delete the `ProcessExecutionStore` emit/read calls in `Process.ts` once the above lands.
 - [ ] (Doc step E) When the tag carries `success`, `RunCompleted` already carries the optional `result`
-      (via `makeProcessExecutionEvent(resultSchema)`) — confirm the supervisor populates it.
+      (via `makeProcessExecutionEvent(successOf(tag))`) — confirm the supervisor populates it.
 
 ## Verify
 `pnpm typecheck` (both projects) + `test/process-store-contract.test.ts` + the process suites.
