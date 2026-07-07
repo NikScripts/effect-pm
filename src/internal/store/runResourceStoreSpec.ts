@@ -1,7 +1,7 @@
 /**
  * Built-in {@link RunResource} store contract.
  *
- * Persists run lifecycle facts (`RunStarted` / `RunCompleted` / `RunFailed`) and gate state
+ * Persists run lifecycle facts (`Started` / `Completed` / `Failed`) and gate state
  * transitions for operator history — the durable counterpart to live {@link Subscribable} views.
  *
  * @module internal/store/runResourceStoreSpec

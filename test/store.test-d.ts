@@ -76,7 +76,7 @@ void _runGateHandle.record({
   id: "run-1/started",
   resourceId: FetchGate.key,
   runId: "run-1",
-  _tag: "RunStarted",
+  _tag: "Started",
   occurredAt: 1,
   concurrency: 2,
 });

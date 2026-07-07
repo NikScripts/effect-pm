@@ -223,7 +223,7 @@ describe("Store.Service", () => {
         id: "run-1/started",
         resourceId: FetchGate.key,
         runId: "run-1",
-        _tag: "RunStarted",
+        _tag: "Started",
         occurredAt: 1,
         concurrency: 2,
       });
@@ -250,7 +250,7 @@ describe("Store.Service", () => {
       const facts = yield* store.facts();
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
-        _tag: "RunStarted",
+        _tag: "Started",
         runId: "run-1",
       });
       const history = yield* store.stateHistory();

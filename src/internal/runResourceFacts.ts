@@ -35,7 +35,7 @@ export const makeRunStartedFact = (input: {
   readonly occurredAt: number;
   readonly concurrency: number;
 }): RunFact => ({
-  _tag: "RunStarted",
+  _tag: "Started",
   id: input.id,
   resourceId: input.resourceId,
   runId: input.runId,
@@ -54,7 +54,7 @@ export const makeRunCompletedFact = (input: {
 }): RunFact =>
   input.success === undefined
     ? {
-        _tag: "RunCompleted",
+        _tag: "Completed",
         id: input.id,
         resourceId: input.resourceId,
         runId: input.runId,
@@ -62,7 +62,7 @@ export const makeRunCompletedFact = (input: {
         durationMs: input.durationMs,
       }
     : ({
-        _tag: "RunCompleted",
+        _tag: "Completed",
         id: input.id,
         resourceId: input.resourceId,
         runId: input.runId,
@@ -80,7 +80,7 @@ export const makeRunFailedFact = (input: {
   readonly durationMs: number;
   readonly error: unknown;
 }): RunFact => ({
-  _tag: "RunFailed",
+  _tag: "Failed",
   id: input.id,
   resourceId: input.resourceId,
   runId: input.runId,

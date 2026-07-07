@@ -72,7 +72,7 @@ describe("runResourceFacts", () => {
         occurredAt: 1,
         concurrency: 2,
       })._tag,
-    ).toBe("RunStarted");
+    ).toBe("Started");
 
     const completed = makeRunCompletedFact({
       id: "r/run/1/completed/1",
@@ -81,8 +81,8 @@ describe("runResourceFacts", () => {
       occurredAt: 2,
       durationMs: 10,
     });
-    expect(completed._tag).toBe("RunCompleted");
-    if (completed._tag === "RunCompleted") {
+    expect(completed._tag).toBe("Completed");
+    if (completed._tag === "Completed") {
       expect(completed.durationMs).toBe(10);
     }
 
@@ -94,8 +94,8 @@ describe("runResourceFacts", () => {
       durationMs: 4,
       error: "boom",
     });
-    expect(failed._tag).toBe("RunFailed");
-    if (failed._tag === "RunFailed") {
+    expect(failed._tag).toBe("Failed");
+    if (failed._tag === "Failed") {
       expect(failed.error).toBe("boom");
     }
   });

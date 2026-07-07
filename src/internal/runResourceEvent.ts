@@ -22,8 +22,8 @@ const runFinishedBase = {
 } as const;
 
 /**
- * Build the run fact union for a store contract — same `_tag` convention as Process
- * (`RunStarted`, `RunCompleted`, `RunFailed`).
+ * Build the run fact union for a store contract — same terminal `_tag` names as
+ * {@link QueueResource} worker events (`Started`, `Completed`, `Failed`).
  *
  * @internal
  */
@@ -45,15 +45,15 @@ export const makeRunResourceFactEvent = <
   };
 
   return Schema.Union([
-    Schema.TaggedStruct("RunStarted", {
+    Schema.TaggedStruct("Started", {
       id: Schema.String,
       resourceId: Schema.String,
       runId: Schema.String,
       occurredAt: Schema.Number,
       concurrency: Schema.Number,
     }),
-    Schema.TaggedStruct("RunCompleted", completedFields),
-    Schema.TaggedStruct("RunFailed", failedFields),
+    Schema.TaggedStruct("Completed", completedFields),
+    Schema.TaggedStruct("Failed", failedFields),
   ]);
 };
 

@@ -120,7 +120,7 @@ export const makeRunResourceStoreTap = (
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunStartedFact({
-          id: yield* nextFactId(runId, "RunStarted"),
+          id: yield* nextFactId(runId, "Started"),
           resourceId,
           runId,
           occurredAt,
@@ -137,7 +137,7 @@ export const makeRunResourceStoreTap = (
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunCompletedFact({
-          id: yield* nextFactId(runId, "RunCompleted"),
+          id: yield* nextFactId(runId, "Completed"),
           resourceId,
           runId,
           occurredAt,
@@ -155,7 +155,7 @@ export const makeRunResourceStoreTap = (
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunFailedFact({
-          id: yield* nextFactId(runId, "RunFailed"),
+          id: yield* nextFactId(runId, "Failed"),
           resourceId,
           runId,
           occurredAt,
