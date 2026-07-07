@@ -59,6 +59,7 @@ import {
   successOf,
   errorOf,
 } from "./internal/queueTagSchemas";
+import * as Store from "./Store";
 import { StoreScopeBridgeTag } from "./internal/store/bridge";
 import { layerDefaultMemory } from "./internal/store/scopeBridge";
 import { facetStoreRegistration } from "./internal/store/facetStore";
@@ -789,28 +790,23 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     const effectiveConfig = yield* foldConfiguredSpec<
       QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
-    // Persist the queue's lifecycle events to its store (the observability plane). The store is a
-    // defaulted service — always in context, baked into `layer`/`serve` via `layerDefaultMemory` —
-    // so it is resolved as a plain **declared dependency** (`yield* StoreScopeBridgeTag`), never
-    // `serviceOption`. The recorder runs at the source in `publishEvent`, so no event burst is
-    // dropped (a late `Stream.fromPubSub` fork would miss the first events).
-    const storeBridge = yield* StoreScopeBridgeTag;
-    const noPersist = (_event: QueueEvent<Schema.Struct<F>["Type"], E>) => Effect.void;
-    const recordEvent = yield* storeBridge
-      .at(tag.key, builtInQueueStoreContract(tag))
-      .pipe(
-        Effect.map(
-          (eventStore) => (event: QueueEvent<Schema.Struct<F>["Type"], E>) =>
-            eventStore.record(event).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning(`Queue "${tag.key}" event persist failed`, cause),
-              ),
+    // Persist the queue's lifecycle events to its store (the observability plane). `Store.withDefault`
+    // resolves the store from the baked-in default (or an app override) — a declared dependency, never
+    // `serviceOption`, and it can't fail (the default materializes any scope). The recorder runs at the
+    // source in `publishEvent`, so no event burst is dropped by a late subscriber.
+    const recordEvent = yield* Store.withDefault(
+      tag.key,
+      builtInQueueStoreContract(tag),
+    ).pipe(
+      Effect.map(
+        (eventStore) => (event: QueueEvent<Schema.Struct<F>["Type"], E>) =>
+          eventStore.record(event).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(`Queue "${tag.key}" event persist failed`, cause),
             ),
-        ),
-        // The baked default registers any scope on demand; a custom store missing this queue's
-        // registration simply skips persistence.
-        Effect.catchTag("StoreScopeNotRegistered", () => Effect.succeed(noPersist)),
-      );
+          ),
+      ),
+    );
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.

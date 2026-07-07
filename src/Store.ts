@@ -102,6 +102,7 @@ import {
 import {
   type StoreHandleForKey,
   type StoreHandleFromContract,
+  type StoreHandleOf,
 } from "./internal/store/spec";
 import type { StoreLogLevel } from "./internal/store/types";
 
@@ -371,6 +372,52 @@ export const changes = (
   );
 
 // ============================================================================
+// Storage resolution — the ergonomic façade over the (internal) scope bridge
+// ============================================================================
+
+/**
+ * Resolve the store handle for a `scope` from the storage in context (an app {@link Service}, or the
+ * baked-in in-memory default). Collapses the `flatMap(bridge, (b) => b.at(scope, contract))` plumbing
+ * so consumers never touch the underlying service directly.
+ *
+ * Fails {@link StoreScopeNotRegistered} when the provided storage doesn't carry this scope — the
+ * **opt-in** path (e.g. persist only if the app wired durable storage for me). For the always-on
+ * observability path, use {@link withDefault}.
+ *
+ * @public
+ */
+export const withStorage = <const C extends StoreContractValue>(
+  scope: string | StoreScopeTag,
+  contract: C,
+): Effect.Effect<StoreHandleOf<C>, StoreScopeNotRegistered, StoreScopeBridgeTag> =>
+  Effect.flatMap(StoreScopeBridgeTag, (bridge) =>
+    bridge.at(typeof scope === "string" ? scope : scope.key, contract),
+  );
+
+/**
+ * Like {@link withStorage}, but **guarantees** a handle. With the baked-in default store in context
+ * (it materializes any scope on demand), this never fails — the always-on observability path, where a
+ * resource's engine records unconditionally with no service-sniffing. If a *custom* store is in
+ * context and lacks this scope, that's a wiring error and it dies with a clear message (bake the
+ * default so it can materialize the scope).
+ *
+ * @public
+ */
+export const withDefault = <const C extends StoreContractValue>(
+  scope: string | StoreScopeTag,
+  contract: C,
+): Effect.Effect<StoreHandleOf<C>, never, StoreScopeBridgeTag> =>
+  withStorage(scope, contract).pipe(
+    Effect.catchTag("StoreScopeNotRegistered", (e) =>
+      Effect.die(
+        `Store.withDefault: scope "${e.key}" is not registered in the provided store, and no default ` +
+          `store is in context to materialize it. Provide the in-memory default (Service.layerMemory / ` +
+          `the resource layer's baked default) so the scope resolves.`,
+      ),
+    ),
+  );
+
+// ============================================================================
 // Aggregate factories
 // ============================================================================
 
@@ -491,7 +538,7 @@ export const store: {
   const contract = scopeOrContract as StoreContractValue;
   return <T extends StoreScopeTag>(tag: T) =>
     Object.assign(tag, {
-      store: Effect.flatMap(StoreScopeBridgeTag, (bridge) => bridge.at(tag.key, contract)),
+      store: withStorage(tag.key, contract),
     });
 }) as never;
 
