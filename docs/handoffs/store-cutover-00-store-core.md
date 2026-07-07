@@ -64,7 +64,7 @@ fact/state union).
 - **RunResource** — `internal/runResourceStoreTap.ts:80` resolves the new store with
   `Effect.serviceOption(StoreScopeBridgeTag)` + `.at().pipe(Effect.option)`, *and* casts the handle. Both go
   (see its report).
-- Legacy-facet `serviceOption` calls (`HistoryStore` / `ProcessExecutionStore` / `QueueResourceStore` /
+- Legacy-facet `serviceOption` calls (`HistoryStore` / `QueueResourceStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
 - Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.
 

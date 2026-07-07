@@ -1198,8 +1198,7 @@ export class QueueResourceStore extends ProcessStore.Service<
     // still drop rows on malformed payload, in which case the result
     // length may fall below `limit`; for projection-correct limits
     // when post-filtering is required, see the `windowOpts` +
-    // `applyQueryOpts` pattern in `processGroup.ts` /
-    // `processExecution.ts`.
+    // `applyQueryOpts` pattern in `processGroup.ts`.
     entries: (query?: QueueEntryQuery) => readEntries(s, query),
     entriesByKey: (key: string, query?: Omit<QueueEntryQuery, "key">) =>
       readEntries(s, { ...query, key }),

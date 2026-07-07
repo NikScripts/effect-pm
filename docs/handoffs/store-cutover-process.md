@@ -28,7 +28,7 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
       store at the root.
 - [ ] `getStatus` / `hasPriorExecutions` read via the store contract's `events` / `hasPriorExecutions`
       (the contract already exposes `hasPriorExecutions`).
-- [ ] Delete the `ProcessExecutionStore` emit/read calls in `Process.ts` once the above lands. **Engine writes removed** on cutover branch; facet module remains until Stage 5 deletion.
+- [ ] Delete the `ProcessExecutionStore` facet module. **Done** — use `Process.store(tag)` for execution history.
 - [ ] (Doc step E) When the tag carries `success`, `RunCompleted` already carries the optional `result`
       (via `makeProcessExecutionEvent(successOf(tag))`) — confirm the supervisor populates it.
 

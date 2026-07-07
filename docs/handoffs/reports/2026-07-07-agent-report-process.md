@@ -34,7 +34,7 @@
 
 ### 2. Facet retirement (Stage 5)
 
-Engine no longer writes **`ProcessExecutionStore`**. Delete facet module + `ProcessStorage` when Queue/RunResource cutovers complete.
+**`ProcessExecutionStore` facet deleted.** Execution history is `Process.store(tag)` only. Remaining facets retire with full ProcessStorage removal.
 
 ### 3. `Process.make` path (no layer)
 

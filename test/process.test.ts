@@ -6,7 +6,6 @@ import { Polling, Process, ProcessMakeInvalidLayerArgument } from "../src";
 // Engine schedule constructors live on the `Process` namespace now (the standalone `ProcessSchedule`
 // module was retired): `Process.scheduleInMemory` (call with no args for an empty schedule) +
 // `Process.at` / `Process.window`.
-import { ProcessExecutionStore } from "../src/store/processExecution";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const alwaysOnEntry = {
@@ -59,11 +58,6 @@ describe("Process runtime with schedule windows", () => {
 
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const rows = yield* Effect.gen(function* () {
-        const store = yield* ProcessExecutionStore;
-        return yield* store.executions({ processId: proc.name });
-      }).pipe(Effect.provide(ProcessStorage.layer));
-      expect(rows).toHaveLength(0);
       yield* Fiber.interrupt(fib);
     }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
   );
@@ -126,55 +120,6 @@ describe("Process runtime with schedule windows", () => {
       Effect.scoped,
     ),
 );
-
-  it.live("runImmediately does not write legacy ProcessExecutionStore rows", () => {
-    const proc = Process.make("test/run-immediately", {
-      effect: Effect.void,
-      polling: Polling.spaced(Duration.seconds(10)),
-      schedule: Process.scheduleInMemory([alwaysOnEntry]),
-    });
-
-    return Effect.gen(function* () {
-        yield* proc.runImmediately();
-        const store = yield* ProcessExecutionStore;
-      const rows = yield* store.executions({
-          processId: proc.name,
-        });
-        expect(rows).toHaveLength(0);
-      }).pipe(Effect.provide(ProcessStorage.layer));
-  });
-
-  it.effect("runImmediately leaves no execution rows when the facet layer is absent", () =>
-    Effect.gen(function* () {
-      const proc = Process.make("test/run-immediately-no-store", {
-        effect: Effect.void,
-      });
-      yield* proc.runImmediately();
-      const rows = yield* Effect.gen(function* () {
-        const store = yield* ProcessExecutionStore;
-        return yield* store.executions({ processId: proc.name });
-      }).pipe(Effect.provide(ProcessStorage.layer));
-      expect(rows).toHaveLength(0);
-    }),
-  );
-
-  it.effect("driver leaves no execution rows when the facet layer is absent", () =>
-    Effect.gen(function* () {
-      const proc = Process.make("test/driver-no-store", {
-        effect: Effect.void,
-        polling: Polling.spaced(Duration.millis(100)),
-        schedule: Process.scheduleInMemory([alwaysOnEntry]),
-      });
-      const fib = yield* Effect.forkChild(proc.effect);
-      yield* TestClock.adjust(Duration.millis(250));
-      const rows = yield* Effect.gen(function* () {
-        const store = yield* ProcessExecutionStore;
-        return yield* store.executions({ processId: proc.name });
-      }).pipe(Effect.provide(ProcessStorage.layer));
-      expect(rows).toHaveLength(0);
-      yield* Fiber.interrupt(fib);
-    }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
-  );
 
   it.effect("exposes current schedule id inside the running effect", () =>
     Effect.gen(function* () {

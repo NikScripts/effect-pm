@@ -27,7 +27,6 @@ export default defineConfig([
       "store/Log": "src/store/log.ts",
       "store/RunResource": "src/store/runResource.ts",
       "store/ProcessLifecycle": "src/store/processLifecycle.ts",
-      "store/ProcessExecution": "src/store/processExecution.ts",
       Query: "src/Query.ts",
       ResourceConfigure: "src/ResourceConfigure.ts",
       RuntimeStorage: "src/RuntimeStorage.ts",

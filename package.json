@@ -76,10 +76,6 @@
       "types": "./dist/store/ProcessLifecycle.d.ts",
       "default": "./dist/store/ProcessLifecycle.js"
     },
-    "./store/ProcessExecution": {
-      "types": "./dist/store/ProcessExecution.d.ts",
-      "default": "./dist/store/ProcessExecution.js"
-    },
     "./Query": {
       "types": "./dist/Query.d.ts",
       "default": "./dist/Query.js"

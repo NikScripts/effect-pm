@@ -4,7 +4,8 @@
 
 ### Minor Changes
 
-- **Process tag wire schemas and store engine tap (breaking).** `Process.Tag` uses positional **`success`** / **`error`** (no `Process.result` pipe). Symbol `successSym` replaces `resultSchemaSym`. `Process.layer` / `serve` / `serveRemote` require **`StoreScopeBridgeTag`** — provide `Store.Service.layerMemory` at the app root. Engine writes terminal runs to **`Process.store(tag)`** only (legacy **`ProcessExecutionStore`** facet is not written by the engine).
+- **Process tag wire schemas and store engine tap (breaking).** `Process.Tag` uses positional **`success`** / **`error`** (no `Process.result` pipe). Symbol `successSym` replaces `resultSchemaSym`. `Process.layer` / `serve` / `serveRemote` require **`StoreScopeBridgeTag`** — provide `Store.Service.layerMemory` at the app root. Engine writes terminal runs to **`Process.store(tag)`** only.
+- **Removed `ProcessExecutionStore` facet (breaking).** Deleted `@nikscripts/effect-pm/store/ProcessExecution`, `ProcessStorage.ProcessExecution`, and `process.execution.completed` runtime facet. Use **`Process.store(tag)`** → `events()` for execution history.
 
 ## 0.8.0-beta.28
 

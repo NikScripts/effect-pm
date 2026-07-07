@@ -75,7 +75,7 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 
 **Remove `Process.result` pipe** in the same PR (already `@deprecated`). No dual API after rename.
 
-**Engine → `Process.store`:** **done** on `cursor/process-store-cutover-a3ad` — `Process.layer` dual-writes to **`Process.store(tag)`** (declared `StoreScopeBridgeTag`) and legacy **`ProcessExecutionStore`** when composed. See `docs/guides/process.md` and `examples/forms/process-store/process-layer-store-auto-write.ts`.
+**Engine → `Process.store`:** **done** — `Process.layer` writes **`Process.store(tag)`** only; **`ProcessExecutionStore` facet deleted**.
 
 ### QueueResource — **not renamed yet; do in same sync PR**
 
@@ -108,7 +108,7 @@ Coordinate lane arity + `{ payload, success, error }` options bag (see old hando
 | Tag config schemas | `inputSchema` / `successSchema` / `errorSchema` → **rename to payload/success/error** | `resultSchema` / `errorSchema` → **success/error** |
 | `*.store(tag)` contract | ✅ built-in facts + state | ✅ built-in `event` union (result-aware) |
 | Engine auto-write to new Store | ✅ `runResourceStoreTap.ts` (lazy bridge) | ✅ `processStoreTap.ts` (declared bridge) |
-| Engine auto-write to legacy facet | ✅ `RunResourceStore` | ✅ `ProcessExecutionStore` (dual-write) |
+| Engine auto-write to legacy facet | ✅ `RunResourceStore` | ❌ facet deleted — `Process.store` only |
 | `error` schema behavior | on RPC wire via `runSpec` | stamped only |
 
 Rename agent: Process engine tap now matches RunResource on the cutover branch; consolidate docs at release.

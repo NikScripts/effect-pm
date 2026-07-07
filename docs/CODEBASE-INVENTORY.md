@@ -188,7 +188,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 - **Outer loop** — schedule driver: waits for arm state / schedule changes.
 - **Inner loop** (per spawned instance while armed) — `awaitNextTick` → user `effect` → polling `afterTick`; instance ends when entry window closes or stop check fails.
-- **Failures in user `effect`** — logged; **`process.execution.completed`** with `failed` when storage facets are present.
+- **Failures in user `effect`** — logged; terminal runs append to **`Process.store(tag)`** when the store is composed on the layer path.
 - **Execution record fields** — `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, `status` (`completed` | `failed` | `interrupted`), optional `error`, `isStartupRun`.
 
 ### Typing helpers
@@ -398,7 +398,6 @@ and call its domain read methods.
 
 | Type | Owner | Payload highlights |
 |------|-------|-------------------|
-| **`process.execution.completed`** | `store/processExecution` | scheduleKey, startedAt, completedAt, durationMs, status, error?, isStartupRun |
 | **`process.lifecycle.changed`** | `store/processLifecycle` (+ `store/processGroup` reuses the encoder) | tag: Started/Stopped/Restarted/Errored/Recovered/Disabled/Enabled, error? |
 | **`log.entry`** | `store/log` | level, message, error?, attributes |
 | **`run-resource.fact.<status>`** × 3 | `store/runResource` | per-status `RunResourceFact` (started/completed/failed) |
@@ -505,7 +504,7 @@ Read toolkit handle **`Subscribable`** views on Tag/Service/layer gates (`status
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/RunResource`, `/store/QueueResource`, `/store/Log`, `/store/ProcessLifecycle`, `/store/ProcessExecution`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`.
+- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/RunResource`, `/store/QueueResource`, `/store/Log`, `/store/ProcessLifecycle`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`.
 
 ---
 

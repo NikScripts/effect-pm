@@ -17,7 +17,7 @@
  *
  * When an app provides **`StoreScopeBridgeTag`** (via `Store.Service.layerMemory` or the
  * built-in default store layer) and registers **`Process.store(tag)`**, finished runs append to
- * the built-in execution contract only — not legacy **`ProcessExecutionStore`** facets.
+ * the built-in execution contract via **`Process.store(tag)`**.
  *
  * ## Two surfaces, one namespace
  *

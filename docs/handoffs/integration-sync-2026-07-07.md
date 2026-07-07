@@ -64,7 +64,7 @@ Two report sets exist — use **both**, for different layers:
 |---------|------|
 | `Tag(key, success?, error?)`, `successOf`/`errorOf` | **`error` stamped but unused** (RPC + store still `String`) |
 | `builtInProcessStoreContract`, `Process.store` | Engine writes Store only (`processStoreTap.ts`) |
-| `process-store-contract.test.ts` | Stage 5: delete `ProcessExecutionStore` facet module |
+| `process-store-contract.test.ts` | Facet deleted — execution via `Process.store` only |
 | ~~`Process.result` deprecated~~ | **Removed** on `cursor/process-store-cutover-a3ad` |
 
 **Discuss / approve:** Wire `error` into typed `RunFailed` vs drop from Tag until wired; symbol rename in changeset.

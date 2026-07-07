@@ -330,16 +330,7 @@ export {
 export { LogStore } from "./store/log";
 export type { LogStoreApi } from "./store/log";
 export { RunResourceStore } from "./store/runResource";
-export { ProcessExecutionStore } from "./store/processExecution";
 export { ProcessLifecycleStore } from "./store/processLifecycle";
-export type {
-  ProcessExecutionCompletedEvent,
-  ProcessExecutionFinishInput,
-  ProcessExecutionQuery,
-  ProcessExecutionScopedFinishInput,
-  ProcessExecutionScopedQuery,
-  ProcessExecutionStatus,
-} from "./store/processExecution";
 export type {
   ProcessLifecycleChangedEvent,
   ProcessLifecycleRecordInput,

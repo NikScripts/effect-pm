@@ -186,8 +186,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 Process.layer(MyProcess, { effect, polling }).pipe(Layer.provide(AppStore.layerMemory));
 ```
 
-Legacy **`ProcessExecutionStore`** is not written by the Process engine. Query execution events via
-`yield* MyProcess.store` → `events()`.
+Query execution events via `yield* MyProcess.store` → `events()`.
 
 The removed monolith service (`yield* ProcessStore`, `ProcessStore.events`,
 `ProcessStore.file`, `@nikscripts/effect-pm/storage/file`) is intentionally not
