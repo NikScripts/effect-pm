@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Cause, Effect, Layer, Logger } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import { Storage, type StorageApi } from "../src/Store";
 import { makeRunResourceStoreTap } from "../src/internal/runResourceStoreTap";
@@ -51,7 +51,7 @@ describe("makeRunResourceStoreTap", () => {
 
       yield* tap.recordRunStarted("run-1", 1, 1);
       yield* tap.recordRunCompleted("run-1", 2, 1);
-      yield* tap.recordRunFailed("run-2", 3, 1, Cause.fail("boom"));
+      yield* tap.recordRunFailed("run-2", 3, 1, "boom");
       yield* tap.recordStateChange(
         "run-resource.run.started",
         previousStatus,

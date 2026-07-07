@@ -43,7 +43,7 @@ const program = Effect.gen(function* () {
   const stateHistory = yield* store.stateHistory({ limit: 20 });
 
   yield* Effect.log(
-    `facts: ${facts.map((row) => `${row.type}(runId=${row.runId})`).join(", ")}`,
+    `facts: ${facts.map((row) => `${row._tag}(runId=${row.runId})`).join(", ")}`,
   );
   yield* Effect.log(
     `state transitions: ${stateHistory.map((row) => row.reason).join(" → ")}`,

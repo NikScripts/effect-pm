@@ -1,4 +1,3 @@
-import { Cause } from "effect";
 import { describe, expect, it } from "vitest";
 import {
   completeRun,
@@ -72,8 +71,8 @@ describe("runResourceFacts", () => {
         runId: "r/run/1",
         occurredAt: 1,
         concurrency: 2,
-      }).type,
-    ).toBe("run-resource.run.started");
+      })._tag,
+    ).toBe("RunStarted");
 
     const completed = makeRunCompletedFact({
       id: "r/run/1/completed/1",
@@ -82,8 +81,8 @@ describe("runResourceFacts", () => {
       occurredAt: 2,
       durationMs: 10,
     });
-    expect(completed.type).toBe("run-resource.run.completed");
-    if (completed.type === "run-resource.run.completed") {
+    expect(completed._tag).toBe("RunCompleted");
+    if (completed._tag === "RunCompleted") {
       expect(completed.durationMs).toBe(10);
     }
 
@@ -93,11 +92,11 @@ describe("runResourceFacts", () => {
       runId: "r/run/1",
       occurredAt: 3,
       durationMs: 4,
-      cause: Cause.fail("boom"),
+      error: "boom",
     });
-    expect(failed.type).toBe("run-resource.run.failed");
-    if (failed.type === "run-resource.run.failed") {
-      expect(Cause.pretty(failed.cause)).toContain("boom");
+    expect(failed._tag).toBe("RunFailed");
+    if (failed._tag === "RunFailed") {
+      expect(failed.error).toBe("boom");
     }
   });
 

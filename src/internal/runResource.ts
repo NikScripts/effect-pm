@@ -24,6 +24,7 @@ import {
   type RunResourceStoreTap,
 } from "./runResourceStoreTap";
 import { runStatusTransitions } from "./runResourceStatus";
+import { extractRunFailure } from "./runResourceFacts";
 
 // ============================================================================
 // Engine types
@@ -190,7 +191,12 @@ const makeObservedRun =
                       durationMs,
                     );
                   } else {
-                    yield* storeTap.recordRunFailed(runId, endedAt, durationMs, exit.cause);
+                    yield* storeTap.recordRunFailed(
+                      runId,
+                      endedAt,
+                      durationMs,
+                      extractRunFailure(exit.cause),
+                    );
                     const failed = runStatusTransitions.failed;
                     yield* publishStatus(failed.update, failed.reason, durationMs);
                   }

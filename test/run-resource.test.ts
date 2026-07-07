@@ -1,5 +1,5 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Cause, Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
+import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";
@@ -239,9 +239,9 @@ describe("RunResource.make — default store bridge", () => {
       const bridge = yield* Storage;
       const store = yield* bridge.at(scopeKey, builtInRunResourceStoreContract({ key: scopeKey }));
       const facts = yield* store.facts();
-      expect(facts.map((row) => row.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
+      expect(facts.map((row) => row._tag).sort()).toEqual([
+        "RunCompleted",
+        "RunStarted",
       ]);
     }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
@@ -265,11 +265,11 @@ describe("RunResource.make — default store bridge", () => {
       );
       const facts = yield* store.facts();
       const history = yield* store.stateHistory();
-      expect(facts.some((row) => row.type === "run-resource.run.failed")).toBe(true);
-      const failed = facts.find((row) => row.type === "run-resource.run.failed");
+      expect(facts.some((row) => row._tag === "RunFailed")).toBe(true);
+      const failed = facts.find((row) => row._tag === "RunFailed");
       expect(failed).toBeDefined();
-      if (failed !== undefined && failed.type === "run-resource.run.failed") {
-        expect(Cause.pretty(failed.cause)).toContain("negative");
+      if (failed !== undefined && failed._tag === "RunFailed") {
+        expect(failed.error).toBe("negative");
       }
       expect(history.length).toBeGreaterThan(0);
     }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
@@ -299,11 +299,11 @@ describe("RunResource.layer — baked default store bridge", () => {
         builtInRunResourceStoreContract(BakedGate),
       );
       const facts = yield* store.facts();
-      expect(facts.map((row) => row.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
+      expect(facts.map((row) => row._tag).sort()).toEqual([
+        "RunCompleted",
+        "RunStarted",
       ]);
-      expect(facts.find((row) => row.type === "run-resource.run.completed")).toMatchObject({
+      expect(facts.find((row) => row._tag === "RunCompleted")).toMatchObject({
         success: 1,
       });
     }).pipe(Effect.provide(bakedLayer), Effect.scoped),
@@ -334,11 +334,11 @@ describe("RunResource.layer — RunResource.store records", () => {
       yield* gate.run(21);
       const store = yield* TestRunStore.at(StoreGate);
       const facts = yield* store.facts();
-      expect(facts.map((row) => row.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
+      expect(facts.map((row) => row._tag).sort()).toEqual([
+        "RunCompleted",
+        "RunStarted",
       ]);
-      expect(facts.find((row) => row.type === "run-resource.run.completed")).toMatchObject({
+      expect(facts.find((row) => row._tag === "RunCompleted")).toMatchObject({
         durationMs: expect.any(Number),
         success: 42,
       });
@@ -374,14 +374,11 @@ describe("RunResource.store — persistence fidelity", () => {
 
       const store = yield* FidelityStore.at(FidelityGate);
       const facts = yield* store.facts();
-      const completed = facts.find((row) => row.type === "run-resource.run.completed");
-      const failed = facts.find((row) => row.type === "run-resource.run.failed");
+      const completed = facts.find((row) => row._tag === "RunCompleted");
+      const failed = facts.find((row) => row._tag === "RunFailed");
 
       expect(completed).toMatchObject({ success: 21 });
-      expect(failed).toBeDefined();
-      if (failed !== undefined && failed.type === "run-resource.run.failed") {
-        expect(Cause.pretty(failed.cause)).toContain("bad:-2");
-      }
+      expect(failed).toMatchObject({ error: "bad:-2" });
     }).pipe(Effect.provide(live), Effect.scoped),
   );
 });

@@ -5,9 +5,13 @@
  * @internal
  */
 
-import type { Cause } from "effect";
+import { Cause, Option } from "effect";
 import type { RunFact, RunStateChange } from "./store/runResourceStoreSpec";
 import type { RunGateStatus } from "./runResource";
+
+/** Extract the failure value for store rows (store-core §5). @internal */
+export const extractRunFailure = (cause: Cause.Cause<unknown>): unknown =>
+  Option.getOrElse(Cause.findErrorOption(cause), () => Cause.squash(cause));
 
 /** Map live counters to the persisted state shape. @internal */
 export const toResourceState = (status: RunGateStatus): RunStateChange["current"] => ({
@@ -31,10 +35,10 @@ export const makeRunStartedFact = (input: {
   readonly occurredAt: number;
   readonly concurrency: number;
 }): RunFact => ({
+  _tag: "RunStarted",
   id: input.id,
   resourceId: input.resourceId,
   runId: input.runId,
-  type: "run-resource.run.started",
   occurredAt: input.occurredAt,
   concurrency: input.concurrency,
 });
@@ -50,18 +54,18 @@ export const makeRunCompletedFact = (input: {
 }): RunFact =>
   input.success === undefined
     ? {
+        _tag: "RunCompleted",
         id: input.id,
         resourceId: input.resourceId,
         runId: input.runId,
-        type: "run-resource.run.completed",
         occurredAt: input.occurredAt,
         durationMs: input.durationMs,
       }
     : ({
+        _tag: "RunCompleted",
         id: input.id,
         resourceId: input.resourceId,
         runId: input.runId,
-        type: "run-resource.run.completed",
         occurredAt: input.occurredAt,
         durationMs: input.durationMs,
         success: input.success,
@@ -74,16 +78,16 @@ export const makeRunFailedFact = (input: {
   readonly runId: string;
   readonly occurredAt: number;
   readonly durationMs: number;
-  readonly cause: Cause.Cause<unknown>;
+  readonly error: unknown;
 }): RunFact => ({
+  _tag: "RunFailed",
   id: input.id,
   resourceId: input.resourceId,
   runId: input.runId,
-  type: "run-resource.run.failed",
   occurredAt: input.occurredAt,
   durationMs: input.durationMs,
-  cause: input.cause,
-});
+  error: input.error,
+} as RunFact);
 
 /** @internal */
 export const makeRunStateChange = (input: {

@@ -1,8 +1,8 @@
 /**
  * Built-in {@link RunResource} store contract.
  *
- * Persists run lifecycle facts (`started` / `completed` / `failed`) and gate state transitions
- * for operator history — the durable counterpart to live {@link Subscribable} views on the handle.
+ * Persists run lifecycle facts (`RunStarted` / `RunCompleted` / `RunFailed`) and gate state
+ * transitions for operator history — the durable counterpart to live {@link Subscribable} views.
  *
  * @module internal/store/runResourceStoreSpec
  * @internal
@@ -11,6 +11,7 @@
 import { Schema } from "effect";
 import type { Effect } from "effect";
 import * as Store from "../../Store";
+import { makeRunResourceFactEvent, runFactReadPayload } from "../runResourceEvent";
 import { errorOf, successOf } from "../runTagSchemas";
 import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
@@ -28,80 +29,8 @@ export type RunResourceStateChangeReason =
 /** Live gate counters persisted on state transitions. @internal */
 export const runStateSchema = runGateStatus;
 
-const runStartedFields = {
-  id: Schema.String,
-  resourceId: Schema.String,
-  runId: Schema.String,
-  type: Schema.Literal("run-resource.run.started"),
-  occurredAt: Schema.Number,
-  concurrency: Schema.Number,
-} as const;
-
-const runFinishedFactBase = {
-  id: Schema.String,
-  resourceId: Schema.String,
-  runId: Schema.String,
-  occurredAt: Schema.Number,
-  durationMs: Schema.Number,
-} as const;
-
-/** @internal */
-export const runStartedFactSchema = Schema.Struct(runStartedFields);
-
-/**
- * Build the run fact union for a store contract.
- * When `success` is set, `completed` carries an optional `success` value.
- * Failures persist a structured {@link Schema.Cause} (not a pretty string).
- *
- * @internal
- */
-export const makeRunFactSchema = <
-  Success extends Schema.Top | void = void,
-  Error extends Schema.Top | void = void,
->(
-  success?: Success extends Schema.Top ? Success : never,
-  error?: Error extends Schema.Top ? Error : never,
-) => {
-  const completedFields =
-    success === undefined
-      ? { ...runFinishedFactBase, type: Schema.Literal("run-resource.run.completed") }
-      : {
-          ...runFinishedFactBase,
-          type: Schema.Literal("run-resource.run.completed"),
-          success: Schema.optional(success),
-        };
-
-  const cause = Schema.Cause(
-    error === undefined ? Schema.Unknown : error,
-    Schema.Unknown,
-  );
-
-  return Schema.Union([
-    runStartedFactSchema,
-    Schema.Struct(completedFields),
-    Schema.Struct({
-      ...runFinishedFactBase,
-      type: Schema.Literal("run-resource.run.failed"),
-      cause,
-    }),
-  ]);
-};
-
-/** Default void run facts (no `success`; structured `Cause`). @internal */
-export const runFactSchema = makeRunFactSchema();
-
-/** @internal */
-export const runCompletedFactSchema = Schema.Struct({
-  ...runFinishedFactBase,
-  type: Schema.Literal("run-resource.run.completed"),
-});
-
-/** @internal */
-export const runFailedFactSchema = Schema.Struct({
-  ...runFinishedFactBase,
-  type: Schema.Literal("run-resource.run.failed"),
-  cause: Schema.Cause(Schema.Unknown, Schema.Unknown),
-});
+/** Default void run facts. @internal */
+export const runFactSchema = makeRunResourceFactEvent();
 
 /** State transition row — mirrors legacy `RunResourceStateChange`. @internal */
 export const runStateChangeSchema = Schema.Struct({
@@ -111,12 +40,6 @@ export const runStateChangeSchema = Schema.Struct({
   reason: Schema.String,
   previous: Schema.NullOr(runStateSchema),
   current: runStateSchema,
-});
-
-/** Read payload for built-in `facts`. @internal */
-export const runFactReadPayload = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
-  runId: Schema.optional(Schema.String),
 });
 
 /** Read payload for built-in `stateHistory`. @internal */
@@ -155,7 +78,7 @@ export const makeRunResourceStoreContract = (
 ): BuiltInRunResourceContract =>
   Store.contract(
     {
-      fact: Store.shape(makeRunFactSchema(success, error), runFactReadPayload),
+      fact: Store.shape(makeRunResourceFactEvent(success, error), runFactReadPayload),
       state: Store.shape(runStateChangeSchema, runStateReadPayload),
     },
     ({ fact, state }) => ({
@@ -175,3 +98,5 @@ export const builtInRunResourceStoreContract = (
 /** @deprecated Internal flat spec — use {@link builtInRunResourceStoreContract}. @internal */
 export const builtInRunResourceStoreSpec = (tag: StoreScopeTag) =>
   builtInRunResourceStoreContract(tag).spec;
+
+export { runFactReadPayload };

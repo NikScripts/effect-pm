@@ -7,12 +7,11 @@
  * @internal
  */
 
-import type { Cause } from "effect";
 import { Effect, Ref } from "effect";
 import { Storage } from "../Store";
 import { catchErrorAndLog } from "./store/helpers";
 import type { StoreScopeNotRegistered } from "./store/errors";
-import { successOf } from "./runTagSchemas";
+import { errorOf, successOf } from "./runTagSchemas";
 import type { RunGateStatus } from "./runResource";
 import {
   makeRunCompletedFact,
@@ -50,7 +49,7 @@ export interface RunResourceStoreTap {
     runId: string,
     occurredAt: number,
     durationMs: number,
-    cause: Cause.Cause<unknown>,
+    error: unknown,
   ) => Effect.Effect<void>;
 }
 
@@ -85,6 +84,7 @@ export const makeRunResourceStoreTap = (
     const stateSeqRef = yield* Ref.make(0);
     const factSeqRef = yield* Ref.make(0);
     const persistSuccess = successOf(scopeTag) !== undefined;
+    const persistTypedError = errorOf(scopeTag) !== undefined;
 
     const nextStateId = (): Effect.Effect<string> =>
       Ref.updateAndGet(stateSeqRef, (n) => n + 1).pipe(
@@ -120,7 +120,7 @@ export const makeRunResourceStoreTap = (
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunStartedFact({
-          id: yield* nextFactId(runId, "run-resource.run.started"),
+          id: yield* nextFactId(runId, "RunStarted"),
           resourceId,
           runId,
           occurredAt,
@@ -137,7 +137,7 @@ export const makeRunResourceStoreTap = (
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunCompletedFact({
-          id: yield* nextFactId(runId, "run-resource.run.completed"),
+          id: yield* nextFactId(runId, "RunCompleted"),
           resourceId,
           runId,
           occurredAt,
@@ -151,16 +151,16 @@ export const makeRunResourceStoreTap = (
       runId: string,
       occurredAt: number,
       durationMs: number,
-      cause: Cause.Cause<unknown>,
+      error: unknown,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunFailedFact({
-          id: yield* nextFactId(runId, "run-resource.run.failed"),
+          id: yield* nextFactId(runId, "RunFailed"),
           resourceId,
           runId,
           occurredAt,
           durationMs,
-          cause,
+          error: persistTypedError ? error : String(error),
         });
         yield* recordWrite(`fact failed ${runId}`, store.record(fact));
       });

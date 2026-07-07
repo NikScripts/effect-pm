@@ -9,7 +9,8 @@
 - **`RunResource.store(tag)`** registers built-in run fact + state-history shapes on an app **`Store.Service`**.
 - **`RunResource.layer` / `serve` / `Service.layer`** merge **`Store.layerDefaultMemory`** automatically (override with `Layer.provideMerge(AppStore.layerMemory)`).
 - The engine persists to **`RunResource.store`** / **`Store.layerDefaultMemory`** only — **`RunResourceStore`** facet removed.
-- Completed run facts persist the **`success`** value when the tag declares a success schema; failed run facts persist a structured **`Cause`** (not a pretty string).
+- Completed run facts persist the **`success`** value when the tag declares a success schema; failed run facts use **`_tag: "RunFailed"`** with typed **`error`** (or string fallback per store-core §5).
+- Store fact rows use PascalCase **`_tag`** discriminators (`RunStarted`, `RunCompleted`, `RunFailed`) — not legacy `type: "run-resource.run.*"` strings.
 - Observable toolkit handles expose **`Subscribable`** views (`status`, `waiting`, `inFlight`, …).
 - **`RunResource.Service`** takes a single config object (schemas + `effect` + `concurrency`); **`RunResource.Tag`** accepts a schema triplet or config object.
 - Removed deprecated **`RunGate`** type alias and **`@nikscripts/effect-pm/store/RunResource`** subpath.

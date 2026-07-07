@@ -59,7 +59,7 @@ const demoProgram = (sqlitePath: string) =>
       `run gate status: completed=${String(status.completed)}, inFlight=${String(status.inFlight)}`,
     );
     yield* Effect.log(
-      `run facts: ${facts.map((row) => row.type).join(", ")}`,
+      `run facts: ${facts.map((row) => row._tag).join(", ")}`,
     );
     yield* Effect.log(
       `run state transitions: ${stateHistory.map((row) => row.reason).join(", ")}`,
