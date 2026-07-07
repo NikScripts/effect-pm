@@ -56,7 +56,6 @@ import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
 import type { ProcessExecutionStore } from "../../store/processExecution";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
-import type { QueueResourceStore } from "../../store/queueResource";
 import type { RunResourceStore } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import {
@@ -163,7 +162,6 @@ export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
   | LogStore
-  | QueueResourceStore
   | RunResourceStore
   | ProcessExecutionStore
   | ProcessLifecycleStore,
@@ -184,7 +182,6 @@ export const layerProcessStoreOrDie = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
   | LogStore
-  | QueueResourceStore
   | RunResourceStore
   | ProcessExecutionStore
   | ProcessLifecycleStore,

@@ -108,14 +108,6 @@ import {
   logEntryFromLoggerOptions,
   type LogEntry,
 } from "../LogEntry";
-import {
-  QueueResourceStore,
-  type QueueDedupeKeyChange,
-  type QueueEntryFact,
-  type QueueLifecycleChange,
-  type QueueRateLimitExceededFact,
-} from "../store/queueResource";
-import { ProcessStore } from "../ProcessStore";
 import { isJsonValue } from "./json";
 import type { JsonValue } from "../ProcessStoreEvent";
 import { DurableQueueStore } from "../DurableQueueStore";
@@ -423,7 +415,7 @@ export interface QueueHandleApi<
   /**
    * Live **lifecycle events** — a fan-out stream of discrete {@link QueueEvent}s (entry /
    * worker / queue). Each consumer gets its own subscription; backed by a sliding buffer, so a
-   * slow subscriber never backpressures the worker (lossy under load — use `QueueResourceStore`
+   * slow subscriber never backpressures the worker (lossy under load — enable a durable store
    * for guaranteed delivery). Subscribe for dashboards / CLI `--watch` / a TUI.
    */
   readonly events: Stream.Stream<QueueEvent<T, E>>;
@@ -888,7 +880,7 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  */
 /**
  * Effect {@link RateLimiter.consume} options for queue workers, with optional
- * `key` (defaults to queue name) and ProcessStore telemetry controls.
+ * `key` (defaults to queue name) and telemetry controls.
  *
  * @remarks
  * Field names match `effect/unstable/persistence` `RateLimiter` (`window`, not
@@ -902,11 +894,6 @@ export type QueueResourceRateLimitOptions = Omit<
 > & {
   /** Shared limit bucket (default: queue `name` / service id). */
   readonly key?: string;
-  /**
-   * When to emit `queue.ratelimit.exceeded` to {@link QueueResourceStore}.
-   * @default `"exceeded"`
-   */
-  readonly record?: "exceeded" | "off";
 };
 
 /** @public Re-export of Effect rate-limiter consume metadata. */
@@ -1387,7 +1374,7 @@ const resolveRateLimitConsumeOptions = (
   queueName: string,
   rateLimit: QueueResourceRateLimitOptions,
 ): Parameters<EffectRateLimiter["consume"]>[0] => {
-  const { record: _record, key: limitKey, ...rest } = rateLimit;
+  const { key: limitKey, ...rest } = rateLimit;
   return {
     ...rest,
     key: limitKey ?? queueName,
@@ -1886,7 +1873,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // ─── Fan-out lifecycle events ───
     // A sliding PubSub: publishing never blocks the worker (drops oldest when a subscriber
     // lags), so the fan-out `events` stream can't backpressure or OOM the queue. Guaranteed
-    // delivery stays on the QueueResourceStore tier. Each `events` consumer subscribes
+    // delivery stays on the durable store tier. Each `events` consumer subscribes
     // independently via `Stream.fromPubSub`.
     const eventsHub = yield* PubSub.sliding<QueueEvent<T, E>>(1024);
 
@@ -2286,17 +2273,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       `Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}, ${rateLimitLog}`,
     );
 
-    // ─── Internal: optional QueueResourceStore analytics ───
-    // If QueueResourceStore is available in context, emit events. If not, silent no-op.
-    // This makes analytics automatic when the queue facet layer is provided, but never required.
-
-    const storeOption = yield* Effect.serviceOption(QueueResourceStore);
     let entrySeq = 0;
     let releaseSeq = 0;
-    let entryFactSeq = 0;
-    let lifecycleSeq = 0;
-    let dedupeChangeSeq = 0;
-    let rateLimitExceededSeq = 0;
 
     const nextEntryId = (): string => {
       entrySeq++;
@@ -2308,382 +2286,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       return `${queueName}-release-${String(releaseSeq)}`;
     };
 
-    const recordStoreWrite = <A, EWrite>(
-      label: string,
-      effect: Effect.Effect<A, EWrite>,
-    ): Effect.Effect<void> =>
-      effect.pipe(
-        ProcessStore.catchErrorAndLog({
-          message: `QueueResourceStore write failed for queue "${queueName}" ${label}`,
-          level: "warning",
-          annotations: {
-            queueId: queueName,
-            label,
-          },
-        }),
-      );
-
-    interface EntryFactSource {
-      readonly entryId: string;
-      readonly key?: string;
-      readonly priority: Priority;
-      readonly attempts: number;
-    }
-
-    interface EntryFactOptions {
-      readonly occurredAtMs: number;
-      readonly startedAtMs?: number;
-      readonly durationMs?: number;
-      readonly error?: string;
-      readonly releaseId?: string;
-      readonly reason?: string;
-      readonly interruptedAtMs?: number;
-      readonly attributes?: Record<string, unknown>;
-    }
-
-    type EntryStatus =
-      | "enqueued"
-      | "started"
-      | "completed"
-      | "failed"
-      | "retried"
-      | "exhausted"
-      | "released"
-      | "dead-lettered"
-      | "dropped";
-
-    const buildEntryFact = (
-      status: EntryStatus,
-      source: EntryFactSource,
-      enqueuedAtMs: number,
-      options: EntryFactOptions,
-    ): QueueEntryFact => {
-      entryFactSeq++;
-      const id = `${queueName}/${source.entryId}/${status}/${String(entryFactSeq)}`;
-      const common = {
-        id,
-        queueId: queueName,
-        entryId: source.entryId,
-        occurredAt: options.occurredAtMs,
-        ...(source.key !== undefined ? { key: source.key } : {}),
-        priority: source.priority,
-        attempts: source.attempts,
-        ...(options.attributes !== undefined
-          ? { attributes: options.attributes }
-          : {}),
-      };
-      const startedAt = options.startedAtMs ?? options.occurredAtMs;
-      const durationMs = options.durationMs ?? 0;
-      switch (status) {
-        case "enqueued":
-          return { ...common, type: "queue.entry.enqueued", enqueuedAt: enqueuedAtMs };
-        case "started":
-          return { ...common, type: "queue.entry.started", startedAt };
-        case "completed":
-          return {
-            ...common,
-            type: "queue.entry.completed",
-            startedAt,
-            durationMs,
-          };
-        case "failed":
-          return {
-            ...common,
-            type: "queue.entry.failed",
-            startedAt,
-            durationMs,
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "retried":
-          return {
-            ...common,
-            type: "queue.entry.retried",
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "exhausted":
-          return {
-            ...common,
-            type: "queue.entry.exhausted",
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "released":
-          return {
-            ...common,
-            type: "queue.entry.released",
-            releaseId: options.releaseId ?? "",
-            ...(options.interruptedAtMs !== undefined
-              ? { interruptedAt: options.interruptedAtMs }
-              : {}),
-          };
-        case "dead-lettered":
-          return {
-            ...common,
-            type: "queue.entry.dead-lettered",
-            ...(options.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "dropped":
-          return {
-            ...common,
-            type: "queue.entry.dropped",
-            ...(options.reason !== undefined ? { reason: options.reason } : {}),
-          };
-      }
-    };
-
-    const recordEntryEvent = (
-      status: EntryStatus,
-      internal: InternalItem<T>,
-      options?: {
-        readonly occurredAt?: DateTime.Utc;
-        readonly startedAt?: DateTime.Utc;
-        readonly durationMs?: number;
-        readonly error?: string;
-        readonly releaseId?: string;
-        readonly reason?: string;
-        readonly attributes?: { readonly [key: string]: JsonValue };
-      },
-    ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
-        const occurredAtMs =
-          options?.occurredAt !== undefined
-            ? DateTime.toEpochMillis(options.occurredAt)
-            : yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const fact = buildEntryFact(
-          status,
-          {
-            entryId: internal.entryId,
-            ...(internal.key !== undefined ? { key: internal.key } : {}),
-            priority: levelToPriority(internal.level),
-            attempts: internal.retries + 1,
-          },
-          internal.enqueuedAt,
-          {
-            occurredAtMs,
-            ...(options?.startedAt !== undefined
-              ? { startedAtMs: DateTime.toEpochMillis(options.startedAt) }
-              : {}),
-            ...(options?.durationMs !== undefined
-              ? { durationMs: options.durationMs }
-              : {}),
-            ...(options?.error !== undefined ? { error: options.error } : {}),
-            ...(options?.releaseId !== undefined
-              ? { releaseId: options.releaseId }
-              : {}),
-            ...(options?.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options?.attributes !== undefined
-              ? { attributes: options.attributes }
-              : {}),
-          },
-        );
-        yield* recordStoreWrite(`entry ${status}`, api.recordEntry(fact));
-      });
-
-    const recordEntryEventForQueueEntry = (
-      status: EntryStatus,
-      entry: QueueEntry<T>,
-      options?: {
-        readonly occurredAt?: DateTime.Utc;
-        readonly reason?: string;
-        readonly attributes?: { readonly [key: string]: JsonValue };
-      },
-    ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
-        const occurredAtMs =
-          options?.occurredAt !== undefined
-            ? DateTime.toEpochMillis(options.occurredAt)
-            : yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const interruptedAtMs =
-          entry.timestamps.interruptedAt !== undefined
-            ? DateTime.toEpochMillis(entry.timestamps.interruptedAt)
-            : undefined;
-        const startedAtMs =
-          entry.timestamps.startedAt !== undefined
-            ? DateTime.toEpochMillis(entry.timestamps.startedAt)
-            : undefined;
-        const fact = buildEntryFact(
-          status,
-          {
-            entryId: entry.entryId,
-            ...(entry.key !== undefined ? { key: entry.key } : {}),
-            priority: entry.priority,
-            attempts: entry.attempts,
-          },
-          DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
-          {
-            occurredAtMs,
-            ...(startedAtMs !== undefined ? { startedAtMs } : {}),
-            ...(interruptedAtMs !== undefined ? { interruptedAtMs } : {}),
-            ...(options?.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options?.attributes !== undefined
-              ? { attributes: options.attributes }
-              : {}),
-          },
-        );
-        yield* recordStoreWrite(`entry ${status}`, api.recordEntry(fact));
-      });
-
-    const buildLifecycleChange = (
-      tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
-      changedAtMs: number,
-      itemsCleared?: number,
-    ): QueueLifecycleChange => {
-      lifecycleSeq++;
-      const id = `${queueName}/lifecycle/${tag.toLowerCase()}/${String(lifecycleSeq)}`;
-      const common = {
-        id,
-        queueId: queueName,
-        changedAt: changedAtMs,
-      };
-      switch (tag) {
-        case "Started":
-          return { ...common, type: "queue.lifecycle.started" };
-        case "Paused":
-          return { ...common, type: "queue.lifecycle.paused" };
-        case "Resumed":
-          return { ...common, type: "queue.lifecycle.resumed" };
-        case "Shutdown":
-          return { ...common, type: "queue.lifecycle.shutdown" };
-        case "Cleared":
-          return {
-            ...common,
-            type: "queue.lifecycle.cleared",
-            itemsCleared: itemsCleared ?? 0,
-          };
-        case "Drained":
-          return { ...common, type: "queue.lifecycle.drained" };
-      }
-    };
-
-    const recordLifecycleEvent = (
-      tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
-      itemsCleared?: number,
-    ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
-        const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const change = buildLifecycleChange(tag, changedAtMs, itemsCleared);
-        yield* recordStoreWrite(`lifecycle ${tag}`, api.recordLifecycle(change));
-      });
-
-    const buildDedupeKeyChange = (
-      kind: "added" | "released",
-      key: string,
-      changedAtMs: number,
-    ): QueueDedupeKeyChange => {
-      dedupeChangeSeq++;
-      const id = `${queueName}/dedupe-key/${kind}/${String(dedupeChangeSeq)}`;
-      const common = {
-        id,
-        queueId: queueName,
-        key,
-        changedAt: changedAtMs,
-      };
-      return kind === "added"
-        ? { ...common, type: "queue.dedupe-key.added" }
-        : { ...common, type: "queue.dedupe-key.released" };
-    };
-
-    const recordDedupeKeyChange = (
-      kind: "added" | "released",
-      key: string,
-    ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
-        const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const change = buildDedupeKeyChange(kind, key, changedAtMs);
-        yield* recordStoreWrite(
-          `dedupe-key ${kind}`,
-          api.recordDedupeKey(change),
-        );
-      });
-
-    const recordDedupeKeyChanges = (
-      kind: "added" | "released",
-      keys: ReadonlyArray<string>,
-    ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        if (keys.length === 0 || Option.isNone(storeOption)) return;
-        const api = storeOption.value;
-        const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const changes = keys.map((key) =>
-          buildDedupeKeyChange(kind, key, changedAtMs),
-        );
-        yield* recordStoreWrite(
-          `dedupe-key ${kind} batch`,
-          api.recordDedupeKeyBatch(changes),
-        );
-      });
-
-    const shouldRecordRateLimitExceeded =
-      config.rateLimit !== undefined && (config.rateLimit.record ?? "exceeded") !== "off";
-
-    const buildRateLimitExceededFact = (
-      payload: RateLimitExceededEmit<T>,
-      occurredAtMs: number,
-    ): QueueRateLimitExceededFact => {
-      rateLimitExceededSeq++;
-      const consumeOpts =
-        config.rateLimit === undefined
-          ? undefined
-          : resolveRateLimitConsumeOptions(queueName, config.rateLimit);
-      const windowMs =
-        consumeOpts !== undefined
-          ? Duration.toMillis(Duration.fromInputUnsafe(consumeOpts.window))
-          : 0;
-      const tokens = consumeOpts?.tokens ?? 1;
-      const retryAfterMs =
-        payload.outcome === "rejected" &&
-        payload.error !== undefined &&
-        isRateLimitExceededReason(payload.error.reason)
-          ? Duration.toMillis(payload.error.reason.retryAfter)
-          : payload.consume !== undefined
-            ? Duration.toMillis(payload.consume.delay)
-            : undefined;
-      return {
-        id: `${queueName}/${payload.internal.entryId}/ratelimit-exceeded/${String(rateLimitExceededSeq)}`,
-        type: "queue.ratelimit.exceeded",
-        queueId: queueName,
-        entryId: payload.internal.entryId,
-        occurredAt: occurredAtMs,
-        limitKey: payload.limitKey,
-        algorithm: payload.algorithm,
-        limit: consumeOpts?.limit ?? 0,
-        tokens,
-        windowMs,
-        outcome: payload.outcome,
-        delayMs:
-          payload.consume !== undefined
-            ? Duration.toMillis(payload.consume.delay)
-            : retryAfterMs ?? 0,
-        remaining:
-          payload.consume !== undefined
-            ? payload.consume.remaining
-            : payload.error !== undefined && isRateLimitExceededReason(payload.error.reason)
-              ? payload.error.reason.remaining
-              : 0,
-        resetAfterMs:
-          payload.consume !== undefined
-            ? Duration.toMillis(payload.consume.resetAfter)
-            : 0,
-        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
-        ...(payload.error !== undefined ? { error: payload.error.message } : {}),
-        ...(payload.internal.key !== undefined ? { key: payload.internal.key } : {}),
-        priority: levelToPriority(payload.internal.level),
-      };
-    };
-
     const emitRateLimitExceeded = (
       payload: RateLimitExceededEmit<T>,
     ): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
-        const occurredAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
         const entry = queueEntryFromInternal(payload.internal);
 
         yield* publishEvent({
@@ -2694,14 +2300,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           algorithm: payload.algorithm,
           outcome: payload.outcome,
         });
-
-        if (!shouldRecordRateLimitExceeded || Option.isNone(storeOption)) return;
-        const api = storeOption.value;
-        const fact = buildRateLimitExceededFact(payload, occurredAtMs);
-        yield* recordStoreWrite(
-          "rate-limit exceeded",
-          api.recordRateLimitExceeded(fact),
-        );
       });
 
     // ─── Internal: wake signals (workers vs drain monitor) ───
@@ -2727,7 +2325,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     /** Wake drain monitor when all priority queues are empty (after work drains). */
     const wakeDrainedIfAllQueuesEmpty = Effect.gen(function* () {
       if (yield* laneStore.isEmpty) {
-        yield* recordLifecycleEvent("Drained");
         yield* signalDrainWake;
       }
     });
@@ -2812,11 +2409,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             if (result !== "deduplicated") persisted.push(internal);
           }
           if (persisted.length === 0) return;
-          yield* Effect.forEach(
-            persisted,
-            (internal) => recordEntryEvent("enqueued", internal),
-            { discard: true },
-          );
           yield* publishEvent({
             _tag: "Enqueued",
             entries: persisted.map((internal) =>
@@ -2828,7 +2420,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
 
         const toEnqueue: Array<InternalItem<T>> = [];
-        const addedDedupeKeys: Array<string> = [];
 
         for (const item of items) {
           // Dedup: skip items whose key is already in-flight
@@ -2837,7 +2428,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             const keys = yield* Ref.get(activeKeys);
             if (HashSet.has(keys, k)) continue;
             yield* Ref.update(activeKeys, HashSet.add(k));
-            addedDedupeKeys.push(k);
           }
           toEnqueue.push({
             item,
@@ -2854,12 +2444,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* Effect.forEach(toEnqueue, (i) => laneStore.offer(i, i.level), {
           discard: true,
         });
-        yield* Effect.forEach(
-          toEnqueue,
-          (internal) => recordEntryEvent("enqueued", internal),
-          { discard: true },
-        );
-        yield* recordDedupeKeyChanges("added", addedDedupeKeys);
         yield* signalWorkerWake;
 
         yield* publishEvent({
@@ -2966,13 +2550,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         const entry = queueEntryFromInternal(internal);
         if (internal.retries >= maxRetries) {
           yield* publishEvent({ _tag: "RetryExhausted", entry, cause });
-          yield* recordEntryEvent("exhausted", internal);
           yield* Effect.logDebug(
             `Retry exhausted for item in queue "${queueName}" after ${String(internal.retries + 1)} attempts`,
           );
           return;
         }
-        yield* recordEntryEvent("retried", internal);
         yield* publishEvent({
           _tag: "RetryScheduled",
           entry,
@@ -3048,10 +2630,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.gen(function* () {
           const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
           const startedAt = DateTime.makeUnsafe(start);
-          yield* recordEntryEvent("started", internal, {
-            occurredAt: startedAt,
-            startedAt,
-          });
           yield* publishEvent({
             _tag: "Started",
             entry: queueEntryFromInternal(internal, { startedAt }),
@@ -3068,25 +2646,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
           yield* Ref.update(completedCount, (n) => n + 1);
 
-          // Record to ProcessStore (if available)
-          yield* recordEntryEvent(
-            Exit.isSuccess(exit) ? "completed" : "failed",
-            internal,
-            {
-              occurredAt: completedAt,
-              startedAt,
-              durationMs: Duration.toMillis(elapsed),
-              error: Exit.isFailure(exit) ? Cause.pretty(exit.cause) : undefined,
-            },
-          );
-
           // Release dedup key BEFORE the auto re-enqueue below. The re-enqueue
-          // must observe a free dedupe key so its `HashSet.has` check passes,
-          // and its emitted `added` change must follow this `released` change
-          // in the analytics stream (preserving the dedupe-key seq invariant).
+          // must observe a free dedupe key so its `HashSet.has` check passes.
           if (config.key !== undefined && internal.key !== undefined) {
             yield* Ref.update(activeKeys, HashSet.remove(internal.key));
-            yield* recordDedupeKeyChange("released", internal.key);
           }
 
           const entry = queueEntryFromInternal(internal, { startedAt, completedAt });
@@ -3160,15 +2723,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const skipRateLimitedItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
-        const occurredAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const occurredAt = DateTime.makeUnsafe(occurredAtMs);
-        yield* recordEntryEvent("dropped", internal, {
-          occurredAt,
-          reason: "rate-limit-exceeded",
-        });
         if (config.key !== undefined && internal.key !== undefined) {
           yield* Ref.update(activeKeys, HashSet.remove(internal.key));
-          yield* recordDedupeKeyChange("released", internal.key);
         }
       });
 
@@ -3348,7 +2904,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* FiberSet.run(workerFibers)(feederLoop);
       }
 
-      yield* recordLifecycleEvent("Started");
       yield* Effect.logDebug(
         `Queue "${queueName}" worker pool started (${String(concurrency)} workers)`,
       );
@@ -3470,18 +3025,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           );
           return;
         }
-        const restoredKeys: string[] = [];
         for (const item of items) {
           yield* laneStore.offer(item, item.level);
           yield* restoreActiveKey(item);
-          if (item.key !== undefined) {
-            restoredKeys.push(item.key);
-          }
         }
         if (items.length > 0) {
           yield* signalWorkerWake;
         }
-        yield* recordDedupeKeyChanges("added", restoredKeys);
       });
 
     const extractPending = (
@@ -3489,14 +3039,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<ReadonlyArray<InternalItem<T>>> =>
       Effect.gen(function* () {
         const extracted = yield* laneStore.extractMatching(select);
-        const releasedKeys: string[] = [];
         for (const item of extracted) {
           yield* releaseActiveKey(item);
-          if (item.key !== undefined) {
-            releasedKeys.push(item.key);
-          }
         }
-        yield* recordDedupeKeyChanges("released", releasedKeys);
         return extracted;
       });
 
@@ -3552,12 +3097,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             attributes: options?.attributes,
           })
         );
-        for (const internal of internals) {
-          yield* recordEntryEvent("released", internal, {
-            releaseId,
-            attributes: options?.attributes,
-          });
-        }
         if (entries.length > 0) {
           yield* publishEvent({
             _tag: "Released",
@@ -3593,12 +3132,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             })
           ),
         );
-        for (const internal of internals) {
-          yield* recordEntryEvent("released", internal, {
-            releaseId,
-            attributes: options?.attributes,
-          });
-        }
         if (encoded.length > 0) {
           const entries = internals.map((internal) =>
             queueEntryFromInternal(internal, undefined, {
@@ -3633,22 +3166,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           : internals.map((internal) =>
               queueEntryFromInternal(internal, undefined, { attributes: options.attributes })
             );
-        for (const internal of internals) {
-          yield* recordEntryEvent(kind, internal, {
-            ...(options.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options.attributes !== undefined
-              ? { attributes: options.attributes }
-              : {}),
-          });
-        }
-        if (isQueueEntry(selector)) {
-          yield* recordEntryEventForQueueEntry(kind, selector, {
-            ...(options.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options.attributes !== undefined
-              ? { attributes: options.attributes }
-              : {}),
-          });
-        }
         if (entries.length > 0) {
           yield* publishEvent(
             kind === "dead-lettered"
@@ -3720,7 +3237,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       pause: latch.close.pipe(
         Effect.andThen(Ref.set(pausedRef, true)),
         Effect.andThen(refreshStatus),
-        Effect.andThen(recordLifecycleEvent("Paused")),
         Effect.asVoid,
       ),
 
@@ -3728,7 +3244,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       resume: latch.open.pipe(
         Effect.andThen(Ref.set(pausedRef, false)),
         Effect.andThen(refreshStatus),
-        Effect.andThen(recordLifecycleEvent("Resumed")),
         Effect.asVoid,
       ),
 
@@ -3746,7 +3261,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           mode: shutdownMode,
           pending,
         });
-        yield* recordLifecycleEvent("Shutdown");
         yield* Effect.logInfo(
           `Queue "${queueName}" shutting down (${shutdownMode})`,
         );
@@ -3775,7 +3289,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           // Purge the stale in-memory copies the feeder had leased (the store is the truth).
           yield* laneStore.drain;
           yield* Ref.set(completedCount, 0);
-          yield* recordLifecycleEvent("Cleared", cleared);
           yield* publishEvent({ _tag: "Cleared", queueId: queueName, count: cleared });
           yield* Effect.logDebug(
             `Queue "${queueName}" cleared ${String(cleared)} items`,
@@ -3785,19 +3298,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
         const drained = yield* laneStore.drain;
         const count = drained.length;
-        const releasedKeys: string[] = [];
         if (config.key !== undefined) {
           for (const internal of drained) {
             if (internal.key !== undefined) {
               yield* Ref.update(activeKeys, HashSet.remove(internal.key));
-              releasedKeys.push(internal.key);
             }
           }
         }
         yield* Ref.set(completedCount, 0);
-        yield* recordLifecycleEvent("Cleared", count);
         yield* publishEvent({ _tag: "Cleared", queueId: queueName, count });
-        yield* recordDedupeKeyChanges("released", releasedKeys);
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
         yield* wakeDrainedIfAllQueuesEmpty;
         return count;

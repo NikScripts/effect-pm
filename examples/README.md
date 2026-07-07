@@ -68,7 +68,6 @@ Storage options:
 - `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
 - `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
 - `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
-- `QueueResourceStore` — queue semantic storage facet.
 
 ### Schedule
 

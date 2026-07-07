@@ -3,7 +3,7 @@
  * {@link ProcessStore} facet.
  *
  * @remarks
- * One-stop shop for apps that want all six facets at once. Compose
+ * One-stop shop for apps that want all built-in facets at once. Compose
  * either:
  *
  * - {@link ProcessStorage.layerRuntimeStorage} — facets only; expects
@@ -35,8 +35,8 @@
  *
  * ### Facet classes (aliases)
  *
- * Each property is a **facet store class** (`QueueResourceStore`, …) under a
- * shorter import path: **`ProcessStorage.QueueResource`** === **`QueueResourceStore`**.
+ * Each property is a **facet store class** (`RunResourceStore`, …) under a
+ * shorter import path: **`ProcessStorage.RunResource`** === **`RunResourceStore`**.
  * Layers and **`Effect.serviceOption`** work the same from here or
  * **`@nikscripts/effect-pm/store/*`**.
  *
@@ -48,14 +48,12 @@ import { RuntimeStorage } from "./RuntimeStorage";
 import { LogStore } from "./store/log";
 import { ProcessExecutionStore } from "./store/processExecution";
 import { ProcessLifecycleStore } from "./store/processLifecycle";
-import { QueueResourceStore } from "./store/queueResource";
 import { RunResourceStore } from "./store/runResource";
 
 const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 
 const facetLayers = Layer.mergeAll(
   LogStore.layerRuntimeStorage,
-  QueueResourceStore.layerRuntimeStorage,
   RunResourceStore.layerRuntimeStorage,
   ProcessExecutionStore.layerRuntimeStorage,
   processLifecycleLayer,
@@ -83,13 +81,12 @@ export const layer = Layer.provide(facetLayers, RuntimeStorage.layer);
 
 /**
  * Facet class aliases (same tags as the public `*Store` facet services) under shorter
- * names: `ProcessStorage.QueueResource` === {@link QueueResourceStore}, etc.
+ * names: `ProcessStorage.RunResource` === {@link RunResourceStore}, etc.
  *
  * @public
  */
 export {
   LogStore as Log,
-  QueueResourceStore as QueueResource,
   RunResourceStore as RunResource,
   ProcessExecutionStore as ProcessExecution,
   ProcessLifecycleStore as ProcessLifecycle,
@@ -98,7 +95,6 @@ export {
 /** Union of every service composed by {@link layerRuntimeStorage}. @public */
 export type Services =
   | LogStore
-  | QueueResourceStore
   | RunResourceStore
   | ProcessExecutionStore
   | ProcessLifecycleStore;
