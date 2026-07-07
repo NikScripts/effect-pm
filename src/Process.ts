@@ -2336,8 +2336,8 @@ const buildProcessImpl = <A, E, R>(
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
 // names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
 
-/** Baked-in default store — always present; app `Store.Service` overrides via `Layer.provideMerge`. @internal */
-const withBakedInDefaultStore = <A, E, R>(
+/** Merge {@link layerDefaultMemory} so the toolkit layer always has a store; app override via `Layer.provideMerge`. @internal */
+const withDefaultMemory = <A, E, R>(
   layer: Layer.Layer<A, E, R>,
 ): Layer.Layer<A | StoreScopeBridgeTag, E, R> =>
   layer.pipe(Layer.provideMerge(layerDefaultMemory));
@@ -2356,7 +2356,7 @@ export function layer(
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return withBakedInDefaultStore(
+  return withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(baseTag, impl)),
     ),
@@ -2381,7 +2381,7 @@ export function serve(
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return withBakedInDefaultStore(
+  return withDefaultMemory(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
@@ -2406,7 +2406,7 @@ export function serveRemote(
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return withBakedInDefaultStore(
+  return withDefaultMemory(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
