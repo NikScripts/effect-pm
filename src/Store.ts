@@ -85,7 +85,7 @@ import type { NormalizedStoreRegistration } from "./internal/store/registrationN
 import {
   StoreScopeNotRegistered,
   StoreChangeEvent,
-  type StoreJournalDecodeError,
+  StoreJournalDecodeError,
   type StoreSqliteConnectionError,
 } from "./internal/store/errors";
 import {
@@ -100,11 +100,20 @@ import {
 import {
   emptyPayloadSchema,
   isStoreContractValue,
+  makeShapeRefs,
   makeStoreContractValue,
   makeStoreShape,
   mergeStoreContracts,
+  resolveShapeRef,
+  shapeRowsByKey,
+  type AllShapeRows,
   type MergedCustom,
+  type SchemaDecoded,
   type ShapeHandles,
+  type ShapeRef,
+  type ShapeRefs,
+  type ShapesOfStore,
+  type StoreClassWithShapes,
   type StoreContractValue,
   type StoreMethodsFn,
   type StoreShapeDef,
@@ -641,7 +650,41 @@ export const retention =
 // ============================================================================
 
 /**
- * Stream append events for a registered scope — one {@link StoreChangeEvent} per successful append.
+ * Decode a change-event payload against a shape's row schema, re-tagging failures. A bare
+ * `Schema.Schema<unknown>` carries `DecodingServices: unknown`, so the decode requirement is
+ * `unknown` here; the public {@link changes} overloads pin the stream requirement to `never`
+ * independently, so callers never see it. @internal
+ */
+const decodeChangeRow = (
+  row: Schema.Schema<unknown>,
+  payload: unknown,
+): Effect.Effect<unknown, StoreJournalDecodeError, unknown> =>
+  Schema.decodeUnknownEffect(Schema.toCodecJson(row))(payload).pipe(
+    Effect.mapError(
+      (cause) =>
+        new StoreJournalDecodeError({
+          cause,
+          detail: "Failed to decode store change-event payload against its shape row schema",
+        }),
+    ),
+  );
+
+/** Resolve the store's scope changes stream, dying if the scope is unregistered (wiring error). @internal */
+const storeChangesStream = (
+  store: StoreClassWithShapes,
+): Effect.Effect<
+  Stream.Stream<StoreChangeEvent, StoreJournalDecodeError>,
+  never,
+  Storage | Scope.Scope
+> => Effect.flatMap(Storage, (bridge) => Effect.orDie(bridge.changes(store.scopeKey)));
+
+/**
+ * Stream store changes. Three forms:
+ *
+ * - `changes(scope)` — coarse firehose of {@link StoreChangeEvent}s for a scope (string or tag).
+ * - `changes(store)` — decoded rows of **every** shape on the store (discriminated union).
+ * - `changes(store, select)` — decoded rows of the **one** shape the selector navigates to, e.g.
+ *   `changes(store, (shapes) => shapes.sensors.temperature)`.
  *
  * Requires a {@link Service.layer} / {@link store.layer} that installed the scope bridge.
  *
@@ -655,16 +698,79 @@ export const retention =
  *
  * @public
  */
-export const changes = (
+export function changes<S extends StoreClassWithShapes, Row extends Schema.Schema<unknown>>(
+  store: S,
+  select: (shapes: ShapeRefs<ShapesOfStore<S>>) => ShapeRef<Row>,
+): Effect.Effect<
+  Stream.Stream<SchemaDecoded<Row>, StoreJournalDecodeError>,
+  never,
+  Storage | Scope.Scope
+>;
+export function changes<S extends StoreClassWithShapes>(
+  store: S,
+): Effect.Effect<
+  Stream.Stream<AllShapeRows<ShapesOfStore<S>>, StoreJournalDecodeError>,
+  never,
+  Storage | Scope.Scope
+>;
+export function changes(
   scope: string | StoreScopeTag,
 ): Effect.Effect<
   Stream.Stream<StoreChangeEvent, StoreJournalDecodeError>,
   StoreScopeNotRegistered,
   Storage | Scope.Scope
-> =>
-  Effect.flatMap(Storage, (bridge) =>
-    bridge.changes(typeof scope === "string" ? scope : scope.key),
-  );
+>;
+export function changes(
+  storeOrScope: string | StoreScopeTag | StoreClassWithShapes,
+  select?: (shapes: ShapeRefs<StoreShapes>) => ShapeRef<Schema.Schema<unknown>>,
+): Effect.Effect<
+  Stream.Stream<unknown, StoreJournalDecodeError, unknown>,
+  StoreScopeNotRegistered,
+  Storage | Scope.Scope
+> {
+  if (isStoreClassWithShapes(storeOrScope)) {
+    const store = storeOrScope;
+    if (select !== undefined) {
+      const ref = resolveShapeRef(select(makeShapeRefs(store.contract.shapes)));
+      return storeChangesStream(store).pipe(
+        Effect.map((stream) =>
+          stream.pipe(
+            Stream.filter((event) => event.method === ref.shapeKey),
+            Stream.mapEffect((event) => decodeChangeRow(ref.row, event.payload)),
+          ),
+        ),
+      );
+    }
+    const rowByKey = shapeRowsByKey(store.contract.shapes);
+    return storeChangesStream(store).pipe(
+      Effect.map((stream) =>
+        stream.pipe(
+          Stream.mapEffect((event) => {
+            const row = rowByKey.get(event.method);
+            return row === undefined
+              ? Effect.die(
+                  new StoreJournalDecodeError({
+                    cause: `no shape row schema registered for change method "${event.method}"`,
+                    detail: "Store.changes(store)",
+                  }),
+                )
+              : decodeChangeRow(row, event.payload);
+          }),
+        ),
+      ),
+    );
+  }
+  const key = typeof storeOrScope === "string" ? storeOrScope : storeOrScope.key;
+  return Effect.flatMap(Storage, (bridge) => bridge.changes(key));
+}
+
+/** True for a single-scope store class carrying its contract — the typed {@link changes} forms. @internal */
+const isStoreClassWithShapes = (value: unknown): value is StoreClassWithShapes =>
+  (typeof value === "object" || typeof value === "function") &&
+  value !== null &&
+  "scopeKey" in value &&
+  "contract" in value &&
+  isStoreContractValue(value.contract);
 
 // ============================================================================
 // Storage resolution — the ergonomic façade over the (internal) scope bridge
@@ -711,6 +817,7 @@ export const withDefault = <const C extends StoreContractValue>(
       ),
     ),
   );
+
 
 // ============================================================================
 // Aggregate factories
