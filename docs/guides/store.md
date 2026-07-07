@@ -154,6 +154,30 @@ const facts = yield* (yield* AppStore.at(FetchGate)).facts();
 
 See [`examples/forms/resource/run-resource-store-readback.ts`](../../examples/forms/resource/run-resource-store-readback.ts).
 
+### Process execution store
+
+Processes register with **`Process.store(tag)`** — same `Store.Service` / EventJournal stack:
+
+```ts
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(Prices),
+) {}
+
+const live = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(Prices, { effect, polling }),
+);
+
+const events = yield* (yield* Prices.store).events({ limit: 50 });
+```
+
+| Entry | Auto-append on terminal runs? |
+|-------|-------------------------------|
+| **`Process.layer` / `serve` / `serveRemote`** | Yes (default in-memory store merged into layer) |
+| **`Process.make`** | No |
+
+See [process.md](./process.md) for wire rows (`RunCompleted.success`, `RunFailed.error`) and examples.
+
 ## Change stream
 
 ```ts

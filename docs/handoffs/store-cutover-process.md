@@ -14,13 +14,12 @@ cutover (B3) is **done** on `cursor/process-store-cutover-a3ad`.
 3. **✅ `processTagSchemas.ts` — DRY.** `schemaOf(tag, sym)` backs `successOf` / `errorOf`.
 4. **✅ `error` consumed.** Typed `RunFailed.error` when `errorOf(tag)` is set; RPC + store contract.
 
-## Cutover (B3 — done)
+## Cutover (B3 — toolkit layers)
 
-- [x] Supervisor terminal writes via **`tag.store`** (`processStoreTap.ts`) — declared
-      `Store.Storage` / `Store.withDefault`, buffered `record`, no `serviceOption`.
-- [x] `hasPriorExecutions` reads store contract when recorder present (layer path).
+- [x] Terminal runs on **`Process.layer` / `serve` / `serveRemote`** append to **`Process.store(tag)`** (declared **`Store.Storage`**, default in-memory store merged into layer).
+- [x] **`Process.make`** — supervisor only; **no** auto-append.
 - [x] **`ProcessExecutionStore` facet deleted** — module, subpath, `ProcessStorage` alias, tests.
-- [x] `RunCompleted.success` populated from `SubscriptionRef` when tag carries `success`.
+- [x] `RunCompleted.success` from latest run when tag carries `success`.
 - [x] `Process.result` removed; positional `success` / `error` on `Tag`.
 
 ## Open

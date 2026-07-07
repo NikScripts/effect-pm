@@ -4,8 +4,9 @@
 
 ### Minor Changes
 
-- **Process tag wire schemas and store engine tap (breaking).** `Process.Tag` uses positional **`success`** / **`error`** (no `Process.result` pipe). `Process.layer` / `serve` / `serveRemote` include a **baked-in default in-memory store**; override with `Layer.provideMerge(AppStore.layerMemory)` at the app root. Engine writes terminal runs to **`Process.store(tag)`** only.
+- **Process tag wire schemas and execution store (breaking).** `Process.Tag` uses positional **`success`** / **`error`** (no `Process.result` pipe). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**; **`Process.make`** does not. Override with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))` at the app root.
 - **Removed `ProcessExecutionStore` facet (breaking).** Deleted `@nikscripts/effect-pm/store/ProcessExecution`, `ProcessStorage.ProcessExecution`, and `process.execution.completed` runtime facet. Use **`Process.store(tag)`** → `events()` for execution history.
+- **`Store.Storage` public API.** `Store.layerDefaultMemory`, `Store.withDefault`, `Store.withStorage` — replaces internal `StoreScopeBridgeTag`.
 
 ## 0.8.0-beta.28
 
