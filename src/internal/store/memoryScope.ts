@@ -173,22 +173,6 @@ export const materializeStoreHandle = <Input extends StoreSpec | StoreContractVa
 };
 
 /** @internal */
-export const acquireFromScopes = <Input extends StoreSpec | StoreContractValue>(
-  scopes: ReadonlyMap<string, ScopeState>,
-  key: string,
-  input: Input,
-): Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered, EventJournal.EventJournal> => {
-  const scope = scopes.get(key);
-  return scope === undefined
-    ? Effect.fail(new StoreScopeNotRegistered({ key }))
-    : EventJournal.EventJournal.pipe(
-        Effect.map((journal) =>
-          materializeStoreHandle(input, { journal, scopeKey: key, maxRows: scope.maxRows }),
-        ),
-      );
-};
-
-/** @internal */
 export const changesFromScopes = (
   scopes: ReadonlyMap<string, ScopeState>,
   key: string,

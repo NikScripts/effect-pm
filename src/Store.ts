@@ -104,6 +104,7 @@ import {
   makeStoreContractValue,
   makeStoreShape,
   mergeStoreContracts,
+  nestHandle,
   resolveShapeRef,
   shapeRowsByKey,
   type AllShapeRows,
@@ -429,6 +430,30 @@ export type Contract<C extends StoreContractValue = StoreContractValue> = C;
  * @public
  */
 export type HandleOf<C extends StoreContractValue> = StoreHandleFromContract<C>;
+
+/**
+ * Add {@link Storage} to the requirement channel of every method in a resolved-handle shape, recursing
+ * into nested sub-trees. Mirrors the `AsShape`/tree recursion so it does not trip `TS2589`: a method
+ * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, R | Storage>`; a bare {@link Effect} custom
+ * member gains `Storage` too; a sub-tree recurses; anything else passes through. @internal
+ */
+export type AddStorageReq<T> = T extends (
+  ...args: infer A
+) => Effect.Effect<infer S, infer E, infer R>
+  ? (...args: A) => Effect.Effect<S, E, R | Storage>
+  : T extends Effect.Effect<infer S, infer E, infer R>
+    ? Effect.Effect<S, E, R | Storage>
+    : T extends Record<string, unknown>
+      ? { readonly [K in keyof T]: AddStorageReq<T[K]> }
+      : T;
+
+/**
+ * The object of effects produced by {@link effects}: the {@link HandleOf} structure (nested shape tree +
+ * custom methods) with {@link Storage} added to every method's requirement channel.
+ *
+ * @public
+ */
+export type StoreEffectsOf<C extends StoreContractValue> = AddStorageReq<StoreHandleFromContract<C>>;
 
 /** Scope keys (tuple registrations) or accessor keys (object registrations) on a store class. @public */
 export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
@@ -817,6 +842,64 @@ export const withDefault = <const C extends StoreContractValue>(
       ),
     ),
   );
+
+/** Navigate a resolved handle to the (possibly dotted) method at `path` and apply it. @internal */
+const callAt = (
+  handle: unknown,
+  path: string,
+  args: ReadonlyArray<unknown>,
+): Effect.Effect<unknown> => {
+  let node: unknown = handle;
+  for (const part of path.split(".")) {
+    // Tree-walk idiom (as in `nestHandle` / `Resource.nestService`).
+    node = (node as Record<string, unknown>)[part];
+  }
+  if (typeof node !== "function") {
+    return Effect.die(`Store.effects: no resolvable method at "${path}"`);
+  }
+  return node(...args);
+};
+
+/**
+ * Build a PURE object of effects from a contract — the {@link HandleOf} structure (nested shape tree +
+ * custom methods) where each method is `(...args) => withDefault(scope, contract).flatMap((handle) =>
+ * handle.<path>(...args))`. So every method carries `Storage` in its requirement (see {@link StoreEffectsOf}),
+ * the error channel stays clean ({@link withDefault} dies on an unregistered custom store rather than
+ * surfacing `StoreScopeNotRegistered`), and there is **no** resolution / `yield*` / memo cell here — the
+ * handle memo lives in the storage bridge's `.at`. No error handling (a future `withGuard` owns that).
+ *
+ * @example
+ * ```ts
+ * const store = Store.effects("sensors", sensorContract);
+ * yield* store.sensors.temperature.append({ celsius: 21 });   // Effect<void, never, Storage>
+ * const rows = yield* store.sensors.temperature.read();       // Effect<ReadonlyArray<…>, never, Storage>
+ * ```
+ *
+ * @public
+ */
+export const effects = <const C extends StoreContractValue>(
+  scope: string | StoreScopeTag,
+  contract: C,
+): StoreEffectsOf<C> => {
+  const method =
+    (path: string) =>
+    (...args: ReadonlyArray<unknown>) =>
+      withDefault(scope, contract).pipe(
+        Effect.flatMap((handle) => callAt(handle, path, args)),
+      );
+
+  const flat: Record<string, unknown> = {};
+  for (const shapeKey of shapeRowsByKey(contract.shapes).keys()) {
+    flat[`${shapeKey}.append`] = method(`${shapeKey}.append`);
+    flat[`${shapeKey}.read`] = method(`${shapeKey}.read`);
+  }
+  for (const name of Object.keys(contract.customEntries)) {
+    flat[name] = method(name);
+  }
+  // Same generic-object structural-rebuild idiom as `makeShapeHandles` / `makeShapeRefs`: the effects
+  // object is assembled by dynamic assignment (then nested), so its type is asserted once here.
+  return nestHandle(flat) as StoreEffectsOf<C>;
+};
 
 
 // ============================================================================

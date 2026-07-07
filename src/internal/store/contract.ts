@@ -21,6 +21,7 @@ export {
   makeStoreShape,
   mergeStoreContracts,
   materializeContractHandle,
+  nestHandle,
   resolveShapeRef,
   shapeRowsByKey,
   toStoreContract,

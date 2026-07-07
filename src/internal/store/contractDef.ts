@@ -716,7 +716,7 @@ const setHandlePath = (
  * works. **Identity (same reference) when there are no dotted keys**, so a flat contract's handle is
  * byte-identical to before. Mirrors `Resource.nestService`. @internal
  */
-const nestHandle = (flat: Record<string, unknown>): Record<string, unknown> => {
+export const nestHandle = (flat: Record<string, unknown>): Record<string, unknown> => {
   if (!Object.keys(flat).some((key) => key.includes("."))) {
     return flat;
   }
