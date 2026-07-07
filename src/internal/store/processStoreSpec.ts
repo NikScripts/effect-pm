@@ -1,71 +1,85 @@
 /**
  * Built-in {@link Process} store contract.
  *
+ * Persists the same execution event union the supervisor emits at run terminal
+ * (`record` / `events`), aligned with {@link builtInQueueStoreContract}.
+ *
  * @module internal/store/processStoreSpec
  * @internal
  */
 
-import { Schema } from "effect";
+import { Effect } from "effect";
+import type { Schema } from "effect";
 import {
-  makeStoreContractValue,
-  makeStoreShape,
-  type ShapeNamespaceMembers,
-  type StoreContractValue,
-  type StoreShapeDef,
-} from "./contractDef";
+  makeProcessExecutionEvent,
+  processEventReadPayload,
+  processExecutionEventVoid,
+} from "../processEvent";
+import { resultSchemaOf } from "../processTagSchemas";
+import * as Store from "../../Store";
+import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
 
-/** Built-in `execution` row schema. @internal */
-export const processExecutionRowSchema = Schema.Struct({
-  processId: Schema.String,
-  executionId: Schema.String,
-  startedAt: Schema.DateTimeUtc,
-});
+/** Execution event type for a void process. @internal */
+export type ProcessExecutionEventVoid = typeof processExecutionEventVoid.Type;
 
-/** Read payload for built-in `execution` / `executions` queries. @internal */
-export const processExecutionReadPayload = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
-});
-
-/** Part 1 shapes on the built-in process store contract. @internal */
-export type ProcessBuiltInShapes = {
-  readonly execution: StoreShapeDef<
-    typeof processExecutionRowSchema,
-    typeof processExecutionReadPayload
-  >;
-};
-
-/** Part 2 custom aliases on the built-in process store contract. @internal */
-export type ProcessBuiltInCustom = {
-  readonly recordExecution: ShapeNamespaceMembers<
-    typeof processExecutionRowSchema,
-    typeof processExecutionReadPayload
-  >["append"];
-  readonly executions: ShapeNamespaceMembers<
-    typeof processExecutionRowSchema,
-    typeof processExecutionReadPayload
-  >["read"];
-};
-
-/** Built-in process store contract. @internal */
-export type BuiltInProcessContract = StoreContractValue<
-  ProcessBuiltInShapes,
-  ProcessBuiltInCustom
->;
-
-/** @internal */
-export const builtInProcessStoreContract = (
-  _tag: StoreScopeTag,
-): BuiltInProcessContract =>
-  makeStoreContractValue(
+/** Built-in process store contract — one `event` shape. @internal */
+export type BuiltInProcessContract<R extends Schema.Top | void = void> =
+  StoreContractValue<
     {
-      execution: makeStoreShape(processExecutionRowSchema, processExecutionReadPayload),
+      readonly event: StoreShapeDef<
+        R extends Schema.Top
+          ? ReturnType<typeof makeProcessExecutionEvent<R>>
+          : typeof processExecutionEventVoid,
+        typeof processEventReadPayload
+      >;
     },
-    ({ execution }) => ({
-      recordExecution: execution.append,
-      executions: execution.read,
+    {
+      readonly record: (
+        event: R extends Schema.Top
+          ? ReturnType<typeof makeProcessExecutionEvent<R>>["Type"]
+          : ProcessExecutionEventVoid,
+      ) => Effect.Effect<void>;
+      readonly events: (
+        payload?: { readonly limit?: number },
+      ) => Effect.Effect<
+        ReadonlyArray<
+          R extends Schema.Top
+            ? ReturnType<typeof makeProcessExecutionEvent<R>>["Type"]
+            : ProcessExecutionEventVoid
+        >
+      >;
+      readonly hasPriorExecutions: () => Effect.Effect<boolean>;
+    }
+  >;
+
+/** Build the process store contract (optional result schema). @internal */
+export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
+  resultSchema?: R extends Schema.Top ? R : never,
+) => {
+  const eventSchema =
+    resultSchema === undefined
+      ? processExecutionEventVoid
+      : makeProcessExecutionEvent(resultSchema);
+
+  return Store.contract(
+    {
+      event: Store.shape(eventSchema, processEventReadPayload),
+    },
+    ({ event }) => ({
+      record: event.append,
+      events: event.read,
+      hasPriorExecutions: () =>
+        Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
     }),
-  ) as unknown as BuiltInProcessContract;
+  );
+};
+
+/** Built-in process store contract for a tag (reads `resultSchema` from tag). @internal */
+export const builtInProcessStoreContract = (
+  tag: StoreScopeTag,
+): BuiltInProcessContract =>
+  makeProcessStoreContract(resultSchemaOf(tag)) as BuiltInProcessContract;
 
 /** @deprecated Internal flat spec — use {@link builtInProcessStoreContract}. @internal */
 export const builtInProcessStoreSpec = (tag: StoreScopeTag) =>
