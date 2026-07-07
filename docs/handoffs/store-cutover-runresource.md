@@ -5,7 +5,7 @@ dependency; NEVER `serviceOption`**).
 
 ## ✅ Done (run-resource branch)
 
-- Declared dependency: `yield* StoreScopeBridgeTag` once at tap build; `yield* bridge.at(scopeKey, contract)` — no `serviceOption`, no `.pipe(Effect.option)`.
+- Declared dependency: `yield* StoreScopeBridgeTag` once at tap build; **Store bridge only** — no `RunResourceStore` facet writes.
 - Cast-free contract in `runResourceStoreSpec.ts` (mirrors queue).
 - Handle cast removed from tap.
 - `ProcessStore.catchErrorAndLog` → `catchErrorAndLog` from `internal/store/helpers`.

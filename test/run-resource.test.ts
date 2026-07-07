@@ -1,11 +1,9 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Duration, Effect, Layer, Ref, Schema } from "effect";
-import * as ProcessStorage from "../src/ProcessStorage";
+import { Effect, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
 import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
-import { RunResourceStore } from "../src/store/runResource";
 
 const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
   layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
@@ -230,30 +228,6 @@ describe("RunResource.Tag + layer", () => {
         expect(p).toBeLessThanOrEqual(3);
       }).pipe(Effect.provide(live));
     }),
-  );
-});
-
-describe("RunResource.make — ProcessStore records", () => {
-  it.live("writes run facts when ProcessStorage is provided", () =>
-    Effect.gen(function* () {
-      const gate = yield* RunResource.make({
-        name: "test-run-store-records",
-        effect: (n: number) => Effect.succeed(n),
-        concurrency: 1,
-      });
-      yield* gate.run(1);
-      yield* Effect.sleep(Duration.millis(20));
-
-      const store = yield* RunResourceStore;
-      const facts = yield* store.facts({ resourceId: "test-run-store-records" });
-      expect(facts.map((row) => row.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
-      ]);
-    }).pipe(
-      Effect.provide(Layer.mergeAll(ProcessStorage.layer, Store.layerDefaultMemory)),
-      Effect.scoped,
-    ),
   );
 });
 

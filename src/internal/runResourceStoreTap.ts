@@ -1,18 +1,15 @@
 /**
- * Optional persistence tap for the RunResource gate engine — legacy facet + new Store API.
+ * Persistence tap for the RunResource gate engine — writes to the Store bridge only.
+ *
+ * Legacy {@link RunResourceStore} facet emitters are not used; the engine targets
+ * {@link builtInRunResourceStoreContract} via {@link StoreScopeBridgeTag}.
  *
  * @module internal/runResourceStoreTap
  * @internal
  */
 
 import { Effect, Ref } from "effect";
-import { RunResourceStore } from "../store/runResource";
 import type {
-  RunResourceRunCompletedFact,
-  RunResourceRunFailedFact,
-  RunResourceRunStartedFact,
-  RunResourceState,
-  RunResourceStateChange,
   RunResourceStateChangeReason,
 } from "../store/runResource";
 import { StoreScopeBridgeTag } from "./store/bridge";
@@ -27,7 +24,7 @@ import {
 } from "./store/runResourceStoreSpec";
 import type { StoreHandleFromContract } from "./store/spec";
 
-/** Engine-facing store tap — writes to legacy facet and defaulted Store bridge. @internal */
+/** Engine-facing store tap — Store bridge only. @internal */
 export interface RunResourceStoreTap {
   readonly recordStateChange: (
     reason: RunResourceStateChangeReason,
@@ -52,12 +49,12 @@ export interface RunResourceStoreTap {
   ) => Effect.Effect<void>;
 }
 
-type NewRunStoreHandle = Pick<
+type RunStoreHandle = Pick<
   StoreHandleFromContract<BuiltInRunResourceContract>,
   "record" | "recordStateChange"
 >;
 
-const toResourceState = (status: RunGateStatus): RunResourceState => ({
+const toResourceState = (status: RunGateStatus): RunStateChange["current"] => ({
   resourceId: status.resourceId,
   observedAt: status.observedAt,
   configVersion: status.configVersion,
@@ -83,58 +80,6 @@ const makeRecordWrite =
       }),
     );
 
-const dualRecord =
-  (recordWrite: ReturnType<typeof makeRecordWrite>) =>
-  (
-    label: string,
-    legacy: Effect.Effect<void, unknown>,
-    store: Effect.Effect<void, unknown>,
-  ): Effect.Effect<void> =>
-    Effect.all(
-      [
-        recordWrite(`legacy ${label}`, legacy),
-        recordWrite(`store ${label}`, store),
-      ],
-      { discard: true },
-    );
-
-const toWireStateChange = (change: RunResourceStateChange): RunStateChange => ({
-  id: change.id,
-  resourceId: change.resourceId,
-  changedAt: change.changedAt,
-  reason: change.reason,
-  previous: change.previous,
-  current: change.current,
-});
-
-const toWireStarted = (fact: RunResourceRunStartedFact): RunFact => ({
-  id: fact.id,
-  resourceId: fact.resourceId,
-  runId: fact.runId,
-  type: fact.type,
-  occurredAt: fact.occurredAt,
-  concurrency: fact.payload.concurrency,
-});
-
-const toWireCompleted = (fact: RunResourceRunCompletedFact): RunFact => ({
-  id: fact.id,
-  resourceId: fact.resourceId,
-  runId: fact.runId,
-  type: fact.type,
-  occurredAt: fact.occurredAt,
-  durationMs: fact.payload.durationMs,
-});
-
-const toWireFailed = (fact: RunResourceRunFailedFact): RunFact => ({
-  id: fact.id,
-  resourceId: fact.resourceId,
-  runId: fact.runId,
-  type: fact.type,
-  occurredAt: fact.occurredAt,
-  durationMs: fact.payload.durationMs,
-  cause: fact.payload.cause,
-});
-
 /** Resolve the store bridge once and build the engine tap. @internal */
 export const makeRunResourceStoreTap = (
   resourceId: string,
@@ -143,9 +88,8 @@ export const makeRunResourceStoreTap = (
   Effect.gen(function* () {
     const bridge = yield* StoreScopeBridgeTag;
     const contract = builtInRunResourceStoreContract(scopeTagForKey(scopeKey));
-    const newStore: NewRunStoreHandle = yield* bridge.at(scopeKey, contract);
+    const store: RunStoreHandle = yield* bridge.at(scopeKey, contract);
     const recordWrite = makeRecordWrite(resourceId);
-    const writeBoth = dualRecord(recordWrite);
     const stateSeqRef = yield* Ref.make(0);
     const factSeqRef = yield* Ref.make(0);
 
@@ -165,7 +109,7 @@ export const makeRunResourceStoreTap = (
       current: RunGateStatus,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const change: RunResourceStateChange = {
+        const change: RunStateChange = {
           id: yield* nextStateId(),
           resourceId,
           changedAt: current.observedAt,
@@ -173,11 +117,7 @@ export const makeRunResourceStoreTap = (
           previous: previous === null ? null : toResourceState(previous),
           current: toResourceState(current),
         };
-        yield* writeBoth(
-          `state ${reason}`,
-          RunResourceStore.recordStateChange(change),
-          newStore.recordStateChange(toWireStateChange(change)),
-        );
+        yield* recordWrite(`state ${reason}`, store.recordStateChange(change));
       });
 
     const recordRunStarted = (
@@ -186,19 +126,15 @@ export const makeRunResourceStoreTap = (
       concurrency: number,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const fact: RunResourceRunStartedFact = {
+        const fact: RunFact = {
           id: yield* nextFactId(runId, "run-resource.run.started"),
           resourceId,
           runId,
           type: "run-resource.run.started",
           occurredAt,
-          payload: { concurrency },
+          concurrency,
         };
-        yield* writeBoth(
-          `fact started ${runId}`,
-          RunResourceStore.recordRunStarted(fact),
-          newStore.record(toWireStarted(fact)),
-        );
+        yield* recordWrite(`fact started ${runId}`, store.record(fact));
       });
 
     const recordRunCompleted = (
@@ -207,19 +143,15 @@ export const makeRunResourceStoreTap = (
       durationMs: number,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const fact: RunResourceRunCompletedFact = {
+        const fact: RunFact = {
           id: yield* nextFactId(runId, "run-resource.run.completed"),
           resourceId,
           runId,
           type: "run-resource.run.completed",
           occurredAt,
-          payload: { durationMs },
+          durationMs,
         };
-        yield* writeBoth(
-          `fact completed ${runId}`,
-          RunResourceStore.recordRunCompleted(fact),
-          newStore.record(toWireCompleted(fact)),
-        );
+        yield* recordWrite(`fact completed ${runId}`, store.record(fact));
       });
 
     const recordRunFailed = (
@@ -229,19 +161,16 @@ export const makeRunResourceStoreTap = (
       cause: string,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const fact: RunResourceRunFailedFact = {
+        const fact: RunFact = {
           id: yield* nextFactId(runId, "run-resource.run.failed"),
           resourceId,
           runId,
           type: "run-resource.run.failed",
           occurredAt,
-          payload: { durationMs, cause },
+          durationMs,
+          cause,
         };
-        yield* writeBoth(
-          `fact failed ${runId}`,
-          RunResourceStore.recordRunFailed(fact),
-          newStore.record(toWireFailed(fact)),
-        );
+        yield* recordWrite(`fact failed ${runId}`, store.record(fact));
       });
 
     return {

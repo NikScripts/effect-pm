@@ -98,7 +98,7 @@ Two report sets exist — use **both**, for different layers:
 | Shipped | Open |
 |---------|------|
 | `.run` handle, RPC serve, `payload`/`success`/`error` | Doc sweep + consolidated changeset |
-| `RunResource.store`, dual-write (facet + Store) | Drop legacy facet (**owner decision**) |
+| `RunResource.store`, Store-only engine tap | Platform may delete `RunResourceStore` facet from ProcessStorage later |
 | Declared-dependency store tap + cast-free contract | Optional write-path buffer (queue may add) |
 | `Store.layerDefaultMemory` public export | Wire default store into Process/Queue layers (their agents) |
 | Remote HTTP test, changeset draft | Consolidated platform changeset |
