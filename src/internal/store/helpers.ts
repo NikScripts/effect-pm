@@ -87,6 +87,10 @@ export const toJsonValue = (value: unknown): JsonValue => {
   if (isRecord(value)) {
     const out: { [key: string]: JsonValue } = {};
     for (const [key, item] of Object.entries(value)) {
+      // Drop `undefined`-valued keys (JSON semantics). Encoding them as `null` would break decode
+      // for `Schema.optional(X)` fields (they expect `X | undefined`, not `null`) after the journal
+      // round-trip — e.g. a queue entry's absent `key`.
+      if (item === undefined) continue;
       out[key] = toJsonValue(item);
     }
     return out;

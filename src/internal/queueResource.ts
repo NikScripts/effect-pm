@@ -1101,6 +1101,12 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
   readonly onFailure?: QueueOnFailure<T, E, R>;
   /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
   readonly refill?: QueueRefill<T, E, QueueEnqueueErrors, R>;
+  /**
+   * Internal hook — persist each published event to the resource's store. Wired by
+   * `QueueResource.layer` from the baked-in store; called at the source (`publishEvent`) so no burst
+   * is dropped by a late `Stream.fromPubSub` subscription. @internal
+   */
+  readonly recordEvent?: (event: QueueEvent<T, E>) => Effect.Effect<void>;
 };
 
 /**
@@ -1244,6 +1250,8 @@ type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
   readonly onFailure?: QueueOnFailure<T, E, R>;
   readonly refill?: QueueRefill<T, E, EEnqueue, R>;
+  /** Internal store recorder — see {@link QueueResourceConfigWithItemSchema.recordEvent}. @internal */
+  readonly recordEvent?: (event: QueueEvent<T, E>) => Effect.Effect<void>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -2140,6 +2148,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
         yield* recordEventMetric(event);
         yield* PubSub.publish(eventsHub, event);
+        // Persist to the resource store at the source, so no burst is dropped by a late subscriber.
+        if (config.recordEvent !== undefined) yield* config.recordEvent(event);
         if (isSignificant(event)) yield* requestMetricsFlush;
       });
 
