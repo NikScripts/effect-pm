@@ -39,9 +39,6 @@ describe("QueueResource → baked store persistence", () => {
       expect(tags).toContain("Enqueued");
       expect(tags).toContain("Started");
       expect(tags).toContain("Completed");
-      expect(tags).toContain("Enqueued");
-      expect(tags).toContain("Started");
-      expect(tags).toContain("Completed");
     }).pipe(
       // Only the queue layer — it bakes + exposes the store. No app Store.Service.
       Effect.provide(
