@@ -58,7 +58,7 @@ Two report sets exist — use **both**, for different layers:
 
 ### Process
 
-**Read:** [`store-cutover-process.md`](./store-cutover-process.md) · [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md)
+**Read:** [`store-cutover-process.md`](./store-cutover-process.md) · [`process-store-cutover-review.md`](./process-store-cutover-review.md) · [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md)
 
 | Shipped | Open |
 |---------|------|
