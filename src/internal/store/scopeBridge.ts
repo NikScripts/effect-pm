@@ -1,19 +1,19 @@
 /**
- * Scope bridge helpers — connect {@link acquireFromScopes} to {@link StoreScopeBridge}.
+ * Scope bridge helpers — connect {@link acquireFromScopes} to {@link StorageApi}.
  *
  * @module internal/store/scopeBridge
  * @internal
  */
 
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Stream } from "effect";
 import {
   acquireFromScopes,
   changesFromScopes,
   materializeStoreHandle,
   type ScopeState,
 } from "./memoryScope";
-import { StoreScopeBridgeTag, type StoreScopeBridge } from "./bridge";
+import type { StorageApi } from "./bridge";
 import { decodeJournalPayload } from "./journalCodec";
 import { StoreChangeEvent } from "./errors";
 
@@ -21,7 +21,7 @@ import { StoreChangeEvent } from "./errors";
 export const buildScopeBridge = (
   scopes: ReadonlyMap<string, ScopeState>,
   journal: EventJournal.EventJournal["Service"],
-): StoreScopeBridge => ({
+): StorageApi => ({
   at: (scopeKey, input) =>
     acquireFromScopes(scopes, scopeKey, input).pipe(
       Effect.provideService(EventJournal.EventJournal, journal),
@@ -43,7 +43,7 @@ export const buildScopeBridge = (
 export const buildDefaultScopeBridge = (
   journal: EventJournal.EventJournal["Service"],
   maxRows?: number,
-): StoreScopeBridge => ({
+): StorageApi => ({
   at: (scopeKey, input) =>
     Effect.succeed(
       materializeStoreHandle(input, { journal, scopeKey, maxRows }),
@@ -64,16 +64,3 @@ export const buildDefaultScopeBridge = (
       ),
     ),
 });
-
-/**
- * The baked-in default store: provides {@link StoreScopeBridgeTag} from a process-local in-memory
- * journal so `Tag.store` / `Resource.store` resolve with **no app `Store.Service` provided**. An
- * app store provides the same tag and overrides this by plain layer composition.
- *
- * @internal
- */
-export const layerDefaultMemory: Layer.Layer<StoreScopeBridgeTag> = Layer.unwrap(
-  Effect.map(EventJournal.EventJournal, (journal) =>
-    Layer.succeed(StoreScopeBridgeTag, buildDefaultScopeBridge(journal)),
-  ),
-).pipe(Layer.provide(EventJournal.layerMemory));

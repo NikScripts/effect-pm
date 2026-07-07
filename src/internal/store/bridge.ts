@@ -1,18 +1,22 @@
 /**
- * Runtime bridge between aggregate {@link Store.Service} layers and tag `.store` accessors.
+ * Runtime bridge type between aggregate {@link Store.Service} layers and tag `.store` accessors.
+ *
+ * The `Storage` service tag that carries this API is co-located with its layers in
+ * `src/Store.ts` (Effect's service-with-layers pattern); this leaf holds only the pure type so
+ * internal modules can reference the API shape without importing the public namespace.
  *
  * @module internal/store/bridge
  * @internal
  */
 
-import { Context, Effect, Stream } from "effect";
+import type { Effect, Stream } from "effect";
 import type { Scope } from "effect/Scope";
 import type { StoreChangeEvent, StoreJournalDecodeError, StoreScopeNotRegistered } from "./errors";
 import type { StoreContractValue } from "./contractDef";
 import type { StoreHandleOf, StoreSpec } from "./spec";
 
 /** @internal */
-export interface StoreScopeBridge {
+export interface StorageApi {
   readonly at: <Input extends StoreSpec | StoreContractValue>(
     scopeKey: string,
     input: Input,
@@ -25,8 +29,3 @@ export interface StoreScopeBridge {
     Scope
   >;
 }
-
-/** @internal */
-export class StoreScopeBridgeTag extends Context.Service<StoreScopeBridgeTag, StoreScopeBridge>()(
-  "@nikscripts/effect-pm/internal/store/bridge/StoreScopeBridgeTag",
-) {}

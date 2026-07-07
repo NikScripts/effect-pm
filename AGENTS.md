@@ -23,9 +23,14 @@ Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture,
 
 ## Vendored repositories
 
-External repositories live under `repos/` as read-only reference material for agents.
+External repositories live under `repos/` as read-only reference material, tracked as **git submodules**.
 
-- Use vendored repositories to inspect idiomatic upstream source, tests, module structure, and API design.
+- `repos/effect` is a submodule of **effect-smol** (Effect **v4**), tracking `main`. The Effect source
+  is at `repos/effect/packages/effect/src/`. NOT v3 — do not trust any "stale v3" assumption.
+- **Init after clone:** `git submodule update --init --depth 1`.
+- **Pull latest upstream:** `git submodule update --remote repos/effect` (then commit the bumped pointer).
+- Use the submodule to inspect idiomatic upstream source, tests, module structure, and API design — when
+  writing Effect code, read `repos/effect/packages/effect/src/` (or the installed `node_modules/effect/src/`
+  for the exact pinned version) before guessing from memory.
 - Do not edit files under `repos/` unless explicitly asked.
-- Do not import from `repos/`; application and package code must continue importing from normal package dependencies.
-- When writing Effect code, inspect `repos/effect/` for examples and API patterns before guessing from memory.
+- Do not import from `repos/`; application and package code import from normal package dependencies.

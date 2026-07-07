@@ -472,7 +472,7 @@ export type {
 } from "./internal/customQueueResource";
 
 export type {
-  CustomQueueTagOptions,
+  CustomQueueTagConfig,
 } from "./CustomQueueResource";
 
 export {

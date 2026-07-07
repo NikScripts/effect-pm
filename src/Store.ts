@@ -63,20 +63,31 @@
  * @module Store
  */
 
-import { Effect, Schema, Stream } from "effect";
-import type { Scope } from "effect/Scope";
+import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
+import * as EventJournal from "effect/unstable/eventlog/EventJournal";
+import * as SqlEventJournal from "effect/unstable/eventlog/SqlEventJournal";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import {
-  applyStoreDefaultLogLevel,
+  buildStandaloneRegistration,
   defineStandaloneStore,
-  defineStoreService,
   defineStoreTag,
-  StoreScopeBridgeTag,
+  storeDefaultLogLevelSym,
   storeRegsSym,
   type StandaloneStoreClass,
-  type StoreServiceClass,
+  type StoreBundle,
   type StoreTagClass,
 } from "./internal/store/defineStore";
-import { StoreScopeNotRegistered, StoreChangeEvent, type StoreJournalDecodeError } from "./internal/store/errors";
+import type { StorageApi } from "./internal/store/bridge";
+import { buildDefaultScopeBridge, buildScopeBridge } from "./internal/store/scopeBridge";
+import { buildScopeStateMap, type ScopeState } from "./internal/store/memoryScope";
+import { buildBundle, mapSqliteBuildError } from "./internal/store/sqliteLayer";
+import type { NormalizedStoreRegistration } from "./internal/store/registrationNormalize";
+import {
+  StoreScopeNotRegistered,
+  StoreChangeEvent,
+  type StoreJournalDecodeError,
+  type StoreSqliteConnectionError,
+} from "./internal/store/errors";
 import {
   makeRegistration,
   type RegisteredWithContract,
@@ -102,14 +113,299 @@ import {
 import {
   type StoreHandleForKey,
   type StoreHandleFromContract,
+  type StoreHandleOf,
 } from "./internal/store/spec";
-import type { StoreLogLevel } from "./internal/store/types";
+import type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 
 export type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreHandleFromContract } from "./internal/store/spec";
 export type { MergedCustom, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
 
 export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent } from "./internal/store/errors";
+
+// ============================================================================
+// Storage service tag + layers
+// ============================================================================
+//
+// The `Storage` service is co-located with its layer builders here (Effect's
+// service-with-layers pattern, like `EventJournal` holds the tag + `layerMemory`). Internal
+// store modules stay one-directional: they consume the pure `StorageApi` type from
+// `./internal/store/bridge` and never import this tag value.
+
+/**
+ * The storage service every store handle resolves through — an app {@link Service} layer, or the
+ * baked-in in-memory default. Carries the (internal) {@link StorageApi} scope bridge.
+ *
+ * @internal
+ */
+export class Storage extends Context.Service<Storage, StorageApi>()(
+  "@nikscripts/effect-pm/Store/Storage",
+) {}
+
+export type { StorageApi } from "./internal/store/bridge";
+
+/** Layer attachments shared by aggregate and standalone store classes. @internal */
+type StoreLayers<Self> = {
+  readonly layerMemory: Layer.Layer<Self | Storage>;
+  readonly layer: (
+    options?: StoreLayerOptions,
+  ) => Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope>;
+};
+
+/** Aggregate store class with attached {@link Storage} layers. @internal */
+export type StoreServiceClass<
+  Self = unknown,
+  Id extends string = string,
+  Regs = ReadonlyArray<NormalizedStoreRegistration>,
+> = StoreTagClass<Self, Id, Regs> & StoreLayers<Self>;
+
+/** Standalone single-scope store class with attached {@link Storage} layers. @internal */
+export type StandaloneStore<
+  Self,
+  Id extends string,
+  K extends string = string,
+  C extends StoreContractValue = StoreContractValue,
+  Tag extends StoreScopeTag | undefined = undefined,
+> = StandaloneStoreClass<Self, Id, K, C, Tag> & StoreLayers<Self>;
+
+/** @internal */
+const layerFromBuiltBridge = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
+  bundle: StoreBundle<Regs>,
+  bridge: StorageApi,
+): Layer.Layer<Self | Storage> =>
+  Layer.mergeAll(
+    Layer.succeed(tag, bundle as unknown as StoreBundle<Regs>),
+    Layer.succeed(Storage, bridge),
+  );
+
+/** @internal */
+const layerForSingleRegistration = <
+  Self,
+  Id extends string,
+  C extends StoreContractValue,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
+  registration: NormalizedStoreRegistration,
+  scopes: Map<string, ScopeState>,
+): Layer.Layer<Self | Storage, never, EventJournal.EventJournal> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const journal = yield* EventJournal.EventJournal;
+      const bridge = buildScopeBridge(scopes, journal);
+      const handle = yield* bridge
+        .at(registration.scopeKey, registration.contract ?? registration.spec)
+        .pipe(Effect.orDie);
+      return Layer.mergeAll(
+        Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
+        Layer.succeed(Storage, bridge),
+      );
+    }),
+  );
+
+/** @internal */
+const buildStandaloneMemoryLayer = <
+  Self,
+  Id extends string,
+  C extends StoreContractValue,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
+  registration: NormalizedStoreRegistration,
+): Layer.Layer<Self | Storage> =>
+  layerForSingleRegistration(tag, registration, buildScopeStateMap([registration])).pipe(
+    Layer.provide(EventJournal.layerMemory),
+  );
+
+/** @internal */
+const buildStandaloneSqliteLayer = <
+  Self,
+  Id extends string,
+  C extends StoreContractValue,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
+  registration: NormalizedStoreRegistration,
+  filename: string,
+): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> => {
+  const scopes = buildScopeStateMap([registration]);
+  const sqlStack = Layer.provideMerge(
+    SqlEventJournal.layer(),
+    SqliteClient.layer({ filename }),
+  );
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      const scope = yield* Scope.Scope;
+      const context = yield* Layer.buildWithScope(sqlStack, scope).pipe(
+        Effect.mapError(mapSqliteBuildError),
+      );
+      const journal = Context.get(context, EventJournal.EventJournal);
+      const bridge = buildScopeBridge(scopes, journal);
+      const handle = yield* bridge
+        .at(registration.scopeKey, registration.contract ?? registration.spec)
+        .pipe(Effect.orDie);
+      return Layer.mergeAll(
+        Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
+        Layer.succeed(Storage, bridge),
+      ).pipe(Layer.provide(Layer.succeedContext(context)));
+    }).pipe(Effect.mapError(mapSqliteBuildError)),
+  );
+};
+
+/** @internal */
+const buildStandaloneLayer = <
+  Self,
+  Id extends string,
+  C extends StoreContractValue,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
+  registration: NormalizedStoreRegistration,
+  options?: { readonly filename?: string },
+): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> =>
+  options?.filename !== undefined
+    ? buildStandaloneSqliteLayer(tag, registration, options.filename)
+    : (buildStandaloneMemoryLayer(tag, registration) as Layer.Layer<
+        Self | Storage,
+        StoreSqliteConnectionError,
+        Scope.Scope
+      >);
+
+/** @internal */
+const layerFromScopeState = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
+  registrations: ReadonlyArray<NormalizedStoreRegistration>,
+  scopes: Map<string, ScopeState>,
+): Layer.Layer<Self | Storage, never, EventJournal.EventJournal> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const journal = yield* EventJournal.EventJournal;
+      const bridge = buildScopeBridge(scopes, journal);
+      const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
+      return layerFromBuiltBridge(tag, bundle as StoreBundle<Regs>, bridge);
+    }),
+  );
+
+/** @internal */
+const buildMemoryLayerForAggregate = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
+  registrations: ReadonlyArray<NormalizedStoreRegistration>,
+): Layer.Layer<Self | Storage> => {
+  const scopes = buildScopeStateMap(registrations);
+  return layerFromScopeState(tag, registrations, scopes).pipe(
+    Layer.provide(EventJournal.layerMemory),
+  );
+};
+
+/** @internal */
+const buildSqliteLayerForAggregate = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
+  registrations: ReadonlyArray<NormalizedStoreRegistration>,
+  filename: string,
+): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> => {
+  const scopes = buildScopeStateMap(registrations);
+  const sqlStack = Layer.provideMerge(
+    SqlEventJournal.layer(),
+    SqliteClient.layer({ filename }),
+  );
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      const scope = yield* Scope.Scope;
+      const context = yield* Layer.buildWithScope(sqlStack, scope).pipe(
+        Effect.mapError(mapSqliteBuildError),
+      );
+      const journal = Context.get(context, EventJournal.EventJournal);
+      const bridge = buildScopeBridge(scopes, journal);
+      const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
+      return layerFromBuiltBridge(tag, bundle as StoreBundle<Regs>, bridge).pipe(
+        Layer.provide(Layer.succeedContext(context)),
+      );
+    }).pipe(Effect.mapError(mapSqliteBuildError)),
+  );
+};
+
+/** @internal */
+const buildLayerForAggregate = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
+  registrations: ReadonlyArray<NormalizedStoreRegistration>,
+  options?: StoreLayerOptions,
+): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> =>
+  options?.filename !== undefined
+    ? buildSqliteLayerForAggregate(tag, registrations, options.filename)
+    : (buildMemoryLayerForAggregate(tag, registrations) as Layer.Layer<
+        Self | Storage,
+        StoreSqliteConnectionError,
+        Scope.Scope
+      >);
+
+/** Attach `layerMemory` / `layer` to a registration-only aggregate class. @internal */
+const attachAggregateLayers = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  aggregate: StoreTagClass<Self, Id, Regs>,
+): StoreServiceClass<Self, Id, Regs> => {
+  const registrations = aggregate[storeRegsSym] as ReadonlyArray<NormalizedStoreRegistration>;
+  const layerMemory = buildMemoryLayerForAggregate(aggregate, registrations);
+  const layer = (options?: StoreLayerOptions) =>
+    buildLayerForAggregate(aggregate, registrations, options);
+  return Object.assign(aggregate, {
+    layerMemory,
+    layer,
+  }) as StoreServiceClass<Self, Id, Regs>;
+};
+
+/** @internal */
+const applyStoreDefaultLogLevel = <
+  Self,
+  Id extends string,
+  Regs,
+>(
+  storeClass: StoreServiceClass<Self, Id, Regs>,
+  level: StoreLogLevel,
+): StoreServiceClass<Self, Id, Regs> => {
+  const registrations = storeClass[storeRegsSym] as ReadonlyArray<NormalizedStoreRegistration>;
+  return Object.assign(storeClass, {
+    [storeDefaultLogLevelSym]: level,
+    layerMemory: buildMemoryLayerForAggregate(storeClass, registrations),
+    layer: (options?: StoreLayerOptions) =>
+      buildLayerForAggregate(storeClass, registrations, {
+        ...options,
+        logLevel: options?.logLevel ?? level,
+      }),
+  });
+};
+
+/**
+ * The baked-in default store: provides {@link Storage} from a process-local in-memory journal so
+ * `Tag.store` / `Resource.store` resolve with **no app {@link Service} provided**. An app store
+ * provides the same tag and overrides this by plain layer composition.
+ *
+ * @internal
+ */
+export const layerDefaultMemory: Layer.Layer<Storage> = Layer.unwrap(
+  Effect.map(EventJournal.EventJournal, (journal) =>
+    Layer.succeed(Storage, buildDefaultScopeBridge(journal)),
+  ),
+).pipe(Layer.provide(EventJournal.layerMemory));
 
 /**
  * A pipeable store contract — shapes plus optional custom methods.
@@ -364,10 +660,56 @@ export const changes = (
 ): Effect.Effect<
   Stream.Stream<StoreChangeEvent, StoreJournalDecodeError>,
   StoreScopeNotRegistered,
-  StoreScopeBridgeTag | Scope
+  Storage | Scope.Scope
 > =>
-  Effect.flatMap(StoreScopeBridgeTag, (bridge) =>
+  Effect.flatMap(Storage, (bridge) =>
     bridge.changes(typeof scope === "string" ? scope : scope.key),
+  );
+
+// ============================================================================
+// Storage resolution — the ergonomic façade over the (internal) scope bridge
+// ============================================================================
+
+/**
+ * Resolve the store handle for a `scope` from the storage in context (an app {@link Service}, or the
+ * baked-in in-memory default). Collapses the `flatMap(bridge, (b) => b.at(scope, contract))` plumbing
+ * so consumers never touch the underlying service directly.
+ *
+ * Fails {@link StoreScopeNotRegistered} when the provided storage doesn't carry this scope — the
+ * **opt-in** path (e.g. persist only if the app wired durable storage for me). For the always-on
+ * observability path, use {@link withDefault}.
+ *
+ * @public
+ */
+export const withStorage = <const C extends StoreContractValue>(
+  scope: string | StoreScopeTag,
+  contract: C,
+): Effect.Effect<StoreHandleOf<C>, StoreScopeNotRegistered, Storage> =>
+  Effect.flatMap(Storage, (bridge) =>
+    bridge.at(typeof scope === "string" ? scope : scope.key, contract),
+  );
+
+/**
+ * Like {@link withStorage}, but **guarantees** a handle. With the baked-in default store in context
+ * (it materializes any scope on demand), this never fails — the always-on observability path, where a
+ * resource's engine records unconditionally with no service-sniffing. If a *custom* store is in
+ * context and lacks this scope, that's a wiring error and it dies with a clear message (bake the
+ * default so it can materialize the scope).
+ *
+ * @public
+ */
+export const withDefault = <const C extends StoreContractValue>(
+  scope: string | StoreScopeTag,
+  contract: C,
+): Effect.Effect<StoreHandleOf<C>, never, Storage> =>
+  withStorage(scope, contract).pipe(
+    Effect.catchTag("StoreScopeNotRegistered", (e) =>
+      Effect.die(
+        `Store.withDefault: scope "${e.key}" is not registered in the provided store, and no default ` +
+          `store is in context to materialize it. Provide the in-memory default (Service.layerMemory / ` +
+          `the resource layer's baked default) so the scope resolves.`,
+      ),
+    ),
   );
 
 // ============================================================================
@@ -402,8 +744,11 @@ export type TagClass<
  *
  * @public
  */
-export const Service = <Self>(id: string) =>
-  defineStoreService<Self, typeof id extends string ? typeof id : never>(id);
+export const Service = <Self>(id: string) => {
+  const define = defineStoreTag<Self, typeof id extends string ? typeof id : never>(id);
+  return <const Args extends ReadonlyArray<unknown>>(...args: Args) =>
+    attachAggregateLayers(define(...args));
+};
 
 /**
  * Like {@link Service} without layers — registration descriptor for remote clients.
@@ -451,7 +796,7 @@ export type Standalone<
   Id extends string,
   K extends string,
   C extends StoreContractValue,
-> = StandaloneStoreClass<Self, Id, K, C>;
+> = StandaloneStore<Self, Id, K, C>;
 
 /**
  * Standalone store for one scope, or attach a public spec to a resource tag (pipe form).
@@ -468,7 +813,7 @@ export const store: {
   >(
     scope: Scope,
     contract: C,
-  ): StandaloneStoreClass<
+  ): StandaloneStore<
     { readonly _tag: ScopeKeyOf<Scope> },
     `@nikscripts/effect-pm/Store/scope/${ScopeKeyOf<Scope>}`,
     ScopeKeyOf<Scope>,
@@ -481,17 +826,26 @@ export const store: {
     readonly store: Effect.Effect<
       StoreHandleFromContract<C>,
       StoreScopeNotRegistered,
-      StoreScopeBridgeTag
+      Storage
     >;
   };
 } = ((scopeOrContract: string | StoreScopeTag | StoreContractValue, maybeContract?: StoreContractValue) => {
   if (maybeContract !== undefined) {
-    return defineStandaloneStore(scopeOrContract as string | StoreScopeTag, maybeContract);
+    const scope = scopeOrContract as string | StoreScopeTag;
+    const standaloneClass = defineStandaloneStore(scope, maybeContract);
+    const registration = buildStandaloneRegistration(scope, maybeContract);
+    const layerMemory = buildStandaloneMemoryLayer(standaloneClass, registration);
+    const layer = (options?: StoreLayerOptions) =>
+      buildStandaloneLayer(standaloneClass, registration, options);
+    return Object.assign(standaloneClass, {
+      layerMemory,
+      layer,
+    });
   }
   const contract = scopeOrContract as StoreContractValue;
   return <T extends StoreScopeTag>(tag: T) =>
     Object.assign(tag, {
-      store: Effect.flatMap(StoreScopeBridgeTag, (bridge) => bridge.at(tag.key, contract)),
+      store: withStorage(tag.key, contract),
     });
 }) as never;
 
@@ -558,7 +912,7 @@ export declare namespace Store {
     Id extends string,
     K extends string,
     C extends StoreContractValue,
-  > = StandaloneStoreClass<Self, Id, K, C>;
+  > = StandaloneStore<Self, Id, K, C>;
 
   /** Scope keys (tuple registrations) or accessor keys (object registrations) on a store class. @public */
   export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
