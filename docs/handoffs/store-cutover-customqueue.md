@@ -25,8 +25,9 @@ CustomQueueResource.Tag<Jobs>()(
 ## Store cutover — mostly free
 
 CustomQueue shares the queue **engine** (`buildQueueEngine` / `makeQueueRuntime` in
-`internal/queueResource.ts`), so once the **queue** store wiring lands (engine `publishEvent` → shared
-`storeTap`), CustomQueue inherits event persistence with no separate engine work.
+`internal/queueResource.ts`), so once the **queue** store wiring lands (engine resolves
+`StoreScopeBridgeTag` as a declared dependency — **no `serviceOption`**, store-core §1 — and `publishEvent`
+persists), CustomQueue inherits event persistence with no separate engine work.
 
 - [ ] After the queue cutover: confirm CustomQueue's events flow to its store (it uses the same
       `publishEvent`), and that its custom-lane events (if any beyond the shared `QueueEvent<T>` set) are

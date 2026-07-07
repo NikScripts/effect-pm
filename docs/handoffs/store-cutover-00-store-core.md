@@ -7,44 +7,68 @@ the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) 
 ## Done and on the integration branch
 
 - **Store Stage 1 — default in-memory backing.** `layerDefaultMemory` (`internal/store/scopeBridge.ts`,
-  `buildDefaultScopeBridge`) materializes any scope on demand against one in-memory `EventJournal`.
-  `store-default.test.ts` proves it. This is the "always a store" default the cutover was blocked on.
-- **Precise handle resolution (tightening).** `bridge.at` is now generic (`at<Input>(scopeKey, input)`
-  → `StoreHandleOf<Input>`); `materializeStoreHandle` carries `Input`; `Tag.store` / `Resource.store`
-  return the **precise** `Store.HandleOf<contract>`, not the loose union. **This removes the consumer
-  casts** — see "Action for every module" below.
+  `buildDefaultScopeBridge`) provides `StoreScopeBridgeTag` from one in-memory `EventJournal`, materializing
+  any scope on demand. `store-default.test.ts` proves it. **This is the always-present default** — see the
+  resolution decision below.
+- **Precise handle resolution (tightening).** `bridge.at` is generic (`at<Input>(scopeKey, input)` →
+  `StoreHandleOf<Input>`); `Tag.store` / `Resource.store` / `AppStore.at(tag)` return the **precise**
+  `Store.HandleOf<contract>`. Removes the consumer casts (see "Action for every module").
 
 ## Decisions locked
 
-1. **No `serviceOption` / `isNone` on any emit path.** Sniffing "is there a store?" per event is banned.
-   Resolve the store handle **once**; emit sites call it unconditionally.
-2. **Resolution mechanism — SHARED, eager, forked-fiber (not lazy, not build-time).** RunResource's
-   current `resolveNewStoreHandle` (lazy `serviceOption` + `.at().pipe(Effect.option)`) is a stopgap and
-   must migrate onto the shared helper. Build-time resolution **deadlocks** (resolving the store during a
-   resource layer's build blocks a later `Store.Service.at(tag)` read — a scoped-layer memoization lock;
-   verified on the queue). The agreed shape: the layer creates the event buffer immediately and forks a
-   scoped daemon that resolves the handle once and drains the buffer. **Owner: queue agent prototypes the
-   shared `internal/store/storeTap.ts` helper and proves it against the deadlock; all three adopt it.**
-3. **Tag is the SSOT for wire schemas** (`payload`/`success`/`error`). Engine/layer config may accept
-   schemas *internally* (bootstrapping without a tag, tests) but must not advertise schema overrides —
-   overriding a tag's schema at `layer()` is unsafe for RPC (`result-schema-and-rpc-validation.md` §3).
-4. **One `event` shape per resource store, tagged-union row, `record`/`events` handle.** Persist the same
-   event the live surface emits (queue: `QueueEvent<T>`; process: execution union; run: fact/state union).
+### 1. The Store is a **defaulted service** — NEVER `serviceOption`
 
-## Action for EVERY module (cast removal)
+The store is **always in context**, exactly like `Clock` / `Logger` / `Random`: `layerDefaultMemory` is the
+default (in-memory), a real `Store.Service` overrides it. So **there is no "is there a store?" question** —
+and therefore **no `Effect.serviceOption(StoreScopeBridgeTag)` anywhere, no `Option.match`, no no-op branch.**
 
-With the tightening, the `... as BuiltInXContract` identity cast is no longer needed. Mirror the queue's
-`builtInQueueStoreContract` (no cast — the type-preserving `Store.contract`/`Store.shape` + the value-typed
-handle methods line up). **Concretely:** `processStoreSpec.ts` still has
-`makeProcessStoreContract(...) as BuiltInProcessContract` — delete the `as`, align the contract's `record`/
-`events` method types to the value union, and it should compile cast-free. Same check for RunResource's
-store contract.
+- Engines resolve the store as a **plain declared dependency**: `const bridge = yield* StoreScopeBridgeTag`.
+  Because it is always provided, the `yield*` always succeeds.
+- "No store wired" is not `Option.none` — it is the default implementation doing its thing.
+- **Emit path never sniffs.** Resolve once (as a dependency), emit unconditionally.
 
-## Store-core TODO (owner: whoever builds the shared tap)
+**This also dissolves the deadlock.** Resolving the store via `serviceOption` *inside a layer build* races
+a concurrent `AppStore.at(tag)` and locks the scoped `EventJournal` (verified on the queue). A **declared
+dependency** is built in topological order and memoized, so the store builds first and every reader reuses
+the same instance — no race, no forked-fiber trick, no lazy per-event resolution.
 
-- [ ] `internal/store/storeTap.ts` — shared helper: `(scopeKey, contract) => Effect<Sink, never, Scope>`
-      that resolves the handle once, forks the drain daemon, returns a buffered `record`-style sink
-      (no-op when no store in context). Used by all three engines.
-- [ ] Verify the forked-fiber resolution dodges the scoped-layer deadlock (the queue case).
-- [ ] Decide `success` persistence (doc step E): does the store `Completed`/`RunCompleted` row carry the
-      worker/run `success` value? Needs the tag's `success` schema threaded into the event union.
+### 2. Provision — app root, not baked into the resource layer
+
+The resource layer **requires** `StoreScopeBridgeTag` (its `RIn` includes it — no longer `never`). The **app**
+provides one at the root: `layerDefaultMemory` (default) **or** its own `Store.Service` (override). Do **not**
+`Layer.provide(layerDefaultMemory)` *inside* the resource layer — that hard-provides and blocks the app from
+overriding.
+
+### 3. Tag is the SSOT for wire schemas (`payload`/`success`/`error`)
+
+Engine/layer config may accept schemas *internally* (bootstrapping without a tag, tests), but must not
+advertise schema overrides — overriding a tag's schema at `layer()` is unsafe for RPC
+(`result-schema-and-rpc-validation.md` §3).
+
+### 4. One `event` shape per resource store, tagged-union row, `record`/`events` handle
+
+Persist the same event the live surface emits (queue: `QueueEvent<T>`; process: execution union; run:
+fact/state union).
+
+## Action for EVERY module
+
+- **Cast removal.** With the tightening, `... as BuiltInXContract` is unnecessary. Mirror
+  `builtInQueueStoreContract` (cast-free). `processStoreSpec.ts` still has `... as BuiltInProcessContract` —
+  delete it; RunResource's contract likewise.
+- **No `serviceOption` on `StoreScopeBridgeTag`.** Resolve it as a declared dependency (§1). (`serviceOption`
+  is still correct for the **durability** plane — `DurableQueueStore` — and irrelevant for the legacy facets
+  being deleted.)
+
+## Who is currently wrong (2026-07-07)
+
+- **RunResource** — `internal/runResourceStoreTap.ts:80` resolves the new store with
+  `Effect.serviceOption(StoreScopeBridgeTag)` + `.at().pipe(Effect.option)`, *and* casts the handle. Both go
+  (see its report).
+- Legacy-facet `serviceOption` calls (`HistoryStore` / `ProcessExecutionStore` / `QueueResourceStore` /
+  `LogStore`) are being **deleted** in the cutover — not this rule's concern.
+- Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.
+
+## Store-core TODO
+
+- [ ] (Doc step E) Decide `success` persistence: does the store `Completed`/`RunCompleted` row carry the
+      worker/run `success` value (the tag's `success` schema threaded into the event union)?
