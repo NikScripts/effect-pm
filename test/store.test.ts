@@ -322,7 +322,7 @@ describe("Store.Service", () => {
 
   it.effect("Tag.store resolves through the provided store layer", () =>
     Effect.gen(function* () {
-      const store = (yield* LabThermometer.store) as unknown as ThermometerHandle;
+      const store = yield* LabThermometer.store;
       yield* store.readings.append({ value: 90 });
       const rows = yield* store.listReadings();
       expect(rows).toEqual([{ value: 90 }]);

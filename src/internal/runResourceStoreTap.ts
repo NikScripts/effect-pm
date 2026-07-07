@@ -83,7 +83,7 @@ const resolveNewStoreHandle = (
     }
     const contract = builtInRunResourceStoreContract(scopeTagForKey(scopeKey));
     const handle = yield* bridge.value
-      .at(scopeKey, contract.spec, contract)
+      .at(scopeKey, contract)
       .pipe(Effect.option);
     if (Option.isNone(handle)) {
       return Option.none();

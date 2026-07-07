@@ -1,9 +1,10 @@
 # Handoff: unify tag schema config names → RPC names (`payload`, `success`, `error`)
 
-**Status:** Locked for next sync (2026-07-07). **Partially landed** on `cursor/run-resource-handle-observable-a009` (remote may already rename RunResource/Process tag fields — verify tree before duplicating work).  
-**Companion design doc:** [`result-schema-and-rpc-validation.md`](./result-schema-and-rpc-validation.md) (RPC fingerprint / buildId — still deferred).
+**Status:** Locked (2026-07-07). **RunResource + Process rename landed** on `cursor/run-resource-handle-observable-a009` (`2c8a95e`). **Queue/CQR rename open.**  
+**Per-module agent reports:** [`reports/README.md`](./reports/README.md)  
+**Companion design doc:** [`result-schema-and-rpc-validation.md`](./result-schema-and-rpc-validation.md) (RPC fingerprint / buildId — deferred)
 
-**Branch context:** `cursor/run-resource-handle-observable-a009` merged `cursor/integration-result-schema-a3ad`. RunResource handle/RPC/store tap **done**; Process store contract **done**; Process engine → `Process.store` **not done**; Queue/CQR rename **in progress / agent-owned**.
+**Integration branch:** merge `cursor/integration-result-schema-a3ad` before module work (Store typing `4597ee1`, AGENTS pointer `25aba6d`).
 
 ---
 
@@ -20,6 +21,18 @@ Replace all **public tag / service / wire-config** schema property names with th
 **SSOT:** `Resource.effectFn(success, { payload, error })`, `Resource.ref`, stream methods — see `src/Resource.ts` TSDoc (`payload` / `success` / `error`).
 
 **Policy:** No backward-compat shims (`@deprecated` aliases, re-exports under old names). One breaking changeset; update every in-repo callsite, test, example, and doc in the same change.
+
+---
+
+## Per-module agent reports
+
+Work is split for **parallel agents** — see [`reports/README.md`](./reports/README.md):
+
+- [RunResource](./reports/2026-07-07-agent-report-run-resource.md) — finish + verify (mostly done)
+- [Process](./reports/2026-07-07-agent-report-process.md) — `error` wiring, engine store tap, remove `Process.result`
+- [QueueResource + CQR](./reports/2026-07-07-agent-report-queue-resource.md) — `itemSchema` → `payload` triplet
+- [Store](./reports/2026-07-07-agent-report-store.md) — bridge typing, default store, engine gaps
+- [Docs + release](./reports/2026-07-07-agent-report-docs-release.md) — changesets, stale doc sweep
 
 ---
 

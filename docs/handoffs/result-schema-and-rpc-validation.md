@@ -1,11 +1,16 @@
 # Tag wire schemas (`payload` / `success` / `error`) + RPC validation
 
-> **Agent handoff (critical notes, checklist, asymmetries):** [`2026-07-07-rpc-schema-names-payload-success-error.md`](./2026-07-07-rpc-schema-names-payload-success-error.md)
+> **Per-module agent reports:** [`reports/README.md`](./reports/README.md) · **Rename checklist:** [`2026-07-07-rpc-schema-names-payload-success-error.md`](./2026-07-07-rpc-schema-names-payload-success-error.md)
 
 **Status:** Design locked (2026-07-07). Tag factories use **Effect `Resource.Method` slot names** —
-`payload`, `success`, `error` — with **no `Schema` suffix**. Process + RunResource implemented on
-integration branches; Queue `Tag` positional `payload` renamed; full QR triplet pending queue agents.
-Complete rename + doc sweep tracked in the handoff above.
+`payload`, `success`, `error` — with **no `Schema` suffix**.
+
+**Integration branch (merge target):** `cursor/integration-result-schema-a3ad` — Process tag +
+store contract, RunResource handle/RPC/store, wire-slot naming, Store bridge typing (`4597ee1`).
+
+**Shipped:** Process (`success`/`error`), RunResource (`payload`/`success`/`error`). **Pending:**
+Queue/CQR full triplet on tag, Process `error` wiring + engine store tap, Store Stage 1 default
+backing, engine cutover off legacy facets, docs/changesets sweep.
 
 Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
 [`queue-persistence-design.md`](./queue-persistence-design.md),

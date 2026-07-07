@@ -156,14 +156,17 @@ export const makeScopeHandle = <S extends StoreSpec>(
 };
 
 /** @internal */
-export const materializeStoreHandle = (
-  input: StoreSpec | StoreContractValue,
+export const materializeStoreHandle = <Input extends StoreSpec | StoreContractValue>(
+  input: Input,
   sideEffects: AppendSideEffects,
-): StoreHandleOf<StoreSpec | StoreContractValue> => {
+): StoreHandleOf<Input> => {
+  // Handles are built by dynamic property assignment, so this is the one boundary between runtime
+  // construction and the static type. Tightening `Input` here makes the whole resolution chain
+  // (`bridge.at` → `Tag.store`) precise, removing the casts consumers/tests otherwise carry.
   if (isStoreContractValue(input)) {
-    return materializeContractHandle(input, sideEffects) as StoreHandleOf<StoreContractValue>;
+    return materializeContractHandle(input, sideEffects) as StoreHandleOf<Input>;
   }
-  return makeScopeHandle(input, sideEffects) as StoreHandleOf<StoreSpec>;
+  return makeScopeHandle(input, sideEffects) as StoreHandleOf<Input>;
 };
 
 /** @internal */
@@ -171,20 +174,16 @@ export const acquireFromScopes = <Input extends StoreSpec | StoreContractValue>(
   scopes: ReadonlyMap<string, ScopeState>,
   key: string,
   input: Input,
-): Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered, EventJournal.EventJournal> =>
-  Effect.gen(function* () {
-    const scope = scopes.get(key);
-    if (scope === undefined) {
-      return yield* new StoreScopeNotRegistered({ key });
-    }
-    const journal = yield* EventJournal.EventJournal;
-    const sideEffects: AppendSideEffects = {
-      journal,
-      scopeKey: key,
-      maxRows: scope.maxRows,
-    };
-    return materializeStoreHandle(input, sideEffects) as StoreHandleOf<Input>;
-  });
+): Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered, EventJournal.EventJournal> => {
+  const scope = scopes.get(key);
+  return scope === undefined
+    ? Effect.fail(new StoreScopeNotRegistered({ key }))
+    : EventJournal.EventJournal.pipe(
+        Effect.map((journal) =>
+          materializeStoreHandle(input, { journal, scopeKey: key, maxRows: scope.maxRows }),
+        ),
+      );
+};
 
 /** @internal */
 export const changesFromScopes = (

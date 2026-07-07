@@ -22,8 +22,8 @@ export const buildScopeBridge = (
   scopes: ReadonlyMap<string, ScopeState>,
   journal: EventJournal.EventJournal["Service"],
 ): StoreScopeBridge => ({
-  at: (scopeKey, spec, contract) =>
-    acquireFromScopes(scopes, scopeKey, contract ?? spec).pipe(
+  at: (scopeKey, input) =>
+    acquireFromScopes(scopes, scopeKey, input).pipe(
       Effect.provideService(EventJournal.EventJournal, journal),
     ),
   changes: (scopeKey) =>
@@ -44,9 +44,9 @@ export const buildDefaultScopeBridge = (
   journal: EventJournal.EventJournal["Service"],
   maxRows?: number,
 ): StoreScopeBridge => ({
-  at: (scopeKey, spec, contract) =>
+  at: (scopeKey, input) =>
     Effect.succeed(
-      materializeStoreHandle(contract ?? spec, { journal, scopeKey, maxRows }),
+      materializeStoreHandle(input, { journal, scopeKey, maxRows }),
     ),
   changes: (scopeKey) =>
     Effect.map(journal.changes, (subscription) =>
