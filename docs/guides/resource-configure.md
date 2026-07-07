@@ -100,6 +100,8 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 ## Run gate
 
 ```typescript
+import * as Store from "@nikscripts/effect-pm/Store";
+
 const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
   payload: PhoneSchema,
   success: Schema.Void,
@@ -109,9 +111,13 @@ const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
 });
 
 const SendSmsLive = SendSms.layer.pipe(
+  Layer.provideMerge(Store.layerDefaultMemory),
   Layer.provideMerge(SendSms.configure({ concurrency: 2 })),
 );
 ```
+
+`RunResource.layer` / `Service.layer` require `StoreScopeBridgeTag` — provide {@link Store.layerDefaultMemory}
+at the app root (or a real {@link Store.Service} that overrides it). See [store.md](./store.md#default-store-layerdefaultmemory).
 
 ---
 

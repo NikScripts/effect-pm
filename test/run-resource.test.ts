@@ -3,6 +3,8 @@ import { Duration, Effect, Layer, Ref, Schema } from "effect";
 import * as ProcessStorage from "../src/ProcessStorage";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
+import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
+import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
 import { RunResourceStore } from "../src/store/runResource";
 
 const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
@@ -252,6 +254,54 @@ describe("RunResource.make — ProcessStore records", () => {
       Effect.provide(Layer.mergeAll(ProcessStorage.layer, Store.layerDefaultMemory)),
       Effect.scoped,
     ),
+  );
+});
+
+describe("RunResource.make — default store bridge", () => {
+  const scopeKey = "@test/default-store-gate";
+
+  it.effect("auto-writes facts to layerDefaultMemory without AppStore registration", () =>
+    Effect.gen(function* () {
+      const gate = yield* RunResource.make({
+        name: scopeKey,
+        scopeKey,
+        effect: (n: number) => Effect.succeed(n),
+        concurrency: 1,
+      });
+      yield* gate.run(1);
+
+      const bridge = yield* StoreScopeBridgeTag;
+      const store = yield* bridge.at(scopeKey, builtInRunResourceStoreContract({ key: scopeKey }));
+      const facts = yield* store.facts();
+      expect(facts.map((row) => row.type).sort()).toEqual([
+        "run-resource.run.completed",
+        "run-resource.run.started",
+      ]);
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
+  );
+
+  it.effect("persists failed runs and state transitions on the default bridge", () =>
+    Effect.gen(function* () {
+      const gate = yield* RunResource.make({
+        name: scopeKey,
+        scopeKey: `${scopeKey}/failed`,
+        effect: (n: number) =>
+          n >= 0 ? Effect.succeed(n) : Effect.fail("negative"),
+        concurrency: 1,
+      });
+      yield* gate.run(-1).pipe(Effect.flip);
+
+      const bridge = yield* StoreScopeBridgeTag;
+      const failedScope = `${scopeKey}/failed`;
+      const store = yield* bridge.at(
+        failedScope,
+        builtInRunResourceStoreContract({ key: failedScope }),
+      );
+      const facts = yield* store.facts();
+      const history = yield* store.stateHistory();
+      expect(facts.some((row) => row.type === "run-resource.run.failed")).toBe(true);
+      expect(history.length).toBeGreaterThan(0);
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 });
 

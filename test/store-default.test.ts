@@ -2,7 +2,6 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import * as Store from "../src/Store";
 import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
-import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
 
 // The baked-in default store: with NO app `Store.Service` provided, the bridge still resolves any
 // scope on demand against a process-local in-memory journal. This is what lets the queue engine
@@ -22,7 +21,7 @@ describe("baked-in default store (layerDefaultMemory)", () => {
       yield* handle.readings.append({ value: 7 });
 
       expect(yield* handle.readings.read()).toEqual([{ value: 42 }, { value: 7 }]);
-    }).pipe(Effect.provide(layerDefaultMemory), Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.effect("keeps scopes isolated by scopeKey (one journal, keyed rows — no 'sharing')", () =>
@@ -36,6 +35,6 @@ describe("baked-in default store (layerDefaultMemory)", () => {
 
       expect(yield* a.readings.read()).toEqual([{ value: 1 }]);
       expect(yield* b.readings.read()).toEqual([{ value: 2 }]);
-    }).pipe(Effect.provide(layerDefaultMemory), Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 });
