@@ -491,9 +491,7 @@ export const store: {
   const contract = scopeOrContract as StoreContractValue;
   return <T extends StoreScopeTag>(tag: T) =>
     Object.assign(tag, {
-      store: Effect.flatMap(StoreScopeBridgeTag, (bridge) =>
-        bridge.at(tag.key, contract.spec, contract),
-      ),
+      store: Effect.flatMap(StoreScopeBridgeTag, (bridge) => bridge.at(tag.key, contract)),
     });
 }) as never;
 

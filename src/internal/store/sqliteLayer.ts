@@ -32,8 +32,7 @@ export const buildBundle = <Regs extends ReadonlyArray<NormalizedStoreRegistrati
     for (const registration of registrations) {
       bundle[registration.accessor] = yield* acquire(
         registration.scopeKey,
-        registration.spec,
-        registration.contract,
+        registration.contract ?? registration.spec,
       );
     }
     return bundle as StoreBundle<Regs>;
@@ -79,7 +78,7 @@ export const layerForSingleRegistration = <
       const journal = yield* EventJournal.EventJournal;
       const bridge = buildScopeBridge(scopes, journal);
       const handle = yield* bridge
-        .at(registration.scopeKey, registration.spec, registration.contract)
+        .at(registration.scopeKey, registration.contract ?? registration.spec)
         .pipe(Effect.orDie);
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
@@ -125,7 +124,7 @@ export const buildStandaloneSqliteLayer = <
       const journal = Context.get(context, EventJournal.EventJournal);
       const bridge = buildScopeBridge(scopes, journal);
       const handle = yield* bridge
-        .at(registration.scopeKey, registration.spec, registration.contract)
+        .at(registration.scopeKey, registration.contract ?? registration.spec)
         .pipe(Effect.orDie);
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),

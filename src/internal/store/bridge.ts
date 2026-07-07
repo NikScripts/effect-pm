@@ -13,14 +13,10 @@ import type { StoreHandleOf, StoreSpec } from "./spec";
 
 /** @internal */
 export interface StoreScopeBridge {
-  readonly at: (
+  readonly at: <Input extends StoreSpec | StoreContractValue>(
     scopeKey: string,
-    spec: StoreSpec,
-    contract?: StoreContractValue,
-  ) => Effect.Effect<
-    StoreHandleOf<StoreSpec | StoreContractValue>,
-    StoreScopeNotRegistered
-  >;
+    input: Input,
+  ) => Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered>;
   readonly changes: (
     scopeKey: string,
   ) => Effect.Effect<

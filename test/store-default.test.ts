@@ -11,17 +11,12 @@ import { layerDefaultMemory } from "../src/internal/store/scopeBridge";
 const readingsContract = Store.contract({
   readings: Schema.Struct({ value: Schema.Number }),
 });
-type ReadingsHandle = Store.HandleOf<typeof readingsContract>;
 
 describe("baked-in default store (layerDefaultMemory)", () => {
   it.effect("resolves + round-trips a scope with no app Store.Service provided", () =>
     Effect.gen(function* () {
       const bridge = yield* StoreScopeBridgeTag;
-      const handle = (yield* bridge.at(
-        "scope-a",
-        readingsContract.spec,
-        readingsContract,
-      )) as unknown as ReadingsHandle;
+      const handle = yield* bridge.at("scope-a", readingsContract);
 
       yield* handle.readings.append({ value: 42 });
       yield* handle.readings.append({ value: 7 });
@@ -33,8 +28,8 @@ describe("baked-in default store (layerDefaultMemory)", () => {
   it.effect("keeps scopes isolated by scopeKey (one journal, keyed rows — no 'sharing')", () =>
     Effect.gen(function* () {
       const bridge = yield* StoreScopeBridgeTag;
-      const a = (yield* bridge.at("scope-a", readingsContract.spec, readingsContract)) as unknown as ReadingsHandle;
-      const b = (yield* bridge.at("scope-b", readingsContract.spec, readingsContract)) as unknown as ReadingsHandle;
+      const a = yield* bridge.at("scope-a", readingsContract);
+      const b = yield* bridge.at("scope-b", readingsContract);
 
       yield* a.readings.append({ value: 1 });
       yield* b.readings.append({ value: 2 });
