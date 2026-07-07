@@ -175,6 +175,24 @@ const program = Effect.gen(function* () {
 });
 ```
 
+### `Process.store` (built-in execution contract)
+
+On **`Process.layer`** / **`serve`** / **`serveRemote`**, the engine auto-appends terminal runs to
+**`Process.store(tag)`** via a **baked-in default in-memory store**. Override with an app
+**`Store.Service`** at the root when you need durable storage or registered query handles:
+
+```typescript
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(MyProcess),
+) {}
+
+Layer.provideMerge(AppStore.layerMemory, Process.layer(MyProcess, { effect, polling }));
+```
+
+Query execution events via `yield* MyProcess.store` → `events()`.
+
 The removed monolith service (`yield* ProcessStore`, `ProcessStore.events`,
 `ProcessStore.file`, `@nikscripts/effect-pm/storage/file`) is intentionally not
 documented as a compatibility path.

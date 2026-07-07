@@ -29,7 +29,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
 | `LogStore` | `store/Log` | `src/store/log.ts` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
-| `ProcessExecutionStore` | `store/ProcessExecution` | `src/store/processExecution.ts` |
 | `ProcessStore` | `ProcessStore` | facet builder |
 | `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
 | `RuntimeStorage` | `RuntimeStorage` | `src/RuntimeStorage.ts` |
@@ -49,8 +48,10 @@ property names (same **`Context`** tags as `*Store`):
 |-------|----------------|
 | **`ProcessStorage.Log`** | **`LogStore`** |
 | **`ProcessStorage.QueueResource`** | **`QueueResourceStore`** *(storage facet)* |
-| **`ProcessStorage.ProcessExecution`** | **`ProcessExecutionStore`** |
 | **`ProcessStorage.ProcessLifecycle`** | **`ProcessLifecycleStore`** |
+
+Run and process execution history use the app **Store bridge** (`RunResource.store`, `Process.store`) — not
+`ProcessStorage` facet aliases.
 
 Use either import style; **`Effect.serviceOption`**, **`Layer`**, and static emitters behave identically.
 
@@ -62,7 +63,6 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 
 | `type` | Writer | Reader |
 |--------|--------|--------|
-| `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessExecutionStore` → `.executions` |
 | `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` → read methods |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
 | `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
@@ -70,26 +70,36 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch`. Worker emits `added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `released` on completion, `release`, drop, dead-letter, and `clear`. The `hydrated` variant is decode-only — defined for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
 | `queue.ratelimit.exceeded` × 1 | `QueueResource` worker when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
 
-**RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` / `Store.layerDefaultMemory`). **Process and Queue engines** still use legacy facets until their store taps land.
+**Process execution history:** **`Process.layer`** / **`serve`** / **`serveRemote`** auto-append
+`RunCompleted` / `RunFailed` / `RunInterrupted` via a baked-in default in-memory store. Register
+**`Process.store(tag)`** on an app **`Store.Service`** when you need durable storage or `yield* Tag.store`
+query handles.
+
+**RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` /
+**`Storage`** via **`Store.layerDefaultMemory`** merged into **`RunResource.layer` / `serve` / `Service.layer`**).
+**Queue** still uses legacy **`QueueResourceStore`** facet emitters for some paths until the engine store tap lands.
 
 ---
 
 ## Usage
 
 ```ts
+import { Layer } from "effect";
 import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
-import { ProcessExecutionStore } from "@nikscripts/effect-pm/store/ProcessExecution";
+import * as Store from "@nikscripts/effect-pm/Store";
+import { Process } from "@nikscripts/effect-pm";
 
-yield* ProcessExecutionStore.recordCompleted(input);
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(MyProcess),
+) {}
 
-const rows = yield* Effect.serviceOption(ProcessExecutionStore).pipe(
-  Effect.flatMap(
-    Option.match({
-      onNone: () => Effect.succeed([]),
-      onSome: (store) => store.executions({ processId: "billing/sync" }),
-    }),
-  ),
+const live = Layer.provideMerge(
+  AppStore.layer({ filename: ".effect-pm/process.db" }),
+  Process.layer(MyProcess, { effect, polling }),
 );
+
+const store = yield* MyProcess.store;
+const events = yield* store.events({ limit: 50 });
 ```
 
 ```ts
@@ -184,7 +194,6 @@ Built-in `withIdentifier` facets (subpath → bound id):
 |-------|---------|-------|
 | `QueueResourceStore` | `store/QueueResource` | `queueId` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `processId` |
-| `ProcessExecutionStore` | `store/ProcessExecution` | `processId` |
 
 The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 
@@ -201,7 +210,7 @@ The facet **owns** all wire-shape work:
 - **Encoders** (`makeMyDomainRecord`, etc.) build `Omit<RuntimeRecord, "runId" | "createdAt">` from the facet's domain types.
 - **Decoders** project `RuntimeRecord[]` back to the facet's domain types.
 - **Predicates** push `processId` / `type` / `key` / `indexA-H` filters into `RuntimeRecordQuery`. Things you cannot index (e.g. payload sub-fields) post-filter after `s.read`.
-- **Limit semantics**: when *all* filters compile to `RuntimeRecordPredicate`, pass `query?.opts` straight through — the storage `limit` and the projection `limit` agree. When *any* filter is post-applied in TypeScript, swap to `windowOpts(opts)` at the storage call and `applyQueryOpts(rows, opts, ...)` after decode (see `src/store/processGroup.ts` and `src/store/processExecution.ts` for live examples).
+- **Limit semantics**: when *all* filters compile to `RuntimeRecordPredicate`, pass `query?.opts` straight through — the storage `limit` and the projection `limit` agree. When *any* filter is post-applied in TypeScript, swap to `windowOpts(opts)` at the storage call and `applyQueryOpts(rows, opts, ...)` after decode (see `src/store/processGroup.ts` for a live example).
 
 **Cut-over checklist:** domain types in the facet file → encoders / decoders / predicates inline → static emitters in the feature module that owns the writes → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test (mirror `test/store.test.ts` + engine integration tests such as `test/run-resource.test.ts`).
 

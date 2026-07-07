@@ -15,26 +15,25 @@ export const errorSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Process/error",
 );
 
-/** @internal */
-export const successOf = (tag: unknown): Schema.Top | undefined => {
+/** Read a wire schema stamped on a process tag. @internal */
+export const schemaOf = (
+  tag: unknown,
+  sym: typeof successSym | typeof errorSym,
+): Schema.Top | undefined => {
   if (
     (typeof tag === "object" || typeof tag === "function") &&
     tag !== null &&
-    successSym in tag
+    sym in tag
   ) {
-    return (tag as { readonly [successSym]?: Schema.Top })[successSym];
+    return (tag as { readonly [K in typeof sym]?: Schema.Top })[sym];
   }
   return undefined;
 };
 
 /** @internal */
-export const errorOf = (tag: unknown): Schema.Top | undefined => {
-  if (
-    (typeof tag === "object" || typeof tag === "function") &&
-    tag !== null &&
-    errorSym in tag
-  ) {
-    return (tag as { readonly [errorSym]?: Schema.Top })[errorSym];
-  }
-  return undefined;
-};
+export const successOf = (tag: unknown): Schema.Top | undefined =>
+  schemaOf(tag, successSym);
+
+/** @internal */
+export const errorOf = (tag: unknown): Schema.Top | undefined =>
+  schemaOf(tag, errorSym);

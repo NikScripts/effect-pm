@@ -42,8 +42,7 @@ export type JsonValue =
  * applied in TypeScript after decoding) must strip `limit` from the
  * storage query (`windowOpts(opts)`) and re-apply it via
  * `applyQueryOpts(rows, opts, ...)` after decoding — see
- * `src/store/processGroup.ts` and `src/store/processExecution.ts` for
- * worked examples and `docs/STORAGE.md` for the rationale.
+ * `src/store/processGroup.ts` for worked examples and `docs/STORAGE.md` for the rationale.
  *
  * @public
  */
@@ -110,7 +109,6 @@ export type ProcessStoreWriteError =
  * Minimal append-only event shape. Implemented by the small set of
  * facet-owned `*Event` interfaces that decode a single
  * {@link RuntimeRecord} into a typed value (currently
- * {@link ProcessExecutionCompletedEvent},
  * {@link ProcessLifecycleChangedEvent}, {@link LogEntryRecordedEvent}).
  *
  * @public

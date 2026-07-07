@@ -7,7 +7,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## Cross-cutting (how pieces combine)
 
-- **Effect `Layer`** — polling, schedule, queues, storage facets (`ProcessStoreRunResource`, `ProcessStoreLog`, `ProcessStoreQueueResource`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessExecution`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
+- **Effect `Layer`** — polling, schedule, queues, storage facets (`ProcessStoreRunResource`, `ProcessStoreLog`, `ProcessStoreQueueResource`, `ProcessStoreProcessLifecycle`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged. **Process execution history** uses **`Process.store(tag)`** on the new `Store` (not a `ProcessStorage` facet).
 - **`Effect.scoped`** — `QueueResource.make`, remote layers acquire/release with scope.
 - **Storage optional** — when relevant facets are present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
 - **Canonical ids** — slash-separated strings (`@scope/Segment/ServiceName`); CLI/remote accept normalized kebab suffix aliases; ambiguous suffixes error with candidate list.
@@ -160,6 +160,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 - **`Process.make(id, { effect, polling?, schedule?, scheduleLayer? })`** or **`Process.make(id, effect, polling?, schedule?)`** — returns handle + baked layers (`process.name === id`). Third/fourth positional args may be polling preset, schedule preset, or schedule initializer (order-independent).
 - **`Process.Service<Self>()(id, effect, …)`** / **`Process.Service<Self>()(id, { effect, … })`** — class-style Context tag + `.layer`; id becomes `name`.
+- **`Process.layer` / `Process.serve` / `Process.serveRemote`** — toolkit resource layers; merge default in-memory store (`withDefaultMemory`); auto-append terminal runs to built-in execution contract. Override store with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))`.
+- **`Process.store(tag)`** — register built-in execution contract on an app `Store.Service` for `yield* Tag.store` queries and durable backends.
 
 ### Config fields (`ProcessMakeOptions`)
 
@@ -188,8 +190,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 - **Outer loop** — schedule driver: waits for arm state / schedule changes.
 - **Inner loop** (per spawned instance while armed) — `awaitNextTick` → user `effect` → polling `afterTick`; instance ends when entry window closes or stop check fails.
-- **Failures in user `effect`** — logged; **`process.execution.completed`** with `failed` when storage facets are present.
-- **Execution record fields** — `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, `status` (`completed` | `failed` | `interrupted`), optional `error`, `isStartupRun`.
+- **Failures in user `effect`** — logged; on the toolkit layer path (`Process.layer` / `serve` / `serveRemote`), terminal runs auto-append to the built-in **`Process.store(tag)`** execution contract (default in-memory store merged into the layer).
+- **Execution record fields** — `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, event `_tag` (`RunCompleted` | `RunFailed` | `RunInterrupted`), optional `success` / `error`, `isStartupRun`.
 
 ### Typing helpers
 
@@ -308,7 +310,7 @@ Live counters on toolkit handles (`status`, `waiting`, `inFlight`, …) via **`S
 
 ### Engine persistence (when Store composed)
 
-The gate engine writes automatically when **`StoreScopeBridgeTag`** is in context. **`RunResource.layer` /
+The gate engine writes automatically when **`Storage`** is in context. **`RunResource.layer` /
 `serve` / `Service.layer`** merge **`Store.layerDefaultMemory`** by default; override with
 **`Layer.provideMerge(AppStore.layerMemory)`**. Writes use **`ProcessStore.catchErrorAndLog`** so storage
 failures do not fail gated work.
@@ -379,20 +381,22 @@ the built-in facets over `RuntimeStorage`.
   `RuntimeStorageService` and `layerProcessStore({ filename })`.
 - **`@nikscripts/effect-pm/storage/redis`** — `RedisRuntimeStorage` durable `RuntimeStorageService`.
 
-### Facet write/read
+### Facet write/read (legacy `ProcessStorage` facets)
 
 **Write:** domain code calls static emitters such as
-`ProcessExecutionStore.recordCompleted(...)` or queue/process facet emitters.
+`QueueResourceStore.recordEntry(...)` or lifecycle facet emitters for legacy paths.
+Process and RunResource write via **`Process.store(tag)`** / **`RunResource.store(tag)`** on the **Store bridge**
+(`Storage` declared dependency; default via `Store.layerDefaultMemory`).
 Static emitters no-op when the facet is absent and log write failures instead of changing caller behavior.
 
-**Read:** acquire the owning facet (`yield* LogStore`, `yield* ProcessExecutionStore`, etc.)
-and call its domain read methods. Run history reads go through the **Store bridge**
-registered by **`RunResource.store(tag)`**.
+**Read:** acquire the owning facet (`yield* LogStore`, `yield* QueueResourceStore`, etc.)
+and call its domain read methods. Process execution history and RunResource facts read through the **Store bridge**
+registered by **`Process.store(tag)`** / **`RunResource.store(tag)`** → `yield* Tag.store`.
 
 ### Query types
 
 - **`QueryOpts`** — `limit`, `before`, `after` (epoch ms).
-- Per-facet query types (`QueueEntryQuery`, `QueueLifecycleQuery`, `QueueDedupeKeyQuery`, `ProcessExecutionQuery`, …) are owned by the facet that consumes them — there is no shared `StoreEventQuery`.
+- Per-facet query types (`QueueEntryQuery`, `QueueLifecycleQuery`, `QueueDedupeKeyQuery`, …) are owned by the facet that consumes them — there is no shared `StoreEventQuery`. Process execution queries use `events({ limit? })` on the built-in store handle; RunResource uses `facts()` / `stateHistory()` on `yield* Tag.store`.
 
 ### Event taxonomy (per-facet, no shared union)
 
@@ -400,7 +404,6 @@ registered by **`RunResource.store(tag)`**.
 
 | Type | Owner | Payload highlights |
 |------|-------|-------------------|
-| **`process.execution.completed`** | `store/processExecution` | scheduleKey, startedAt, completedAt, durationMs, status, error?, isStartupRun |
 | **`process.lifecycle.changed`** | `store/processLifecycle` (+ `store/processGroup` reuses the encoder) | tag: Started/Stopped/Restarted/Errored/Recovered/Disabled/Enabled, error? |
 | **`log.entry`** | `store/log` | level, message, error?, attributes |
 | **`queue.entry.<status>`** × 9 | `store/queueResource` | enqueued, started, completed, failed, retried, exhausted, released, dead-lettered, dropped |
@@ -441,7 +444,7 @@ registered by **`RunResource.store(tag)`**.
 
 ### Engine tap
 
-The gate engine resolves **`StoreScopeBridgeTag`** once at handle build and appends via
+The gate engine resolves **`Storage`** once at handle build and appends via
 **`builtInRunResourceStoreContract`**. Writes use **`ProcessStore.catchErrorAndLog`**.
 
 ### Store handle methods
@@ -486,7 +489,7 @@ Read toolkit handle **`Subscribable`** views on Tag/Service/layer gates (`status
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/QueueResource`, `/store/Log`, `/store/ProcessLifecycle`, `/store/ProcessExecution`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`.
+- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/QueueResource`, `/store/Log`, `/store/ProcessLifecycle`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`. (No `/store/ProcessExecution` or `/store/RunResource` — execution history uses `Process.store`; run facts use `RunResource.store` on the Store bridge.)
 
 ---
 

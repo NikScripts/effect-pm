@@ -72,10 +72,6 @@
       "types": "./dist/store/ProcessLifecycle.d.ts",
       "default": "./dist/store/ProcessLifecycle.js"
     },
-    "./store/ProcessExecution": {
-      "types": "./dist/store/ProcessExecution.d.ts",
-      "default": "./dist/store/ProcessExecution.js"
-    },
     "./Query": {
       "types": "./dist/Query.d.ts",
       "default": "./dist/Query.js"
@@ -222,6 +218,7 @@
     "example:form:polling-spaced-read": "tsx examples/forms/polling/polling-spaced-read.ts",
     "example:form:polling-accelerating-reset-cadence": "tsx examples/forms/polling/polling-accelerating-reset-cadence.ts",
     "example:form:polling-accelerating-peek-cadence": "tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",
+    "example:process-layer-store-auto-write": "tsx examples/forms/process-store/process-layer-store-auto-write.ts",
     "prepare": "effect-language-service patch && effect-tsgo patch"
   },
   "dependencies": {

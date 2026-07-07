@@ -18,10 +18,15 @@ class PricedErrProc extends Process.Tag<PricedErrProc>()(
 ) {}
 
 const pricedRegistration = Store.register(PricedProc, builtInProcessStoreContract(PricedProc));
+const pricedErrRegistration = Store.register(
+  PricedErrProc,
+  builtInProcessStoreContract(PricedErrProc),
+);
 
 class ProcessStore extends Store.Service<ProcessStore>("@test/ProcessStore")(
   Store.register(VoidProc, builtInProcessStoreContract(VoidProc)),
   pricedRegistration,
+  pricedErrRegistration,
 ) {}
 
 describe("Process store contract", () => {
@@ -44,7 +49,7 @@ describe("Process store contract", () => {
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("value process record includes optional result field", () =>
+  it.effect("value process record includes optional success field", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore.at(PricedProc);
       yield* store.record({
@@ -55,19 +60,40 @@ describe("Process store contract", () => {
         completedAt: 20,
         durationMs: 10,
         isStartupRun: false,
-        result: { symbol: "AAPL", usd: 1 },
+        success: { symbol: "AAPL", usd: 1 },
       });
       const events = yield* store.events();
       expect(events[0]).toMatchObject({
         _tag: "RunCompleted",
-        result: { symbol: "AAPL", usd: 1 },
+        success: { symbol: "AAPL", usd: 1 },
       });
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
   );
 
-  it("Tag stamps success from positional args", () => {
+  it("Tag stamps success and error from positional args", () => {
     expect(Process.successOf(PricedProc)).toBe(Price);
     expect(Process.errorOf(PricedErrProc)).toBe(FetchErr);
     expect(Process.successOf(VoidProc)).toBeUndefined();
   });
+
+  it.effect("RunFailed carries typed error when error schema is stamped", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore.at(PricedErrProc);
+      yield* store.record({
+        _tag: "RunFailed",
+        processId: PricedErrProc.key,
+        scheduleKey: null,
+        startedAt: 1,
+        completedAt: 2,
+        durationMs: 1,
+        isStartupRun: false,
+        error: { _tag: "FetchError", status: 404 },
+      });
+      const events = yield* store.events();
+      expect(events[0]).toMatchObject({
+        _tag: "RunFailed",
+        error: { _tag: "FetchError", status: 404 },
+      });
+    }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
+  );
 });

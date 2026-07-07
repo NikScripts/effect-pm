@@ -55,8 +55,6 @@ class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
 }) {}
 ```
 
-`Process.result(Schema)` is **deprecated** — use positional `success` instead.
-
 ### Schedule (still pipeable)
 
 ```ts
@@ -86,12 +84,27 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 
 const store = yield* Prices.store;
-yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, result: { … } });
+yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, success: { … } });
 const rows = yield* store.events({ limit: 10 });
 ```
 
-Engine wiring to the new store (replacing `ProcessExecutionStore`) is pending default in-memory
-store backing — see [../handoffs/2026-07-06-processstore-removal.md](../handoffs/2026-07-06-processstore-removal.md).
+On the **`Process.layer`** path, the engine auto-appends terminal runs. The layer includes a
+**baked-in default in-memory store**; override with `Layer.provideMerge(AppStore.layerMemory)` when
+you register the tag on an app store.
+
+```ts
+import { Layer } from "effect";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(Prices),
+) {}
+
+const live = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(Prices, { effect: poll }),
+);
+```
 
 ## See also
 

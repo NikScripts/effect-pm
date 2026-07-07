@@ -23,7 +23,7 @@ The branch is on the **old store journal codec**, which has two bugs I fixed on 
    fails for any schema with a real transform.
 2. **Hand-rolled `toJsonValue`** instead of Effect's `Schema.toCodecJson` — flattens rich Effect types.
 
-Base process events survive both (all primitives). But `RunCompleted.result` = `Schema.optional(success)`
+Base process events survive both (all primitives). But `RunCompleted.success` = `Schema.optional(success)`
 and `RunFailed.error` = the tag's `error` schema — **these are user-supplied**. A process that declares a
 rich `success`/`error` (a `DateTime`, an `Exit`, a `TaggedError` with a transform, a class schema) will
 **silently fail to persist / read back**. Tests with plain-struct results pass, so it's latent.
@@ -35,7 +35,7 @@ not queue-specific):
   codec — round-trips `DateTime`/`Exit`/`Cause`/`Duration`),
 - `toJsonValue` drops `undefined` keys.
 
-With those, the Process store persists rich `result`/`error` for free — and the branch could drop the
+With those, the Process store persists rich `success`/`error` for free — and the branch could drop the
 "keep it primitive to be safe" constraint if it ever wants richer events.
 
 Key fact behind the fix: `Schema.DateTimeUtc` / `Schema.Exit` / `Schema.Cause` are **identity codecs**

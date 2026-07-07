@@ -3,7 +3,7 @@
  * {@link ProcessStore} facet.
  *
  * @remarks
- * One-stop shop for apps that want all five facets at once. Compose
+ * One-stop shop for apps that want the remaining legacy facets at once. Compose
  * either:
  *
  * - {@link ProcessStorage.layerRuntimeStorage} — facets only; expects
@@ -12,6 +12,9 @@
  * - {@link ProcessStorage.layer} — facets + the in-memory
  *   {@link RuntimeStorage} adapter; suitable for tests, examples, and
  *   short-lived dev programs.
+ *
+ * Run and process execution history use the app **Store bridge** (`RunResource.store`,
+ * `Process.store`) — not ProcessStorage facets.
  *
  * @example Durable composition
  * ```ts
@@ -46,7 +49,6 @@
 import { Layer } from "effect";
 import { RuntimeStorage } from "./RuntimeStorage";
 import { LogStore } from "./store/log";
-import { ProcessExecutionStore } from "./store/processExecution";
 import { ProcessLifecycleStore } from "./store/processLifecycle";
 import { QueueResourceStore } from "./store/queueResource";
 
@@ -55,7 +57,6 @@ const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 const facetLayers = Layer.mergeAll(
   LogStore.layerRuntimeStorage,
   QueueResourceStore.layerRuntimeStorage,
-  ProcessExecutionStore.layerRuntimeStorage,
   processLifecycleLayer,
 );
 
@@ -88,7 +89,6 @@ export const layer = Layer.provide(facetLayers, RuntimeStorage.layer);
 export {
   LogStore as Log,
   QueueResourceStore as QueueResource,
-  ProcessExecutionStore as ProcessExecution,
   ProcessLifecycleStore as ProcessLifecycle,
 };
 
@@ -96,5 +96,4 @@ export {
 export type Services =
   | LogStore
   | QueueResourceStore
-  | ProcessExecutionStore
   | ProcessLifecycleStore;

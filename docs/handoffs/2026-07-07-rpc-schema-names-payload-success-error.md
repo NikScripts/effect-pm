@@ -71,11 +71,13 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 1. Rename config fields to `success` / `error`.
 2. Either wire `error` into RPC spec + store failed events **or** remove `error` from public Tag API until wired (owner call at sync — prefer wire + store in same PR if timeboxed).
 
-**Store domain field `RunCompleted.result`:** persisted analytics shape, not tag config. **Do not** rename to `success` in store events unless product wants breaking storage wire change — keep `result` on `RunCompleted` facts; only tag config uses `success`.
+**Store wire fields (locked 2026-07-07):** persisted terminal rows use **`success`** and **`error`**
+(slot names match the tag). `RunCompleted.success` / `Completed.success` — not `result`. See
+`store-cutover-00-store-core.md` §5 for `_tag` (PascalCase) and `error` encoding.
 
 **Remove `Process.result` pipe** in the same PR (already `@deprecated`). No dual API after rename.
 
-**Engine → `Process.store` still missing:** supervisor writes **`ProcessExecutionStore`** only; `Process.store(tag)` contract exists (`builtInProcessStoreContract`) but engine does not auto-append. RunResource **does** auto-write (see below). Do **not** block rename on B3, but **document asymmetry** in PROCESS-API / STORAGE until Process engine tap lands.
+**Engine → `Process.store`:** **done** — `Process.layer` writes **`Process.store(tag)`** only; **`ProcessExecutionStore` facet deleted**.
 
 ### QueueResource — **not renamed yet; do in same sync PR**
 
@@ -107,11 +109,11 @@ Coordinate lane arity + `{ payload, success, error }` options bag (see old hando
 |--|--|--|
 | Tag config schemas | `inputSchema` / `successSchema` / `errorSchema` → **rename to payload/success/error** | `resultSchema` / `errorSchema` → **success/error** |
 | `*.store(tag)` contract | ✅ built-in facts + state | ✅ built-in `event` union (result-aware) |
-| Engine auto-write to new Store | ✅ declared-dependency tap + merged `Store.layerDefaultMemory` | ❌ still `ProcessExecutionStore` only |
-| Engine auto-write to legacy facet | ❌ **`RunResourceStore` deleted** | ✅ `ProcessExecutionStore` |
+| Engine auto-write to new Store | ✅ declared `Storage` tap + merged `Store.layerDefaultMemory` | ✅ `processStoreTap.ts` (declared `Storage`) + `withDefaultMemory` |
+| Engine auto-write to legacy facet | ❌ **`RunResourceStore` deleted** | ❌ **`ProcessExecutionStore` deleted** — `Process.store` only |
 | `error` schema behavior | on RPC wire via `runSpec` | stamped only |
 
-Rename agent: **do not** claim unified platform story until Process engine tap matches RunResource.
+Rename agent: Process engine tap now matches RunResource on the cutover branch; consolidate docs at release.
 
 ### 3. `msgpackr` direct dependency — likely mistake
 
@@ -214,7 +216,7 @@ Coordinate with existing `.changeset/run-resource-handle-rpc-store.md` — conso
 ## Open questions for sync (resolve in room, not in agent silence)
 
 1. **Process `error`:** wire + store in rename PR, or drop from Tag until wired?
-2. **Store persisted fields:** keep `RunCompleted.result` / queue `entry.item` as domain names?
+2. **Store persisted fields:** `RunCompleted.success` / `Completed.success` (locked); queue `entry.item` stays `item` (enqueue payload domain name).
 3. **Symbol names:** `successSchemaSym` vs `successSym`?
 4. **Queue positional arity:** `Tag()(key, payload, success?, error?)` — confirm order matches RunResource.
 5. **Process engine → `Process.store`:** separate agent immediately after rename, or same sprint?

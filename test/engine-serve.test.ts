@@ -4,7 +4,6 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Process from "../src/Process";
 import { Polling } from "../src/Polling";
-
 // The engine-serve gap: Resource.serve is query-only (no worker/tick engine). QueueResource.serve /
 // Process.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
 // dependency. Proof: two processes whose TICK reads the same Dep tag with different values; each engine

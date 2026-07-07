@@ -74,6 +74,30 @@ yield* proc.logs.live                    // live captured lines
 yield* proc.logs.history({ limit: 100 }) // past captured lines
 ```
 
+### Execution analytics (`Process.store`)
+
+On **`Process.layer`** / **`serve`** / **`serveRemote`**, finished runs auto-append to the built-in
+execution contract via a **default in-memory store** merged into the layer. Override with an app
+**`Store.Service`** when you need durable storage or a registered `Tag.store` handle:
+
+```ts
+import { Layer } from "effect";
+import { Process } from "@nikscripts/effect-pm";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(NwslSync),
+) {}
+
+const procLayer = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(NwslSync, { effect, polling }),
+);
+
+const store = yield* NwslSync.store;
+const events = yield* store.events({ limit: 50 });
+```
+
 ## Runtime-wide (HostLogs)
 
 `HostLogs` captures **every** log in the runtime (including untagged effects and all processes) — live

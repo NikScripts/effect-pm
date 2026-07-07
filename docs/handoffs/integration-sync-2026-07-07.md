@@ -33,8 +33,8 @@ Two report sets exist — use **both**, for different layers:
 
 **Supersedes / corrections (read before trusting older agent report lines):**
 
-1. **Store Stage 1** — `store-cutover-00` says **done** (`layerDefaultMemory`, `buildDefaultScopeBridge`). The Store agent report still says “blocked” — **ignore that**; engines still need to **compose** the default layer (not wired into `Process.layer` / `QueueResource.layer` yet).
-2. **Lazy store resolution** — ~~RunResource agent report treats lazy bridge as acceptable~~ **Done on run-resource branch:** declared `StoreScopeBridgeTag` dependency; **`RunResource.layer` / `serve` / `Service.layer` merge `layerDefaultMemory`**. Process/Queue still need the same cutover.
+1. **Store Stage 1** — `store-cutover-00` says **done** (`layerDefaultMemory`, `buildDefaultScopeBridge`). The Store agent report still says “blocked” — **ignore that**. **Process**, **RunResource**, and **Queue** merge the default into `layer` / `serve` / `serveRemote` via `Layer.provideMerge(Store.layerDefaultMemory)` (Process via `withDefaultMemory`). Apps override at root with `Layer.provideMerge(AppStore.layerMemory, ...)`.
+2. **Lazy store resolution** — ~~RunResource agent report treats lazy bridge as acceptable~~ **Resolved:** declared **`Storage`** dependency (`yield* Storage`); no `serviceOption`, no forked-fiber `storeTap.ts` helper (discarded in `b4bf1de`). **`RunResource.layer` / `Process.layer` / `QueueResource.layer`** all merge `layerDefaultMemory` by default.
 3. **Queue Tag `payload`** — Integration **already** renamed `QueueResource.Tag(key, itemSchema)` → `Tag(key, payload)` (positional). Queue agent report “not renamed” is **stale**. Still open: **`success`/`error` triplet**, config-object overload, tag stamps, engine cutover.
 4. **Process symbols** — `successSym` / `successOf` (not `resultSchemaSym`). `store-cutover-process.md` still mentions `resultSchemaOf` in one bullet — treat as `successOf`.
 
@@ -48,9 +48,10 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Process/Queue engine cutover (declared dependency) |
-| Effect Msgpack journal (no direct `msgpackr`) | App-root `Store.layerDefaultMemory` in examples/docs |
-| Cast-free queue + run-resource contracts | Process contract cast removal |
+| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Queue engine: `publishEvent` → store, drop legacy facet tier |
+| Effect Msgpack journal (no direct `msgpackr`) | `success`/`error` triplet on Queue Tag + stamps |
+| Cast-free queue + run-resource contracts | Process contract cast removal (if any remain) |
+| Process / RunResource / Queue default store baked into toolkit layers | |
 
 **Discuss / approve:** Whether `success` value is persisted on store completion rows (store-core TODO §3).
 
@@ -58,16 +59,18 @@ Two report sets exist — use **both**, for different layers:
 
 ### Process
 
-**Read:** [`store-cutover-process.md`](./store-cutover-process.md) · [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md)
+**Read:** [`store-cutover-process.md`](./store-cutover-process.md) · [`process-store-cutover-review.md`](./process-store-cutover-review.md) · [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md)
 
 | Shipped | Open |
 |---------|------|
-| `Tag(key, success?, error?)`, `successOf`/`errorOf` | **`error` stamped but unused** (RPC + store still `String`) |
-| `builtInProcessStoreContract`, `Process.store` | Engine still **`ProcessExecutionStore` only** |
-| `process-store-contract.test.ts` | `processStoreTap.ts` (mirror RunResource declared dependency) |
-| `Process.result` deprecated | Remove `Process.result` (no shim policy) |
+| `Tag(key, success?, error?)`, `successOf`/`errorOf` | Cast removal on `makeProcessStoreContract` (if any remain) |
+| `builtInProcessStoreContract`, `Process.store`, engine tap | **`error` stamped but unused** on RPC (store wire uses typed/fallback encoding per store-core §5) |
+| `withDefaultMemory` on `layer` / `serve` / `serveRemote` | |
+| `ProcessExecutionStore` facet deleted; `Process.result` removed | |
+| `RunCompleted.success` / `RunFailed.error` wire (store-core §5) | |
+| `process-store-contract.test.ts`, `process-store-default-override.test.ts` | |
 
-**Discuss / approve:** Wire `error` into typed `RunFailed` vs drop from Tag until wired; dual-write vs cutover for execution events; symbol rename in changeset.
+**Discuss / approve:** Wire `error` into typed RPC `RunFailed` vs drop from Tag until wired; symbol rename in changeset.
 
 **Blind spot (RunResource agent):** Process has no `payload` on tag — two-slot only. Do not add without product call.
 
@@ -81,7 +84,7 @@ Two report sets exist — use **both**, for different layers:
 |---------|------|
 | `Tag(key, payload)` positional rename | `success` / `error` on Tag + stamps |
 | `builtInQueueStoreContract` (cast-free) | Config-object `{ payload, success?, error? }` |
-| Store typing + default bridge | Engine cutover: declared `StoreScopeBridgeTag`, app-root `layerDefaultMemory` |
+| Store typing + default bridge | Engine cutover: declared `Storage`, baked `layerDefaultMemory`; legacy facet tier until `publishEvent` → store |
 | | Engine: `publishEvent` → store, drop facet tier |
 | | Event taxonomy: entry-only vs full lifecycle (**owner decision**) |
 
@@ -100,12 +103,12 @@ Two report sets exist — use **both**, for different layers:
 | `.run` handle, RPC serve, `payload`/`success`/`error` | Consolidated platform changeset (docs agent) |
 | `RunResource.store`, Store-only engine tap | ✅ **`RunResourceStore` facet deleted** |
 | Declared-dependency store tap + cast-free contract | Optional write-path buffer (queue may add) |
-| `Store.layerDefaultMemory` merged into layer entry points | Wire default store into Process/Queue layers (their agents) |
+| `Store.layerDefaultMemory` merged into layer entry points | Queue engine: `publishEvent` → store, drop legacy facet tier |
 | Remote HTTP test, doc sweep | Consolidated platform changeset (docs agent) |
 
 **Done:** Legacy `RunResourceStore` facet removed from ProcessStorage, exports, and build.
 
-**Blind spot (Queue agent):** ~~RunResource report says “lazy at write time is required for Layer.mergeAll siblings”~~ **Resolved:** declared dependency + `layerDefaultMemory` merged into RunResource layer entry points (override via app-root `AppStore`).
+**Blind spot (Queue agent):** ~~RunResource report says “lazy at write time is required for Layer.mergeAll siblings”~~ **Resolved:** declared **`Storage`** dependency + `layerDefaultMemory` merged into RunResource layer entry points (override via app-root `AppStore`).
 
 ---
 
@@ -127,9 +130,9 @@ Two report sets exist — use **both**, for different layers:
 |---|--------|---------|-------|
 | 1 | **Store event taxonomy (queue)** | entry-only vs lifecycle vs full facet port | Blocks queue store contract final shape |
 | 2 | **`error` on Process tag** | Wire to RPC + typed `RunFailed` vs remove until wired | Stamped today, consumed nowhere |
-| 3 | **Engine store tap pattern** | Declared `StoreScopeBridgeTag` + default bridge | RunResource ✅ (tap + merged `layerDefaultMemory`); Process + Queue adopt same shape |
-| 4 | **Default store in resource layers** | RunResource merges `layerDefaultMemory` via `provideMerge` ✅ | Process/Queue: app provides at root until cutover |
-| 5 | **Legacy facet dual-write** | RunResource engine: **Store only** ✅ | Process/Queue still on legacy facets until cutover |
+| 3 | **Engine store tap pattern** | Declared **`Storage`** dependency per `store-cutover-00` §1 | Process ✅ (`internal/processStoreTap.ts`); RunResource ✅ (`internal/runResourceStoreTap.ts`); Queue adopt same shape |
+| 4 | **Default store in resource layers** | `Layer.provideMerge(Store.layerDefaultMemory)` on toolkit entry points | **Process**, **RunResource**, **Queue** ✅ — apps override at root with `AppStore.layerMemory` |
+| 5 | **Legacy facet dual-write** | Store bridge only after cutover | **Process** ✅ (`ProcessExecutionStore` deleted); **RunResource** ✅ (`RunResourceStore` deleted); **Queue** still on legacy `QueueResourceStore` facet until engine tap lands |
 | 6 | **CQR tag arity** | Trailing `{ success?, error? }` after lanes | [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) |
 
 ---

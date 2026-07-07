@@ -28,7 +28,6 @@
 import { Effect, Layer } from "effect";
 import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
-import type { ProcessExecutionStore } from "../../store/processExecution";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
 import type { QueueResourceStore } from "../../store/queueResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
@@ -76,7 +75,6 @@ export const layerProcessStore = (
 ): Layer.Layer<
   | LogStore
   | QueueResourceStore
-  | ProcessExecutionStore
   | ProcessLifecycleStore
 > =>
   Layer.provide(ProcessStorage.layerRuntimeStorage, layerRuntimeStorage(config));
@@ -91,7 +89,6 @@ export const layerProcessStoreOrDie = (
 ): Layer.Layer<
   | LogStore
   | QueueResourceStore
-  | ProcessExecutionStore
   | ProcessLifecycleStore
 > =>
   layerProcessStore(config);

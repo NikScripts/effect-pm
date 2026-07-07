@@ -27,7 +27,7 @@ Tag factories and config objects use the **same names as `Resource.Method`**:
 | Slot | RPC meaning | Process | Queue | RunResource |
 |------|-------------|---------|-------|-------------|
 | **`payload`** | Request / enqueue / run input | — (effect in layer) | `add` payload (= work item) | `run` payload |
-| **`success`** | Return / worker output / last value | `result` ref element | worker return (TBD on wire) | `run` success |
+| **`success`** | Return / worker output / last value | `result` ref (live handle) + **`RunCompleted.success`** (store) | **`Completed.success`** (store) | `run` success |
 | **`error`** | Typed failure channel | effect error stamp | worker error (TBD) | `run` error |
 
 **Not tag-factory names:** RPC **procedure** names (`run`, `add`, `status`, `result`, …) and internal
@@ -104,7 +104,20 @@ with the wrong shape → silent data corruption.
 **Public stance:** document as **unsupported / expert-only** if internal escape hatches remain;
 prefer compile-time + connect-time failure when layer config schemas ≠ tag schemas.
 
-### 4. RPC schema validation — deferred subsystem, feasible via fingerprints
+### 5. Store wire — `success`, `error`, `_tag` (locked)
+
+Authoritative detail: [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) §5.
+
+- **`_tag`:** PascalCase discriminators on all built-in store event rows.
+- **`success`:** optional on terminal success rows when the tag stamps `success` (`RunCompleted.success`,
+  `Completed.success`). Not `result`.
+- **`error`:** always on terminal failure rows. Tag stamps `error` → decoded typed value (journal encodes
+  on append). No tag `error` → `Schema.String` via `String(findErrorOption ?? squash)`.
+
+**RunResource:** store handle (`record` / `facts` / `stateHistory`) is correct; migrate facts from kebab
+`type` strings to PascalCase `_tag` and adopt the same `error` rule on `RunFailed` rows.
+
+### 6. RPC schema validation — deferred subsystem, feasible via fingerprints
 
 **Goal:** validate once that client and server agree on wire schemas before trusting RPC traffic.
 Skip re-validation when nothing material has changed.
@@ -177,9 +190,9 @@ fingerprints or version stamps.
 | Step | Scope | Agent now? |
 |------|-------|------------|
 | **A** | This handoff + align queue branch agents on config-object overload | Done (doc) |
-| **B** | Process tag positional `success` / `error` + config overload; deprecate `Process.result` | **Done** |
+| **B** | Process tag positional `success` / `error` + config overload; remove `Process.result` | **Done** |
 | **B2** | `processStoreSpec` queue-aligned (`event` + `record` / `events`) | **Done** |
-| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Blocked** — Store Stage 1 |
+| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Done** — facet deleted |
 | **C** | QR / CQR `payload` / `success` / `error` on Tag (coordinate queue branches) | **In progress** |
 | **D** | RR `payload` / `success` / `error` on Tag | **Done** (run-resource branch) |
 | **E** | `success` on store contracts (`processStoreSpec`, `queueStoreSpec`) | After Store Stage 1 |
@@ -200,7 +213,7 @@ fingerprints or version stamps.
 
 1. **CQR arity** — where does `{ payload, success }` sit relative to lane count / named levels?
 2. **Observation field name** — `result` (Process parity) vs `lastResult` (queue worker semantics)?
-3. **`Process.result` removal** — breaking changeset when tag positional API ships?
+3. **`Process.result` removal** — **done** on `cursor/process-store-cutover-a3ad`; consolidate changeset at release.
 4. **buildId source** — CI env var vs `package.json` version vs explicit `Node({ buildId })`?
 5. **Internal layer override** — remove from types entirely vs `@internal` + runtime `Effect.die` if
    tag vs config mismatch?
@@ -280,7 +293,7 @@ class Jobs extends CustomQueueResource.Tag<Jobs>()(
 
 ## References
 
-- `Process.result` — **to deprecate** (`src/Process.ts`)
+- `Process.result` — **removed** (use positional `success` on `Tag`)
 - `schemaVersionOf` / `makeQueueItemCodecDescriptor` — `src/internal/queueResource.ts`
 - `Resource.Node` / `NodeKey` — `src/Resource.ts`
 - Queue store contract — `src/internal/store/queueStoreSpec.ts` (`queueEvent(itemSchema)`)

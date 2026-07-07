@@ -8,8 +8,8 @@ Separate handoffs for **parallel agents**. Each report is scoped to one module (
 
 | Report | Agent scope | Priority |
 |--------|-------------|----------|
-| [RunResource](./2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep | **Low** — cutover done; changeset consolidation open |
-| [Process](./2026-07-07-agent-report-process.md) | Tag wire slots, `error` wiring, engine store tap | **High** |
+| [RunResource](./2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep | **Low** — mostly done; finish + verify |
+| [Process](./2026-07-07-agent-report-process.md) | Tag wire slots, store engine tap, facet retirement | **Medium** — B3 landed; facet removal open |
 | [QueueResource + CustomQueueResource](./2026-07-07-agent-report-queue-resource.md) | `success`/`error` triplet, engine cutover | **High** — see corrections in integration-sync |
 | [Store](./2026-07-07-agent-report-store.md) | Bridge typing, engine wiring gaps | **Medium** — Stage 1 details in store-cutover |
 | [Docs + release](./2026-07-07-agent-report-docs-release.md) | Changesets, stale docs, examples README | **Medium** (after module PRs land) |
@@ -20,8 +20,8 @@ Separate handoffs for **parallel agents**. Each report is scoped to one module (
 |-----|-------|
 | [Store core](../store-cutover-00-store-core.md) | Shared decisions — **read first** |
 | [Process](../store-cutover-process.md) | Process engine → `tag.store` |
-| [Queue](../store-cutover-queue.md) | Declared-dependency engine cutover |
-| [RunResource](../store-cutover-runresource.md) | ✅ Done — reference for Process/Queue |
+| [Queue](../store-cutover-queue.md) | `storeTap.ts` prototype + queue engine |
+| [RunResource](../store-cutover-runresource.md) | Migrate off lazy tap |
 | [CustomQueue](../store-cutover-customqueue.md) | Tag arity + inherits queue engine |
 
 ## Naming & RPC policy

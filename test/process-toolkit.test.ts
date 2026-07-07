@@ -38,9 +38,7 @@ it("base process arms and runs its effect immediately (default schedule)", () =>
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
-        Effect.provide(
-          Process.layer(BaseProc, { effect: Ref.update(ran, (n) => n + 1) }),
-        ),
+        Effect.provide(Process.layer(BaseProc, { effect: Ref.update(ran, (n) => n + 1) })),
       );
     }),
   ));

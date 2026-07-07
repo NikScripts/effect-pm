@@ -176,6 +176,42 @@ const armWindows = Effect.gen(function* () {
 });
 ```
 
+## 7b. Process execution store (auto-write on `Process.layer`)
+
+**`Process.layer`** includes a baked-in default in-memory store. Override with an app
+**`Store.Service`** when you need durable storage or registered query handles:
+
+```ts
+import { Duration, Effect, Layer, Schema } from "effect";
+import { Polling, Process } from "@nikscripts/effect-pm";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
+
+class Prices extends Process.Tag<Prices>()("app/Prices", Price) {}
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(Prices),
+) {}
+
+const pricesLayer = Layer.provideMerge(
+  AppStore.layerMemory,
+  Process.layer(Prices, {
+    effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
+    polling: Polling.spaced(Duration.seconds(30)),
+  }),
+);
+
+// query persisted runs
+const readRuns = Effect.gen(function* () {
+  const store = yield* Prices.store;
+  const events = yield* store.events({ limit: 20 });
+  const latest = yield* Prices.result.get; // reactive Option when success is on the tag
+});
+```
+
+See [process.md](./process.md) and `examples/forms/process-store/process-layer-store-auto-write.ts`.
+
 ## 8. A schedule as its own resource (reusable window manager)
 
 `Process.Schedule` is a standalone schedule `Resource` — full CRUD (`set` / `add` / `upsert` /
