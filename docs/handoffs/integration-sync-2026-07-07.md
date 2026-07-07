@@ -62,10 +62,11 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `Tag(key, success?, error?)`, `successOf`/`errorOf` | Owner decision: `RunFailed.error` encoding when tag has no `error` schema |
-| `builtInProcessStoreContract`, `Process.store`, engine tap | Cast removal on `makeProcessStoreContract` |
-| `withDefaultMemory` on `layer` / `serve` / `serveRemote` | Cast removal on `makeProcessStoreContract` |
+| `Tag(key, success?, error?)`, `successOf`/`errorOf` | Cast removal on `makeProcessStoreContract` |
+| `builtInProcessStoreContract`, `Process.store`, engine tap | |
+| `withDefaultMemory` on `layer` / `serve` / `serveRemote` | |
 | `ProcessExecutionStore` facet deleted; `Process.result` removed | |
+| `RunCompleted.success` / `RunFailed.error` wire (store-core §5) | |
 | `process-store-contract.test.ts`, `process-store-default-override.test.ts` | |
 
 **Blind spot (RunResource agent):** Process has no `payload` on tag — two-slot only. Do not add without product call.

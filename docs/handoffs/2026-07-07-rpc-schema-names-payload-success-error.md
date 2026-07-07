@@ -71,7 +71,9 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 1. Rename config fields to `success` / `error`.
 2. Either wire `error` into RPC spec + store failed events **or** remove `error` from public Tag API until wired (owner call at sync — prefer wire + store in same PR if timeboxed).
 
-**Store domain field `RunCompleted.result`:** persisted analytics shape, not tag config. **Do not** rename to `success` in store events unless product wants breaking storage wire change — keep `result` on `RunCompleted` facts; only tag config uses `success`.
+**Store wire fields (locked 2026-07-07):** persisted terminal rows use **`success`** and **`error`**
+(slot names match the tag). `RunCompleted.success` / `Completed.success` — not `result`. See
+`store-cutover-00-store-core.md` §5 for `_tag` (PascalCase) and `error` encoding.
 
 **Remove `Process.result` pipe** in the same PR (already `@deprecated`). No dual API after rename.
 
@@ -214,7 +216,7 @@ Coordinate with existing `.changeset/run-resource-handle-rpc-store.md` — conso
 ## Open questions for sync (resolve in room, not in agent silence)
 
 1. **Process `error`:** wire + store in rename PR, or drop from Tag until wired?
-2. **Store persisted fields:** keep `RunCompleted.result` / queue `entry.item` as domain names?
+2. **Store persisted fields:** `RunCompleted.success` / `Completed.success` (locked); queue `entry.item` stays `item` (enqueue payload domain name).
 3. **Symbol names:** `successSchemaSym` vs `successSym`?
 4. **Queue positional arity:** `Tag()(key, payload, success?, error?)` — confirm order matches RunResource.
 5. **Process engine → `Process.store`:** separate agent immediately after rename, or same sprint?

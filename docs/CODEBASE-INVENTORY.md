@@ -191,7 +191,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **Outer loop** — schedule driver: waits for arm state / schedule changes.
 - **Inner loop** (per spawned instance while armed) — `awaitNextTick` → user `effect` → polling `afterTick`; instance ends when entry window closes or stop check fails.
 - **Failures in user `effect`** — logged; on the toolkit layer path (`Process.layer` / `serve` / `serveRemote`), terminal runs auto-append to the built-in **`Process.store(tag)`** execution contract (default in-memory store merged into the layer).
-- **Execution record fields** — `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, event `_tag` (`RunCompleted` | `RunFailed` | `RunInterrupted`), optional `result` / `error`, `isStartupRun`.
+- **Execution record fields** — `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, event `_tag` (`RunCompleted` | `RunFailed` | `RunInterrupted`), optional `success` / `error`, `isStartupRun`.
 
 ### Typing helpers
 

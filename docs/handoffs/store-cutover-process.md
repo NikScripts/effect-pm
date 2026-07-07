@@ -20,13 +20,14 @@ cutover (B3) is **done** on `cursor/process-store-cutover-a3ad`.
       `StoreScopeBridgeTag`, buffered `record`, no `serviceOption`.
 - [x] `hasPriorExecutions` reads store contract when recorder present (layer path).
 - [x] **`ProcessExecutionStore` facet deleted** — module, subpath, `ProcessStorage` alias, tests.
-- [x] `RunCompleted.result` populated from `SubscriptionRef` when tag carries `success`.
+- [x] `RunCompleted.success` populated from `SubscriptionRef` when tag carries `success`.
 - [x] `Process.result` removed; positional `success` / `error` on `Tag`.
 
 ## Open
 
 - [x] `RunInterrupted` recorded via `Effect.onInterrupt` when a tracked run is cancelled (`stop` / fiber interrupt).
-- [ ] Owner decision: `RunFailed.error` encoding — raw failure value (journal encodes) vs pre-encoded.
+- [x] **`RunFailed.error` encoding** — locked in `store-cutover-00-store-core.md` §5: typed decoded
+      `error` when `errorOf(tag)` is set; `String(extracted)` when not; journal encodes on append.
 - **✅ Baked-in default store:** `Process.layer` / `serve` / `serveRemote` merge `layerDefaultMemory`
   internally. Override at the app root with `Layer.provideMerge(AppStore.layerMemory)` or
   `AppStore.layer({ filename })`.

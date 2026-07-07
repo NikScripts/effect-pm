@@ -58,7 +58,7 @@ describe("Process.layer — Process.store auto-write", () => {
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
 
-  it.effect("records optional result on value-returning processes", () =>
+  it.effect("records optional success on value-returning processes", () =>
     Effect.gen(function* () {
       const live = processLayer(
         Process.layer(PricedExec, {
@@ -73,7 +73,7 @@ describe("Process.layer — Process.store auto-write", () => {
         const events = yield* store.events();
         const completed = events.find((row) => row._tag === "RunCompleted");
         expect(completed).toMatchObject({
-          result: { symbol: "AAPL", usd: 42 },
+          success: { symbol: "AAPL", usd: 42 },
         });
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),

@@ -57,7 +57,7 @@ describe("Process.layer — baked-in default store", () => {
         const events = yield* store.events();
         expect(events.length).toBeGreaterThanOrEqual(1);
         expect(events.find((row) => row._tag === "RunCompleted")).toMatchObject({
-          result: { symbol: "OVERRIDE", usd: 1 },
+          success: { symbol: "OVERRIDE", usd: 1 },
         });
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),

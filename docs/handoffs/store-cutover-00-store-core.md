@@ -73,7 +73,39 @@ fact/state union).
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
 - Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.
 
+### 5. Store event wire — `_tag`, `success`, `error` (locked 2026-07-07)
+
+Persisted store rows use the **same slot names as the tag factory** (`success`, `error`) and
+**PascalCase `_tag`** discriminators. Tag config and store wire align — no `result` on
+`RunCompleted` / `Completed`.
+
+| Convention | Rule |
+|------------|------|
+| **`_tag`** | PascalCase only — `RunCompleted`, `RunFailed`, `Completed`, `Failed`, `RunStarted`, … Retire kebab `type` strings (`run-resource.run.failed`, …). **RunResource** store facts still need this migration; handle API (`record` / `facts` / `stateHistory`) is correct. |
+| **`success`** | Present on terminal success rows **iff** the tag declares a `success` schema. Field name is `success` (not `result`). Value is the **decoded** worker/run return — journal encodes on append. |
+| **`error`** | Always on terminal failure rows. Presence-driven by the tag's `error` schema (see below). |
+
+#### `error` encoding (locked — Process, Queue, RunResource store rows)
+
+One rule for all worker resources:
+
+1. **Extract** the failure value once at the engine:
+   `Option.getOrElse(Cause.findErrorOption(cause), () => Cause.squash(cause))`.
+2. **Tag declares `error` schema** → store row carries **decoded typed `error`** (the fail-channel
+   value). Pass the raw object to `store.record`; the contract's `error` field uses the tag schema;
+   the journal **encodes on append** — never pre-encode to JSON/string at the tap.
+3. **Tag has no `error` schema** → store row carries **`error: Schema.String`** with
+   `String(extracted)` — human-readable fallback, not `Cause.pretty` of the full tree, not
+   `Schema.Cause` on the wire.
+
+Queue `Failed` without an `error` schema uses the same `error: string` field (not a separate
+`cause` column on the persisted row). Live `.events` streams may still carry rich `Cause`/`Exit`
+for subscribers; the **store row** follows the rule above.
+
+**Not the live-handle `result` ref:** Process's reactive `result` Subscribable (latest success
+`Option`) is unrelated — only the persisted `RunCompleted.success` field follows this table.
+
 ## Store-core TODO
 
-- [ ] (Doc step E) Decide `success` persistence: does the store `Completed`/`RunCompleted` row carry the
-      worker/run `success` value (the tag's `success` schema threaded into the event union)?
+- [x] `success` persistence — terminal rows carry optional `success` when the tag stamps `success`.
+- [x] `error` encoding — presence-driven typed vs `String` fallback (§5).

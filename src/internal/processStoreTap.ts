@@ -61,7 +61,7 @@ const readOptionalResult = (
 const buildCompletedEvent = (
   processId: string,
   input: Parameters<ProcessStoreTap["recordCompleted"]>[0],
-  result: unknown | undefined,
+  success: unknown | undefined,
 ): ProcessStoreEventRow => ({
   _tag: "RunCompleted",
   processId,
@@ -70,7 +70,7 @@ const buildCompletedEvent = (
   completedAt: input.completedAt,
   durationMs: input.completedAt - input.startedAt,
   isStartupRun: input.isStartupRun,
-  ...(result !== undefined ? { result } : {}),
+  ...(success !== undefined ? { success } : {}),
 });
 
 const buildFailedEvent = (
@@ -140,13 +140,13 @@ export const makeProcessStoreTap = (options: {
     return {
       recordCompleted: (input) =>
         readOptionalResult(options.resultRef).pipe(
-          Effect.flatMap((result) =>
+          Effect.flatMap((successOption) =>
             offerLossy(
               queue,
               buildCompletedEvent(
                 options.scopeKey,
                 input,
-                Option.getOrUndefined(result),
+                Option.getOrUndefined(successOption),
               ),
             ),
           ),

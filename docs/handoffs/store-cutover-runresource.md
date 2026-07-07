@@ -26,8 +26,11 @@ Also: the tap still uses the legacy `ProcessStore.catchErrorAndLog` — swap for
 
 ## Keep
 
-- The fact/state event shapes (`run-resource.fact.*` / state changes) as the store's tagged-union `event`
-  row (`record`/`events`), aligned with queue/process.
+- The fact/state event shapes as the store's tagged-union rows (`record`/`events` / `stateHistory`),
+  aligned with queue/process — **`_tag` in PascalCase** (`RunStarted`, `RunCompleted`, `RunFailed`),
+  retiring kebab `type` strings (`run-resource.run.*`). Handle API unchanged.
+- **`error` on `RunFailed` facts** — same presence-driven rule as store-core §5 (typed when tag stamps
+  `error`; `String` fallback when not). Replace today's `cause: string` (`Cause.pretty`) on the store row.
 
 ## Note
 

@@ -1383,7 +1383,7 @@ export const processLogEntry = LogEntrySchema;
 export { processEventReadPayload };
 
 /**
- * Execution event union for void processes (no `result` field on `RunCompleted`).
+ * Execution event union for void processes (no `success` field on `RunCompleted`).
  *
  * @public
  */

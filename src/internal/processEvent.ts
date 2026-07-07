@@ -23,7 +23,7 @@ const runFinishedBase = {
 
 /**
  * Build the execution event union for a process store contract.
- * When `success` is set, `RunCompleted` carries an optional encoded `result`.
+ * When `success` is set, `RunCompleted` carries an optional `success` value.
  * When `error` is set, `RunFailed.error` uses that schema; otherwise `Schema.String`.
  *
  * @internal
@@ -38,7 +38,7 @@ export const makeProcessExecutionEvent = <
   const completedFields =
     success === undefined
       ? runFinishedBase
-      : { ...runFinishedBase, result: Schema.optional(success) };
+      : { ...runFinishedBase, success: Schema.optional(success) };
 
   const failedFields = {
     ...runFinishedBase,

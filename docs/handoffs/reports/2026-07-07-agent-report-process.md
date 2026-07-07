@@ -18,7 +18,7 @@
 | Engine store tap (layer path) | ✅ | `src/internal/processStoreTap.ts` — declared `StoreScopeBridgeTag`, buffered `record` |
 | Legacy facet writes from engine | ✅ removed | **`ProcessExecutionStore` facet deleted** |
 | Cast on store contract | 🟡 | `builtInProcessStoreContract` cast-free; factory cast remains |
-| `RunCompleted.result` population | ✅ | From `SubscriptionRef` when `success` stamped |
+| `RunCompleted.success` population | ✅ | From `SubscriptionRef` when `success` stamped |
 | `hasPriorExecutions` via store | ✅ | When execution recorder present (layer path) |
 | `Process.result` removed | ✅ | Positional `success` only |
 | Store contract tests | ✅ | `test/process-store-contract.test.ts` |
@@ -43,9 +43,11 @@ append.
 
 `Process.make` does not write to the store (no `_storeTap`). Use **`Process.layer`** for auto-append.
 
-### 4. Owner decision deferred
+### 4. Owner decisions locked
 
-**`RunFailed.error` encoding** when `error` schema is stamped: raw failure value (journal encodes on append) vs pre-encoded payload.
+**`RunFailed.error` encoding** — see `store-cutover-00-store-core.md` §5: typed decoded `error` when
+`errorOf(tag)` is set; `String(extracted)` when not; journal encodes on append. **`RunCompleted.success`**
+(not `result`) when `success` is stamped.
 
 ### 5. Baked-in default store
 

@@ -84,7 +84,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 
 const store = yield* Prices.store;
-yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, result: { … } });
+yield* store.record({ _tag: "RunCompleted", processId: Prices.key, /* … */, success: { … } });
 const rows = yield* store.events({ limit: 10 });
 ```
 

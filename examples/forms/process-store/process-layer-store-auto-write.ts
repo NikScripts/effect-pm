@@ -44,9 +44,9 @@ const program = Effect.gen(function* () {
     const price =
       completed !== undefined &&
       completed._tag === "RunCompleted" &&
-      "result" in completed &&
-      completed.result !== undefined
-        ? yield* Schema.decodeUnknownEffect(Price)(completed.result).pipe(Effect.option)
+      "success" in completed &&
+      completed.success !== undefined
+        ? yield* Schema.decodeUnknownEffect(Price)(completed.success).pipe(Effect.option)
         : Option.none();
     yield* Option.match(price, {
       onNone: () => Effect.log("latest result: none"),

@@ -27,7 +27,7 @@ Tag factories and config objects use the **same names as `Resource.Method`**:
 | Slot | RPC meaning | Process | Queue | RunResource |
 |------|-------------|---------|-------|-------------|
 | **`payload`** | Request / enqueue / run input | — (effect in layer) | `add` payload (= work item) | `run` payload |
-| **`success`** | Return / worker output / last value | `result` ref element | worker return (TBD on wire) | `run` success |
+| **`success`** | Return / worker output / last value | `result` ref (live handle) + **`RunCompleted.success`** (store) | **`Completed.success`** (store) | `run` success |
 | **`error`** | Typed failure channel | effect error stamp | worker error (TBD) | `run` error |
 
 **Not tag-factory names:** RPC **procedure** names (`run`, `add`, `status`, `result`, …) and internal
@@ -104,7 +104,20 @@ with the wrong shape → silent data corruption.
 **Public stance:** document as **unsupported / expert-only** if internal escape hatches remain;
 prefer compile-time + connect-time failure when layer config schemas ≠ tag schemas.
 
-### 4. RPC schema validation — deferred subsystem, feasible via fingerprints
+### 5. Store wire — `success`, `error`, `_tag` (locked)
+
+Authoritative detail: [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) §5.
+
+- **`_tag`:** PascalCase discriminators on all built-in store event rows.
+- **`success`:** optional on terminal success rows when the tag stamps `success` (`RunCompleted.success`,
+  `Completed.success`). Not `result`.
+- **`error`:** always on terminal failure rows. Tag stamps `error` → decoded typed value (journal encodes
+  on append). No tag `error` → `Schema.String` via `String(findErrorOption ?? squash)`.
+
+**RunResource:** store handle (`record` / `facts` / `stateHistory`) is correct; migrate facts from kebab
+`type` strings to PascalCase `_tag` and adopt the same `error` rule on `RunFailed` rows.
+
+### 6. RPC schema validation — deferred subsystem, feasible via fingerprints
 
 **Goal:** validate once that client and server agree on wire schemas before trusting RPC traffic.
 Skip re-validation when nothing material has changed.

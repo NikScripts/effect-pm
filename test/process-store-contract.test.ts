@@ -49,7 +49,7 @@ describe("Process store contract", () => {
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("value process record includes optional result field", () =>
+  it.effect("value process record includes optional success field", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore.at(PricedProc);
       yield* store.record({
@@ -60,12 +60,12 @@ describe("Process store contract", () => {
         completedAt: 20,
         durationMs: 10,
         isStartupRun: false,
-        result: { symbol: "AAPL", usd: 1 },
+        success: { symbol: "AAPL", usd: 1 },
       });
       const events = yield* store.events();
       expect(events[0]).toMatchObject({
         _tag: "RunCompleted",
-        result: { symbol: "AAPL", usd: 1 },
+        success: { symbol: "AAPL", usd: 1 },
       });
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
   );

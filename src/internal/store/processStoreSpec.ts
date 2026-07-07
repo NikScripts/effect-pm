@@ -29,7 +29,7 @@ export type ProcessStoreEventRow = {
   readonly completedAt: number;
   readonly durationMs: number;
   readonly isStartupRun: boolean;
-  readonly result?: unknown;
+  readonly success?: unknown;
   readonly error?: unknown;
 };
 
