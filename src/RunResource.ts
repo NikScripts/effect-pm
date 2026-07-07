@@ -78,6 +78,7 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import * as internal from "./internal/runResource";
+import { errorSym, successSym } from "./internal/runTagSchemas";
 import * as Store from "./Store";
 import type { StoreScopeNotRegistered } from "./internal/store/errors";
 import {
@@ -366,7 +367,13 @@ const materializeRunTag = <
   const ready = Resource.withReadiness(tag, (svc) =>
     Effect.map(svc.status.get, () => ({ ready: true })),
   );
-  return Object.assign(ready, { run: makeStaticRun(ready) }) as RunTagWithStaticRun<
+  const stamp: Partial<Record<typeof successSym | typeof errorSym, Schema.Top>> = {
+    [successSym]: success,
+  };
+  if ((error as Schema.Top) !== Schema.Never) {
+    stamp[errorSym] = error;
+  }
+  return Object.assign(ready, stamp, { run: makeStaticRun(ready) }) as RunTagWithStaticRun<
     Self,
     I,
     A,
@@ -407,6 +414,7 @@ const buildRunImpl = <
     const handle = yield* internal.makeRunResourceHandleEffect({
       name: effectiveConfig.name ?? tag.key,
       scopeKey: tag.key,
+      tag,
       effect: (input: Schema.Schema.Type<I>) => provideR(effectiveConfig.effect(input)),
       concurrency: effectiveConfig.concurrency,
     });

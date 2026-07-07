@@ -17,6 +17,7 @@ import type { RunResourceStateChangeReason } from "./store/runResourceStoreSpec"
 import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
 import { Storage } from "../Store";
 import type { StoreScopeNotRegistered } from "./store/errors";
+import type { StoreScopeTag } from "./store/registration";
 import {
   makeRunResourceStoreTap,
   nextRunId,
@@ -65,6 +66,7 @@ export type RunResourceHandle<T, A, E> = RunGateHandle<T, A, E> & {
 export interface RunResourceConfig<T, A, E> {
   readonly name?: string;
   readonly scopeKey?: string;
+  readonly tag?: StoreScopeTag;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
 }
@@ -172,7 +174,12 @@ const makeObservedRun =
                   const endedAt = yield* Clock.currentTimeMillis;
                   const durationMs = Math.max(0, endedAt - startedAt);
                   if (Exit.isSuccess(exit)) {
-                    yield* storeTap.recordRunCompleted(runId, endedAt, durationMs);
+                    yield* storeTap.recordRunCompleted(
+                      runId,
+                      endedAt,
+                      durationMs,
+                      exit.value,
+                    );
                     const completed = runStatusTransitions.completed;
                     yield* publishStatus(completed.update, completed.reason, durationMs);
                   } else if (Cause.hasInterrupts(exit.cause)) {
@@ -183,8 +190,7 @@ const makeObservedRun =
                       durationMs,
                     );
                   } else {
-                    const causeText = Cause.pretty(exit.cause);
-                    yield* storeTap.recordRunFailed(runId, endedAt, durationMs, causeText);
+                    yield* storeTap.recordRunFailed(runId, endedAt, durationMs, exit.cause);
                     const failed = runStatusTransitions.failed;
                     yield* publishStatus(failed.update, failed.reason, durationMs);
                   }
@@ -230,7 +236,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
-    const storeTap = yield* makeRunResourceStoreTap(resourceId, scopeKey);
+    const storeTap = yield* makeRunResourceStoreTap(resourceId, scopeKey, config.tag);
     const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
       `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,

@@ -1,5 +1,5 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
+import { Cause, Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";
@@ -266,6 +266,11 @@ describe("RunResource.make — default store bridge", () => {
       const facts = yield* store.facts();
       const history = yield* store.stateHistory();
       expect(facts.some((row) => row.type === "run-resource.run.failed")).toBe(true);
+      const failed = facts.find((row) => row.type === "run-resource.run.failed");
+      expect(failed).toBeDefined();
+      if (failed !== undefined && failed.type === "run-resource.run.failed") {
+        expect(Cause.pretty(failed.cause)).toContain("negative");
+      }
       expect(history.length).toBeGreaterThan(0);
     }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
@@ -291,13 +296,16 @@ describe("RunResource.layer — baked default store bridge", () => {
       const bridge = yield* Storage;
       const store = yield* bridge.at(
         BakedGate.key,
-        builtInRunResourceStoreContract({ key: BakedGate.key }),
+        builtInRunResourceStoreContract(BakedGate),
       );
       const facts = yield* store.facts();
       expect(facts.map((row) => row.type).sort()).toEqual([
         "run-resource.run.completed",
         "run-resource.run.started",
       ]);
+      expect(facts.find((row) => row.type === "run-resource.run.completed")).toMatchObject({
+        success: 1,
+      });
     }).pipe(Effect.provide(bakedLayer), Effect.scoped),
   );
 });
@@ -332,7 +340,48 @@ describe("RunResource.layer — RunResource.store records", () => {
       ]);
       expect(facts.find((row) => row.type === "run-resource.run.completed")).toMatchObject({
         durationMs: expect.any(Number),
+        success: 42,
       });
+    }).pipe(Effect.provide(live), Effect.scoped),
+  );
+});
+
+describe("RunResource.store — persistence fidelity", () => {
+  const FidelityGate = RunResource.Tag<{ readonly _tag: "FidelityGate" }>()(
+    "@test/FidelityGate",
+    Schema.Number,
+    Schema.Number,
+    Schema.String,
+  );
+
+  const fidelityRegistration = RunResource.store(FidelityGate);
+
+  class FidelityStore extends Store.Service<FidelityStore>("@test/FidelityStore")(
+    fidelityRegistration,
+  ) {}
+
+  const live = RunResource.layer(FidelityGate, {
+    effect: (n: number) =>
+      n >= 0 ? Effect.succeed(n * 3) : Effect.fail(`bad:${String(n)}`),
+    concurrency: 1,
+  }).pipe(Layer.provideMerge(FidelityStore.layerMemory));
+
+  it.effect("persists run success values and structured failure causes", () =>
+    Effect.gen(function* () {
+      const gate = yield* FidelityGate;
+      yield* gate.run(7);
+      yield* gate.run(-2).pipe(Effect.flip);
+
+      const store = yield* FidelityStore.at(FidelityGate);
+      const facts = yield* store.facts();
+      const completed = facts.find((row) => row.type === "run-resource.run.completed");
+      const failed = facts.find((row) => row.type === "run-resource.run.failed");
+
+      expect(completed).toMatchObject({ success: 21 });
+      expect(failed).toBeDefined();
+      if (failed !== undefined && failed.type === "run-resource.run.failed") {
+        expect(Cause.pretty(failed.cause)).toContain("bad:-2");
+      }
     }).pipe(Effect.provide(live), Effect.scoped),
   );
 });

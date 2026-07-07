@@ -5,6 +5,7 @@
  * @internal
  */
 
+import type { Cause } from "effect";
 import type { RunFact, RunStateChange } from "./store/runResourceStoreSpec";
 import type { RunGateStatus } from "./runResource";
 
@@ -45,14 +46,26 @@ export const makeRunCompletedFact = (input: {
   readonly runId: string;
   readonly occurredAt: number;
   readonly durationMs: number;
-}): RunFact => ({
-  id: input.id,
-  resourceId: input.resourceId,
-  runId: input.runId,
-  type: "run-resource.run.completed",
-  occurredAt: input.occurredAt,
-  durationMs: input.durationMs,
-});
+  readonly success?: unknown;
+}): RunFact =>
+  input.success === undefined
+    ? {
+        id: input.id,
+        resourceId: input.resourceId,
+        runId: input.runId,
+        type: "run-resource.run.completed",
+        occurredAt: input.occurredAt,
+        durationMs: input.durationMs,
+      }
+    : ({
+        id: input.id,
+        resourceId: input.resourceId,
+        runId: input.runId,
+        type: "run-resource.run.completed",
+        occurredAt: input.occurredAt,
+        durationMs: input.durationMs,
+        success: input.success,
+      } as RunFact);
 
 /** @internal */
 export const makeRunFailedFact = (input: {
@@ -61,7 +74,7 @@ export const makeRunFailedFact = (input: {
   readonly runId: string;
   readonly occurredAt: number;
   readonly durationMs: number;
-  readonly cause: string;
+  readonly cause: Cause.Cause<unknown>;
 }): RunFact => ({
   id: input.id,
   resourceId: input.resourceId,

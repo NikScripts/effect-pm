@@ -1,3 +1,4 @@
+import { Cause } from "effect";
 import { describe, expect, it } from "vitest";
 import {
   completeRun,
@@ -92,11 +93,11 @@ describe("runResourceFacts", () => {
       runId: "r/run/1",
       occurredAt: 3,
       durationMs: 4,
-      cause: "boom",
+      cause: Cause.fail("boom"),
     });
     expect(failed.type).toBe("run-resource.run.failed");
     if (failed.type === "run-resource.run.failed") {
-      expect(failed.cause).toBe("boom");
+      expect(Cause.pretty(failed.cause)).toContain("boom");
     }
   });
 

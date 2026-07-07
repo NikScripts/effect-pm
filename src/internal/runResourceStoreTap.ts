@@ -7,10 +7,12 @@
  * @internal
  */
 
+import type { Cause } from "effect";
 import { Effect, Ref } from "effect";
 import { Storage } from "../Store";
 import { catchErrorAndLog } from "./store/helpers";
 import type { StoreScopeNotRegistered } from "./store/errors";
+import { successOf } from "./runTagSchemas";
 import type { RunGateStatus } from "./runResource";
 import {
   makeRunCompletedFact,
@@ -24,6 +26,7 @@ import {
   type RunResourceStateChangeReason,
 } from "./store/runResourceStoreSpec";
 import type { StoreHandleFromContract } from "./store/spec";
+import type { StoreScopeTag } from "./store/registration";
 
 /** Engine-facing store tap — Store bridge only. @internal */
 export interface RunResourceStoreTap {
@@ -41,12 +44,13 @@ export interface RunResourceStoreTap {
     runId: string,
     occurredAt: number,
     durationMs: number,
+    success?: unknown,
   ) => Effect.Effect<void>;
   readonly recordRunFailed: (
     runId: string,
     occurredAt: number,
     durationMs: number,
-    cause: string,
+    cause: Cause.Cause<unknown>,
   ) => Effect.Effect<void>;
 }
 
@@ -54,8 +58,6 @@ type RunStoreHandle = Pick<
   StoreHandleFromContract<BuiltInRunResourceContract>,
   "record" | "recordStateChange"
 >;
-
-const scopeTagForKey = (scopeKey: string) => ({ key: scopeKey });
 
 const makeRecordWrite =
   (resourceId: string) =>
@@ -72,14 +74,17 @@ const makeRecordWrite =
 export const makeRunResourceStoreTap = (
   resourceId: string,
   scopeKey: string,
+  tag?: StoreScopeTag,
 ): Effect.Effect<RunResourceStoreTap, StoreScopeNotRegistered, Storage> =>
   Effect.gen(function* () {
     const bridge = yield* Storage;
-    const contract = builtInRunResourceStoreContract(scopeTagForKey(scopeKey));
+    const scopeTag = tag ?? { key: scopeKey };
+    const contract = builtInRunResourceStoreContract(scopeTag);
     const store: RunStoreHandle = yield* bridge.at(scopeKey, contract);
     const recordWrite = makeRecordWrite(resourceId);
     const stateSeqRef = yield* Ref.make(0);
     const factSeqRef = yield* Ref.make(0);
+    const persistSuccess = successOf(scopeTag) !== undefined;
 
     const nextStateId = (): Effect.Effect<string> =>
       Ref.updateAndGet(stateSeqRef, (n) => n + 1).pipe(
@@ -128,6 +133,7 @@ export const makeRunResourceStoreTap = (
       runId: string,
       occurredAt: number,
       durationMs: number,
+      success?: unknown,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunCompletedFact({
@@ -136,6 +142,7 @@ export const makeRunResourceStoreTap = (
           runId,
           occurredAt,
           durationMs,
+          ...(persistSuccess ? { success } : {}),
         });
         yield* recordWrite(`fact completed ${runId}`, store.record(fact));
       });
@@ -144,7 +151,7 @@ export const makeRunResourceStoreTap = (
       runId: string,
       occurredAt: number,
       durationMs: number,
-      cause: string,
+      cause: Cause.Cause<unknown>,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const fact = makeRunFailedFact({

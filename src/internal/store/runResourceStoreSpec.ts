@@ -11,6 +11,7 @@
 import { Schema } from "effect";
 import type { Effect } from "effect";
 import * as Store from "../../Store";
+import { errorOf, successOf } from "../runTagSchemas";
 import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
@@ -27,43 +28,80 @@ export type RunResourceStateChangeReason =
 /** Live gate counters persisted on state transitions. @internal */
 export const runStateSchema = runGateStatus;
 
-/** @internal */
-export const runStartedFactSchema = Schema.Struct({
+const runStartedFields = {
   id: Schema.String,
   resourceId: Schema.String,
   runId: Schema.String,
   type: Schema.Literal("run-resource.run.started"),
   occurredAt: Schema.Number,
   concurrency: Schema.Number,
-});
+} as const;
 
-/** @internal */
-export const runCompletedFactSchema = Schema.Struct({
+const runFinishedFactBase = {
   id: Schema.String,
   resourceId: Schema.String,
   runId: Schema.String,
-  type: Schema.Literal("run-resource.run.completed"),
   occurredAt: Schema.Number,
   durationMs: Schema.Number,
+} as const;
+
+/** @internal */
+export const runStartedFactSchema = Schema.Struct(runStartedFields);
+
+/**
+ * Build the run fact union for a store contract.
+ * When `success` is set, `completed` carries an optional `success` value.
+ * Failures persist a structured {@link Schema.Cause} (not a pretty string).
+ *
+ * @internal
+ */
+export const makeRunFactSchema = <
+  Success extends Schema.Top | void = void,
+  Error extends Schema.Top | void = void,
+>(
+  success?: Success extends Schema.Top ? Success : never,
+  error?: Error extends Schema.Top ? Error : never,
+) => {
+  const completedFields =
+    success === undefined
+      ? { ...runFinishedFactBase, type: Schema.Literal("run-resource.run.completed") }
+      : {
+          ...runFinishedFactBase,
+          type: Schema.Literal("run-resource.run.completed"),
+          success: Schema.optional(success),
+        };
+
+  const cause = Schema.Cause(
+    error === undefined ? Schema.Unknown : error,
+    Schema.Unknown,
+  );
+
+  return Schema.Union([
+    runStartedFactSchema,
+    Schema.Struct(completedFields),
+    Schema.Struct({
+      ...runFinishedFactBase,
+      type: Schema.Literal("run-resource.run.failed"),
+      cause,
+    }),
+  ]);
+};
+
+/** Default void run facts (no `success`; structured `Cause`). @internal */
+export const runFactSchema = makeRunFactSchema();
+
+/** @internal */
+export const runCompletedFactSchema = Schema.Struct({
+  ...runFinishedFactBase,
+  type: Schema.Literal("run-resource.run.completed"),
 });
 
 /** @internal */
 export const runFailedFactSchema = Schema.Struct({
-  id: Schema.String,
-  resourceId: Schema.String,
-  runId: Schema.String,
+  ...runFinishedFactBase,
   type: Schema.Literal("run-resource.run.failed"),
-  occurredAt: Schema.Number,
-  durationMs: Schema.Number,
-  cause: Schema.String,
+  cause: Schema.Cause(Schema.Unknown, Schema.Unknown),
 });
-
-/** Discriminated union of run lifecycle facts. @internal */
-export const runFactSchema = Schema.Union([
-  runStartedFactSchema,
-  runCompletedFactSchema,
-  runFailedFactSchema,
-]);
 
 /** State transition row — mirrors legacy `RunResourceStateChange`. @internal */
 export const runStateChangeSchema = Schema.Struct({
@@ -86,7 +124,7 @@ export const runStateReadPayload = Schema.Struct({
   limit: Schema.optional(Schema.Number),
 });
 
-/** Persisted run fact for a tag scope. @internal */
+/** Persisted run fact for the default void contract. @internal */
 export type RunFact = Schema.Schema.Type<typeof runFactSchema>;
 
 /** Persisted state transition for a tag scope. @internal */
@@ -110,13 +148,14 @@ export type BuiltInRunResourceContract = StoreContractValue<
   }
 >;
 
-/** Built-in run-resource store contract for a tag. @internal */
-export const builtInRunResourceStoreContract = (
-  _tag: StoreScopeTag,
+/** Build the run store contract (optional success / error schemas). @internal */
+export const makeRunResourceStoreContract = (
+  success?: Schema.Top,
+  error?: Schema.Top,
 ): BuiltInRunResourceContract =>
   Store.contract(
     {
-      fact: Store.shape(runFactSchema, runFactReadPayload),
+      fact: Store.shape(makeRunFactSchema(success, error), runFactReadPayload),
       state: Store.shape(runStateChangeSchema, runStateReadPayload),
     },
     ({ fact, state }) => ({
@@ -125,4 +164,14 @@ export const builtInRunResourceStoreContract = (
       recordStateChange: state.append,
       stateHistory: state.read,
     }),
-  );
+  ) as BuiltInRunResourceContract;
+
+/** Built-in run-resource store contract for a tag (reads `success` / `error` from tag). @internal */
+export const builtInRunResourceStoreContract = (
+  tag: StoreScopeTag,
+): BuiltInRunResourceContract =>
+  makeRunResourceStoreContract(successOf(tag), errorOf(tag));
+
+/** @deprecated Internal flat spec — use {@link builtInRunResourceStoreContract}. @internal */
+export const builtInRunResourceStoreSpec = (tag: StoreScopeTag) =>
+  builtInRunResourceStoreContract(tag).spec;
