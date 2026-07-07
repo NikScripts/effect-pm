@@ -285,9 +285,10 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Construction forms
 
-- **`RunResource.make({ name?, effect, concurrency? })`** — scoped gate callable.
-- **`RunResource.Service<Self, T, A, E>()(name, config)`** — tag + `.layer`.
-- **`RunResource.Tag` + `RunResource.layer`** — DI.
+- **`RunResource.make({ name?, effect, concurrency? })`** — scoped handle with `.run` only (persistence when storage composed; no Subscribables exposed).
+- **`RunResource.Service<Self>()(name, { inputSchema, successSchema, errorSchema?, effect, concurrency? })`** — tag + baked-in `.layer` + `.configure` + static `.run`.
+- **`RunResource.Tag<Self>()(key, schemas…)`** — identity tag + wire schemas; pair with **`RunResource.layer`** / **`serve`** / **`serveRemote`**.
+- **`RunResource.store(tag)`** — built-in fact/state registration on an app **`Store.Service`**.
 - **`RunResource.makeRunner({ name, concurrency? })`** — tag + layer; **`yield* runner(anyEffect)`** wraps any `Effect`.
 
 ### Config
@@ -303,9 +304,13 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### `RunResourceState` (observer snapshot)
 
-- **`ref`**, **`observedAt`**, **`configVersion`**, **`concurrency`**, **`waiting`**, **`inFlight`**, **`completed`**, **`failed`**, **`interrupted`**, **`totalDurationMs`**.
+Live counters on toolkit handles (`status`, `waiting`, `inFlight`, …) via **`Subscribable`**. Persisted snapshots use the same field names on **`RunResourceState`**.
 
-### `ProcessStoreRunResource` facts (when facet layer composed)
+### Engine persistence (when storage composed)
+
+The gate engine writes automatically when **`ProcessStorage.layer`** / **`RunResourceStore.layerRuntimeStorage`** or **`RunResource.store(tag)`** on a **`Store.Service`** is in context — same optional semantics as **`QueueResource`**. Writes use **`ProcessStore.catchErrorAndLog`** so storage failures do not fail gated work.
+
+### `ProcessStoreRunResource` facts (legacy facet)
 
 **Fact types:** `run-resource.run.started`, `run-resource.run.completed`, `run-resource.run.failed`.
 
@@ -313,7 +318,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Remote
 
-- None.
+- **`RunResource.serve` / `serveRemote`** — RPC handlers (same config as **`layer`**).
+- Tag wire schemas: **`runGateStatus`**, **`runSpec(input, success, error?)`**.
 
 ---
 
@@ -423,7 +429,7 @@ and call its domain read methods.
 
 - **Process** supervisor — executions + lifecycle when relevant facets are present.
 - **QueueResource** — item + lifecycle events when relevant facets are present.
-- **`ProcessStoreRunResource` facet** — RunResource facts/state persisted as analytics events through the per-type static optional emitters on the tag.
+- **`ProcessStoreRunResource` facet** — RunResource facts/state persisted as analytics events; the gate engine calls static emitters automatically when the facet layer is composed (same as **`RunResource.store`** on **`Store.Service`**).
 
 ### Remote
 
@@ -450,9 +456,9 @@ and call its domain read methods.
 - **`ProcessStoreRunResource.layer`** — facet + in-memory `RuntimeStorage` (dev/test).
 - Composed by `ProcessStorage.layerRuntimeStorage` and `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 
-### In-process listeners (no durability)
+### In-process observation (no durability)
 
-Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** via `Effect.provideService` / `Layer.succeed` that fans out to scoped callbacks. Type your callback bag with a local interface inside the consumer (the package no longer ships a generic `RuntimeObservationListener`). There is no package-level `layerListeners` helper.
+Read toolkit handle **`Subscribable`** views on Tag/Service/layer gates (`status`, `waiting`, …) — see `run-resource-runtime-observer` example. Custom services matching **`ProcessStoreRunResource.Type`** via `Effect.provideService` / `Layer.succeed` remain supported for fan-out mocks. There is no package-level `layerListeners` helper.
 
 ### Core types
 

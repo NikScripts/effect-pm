@@ -98,17 +98,18 @@ For durable adapter work, start with
 TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 `RunResource` publishes per-type facts and `RunResourceState` transitions
-through the static optional emitters on the per-domain `RunResourceStore`
-facet (`RunResourceStore.recordRunStarted` / `recordRunCompleted` /
-`recordRunFailed` / `recordStateChange`). Composing
+through the gate engine when storage is composed — legacy
+**`RunResourceStore`** static emitters (`recordRunStarted` / …) and/or
+**`RunResource.store(tag)`** on an app **`Store.Service`**. Composing
 `RunResourceStore.layerRuntimeStorage` (or the full-stack
 `ProcessStorage.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) persists facts as
 `run-resource.fact.recorded` events and state changes as
-`run-resource.state.changed` events. For in-process listeners (no
-durability) provide a custom service typed as `RunResourceStore.Type`
-via `Effect.provideService` / `Layer.succeed`. A `RunResourceStore.live(resourceId)`
-streaming projection is planned.
+`run-resource.state.changed` events. For live counters without durability,
+read toolkit handle **`Subscribable`** views (`run-resource-runtime-observer`
+example). Custom **`RunResourceStore.Type`** services remain supported for
+fan-out mocks; a `RunResourceStore.live(resourceId)` streaming projection is
+planned.
 
 ---
 

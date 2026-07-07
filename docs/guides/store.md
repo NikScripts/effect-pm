@@ -89,6 +89,7 @@ const extended = baseContract.pipe(
 | Tuple / rest | `Service(...)(reg1, reg2)` | `scopeKey` of each registration |
 | Named object | `Service({ temp: reg })` | accessor name (`temp`) |
 | Resource tag | `Resource.store(Tag, contract)` | tag `.key` |
+| Run gate | `RunResource.store(Tag)` | tag `.key` (built-in fact + state contract) |
 | String scope | `Store.register("scope", contract)` | `"scope"` |
 | Standalone | `Store.store("scope", contract)` | yield `yield* MyStore` directly |
 

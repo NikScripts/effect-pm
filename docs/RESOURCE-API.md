@@ -450,6 +450,53 @@ const gate = yield* RunResource.make({
 const result = yield* gate.run(21)  // 42
 ```
 
+### Live observation (Tag / Service / layer)
+
+Toolkit services expose **`Subscribable`** views backed by `SubscriptionRef`:
+
+```typescript
+const gate = yield* ApiGate
+yield* gate.run(request)
+
+const waiting = yield* gate.waiting.get
+yield* Stream.runForEach(gate.completed.changes, (n) =>
+  Effect.log(`completed: ${String(n)}`),
+)
+```
+
+Static shortcuts: `yield* ApiGate.run(request)` (requires the tag in `R`).
+
+### Remote (RPC)
+
+Same tag + config as {@link layer}; serve over HTTP like Queue/Process:
+
+```typescript
+const remoteHandlers = RunResource.serveRemote(ApiGate, {
+  effect: (req) => httpFetch(req),
+  concurrency: 10,
+})
+
+const localAndRemote = RunResource.serve(ApiGate, { effect: (req) => httpFetch(req) })
+```
+
+Wire schemas on the tag: `runGateStatus`, `runSpec(inputSchema, successSchema, errorSchema?)`.
+
+### Store registration (`RunResource.store`)
+
+Register built-in run facts + state history on an app {@link Store.Service}:
+
+```typescript
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  RunResource.store(ApiGate),
+) {}
+
+// Engine auto-writes when AppStore.layerMemory (or .layer) is composed with ApiGate.layer
+const store = yield* AppStore.at(ApiGate)
+const facts = yield* store.facts()
+```
+
+Legacy **`RunResourceStore`** / **`ProcessStorage.layer`** path persists the same events via static emitters.
+
 ---
 
 ## HttpApiResource

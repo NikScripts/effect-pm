@@ -10,7 +10,7 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `RunResource.make` | Scoped handle with `.run` only (no observation) |
+ * | `RunResource.make` | Scoped handle with `.run` only (no Subscribables exposed) |
  * | `RunResource.layer` | Builds a `Layer` from tag + config (observable handle) |
  * | `RunResource.serve` / `serveRemote` | RPC server layers (same config as {@link layer}) |
  * | `RunResource.Service` | Tag + baked-in `.layer` + `.configure` |

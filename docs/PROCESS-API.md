@@ -218,15 +218,17 @@ When `RunResourceStore.layerRuntimeStorage` (or the full-stack
 `ProcessStorage.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) is composed, facts and state changes
 are persisted as `run-resource.fact.recorded` / `run-resource.state.changed`
-analytics events. `LogStore` covers structured log
-history; capture/relay uses `@nikscripts/effect-pm/Logs`.
+analytics events. The same engine tap writes to **`RunResource.store(tag)`**
+handles when an app **`Store.Service`** registers the gate scope. `LogStore`
+covers structured log history; capture/relay uses `@nikscripts/effect-pm/Logs`.
 
-For in-process listeners (no durability), provide a custom service typed as
-`RunResourceStore.Type` via `Effect.provideService` or
-`Layer.succeed` that fans out to scoped callbacks (see
-`examples/forms/resource/run-resource-runtime-observer.ts`). A planned
-`RunResourceStore.live(resourceId): Stream<...>` projection will
-replace the custom-service pattern with a proper subscription stream.
+For live in-process observation (no durability), read toolkit handle
+**`Subscribable`** views (`status`, `waiting`, `inFlight`, …) or subscribe via
+`.changes` — see `examples/forms/resource/run-resource-runtime-observer.ts`.
+Custom **`RunResourceStore.Type`** services via `Effect.provideService` /
+`Layer.succeed` remain supported for fan-out mocks. A planned
+`RunResourceStore.live(resourceId): Stream<...>` projection will offer a
+durable subscription stream.
 
 ---
 
