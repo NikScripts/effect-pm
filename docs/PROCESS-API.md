@@ -170,6 +170,26 @@ const program = Effect.gen(function* () {
 void Effect.runPromise(program.pipe(Effect.provide(ProcessStorage.layer)));
 ```
 
+### `Process.store` (built-in execution contract)
+
+On **`Process.layer`** / **`serve`** / **`serveRemote`**, the engine auto-appends terminal runs to
+**`Process.store(tag)`** when the app provides **`StoreScopeBridgeTag`** (via `Store.Service.layerMemory`
+at the root). Register the tag on an app store:
+
+```typescript
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(MyProcess),
+) {}
+
+Process.layer(MyProcess, { effect, polling }).pipe(Layer.provide(AppStore.layerMemory));
+```
+
+Legacy **`ProcessExecutionStore`** rows are still written when that facet is composed (dual-write).
+Query new-store events via `yield* MyProcess.store` → `events()`; query legacy rows via
+`ProcessExecutionStore.executions({ processId })`.
+
 The removed monolith service (`yield* ProcessStore`, `ProcessStore.events`,
 `ProcessStore.file`, `@nikscripts/effect-pm/storage/file`) is intentionally not
 documented as a compatibility path.

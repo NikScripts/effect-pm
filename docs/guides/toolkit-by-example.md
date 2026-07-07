@@ -176,6 +176,42 @@ const armWindows = Effect.gen(function* () {
 });
 ```
 
+## 7b. Process execution store (auto-write on `Process.layer`)
+
+Register **`Process.store(tag)`** on an app `Store.Service` and provide **`StoreScopeBridgeTag`**
+at the root (`Store.Service.layerMemory` or the built-in default). On **`Process.layer`**, the engine
+auto-appends terminal runs (`RunCompleted` / `RunFailed`) to the built-in execution contract. When
+**`ProcessExecutionStore`** is also composed (via `ProcessStorage.layer`), the engine **dual-writes**
+to the legacy facet until facet removal.
+
+```ts
+import { Duration, Effect, Layer, Schema } from "effect";
+import { Polling, Process } from "@nikscripts/effect-pm";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
+
+class Prices extends Process.Tag<Prices>()("app/Prices", Price) {}
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(Prices),
+) {}
+
+const pricesLayer = Process.layer(Prices, {
+  effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
+  polling: Polling.spaced(Duration.seconds(30)),
+}).pipe(Layer.provide(AppStore.layerMemory));
+
+// query persisted runs
+const readRuns = Effect.gen(function* () {
+  const store = yield* Prices.store;
+  const events = yield* store.events({ limit: 20 });
+  const latest = yield* Prices.result.get; // reactive Option when success is on the tag
+});
+```
+
+See [process.md](./process.md) and `examples/forms/process-store/process-layer-store-auto-write.ts`.
+
 ## 8. A schedule as its own resource (reusable window manager)
 
 `Process.Schedule` is a standalone schedule `Resource` — full CRUD (`set` / `add` / `upsert` /

@@ -75,7 +75,7 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 
 **Remove `Process.result` pipe** in the same PR (already `@deprecated`). No dual API after rename.
 
-**Engine → `Process.store` still missing:** supervisor writes **`ProcessExecutionStore`** only; `Process.store(tag)` contract exists (`builtInProcessStoreContract`) but engine does not auto-append. RunResource **does** auto-write (see below). Do **not** block rename on B3, but **document asymmetry** in PROCESS-API / STORAGE until Process engine tap lands.
+**Engine → `Process.store`:** **done** on `cursor/process-store-cutover-a3ad` — `Process.layer` dual-writes to **`Process.store(tag)`** (declared `StoreScopeBridgeTag`) and legacy **`ProcessExecutionStore`** when composed. See `docs/guides/process.md` and `examples/forms/process-store/process-layer-store-auto-write.ts`.
 
 ### QueueResource — **not renamed yet; do in same sync PR**
 
@@ -107,11 +107,11 @@ Coordinate lane arity + `{ payload, success, error }` options bag (see old hando
 |--|--|--|
 | Tag config schemas | `inputSchema` / `successSchema` / `errorSchema` → **rename to payload/success/error** | `resultSchema` / `errorSchema` → **success/error** |
 | `*.store(tag)` contract | ✅ built-in facts + state | ✅ built-in `event` union (result-aware) |
-| Engine auto-write to new Store | ✅ `runResourceStoreTap.ts` (lazy bridge) | ❌ still `ProcessExecutionStore` only |
-| Engine auto-write to legacy facet | ✅ `RunResourceStore` | ✅ `ProcessExecutionStore` |
+| Engine auto-write to new Store | ✅ `runResourceStoreTap.ts` (lazy bridge) | ✅ `processStoreTap.ts` (declared bridge) |
+| Engine auto-write to legacy facet | ✅ `RunResourceStore` | ✅ `ProcessExecutionStore` (dual-write) |
 | `error` schema behavior | on RPC wire via `runSpec` | stamped only |
 
-Rename agent: **do not** claim unified platform story until Process engine tap matches RunResource.
+Rename agent: Process engine tap now matches RunResource on the cutover branch; consolidate docs at release.
 
 ### 3. `msgpackr` direct dependency — likely mistake
 

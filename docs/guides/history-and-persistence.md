@@ -74,6 +74,30 @@ yield* proc.logs.live                    // live captured lines
 yield* proc.logs.history({ limit: 100 }) // past captured lines
 ```
 
+### Execution analytics (`Process.store`)
+
+On **`Process.layer`**, finished runs auto-append to **`Process.store(tag)`** when the app registers
+the tag on a `Store.Service` and provides **`StoreScopeBridgeTag`**. Legacy **`ProcessExecutionStore`**
+rows are still written when that facet is composed (dual-write). Query via `yield* Tag.store` or the
+facet's `executions({ processId })`.
+
+```ts
+import { Layer } from "effect";
+import { Process } from "@nikscripts/effect-pm";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(NwslSync),
+) {}
+
+const procLayer = Process.layer(NwslSync, { effect, polling }).pipe(
+  Layer.provide(AppStore.layerMemory),
+);
+
+const store = yield* NwslSync.store;
+const events = yield* store.events({ limit: 50 });
+```
+
 ## Runtime-wide (HostLogs)
 
 `HostLogs` captures **every** log in the runtime (including untagged effects and all processes) — live

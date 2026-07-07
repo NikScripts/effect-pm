@@ -75,11 +75,7 @@ import {
   successSym,
 } from "./internal/processTagSchemas";
 import { LogAnnotationKeys, withProcessLogAnnotations } from "./LogContext";
-import {
-  ProcessExecutionStore,
-  type ProcessExecutionFinishInput,
-} from "./store/processExecution";
-import { ProcessStore } from "./ProcessStore";
+import type { ProcessExecutionFinishInput } from "./store/processExecution";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./internal/processSchedule";
 import type {
@@ -113,6 +109,7 @@ import { facetStoreRegistration } from "./internal/store/facetStore";
 import { StoreScopeBridgeTag } from "./internal/store/bridge";
 import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
+import { makeProcessExecutionPersist } from "./internal/processExecutionPersist";
 import {
   makeProcessExecutionRecorder,
   type ProcessExecutionRecorder,
@@ -537,69 +534,15 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     isStartupRun: args.isStartupRun,
   });
 
-  const recordExecutionCompleted = (
-    args: Parameters<typeof finishInput>[0],
-  ): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      if (executionRecorder !== undefined) {
-        yield* executionRecorder.recordCompleted({
-          scheduleKey: args.scheduleKey,
-          startedAt: args.startedAt,
-          completedAt: args.completedAt,
-          isStartupRun: args.isStartupRun,
-        });
-      }
-      yield* ProcessExecutionStore.recordCompleted(finishInput(args)).pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "ProcessExecutionStore write failed for completed run",
-          level: "warning",
-          annotations: { processId: name },
-        }),
-      );
-    });
+  const executionPersist = makeProcessExecutionPersist({
+    processId: name,
+    finishInput,
+    recorder: executionRecorder,
+  });
 
-  const recordExecutionFailed = (
-    args: Parameters<typeof finishInput>[0],
-  ): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      if (executionRecorder !== undefined) {
-        yield* executionRecorder.recordFailed({
-          scheduleKey: args.scheduleKey,
-          startedAt: args.startedAt,
-          completedAt: args.completedAt,
-          isStartupRun: args.isStartupRun,
-          error: args.error,
-        });
-      }
-      yield* ProcessExecutionStore.recordFailed(finishInput(args)).pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "ProcessExecutionStore write failed for failed run",
-          level: "warning",
-          annotations: { processId: name },
-        }),
-      );
-    });
-
-  const readHasPriorExecutions = (): Effect.Effect<boolean> =>
-    executionRecorder !== undefined
-      ? executionRecorder.hasPriorExecutions()
-      : Effect.serviceOption(ProcessExecutionStore).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: () => Effect.succeed(false),
-              onSome: (store) =>
-                store.hasPriorExecutions(name).pipe(
-                  Effect.catch((error: unknown) =>
-                    Effect.logWarning("Process storage read failed while checking startup run").pipe(
-                      Effect.annotateLogs("processId", name),
-                      Effect.annotateLogs("error", String(error)),
-                      Effect.as(false),
-                    ),
-                  ),
-                ),
-            }),
-          ),
-        );
+  const recordExecutionCompleted = executionPersist.recordCompleted;
+  const recordExecutionFailed = executionPersist.recordFailed;
+  const readHasPriorExecutions = executionPersist.hasPriorExecutions;
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,

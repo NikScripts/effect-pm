@@ -56,7 +56,7 @@ Known stale (fix or assign to module agent):
 | `docs/CODEBASE-INVENTORY.md` | RunResource Service line may still say `inputSchema` |
 | `docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md` | Mark rename **done** for RR/Process; open for Queue |
 | `docs/handoffs/result-schema-and-rpc-validation.md` | Keep fingerprint design; status table |
-| `CHANGELOG.md` | Still documents `Process.result` as current |
+| `CHANGELOG.md` | Unreleased note documents `Process.result` removal + store tap |
 | `.changeset/process-toolkit-namespace.md` | Historical — do not duplicate |
 
 ---

@@ -45,6 +45,13 @@ export interface ProcessExecutionRecorder {
 const offerLossy = <A>(queue: Queue.Queue<A>, value: A): Effect.Effect<void> =>
   Queue.offer(queue, value).pipe(Effect.asVoid);
 
+const readOptionalResult = (
+  resultRef: SubscriptionRef.SubscriptionRef<Option.Option<unknown>> | undefined,
+): Effect.Effect<Option.Option<unknown>> =>
+  resultRef === undefined
+    ? Effect.succeed(Option.none())
+    : SubscriptionRef.get(resultRef);
+
 const buildCompletedEvent = (
   processId: string,
   input: Parameters<ProcessExecutionRecorder["recordCompleted"]>[0],
@@ -113,20 +120,18 @@ export const makeProcessExecutionRecorder = (options: {
 
     return {
       recordCompleted: (input) =>
-        Effect.gen(function* () {
-          let result: unknown | undefined;
-          const resultRef = options.resultRef;
-          if (resultRef !== undefined) {
-            const current = yield* SubscriptionRef.get(resultRef);
-            if (Option.isSome(current)) {
-              result = current.value;
-            }
-          }
-          yield* offerLossy(
-            queue,
-            buildCompletedEvent(options.scopeKey, input, result),
-          );
-        }),
+        readOptionalResult(options.resultRef).pipe(
+          Effect.flatMap((result) =>
+            offerLossy(
+              queue,
+              buildCompletedEvent(
+                options.scopeKey,
+                input,
+                Option.getOrUndefined(result),
+              ),
+            ),
+          ),
+        ),
       recordFailed: (input) =>
         offerLossy(
           queue,

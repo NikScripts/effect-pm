@@ -33,7 +33,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) |
+| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) → [`process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) |
 
 ---
 
@@ -62,11 +62,13 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
 | [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + ProcessStorage facet reads + RunResource run facts on SQLite |
+| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | `Process.layer` + `Process.store(tag)` auto-write + legacy `ProcessExecutionStore` dual-write |
 
 Storage options:
 
 - `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
 - `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
+- `Store.Service` + `Process.store(tag)` — built-in execution contract; engine auto-writes on `Process.layer` when `StoreScopeBridgeTag` is provided.
 - `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
 - `QueueResourceStore` — queue semantic storage facet.
 
