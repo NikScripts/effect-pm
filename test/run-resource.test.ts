@@ -5,9 +5,6 @@ import * as Store from "../src/Store";
 import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
 import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
 
-const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
-
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
     const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -93,8 +90,7 @@ describe("RunResource.Service", () => {
         Schema.String,
         Schema.String,
       );
-      const gateLayer = withDefaultStore(
-        RunResource.layer(SlowGate, {
+      const gateLayer = RunResource.layer(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
             const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -105,8 +101,7 @@ describe("RunResource.Service", () => {
             return s.toUpperCase();
           }),
         concurrency: 2,
-        }),
-      );
+      });
 
       yield* Effect.gen(function* () {
         const gate = yield* SlowGate;
@@ -128,7 +123,7 @@ describe("RunResource.Service", () => {
     concurrency: 2,
   }) {}
 
-  const slowLayer = withDefaultStore(SlowGate.layer);
+  const slowLayer = SlowGate.layer;
 
   it.live("static run accessor requires the service in R", () =>
     Effect.gen(function* () {
@@ -159,12 +154,10 @@ describe("RunResource.Tag + layer", () => {
     Schema.Number,
   );
 
-  const testLayer = withDefaultStore(
-    RunResource.layer(TestGate, {
-      effect: (n: number) => Effect.succeed(n + 100),
-      concurrency: 1,
-    }),
-  );
+  const testLayer = RunResource.layer(TestGate, {
+    effect: (n: number) => Effect.succeed(n + 100),
+    concurrency: 1,
+  });
 
   it("Tag produces valid service key", () => {
     expect(TestGate.key).toBe("@test/TestGate");
@@ -200,9 +193,8 @@ describe("RunResource.Tag + layer", () => {
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
-      const live = withDefaultStore(
-        Layer.mergeAll(
-          RunResource.layer(TestGate, {
+      const live = Layer.mergeAll(
+        RunResource.layer(TestGate, {
           effect: (n: number) =>
             Effect.gen(function* () {
               const nActive = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -215,7 +207,6 @@ describe("RunResource.Tag + layer", () => {
           concurrency: 1,
         }),
         RunResource.configure(TestGate, { concurrency: 3 }),
-        ),
       );
 
       yield* Effect.gen(function* () {
@@ -276,6 +267,37 @@ describe("RunResource.make — default store bridge", () => {
       expect(facts.some((row) => row.type === "run-resource.run.failed")).toBe(true);
       expect(history.length).toBeGreaterThan(0);
     }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
+  );
+});
+
+describe("RunResource.layer — baked default store bridge", () => {
+  const BakedGate = RunResource.Tag<{ readonly _tag: "BakedGate" }>()(
+    "@test/BakedGate",
+    Schema.Number,
+    Schema.Number,
+  );
+
+  const bakedLayer = RunResource.layer(BakedGate, {
+    effect: (n: number) => Effect.succeed(n),
+    concurrency: 1,
+  });
+
+  it.effect("persists facts without an extra Store.layerDefaultMemory at app root", () =>
+    Effect.gen(function* () {
+      const gate = yield* BakedGate;
+      yield* gate.run(1);
+
+      const bridge = yield* StoreScopeBridgeTag;
+      const store = yield* bridge.at(
+        BakedGate.key,
+        builtInRunResourceStoreContract({ key: BakedGate.key }),
+      );
+      const facts = yield* store.facts();
+      expect(facts.map((row) => row.type).sort()).toEqual([
+        "run-resource.run.completed",
+        "run-resource.run.started",
+      ]);
+    }).pipe(Effect.provide(bakedLayer), Effect.scoped),
   );
 });
 

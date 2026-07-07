@@ -5,7 +5,6 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as RunResource from "../src/RunResource";
-import * as Store from "../src/Store";
 
 class RemoteGate extends RunResource.Tag<RemoteGate>()(
   "run-remote/G",
@@ -29,10 +28,7 @@ const withServer = <A, E>(
         n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
       concurrency: 2,
     }),
-  ]).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
-    Layer.provideMerge(Store.layerDefaultMemory),
-  );
+  ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
   return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(

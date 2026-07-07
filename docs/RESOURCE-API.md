@@ -439,18 +439,9 @@ yield* gate.run(request)
 When `RunResource.store(tag)` or the default store bridge is composed, the engine automatically
 persists run facts and state transitions to **Store**.
 
-**Store provision:** `RunResource.layer`, `RunResource.serve`, `RunResource.Service.layer`, and `RunResource.make` require
-`StoreScopeBridgeTag` in the environment. Provide {@link Store.layerDefaultMemory} at the **app root** (or a real
-{@link Store.Service} that overrides it):
-
-```typescript
-import * as Store from "@nikscripts/effect-pm/Store";
-
-const AppLayer = RunResource.layer(ApiGate, {
-  effect: (req) => httpFetch(req),
-  concurrency: 10,
-}).pipe(Layer.provideMerge(Store.layerDefaultMemory))
-```
+**Store provision:** `RunResource.layer`, `RunResource.serve`, and `RunResource.Service.layer` merge
+{@link Store.layerDefaultMemory} automatically. Override with `Layer.provideMerge(AppStore.layerMemory)`.
+{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect (see tests).
 
 #### Raw make (no tag)
 

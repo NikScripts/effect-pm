@@ -9,7 +9,6 @@
 
 import { Effect, Ref, Schema, Stream } from "effect";
 import { RunResource, Store } from "../../../src";
-import { withDefaultStore } from "../../shared/run-resource-layers";
 
 const ObservedRunGate = RunResource.Service<{ readonly _tag: "ObservedRunGate" }>()(
   "examples/ObservedRunGate",
@@ -48,10 +47,7 @@ const program = Effect.gen(function* () {
         }),
       ),
     );
-  }).pipe(
-    Effect.provide(withDefaultStore(ObservedRunGate.layer)),
-    Effect.scoped,
-  );
+  }).pipe(Effect.provide(ObservedRunGate.layer), Effect.scoped);
 
   yield* Effect.log("");
   yield* Effect.log("=== make: run-only handle (no observation) ===");

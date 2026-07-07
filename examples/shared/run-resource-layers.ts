@@ -4,9 +4,7 @@
  * @module examples/shared/run-resource-layers
  */
 
-import { Layer } from "effect";
-import { Store } from "../../src";
+import type { Layer } from "effect";
 
-/** Provide the baked-in default store bridge at the app root (required by RunResource engines). @public */
-export const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+/** @deprecated RunResource layers already merge the default store; pass the layer through unchanged. */
+export const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) => layer;

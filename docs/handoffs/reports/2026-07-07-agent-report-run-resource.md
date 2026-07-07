@@ -67,7 +67,7 @@ npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts
 
 1. **`RunResource.make`** uses the observable engine internally but exposes **`.run` only** (no Subscribables on public handle).
 2. **Do not rename** persisted fact fields (`run-resource.run.*`) or `RunGateStatus` counters — only tag config uses `payload` / `success` / `error`.
-3. **Store provision:** compose `Store.layerDefaultMemory` at the **app root** via `Layer.provideMerge` — do **not** bake it into resource layers (store-cutover §2).
+3. **Store provision:** `layer` / `serve` / `Service.layer` merge `Store.layerDefaultMemory` automatically; override with `Layer.provideMerge(AppStore.layerMemory)`. **`make`** still needs `Effect.provide(Store.layerDefaultMemory)` (see tests).
 
 ---
 

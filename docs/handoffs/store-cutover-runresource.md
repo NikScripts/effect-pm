@@ -9,7 +9,7 @@ dependency; NEVER `serviceOption`**).
 - Cast-free contract in `runResourceStoreSpec.ts` (mirrors queue).
 - Handle cast removed from tap.
 - `ProcessStore.catchErrorAndLog` → `catchErrorAndLog` from `internal/store/helpers`.
-- Public `Store.layerDefaultMemory`; tests/examples use `Layer.provideMerge` at app root.
+- Public `Store.layerDefaultMemory`; **`RunResource.layer` / `serve` / `Service.layer` merge it automatically**; override with `Layer.provideMerge(AppStore.layerMemory)`.
 - Layer `RIn` includes `StoreScopeBridgeTag` on `layer` / `serve` / `Service.layer` / `make`.
 
 ## 🔴 Was wrong — fixed in `internal/runResourceStoreTap.ts`
