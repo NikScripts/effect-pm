@@ -1,17 +1,13 @@
 /**
  * Persistence tap for the RunResource gate engine — writes to the Store bridge only.
  *
- * Legacy {@link RunResourceStore} facet emitters are not used; the engine targets
- * {@link builtInRunResourceStoreContract} via {@link StoreScopeBridgeTag}.
+ * The engine targets {@link builtInRunResourceStoreContract} via {@link StoreScopeBridgeTag}.
  *
  * @module internal/runResourceStoreTap
  * @internal
  */
 
 import { Effect, Ref } from "effect";
-import type {
-  RunResourceStateChangeReason,
-} from "../store/runResource";
 import { StoreScopeBridgeTag } from "./store/bridge";
 import { catchErrorAndLog } from "./store/helpers";
 import type { StoreScopeNotRegistered } from "./store/errors";
@@ -20,6 +16,7 @@ import {
   builtInRunResourceStoreContract,
   type BuiltInRunResourceContract,
   type RunFact,
+  type RunResourceStateChangeReason,
   type RunStateChange,
 } from "./store/runResourceStoreSpec";
 import type { StoreHandleFromContract } from "./store/spec";

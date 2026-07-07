@@ -60,10 +60,6 @@
       "types": "./dist/ProcessStorage.d.ts",
       "default": "./dist/ProcessStorage.js"
     },
-    "./store/RunResource": {
-      "types": "./dist/store/RunResource.d.ts",
-      "default": "./dist/store/RunResource.js"
-    },
     "./store/QueueResource": {
       "types": "./dist/store/QueueResource.d.ts",
       "default": "./dist/store/QueueResource.js"

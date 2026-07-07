@@ -437,7 +437,7 @@ yield* gate.run(request)
 ```
 
 When `RunResource.store(tag)` or the default store bridge is composed, the engine automatically
-persists run facts and state transitions to **Store only** (not the legacy `RunResourceStore` facet).
+persists run facts and state transitions to **Store**.
 
 **Store provision:** `RunResource.layer`, `RunResource.serve`, `RunResource.Service.layer`, and `RunResource.make` require
 `StoreScopeBridgeTag` in the environment. Provide {@link Store.layerDefaultMemory} at the **app root** (or a real

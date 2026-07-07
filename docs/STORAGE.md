@@ -26,7 +26,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 
 | Tag | Subpath | File |
 |-----|---------|------|
-| `RunResourceStore` | `store/RunResource` | `src/store/runResource.ts` |
 | `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
 | `LogStore` | `store/Log` | `src/store/log.ts` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
@@ -50,7 +49,6 @@ property names (same **`Context`** tags as `*Store`):
 |-------|----------------|
 | **`ProcessStorage.Log`** | **`LogStore`** |
 | **`ProcessStorage.QueueResource`** | **`QueueResourceStore`** *(storage facet)* |
-| **`ProcessStorage.RunResource`** | **`RunResourceStore`** |
 | **`ProcessStorage.ProcessExecution`** | **`ProcessExecutionStore`** |
 | **`ProcessStorage.ProcessLifecycle`** | **`ProcessLifecycleStore`** |
 
@@ -66,15 +64,13 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 |--------|--------|--------|
 | `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessExecutionStore` → `.executions` |
 | `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` → read methods |
-| `run-resource.fact.recorded` | static `recordRun*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
-| `run-resource.state.changed` | static `recordStateChange` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
 | `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
 | `queue.lifecycle.<tag>` × 6 | `QueueResource` worker → static `recordLifecycle` / `recordLifecycleBatch` (Started, Paused, Resumed, Shutdown, Cleared, Drained) | `.lifecycle` |
 | `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch`. Worker emits `added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `released` on completion, `release`, drop, dead-letter, and `clear`. The `hydrated` variant is decode-only — defined for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
 | `queue.ratelimit.exceeded` × 1 | `QueueResource` worker when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
 
-**RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` / `Store.layerDefaultMemory`). It does **not** write the legacy `RunResourceStore` facet. **Process and Queue engines** still use legacy facets until their store taps land.
+**RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` / `Store.layerDefaultMemory`). **Process and Queue engines** still use legacy facets until their store taps land.
 
 ---
 
@@ -107,7 +103,7 @@ Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }
 
 ## Authoring a facet (`ProcessStore.Service`)
 
-Template: `src/store/runResource.ts`, tests: `test/run-resource-store-facet.test.ts`.
+Template: `src/store/queueResource.ts`, tests: `test/queue-resource-store-facet.test.ts` (if present).
 
 A facet is declared with up to **three** sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
 
@@ -180,14 +176,13 @@ yield* queue.dedupeKeys();            // queueId still baked in
 
 Equivalent: `yield* QueueResourceStore.withIdentifier("@app/Email")`.
 
-Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/runResource.ts` for the live pattern.
+Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` for the live pattern.
 
 Built-in `withIdentifier` facets (subpath → bound id):
 
 | Facet | Subpath | Binds |
 |-------|---------|-------|
 | `QueueResourceStore` | `store/QueueResource` | `queueId` |
-| `RunResourceStore` | `store/RunResource` | `resourceId` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `processId` |
 | `ProcessExecutionStore` | `store/ProcessExecution` | `processId` |
 

@@ -98,12 +98,12 @@ Two report sets exist — use **both**, for different layers:
 | Shipped | Open |
 |---------|------|
 | `.run` handle, RPC serve, `payload`/`success`/`error` | Doc sweep + consolidated changeset |
-| `RunResource.store`, Store-only engine tap | Platform may delete `RunResourceStore` facet from ProcessStorage later |
+| `RunResource.store`, Store-only engine tap | ✅ **`RunResourceStore` facet deleted** |
 | Declared-dependency store tap + cast-free contract | Optional write-path buffer (queue may add) |
 | `Store.layerDefaultMemory` public export | Wire default store into Process/Queue layers (their agents) |
 | Remote HTTP test, changeset draft | Consolidated platform changeset |
 
-**Discuss / approve:** When to drop legacy `RunResourceStore` facet (after Process/Queue cutover?).
+**Done:** Legacy `RunResourceStore` facet removed from ProcessStorage, exports, and build.
 
 **Blind spot (Queue agent):** ~~RunResource report says “lazy at write time is required for Layer.mergeAll siblings”~~ **Resolved:** declared dependency + `Layer.provideMerge(Store.layerDefaultMemory)` at app root.
 
@@ -129,7 +129,7 @@ Two report sets exist — use **both**, for different layers:
 | 2 | **`error` on Process tag** | Wire to RPC + typed `RunFailed` vs remove until wired | Stamped today, consumed nowhere |
 | 3 | **Engine store tap pattern** | Declared `StoreScopeBridgeTag` + app-root `layerDefaultMemory` | RunResource ✅; Process + Queue adopt same shape (no `serviceOption`, no build-time resolve) |
 | 4 | **Default store in resource layers** | ~~Auto-merge inside resource layer~~ **Rejected** — app provides at root via `Layer.provideMerge` | Stage 1 exists; RunResource docs/examples updated |
-| 5 | **Legacy facet dual-write** | Keep until all engines cut over vs stop new dual-write | RunResource + future Process tap |
+| 5 | **Legacy facet dual-write** | RunResource engine: **Store only** ✅ | Process/Queue still on legacy facets until cutover |
 | 6 | **CQR tag arity** | Trailing `{ success?, error? }` after lanes | [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) |
 
 ---

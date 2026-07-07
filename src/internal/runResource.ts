@@ -12,7 +12,7 @@ import {
   Semaphore,
   SubscriptionRef,
 } from "effect";
-import type { RunResourceStateChangeReason } from "../store/runResource";
+import type { RunResourceStateChangeReason } from "./store/runResourceStoreSpec";
 import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
 import { StoreScopeBridgeTag } from "./store/bridge";
 import type { StoreScopeNotRegistered } from "./store/errors";

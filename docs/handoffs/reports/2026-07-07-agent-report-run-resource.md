@@ -47,7 +47,7 @@ Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide renam
 
 - Process engine → `Process.store` tap (same declared-dependency pattern)
 - Queue engine cutover
-- Removing legacy `RunResourceStore` facet from **RunResource engine** — ✅ done; facet module remains for ProcessStorage until platform cleanup
+- Removing legacy `RunResourceStore` facet — ✅ **deleted** (module, ProcessStorage, subpath, tests)
 - RPC fingerprint / buildId handshake
 
 ---
@@ -92,7 +92,7 @@ Read: [`store-cutover-00-store-core.md`](../store-cutover-00-store-core.md), [`s
 
 ### Open decision for owner (deferred)
 
-None for RunResource engine persistence — Store-only tap is shipped. Platform may still delete the `RunResourceStore` facet module from ProcessStorage when Process/Queue cut over.
+None — Store-only persistence; **`RunResourceStore` facet fully removed**.
 
 ---
 

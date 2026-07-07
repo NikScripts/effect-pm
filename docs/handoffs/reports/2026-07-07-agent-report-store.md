@@ -37,7 +37,7 @@ From `2026-07-06-processstore-removal.md`:
 
 | Resource | New Store tap | Legacy facet |
 |----------|---------------|--------------|
-| RunResource | ✅ `runResourceStoreTap.ts` | ✅ `RunResourceStore` |
+| RunResource | ✅ `runResourceStoreTap.ts` | ✅ Store bridge only (facet removed) |
 | Process | ❌ | ✅ `ProcessExecutionStore` |
 | QueueResource | ❌ | ✅ `QueueResourceStore` |
 

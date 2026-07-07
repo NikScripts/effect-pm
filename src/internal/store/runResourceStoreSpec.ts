@@ -15,6 +15,15 @@ import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
 
+/** Reasons attached to run gate state transitions. @internal */
+export type RunResourceStateChangeReason =
+  | "run-resource.run.waiting"
+  | "run-resource.run.started"
+  | "run-resource.run.completed"
+  | "run-resource.run.failed"
+  | "run-resource.run.interrupted"
+  | "run-resource.run.wait.interrupted";
+
 /** Live gate counters persisted on state transitions. @internal */
 export const runStateSchema = runGateStatus;
 

@@ -31,7 +31,6 @@ import type { LogStore } from "../../store/log";
 import type { ProcessExecutionStore } from "../../store/processExecution";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
 import type { QueueResourceStore } from "../../store/queueResource";
-import type { RunResourceStore } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type { RuntimeStorageService } from "../../RuntimeStorage";
 import type { RedisRuntimeStorageConfig } from "./public-types";
@@ -77,7 +76,6 @@ export const layerProcessStore = (
 ): Layer.Layer<
   | LogStore
   | QueueResourceStore
-  | RunResourceStore
   | ProcessExecutionStore
   | ProcessLifecycleStore
 > =>
@@ -93,7 +91,6 @@ export const layerProcessStoreOrDie = (
 ): Layer.Layer<
   | LogStore
   | QueueResourceStore
-  | RunResourceStore
   | ProcessExecutionStore
   | ProcessLifecycleStore
 > =>
