@@ -56,7 +56,6 @@ import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
 import type { QueueResourceStore } from "../../store/queueResource";
-import type { RunResourceStore } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import {
   RuntimeStorageConnectionError,
@@ -163,7 +162,6 @@ export const layerProcessStore = (
 ): Layer.Layer<
   | LogStore
   | QueueResourceStore
-  | RunResourceStore
   | ProcessLifecycleStore,
   RuntimeStorageConnectionError | RuntimeStorageSchemaError,
   Scope.Scope
@@ -183,7 +181,6 @@ export const layerProcessStoreOrDie = (
 ): Layer.Layer<
   | LogStore
   | QueueResourceStore
-  | RunResourceStore
   | ProcessLifecycleStore,
   never,
   Scope.Scope

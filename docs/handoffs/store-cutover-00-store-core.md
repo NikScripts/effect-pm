@@ -13,6 +13,8 @@ the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) 
 - **Precise handle resolution (tightening).** `bridge.at` is generic (`at<Input>(scopeKey, input)` →
   `StoreHandleOf<Input>`); `Tag.store` / `Resource.store` / `AppStore.at(tag)` return the **precise**
   `Store.HandleOf<contract>`. Removes the consumer casts (see "Action for every module").
+- **`Storage` public API** — {@link Storage}, {@link StorageApi}, and {@link layerDefaultMemory} are
+  `@public` so third-party engines declare the bridge as a dependency (`withDefault` / `withStorage`).
 
 ## Decisions locked
 
@@ -32,17 +34,18 @@ a concurrent `AppStore.at(tag)` and locks the scoped `EventJournal` (verified on
 dependency** is built in topological order and memoized, so the store builds first and every reader reuses
 the same instance — no race, no forked-fiber trick, no lazy per-event resolution.
 
-### 2. Provision — app root by default; Process toolkit exception
+### 2. Provision — `layerDefaultMemory` baked into toolkit layers
 
-**Default (Queue, RunResource, CustomQueue — pending cutover):** the resource layer **requires**
-`Storage` in its dependency graph. The **app** provides one at the root:
-`layerDefaultMemory` (default) **or** its own `Store.Service` (override). Do **not** bake
-`layerDefaultMemory` into those resource layers until the module owner approves the override story.
+Every worker resource layer **requires** {@link Storage} in its dependency graph. Toolkit entry points merge
+{@link Store.layerDefaultMemory} via `Layer.provideMerge` so gates work out of the box:
 
-**Process toolkit (shipped on `cursor/process-store-cutover-a3ad`):** `Process.layer` / `serve` /
-`serveRemote` merge `layerDefaultMemory` internally via `withDefaultMemory`. Apps override at the
-root with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))` (later layer wins on
-`Storage`). `RIn` for user deps stays `R` only.
+- **Process:** `Process.layer` / `serve` / `serveRemote` via `withDefaultMemory`.
+- **RunResource:** `RunResource.layer` / `serve` / `Service.layer`.
+- **QueueResource:** `QueueResource.layer` / `serve` / `serveRemote`.
+
+A real `AppStore` at the app root **overrides** the default by plain merge
+(`Layer.provideMerge(AppStore.layerMemory, Resource.layer(...))` — later layer wins on `Storage`). Do **not**
+hard-provide inside the resource layer in a way that blocks override.
 
 ### 3. Tag is the SSOT for wire schemas (`payload`/`success`/`error`)
 
@@ -66,9 +69,13 @@ fact/state union).
 
 ## Who is currently wrong (2026-07-07)
 
-- **RunResource** — `internal/runResourceStoreTap.ts:80` resolves the new store with
-  `Effect.serviceOption(Storage)` + `.at().pipe(Effect.option)`, *and* casts the handle. Both go
-  (see its report).
+- ~~**RunResource** — `internal/runResourceStoreTap.ts` resolves with `serviceOption` + handle cast~~ **Fixed**
+  on run-resource branch: declared `Storage` dependency, cast-free contract, **`RunResourceStore` facet deleted**,
+  `layerDefaultMemory` merged into layer entry points.
+- ~~**Process** — still on `ProcessExecutionStore` only~~ **Fixed** on integration branch: `processStoreTap.ts`,
+  **`ProcessExecutionStore` facet deleted**, `withDefaultMemory` on toolkit layers.
+- **Queue** — engine still writes legacy `QueueResourceStore` facet for some paths; store bridge tap + facet
+  deletion tracked in `store-cutover-queue.md`.
 - Legacy-facet `serviceOption` calls (`HistoryStore` / `QueueResourceStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
 - Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.

@@ -100,6 +100,8 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 ## Run gate
 
 ```typescript
+import * as Store from "@nikscripts/effect-pm/Store";
+
 const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
   payload: PhoneSchema,
   success: Schema.Void,
@@ -112,6 +114,11 @@ const SendSmsLive = SendSms.layer.pipe(
   Layer.provideMerge(SendSms.configure({ concurrency: 2 })),
 );
 ```
+
+`RunResource.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
+`Layer.provideMerge(AppStore.layerMemory)` (or SQLite `AppStore.layer({ filename })`) at the app root.
+{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect. See
+[store.md](./store.md#default-store-layerdefaultmemory).
 
 ---
 

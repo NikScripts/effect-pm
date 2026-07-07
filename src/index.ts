@@ -329,7 +329,6 @@ export {
 
 export { LogStore } from "./store/log";
 export type { LogStoreApi } from "./store/log";
-export { RunResourceStore } from "./store/runResource";
 export { ProcessLifecycleStore } from "./store/processLifecycle";
 export type {
   ProcessLifecycleChangedEvent,
@@ -373,25 +372,6 @@ export type {
   QueueRateLimitQuery,
 } from "./store/queueResource";
 export { QueueResourceStore } from "./store/queueResource";
-export type {
-  RunResourceFact,
-  RunResourceFactQuery,
-  RunResourceFactType,
-  RunResourceRef,
-  RunResourceRun,
-  RunResourceRunCompletedFact,
-  RunResourceRunCompletedPayload,
-  RunResourceRunFailedFact,
-  RunResourceRunFailedPayload,
-  RunResourceRunStartedFact,
-  RunResourceRunStartedPayload,
-  RunResourceScopedFactQuery,
-  RunResourceScopedStateHistoryQuery,
-  RunResourceState,
-  RunResourceStateChange,
-  RunResourceStateChangeReason,
-  RunResourceStateHistoryQuery,
-} from "./store/runResource";
 
 // Types - Process
 export type {

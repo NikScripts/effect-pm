@@ -2248,8 +2248,8 @@ const httpServerBase = (
 // Array form of `Layer.mergeAll` (which needs a non-empty *tuple*): fold the list into one layer. The
 // `httpServer` overload guarantees a non-empty list; untyped plumbing behind that typed overload.
 const mergeLayers = (
-  layers: ReadonlyArray<Layer.Layer<any, never, any>>,
-): Layer.Layer<any, never, any> =>
+  layers: ReadonlyArray<Layer.Layer<any, any, any>>,
+): Layer.Layer<any, any, any> =>
   layers.reduce((acc, layer) => Layer.merge(acc, layer));
 
 /**
@@ -2285,8 +2285,8 @@ export function httpServer(
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
 export function httpServer<
   Serves extends readonly [
-    Layer.Layer<any, never, any>,
-    ...ReadonlyArray<Layer.Layer<any, never, any>>,
+    Layer.Layer<any, any, any>,
+    ...ReadonlyArray<Layer.Layer<any, any, any>>,
   ],
 >(
   serves: Serves,
@@ -2298,7 +2298,7 @@ export function httpServer<
 >;
 export function httpServer(
   servesOrOptions?:
-    | ReadonlyArray<Layer.Layer<any, never, any>>
+    | ReadonlyArray<Layer.Layer<any, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, never, unknown> {

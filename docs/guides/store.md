@@ -118,6 +118,39 @@ Store.retention(500)(Store.register("events", contract))
 
 Oldest journal rows per `scopeKey` are deleted after each append when SQL is active.
 
+## Default store (`layerDefaultMemory`)
+
+Resource engines require `StoreScopeBridgeTag` in the environment.
+
+**RunResource:** {@link RunResource.layer}, {@link RunResource.serve}, and {@link RunResource.Service.layer}
+merge {@link Store.layerDefaultMemory} automatically via `Layer.provideMerge`. Override with a real
+`AppStore.layerMemory` / `AppStore.layer({ filename })` at the app root — plain merge wins over the default.
+
+**Process / Queue (until their cutover):** provide {@link Store.layerDefaultMemory} at the app root when you
+do not compose a custom {@link Store.Service}:
+
+```ts
+import * as Store from "@nikscripts/effect-pm/Store";
+
+const AppLayer = MyProcess.layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+```
+
+**`RunResource.make`:** still an `Effect`, not a layer — provide {@link Store.layerDefaultMemory} on the
+effect (see `test/run-resource.test.ts`).
+
+Run gates register built-in fact/state shapes with {@link RunResource.store}:
+
+```ts
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  RunResource.store(FetchGate),
+) {}
+
+const live = FetchGate.layer.pipe(Layer.provideMerge(AppStore.layerMemory));
+const facts = yield* (yield* AppStore.at(FetchGate)).facts();
+```
+
+See [`examples/forms/resource/run-resource-store-readback.ts`](../../examples/forms/resource/run-resource-store-readback.ts).
+
 ## Change stream
 
 ```ts

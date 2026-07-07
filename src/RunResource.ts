@@ -19,6 +19,14 @@
  * | `RunResource.store` | Register built-in run facts + state history on an app {@link Store.Service} |
  * | `RunResource.makeRunner` | Generic runner (wraps arbitrary effects) |
  *
+ * ## Store provision
+ *
+ * {@link layer}, {@link serve}, and {@link Service.layer} merge {@link Store.layerDefaultMemory} — the store
+ * bridge is always in context (like `Clock`), so engines emit unconditionally. Override with a real
+ * {@link Store.Service} via `Layer.provideMerge(AppStore.layerMemory)` (or SQLite) on the composed app layer.
+ * {@link make} requires the same bridge — provide {@link Store.layerDefaultMemory} or your store layer on the
+ * effect (see tests).
+ *
  * ## Remote usage
  *
  * Declare wire schemas on the tag, then serve or connect like {@link QueueResource} / {@link Process}:
@@ -70,6 +78,8 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import * as internal from "./internal/runResource";
+import * as Store from "./Store";
+import type { StoreScopeNotRegistered } from "./internal/store/errors";
 import {
   runGateStatus,
   runSpec,
@@ -154,7 +164,7 @@ export interface RunResourceServiceDefinition<
   R = never,
 > extends RunResourceTagDefinition<Self, I, A, E> {
   readonly defaultSpec: RunResourceServiceConfig<I, A, E, R> & { readonly name: Name };
-  readonly layer: Layer.Layer<Self, never, R>;
+  readonly layer: Layer.Layer<Self | Store.Storage, StoreScopeNotRegistered, R>;
   readonly configure: (
     patch: ConfigPatch<
       RunResourceLayerConfig<
@@ -364,6 +374,12 @@ const materializeRunTag = <
   >;
 };
 
+/** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
+const withDefaultStoreBridge = <A, E, R>(
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> =>
+  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+
 /**
  * Build the live gate behind `tag` and map it onto the toolkit service impl — shared by
  * {@link layer} / {@link serve} / {@link serveRemote}.
@@ -379,7 +395,7 @@ const buildRunImpl = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Effect.Effect<any, never, R | Scope.Scope> =>
+): Effect.Effect<any, StoreScopeNotRegistered, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const provideR = <Out, Err>(
@@ -517,9 +533,11 @@ export const layer = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<Self | Local<Self>, never, R> =>
-  Layer.unwrap(
-    Effect.map(buildRunImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+): Layer.Layer<Self | Local<Self> | Store.Storage, StoreScopeNotRegistered, R> =>
+  withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(buildRunImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+    ),
   );
 
 /**
@@ -536,18 +554,20 @@ export function serveRemote<
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>>, never, R>;
+): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, StoreScopeNotRegistered, R>;
 export function serveRemote(
   tag: ResourceTag<any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return Layer.unwrap(
-    Effect.map(
-      buildRunImpl(tag, config),
-      (impl) =>
-        Resource.serveRemote(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
-    ),
-  ) as Layer.Layer<any, any, any>;
+  return withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(
+        buildRunImpl(tag, config),
+        (impl) =>
+          Resource.serveRemote(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
+      ),
+    ) as Layer.Layer<any, any, any>,
+  );
 }
 
 /**
@@ -565,20 +585,22 @@ export function serve<
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>>,
-  never,
+  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
+  StoreScopeNotRegistered,
   R
 >;
 export function serve(
   tag: ResourceTag<any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return Layer.unwrap(
-    Effect.map(
-      buildRunImpl(tag, config),
-      (impl) => Resource.serve(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
-    ),
-  ) as Layer.Layer<any, any, any>;
+  return withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(
+        buildRunImpl(tag, config),
+        (impl) => Resource.serve(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
+      ),
+    ) as Layer.Layer<any, any, any>,
+  );
 }
 
 /**
@@ -641,12 +663,14 @@ export const Service = <Self>() => {
           R
         >["effect"],
       ) => configureWrapEffectField(name, fn),
-      layer: Layer.unwrap(
-        Effect.map(
-          buildRunImpl(tag as ResourceTag<any, any>, layerConfig),
-          (impl) => Resource.layer(tag as ResourceTag<any, any>, impl),
-        ),
-      ) as Layer.Layer<Self, never, R>,
+      layer: withDefaultStoreBridge(
+        Layer.unwrap(
+          Effect.map(
+            buildRunImpl(tag as ResourceTag<any, any>, layerConfig),
+            (impl) => Resource.layer(tag as ResourceTag<any, any>, impl),
+          ),
+        ) as Layer.Layer<Self, StoreScopeNotRegistered, R | Store.Storage>,
+      ),
       run: makeStaticRun(tag),
     });
   }

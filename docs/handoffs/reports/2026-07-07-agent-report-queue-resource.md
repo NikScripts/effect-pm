@@ -4,7 +4,7 @@
 **Agent:** Queue owner (owns CQR in same PR)  
 **Priority:** **High** — triplet + engine cutover remain.
 
-> **Correction (2026-07-07):** Tag positional arg is already **`payload`** on integration (`QueueResource.Tag(key, payload)`). This report’s “`itemSchema` not renamed” row is stale. Still open: `success`/`error`, config-object overload, stamps, engine `storeTap`.
+> **Correction (2026-07-07):** Tag positional arg is already **`payload`** on integration (`QueueResource.Tag(key, payload)`). Engine cutover uses **declared `StoreScopeBridgeTag`** + app-root `Store.layerDefaultMemory` (see RunResource `d166abc`) — not `storeTap.ts`.
 
 ---
 

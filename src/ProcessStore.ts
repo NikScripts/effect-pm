@@ -3,7 +3,7 @@
  *
  * @remarks
  * Per-domain storage facets in `src/store/*` (e.g.
- * {@link QueueResourceStore}, {@link RunResourceStore})
+ * {@link QueueResourceStore})
  * are declared with `ProcessStore.Service<Self>()(id, ...sections)`,
  * where each section is a partial of the facet:
  *

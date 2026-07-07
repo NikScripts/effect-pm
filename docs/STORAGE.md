@@ -26,7 +26,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 
 | Tag | Subpath | File |
 |-----|---------|------|
-| `RunResourceStore` | `store/RunResource` | `src/store/runResource.ts` |
 | `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
 | `LogStore` | `store/Log` | `src/store/log.ts` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
@@ -49,8 +48,10 @@ property names (same **`Context`** tags as `*Store`):
 |-------|----------------|
 | **`ProcessStorage.Log`** | **`LogStore`** |
 | **`ProcessStorage.QueueResource`** | **`QueueResourceStore`** *(storage facet)* |
-| **`ProcessStorage.RunResource`** | **`RunResourceStore`** |
 | **`ProcessStorage.ProcessLifecycle`** | **`ProcessLifecycleStore`** |
+
+Run and process execution history use the app **Store bridge** (`RunResource.store`, `Process.store`) — not
+`ProcessStorage` facet aliases.
 
 Use either import style; **`Effect.serviceOption`**, **`Layer`**, and static emitters behave identically.
 
@@ -63,8 +64,6 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `type` | Writer | Reader |
 |--------|--------|--------|
 | `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` → read methods |
-| `run-resource.fact.recorded` | static `recordRun*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
-| `run-resource.state.changed` | static `recordStateChange` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
 | `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
 | `queue.lifecycle.<tag>` × 6 | `QueueResource` worker → static `recordLifecycle` / `recordLifecycleBatch` (Started, Paused, Resumed, Shutdown, Cleared, Drained) | `.lifecycle` |
@@ -76,7 +75,9 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 **`Process.store(tag)`** on an app **`Store.Service`** when you need durable storage or `yield* Tag.store`
 query handles.
 
-**RunResource engine:** when a gate runs and storage is composed, the worker calls the same static emitters (`RunResourceStore.recordRun*`, `recordStateChange`) and/or **`RunResource.store(tag)`** append methods — no manual writes at call sites.
+**RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` /
+**`Storage`** via **`Store.layerDefaultMemory`** merged into **`RunResource.layer` / `serve` / `Service.layer`**).
+**Queue** still uses legacy **`QueueResourceStore`** facet emitters for some paths until the engine store tap lands.
 
 ---
 
@@ -112,7 +113,7 @@ Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }
 
 ## Authoring a facet (`ProcessStore.Service`)
 
-Template: `src/store/runResource.ts`, tests: `test/run-resource-store-facet.test.ts`.
+Template: `src/store/queueResource.ts`, tests: `test/queue-resource-store-facet.test.ts` (if present).
 
 A facet is declared with up to **three** sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
 
@@ -185,14 +186,13 @@ yield* queue.dedupeKeys();            // queueId still baked in
 
 Equivalent: `yield* QueueResourceStore.withIdentifier("@app/Email")`.
 
-Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/runResource.ts` for the live pattern.
+Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` for the live pattern.
 
 Built-in `withIdentifier` facets (subpath → bound id):
 
 | Facet | Subpath | Binds |
 |-------|---------|-------|
 | `QueueResourceStore` | `store/QueueResource` | `queueId` |
-| `RunResourceStore` | `store/RunResource` | `resourceId` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `processId` |
 
 The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
@@ -212,7 +212,7 @@ The facet **owns** all wire-shape work:
 - **Predicates** push `processId` / `type` / `key` / `indexA-H` filters into `RuntimeRecordQuery`. Things you cannot index (e.g. payload sub-fields) post-filter after `s.read`.
 - **Limit semantics**: when *all* filters compile to `RuntimeRecordPredicate`, pass `query?.opts` straight through — the storage `limit` and the projection `limit` agree. When *any* filter is post-applied in TypeScript, swap to `windowOpts(opts)` at the storage call and `applyQueryOpts(rows, opts, ...)` after decode (see `src/store/processGroup.ts` for a live example).
 
-**Cut-over checklist:** domain types in the facet file → encoders / decoders / predicates inline → static emitters in the feature module that owns the writes → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test (mirror `test/run-resource-store-facet.test.ts`).
+**Cut-over checklist:** domain types in the facet file → encoders / decoders / predicates inline → static emitters in the feature module that owns the writes → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test (mirror `test/store.test.ts` + engine integration tests such as `test/run-resource.test.ts`).
 
 **Do not:** add a shared envelope; expose row codecs from `ProcessStore` or `internal/store/`; hand-roll `serviceOption` in feature modules.
 

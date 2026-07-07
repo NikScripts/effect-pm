@@ -436,8 +436,12 @@ const gate = yield* ApiGate
 yield* gate.run(request)
 ```
 
-When `ProcessStorage.layer` or `RunResource.store(tag)` is composed, the engine automatically
-persists run facts and state transitions (same optional semantics as `QueueResource`).
+When `RunResource.store(tag)` or the default store bridge is composed, the engine automatically
+persists run facts and state transitions to **Store**.
+
+**Store provision:** `RunResource.layer`, `RunResource.serve`, and `RunResource.Service.layer` merge
+{@link Store.layerDefaultMemory} automatically. Override with `Layer.provideMerge(AppStore.layerMemory)`.
+{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect (see tests).
 
 #### Raw make (no tag)
 
@@ -495,7 +499,7 @@ const store = yield* AppStore.at(ApiGate)
 const facts = yield* store.facts()
 ```
 
-Legacy **`RunResourceStore`** / **`ProcessStorage.layer`** path persists the same events via static emitters.
+Legacy **`ProcessStorage.layer`** still composes other facets (execution, queue, log); run-gate history is on **Store**.
 
 ---
 

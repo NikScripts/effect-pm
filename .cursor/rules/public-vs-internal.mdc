@@ -18,7 +18,6 @@ Storage facets are **public** under **`src/store/`** with **`@nikscripts/effect-
 |----------------------------|---------|-------------|
 | `src/store/queueResource.ts` | `store/QueueResource` | `QueueResourceStore` |
 | `src/store/log.ts` | `store/Log` | `LogStore` |
-| `src/store/runResource.ts` | `store/RunResource` | `RunResourceStore` |
 | `src/store/processLifecycle.ts` | `store/ProcessLifecycle` | `ProcessLifecycleStore` |
 | `src/store/processGroup.ts` | `store/ProcessGroup` | `ProcessGroupStore` |
 

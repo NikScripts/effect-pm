@@ -32,7 +32,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
-| **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
+| **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) → [`process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) |
 
 ---
@@ -50,7 +50,8 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 | File | Teaches |
 |------|---------|
-| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunResource.make` unit and input forms + concurrency |
+| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunResource.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
+| [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `RunResource.store` + `Store.Service.at` readback |
 | [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiResource.Service` + `ApiMetrics.Tag` |
@@ -114,7 +115,8 @@ Storage options:
 | `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
 | `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
 | `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:run-resource` | RunResource form |
+| `pnpm run example:run-resource` | RunResource concurrency form |
+| `pnpm run example:run-resource-store-readback` | RunResource store auto-write + readback |
 | `pnpm run example:http-client-run-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiResource form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |

@@ -21,7 +21,7 @@ const clientHttp = (port: number) =>
 
 const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
-) => {
+): Effect.Effect<A, E, never> => {
   const server = Resource.httpServer([
     RunResource.serve(RemoteGate, {
       effect: (n: number) =>
@@ -41,7 +41,7 @@ const withServer = <A, E>(
       ),
       Effect.scoped,
     );
-  }).pipe(Effect.provide(server), Effect.scoped);
+  }).pipe(Effect.provide(server), Effect.scoped) as Effect.Effect<A, E, never>;
 };
 
 it("run + status round-trip over http against the real driver", () =>

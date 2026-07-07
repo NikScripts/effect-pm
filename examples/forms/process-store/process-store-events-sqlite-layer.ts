@@ -1,16 +1,16 @@
 /**
  * @module examples/forms/process-store/process-store-events-sqlite-layer
  *
- * ProcessStorage facets + SQLite RuntimeStorage, including RunResource run facts.
+ * ProcessStorage facets (lifecycle) on SQLite + RunResource run facts on Store.
  * Run: `npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts`
  */
 
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path, Schema } from "effect";
-import { RunResource } from "../../../src";
+import * as RunResource from "../../../src/RunResource";
+import * as Store from "../../../src/Store";
 import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
-import { RunResourceStore } from "../../../src/store/runResource";
 import { layerProcessStore } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -24,25 +24,20 @@ class SqliteDemoGate extends RunResource.Service<SqliteDemoGate>()(gateKey, {
   concurrency: 1,
 }) {}
 
-const program = Effect.gen(function* () {
-  const path = yield* Path.Path;
-  const fs = yield* FileSystem.FileSystem;
+const runStoreRegistration = RunResource.store(SqliteDemoGate);
 
-  const sqlitePath = path.join(
-    ".tmp",
-    "examples",
-    "process-store-events.sqlite",
+class SqliteRunStore extends Store.Service<SqliteRunStore>("@examples/SqliteRunStore")(
+  runStoreRegistration,
+) {}
+
+const demoLayer = (sqlitePath: string) =>
+  SqliteRunStore.layer({ filename: sqlitePath }).pipe(
+    Layer.provideMerge(layerProcessStore({ filename: sqlitePath })),
+    Layer.provideMerge(SqliteDemoGate.layer),
   );
 
-  yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
-  yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
-
-  const live = Layer.mergeAll(
-    layerProcessStore({ filename: sqlitePath }),
-    SqliteDemoGate.layer,
-  );
-
-  yield* Effect.gen(function* () {
+const demoProgram = (sqlitePath: string) =>
+  Effect.gen(function* () {
     yield* ProcessLifecycleStore.lifecycleChanged({
       processId: "examples/ManualProcess",
       tag: "Started",
@@ -56,9 +51,9 @@ const program = Effect.gen(function* () {
     const lifecycle = yield* ProcessLifecycleStore;
     const processEvents = yield* lifecycle.lifecycle("examples/ManualProcess");
 
-    const runs = yield* RunResourceStore;
-    const facts = yield* runs.facts({ resourceId: gateKey });
-    const stateHistory = yield* runs.stateHistory({ resourceId: gateKey });
+    const runStore = yield* SqliteRunStore.at(SqliteDemoGate);
+    const facts = yield* runStore.facts();
+    const stateHistory = yield* runStore.stateHistory();
 
     yield* Effect.log(
       `run gate status: completed=${String(status.completed)}, inFlight=${String(status.inFlight)}`,
@@ -73,7 +68,25 @@ const program = Effect.gen(function* () {
       `process lifecycle events: ${processEvents.map((event) => event.id).join(", ")}`,
     );
     yield* Effect.log(`sqlite-backed store path: ${sqlitePath}`);
-  }).pipe(Effect.provide(live));
+  }).pipe(
+    Effect.provide(demoLayer(sqlitePath)),
+    Effect.scoped,
+  ) as Effect.Effect<void, never, never>;
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+
+  const sqlitePath = path.join(
+    ".tmp",
+    "examples",
+    "process-store-events.sqlite",
+  );
+
+  yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
+  yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
+
+  yield* demoProgram(sqlitePath);
 }).pipe(Effect.provide(platformLayer));
 
-void Effect.runPromise(Effect.scoped(program));
+void Effect.runPromise(program);

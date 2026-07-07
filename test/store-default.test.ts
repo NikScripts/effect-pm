@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
-import * as Store from "../src/Store";
 import { Storage, layerDefaultMemory } from "../src/Store";
+import * as Store from "../src/Store";
 
 // The baked-in default store: with NO app `Store.Service` provided, the bridge still resolves any
 // scope on demand against a process-local in-memory journal. This is what lets the queue engine

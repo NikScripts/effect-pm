@@ -1,9 +1,10 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Duration, Effect, Layer, Ref, Schema } from "effect";
-import * as ProcessStorage from "../src/ProcessStorage";
+import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
-import { RunResourceStore } from "../src/store/runResource";
+import { Storage, type StorageApi } from "../src/Store";
+import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
+import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -30,7 +31,7 @@ describe("RunResource.make", () => {
       });
       const p = yield* Ref.get(peak);
       expect(p).toBe(1);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.live("respects concurrency limit", () =>
@@ -49,7 +50,7 @@ describe("RunResource.make", () => {
       const p = yield* Ref.get(peak);
       expect(p).toBeLessThanOrEqual(4);
       expect(p).toBeGreaterThan(1);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.live("gates a function effect with concurrency", () =>
@@ -64,7 +65,7 @@ describe("RunResource.make", () => {
         { concurrency: "unbounded" },
       );
       expect(results).toEqual([10, 20, 30]);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.live("does not expose observation subscribables", () =>
@@ -76,7 +77,7 @@ describe("RunResource.make", () => {
       });
       expect("status" in gate).toBe(false);
       expect("waiting" in gate).toBe(false);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 });
 
@@ -222,24 +223,82 @@ describe("RunResource.Tag + layer", () => {
   );
 });
 
-describe("RunResource.make — ProcessStore records", () => {
-  it.live("writes run facts when ProcessStorage is provided", () =>
+describe("RunResource.make — default store bridge", () => {
+  const scopeKey = "@test/default-store-gate";
+
+  it.effect("auto-writes facts to layerDefaultMemory without AppStore registration", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
-        name: "test-run-store-records",
+        name: scopeKey,
+        scopeKey,
         effect: (n: number) => Effect.succeed(n),
         concurrency: 1,
       });
       yield* gate.run(1);
-      yield* Effect.sleep(Duration.millis(20));
 
-      const store = yield* RunResourceStore;
-      const facts = yield* store.facts({ resourceId: "test-run-store-records" });
+      const bridge = yield* Storage;
+      const store = yield* bridge.at(scopeKey, builtInRunResourceStoreContract({ key: scopeKey }));
+      const facts = yield* store.facts();
       expect(facts.map((row) => row.type).sort()).toEqual([
         "run-resource.run.completed",
         "run-resource.run.started",
       ]);
-    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
+  );
+
+  it.effect("persists failed runs and state transitions on the default bridge", () =>
+    Effect.gen(function* () {
+      const gate = yield* RunResource.make({
+        name: scopeKey,
+        scopeKey: `${scopeKey}/failed`,
+        effect: (n: number) =>
+          n >= 0 ? Effect.succeed(n) : Effect.fail("negative"),
+        concurrency: 1,
+      });
+      yield* gate.run(-1).pipe(Effect.flip);
+
+      const bridge = yield* Storage;
+      const failedScope = `${scopeKey}/failed`;
+      const store = yield* bridge.at(
+        failedScope,
+        builtInRunResourceStoreContract({ key: failedScope }),
+      );
+      const facts = yield* store.facts();
+      const history = yield* store.stateHistory();
+      expect(facts.some((row) => row.type === "run-resource.run.failed")).toBe(true);
+      expect(history.length).toBeGreaterThan(0);
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
+  );
+});
+
+describe("RunResource.layer — baked default store bridge", () => {
+  const BakedGate = RunResource.Tag<{ readonly _tag: "BakedGate" }>()(
+    "@test/BakedGate",
+    Schema.Number,
+    Schema.Number,
+  );
+
+  const bakedLayer = RunResource.layer(BakedGate, {
+    effect: (n: number) => Effect.succeed(n),
+    concurrency: 1,
+  });
+
+  it.effect("persists facts without an extra Store.layerDefaultMemory at app root", () =>
+    Effect.gen(function* () {
+      const gate = yield* BakedGate;
+      yield* gate.run(1);
+
+      const bridge = yield* Storage;
+      const store = yield* bridge.at(
+        BakedGate.key,
+        builtInRunResourceStoreContract({ key: BakedGate.key }),
+      );
+      const facts = yield* store.facts();
+      expect(facts.map((row) => row.type).sort()).toEqual([
+        "run-resource.run.completed",
+        "run-resource.run.started",
+      ]);
+    }).pipe(Effect.provide(bakedLayer), Effect.scoped),
   );
 });
 
@@ -256,13 +315,10 @@ describe("RunResource.layer — RunResource.store records", () => {
     storeGateRegistration,
   ) {}
 
-  const live = Layer.mergeAll(
-    RunResource.layer(StoreGate, {
-      effect: (n: number) => Effect.succeed(n * 2),
-      concurrency: 1,
-    }),
-    TestRunStore.layerMemory,
-  );
+  const live = RunResource.layer(StoreGate, {
+    effect: (n: number) => Effect.succeed(n * 2),
+    concurrency: 1,
+  }).pipe(Layer.provideMerge(TestRunStore.layerMemory));
 
   it.effect("writes facts when the gate runs", () =>
     Effect.gen(function* () {
@@ -300,5 +356,100 @@ describe("RunResource.makeRunner", () => {
       const p = yield* Ref.get(peak);
       expect(p).toBeLessThanOrEqual(2);
     }).pipe(Effect.provide(Runner.layer)),
+  );
+});
+
+describe("RunResource — unit gates and interrupts", () => {
+  class UnitGate extends RunResource.Service<UnitGate>()("@test/UnitGate", {
+    payload: Schema.Void,
+    success: Schema.Number,
+    effect: () => Effect.succeed(42),
+    concurrency: 1,
+  }) {}
+
+  const unitLayer = UnitGate.layer;
+
+  it.live("Service.run() accepts no input for Schema.Void payload", () =>
+    Effect.gen(function* () {
+      const gate = yield* UnitGate;
+      const fromHandle = yield* gate.run();
+      const fromStatic = yield* UnitGate.run();
+      expect(fromHandle).toBe(42);
+      expect(fromStatic).toBe(42);
+    }).pipe(Effect.provide(unitLayer)),
+  );
+
+  const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {
+    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(
+      key,
+      Schema.Void,
+      Schema.Void,
+    );
+    return {
+      tag: HoldGate,
+      layer: RunResource.layer(HoldGate, {
+        effect: () => Deferred.await(hold),
+        concurrency: 1,
+      }),
+    };
+  };
+
+  // Waiting-acquire interrupt accounting is covered by `test/run-resource-pure.test.ts`
+  // (`interruptWaitingAcquire`). Live sem.take + Fiber.interrupt is scheduler-sensitive in Effect v4.
+
+  it.live("in-flight interrupt increments interrupted without failing the gate service", () =>
+    Effect.gen(function* () {
+      const hold = yield* Deferred.make<void, never>();
+      const { tag: HoldGate, layer } = holdLayer(hold, "@test/HoldGate/in-flight-interrupt");
+
+      yield* Effect.gen(function* () {
+        const gate = yield* HoldGate;
+        const inFlight = yield* Effect.forkChild(gate.run());
+        yield* Effect.yieldNow;
+        expect(yield* gate.inFlight.get).toBe(1);
+        yield* Fiber.interrupt(inFlight);
+        yield* Fiber.await(inFlight);
+        expect(yield* gate.interrupted.get).toBe(1);
+        expect(yield* gate.inFlight.get).toBe(0);
+        yield* Deferred.succeed(hold, undefined);
+      }).pipe(Effect.provide(layer));
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("RunResource.layer — store failure isolation", () => {
+  const scopeKey = "@test/store-failure-gate";
+
+  const FailingBridgeGate = RunResource.Tag<{ readonly _tag: "FailingBridgeGate" }>()(
+    scopeKey,
+    Schema.Number,
+    Schema.Number,
+  );
+
+  const failingBridgeLayer = Layer.succeed(Storage, {
+    at: () =>
+      Effect.succeed({
+        record: () =>
+          Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-fact" })),
+        recordStateChange: () =>
+          Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-state" })),
+        facts: () => Effect.succeed([]),
+        stateHistory: () => Effect.succeed([]),
+      }),
+    changes: () => Effect.die(new Error("unused")),
+  } as unknown as StorageApi);
+
+  const live = RunResource.layer(FailingBridgeGate, {
+    effect: (n: number) => Effect.succeed(n + 1),
+    concurrency: 1,
+  }).pipe(Layer.provideMerge(failingBridgeLayer));
+
+  it.effect("gate.run succeeds when store writes fail", () =>
+    Effect.gen(function* () {
+      const gate = yield* FailingBridgeGate;
+      const result = yield* gate.run(10);
+      expect(result).toBe(11);
+      expect(yield* gate.completed.get).toBe(1);
+    }).pipe(Effect.provide(live), Effect.scoped),
   );
 });
