@@ -34,28 +34,27 @@ export type ProcessStoreEventRow = {
 };
 
 /** Built-in process store contract — one `event` shape. @internal */
-export type BuiltInProcessContract =
-  StoreContractValue<
-    {
-      readonly event: StoreShapeDef<
-        typeof processExecutionEventVoid,
-        typeof processEventReadPayload
-      >;
-    },
-    {
-      readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void>;
-      readonly events: (
-        payload?: { readonly limit?: number },
-      ) => Effect.Effect<ReadonlyArray<ProcessStoreEventRow>>;
-      readonly hasPriorExecutions: () => Effect.Effect<boolean>;
-    }
-  >;
+export type BuiltInProcessContract = StoreContractValue<
+  {
+    readonly event: StoreShapeDef<
+      Schema.Schema<unknown>,
+      typeof processEventReadPayload
+    >;
+  },
+  {
+    readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void>;
+    readonly events: (
+      payload?: { readonly limit?: number },
+    ) => Effect.Effect<ReadonlyArray<ProcessStoreEventRow>>;
+    readonly hasPriorExecutions: () => Effect.Effect<boolean>;
+  }
+>;
 
 /** Build the process store contract (optional success / error schemas). @internal */
 export const makeProcessStoreContract = (
   success?: Schema.Top,
   error?: Schema.Top,
-) =>
+): BuiltInProcessContract =>
   Store.contract(
     {
       event: Store.shape(
@@ -71,13 +70,13 @@ export const makeProcessStoreContract = (
       hasPriorExecutions: () =>
         Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
     }),
-  );
+  ) as BuiltInProcessContract;
 
 /** Built-in process store contract for a tag (reads `success` / `error` from tag). @internal */
 export const builtInProcessStoreContract = (
   tag: StoreScopeTag,
 ): BuiltInProcessContract =>
-  makeProcessStoreContract(successOf(tag), errorOf(tag)) as BuiltInProcessContract;
+  makeProcessStoreContract(successOf(tag), errorOf(tag));
 
 /** @deprecated Internal flat spec — use {@link builtInProcessStoreContract}. @internal */
 export const builtInProcessStoreSpec = (tag: StoreScopeTag) =>

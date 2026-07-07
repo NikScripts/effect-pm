@@ -16,7 +16,8 @@
 | `error` on store union | ✅ | `makeProcessExecutionEvent(success, error)` |
 | `Process.store(tag)` registration | ✅ | `builtInProcessStoreContract(tag)` |
 | Engine store tap (layer path) | ✅ | `src/internal/processStoreTap.ts` — declared `StoreScopeBridgeTag`, buffered `record` |
-| Legacy facet writes from engine | ✅ removed | Engine does not write `ProcessExecutionStore` |
+| Legacy facet writes from engine | ✅ removed | **`ProcessExecutionStore` facet deleted** |
+| Cast on store contract | 🟡 | `builtInProcessStoreContract` cast-free; factory cast remains |
 | `RunCompleted.result` population | ✅ | From `SubscriptionRef` when `success` stamped |
 | `hasPriorExecutions` via store | ✅ | When execution recorder present (layer path) |
 | `Process.result` removed | ✅ | Positional `success` only |
@@ -28,9 +29,11 @@
 
 ## Open issues
 
-### 1. Cast on `builtInProcessStoreContract`
+### 1. Cast on `makeProcessStoreContract`
 
-`makeProcessStoreContract(...) as BuiltInProcessContract` — type variance when `success`/`error` schemas vary per tag. Mirror queue's tag-parameterized contract when time allows.
+`builtInProcessStoreContract(tag)` is cast-free. One `as BuiltInProcessContract` at
+`makeProcessStoreContract` keeps engine `record` on `ProcessStoreEventRow` while schemas validate on
+append.
 
 ### 2. Facet retirement (Stage 5)
 
@@ -54,7 +57,7 @@
 
 | File | Work |
 |------|------|
-| `src/internal/store/processStoreSpec.ts` | Drop `as BuiltInProcessContract` if types align |
+| `src/internal/store/processStoreSpec.ts` | Tag-parameterized contract to drop factory cast |
 | `src/Process.ts` | Facet writes removed — store contract only on layer path |
 | `docs/PROCESS-API.md`, `docs/STORAGE.md` | Document new store path + layer requirement |
 | `.changeset/process-tag-store-cutover.md` | Consolidate with platform rename changeset at release |

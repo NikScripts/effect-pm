@@ -44,7 +44,10 @@ const program = Effect.gen(function* () {
     const completed = events.find((row) => row._tag === "RunCompleted");
     yield* Effect.log(`built-in store: ${String(events.length)} event(s)`);
     const price =
-      completed !== undefined && completed._tag === "RunCompleted"
+      completed !== undefined &&
+      completed._tag === "RunCompleted" &&
+      "result" in completed &&
+      completed.result !== undefined
         ? yield* Schema.decodeUnknownEffect(Price)(completed.result).pipe(Effect.option)
         : Option.none();
     yield* Option.match(price, {

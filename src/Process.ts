@@ -1939,29 +1939,11 @@ export type ProcessTagBuild<Self> = {
  * @public
  */
 export const Tag = <Self>() => {
-  function build(key: string): ResourceTag<Self, ProcessSpec>;
-  function build<A extends Schema.Top>(
-    key: string,
-    success: A,
-  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
-  function build<A extends Schema.Top, E extends Schema.Top>(
-    key: string,
-    success: A,
-    error: E,
-  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
-  function build<HSelf>(
-    key: string,
-    options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, ProcessSpec, HSelf>;
-  function build(
-    key: string,
-    options: ProcessTagOptions,
-  ): ResourceTag<Self, ProcessSpec>;
   function build(
     key: string,
     second?: Schema.Top | ProcessTagOptions,
     third?: Schema.Top,
-  ) {
+  ): ResourceTag<Self, ProcessSpec> | NodeBoundTag<Self, ProcessSpec, unknown> {
     if (second === undefined) {
       return buildProcessTag<Self>(key, undefined);
     }
