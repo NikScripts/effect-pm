@@ -4,7 +4,6 @@ import { TestClock } from "effect/testing";
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
 import { Polling } from "../src/Polling";
-import { StoreScopeBridgeTag } from "../src/internal/store/bridge";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
@@ -20,7 +19,7 @@ class OverrideStore extends Store.Service<OverrideStore>("@test/OverrideStore")(
 const clock = TestClock.layer();
 
 describe("Process.layer — baked-in default store", () => {
-  it.effect("records terminal runs with no external StoreScopeBridgeTag layer", () =>
+  it.effect("records terminal runs with no external Store.Storage layer", () =>
     Effect.gen(function* () {
       const live = Process.layer(DefaultExec, {
         effect: Effect.void,
@@ -29,8 +28,7 @@ describe("Process.layer — baked-in default store", () => {
       yield* Effect.gen(function* () {
         yield* DefaultExec;
         yield* TestClock.adjust(Duration.millis(200));
-        const bridge = yield* StoreScopeBridgeTag;
-        const store = yield* bridge.at(
+        const store = yield* Store.withDefault(
           DefaultExec.key,
           builtInProcessStoreContract(DefaultExec),
         );

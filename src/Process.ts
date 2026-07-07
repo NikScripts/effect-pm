@@ -107,8 +107,7 @@ import { HistoryStore } from "./HistoryStore";
 import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
-import { StoreScopeBridgeTag } from "./internal/store/bridge";
-import { layerDefaultMemory } from "./internal/store/scopeBridge";
+import * as Store from "./Store";
 import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
 import { makeProcessStorePersist, makeProcessStoreTap, type ProcessStoreTap } from "./internal/processStoreTap";
@@ -2170,7 +2169,7 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
 const buildProcessImpl = <A, E, R>(
   tag: ResourceTag<any, any>,
   baseConfig: ProcessLayerConfig<A, E, R>,
-): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope | StoreScopeBridgeTag> =>
+): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
@@ -2360,11 +2359,11 @@ const buildProcessImpl = <A, E, R>(
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
 // names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
 
-/** Merge {@link layerDefaultMemory} so the toolkit layer always has a store; app override via `Layer.provideMerge`. @internal */
+/** Merge {@link Store.layerDefaultMemory} so the toolkit layer always has a store; app override via `Layer.provideMerge`. @internal */
 const withDefaultMemory = <A, E, R>(
   layer: Layer.Layer<A, E, R>,
-): Layer.Layer<A | StoreScopeBridgeTag, E, R> =>
-  layer.pipe(Layer.provideMerge(layerDefaultMemory));
+): Layer.Layer<A | Store.Storage, E, R> =>
+  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * The **local** layer for a process: build its driver (auto-started) and provide its service.
@@ -2374,7 +2373,7 @@ const withDefaultMemory = <A, E, R>(
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self> | StoreScopeBridgeTag, never, R>;
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 export function layer(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,
@@ -2396,7 +2395,7 @@ export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<ProcessSpec> | StoreScopeBridgeTag,
+  Self | Local<Self> | HandlerContextOf<ProcessSpec> | Store.Storage,
   never,
   R
 >;
@@ -2424,7 +2423,7 @@ export function serve(
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec> | StoreScopeBridgeTag, never, R>;
+): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
 export function serveRemote(
   tag: ResourceTag<any, any>,
   config: ProcessLayerConfig<any, any, any>,

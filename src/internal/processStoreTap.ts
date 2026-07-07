@@ -1,6 +1,6 @@
 /**
  * Buffered engine writes to the built-in {@link Process} {@link Store} contract
- * (`builtInProcessStoreContract`) via {@link StoreScopeBridgeTag}.
+ * (`builtInProcessStoreContract`) via {@link Store.withDefault}.
  *
  * @module internal/processStoreTap
  * @internal
@@ -14,8 +14,8 @@ import {
   Scope,
   SubscriptionRef,
 } from "effect";
+import * as Store from "../Store";
 import { errorOf } from "./processTagSchemas";
-import { StoreScopeBridgeTag } from "./store/bridge";
 import {
   builtInProcessStoreContract,
   type ProcessStoreEventRow,
@@ -103,7 +103,7 @@ const buildInterruptedEvent = (
 
 /**
  * Resolve the built-in process store once and return a buffered store tap.
- * Requires {@link StoreScopeBridgeTag} as a declared dependency (never `serviceOption`).
+ * Requires {@link Store.Storage} as a declared dependency (never `serviceOption`).
  *
  * @internal
  */
@@ -111,11 +111,10 @@ export const makeProcessStoreTap = (options: {
   readonly scopeKey: string;
   readonly tag: StoreScopeTag;
   readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
-}): Effect.Effect<ProcessStoreTap, never, StoreScopeBridgeTag | Scope.Scope> =>
+}): Effect.Effect<ProcessStoreTap, never, Store.Storage | Scope.Scope> =>
   Effect.gen(function* () {
-    const bridge = yield* StoreScopeBridgeTag;
     const contract = builtInProcessStoreContract(options.tag);
-    const store = yield* bridge.at(options.scopeKey, contract).pipe(Effect.orDie);
+    const store = yield* Store.withDefault(options.scopeKey, contract);
     const scope = yield* Effect.scope;
     const errorSchema = errorOf(options.tag);
     const queue = yield* Queue.bounded<ProcessStoreEventRow>(bufferCapacity);
