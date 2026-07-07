@@ -1,7 +1,7 @@
 # Store cutover — Queue (my target)
 
-Prereq: `store-cutover-00-store-core.md`. This module owns the **shared store-tap helper** the other three
-depend on, plus the queue engine cutover.
+Prereq: `store-cutover-00-store-core.md` (shared decisions — **the store is a defaulted service; resolve it
+as a declared dependency; NEVER `serviceOption`**).
 
 ## Done
 
@@ -9,31 +9,35 @@ depend on, plus the queue engine cutover.
   (`record`/`events`), **cast-free** (the reference other modules mirror to drop their casts).
 - Store tightening + `layerDefaultMemory` (shipped; see store-core report).
 
-## In progress / blocked
+## Plan (owner: me) — the defaulted-dependency shape
 
-- **Engine wiring deadlocks.** WIP commit `0e48e9d28` on branch `queue-store-wiring`: `buildQueueImpl`
-  resolves the store handle **during layer build** and passes `recordEvent` to the engine; `publishEvent`
-  persists. It compiles and breaks no existing test (117 green), **but** resolving the store in the layer
-  build deadlocks a later `Store.Service.at(tag)` read (scoped-layer memoization lock). Verified by
-  isolation: `yield* AppStore.at(tag)` never returns.
+The engine cutover is now simple, per the store-core §1/§2 decisions:
 
-## Plan (owner: me)
+1. [ ] `buildQueueImpl` resolves the store handle as a **plain declared dependency**:
+       `const bridge = yield* StoreScopeBridgeTag; const store = yield* bridge.at(tag.key,
+       builtInQueueStoreContract(tag))`. **No `serviceOption`, no `Option.match`, no forked-fiber, no lazy.**
+2. [ ] Buffer appends off the worker hot path (one scoped daemon draining a bounded queue → `store.record`).
+3. [ ] `publishEvent` persists via that buffer; delete the reverted `serviceOption(QueueResourceStore)` facet
+       tier and the `ProcessStore` import.
+4. [ ] The queue layer's `RIn` gains `StoreScopeBridgeTag`; the **app** provides `layerDefaultMemory` or a
+       real `Store.Service` at the root (do NOT bake it into the queue layer). Update queue tests to provide
+       one.
 
-1. [ ] **Build `internal/store/storeTap.ts`** — the shared helper: create the event buffer immediately,
-       fork **one** scoped daemon that resolves the handle **once** (eager, not lazy, not build-time) and
-       drains the buffer to `handle.record`. Returns a sink (no-op when no store in context). No
-       `serviceOption` on the emit path.
-2. [ ] **Prove it dodges the deadlock** — the same queue + `AppStore.at` case that currently hangs must
-       pass (persist events → read back via the app store).
-3. [ ] **Cut the engine over to it** — `publishEvent` → the tap's sink; delete the current build-time
-       resolution in `buildQueueImpl` and the reverted per-event facet tier.
-4. [ ] Hand `storeTap.ts` to Process + RunResource (they adopt it — see their reports).
+## Discarded (do not do — I got these wrong earlier)
 
-## Non-goals / rejected
+- ❌ `Effect.serviceOption(StoreScopeBridgeTag)` in the engine/layer — violates the no-sniff rule and is the
+  cause of the build-time deadlock.
+- ❌ A shared `internal/store/storeTap.ts` helper that resolves via `serviceOption` in a forked fiber — same
+  violation, dressed up. A declared dependency needs no such helper.
+- ❌ Lazy per-event resolution.
+- ❌ `Layer.provide(layerDefaultMemory)` baked into the queue layer (hard-provides; blocks app override).
 
-- Lazy per-event or per-run resolution (owner rejected; it's what RunResource must migrate *off*).
-- Build-time resolution (deadlocks).
-- Layer-level schema overrides (unsafe for RPC — result-schema doc §3).
+## Why no deadlock now
+
+A declared dependency (`yield* StoreScopeBridgeTag`) is built in topological order and memoized, so the store
+builds first and `AppStore.at(tag)` reuses the same instance — no concurrent build, no scoped-`EventJournal`
+lock. The deadlock was an artifact of `serviceOption`-in-layer-build, which we're removing.
 
 ## Verify
-`pnpm typecheck` (both) + queue suites + a new `queue-store-persist` test (persist → read back via app store).
+`pnpm typecheck` (both) + queue suites + a `queue-store-persist` test (persist → read back via app store,
+`it.live` — real clock; the queue processes + poll in real time).

@@ -1,34 +1,37 @@
 # Store cutover — RunResource
 
-Prereq: `store-cutover-00-store-core.md`. Context: `result-schema-and-rpc-validation.md` (§D done: tag
-`payload`/`success`/`error`; RPC + handle shipped).
+Prereq: `store-cutover-00-store-core.md` (**the store is a defaulted service; resolve it as a declared
+dependency; NEVER `serviceOption`**).
 
-## The one real issue: migrate the store tap off lazy resolution
+## 🔴 RunResource is currently doing it wrong — two violations in `internal/runResourceStoreTap.ts`
 
-`internal/runResourceStoreTap.ts` currently resolves the store **lazily** — `resolveNewStoreHandle` does
-`Effect.serviceOption(StoreScopeBridgeTag)` + `bridge.at(scopeKey, contract).pipe(Effect.option)` **per
-resolution** (called from the run path). This was the stopgap to avoid the build-time deadlock, but:
+1. **`serviceOption` on the new store bridge.** `resolveNewStoreHandle` (line ~80) does
+   `Effect.serviceOption(StoreScopeBridgeTag)` + `bridge.at(scopeKey, contract).pipe(Effect.option)`, resolved
+   **per write**. This breaks the locked rule (store-core §1): the store is a **defaulted service**, always
+   present, so there is nothing to `serviceOption`. Per-write resolution is also the pattern the queue got
+   burned by (build-time race / deadlock).
 
-- **Lazy per-run resolution is rejected** (owner preference; see store-core §2).
-- It's inconsistent with the shared resolution mechanism the three resources are supposed to align on.
+   **Fix:** resolve the store **once** as a plain declared dependency —
+   `const bridge = yield* StoreScopeBridgeTag; const store = yield* bridge.at(scopeKey, contract)` — buffer
+   writes off the hot path, emit unconditionally. No `serviceOption`, no `.pipe(Effect.option)`. The tap's
+   `RIn` gains `StoreScopeBridgeTag`; the app provides `layerDefaultMemory` or a real store at the root.
 
-**Action:**
-- [ ] Migrate to the shared `internal/store/storeTap.ts` helper (queue agent builds it): resolve the
-      handle **once, eagerly, in a forked fiber** at engine build; emit sites call the returned sink
-      unconditionally. No `serviceOption`, no `.pipe(Effect.option)` on the tap path.
-- [ ] Keep the fact/state event shapes (`run-resource.fact.*` / state changes) as the store's tagged-union
-      row — one `event` shape, `record`/`events` handle, aligned with queue/process.
+2. **Cast on the handle.** `handle.value as unknown as StoreHandleFromContract<BuiltInRunResourceContract>`.
+   With the Store tightening merged, `bridge.at` returns the precise handle — **delete the `as unknown as`.**
+   Also confirm the built-in RunResource store contract has no `... as BuiltInRunResourceContract` identity
+   cast (mirror `builtInQueueStoreContract`, which is cast-free).
 
-## Cast check
+Also: the tap still uses the legacy `ProcessStore.catchErrorAndLog` — swap for a local
+`Effect.catchCause(... logWarning ...)` as the old facets are removed.
 
-- [ ] Confirm RunResource's built-in store contract has no `... as BuiltInRunResourceContract` identity
-      cast. With the Store tightening it should compile cast-free (mirror `builtInQueueStoreContract`); if a
-      cast is still present, remove it the same way.
+## Keep
+
+- The fact/state event shapes (`run-resource.fact.*` / state changes) as the store's tagged-union `event`
+  row (`record`/`events`), aligned with queue/process.
 
 ## Note
 
-The `bridge.at` call in `runResourceStoreTap.ts:86` was already updated to the new 2-arg signature during
-the Store-tightening merge — no action needed there.
+The `bridge.at` 2-arg signature update was already applied during the Store-tightening merge — no action there.
 
 ## Verify
 `pnpm typecheck` (both) + the run-resource + run-resource store suites.

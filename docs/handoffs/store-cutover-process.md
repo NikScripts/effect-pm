@@ -21,8 +21,11 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
 ## Cutover (B3 — now unblocked)
 
 - [ ] `createProcess` (supervisor terminal) writes execution events via **`tag.store`** (the built-in
-      process contract's `record`), not the legacy `ProcessExecutionStore` facet. Use the shared
-      `internal/store/storeTap.ts` helper (see store-core report) — resolve once, buffered, no `serviceOption`.
+      process contract's `record`), not the legacy `ProcessExecutionStore` facet. Resolve the store as a
+      **plain declared dependency** (`const bridge = yield* StoreScopeBridgeTag; const store = yield*
+      bridge.at(scopeKey, contract)`) — **no `serviceOption`** (store-core §1), buffer writes off the hot
+      path. The engine's `RIn` gains `StoreScopeBridgeTag`; the app provides `layerDefaultMemory` or a real
+      store at the root.
 - [ ] `getStatus` / `hasPriorExecutions` read via the store contract's `events` / `hasPriorExecutions`
       (the contract already exposes `hasPriorExecutions`).
 - [ ] Delete the `ProcessExecutionStore` emit/read calls in `Process.ts` once the above lands.
