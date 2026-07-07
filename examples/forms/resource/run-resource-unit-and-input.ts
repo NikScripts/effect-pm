@@ -9,8 +9,8 @@ import { RunResource } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/TimedWorkGate", {
-  inputSchema: Schema.Void,
-  successSchema: Schema.Number,
+  payload: Schema.Void,
+  success: Schema.Number,
   effect: () =>
     Effect.gen(function* () {
       const startedAt = yield* Clock.currentTimeMillis;
@@ -21,8 +21,8 @@ class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/Timed
 }) {}
 
 class DoubleGate extends RunResource.Service<DoubleGate>()("examples/DoubleGate", {
-  inputSchema: Schema.Number,
-  successSchema: Schema.Number,
+  payload: Schema.Number,
+  success: Schema.Number,
   effect: (n: number) =>
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.millis(8));

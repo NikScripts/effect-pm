@@ -370,9 +370,9 @@ Concurrency gate (semaphore) around any effect. No queues, no workers — just b
 
 ```typescript
 class SendSms extends RunResource.Service<SendSms>()("@app/SendSms", {
-  inputSchema: PhoneNumberSchema,
-  successSchema: SmsResultSchema,
-  errorSchema: SmsErrorSchema,
+  payload: PhoneNumberSchema,
+  success: SmsResultSchema,
+  error: SmsErrorSchema,
   effect: (phone) => twilioClient.send(phone),
   concurrency: 5,
 }) {}
@@ -386,9 +386,9 @@ const result = yield* send.run("+1234567890")
 
 ```typescript
 class RefreshPrices extends RunResource.Service<RefreshPrices>()("@app/RefreshPrices", {
-  inputSchema: Schema.Void,
-  successSchema: PriceDataSchema,
-  errorSchema: FetchErrorSchema,
+  payload: Schema.Void,
+  success: PriceDataSchema,
+  error: FetchErrorSchema,
   effect: () => fetchLatestPrices(),
   concurrency: 1,  // only one refresh at a time
 }) {}
@@ -479,7 +479,7 @@ const remoteHandlers = RunResource.serveRemote(ApiGate, {
 const localAndRemote = RunResource.serve(ApiGate, { effect: (req) => httpFetch(req) })
 ```
 
-Wire schemas on the tag: `runGateStatus`, `runSpec(inputSchema, successSchema, errorSchema?)`.
+Wire schemas on the tag: `runGateStatus`, `runSpec(payload, success, error?)`.
 
 ### Store registration (`RunResource.store`)
 

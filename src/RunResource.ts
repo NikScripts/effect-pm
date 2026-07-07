@@ -32,9 +32,9 @@
  * ) {}
  * // or:
  * class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", {
- *   inputSchema: SymbolSchema,
- *   successSchema: PriceSchema,
- *   errorSchema: FetchErrSchema,
+ *   payload: SymbolSchema,
+ *   success: PriceSchema,
+ *   error: FetchErrSchema,
  * }) {}
  * ```
  *
@@ -214,9 +214,9 @@ export interface RunResourceWireSchemas<
   A extends Schema.Top = Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 > {
-  readonly inputSchema: I;
-  readonly successSchema: A;
-  readonly errorSchema?: E;
+  readonly payload: I;
+  readonly success: A;
+  readonly error?: E;
 }
 
 /**
@@ -333,8 +333,8 @@ const isSchemaTop = (value: unknown): value is Schema.Top =>
 const isTagSchemaConfig = (value: unknown): value is RunResourceTagSchemas =>
   typeof value === "object" &&
   value !== null &&
-  "inputSchema" in value &&
-  "successSchema" in value;
+  "payload" in value &&
+  "success" in value;
 
 const materializeRunTag = <
   Self,
@@ -343,12 +343,12 @@ const materializeRunTag = <
   E extends Schema.Top,
 >(
   key: string,
-  inputSchema: I,
-  successSchema: A,
-  errorSchema: E,
+  payload: I,
+  success: A,
+  error: E,
   options?: { readonly description?: string },
 ): RunTagWithStaticRun<Self, I, A, E> => {
-  const spec = runSpec(inputSchema, successSchema, errorSchema);
+  const spec = runSpec(payload, success, error);
   const tag = Resource.Tag<Self>()(key, spec, {
     description: options?.description,
     kind,
@@ -429,8 +429,8 @@ const runTag = <Self>() => {
   ): RunTagWithStaticRun<Self, I, A, E>;
   function build<I extends Schema.Top, A extends Schema.Top>(
     key: string,
-    inputSchema: I,
-    successSchema: A,
+    payload: I,
+    success: A,
     options?: { readonly description?: string },
   ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
   function build<
@@ -439,41 +439,41 @@ const runTag = <Self>() => {
     E extends Schema.Top,
   >(
     key: string,
-    inputSchema: I,
-    successSchema: A,
-    errorSchema: E,
+    payload: I,
+    success: A,
+    error: E,
     options?: { readonly description?: string },
   ): RunTagWithStaticRun<Self, I, A, E>;
   function build(
     key: string,
     inputOrSchemas: Schema.Top | RunResourceTagSchemas,
-    successSchema?: Schema.Top,
+    success?: Schema.Top,
     errorOrOptions?: Schema.Top | { readonly description?: string },
     maybeOptions?: { readonly description?: string },
   ): RunTagWithStaticRun<Self, any, any, any> {
     if (isTagSchemaConfig(inputOrSchemas)) {
-      const errorSchema = (inputOrSchemas.errorSchema ?? Schema.Never) as Schema.Top;
+      const error = (inputOrSchemas.error ?? Schema.Never) as Schema.Top;
       return materializeRunTag(
         key,
-        inputOrSchemas.inputSchema,
-        inputOrSchemas.successSchema,
-        errorSchema,
+        inputOrSchemas.payload,
+        inputOrSchemas.success,
+        error,
         { description: inputOrSchemas.description },
       );
     }
-    const inputSchema = inputOrSchemas;
-    const hasErrorSchema =
+    const payload = inputOrSchemas;
+    const hasError =
       errorOrOptions !== undefined &&
       isSchemaTop(errorOrOptions);
-    const errorSchema = hasErrorSchema ? errorOrOptions : Schema.Never;
-    const options = hasErrorSchema ? maybeOptions : errorOrOptions as
+    const error = hasError ? errorOrOptions : Schema.Never;
+    const options = hasError ? maybeOptions : errorOrOptions as
       | { readonly description?: string }
       | undefined;
     return materializeRunTag(
       key,
-      inputSchema,
-      successSchema as Schema.Top,
-      errorSchema,
+      payload,
+      success as Schema.Top,
+      error,
       options,
     );
   }
@@ -597,13 +597,13 @@ export const Service = <Self>() => {
     name: Name,
     config: RunResourceServiceConfig<I, A, E, R>,
   ) {
-    const errorSchema = (config.errorSchema ?? Schema.Never) as E;
+    const error = (config.error ?? Schema.Never) as E;
     const tag = runTag<Self>()(name, {
-      inputSchema: config.inputSchema,
-      successSchema: config.successSchema,
-      errorSchema,
+      payload: config.payload,
+      success: config.success,
+      error,
     });
-    const defaultSpec = { name, ...config, errorSchema };
+    const defaultSpec = { name, ...config, error };
     const layerConfig: RunResourceLayerConfig<
       Schema.Schema.Type<I>,
       Schema.Schema.Type<A>,

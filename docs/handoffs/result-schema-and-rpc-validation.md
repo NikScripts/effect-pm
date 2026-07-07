@@ -1,9 +1,8 @@
-# Result / error schemas on tag factories + RPC schema safety
+# Tag wire schemas (`payload` / `success` / `error`) + RPC validation
 
-**Status:** Design locked in conversation (2026-07-06, revised late evening). **Process tag positional
-API + store contract shipped** on `cursor/process-tag-schemas-a3ad`. **Not implemented** on queues /
-RR / CQR (other branches). **`Process.result` pipe deprecated** in favor of positional tag args +
-config-object overload.
+**Status:** Design locked (2026-07-07). Tag factories use **Effect `Resource.Method` slot names** —
+`payload`, `success`, `error` — with **no `Schema` suffix**. Process + RunResource implemented on
+integration branches; Queue `Tag` positional `payload` renamed; full QR triplet pending queue agents.
 
 Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
 [`queue-persistence-design.md`](./queue-persistence-design.md),
@@ -13,7 +12,20 @@ Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
 
 ## Decisions locked
 
-### 1. No pipe combinators — positional schemas on `Tag` only
+### 0. Wire slot names — `payload`, `success`, `error` (no `Schema` suffix)
+
+Tag factories and config objects use the **same names as `Resource.Method`**:
+
+| Slot | RPC meaning | Process | Queue | RunResource |
+|------|-------------|---------|-------|-------------|
+| **`payload`** | Request / enqueue / run input | — (effect in layer) | `add` payload (= work item) | `run` payload |
+| **`success`** | Return / worker output / last value | `result` ref element | worker return (TBD on wire) | `run` success |
+| **`error`** | Typed failure channel | effect error stamp | worker error (TBD) | `run` error |
+
+**Not tag-factory names:** RPC **procedure** names (`run`, `add`, `status`, `result`, …) and internal
+`itemSchema` in engine config (legacy; reads from tag `payload` on `add`).
+
+### 1. No pipe combinators — positional wire schemas on `Tag` only
 
 **Retired:** `.pipe(Process.result(schema))`, planned `QueueResource.result`, etc.
 
@@ -22,15 +34,16 @@ overload). Layer config must not override them (see §3).
 
 | Resource | Required | Optional 2nd | Optional 3rd | Config-object overload |
 |----------|----------|--------------|--------------|------------------------|
-| **Process** | `key` | `resultSchema` | `errorSchema` | `Tag(key, { resultSchema?, errorSchema?, description?, node? })` |
-| **QueueResource** | `key` + **`itemSchema`** | `resultSchema` | `errorSchema` | `Tag(key, { itemSchema, resultSchema?, errorSchema?, description?, node? })` |
-| **CustomQueueResource** | `key` + **`itemSchema`** + lane args | `resultSchema` | `errorSchema` | `Tag(key, itemSchema, lanes…, { resultSchema?, errorSchema?, … })` or leading config object — **TBD with CQR agent** |
+| **Process** | `key` | `success` | `error` | `Tag(key, { success?, error?, description?, node? })` |
+| **QueueResource** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success?, error?, description?, node? })` |
+| **RunResource** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success, error?, description? })` |
+| **CustomQueueResource** | `key` + **`payload`** + lane args | `success` | `error` | trailing `{ success?, error?, … }` — **TBD with CQR agent** |
 
-Disambiguation: when the 2nd argument is a **plain object** with `description` / `node` / schema
-keys, it is the **config overload**, not a schema.
+Disambiguation: when the 2nd argument is a **plain object** with `description` / `node` / wire-slot
+keys, it is the **config overload**, not a schema value.
 
-**Migration:** deprecate `Process.result`; graft `result` ref + `resultSchemaSym` / `errorSchemaSym`
-from tag factory args instead.
+**Migration:** deprecate `Process.result`; graft `result` ref + `successSym` / `errorSym` from tag
+factory args. Queue: rename tag arg `itemSchema` → `payload`.
 
 ### 2. Tag factory forms (canonical)
 
@@ -40,29 +53,36 @@ See conversation summary in repo; full examples in §“Tag factory forms” bel
 
 ```ts
 Process.Tag()(key)
-Process.Tag()(key, resultSchema)
-Process.Tag()(key, resultSchema, errorSchema)
-Process.Tag()(key, { resultSchema?, errorSchema?, description?, node? })
+Process.Tag()(key, success)
+Process.Tag()(key, success, error)
+Process.Tag()(key, { success?, error?, description?, node? })
 ```
 
 **QueueResource:**
 
 ```ts
-QueueResource.Tag()(key, itemSchema)
-QueueResource.Tag()(key, itemSchema, resultSchema)
-QueueResource.Tag()(key, itemSchema, resultSchema, errorSchema)
-QueueResource.Tag()(key, { itemSchema, resultSchema?, errorSchema?, description?, node? })
+QueueResource.Tag()(key, payload)
+QueueResource.Tag()(key, payload, success)
+QueueResource.Tag()(key, payload, success, error)
+QueueResource.Tag()(key, { payload, success?, error?, description?, node? })
 ```
 
-**CustomQueueResource** — same three optional schema slots after required `itemSchema`; lane
-count / named levels follow (unchanged arity, schemas before or inside config object per CQR
-implementer — prefer trailing options bag: `Tag(key, itemSchema, 3, namedLevels, { resultSchema, errorSchema })`).
+**RunResource:**
+
+```ts
+RunResource.Tag()(key, payload, success)
+RunResource.Tag()(key, payload, success, error)
+RunResource.Tag()(key, { payload, success, error?, description? })
+```
+
+**CustomQueueResource** — same three wire slots after required `payload`; lane count / named levels
+follow (prefer trailing options bag: `Tag(key, payload, 3, namedLevels, { success, error })`).
 
 ### 3. Layer-level schema overrides — internal only, strongly discouraged publicly
 
 **Policy:**
 
-- **Tag / registration** is the **SSOT** for `itemSchema` and `resultSchema` on toolkit resources.
+- **Tag / registration** is the **SSOT** for `payload` and `success` on toolkit resources.
 - **`QueueLayerConfig` / `ProcessLayerConfig` / `RunResourceConfig`** should **not** advertise
   schema override fields in public TSDoc or guides.
 - **Internal** code paths may accept schemas for engine bootstrapping (`makeQueueRuntime` without a
@@ -91,8 +111,8 @@ Skip re-validation when nothing material has changed.
 #### Proposed model
 
 1. **Codec fingerprint** per schema role on a tag:
-   - `item` — already partially there
-   - `result` — same machinery when `resultSchema` lands
+   - `payload` — queue `add`, run-gate `run`
+   - `success` — worker / run return, process `result` ref
    - Fingerprint = hash of **canonical JSON Schema** export (or stable AST canonicalization), not
      raw `Schema` reference identity.
 
@@ -112,7 +132,7 @@ Skip re-validation when nothing material has changed.
 
 4. **Handshake** (on `Resource.client` / `connect` — design TBD):
 
-   - Client sends: `{ buildId, codecs: [{ role: "item", id, fingerprint }, { role: "result", … }] }`
+   - Client sends: `{ buildId, codecs: [{ role: "payload", id, fingerprint }, { role: "success", … }] }`
    - Server compares to tag-stamped descriptors.
    - Mismatch → typed defect (`SchemaDriftError` / `CodecMismatchError`) before application RPC.
 
@@ -149,12 +169,12 @@ fingerprints or version stamps.
 | Step | Scope | Agent now? |
 |------|-------|------------|
 | **A** | This handoff + align queue branch agents on config-object overload | Done (doc) |
-| **B** | Process tag positional `resultSchema` / `errorSchema` + config overload; deprecate `Process.result` | **Done** (`cursor/process-tag-schemas-a3ad`) |
-| **B2** | `processStoreSpec` queue-aligned (`event` + `record` / `events`); `test/process-store-contract.test.ts` | **Done** (same branch) |
-| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Blocked** — default in-memory store (Store Stage 1) |
-| **C** | QR / CQR positional schemas + config object (coordinate with queue branches) | **Other agents** — don’t duplicate |
-| **D** | RR `resultSchema` config + pipe | Defer until RR branch free |
-| **E** | `resultSchema` on store contracts (`processStoreSpec`, `queueStoreSpec`) | After Store Stage 1; Process track |
+| **B** | Process tag positional `success` / `error` + config overload; deprecate `Process.result` | **Done** |
+| **B2** | `processStoreSpec` queue-aligned (`event` + `record` / `events`) | **Done** |
+| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Blocked** — Store Stage 1 |
+| **C** | QR / CQR `payload` / `success` / `error` on Tag (coordinate queue branches) | **In progress** |
+| **D** | RR `payload` / `success` / `error` on Tag | **Done** (run-resource branch) |
+| **E** | `success` on store contracts (`processStoreSpec`, `queueStoreSpec`) | After Store Stage 1 |
 | **F** | RPC fingerprint handshake + buildId on Node | **Defer** — cross-cutting; ~1 dedicated agent after C stabilizes |
 
 ### Spin up an agent now?
@@ -170,8 +190,7 @@ fingerprints or version stamps.
 
 ## Open questions (resolve at implement time)
 
-1. **CQR arity** — where does the `{ itemSchema, resultSchema }` object sit relative to lane
-   count / named levels? (One leading config object recommended.)
+1. **CQR arity** — where does `{ payload, success }` sit relative to lane count / named levels?
 2. **Observation field name** — `result` (Process parity) vs `lastResult` (queue worker semantics)?
 3. **`Process.result` removal** — breaking changeset when tag positional API ships?
 4. **buildId source** — CI env var vs `package.json` version vs explicit `Node({ buildId })`?
@@ -199,8 +218,8 @@ class PricesValue extends Process.Tag<PricesValue>()("app/Prices", Price) {}
 
 // config object (2nd arg) — same semantics
 class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
-  resultSchema: Price,
-  errorSchema: FetchErr,
+  success: Price,
+  error: FetchErr,
   description: "Spot quotes",
 }) {}
 ```
@@ -212,26 +231,32 @@ const Job = Schema.Struct({ id: Schema.String, text: Schema.String });
 const Summary = Schema.Struct({ wordCount: Schema.Number });
 const WorkerErr = Schema.TaggedStruct("WorkerError", { reason: Schema.String });
 
-// item only (required) — void worker return
+// payload only (required) — void worker return
 class Mail extends QueueResource.Tag<Mail>()("@app/Mail", Job) {}
 
-// item + result
+// payload + success
 class Summarize extends QueueResource.Tag<Summarize>()("@app/Summarize", Job, Summary) {}
 
-// item + result + error
+// payload + success + error
 class SummarizeE extends QueueResource.Tag<SummarizeE>()("@app/Summarize", Job, Summary, WorkerErr) {}
 
-// config object (2nd arg replaces positional item + optional schemas)
+// config object (2nd arg)
 class SummarizeCfg extends QueueResource.Tag<SummarizeCfg>()("@app/Summarize", {
-  itemSchema: Job,
-  resultSchema: Summary,
-  errorSchema: WorkerErr,
+  payload: Job,
+  success: Summary,
+  error: WorkerErr,
 }) {}
+```
+
+### RunResource
+
+```ts
+class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", Symbol, Price, FetchErr) {}
 ```
 
 ### CustomQueueResource (sketch)
 
-Lane arity unchanged; schemas trail item or sit in options:
+Lane arity unchanged; wire slots trail `payload` or sit in options:
 
 ```ts
 class Jobs extends CustomQueueResource.Tag<Jobs>()(
@@ -239,7 +264,7 @@ class Jobs extends CustomQueueResource.Tag<Jobs>()(
   Job,
   3,
   { urgent: 0, normal: 1, bulk: 2 },
-  { resultSchema: LaneMeta, errorSchema: WorkerErr },
+  { success: LaneMeta, error: WorkerErr },
 )
 ```
 

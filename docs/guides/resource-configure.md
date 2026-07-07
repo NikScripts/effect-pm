@@ -101,9 +101,9 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 
 ```typescript
 const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
-  inputSchema: PhoneSchema,
-  successSchema: Schema.Void,
-  errorSchema: SmsErrorSchema,
+  payload: PhoneSchema,
+  success: Schema.Void,
+  error: SmsErrorSchema,
   effect: (phone) => send(phone),
   concurrency: 5,
 });

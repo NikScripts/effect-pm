@@ -15,7 +15,7 @@ import {
   processEventReadPayload,
   processExecutionEventVoid,
 } from "../processEvent";
-import { resultSchemaOf } from "../processTagSchemas";
+import { successOf } from "../processTagSchemas";
 import * as Store from "../../Store";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreScopeTag } from "./registration";
@@ -55,12 +55,12 @@ export type BuiltInProcessContract<R extends Schema.Top | void = void> =
 
 /** Build the process store contract (optional result schema). @internal */
 export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
-  resultSchema?: R extends Schema.Top ? R : never,
+  success?: R extends Schema.Top ? R : never,
 ) => {
   const eventSchema =
-    resultSchema === undefined
+    success === undefined
       ? processExecutionEventVoid
-      : makeProcessExecutionEvent(resultSchema);
+      : makeProcessExecutionEvent(success);
 
   return Store.contract(
     {
@@ -75,11 +75,11 @@ export const makeProcessStoreContract = <R extends Schema.Top | void = void>(
   );
 };
 
-/** Built-in process store contract for a tag (reads `resultSchema` from tag). @internal */
+/** Built-in process store contract for a tag (reads `success` from tag). @internal */
 export const builtInProcessStoreContract = (
   tag: StoreScopeTag,
 ): BuiltInProcessContract =>
-  makeProcessStoreContract(resultSchemaOf(tag)) as BuiltInProcessContract;
+  makeProcessStoreContract(successOf(tag)) as BuiltInProcessContract;
 
 /** @deprecated Internal flat spec — use {@link builtInProcessStoreContract}. @internal */
 export const builtInProcessStoreSpec = (tag: StoreScopeTag) =>

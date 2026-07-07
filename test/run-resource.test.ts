@@ -117,8 +117,8 @@ describe("RunResource.Service", () => {
   );
 
   class SlowGate extends RunResource.Service<SlowGate>()("@test/SlowGateService", {
-    inputSchema: Schema.String,
-    successSchema: Schema.String,
+    payload: Schema.String,
+    success: Schema.String,
     effect: (s: string) => Effect.succeed(s.toUpperCase()),
     concurrency: 2,
   }) {}
@@ -165,8 +165,8 @@ describe("RunResource.Tag + layer", () => {
 
   it("Tag accepts schema config object", () => {
     const ConfigGate = RunResource.Tag<{ readonly _tag: "ConfigGate" }>()("@test/ConfigGate", {
-      inputSchema: Schema.Number,
-      successSchema: Schema.Number,
+      payload: Schema.Number,
+      success: Schema.Number,
       description: "config-object tag",
     });
     expect(ConfigGate.key).toBe("@test/ConfigGate");

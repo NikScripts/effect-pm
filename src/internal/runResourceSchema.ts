@@ -32,9 +32,9 @@ export const runSpec = <
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 >(
-  inputSchema: I,
-  successSchema: A,
-  errorSchema: E = Schema.Never as unknown as E,
+  payload: I,
+  success: A,
+  error: E = Schema.Never as unknown as E,
 ) => ({
   status: Resource.ref(runGateStatus).annotate({
     description:
@@ -55,7 +55,7 @@ export const runSpec = <
   interrupted: Resource.ref(Schema.Number).annotate({
     description: "Count of runs interrupted while waiting or executing.",
   }),
-  run: Resource.effectFn(successSchema, { payload: inputSchema, error: errorSchema }).annotate({
+  run: Resource.effectFn(success, { payload, error }).annotate({
     description:
       "Acquire a permit, run the gated effect, release the permit — returns the effect result.",
   }),

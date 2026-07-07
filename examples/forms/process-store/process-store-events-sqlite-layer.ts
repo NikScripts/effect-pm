@@ -18,8 +18,8 @@ const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const gateKey = "examples/SqliteBackedGate";
 
 class SqliteDemoGate extends RunResource.Service<SqliteDemoGate>()(gateKey, {
-  inputSchema: Schema.Number,
-  successSchema: Schema.Number,
+  payload: Schema.Number,
+  success: Schema.Number,
   effect: (n: number) => Effect.succeed(n + 1),
   concurrency: 1,
 }) {}

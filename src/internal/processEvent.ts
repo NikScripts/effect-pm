@@ -23,17 +23,17 @@ const runFinishedBase = {
 
 /**
  * Build the execution event union for a process store contract.
- * When `resultSchema` is set, `RunCompleted` carries an optional encoded `result`.
+ * When `success` is set, `RunCompleted` carries an optional encoded `result`.
  *
  * @internal
  */
 export const makeProcessExecutionEvent = <R extends Schema.Top>(
-  resultSchema?: R,
+  success?: R,
 ) => {
   const completedFields =
-    resultSchema === undefined
+    success === undefined
       ? runFinishedBase
-      : { ...runFinishedBase, result: Schema.optional(resultSchema) };
+      : { ...runFinishedBase, result: Schema.optional(success) };
 
   return Schema.Union([
     Schema.TaggedStruct("RunCompleted", completedFields),

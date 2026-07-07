@@ -30,9 +30,10 @@ const layer = Process.layer(LiveScores, {
 - **`Process.serve(Tag, config)`** / **`serveRemote`** — host over RPC.
 - **`Resource.client(Tag)`** — remote handle.
 
-### Tag schemas (result / error)
+### Tag wire schemas (`success` / `error`)
 
-Declare on the tag — positional or config object. **No pipe combinator** (see handoff).
+Declare on the tag — positional or config object. Names match Effect `Resource.Method` slots
+(`payload` / `success` / `error`). Process has no tag-level `payload` (the effect is in layer config).
 
 ```ts
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
@@ -44,17 +45,17 @@ class Health extends Process.Tag<Health>()("app/Health") {}
 // value-returning
 class Prices extends Process.Tag<Prices>()("app/Prices", Price) {}
 
-// value + typed error channel (stamped for RPC / store; wire policy TBD)
+// value + typed error channel
 class PricesE extends Process.Tag<PricesE>()("app/Prices", Price, FetchErr) {}
 
 // config object overload
 class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
-  resultSchema: Price,
-  errorSchema: FetchErr,
+  success: Price,
+  error: FetchErr,
 }) {}
 ```
 
-`Process.result(Schema)` is **deprecated** — use positional `resultSchema` instead.
+`Process.result(Schema)` is **deprecated** — use positional `success` instead.
 
 ### Schedule (still pipeable)
 
@@ -71,7 +72,7 @@ class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule(
 - **Lifecycle:** `start`, `stop`, `runImmediately`.
 - **Observe:** `status` (`status.get` / `status.changes`), `logs.live`, `logs.history`.
 - **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
-- **Result** (when `resultSchema` on tag): `result.get` / `result.changes` — `Option` until first success.
+- **Result** (when `success` on tag): `result.get` / `result.changes` — `Option` until first success.
 
 ## Store
 

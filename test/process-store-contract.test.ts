@@ -65,9 +65,9 @@ describe("Process store contract", () => {
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
   );
 
-  it("Tag stamps resultSchema from positional args", () => {
-    expect(Process.resultSchemaOf(PricedProc)).toBe(Price);
-    expect(Process.errorSchemaOf(PricedErrProc)).toBe(FetchErr);
-    expect(Process.resultSchemaOf(VoidProc)).toBeUndefined();
+  it("Tag stamps success from positional args", () => {
+    expect(Process.successOf(PricedProc)).toBe(Price);
+    expect(Process.errorOf(PricedErrProc)).toBe(FetchErr);
+    expect(Process.successOf(VoidProc)).toBeUndefined();
   });
 });

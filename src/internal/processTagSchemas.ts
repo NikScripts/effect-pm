@@ -1,5 +1,5 @@
 /**
- * Read result / error schemas stamped on {@link Process.Tag} factories.
+ * Wire schemas stamped on {@link Process.Tag} factories (`success` / `error` slots).
  *
  * @module internal/processTagSchemas
  * @internal
@@ -7,34 +7,34 @@
 
 import type { Schema } from "effect";
 
-export const resultSchemaSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Process/resultSchema",
+export const successSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Process/success",
 );
 
-export const errorSchemaSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Process/errorSchema",
+export const errorSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Process/error",
 );
 
 /** @internal */
-export const resultSchemaOf = (tag: unknown): Schema.Top | undefined => {
+export const successOf = (tag: unknown): Schema.Top | undefined => {
   if (
     (typeof tag === "object" || typeof tag === "function") &&
     tag !== null &&
-    resultSchemaSym in tag
+    successSym in tag
   ) {
-    return (tag as { readonly [resultSchemaSym]?: Schema.Top })[resultSchemaSym];
+    return (tag as { readonly [successSym]?: Schema.Top })[successSym];
   }
   return undefined;
 };
 
 /** @internal */
-export const errorSchemaOf = (tag: unknown): Schema.Top | undefined => {
+export const errorOf = (tag: unknown): Schema.Top | undefined => {
   if (
     (typeof tag === "object" || typeof tag === "function") &&
     tag !== null &&
-    errorSchemaSym in tag
+    errorSym in tag
   ) {
-    return (tag as { readonly [errorSchemaSym]?: Schema.Top })[errorSchemaSym];
+    return (tag as { readonly [errorSym]?: Schema.Top })[errorSym];
   }
   return undefined;
 };

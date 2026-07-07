@@ -562,20 +562,20 @@ export const kind = "@nikscripts/effect-pm/QueueResource";
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
-    itemSchema: Schema.Struct<F>,
+    payload: Schema.Struct<F>,
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    itemSchema: Schema.Struct<F>,
+    payload: Schema.Struct<F>,
     options?: { readonly description?: string },
   ): ResourceTag<Self, QueueInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    itemSchema: Schema.Struct<F>,
+    payload: Schema.Struct<F>,
     options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
   ): ResourceTag<Self, QueueInstanceSpec<F>> {
-    const spec = queueSpec(itemSchema);
+    const spec = queueSpec(payload);
     const node = options?.node;
     const tagOptions = { description: options?.description, kind };
     // node rides the inferring call; `makeTag`'s inner overload narrows the tag's node.

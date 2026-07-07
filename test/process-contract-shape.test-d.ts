@@ -15,7 +15,7 @@ const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 // base — observation + lifecycle only
 class Health extends Process.Tag<Health>()("shape/Health") {}
 
-// value-returning — gains a reactive `result` via positional resultSchema
+// value-returning — gains a reactive `result` via positional success
 class Prices extends Process.Tag<Prices>()("shape/Prices", Price) {}
 
 // owns an inline schedule — gains the `schedule` verb group (id optional on windows)
