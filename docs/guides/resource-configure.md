@@ -111,13 +111,14 @@ const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
 });
 
 const SendSmsLive = SendSms.layer.pipe(
-  Layer.provideMerge(Store.layerDefaultMemory),
   Layer.provideMerge(SendSms.configure({ concurrency: 2 })),
 );
 ```
 
-`RunResource.layer` / `Service.layer` require `StoreScopeBridgeTag` — provide {@link Store.layerDefaultMemory}
-at the app root (or a real {@link Store.Service} that overrides it). See [store.md](./store.md#default-store-layerdefaultmemory).
+`RunResource.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
+`Layer.provideMerge(AppStore.layerMemory)` (or SQLite `AppStore.layer({ filename })`) at the app root.
+{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect. See
+[store.md](./store.md#default-store-layerdefaultmemory).
 
 ---
 

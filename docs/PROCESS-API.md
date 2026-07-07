@@ -189,7 +189,7 @@ documented as a compatibility path.
 | Member | Role |
 |--------|------|
 | `RunResource.store(tag)` | Registers built-in `fact` + `state` shapes on an app **`Store.Service`**. |
-| `Store.layerDefaultMemory` | In-memory store bridge for tests and dev — provide at the app root via `Layer.provideMerge`. |
+| `Store.layerDefaultMemory` | In-memory store bridge — merged by **`RunResource.layer` / `serve` / `Service.layer`**; override via `Layer.provideMerge(AppStore.layerMemory)`. |
 | `(yield* store).record(fact)` | Append a run lifecycle fact (`run-resource.run.started` / `.completed` / `.failed`). |
 | `(yield* store).facts(payload?)` | Read persisted facts (optional `limit`, `runId`). |
 | `(yield* store).recordStateChange(change)` | Append a gate state transition row. |

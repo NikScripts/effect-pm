@@ -32,12 +32,17 @@ a concurrent `AppStore.at(tag)` and locks the scoped `EventJournal` (verified on
 dependency** is built in topological order and memoized, so the store builds first and every reader reuses
 the same instance — no race, no forked-fiber trick, no lazy per-event resolution.
 
-### 2. Provision — app root, not baked into the resource layer
+### 2. Provision — app root by default; RunResource merges `layerDefaultMemory`
 
 The resource layer **requires** `StoreScopeBridgeTag` (its `RIn` includes it — no longer `never`). The **app**
-provides one at the root: `layerDefaultMemory` (default) **or** its own `Store.Service` (override). Do **not**
-`Layer.provide(layerDefaultMemory)` *inside* the resource layer — that hard-provides and blocks the app from
-overriding.
+provides one at the root: `layerDefaultMemory` (default) **or** its own `Store.Service` (override).
+
+**RunResource (shipped):** `RunResource.layer` / `serve` / `Service.layer` merge `layerDefaultMemory` via
+`Layer.provideMerge` so gates work out of the box. A real `AppStore` at the app root still **overrides** the
+default by plain merge.
+
+**Process / Queue (open):** do **not** `Layer.provide(layerDefaultMemory)` *inside* the resource layer — that
+hard-provides and blocks override. App provides at root until their cutover lands the RunResource pattern.
 
 ### 3. Tag is the SSOT for wire schemas (`payload`/`success`/`error`)
 
@@ -61,9 +66,9 @@ fact/state union).
 
 ## Who is currently wrong (2026-07-07)
 
-- **RunResource** — `internal/runResourceStoreTap.ts:80` resolves the new store with
-  `Effect.serviceOption(StoreScopeBridgeTag)` + `.at().pipe(Effect.option)`, *and* casts the handle. Both go
-  (see its report).
+- ~~**RunResource** — `internal/runResourceStoreTap.ts` resolves with `serviceOption` + handle cast~~ **Fixed**
+  on run-resource branch: declared dependency, cast-free contract, facet deleted, `layerDefaultMemory` merged
+  into layer entry points.
 - Legacy-facet `serviceOption` calls (`HistoryStore` / `ProcessExecutionStore` / `QueueResourceStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
 - Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.

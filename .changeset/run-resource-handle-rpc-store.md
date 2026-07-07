@@ -7,6 +7,7 @@
 - Gates are no longer callable — use **`handle.run(input)`** or **`Tag.run` / `Service.run`** shortcuts.
 - **`RunResource.Tag`** is a **`Resource.Tag`** with wire schemas (`runGateStatus`, `runSpec`); **`serve` / `serveRemote`** mirror Queue/Process.
 - **`RunResource.store(tag)`** registers built-in run fact + state-history shapes on an app **`Store.Service`**.
+- **`RunResource.layer` / `serve` / `Service.layer`** merge **`Store.layerDefaultMemory`** automatically (override with `Layer.provideMerge(AppStore.layerMemory)`).
 - The engine persists to **`RunResource.store`** / **`Store.layerDefaultMemory`** only — **`RunResourceStore`** facet removed.
 - Observable toolkit handles expose **`Subscribable`** views (`status`, `waiting`, `inFlight`, …).
 - **`RunResource.Service`** takes a single config object (schemas + `effect` + `concurrency`); **`RunResource.Tag`** accepts a schema triplet or config object.

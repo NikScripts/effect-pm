@@ -3,7 +3,7 @@
 **Branch:** `cursor/run-resource-handle-observable-a009`  
 **Integration base:** merge `cursor/integration-result-schema-a3ad` (through `b4bf1de` store-cutover corrections)  
 **Agent:** RunResource owner  
-**Priority:** Low — **RunResource cutover done**; docs/changeset consolidation remain.
+**Priority:** **Done** — RunResource cutover complete; optional platform changeset consolidation remains.
 
 ---
 
@@ -17,29 +17,34 @@
 | Tag wire slots `payload` / `success` / `error` | ✅ | commit `2c8a95e` |
 | `RunResource.store(tag)` | ✅ | `builtInRunResourceStoreContract` (cast-free) |
 | Engine store tap | ✅ | `src/internal/runResourceStoreTap.ts` — Store bridge only (no legacy facet) |
-| Public default store | ✅ | `Store.layerDefaultMemory` — app provides at root |
+| **`RunResourceStore` facet** | ✅ **deleted** | module, ProcessStorage, subpath, tests |
+| Default store on layers | ✅ | `layer` / `serve` / `Service.layer` merge `Store.layerDefaultMemory` (`c6ca217`) |
 | Layer `RIn` | ✅ | `layer` / `serve` / `Service.layer` require `StoreScopeBridgeTag` |
 | Integration tests | ✅ | `test/run-resource.test.ts`, remote HTTP, store suites |
 | Changeset (partial) | ✅ | `.changeset/run-resource-handle-rpc-store.md` |
+| Doc sweep | ✅ | guides, handoffs, inventory, PROCESS-API, STORAGE |
 
 ---
 
-## Remaining work
+## Remaining work (platform / optional — not RunResource blockers)
 
 ### 1. Changeset consolidation (owner / docs agent)
 
-Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide rename/release changeset. Note new requirement: apps must provide `Store.layerDefaultMemory` (or a real `Store.Service`) when composing RunResource layers.
+Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide rename/release changeset. Note:
+`.run` migration, facet removal, and **`layerDefaultMemory` merged into RunResource layer entry points**.
 
-### 2. Doc sweep (mostly done)
+### 2. Optional hardening (explicitly deferred)
 
-- ✅ `docs/CODEBASE-INVENTORY.md` — `payload` / `success` on Service line
-- ✅ Module TSDoc on `RunResource` — store provision section
-- Optional: `docs/STORAGE.md` asymmetry paragraph (Process/Queue still facet-only)
+- **`serve` / `serveRemote` + `Resource.httpServer`** — layer error channel includes `StoreScopeNotRegistered`;
+  httpServer overload still expects `never` (partial fix in `d208c62`).
+- **Write-path buffer** — queue cutover may add bounded buffer daemon; RunResource tap writes synchronously
+  on the run path (acceptable for low-volume facts).
 
-### 3. Optional hardening
+### 3. Product gaps (not bugs — not implemented unless requested)
 
-- **`serve` / `serveRemote` + `Resource.httpServer`** — layer error channel is `StoreScopeNotRegistered`; httpServer overload still expects `never` (cast at call sites today).
-- **Write-path buffer** — queue cutover may add bounded buffer daemon; RunResource tap writes synchronously on the run path (acceptable for low-volume facts).
+- Layer flag for **no store writes** (disable engine persistence).
+- Public **memory options** on default bridge (`maxRows` exists internally, not exported on `layerDefaultMemory`).
+- **`Store.layerFromEventJournal`** / Redis journal adapter.
 
 ---
 
@@ -47,7 +52,6 @@ Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide renam
 
 - Process engine → `Process.store` tap (same declared-dependency pattern)
 - Queue engine cutover
-- Removing legacy `RunResourceStore` facet — ✅ **deleted** (module, ProcessStorage, subpath, tests)
 - RPC fingerprint / buildId handshake
 
 ---
@@ -57,7 +61,7 @@ Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide renam
 ```bash
 pnpm run typecheck
 pnpm exec vitest run test/run-resource.test.ts test/run-resource-remote-http.test.ts \
-  test/run-resource-store-facet.test.ts test/store.test.ts test/store-default.test.ts
+  test/store.test.ts test/store-default.test.ts
 npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts
 ```
 
@@ -71,7 +75,7 @@ npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts
 
 ---
 
-## Review 2026-07-07 (store-cutover corrections — `b4bf1de`)
+## Review 2026-07-07 (store-cutover corrections — `b4bf1de` + `c6ca217`)
 
 Read: [`store-cutover-00-store-core.md`](../store-cutover-00-store-core.md), [`store-cutover-runresource.md`](../store-cutover-runresource.md).
 
@@ -81,18 +85,20 @@ Read: [`store-cutover-00-store-core.md`](../store-cutover-00-store-core.md), [`s
 |----------|-------------------------|
 | Lazy `serviceOption` per write | **Rejected** — removed |
 | Forked-fiber `storeTap.ts` helper | **Discarded** — same violation dressed up |
-| Build-time resolve deadlocks | Fixed by **declared dependency** + app-root `layerDefaultMemory` (topological build, memoized bridge) |
+| Build-time resolve deadlocks | Fixed by **declared dependency** + memoized bridge |
+| App must always provide store at root | **RunResource:** `layerDefaultMemory` merged into layer entry points via `provideMerge`; override at app root still works |
 
 ### Implemented in this branch
 
 - `runResourceStoreTap.ts`: `yield* StoreScopeBridgeTag` once; `yield* bridge.at(scopeKey, contract)`; no `serviceOption`, no handle cast
 - `runResourceStoreSpec.ts`: cast-free contract (mirrors queue)
-- `Store.layerDefaultMemory` exported publicly
-- Tests/examples updated: `layer.pipe(Layer.provideMerge(Store.layerDefaultMemory))`
+- `Store.layerDefaultMemory` exported publicly; merged into `RunResource.layer` / `serve` / `Service.layer`
+- **`RunResourceStore` facet fully removed**
+- Tests/examples/docs aligned with baked-default policy
 
 ### Open decision for owner (deferred)
 
-None — Store-only persistence; **`RunResourceStore` facet fully removed**.
+None for RunResource store cutover.
 
 ---
 

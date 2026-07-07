@@ -120,18 +120,23 @@ Oldest journal rows per `scopeKey` are deleted after each append when SQL is act
 
 ## Default store (`layerDefaultMemory`)
 
-Resource engines (`RunResource`, and eventually Process / Queue) require `StoreScopeBridgeTag` in
-the environment. Provide the baked-in default at the **app root** when you do not compose a custom
-{@link Store.Service}:
+Resource engines require `StoreScopeBridgeTag` in the environment.
+
+**RunResource:** {@link RunResource.layer}, {@link RunResource.serve}, and {@link RunResource.Service.layer}
+merge {@link Store.layerDefaultMemory} automatically via `Layer.provideMerge`. Override with a real
+`AppStore.layerMemory` / `AppStore.layer({ filename })` at the app root — plain merge wins over the default.
+
+**Process / Queue (until their cutover):** provide {@link Store.layerDefaultMemory} at the app root when you
+do not compose a custom {@link Store.Service}:
 
 ```ts
 import * as Store from "@nikscripts/effect-pm/Store";
 
-const AppLayer = MyRunGate.layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+const AppLayer = MyProcess.layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
 ```
 
-A real `AppStore.layerMemory` / `AppStore.layer({ filename })` **overrides** the default by plain
-layer merge — do not bake `layerDefaultMemory` inside resource layers.
+**`RunResource.make`:** still an `Effect`, not a layer — provide {@link Store.layerDefaultMemory} on the
+effect (see `test/run-resource.test.ts`).
 
 Run gates register built-in fact/state shapes with {@link RunResource.store}:
 

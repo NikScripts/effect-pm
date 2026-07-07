@@ -308,9 +308,10 @@ Live counters on toolkit handles (`status`, `waiting`, `inFlight`, …) via **`S
 
 ### Engine persistence (when Store composed)
 
-The gate engine writes automatically when **`RunResource.store(tag)`** on a **`Store.Service`** or
-**`Store.layerDefaultMemory`** at the app root is in context. Writes use **`ProcessStore.catchErrorAndLog`**
-so storage failures do not fail gated work.
+The gate engine writes automatically when **`StoreScopeBridgeTag`** is in context. **`RunResource.layer` /
+`serve` / `Service.layer`** merge **`Store.layerDefaultMemory`** by default; override with
+**`Layer.provideMerge(AppStore.layerMemory)`**. Writes use **`ProcessStore.catchErrorAndLog`** so storage
+failures do not fail gated work.
 
 ### Store shapes (built-in contract)
 
@@ -435,7 +436,8 @@ registered by **`RunResource.store(tag)`**.
 ### Registration
 
 - **`RunResource.store(tag)`** — registers `fact` + `state` shapes on an app **`Store.Service`**.
-- **`Store.layerDefaultMemory`** — in-memory bridge for tests/dev; provide at app root via `Layer.provideMerge`.
+- **`Store.layerDefaultMemory`** — in-memory bridge merged by **`RunResource.layer` / `serve` / `Service.layer`**;
+  override at app root via `Layer.provideMerge(AppStore.layerMemory)`.
 
 ### Engine tap
 

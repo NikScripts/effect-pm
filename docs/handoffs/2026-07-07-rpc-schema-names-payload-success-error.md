@@ -107,8 +107,8 @@ Coordinate lane arity + `{ payload, success, error }` options bag (see old hando
 |--|--|--|
 | Tag config schemas | `inputSchema` / `successSchema` / `errorSchema` → **rename to payload/success/error** | `resultSchema` / `errorSchema` → **success/error** |
 | `*.store(tag)` contract | ✅ built-in facts + state | ✅ built-in `event` union (result-aware) |
-| Engine auto-write to new Store | ✅ declared-dependency tap + `Store.layerDefaultMemory` | ❌ still `ProcessExecutionStore` only |
-| Engine auto-write to legacy facet | ✅ `RunResourceStore` | ✅ `ProcessExecutionStore` |
+| Engine auto-write to new Store | ✅ declared-dependency tap + merged `Store.layerDefaultMemory` | ❌ still `ProcessExecutionStore` only |
+| Engine auto-write to legacy facet | ❌ **`RunResourceStore` deleted** | ✅ `ProcessExecutionStore` |
 | `error` schema behavior | on RPC wire via `runSpec` | stamped only |
 
 Rename agent: **do not** claim unified platform story until Process engine tap matches RunResource.
