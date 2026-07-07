@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
-import { StoreScopeBridgeTag, type StoreScopeBridge } from "../src/internal/store/bridge";
+import { Storage, type StorageApi } from "../src/Store";
 import { makeRunResourceStoreTap } from "../src/internal/runResourceStoreTap";
 import type { RunGateStatus } from "../src/internal/runResource";
 
@@ -18,7 +18,7 @@ const failingBridge = {
       stateHistory: () => Effect.succeed([]),
     }),
   changes: () => Effect.die(new Error("unused in tap tests")),
-} as unknown as StoreScopeBridge;
+} as unknown as StorageApi;
 
 const previousStatus: RunGateStatus = {
   resourceId: scopeKey,
@@ -64,7 +64,7 @@ describe("makeRunResourceStoreTap", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(StoreScopeBridgeTag, failingBridge),
+          Layer.succeed(Storage, failingBridge),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),

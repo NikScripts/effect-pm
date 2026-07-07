@@ -1,14 +1,14 @@
 /**
  * Persistence tap for the RunResource gate engine — writes to the Store bridge only.
  *
- * The engine targets {@link builtInRunResourceStoreContract} via {@link StoreScopeBridgeTag}.
+ * The engine targets {@link builtInRunResourceStoreContract} via {@link Storage}.
  *
  * @module internal/runResourceStoreTap
  * @internal
  */
 
 import { Effect, Ref } from "effect";
-import { StoreScopeBridgeTag } from "./store/bridge";
+import { Storage } from "../Store";
 import { catchErrorAndLog } from "./store/helpers";
 import type { StoreScopeNotRegistered } from "./store/errors";
 import type { RunGateStatus } from "./runResource";
@@ -72,9 +72,9 @@ const makeRecordWrite =
 export const makeRunResourceStoreTap = (
   resourceId: string,
   scopeKey: string,
-): Effect.Effect<RunResourceStoreTap, StoreScopeNotRegistered, StoreScopeBridgeTag> =>
+): Effect.Effect<RunResourceStoreTap, StoreScopeNotRegistered, Storage> =>
   Effect.gen(function* () {
-    const bridge = yield* StoreScopeBridgeTag;
+    const bridge = yield* Storage;
     const contract = builtInRunResourceStoreContract(scopeTagForKey(scopeKey));
     const store: RunStoreHandle = yield* bridge.at(scopeKey, contract);
     const recordWrite = makeRecordWrite(resourceId);

@@ -10,13 +10,12 @@ import { CustomQueueResource } from "../../../src";
 
 const JobSchema = Schema.Struct({ id: Schema.String, kind: Schema.String });
 
-/** Tag factory: `(id, schema, levelCount, namedLevels?)` or `(id, schema, levelNames[])`. */
-class Jobs extends CustomQueueResource.Tag<Jobs>()(
-  "examples/CustomJobs",
-  JobSchema,
-  4,
-  { interactive: 0, standard: 2, batch: 3 },
-) {}
+/** Tag factory: config object — `{ payload, levelCount, namedLevels? }`. */
+class Jobs extends CustomQueueResource.Tag<Jobs>()("examples/CustomJobs", {
+  payload: JobSchema,
+  levelCount: 4,
+  namedLevels: { interactive: 0, standard: 2, batch: 3 },
+}) {}
 
 const program = Effect.gen(function* () {
   const queue = yield* Jobs;

@@ -2,7 +2,7 @@ import { it, describe, expect } from "@effect/vitest";
 import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
-import { StoreScopeBridgeTag, type StoreScopeBridge } from "../src/internal/store/bridge";
+import { Storage, type StorageApi } from "../src/Store";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
 
@@ -236,7 +236,7 @@ describe("RunResource.make — default store bridge", () => {
       });
       yield* gate.run(1);
 
-      const bridge = yield* StoreScopeBridgeTag;
+      const bridge = yield* Storage;
       const store = yield* bridge.at(scopeKey, builtInRunResourceStoreContract({ key: scopeKey }));
       const facts = yield* store.facts();
       expect(facts.map((row) => row.type).sort()).toEqual([
@@ -257,7 +257,7 @@ describe("RunResource.make — default store bridge", () => {
       });
       yield* gate.run(-1).pipe(Effect.flip);
 
-      const bridge = yield* StoreScopeBridgeTag;
+      const bridge = yield* Storage;
       const failedScope = `${scopeKey}/failed`;
       const store = yield* bridge.at(
         failedScope,
@@ -288,7 +288,7 @@ describe("RunResource.layer — baked default store bridge", () => {
       const gate = yield* BakedGate;
       yield* gate.run(1);
 
-      const bridge = yield* StoreScopeBridgeTag;
+      const bridge = yield* Storage;
       const store = yield* bridge.at(
         BakedGate.key,
         builtInRunResourceStoreContract({ key: BakedGate.key }),
@@ -426,7 +426,7 @@ describe("RunResource.layer — store failure isolation", () => {
     Schema.Number,
   );
 
-  const failingBridgeLayer = Layer.succeed(StoreScopeBridgeTag, {
+  const failingBridgeLayer = Layer.succeed(Storage, {
     at: () =>
       Effect.succeed({
         record: () =>
@@ -437,7 +437,7 @@ describe("RunResource.layer — store failure isolation", () => {
         stateHistory: () => Effect.succeed([]),
       }),
     changes: () => Effect.die(new Error("unused")),
-  } as unknown as StoreScopeBridge);
+  } as unknown as StorageApi);
 
   const live = RunResource.layer(FailingBridgeGate, {
     effect: (n: number) => Effect.succeed(n + 1),

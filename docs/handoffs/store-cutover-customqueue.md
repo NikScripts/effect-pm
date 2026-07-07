@@ -1,26 +1,25 @@
 # Store cutover — CustomQueueResource
 
-Prereq: `store-cutover-00-store-core.md`. Context: `result-schema-and-rpc-validation.md` (§C — the CQR
-`payload`/`success`/`error` triplet is flagged **TBD with the CQR agent**).
+Prereq: `store-cutover-00-store-core.md`.
 
-## Tag wire schemas (open — needs your call)
+## Tag API — OWNER DECISION LOCKED (2026-07-06)
 
-CustomQueue's `Tag` factory must land the same three wire slots after the required `payload`, but arity
-interacts with lane count / named levels. The handoff proposes a trailing options bag:
+**CQR does NOT take the `success`/`error` triplet.** It is **config-object only** — no positional wire
+slots, no `success`/`error`. The triplet is a QueueResource concern; CQR's arity (lanes) makes positional
+wire slots a non-starter, and the owner ruled it out.
 
 ```ts
-CustomQueueResource.Tag<Jobs>()(
-  "@app/Jobs",
-  Job,                         // payload (required)
-  3,                           // lane count
-  { urgent: 0, normal: 1, bulk: 2 },
-  { success: LaneMeta, error: WorkerErr },   // trailing wire slots
-)
+// CQR Tag: config object only, no success/error.
+CustomQueueResource.Tag<Jobs>()("@app/Jobs", {
+  payload: Job,
+  levelCount: 3,
+  namedLevels: { urgent: 0, normal: 1, bulk: 2 },
+})
 ```
 
-- [ ] Decide the canonical arity: where do `success`/`error` sit relative to lane count / named levels?
-      (Open question #1 in the result-schema doc.) Prefer the trailing options bag over more positional args.
-- [ ] Config-object overload parity with QueueResource (`{ payload, success?, error?, … }` + lane config).
+- [ ] Land the config-object-only `Tag` (no `success`/`error` slots, no positional-triplet overload).
+- [ ] Supersedes the earlier "trailing `{ success?, error? }` bag" proposal (result-schema doc §C / sync
+      cross-cutting #6) — dropped.
 
 ## Store cutover — mostly free
 

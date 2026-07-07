@@ -199,50 +199,8 @@ export const customQueueControlSpec = {
   },
 };
 
-/** Tag options beyond lane config (description, node). @public */
-export type CustomQueueTagOptions = {
-  readonly description?: string;
-};
-
-/** Lane config resolved from tag factory positional args. @internal */
+/** Lane config for a custom queue tag. @internal */
 type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
-
-const namedLevelsFromNames = (names: readonly string[]): Record<string, number> =>
-  Object.fromEntries(names.map((name, index) => [name, index]));
-
-const isTagOptions = (value: object): value is CustomQueueTagOptions & { readonly node?: NodeKey<unknown> } =>
-  "description" in value || "node" in value;
-
-const resolveTagLevelConfig = (
-  levelCountOrNames: number | readonly string[],
-  fourth?: Readonly<Record<string, number>> | (CustomQueueTagOptions & { readonly node?: NodeKey<unknown> }),
-  fifth?: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> },
-): {
-  readonly levelConfig: CustomQueueTagLevelConfig;
-  readonly tagOptions: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> };
-} => {
-  if (typeof levelCountOrNames === "number") {
-    const namedLevels =
-      fourth !== undefined && !isTagOptions(fourth) ? fourth : {};
-    const tagOptions =
-      fourth !== undefined && isTagOptions(fourth)
-        ? fourth
-        : (fifth ?? {});
-    return {
-      levelConfig: { levelCount: levelCountOrNames, namedLevels },
-      tagOptions,
-    };
-  }
-  const names = levelCountOrNames.filter((name) => name.length > 0);
-  return {
-    levelConfig: {
-      levelCount: Math.max(1, names.length),
-      namedLevels: namedLevelsFromNames(names),
-    },
-    tagOptions:
-      fourth !== undefined && isTagOptions(fourth) ? fourth : {},
-  };
-};
 
 /**
  * Build a custom-queue **instance** spec: shared {@link customQueueControlSpec} plus
@@ -350,57 +308,51 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
 export const kind = "@nikscripts/effect-pm/CustomQueueResource";
 
+/**
+ * CustomQueue `Tag` config — **config-object only** (owner decision 2026-07-06): CQR's lane arity
+ * makes positional wire slots a non-starter, and CQR does **not** take the `success`/`error` triplet
+ * (that is a QueueResource concern). `payload` is the item schema; `levelCount` is the number of
+ * priority lanes; `namedLevels` maps names → lane indices.
+ *
+ * @public
+ */
+export interface CustomQueueTagConfig<F extends Schema.Struct.Fields> {
+  readonly payload: Schema.Struct<F>;
+  readonly levelCount: number;
+  readonly namedLevels?: Readonly<Record<string, number>>;
+  readonly description?: string;
+  readonly node?: NodeKey<unknown>;
+}
+
 export const customQueueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
-    itemSchema: Schema.Struct<F>,
-    levelCount: number,
-    namedLevels: Readonly<Record<string, number>> | undefined,
-    options: CustomQueueTagOptions & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
-  function build<F extends Schema.Struct.Fields, HSelf>(
-    key: string,
-    itemSchema: Schema.Struct<F>,
-    levelNames: readonly string[],
-    options: CustomQueueTagOptions & { readonly node: NodeKey<HSelf> },
+    config: CustomQueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    itemSchema: Schema.Struct<F>,
-    levelCount: number,
-    namedLevels?: Readonly<Record<string, number>>,
-    options?: CustomQueueTagOptions,
+    config: CustomQueueTagConfig<F>,
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    itemSchema: Schema.Struct<F>,
-    levelNames: readonly string[],
-    options?: CustomQueueTagOptions,
-  ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
-  function build<F extends Schema.Struct.Fields>(
-    key: string,
-    itemSchema: Schema.Struct<F>,
-    levelCountOrNames: number | readonly string[],
-    fourth?:
-      | Readonly<Record<string, number>>
-      | (CustomQueueTagOptions & { readonly node?: NodeKey<unknown> }),
-    fifth?: CustomQueueTagOptions & { readonly node?: NodeKey<unknown> },
+    config: CustomQueueTagConfig<F>,
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>> {
-    const { levelConfig, tagOptions } = resolveTagLevelConfig(
-      levelCountOrNames,
-      fourth,
-      fifth,
-    );
-    const { description, node, ...rest } = tagOptions;
-    const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
-    void rest;
-    const tag =
-      node === undefined
-        ? Resource.Tag<Self>()(key, spec, { description, kind })
-        : Resource.Tag<Self>()(key, spec, { description, kind, node });
+    const levelConfig: CustomQueueTagLevelConfig = {
+      levelCount: config.levelCount,
+      namedLevels: config.namedLevels ?? {},
+    };
+    const spec = customQueueSpec(config.payload, levelConfig) as CustomQueueInstanceSpec<F>;
+    const base =
+      config.node === undefined
+        ? Resource.Tag<Self>()(key, spec, { description: config.description, kind })
+        : Resource.Tag<Self>()(key, spec, {
+            description: config.description,
+            kind,
+            node: config.node,
+          });
     // Readiness from the queue's own status (SSOT): ready iff the worker pool is running.
     // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
-    return Resource.withReadiness(tag, (svc) =>
+    return Resource.withReadiness(base, (svc) =>
       Effect.map(svc.status.get, (status) => ({
         ready: status.phase === "running",
         ...(status.phase === "running"

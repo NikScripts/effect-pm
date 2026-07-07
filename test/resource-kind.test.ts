@@ -12,7 +12,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 
 class Q extends QueueResource.Tag<Q>()("kindtest/Q", Item) {}
 class P extends Process.Tag<P>()("kindtest/P") {}
-class C extends CustomQueueResource.Tag<C>()("kindtest/C", Item, 3) {}
+class C extends CustomQueueResource.Tag<C>()("kindtest/C", { payload: Item, levelCount: 3 }) {}
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}
 class Bare extends Resource.Tag<Bare>()("kindtest/Bare", {
   ping: Resource.effect(Schema.String),
