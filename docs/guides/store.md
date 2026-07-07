@@ -126,6 +126,38 @@ const stream = yield* Store.changes("thermo");
 
 Streams from `EventJournal.changes`, filtered to the scope.
 
+## Engine authoring
+
+Toolkit engines resolve store handles through **`Store.Storage`** — a defaulted service. Merge
+`Store.layerDefaultMemory` into your layer (or let the app override with `Layer.provideMerge`).
+
+```ts
+import * as Store from "@nikscripts/effect-pm/Store";
+import { Effect, Layer } from "effect";
+
+// At layer build — declared dependency, never serviceOption
+const program = Effect.gen(function* () {
+  const store = yield* Store.withDefault(scopeKey, myContract);
+  yield* store.record(row);
+});
+
+// Bake default into a custom resource layer
+const myLayer = baseLayer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+
+// Low-level (when you need the bridge directly)
+Effect.gen(function* () {
+  const bridge = yield* Store.Storage;
+  const store = yield* bridge.at(scopeKey, contract);
+});
+```
+
+| API | Use when |
+|-----|----------|
+| `Store.withDefault` | Always record — default store materializes the scope |
+| `Store.withStorage` | Opt-in — fails `StoreScopeNotRegistered` if scope not registered |
+| `Store.Storage` | Custom engine plumbing; same bridge app stores provide |
+| `Store.layerDefaultMemory` | Toolkit layer merge — Process / Queue pattern |
+
 ## Examples
 
 - `examples/forms/store/store-memory.ts`

@@ -6,8 +6,8 @@ the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) 
 
 ## Done and on the integration branch
 
-- **Store Stage 1 — default in-memory backing.** `layerDefaultMemory` (`internal/store/scopeBridge.ts`,
-  `buildDefaultScopeBridge`) provides `StoreScopeBridgeTag` from one in-memory `EventJournal`, materializing
+- **Store Stage 1 — default in-memory backing.** `layerDefaultMemory` (`Store.ts`,
+  `buildDefaultScopeBridge`) provides {@link Storage} from one in-memory `EventJournal`, materializing
   any scope on demand. `store-default.test.ts` proves it. **This is the always-present default** — see the
   resolution decision below.
 - **Precise handle resolution (tightening).** `bridge.at` is generic (`at<Input>(scopeKey, input)` →
@@ -20,10 +20,10 @@ the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) 
 
 The store is **always in context**, exactly like `Clock` / `Logger` / `Random`: `layerDefaultMemory` is the
 default (in-memory), a real `Store.Service` overrides it. So **there is no "is there a store?" question** —
-and therefore **no `Effect.serviceOption(StoreScopeBridgeTag)` anywhere, no `Option.match`, no no-op branch.**
+and therefore **no `Effect.serviceOption(Storage)` anywhere, no `Option.match`, no no-op branch.**
 
-- Engines resolve the store as a **plain declared dependency**: `const bridge = yield* StoreScopeBridgeTag`.
-  Because it is always provided, the `yield*` always succeeds.
+- Engines resolve the store as a **plain declared dependency**: `yield* Storage` or
+  `yield* Store.withDefault(scopeKey, contract)`. Because it is always provided, the `yield*` always succeeds.
 - "No store wired" is not `Option.none` — it is the default implementation doing its thing.
 - **Emit path never sniffs.** Resolve once (as a dependency), emit unconditionally.
 
@@ -35,14 +35,14 @@ the same instance — no race, no forked-fiber trick, no lazy per-event resoluti
 ### 2. Provision — app root by default; Process toolkit exception
 
 **Default (Queue, RunResource, CustomQueue — pending cutover):** the resource layer **requires**
-`StoreScopeBridgeTag` in its dependency graph. The **app** provides one at the root:
+`Storage` in its dependency graph. The **app** provides one at the root:
 `layerDefaultMemory` (default) **or** its own `Store.Service` (override). Do **not** bake
 `layerDefaultMemory` into those resource layers until the module owner approves the override story.
 
 **Process toolkit (shipped on `cursor/process-store-cutover-a3ad`):** `Process.layer` / `serve` /
 `serveRemote` merge `layerDefaultMemory` internally via `withDefaultMemory`. Apps override at the
 root with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))` (later layer wins on
-`StoreScopeBridgeTag`). `RIn` for user deps stays `R` only.
+`Storage`). `RIn` for user deps stays `R` only.
 
 ### 3. Tag is the SSOT for wire schemas (`payload`/`success`/`error`)
 
@@ -60,14 +60,14 @@ fact/state union).
 - **Cast removal.** With the tightening, `... as BuiltInXContract` is unnecessary. Mirror
   `builtInQueueStoreContract` (cast-free). `processStoreSpec.ts` still has `... as BuiltInProcessContract` —
   delete it; RunResource's contract likewise.
-- **No `serviceOption` on `StoreScopeBridgeTag`.** Resolve it as a declared dependency (§1). (`serviceOption`
+- **No `serviceOption` on `Storage`.** Resolve it as a declared dependency (§1). (`serviceOption`
   is still correct for the **durability** plane — `DurableQueueStore` — and irrelevant for the legacy facets
   being deleted.)
 
 ## Who is currently wrong (2026-07-07)
 
 - **RunResource** — `internal/runResourceStoreTap.ts:80` resolves the new store with
-  `Effect.serviceOption(StoreScopeBridgeTag)` + `.at().pipe(Effect.option)`, *and* casts the handle. Both go
+  `Effect.serviceOption(Storage)` + `.at().pipe(Effect.option)`, *and* casts the handle. Both go
   (see its report).
 - Legacy-facet `serviceOption` calls (`HistoryStore` / `QueueResourceStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.

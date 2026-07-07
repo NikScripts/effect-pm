@@ -27,6 +27,23 @@
  * {@link changes} streams {@link StoreChangeEvent} on every successful append (operator plumbing).
  * {@link retention} caps row count per registration — oldest rows drop after each append.
  *
+ * ## Engine authoring
+ *
+ * Toolkit engines (Process, Queue, RunResource, custom resources) resolve store handles through
+ * {@link Storage} — a **defaulted service** always in context when {@link layerDefaultMemory} is
+ * merged (or when an app {@link Service} overrides it). Declare it as a dependency; never
+ * `Effect.serviceOption`.
+ *
+ * - {@link withDefault} — always-on observability (`record` unconditionally).
+ * - {@link withStorage} — opt-in when the app registered the scope on a custom store.
+ * - `yield* Storage` then `bridge.at(scopeKey, contract)` — low-level; prefer the façades.
+ *
+ * Bake the default into a resource layer:
+ *
+ * ```ts
+ * myLayer.pipe(Layer.provideMerge(Store.layerDefaultMemory))
+ * ```
+ *
  * @example Shape-first contract
  * ```ts
  * import * as Store from "@nikscripts/effect-pm/Store";
@@ -128,20 +145,30 @@ export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent } fro
 // ============================================================================
 //
 // The `Storage` service is co-located with its layer builders here (Effect's
-// service-with-layers pattern, like `EventJournal` holds the tag + `layerMemory`). Internal
-// store modules stay one-directional: they consume the pure `StorageApi` type from
-// `./internal/store/bridge` and never import this tag value.
+// service-with-layers pattern, like `EventJournal` holds the tag + `layerMemory`).
 
 /**
- * The storage service every store handle resolves through — an app {@link Service} layer, or the
- * baked-in in-memory default. Carries the (internal) {@link StorageApi} scope bridge.
+ * Scope bridge every store handle resolves through — provided by an app {@link Service} layer or
+ * {@link layerDefaultMemory}. Toolkit and third-party engines declare this as a dependency and
+ * resolve handles via {@link withDefault} / {@link withStorage} (preferred) or `bridge.at`.
  *
- * @internal
+ * @example Engine — resolve once at layer build
+ * ```ts
+ * const store = yield* Store.withDefault(tag.key, builtInMyStoreContract(tag));
+ * yield* store.record(event);
+ * ```
+ *
+ * @public
  */
 export class Storage extends Context.Service<Storage, StorageApi>()(
   "@nikscripts/effect-pm/Store/Storage",
 ) {}
 
+/**
+ * API carried by {@link Storage}: materialize a typed handle for a `scopeKey` + contract.
+ *
+ * @public
+ */
 export type { StorageApi } from "./internal/store/bridge";
 
 /** Layer attachments shared by aggregate and standalone store classes. @internal */
@@ -395,11 +422,12 @@ const applyStoreDefaultLogLevel = <
 };
 
 /**
- * The baked-in default store: provides {@link Storage} from a process-local in-memory journal so
- * `Tag.store` / `Resource.store` resolve with **no app {@link Service} provided**. An app store
- * provides the same tag and overrides this by plain layer composition.
+ * Baked-in default store layer: provides {@link Storage} from a process-local in-memory
+ * `EventJournal`. Materializes any scope on demand so {@link withDefault} never fails when this
+ * layer is in context. Merge into toolkit layers; apps override with `Layer.provideMerge` and a
+ * registered {@link Service}.
  *
- * @internal
+ * @public
  */
 export const layerDefaultMemory: Layer.Layer<Storage> = Layer.unwrap(
   Effect.map(EventJournal.EventJournal, (journal) =>
@@ -881,6 +909,15 @@ export const register = <
 export declare namespace Store {
   /** @public */
   export type Contract<C extends StoreContractValue = StoreContractValue> = C;
+
+  /** @public */
+  export { Storage };
+
+  /** @public */
+  export type { StorageApi };
+
+  /** @public */
+  export { layerDefaultMemory };
 
   /** @public */
   export type HandleOf<C extends StoreContractValue> = StoreHandleFromContract<C>;
