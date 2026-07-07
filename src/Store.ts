@@ -76,6 +76,7 @@ import {
   type StoreServiceClass,
   type StoreTagClass,
 } from "./internal/store/defineStore";
+import { layerDefaultMemory } from "./internal/store/scopeBridge";
 import { StoreScopeNotRegistered, StoreChangeEvent, type StoreJournalDecodeError } from "./internal/store/errors";
 import {
   makeRegistration,
@@ -440,6 +441,15 @@ export const logLevelErrorDefault = withDefaultLogLevel("Error");
 
 /** @public */
 export const logLevelNoneDefault = withDefaultLogLevel("None");
+
+/**
+ * Default in-memory store bridge — materializes any scope on demand. Provide at the app root when
+ * composing resource layers that persist run/process/queue events. A {@link Service.layer} overrides
+ * this by plain layer merge.
+ *
+ * @public
+ */
+export { layerDefaultMemory };
 
 // ============================================================================
 // Standalone + tag attachment

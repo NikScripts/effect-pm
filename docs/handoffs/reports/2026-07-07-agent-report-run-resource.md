@@ -1,9 +1,9 @@
 # Agent report: RunResource
 
-**Branch:** `cursor/run-resource-handle-observable-a009` (includes RunResource handle/RPC/store work)  
-**Integration base:** merge `cursor/integration-result-schema-a3ad` before work  
+**Branch:** `cursor/run-resource-handle-observable-a009`  
+**Integration base:** merge `cursor/integration-result-schema-a3ad` (through `b4bf1de` store-cutover corrections)  
 **Agent:** RunResource owner  
-**Priority:** Low — **most work is done**; this agent finishes gaps and verifies.
+**Priority:** Low — **RunResource cutover done**; docs/changeset consolidation remain.
 
 ---
 
@@ -15,48 +15,40 @@
 | Subscribable observation | ✅ | `status`, `waiting`, `inFlight`, … |
 | RPC `layer` / `serve` / `serveRemote` | ✅ | `runSpec`, `buildRunImpl` |
 | Tag wire slots `payload` / `success` / `error` | ✅ | commit `2c8a95e` |
-| `RunResource.store(tag)` | ✅ | `builtInRunResourceStoreContract` |
-| Engine store tap | ✅ (stopgap) | `src/internal/runResourceStoreTap.ts` (legacy facet + Store; lazy bridge — migrate to `storeTap.ts`) |
-| Integration tests | ✅ | `test/run-resource.test.ts` (ProcessStorage + Store auto-write) |
-| Remote HTTP test | ✅ | `test/run-resource-remote-http.test.ts` |
+| `RunResource.store(tag)` | ✅ | `builtInRunResourceStoreContract` (cast-free) |
+| Engine store tap | ✅ | `src/internal/runResourceStoreTap.ts` — declared `StoreScopeBridgeTag`, resolve once at tap build, dual-write facet + Store |
+| Public default store | ✅ | `Store.layerDefaultMemory` — app provides at root |
+| Layer `RIn` | ✅ | `layer` / `serve` / `Service.layer` require `StoreScopeBridgeTag` |
+| Integration tests | ✅ | `test/run-resource.test.ts`, remote HTTP, store suites |
 | Changeset (partial) | ✅ | `.changeset/run-resource-handle-rpc-store.md` |
 
 ---
 
 ## Remaining work
 
-### 1. Consume integration branch Store typing fix
+### 1. Changeset consolidation (owner / docs agent)
 
-Integration commit `4597ee1` tightens `bridge.at` / `Tag.store` so consumers get `StoreHandleOf<C>` without casts.
+Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide rename/release changeset. Note new requirement: apps must provide `Store.layerDefaultMemory` (or a real `Store.Service`) when composing RunResource layers.
 
-- **File:** `src/internal/runResourceStoreTap.ts` — may drop `as unknown as StoreHandleFromContract<…>` after merge.
-- **Verify:** `test/store.test.ts`, `test/store-default.test.ts`.
+### 2. Doc sweep (mostly done)
 
-### 2. Doc sweep (stale names)
+- ✅ `docs/CODEBASE-INVENTORY.md` — `payload` / `success` on Service line
+- ✅ Module TSDoc on `RunResource` — store provision section
+- Optional: `docs/STORAGE.md` asymmetry paragraph (Process/Queue still facet-only)
 
-Grep and fix any remaining `inputSchema` / `successSchema` / `RunGate` / callable `gate(`:
+### 3. Optional hardening
 
-- `docs/CODEBASE-INVENTORY.md` — RunResource Service line still mentions `inputSchema` (as of pre-report tree)
-- `docs/guides/resource-configure.md` — confirm `payload` / `success` / `error`
-- Examples under `examples/forms/resource/`
-
-### 3. Changeset consolidation
-
-Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide rename/release changeset (see Docs + release report). Avoid two conflicting beta notes.
-
-### 4. Optional hardening
-
-- **`serve` / `serveRemote` casts** — `Layer.unwrap` + casts mirror Process; revisit only if typecheck improves upstream.
-- **SQLite example** — `examples/forms/process-store/process-store-events-sqlite-layer.ts` already logs run facts; no blocker.
+- **`serve` / `serveRemote` + `Resource.httpServer`** — layer error channel is `StoreScopeNotRegistered`; httpServer overload still expects `never` (cast at call sites today).
+- **Write-path buffer** — queue cutover may add bounded buffer daemon; RunResource tap writes synchronously on the run path (acceptable for low-volume facts).
 
 ---
 
 ## Out of scope (other agents)
 
-- Process engine → `Process.store` tap
-- Queue `itemSchema` → `payload` rename
+- Process engine → `Process.store` tap (same declared-dependency pattern)
+- Queue engine cutover
+- Removing legacy `RunResourceStore` facet (**owner decision** — see below)
 - RPC fingerprint / buildId handshake
-- Removing legacy `RunResourceStore` facet (ProcessStorage still depends on it)
 
 ---
 
@@ -65,7 +57,7 @@ Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide renam
 ```bash
 pnpm run typecheck
 pnpm exec vitest run test/run-resource.test.ts test/run-resource-remote-http.test.ts \
-  test/run-resource-store-facet.test.ts test/store.test.ts
+  test/run-resource-store-facet.test.ts test/store.test.ts test/store-default.test.ts
 npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts
 ```
 
@@ -73,41 +65,37 @@ npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts
 
 ## Critical notes
 
-1. **`RunResource.make`** uses the observable engine internally but exposes **`.run` only** (no Subscribables on public handle). Documented in module TSDoc — keep accurate.
+1. **`RunResource.make`** uses the observable engine internally but exposes **`.run` only** (no Subscribables on public handle).
 2. **Do not rename** persisted fact fields (`run-resource.run.*`) or `RunGateStatus` counters — only tag config uses `payload` / `success` / `error`.
+3. **Store provision:** compose `Store.layerDefaultMemory` at the **app root** via `Layer.provideMerge` — do **not** bake it into resource layers (store-cutover §2).
 
 ---
 
-## Review 2026-07-07 (post store-cutover merge)
+## Review 2026-07-07 (store-cutover corrections — `b4bf1de`)
 
-Read: [`integration-sync-2026-07-07.md`](../integration-sync-2026-07-07.md), [`store-cutover-00-store-core.md`](../store-cutover-00-store-core.md), [`store-cutover-runresource.md`](../store-cutover-runresource.md).
+Read: [`store-cutover-00-store-core.md`](../store-cutover-00-store-core.md), [`store-cutover-runresource.md`](../store-cutover-runresource.md).
 
-### Corrections to this report
+### Policy shift (supersedes earlier `storeTap.ts` plan)
 
-| Prior claim | Updated position |
-|-------------|------------------|
-| Lazy bridge at write time is long-term | **Stopgap only.** Owner preference + store-core §2: migrate to shared `internal/store/storeTap.ts` (eager resolve once in forked fiber). |
-| Engine store tap ✅ done | **Feature-complete for beta**, not **architecture-complete**. Dual-write + lazy path ships; cutover is follow-up after Queue prototypes `storeTap.ts`. |
-| Drop tap cast after Store merge | **Partially done.** `bridge.at` is 2-arg; `runResourceStoreTap.ts:91` still has `as unknown as StoreHandleFromContract<…>`; `runResourceStoreSpec.ts:119` still has `as BuiltInRunResourceContract` (queue is cast-free reference). |
+| Old plan | Current (integration) |
+|----------|-------------------------|
+| Lazy `serviceOption` per write | **Rejected** — removed |
+| Forked-fiber `storeTap.ts` helper | **Discarded** — same violation dressed up |
+| Build-time resolve deadlocks | Fixed by **declared dependency** + app-root `layerDefaultMemory` (topological build, memoized bridge) |
 
-### Other agents on RunResource
+### Implemented in this branch
 
-| Agent | Opinion |
-|-------|---------|
-| **Store** | RunResource is only engine with Store tap today; lazy path was workaround before `layerDefaultMemory`. Process/Queue still facet-only. |
-| **Process** | RunResource tap is reference for `processStoreTap.ts`; Process report still says lazy at write time — **stale** vs store-cutover; Process should adopt shared helper, not copy lazy pattern. |
-| **Queue** | Owns `storeTap.ts` prototype; **rejects** lazy per-run resolution; build-time resolve deadlocks (`AppStore.at` hang). RunResource must adopt after queue proof. |
-| **Docs** | Consolidate changeset; grep sweep; STORAGE.md should state RunResource auto-writes Store + facet, Process/Queue legacy-only until taps land. |
+- `runResourceStoreTap.ts`: `yield* StoreScopeBridgeTag` once; `yield* bridge.at(scopeKey, contract)`; no `serviceOption`, no handle cast
+- `runResourceStoreSpec.ts`: cast-free contract (mirrors queue)
+- `Store.layerDefaultMemory` exported publicly
+- Tests/examples updated: `layer.pipe(Layer.provideMerge(Store.layerDefaultMemory))`
 
-### RunResource owner recommendations (for discussion)
+### Open decision for owner (deferred)
 
-1. **Do not refactor the tap until Queue lands `storeTap.ts` and proves deadlock fix** — current lazy tap is stable, tested, and unblocks beta; premature migration risks regressions without the shared helper.
-2. **When adopting `storeTap.ts`, re-run `Layer.mergeAll` sibling ordering tests** — the original lazy design addressed gate + Store as merge siblings; queue's forked-fiber design must pass the same composition before we delete lazy code.
-3. **Keep dual-write (facet + Store) until Process and Queue cut over** — do not remove `RunResourceStore` early; ProcessStorage and sqlite examples still depend on facet reads.
-4. **Cast removal is low-risk follow-up** — mirror `builtInQueueStoreContract` in `runResourceStoreSpec.ts`; may unblock tap cast at line 91 without waiting for `storeTap.ts`.
-5. **Ship RunResource PR without blocking on store cutover** — handle/RPC/tag rename/store registration are done; open follow-up PR for `storeTap` migration tied to queue prototype merge.
-6. **`RunResource.make` without Subscribables** — keep as-is (intentional slim API); observation lives on Tag/Service/layer handles only.
+**When to drop legacy `RunResourceStore` facet** — after all three engines on Store-only (Option A), keep as projection (Option B), or facet reads from Store journal (Option C). Dual-write remains until decided.
 
-### Open decision for owner
+---
 
-When to drop legacy `RunResourceStore` facet — after all three engines on Store-only, or keep facet as read-optimized projection indefinitely?
+## Review 2026-07-07 (initial — partially superseded)
+
+Earlier notes about waiting for Queue's `storeTap.ts` are **obsolete** after `b4bf1de`. Queue and Process should copy RunResource's **declared-dependency** tap shape, not lazy resolution or a shared `serviceOption` helper.

@@ -5,8 +5,7 @@
  * @internal
  */
 
-import { Effect, Option } from "effect";
-import { ProcessStore } from "../ProcessStore";
+import { Effect } from "effect";
 import { RunResourceStore } from "../store/runResource";
 import type {
   RunResourceRunCompletedFact,
@@ -17,23 +16,16 @@ import type {
   RunResourceStateChangeReason,
 } from "../store/runResource";
 import { StoreScopeBridgeTag } from "./store/bridge";
-import type { StoreScopeTag } from "./store/registration";
+import { catchErrorAndLog } from "./store/helpers";
+import type { StoreScopeNotRegistered } from "./store/errors";
 import type { RunGateStatus } from "./runResource";
-import type { StoreHandleFromContract } from "./store/spec";
 import {
   builtInRunResourceStoreContract,
-  type BuiltInRunResourceContract,
   type RunFact,
   type RunStateChange,
 } from "./store/runResourceStoreSpec";
 
-/** Minimal new-store handle used by the engine tap. @internal */
-type NewRunStoreHandle = Pick<
-  StoreHandleFromContract<BuiltInRunResourceContract>,
-  "record" | "recordStateChange"
->;
-
-/** Engine-facing store tap — no-ops when no backing store is composed. @internal */
+/** Engine-facing store tap — writes to legacy facet and defaulted Store bridge. @internal */
 export interface RunResourceStoreTap {
   readonly recordStateChange: (
     reason: RunResourceStateChangeReason,
@@ -71,47 +63,28 @@ const toResourceState = (status: RunGateStatus): RunResourceState => ({
   totalDurationMs: status.totalDurationMs,
 });
 
-const scopeTagForKey = (scopeKey: string): StoreScopeTag => ({ key: scopeKey });
-
-const resolveNewStoreHandle = (
-  scopeKey: string,
-): Effect.Effect<Option.Option<NewRunStoreHandle>> =>
-  Effect.gen(function* () {
-    const bridge = yield* Effect.serviceOption(StoreScopeBridgeTag);
-    if (Option.isNone(bridge)) {
-      return Option.none();
-    }
-    const contract = builtInRunResourceStoreContract(scopeTagForKey(scopeKey));
-    const handle = yield* bridge.value
-      .at(scopeKey, contract)
-      .pipe(Effect.option);
-    if (Option.isNone(handle)) {
-      return Option.none();
-    }
-    const store = handle.value as unknown as StoreHandleFromContract<BuiltInRunResourceContract>;
-    return Option.some({
-      record: store.record,
-      recordStateChange: store.recordStateChange,
-    });
-  });
+const scopeTagForKey = (scopeKey: string) => ({ key: scopeKey });
 
 const makeRecordWrite =
   (resourceId: string) =>
   (label: string, effect: Effect.Effect<void, unknown>): Effect.Effect<void> =>
     effect.pipe(
-      ProcessStore.catchErrorAndLog({
+      catchErrorAndLog({
         message: `RunResource store write failed for "${resourceId}" ${label}`,
         level: "warning",
         annotations: { resourceId, label },
       }),
     );
 
-/** Resolve optional new store handle and build the engine tap. @internal */
+/** Resolve the store bridge once and build the engine tap. @internal */
 export const makeRunResourceStoreTap = (
   resourceId: string,
   scopeKey: string,
-): Effect.Effect<RunResourceStoreTap> =>
-  Effect.sync(() => {
+): Effect.Effect<RunResourceStoreTap, StoreScopeNotRegistered, StoreScopeBridgeTag> =>
+  Effect.gen(function* () {
+    const bridge = yield* StoreScopeBridgeTag;
+    const contract = builtInRunResourceStoreContract(scopeTagForKey(scopeKey));
+    const newStore = yield* bridge.at(scopeKey, contract);
     const recordWrite = makeRecordWrite(resourceId);
     let stateSeq = 0;
     let factSeq = 0;
@@ -125,17 +98,6 @@ export const makeRunResourceStoreTap = (
       factSeq += 1;
       return `${runId}/${suffix}/${String(factSeq)}`;
     };
-
-    const writeToNewStore = (
-      label: string,
-      write: (store: NewRunStoreHandle) => Effect.Effect<void>,
-    ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        const newStore = yield* resolveNewStoreHandle(scopeKey);
-        if (Option.isSome(newStore)) {
-          yield* recordWrite(label, write(newStore.value));
-        }
-      });
 
     const writeStateChange = (
       reason: RunResourceStateChangeReason,
@@ -163,9 +125,9 @@ export const makeRunResourceStoreTap = (
           `state ${reason}`,
           RunResourceStore.recordStateChange(change),
         );
-        yield* writeToNewStore(
+        yield* recordWrite(
           `store state ${reason}`,
-          (store) => store.recordStateChange(wireChange),
+          newStore.recordStateChange(wireChange),
         );
       });
     };
@@ -193,10 +155,7 @@ export const makeRunResourceStoreTap = (
       };
       return Effect.gen(function* () {
         yield* recordWrite(`fact started ${runId}`, RunResourceStore.recordRunStarted(fact));
-        yield* writeToNewStore(
-          `store fact started ${runId}`,
-          (store) => store.record(wireFact),
-        );
+        yield* recordWrite(`store fact started ${runId}`, newStore.record(wireFact));
       });
     };
 
@@ -226,10 +185,7 @@ export const makeRunResourceStoreTap = (
           `fact completed ${runId}`,
           RunResourceStore.recordRunCompleted(fact),
         );
-        yield* writeToNewStore(
-          `store fact completed ${runId}`,
-          (store) => store.record(wireFact),
-        );
+        yield* recordWrite(`store fact completed ${runId}`, newStore.record(wireFact));
       });
     };
 
@@ -258,10 +214,7 @@ export const makeRunResourceStoreTap = (
       };
       return Effect.gen(function* () {
         yield* recordWrite(`fact failed ${runId}`, RunResourceStore.recordRunFailed(fact));
-        yield* writeToNewStore(
-          `store fact failed ${runId}`,
-          (store) => store.record(wireFact),
-        );
+        yield* recordWrite(`store fact failed ${runId}`, newStore.record(wireFact));
       });
     };
 

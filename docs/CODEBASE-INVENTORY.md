@@ -286,7 +286,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 ### Construction forms
 
 - **`RunResource.make({ name?, effect, concurrency? })`** — scoped handle with `.run` only (persistence when storage composed; no Subscribables exposed).
-- **`RunResource.Service<Self>()(name, { inputSchema, successSchema, errorSchema?, effect, concurrency? })`** — tag + baked-in `.layer` + `.configure` + static `.run`.
+- **`RunResource.Service<Self>()(name, { payload, success, errorSchema?, effect, concurrency? })`** — tag + baked-in `.layer` + `.configure` + static `.run`.
 - **`RunResource.Tag<Self>()(key, schemas…)`** — identity tag + wire schemas; pair with **`RunResource.layer`** / **`serve`** / **`serveRemote`**.
 - **`RunResource.store(tag)`** — built-in fact/state registration on an app **`Store.Service`**.
 - **`RunResource.makeRunner({ name, concurrency? })`** — tag + layer; **`yield* runner(anyEffect)`** wraps any `Effect`.

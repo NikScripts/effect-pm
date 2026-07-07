@@ -7,8 +7,8 @@
  * Run: `npx tsx examples/forms/resource/run-resource-runtime-observer.ts`
  */
 
-import { Effect, Ref, Schema, Stream } from "effect";
-import { RunResource } from "../../../src";
+import { Effect, Layer, Ref, Schema, Stream } from "effect";
+import { RunResource, Store } from "../../../src";
 
 const ObservedRunGate = RunResource.Service<{ readonly _tag: "ObservedRunGate" }>()(
   "examples/ObservedRunGate",
@@ -47,7 +47,12 @@ const program = Effect.gen(function* () {
         }),
       ),
     );
-  }).pipe(Effect.provide(ObservedRunGate.layer), Effect.scoped);
+  }).pipe(
+    Effect.provide(
+      ObservedRunGate.layer.pipe(Layer.provideMerge(Store.layerDefaultMemory)),
+    ),
+    Effect.scoped,
+  );
 
   yield* Effect.log("");
   yield* Effect.log("=== make: run-only handle (no observation) ===");
@@ -58,6 +63,6 @@ const program = Effect.gen(function* () {
   });
   const value = yield* unobserved.run(21);
   yield* Effect.log(`unobserved result: ${String(value)}`);
-});
+}).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped);
 
 void Effect.runPromise(program);

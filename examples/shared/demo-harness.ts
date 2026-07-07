@@ -36,9 +36,9 @@ export const runNodeProgramOrExit = (
  * built from `layer` (same idea as `ManagedRuntime` in Effect’s own source: layer → runtime →
  * `runPromise`, without scattering `Effect.provide(effect, layer)` through scripts).
  */
-export const runNodeProgramWithLayer = <R, EL>(
+export const runNodeProgramWithLayer = <R, EL, LE = never>(
   program: Effect.Effect<void, EL, R>,
-  layer: Layer.Layer<R, EL, never>,
+  layer: Layer.Layer<R, LE, never>,
   successLine: string,
 ): void => {
   const rt = ManagedRuntime.make(layer);

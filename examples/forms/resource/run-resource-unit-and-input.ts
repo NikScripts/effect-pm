@@ -5,7 +5,7 @@
  */
 
 import { Clock, Duration, Effect, Layer, Schema } from "effect";
-import { RunResource } from "../../../src";
+import { RunResource, Store } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/TimedWorkGate", {
@@ -69,6 +69,8 @@ const program = Effect.gen(function* () {
   yield* Effect.log("");
 });
 
-const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer);
+const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer).pipe(
+  Layer.provideMerge(Store.layerDefaultMemory),
+);
 
 runNodeProgramWithLayer(program, mainLayer, "form:run-resource-unit-and-input finished OK");

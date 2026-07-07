@@ -14,6 +14,8 @@ import {
 } from "effect";
 import type { RunResourceStateChangeReason } from "../store/runResource";
 import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+import { StoreScopeBridgeTag } from "./store/bridge";
+import type { StoreScopeNotRegistered } from "./store/errors";
 import {
   makeRunResourceStoreTap,
   nextRunId,
@@ -242,7 +244,7 @@ const makeObservedRun =
  */
 export const makeRunGateHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunGateHandle<T, A, E>> =>
+): Effect.Effect<RunGateHandle<T, A, E>, StoreScopeNotRegistered, StoreScopeBridgeTag> =>
   Effect.map(makeRunResourceHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
@@ -254,7 +256,7 @@ export const makeRunGateHandleEffect = <T, A, E>(
  */
 export const makeRunResourceHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunResourceHandle<T, A, E>> => {
+): Effect.Effect<RunResourceHandle<T, A, E>, StoreScopeNotRegistered, StoreScopeBridgeTag> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
   const scopeKey = config.scopeKey ?? resourceId;

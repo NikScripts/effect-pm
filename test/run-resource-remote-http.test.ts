@@ -5,6 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as RunResource from "../src/RunResource";
+import * as Store from "../src/Store";
 
 class RemoteGate extends RunResource.Tag<RemoteGate>()(
   "run-remote/G",
@@ -21,14 +22,17 @@ const clientHttp = (port: number) =>
 
 const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
-) => {
+): Effect.Effect<A, E, never> => {
   const server = Resource.httpServer([
     RunResource.serve(RemoteGate, {
       effect: (n: number) =>
         n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
       concurrency: 2,
-    }),
-  ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+    }) as Layer.Layer<any, never, any>,
+  ]).pipe(
+    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(Store.layerDefaultMemory),
+  );
 
   return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(
@@ -41,7 +45,7 @@ const withServer = <A, E>(
       ),
       Effect.scoped,
     );
-  }).pipe(Effect.provide(server), Effect.scoped);
+  }).pipe(Effect.provide(server), Effect.scoped) as Effect.Effect<A, E, never>;
 };
 
 it("run + status round-trip over http against the real driver", () =>

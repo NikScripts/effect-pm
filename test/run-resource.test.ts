@@ -5,6 +5,9 @@ import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 import { RunResourceStore } from "../src/store/runResource";
 
+const withDefaultStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
     const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -30,7 +33,7 @@ describe("RunResource.make", () => {
       });
       const p = yield* Ref.get(peak);
       expect(p).toBe(1);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.live("respects concurrency limit", () =>
@@ -49,7 +52,7 @@ describe("RunResource.make", () => {
       const p = yield* Ref.get(peak);
       expect(p).toBeLessThanOrEqual(4);
       expect(p).toBeGreaterThan(1);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.live("gates a function effect with concurrency", () =>
@@ -64,7 +67,7 @@ describe("RunResource.make", () => {
         { concurrency: "unbounded" },
       );
       expect(results).toEqual([10, 20, 30]);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 
   it.live("does not expose observation subscribables", () =>
@@ -76,7 +79,7 @@ describe("RunResource.make", () => {
       });
       expect("status" in gate).toBe(false);
       expect("waiting" in gate).toBe(false);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped),
   );
 });
 
@@ -90,7 +93,8 @@ describe("RunResource.Service", () => {
         Schema.String,
         Schema.String,
       );
-      const gateLayer = RunResource.layer(SlowGate, {
+      const gateLayer = withDefaultStore(
+        RunResource.layer(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
             const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -101,7 +105,8 @@ describe("RunResource.Service", () => {
             return s.toUpperCase();
           }),
         concurrency: 2,
-      });
+        }),
+      );
 
       yield* Effect.gen(function* () {
         const gate = yield* SlowGate;
@@ -123,7 +128,7 @@ describe("RunResource.Service", () => {
     concurrency: 2,
   }) {}
 
-  const slowLayer = SlowGate.layer;
+  const slowLayer = withDefaultStore(SlowGate.layer);
 
   it.live("static run accessor requires the service in R", () =>
     Effect.gen(function* () {
@@ -154,10 +159,12 @@ describe("RunResource.Tag + layer", () => {
     Schema.Number,
   );
 
-  const testLayer = RunResource.layer(TestGate, {
-    effect: (n: number) => Effect.succeed(n + 100),
-    concurrency: 1,
-  });
+  const testLayer = withDefaultStore(
+    RunResource.layer(TestGate, {
+      effect: (n: number) => Effect.succeed(n + 100),
+      concurrency: 1,
+    }),
+  );
 
   it("Tag produces valid service key", () => {
     expect(TestGate.key).toBe("@test/TestGate");
@@ -193,8 +200,9 @@ describe("RunResource.Tag + layer", () => {
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
-      const live = Layer.mergeAll(
-        RunResource.layer(TestGate, {
+      const live = withDefaultStore(
+        Layer.mergeAll(
+          RunResource.layer(TestGate, {
           effect: (n: number) =>
             Effect.gen(function* () {
               const nActive = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -207,6 +215,7 @@ describe("RunResource.Tag + layer", () => {
           concurrency: 1,
         }),
         RunResource.configure(TestGate, { concurrency: 3 }),
+        ),
       );
 
       yield* Effect.gen(function* () {
@@ -239,7 +248,10 @@ describe("RunResource.make — ProcessStore records", () => {
         "run-resource.run.completed",
         "run-resource.run.started",
       ]);
-    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+    }).pipe(
+      Effect.provide(Layer.mergeAll(ProcessStorage.layer, Store.layerDefaultMemory)),
+      Effect.scoped,
+    ),
   );
 });
 
@@ -256,13 +268,10 @@ describe("RunResource.layer — RunResource.store records", () => {
     storeGateRegistration,
   ) {}
 
-  const live = Layer.mergeAll(
-    RunResource.layer(StoreGate, {
-      effect: (n: number) => Effect.succeed(n * 2),
-      concurrency: 1,
-    }),
-    TestRunStore.layerMemory,
-  );
+  const live = RunResource.layer(StoreGate, {
+    effect: (n: number) => Effect.succeed(n * 2),
+    concurrency: 1,
+  }).pipe(Layer.provideMerge(TestRunStore.layerMemory));
 
   it.effect("writes facts when the gate runs", () =>
     Effect.gen(function* () {

@@ -34,7 +34,7 @@ Two report sets exist — use **both**, for different layers:
 **Supersedes / corrections (read before trusting older agent report lines):**
 
 1. **Store Stage 1** — `store-cutover-00` says **done** (`layerDefaultMemory`, `buildDefaultScopeBridge`). The Store agent report still says “blocked” — **ignore that**; engines still need to **compose** the default layer (not wired into `Process.layer` / `QueueResource.layer` yet).
-2. **Lazy store resolution** — RunResource agent report treats lazy bridge as acceptable long-term. **`store-cutover-00` rejects it** — all engines migrate to shared `internal/store/storeTap.ts` (eager resolve once in forked fiber). RunResource `runResourceStoreTap.ts` is a **stopgap**.
+2. **Lazy store resolution** — ~~RunResource agent report treats lazy bridge as acceptable~~ **Done on run-resource branch:** declared `StoreScopeBridgeTag` dependency; app provides `Store.layerDefaultMemory` at root. Process/Queue still need the same cutover.
 3. **Queue Tag `payload`** — Integration **already** renamed `QueueResource.Tag(key, itemSchema)` → `Tag(key, payload)` (positional). Queue agent report “not renamed” is **stale**. Still open: **`success`/`error` triplet**, config-object overload, tag stamps, engine cutover.
 4. **Process symbols** — `successSym` / `successOf` (not `resultSchemaSym`). `store-cutover-process.md` still mentions `resultSchemaOf` in one bullet — treat as `successOf`.
 
@@ -97,14 +97,15 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `.run` handle, RPC serve, `payload`/`success`/`error` | Migrate tap off **lazy** `resolveNewStoreHandle` |
-| `RunResource.store`, dual-write (facet + Store) | Drop `as BuiltInRunResourceContract` if still present |
-| Remote HTTP test, changeset draft | Doc sweep (`CODEBASE-INVENTORY` stale names) |
-| `bridge.at` 2-arg after Store merge | Consolidate changeset with platform rename |
+| `.run` handle, RPC serve, `payload`/`success`/`error` | Doc sweep + consolidated changeset |
+| `RunResource.store`, dual-write (facet + Store) | Drop legacy facet (**owner decision**) |
+| Declared-dependency store tap + cast-free contract | Optional write-path buffer (queue may add) |
+| `Store.layerDefaultMemory` public export | Wire default store into Process/Queue layers (their agents) |
+| Remote HTTP test, changeset draft | `Resource.httpServer` overload vs `StoreScopeNotRegistered` |
 
 **Discuss / approve:** When to drop legacy `RunResourceStore` facet (after Process/Queue cutover?).
 
-**Blind spot (Queue agent):** RunResource report says “lazy at write time is required for Layer.mergeAll siblings” — **conflicts** with store-cutover eager-fiber design; queue prototype must prove deadlock fix applies to RunResource too.
+**Blind spot (Queue agent):** ~~RunResource report says “lazy at write time is required for Layer.mergeAll siblings”~~ **Resolved:** declared dependency + `Layer.provideMerge(Store.layerDefaultMemory)` at app root.
 
 ---
 

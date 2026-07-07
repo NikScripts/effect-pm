@@ -116,4 +116,4 @@ export const builtInRunResourceStoreContract = (
       recordStateChange: state.append,
       stateHistory: state.read,
     }),
-  ) as BuiltInRunResourceContract;
+  );

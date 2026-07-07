@@ -8,12 +8,14 @@
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path, Schema } from "effect";
-import { RunResource } from "../../../src";
+import { RunResource, Store } from "../../../src";
 import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
 import { RunResourceStore } from "../../../src/store/runResource";
 import { layerProcessStore } from "../../../src/storage/sqlite";
 
-const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer).pipe(
+  Layer.provideMerge(Store.layerDefaultMemory),
+);
 
 const gateKey = "examples/SqliteBackedGate";
 
@@ -37,9 +39,8 @@ const program = Effect.gen(function* () {
   yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
   yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
-  const live = Layer.mergeAll(
-    layerProcessStore({ filename: sqlitePath }),
-    SqliteDemoGate.layer,
+  const live = layerProcessStore({ filename: sqlitePath }).pipe(
+    Layer.provideMerge(SqliteDemoGate.layer),
   );
 
   yield* Effect.gen(function* () {
