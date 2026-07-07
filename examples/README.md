@@ -62,7 +62,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
 | [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + ProcessStorage facet reads + RunResource run facts on SQLite |
-| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | `Process.layer` + `Process.store(tag)` auto-write + legacy `ProcessExecutionStore` dual-write |
+| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | `Process.layer` + `Process.store(tag)` auto-write |
 
 Storage options:
 

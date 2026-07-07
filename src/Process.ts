@@ -17,8 +17,7 @@
  *
  * When an app provides **`StoreScopeBridgeTag`** (via `Store.Service.layerMemory` or the
  * built-in default store layer) and registers **`Process.store(tag)`**, finished runs append to
- * the built-in execution contract. Legacy **`ProcessExecutionStore`** rows are still written when
- * that facet is composed (dual-write until facet removal).
+ * the built-in execution contract only — not legacy **`ProcessExecutionStore`** facets.
  *
  * ## Two surfaces, one namespace
  *
@@ -75,7 +74,6 @@ import {
   successSym,
 } from "./internal/processTagSchemas";
 import { LogAnnotationKeys, withProcessLogAnnotations } from "./LogContext";
-import type { ProcessExecutionFinishInput } from "./store/processExecution";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./internal/processSchedule";
 import type {
@@ -161,13 +159,14 @@ export interface Process<out R> {
   readonly type: "managed";
   /**
    * Long-running trigger driver that spawns run instances.
-   * Optional `ProcessExecutionStore` facet — execution rows are recorded when
-   * present, silently skipped when absent (compose at app / `layerProcessStore`).
+   * Execution history is recorded on the **`Process.layer`** path via **`Process.store(tag)`**
+   * when the app provides **`StoreScopeBridgeTag`**. The direct **`make`** path does not write
+   * legacy storage facets.
    */
   readonly effect: Effect.Effect<void, never, R>;
   /**
    * Runs the user `effect` once with tracking, independent of trigger cadence.
-   * Optional execution facet — same no-op semantics as {@link Process.effect}.
+   * Same store-only persistence semantics as {@link Process.effect} on the layer path.
    */
   readonly runImmediately: () => Effect.Effect<void, never, R>;
   /**
@@ -519,24 +518,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     lastRunDurationMillis: MutableRef.make<Option.Option<number>>(Option.none()),
   };
 
-  const finishInput = (args: {
-    readonly scheduleKey: string | null;
-    readonly startedAt: number;
-    readonly completedAt: number;
-    readonly error?: unknown;
-    readonly isStartupRun: boolean;
-  }): ProcessExecutionFinishInput => ({
-    processId: name,
-    scheduleKey: args.scheduleKey,
-    startedAt: args.startedAt,
-    completedAt: args.completedAt,
-    ...(args.error !== undefined ? { error: String(args.error) } : {}),
-    isStartupRun: args.isStartupRun,
-  });
-
   const executionPersist = makeProcessExecutionPersist({
-    processId: name,
-    finishInput,
     recorder: executionRecorder,
   });
 

@@ -28,7 +28,7 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
       store at the root.
 - [ ] `getStatus` / `hasPriorExecutions` read via the store contract's `events` / `hasPriorExecutions`
       (the contract already exposes `hasPriorExecutions`).
-- [ ] Delete the `ProcessExecutionStore` emit/read calls in `Process.ts` once the above lands.
+- [ ] Delete the `ProcessExecutionStore` emit/read calls in `Process.ts` once the above lands. **Engine writes removed** on cutover branch; facet module remains until Stage 5 deletion.
 - [ ] (Doc step E) When the tag carries `success`, `RunCompleted` already carries the optional `result`
       (via `makeProcessExecutionEvent(successOf(tag))`) — confirm the supervisor populates it.
 
@@ -38,7 +38,7 @@ the review fixes + the engine cutover (B3), now **unblocked** (Store Stage 1 def
 ## Review 2026-07-07 (shipped on `cursor/process-store-cutover-a3ad`)
 
 - [x] Wire `error` into store contract (`makeProcessExecutionEvent(success, error)`; typed `RunFailed` when `errorOf(tag)` set).
-- [x] Engine dual-write: `makeProcessExecutionRecorder` resolves `StoreScopeBridgeTag` once, buffers to `store.record`; legacy `ProcessExecutionStore` kept.
+- [x] Engine store tap: `makeProcessExecutionRecorder` resolves `StoreScopeBridgeTag` once, buffers to `store.record`; **no** `ProcessExecutionStore` writes.
 - [x] `hasPriorExecutions` reads store when recorder present (layer path).
 - [x] Populate `result` on `RunCompleted` from `SubscriptionRef` when tag carries `success`.
 - [x] Remove `Process.result`.

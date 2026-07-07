@@ -1,9 +1,8 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/process-store/process-layer-store-auto-write
  *
- * Process.layer auto-writes terminal runs to Process.store(tag) and the legacy
- * ProcessExecutionStore facet when both are composed.
+ * Process.layer auto-writes terminal runs to Process.store(tag) when the app
+ * registers the tag and provides StoreScopeBridgeTag.
  * Run: `pnpm run example:process-layer-store-auto-write`
  */
 
@@ -12,7 +11,6 @@ import { TestClock } from "effect/testing";
 import * as Process from "../../../src/Process";
 import * as Store from "../../../src/Store";
 import { Polling } from "../../../src/Polling";
-import { ProcessExecutionStore } from "../../../src/store/processExecution";
 import { layerDefaultMemory } from "../../../src/internal/store/scopeBridge";
 import { builtInProcessStoreContract } from "../../../src/internal/store/processStoreSpec";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
@@ -27,7 +25,6 @@ class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
 
 const storeEnv = Layer.mergeAll(
   DemoStore.layerMemory,
-  ProcessStorage.layer,
   TestClock.layer(),
   layerDefaultMemory,
 );
@@ -55,13 +52,7 @@ const program = Effect.gen(function* () {
       onSome: (p) =>
         Effect.log(`latest result: ${p.symbol} @ ${String(p.usd)}`),
     });
-
-    const facet = yield* ProcessExecutionStore;
-    const rows = yield* facet.executions({ processId: PricesProcess.key });
-    yield* Effect.log(
-      `legacy facet: ${String(rows.length)} execution row(s), status=${rows[0]?.execution.status ?? "none"}`,
-    );
   }).pipe(Effect.provide(live), Effect.scoped);
-}).pipe(Effect.provide(storeEnv), Effect.scoped);
+}).pipe(Effect.provide(storeEnv), Effect.scoped, Effect.orDie);
 
 runNodeProgramOrExit(program, "process-layer-store-auto-write finished");

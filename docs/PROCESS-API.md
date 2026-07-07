@@ -186,9 +186,8 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 Process.layer(MyProcess, { effect, polling }).pipe(Layer.provide(AppStore.layerMemory));
 ```
 
-Legacy **`ProcessExecutionStore`** rows are still written when that facet is composed (dual-write).
-Query new-store events via `yield* MyProcess.store` → `events()`; query legacy rows via
-`ProcessExecutionStore.executions({ processId })`.
+Legacy **`ProcessExecutionStore`** is not written by the Process engine. Query execution events via
+`yield* MyProcess.store` → `events()`.
 
 The removed monolith service (`yield* ProcessStore`, `ProcessStore.events`,
 `ProcessStore.file`, `@nikscripts/effect-pm/storage/file`) is intentionally not

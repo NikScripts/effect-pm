@@ -59,13 +59,13 @@ describe("Process runtime with schedule windows", () => {
 
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const store = yield* ProcessExecutionStore;
-      const rows = yield* store.executions({
-        processId: proc.name,
-      });
-      expect(rows.length).toBeGreaterThanOrEqual(1);
+      const rows = yield* Effect.gen(function* () {
+        const store = yield* ProcessExecutionStore;
+        return yield* store.executions({ processId: proc.name });
+      }).pipe(Effect.provide(ProcessStorage.layer));
+      expect(rows).toHaveLength(0);
       yield* Fiber.interrupt(fib);
-    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+    }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
   );
 
   it.effect("omitted schedule defaults to always armed so polling ticks without manual set", () =>
@@ -127,7 +127,7 @@ describe("Process runtime with schedule windows", () => {
     ),
 );
 
-  it.live("runImmediately records one tracked execution", () => {
+  it.live("runImmediately does not write legacy ProcessExecutionStore rows", () => {
     const proc = Process.make("test/run-immediately", {
       effect: Effect.void,
       polling: Polling.spaced(Duration.seconds(10)),
@@ -140,8 +140,7 @@ describe("Process runtime with schedule windows", () => {
       const rows = yield* store.executions({
           processId: proc.name,
         });
-        expect(rows.length).toBe(1);
-        expect(rows[0]?.execution.status).toBe("completed");
+        expect(rows).toHaveLength(0);
       }).pipe(Effect.provide(ProcessStorage.layer));
   });
 

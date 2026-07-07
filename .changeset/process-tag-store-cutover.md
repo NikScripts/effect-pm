@@ -8,7 +8,7 @@
 - **Removed `Process.result(Schema)`** — use `Process.Tag()(key, success)` or `{ success, error? }` on the tag factory instead.
 - **`successSym`** replaces `resultSchemaSym` (`Symbol.for("@nikscripts/effect-pm/Process/success")`) — external symbol readers must update.
 - **`Process.layer` / `serve` / `serveRemote`** now require **`StoreScopeBridgeTag`** in the layer environment. Provide **`layerDefaultMemory`** or an app **`Store.Service.layerMemory`** at the **root** via `Layer.provide` (do not bake into the resource layer).
-- Toolkit engine **dual-writes** terminal runs to **`Process.store(tag)`** (built-in execution contract) and legacy **`ProcessExecutionStore`** when composed.
+- Toolkit engine writes terminal runs to **`Process.store(tag)`** only — legacy **`ProcessExecutionStore`** is not written by the engine.
 
 Migration:
 

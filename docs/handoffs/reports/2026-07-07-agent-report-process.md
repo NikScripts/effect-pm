@@ -16,7 +16,7 @@
 | `error` on store union | ✅ | `makeProcessExecutionEvent(success, error)` |
 | `Process.store(tag)` registration | ✅ | `builtInProcessStoreContract(tag)` |
 | Engine store tap (layer path) | ✅ | `src/internal/processStoreTap.ts` — declared `StoreScopeBridgeTag`, buffered `record` |
-| Dual-write legacy facet | ✅ | `ProcessExecutionStore` + new store on terminal events |
+| Legacy facet writes from engine | ✅ removed | Engine does not write `ProcessExecutionStore` |
 | `RunCompleted.result` population | ✅ | From `SubscriptionRef` when `success` stamped |
 | `hasPriorExecutions` via store | ✅ | When execution recorder present (layer path) |
 | `Process.result` removed | ✅ | Positional `success` only |
@@ -34,11 +34,11 @@
 
 ### 2. Facet retirement (Stage 5)
 
-Engine still dual-writes **`ProcessExecutionStore`**. Delete facet emit/read after Queue + RunResource cutovers stabilize.
+Engine no longer writes **`ProcessExecutionStore`**. Delete facet module + `ProcessStorage` when Queue/RunResource cutovers complete.
 
 ### 3. `Process.make` path (no layer)
 
-`Process.make` / direct supervisor without `_executionRecorder` still uses `serviceOption(ProcessExecutionStore)` for startup-run detection. Acceptable until `make` is deprecated or gains optional store bridge.
+`Process.make` does not write execution history (no `_executionRecorder`). Use **`Process.layer`** for store-backed runs.
 
 ### 4. Owner decision deferred
 
@@ -55,7 +55,7 @@ Engine still dual-writes **`ProcessExecutionStore`**. Delete facet emit/read aft
 | File | Work |
 |------|------|
 | `src/internal/store/processStoreSpec.ts` | Drop `as BuiltInProcessContract` if types align |
-| `src/Process.ts` | Remove `ProcessExecutionStore` dual-write when approved |
+| `src/Process.ts` | Facet writes removed — store contract only on layer path |
 | `docs/PROCESS-API.md`, `docs/STORAGE.md` | Document new store path + layer requirement |
 | `.changeset/process-tag-store-cutover.md` | Consolidate with platform rename changeset at release |
 

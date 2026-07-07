@@ -179,7 +179,7 @@ fingerprints or version stamps.
 | **A** | This handoff + align queue branch agents on config-object overload | Done (doc) |
 | **B** | Process tag positional `success` / `error` + config overload; remove `Process.result` | **Done** |
 | **B2** | `processStoreSpec` queue-aligned (`event` + `record` / `events`) | **Done** |
-| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Partial** — dual-write on layer path (`processStoreTap.ts`); facet not removed |
+| **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Done** on layer path — facet not written by engine |
 | **C** | QR / CQR `payload` / `success` / `error` on Tag (coordinate queue branches) | **In progress** |
 | **D** | RR `payload` / `success` / `error` on Tag | **Done** (run-resource branch) |
 | **E** | `success` on store contracts (`processStoreSpec`, `queueStoreSpec`) | After Store Stage 1 |

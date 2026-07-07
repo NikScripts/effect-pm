@@ -63,11 +63,11 @@ Two report sets exist — use **both**, for different layers:
 | Shipped | Open |
 |---------|------|
 | `Tag(key, success?, error?)`, `successOf`/`errorOf` | **`error` stamped but unused** (RPC + store still `String`) |
-| `builtInProcessStoreContract`, `Process.store` | Engine dual-write to Store + legacy facet (`processStoreTap.ts`) |
-| `process-store-contract.test.ts` | Drop facet dual-write; remove `ProcessExecutionStore` reads |
+| `builtInProcessStoreContract`, `Process.store` | Engine writes Store only (`processStoreTap.ts`) |
+| `process-store-contract.test.ts` | Stage 5: delete `ProcessExecutionStore` facet module |
 | ~~`Process.result` deprecated~~ | **Removed** on `cursor/process-store-cutover-a3ad` |
 
-**Discuss / approve:** Wire `error` into typed `RunFailed` vs drop from Tag until wired; dual-write vs cutover for execution events; symbol rename in changeset.
+**Discuss / approve:** Wire `error` into typed `RunFailed` vs drop from Tag until wired; symbol rename in changeset.
 
 **Blind spot (RunResource agent):** Process has no `payload` on tag — two-slot only. Do not add without product call.
 

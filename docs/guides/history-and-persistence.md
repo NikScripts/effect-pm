@@ -77,9 +77,7 @@ yield* proc.logs.history({ limit: 100 }) // past captured lines
 ### Execution analytics (`Process.store`)
 
 On **`Process.layer`**, finished runs auto-append to **`Process.store(tag)`** when the app registers
-the tag on a `Store.Service` and provides **`StoreScopeBridgeTag`**. Legacy **`ProcessExecutionStore`**
-rows are still written when that facet is composed (dual-write). Query via `yield* Tag.store` or the
-facet's `executions({ processId })`.
+the tag on a `Store.Service` and provides **`StoreScopeBridgeTag`**. Query via `yield* Tag.store`.
 
 ```ts
 import { Layer } from "effect";

@@ -180,9 +180,7 @@ const armWindows = Effect.gen(function* () {
 
 Register **`Process.store(tag)`** on an app `Store.Service` and provide **`StoreScopeBridgeTag`**
 at the root (`Store.Service.layerMemory` or the built-in default). On **`Process.layer`**, the engine
-auto-appends terminal runs (`RunCompleted` / `RunFailed`) to the built-in execution contract. When
-**`ProcessExecutionStore`** is also composed (via `ProcessStorage.layer`), the engine **dual-writes**
-to the legacy facet until facet removal.
+auto-appends terminal runs (`RunCompleted` / `RunFailed`) to the built-in execution contract.
 
 ```ts
 import { Duration, Effect, Layer, Schema } from "effect";

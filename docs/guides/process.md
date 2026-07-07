@@ -90,8 +90,8 @@ const rows = yield* store.events({ limit: 10 });
 
 On the **`Process.layer`** path, the engine auto-appends terminal runs to **`Process.store(tag)`**
 when the app provides **`StoreScopeBridgeTag`** (see
-[../handoffs/store-cutover-process.md](../handoffs/store-cutover-process.md)). Legacy
-**`ProcessExecutionStore`** rows are still written when that facet is composed.
+[../handoffs/store-cutover-process.md](../handoffs/store-cutover-process.md)). The engine does **not**
+write legacy **`ProcessExecutionStore`** facets.
 
 ```ts
 import { Layer } from "effect";
