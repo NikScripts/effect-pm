@@ -63,7 +63,7 @@
  * @module Store
  */
 
-import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
+import { Context, Effect, Layer, Predicate, Schema, Scope, Stream } from "effect";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
 import * as SqlEventJournal from "effect/unstable/eventlog/SqlEventJournal";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -449,12 +449,36 @@ export type AddStorageReq<T> = T extends (
       : T;
 
 /**
+ * Brand identifier for an {@link effects} object — Effect's v4 `TypeId` shape (a string-literal id,
+ * present at runtime). @public
+ */
+export type TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
+
+/** @public */
+export const TypeId: TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
+
+/**
+ * Variance carrier for the {@link effects} brand — mirrors Effect's `Stream.Variance`. `C` is
+ * **covariant** (Effect's `(_: never) => C` encoding), so a specific contract's effects satisfy the wide
+ * `StoreEffectsVariance<StoreContractValue>` constraint that {@link swallowWriteErrors} takes. @public
+ */
+export interface StoreEffectsVariance<out C extends StoreContractValue> {
+  readonly [TypeId]: { readonly _C: (_: never) => C };
+}
+
+/**
  * The object of effects produced by {@link effects}: the {@link HandleOf} structure (nested shape tree +
- * custom methods) with {@link Storage} added to every method's requirement channel.
+ * custom methods) with {@link Storage} added to every method's requirement channel, carrying the
+ * {@link StoreEffectsVariance} brand.
  *
  * @public
  */
-export type StoreEffectsOf<C extends StoreContractValue> = AddStorageReq<StoreHandleFromContract<C>>;
+export type StoreEffectsOf<C extends StoreContractValue> = AddStorageReq<StoreHandleFromContract<C>> &
+  StoreEffectsVariance<C>;
+
+/** True for a value branded as a {@link effects} object. @public */
+export const isStoreEffects = (u: unknown): u is StoreEffectsOf<StoreContractValue> =>
+  Predicate.hasProperty(u, TypeId);
 
 /** Scope keys (tuple registrations) or accessor keys (object registrations) on a store class. @public */
 export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
@@ -867,13 +891,29 @@ interface StoreEffectsMeta {
   readonly writePaths: ReadonlyArray<string>;
 }
 
-/** Non-enumerable marker carrying {@link StoreEffectsMeta} (invisible to method access / destructuring). @internal */
-const effectsMetaSym = Symbol.for("@nikscripts/effect-pm/Store/effectsMeta");
+/**
+ * Non-enumerable carrier of {@link StoreEffectsMeta}, invisible to method access / destructuring. A
+ * genuinely **private** symbol (not in the global registry, not exported) — the runtime detail
+ * `swallowWriteErrors` reads; it is NOT the public {@link TypeId} brand. @internal
+ */
+const effectsMetaSym = Symbol("effectsMeta");
 
 /** @internal */
 const stampEffectsMeta = (target: object, meta: StoreEffectsMeta): void => {
   Object.defineProperty(target, effectsMetaSym, {
     value: meta,
+    enumerable: false,
+  });
+};
+
+/**
+ * Stamp the honest (present-at-runtime) {@link TypeId} brand so {@link isStoreEffects} and the
+ * {@link swallowWriteErrors} constraint are backed by a real property, not a phantom. Non-enumerable so
+ * it stays invisible to method access / destructuring. @internal
+ */
+const stampEffectsBrand = (target: object): void => {
+  Object.defineProperty(target, TypeId, {
+    value: { _C: (_: never) => _ },
     enumerable: false,
   });
 };
@@ -990,6 +1030,7 @@ export const effects = <const C extends StoreContractValue>(
     scope: typeof scope === "string" ? scope : scope.key,
     writePaths: writePathsOf(contract),
   });
+  stampEffectsBrand(built);
   // Same generic-object structural-rebuild idiom as `makeShapeHandles` / `makeShapeRefs`: the effects
   // object is assembled by dynamic assignment (then nested), so its type is asserted once here.
   return built as StoreEffectsOf<C>;
@@ -1012,15 +1053,16 @@ export const effects = <const C extends StoreContractValue>(
  * runtime guard over the type-erased journal failure — the exact input type is returned unchanged.
  *
  * @remarks
- * Typed as an identity generic (`<Effects>(effects: Effects) => Effects`) rather than
+ * Typed as an identity generic constrained to the {@link StoreEffectsVariance} brand rather than
  * `(effects: StoreEffectsOf<C>) => StoreEffectsOf<C>`: `C` is not inferable through the opaque
- * `StoreEffectsOf<C>`, so the latter form would default `C` and *widen* the result, breaking both
- * type-preservation and `pipe` composition. The identity generic returns the caller's exact
- * `StoreEffectsOf<C>` and composes.
+ * `StoreEffectsOf<C>`, so that form would default `C` and *widen* the result, breaking both
+ * type-preservation and `pipe` composition. `Effects` infers as the caller's exact `StoreEffectsOf<C>`
+ * (returned unchanged, composes through `pipe`), while the brand constraint rejects a bare `{}` / plain
+ * object — `C`'s covariant encoding lets a specific contract's effects satisfy the wide constraint.
  *
  * @public
  */
-export const swallowWriteErrors = <Effects extends object>(
+export const swallowWriteErrors = <Effects extends StoreEffectsVariance<StoreContractValue>>(
   effects: Effects,
 ): Effects => {
   const meta = readEffectsMeta(effects);
@@ -1045,6 +1087,7 @@ export const swallowWriteErrors = <Effects extends object>(
 
   const built = nestHandle(flat);
   stampEffectsMeta(built, meta);
+  stampEffectsBrand(built);
   // Same structural-rebuild idiom as `effects`: the guarded object is reassembled by dynamic assignment.
   return built as Effects;
 };

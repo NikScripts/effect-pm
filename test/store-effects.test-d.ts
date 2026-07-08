@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Schema, pipe } from "effect";
 import * as Store from "../src/Store";
 
 // A nested contract (`sensors.temperature`/`sensors.humidity`) plus a flat contract with custom methods.
@@ -76,3 +76,35 @@ type RecordCtx = ReturnType<typeof queueEffects.record> extends Effect.Effect<in
   : never;
 void ({} as RecordCtx satisfies Store.Storage);
 void ({} as Store.Storage satisfies RecordCtx);
+
+// ============================================================================
+// TypeId brand — swallowWriteErrors is type-preserving, composes, and rejects non-branded input.
+// ============================================================================
+
+const guarded = Store.swallowWriteErrors(sensorEffects);
+type Sensor = typeof sensorEffects;
+type Guarded = typeof guarded;
+// Same `StoreEffectsOf` type in and out (mutually assignable).
+type SamePreserved = [Sensor] extends [Guarded]
+  ? [Guarded] extends [Sensor]
+    ? true
+    : false
+  : false;
+true satisfies SamePreserved;
+
+// `pipe(...)` composes and preserves the exact type.
+const piped = pipe(Store.effects("sensors", nestedContract), Store.swallowWriteErrors);
+type Piped = typeof piped;
+type PipedSame = [Piped] extends [Sensor] ? ([Sensor] extends [Piped] ? true : false) : false;
+true satisfies PipedSame;
+
+// A bare object is NOT a branded effects object — the constraint rejects it.
+// @ts-expect-error - `{}` lacks the StoreEffects TypeId brand
+Store.swallowWriteErrors({});
+
+// `isStoreEffects` narrows an `unknown` to a branded effects object.
+declare const maybe: unknown;
+if (Store.isStoreEffects(maybe)) {
+  const narrowed: Store.StoreEffectsOf<Store.StoreContractValue> = maybe;
+  void narrowed;
+}

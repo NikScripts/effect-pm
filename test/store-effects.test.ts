@@ -19,6 +19,17 @@ const queueContract = Store.contract(
 );
 
 describe("Store.effects", () => {
+  it("stamps the TypeId brand — isStoreEffects is true for effects, false for a plain object", () => {
+    const store = Store.effects("sensors", nestedContract);
+    expect(Store.isStoreEffects(store)).toBe(true);
+    // The transform preserves the brand (rebuilt object is re-stamped).
+    expect(Store.isStoreEffects(Store.swallowWriteErrors(store))).toBe(true);
+    expect(Store.isStoreEffects({})).toBe(false);
+    expect(Store.isStoreEffects(null)).toBe(false);
+    // The brand is non-enumerable — invisible to method access / destructuring.
+    expect(Object.keys(store)).not.toContain(Store.TypeId);
+  });
+
   it.effect("append/read round-trips against the provided store (requirement satisfied by the layer)", () =>
     Effect.gen(function* () {
       const store = Store.effects("sensors", nestedContract);
