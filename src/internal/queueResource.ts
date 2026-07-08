@@ -327,6 +327,9 @@ export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemE
 export interface QueueEnqueue<T, E = never, R = never> {
   (item: T): Effect.Effect<void, E, R>;
   (items: ReadonlyArray<T>): Effect.Effect<void, E, R>;
+  // Union overload: lets a `T | ReadonlyArray<T>` argument resolve directly (the engine impl already
+  // accepts the union), so callers holding the decoded union don't need an `Array.isArray` narrowing.
+  (itemOrItems: T | ReadonlyArray<T>): Effect.Effect<void, E, R>;
 }
 
 /**

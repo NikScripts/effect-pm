@@ -918,28 +918,16 @@ const buildQueueImpl = <
     const storeEffects = Store.catchWriteErrors(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
+    // Discharge `Storage` from every recorder method in one shot (`Store.provideContext`, the Store-side
+    // mirror of `Resource.provideContext`) — the subtractive result leaves each narrow write as
+    // `Effect<void>`, so it satisfies `QueueStoreWriter` (Storage-free) directly; the extra base
+    // `event.append/read` members it also carries are unused here (a wider object is assignable).
     const storageContext = yield* Effect.context<Store.Storage>();
-    const provideStorage = <A>(
-      write: Effect.Effect<A, never, Store.Storage>,
-    ): Effect.Effect<A> => Effect.provide(write, storageContext);
     const store: QueueStoreWriter<
       Schema.Struct<F>["Type"],
       E,
       QueueSuccessValueOf<Success>
-    > = {
-      enqueued: (entries, priority, batchId) =>
-        provideStorage(storeEffects.enqueued(entries, priority, batchId)),
-      started: (entry) => provideStorage(storeEffects.started(entry)),
-      completed: (entry, success, elapsed) =>
-        provideStorage(storeEffects.completed(entry, success, elapsed)),
-      failed: (entry, cause, elapsed) =>
-        provideStorage(storeEffects.failed(entry, cause, elapsed)),
-      retryScheduled: (entry, cause, nextAttempt) =>
-        provideStorage(storeEffects.retryScheduled(entry, cause, nextAttempt)),
-      retryExhausted: (entry, cause) =>
-        provideStorage(storeEffects.retryExhausted(entry, cause)),
-      record: (event) => provideStorage(storeEffects.record(event)),
-    };
+    > = Store.provideContext(storeEffects, storageContext);
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
@@ -958,6 +946,10 @@ const buildQueueImpl = <
     // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
     // it back. serviceOption → no store means append is skipped and history reads return empty.
     const history = yield* Effect.serviceOption(HistoryStore);
+    // Hoist both codecs once (encoders parallel to decoders): the encoder is reused per stream element
+    // in the append forks below rather than reconstructed on every element.
+    const encodeMetric = Schema.encodeEffect(queueMetrics);
+    const encodeLog = Schema.encodeEffect(queueLogEntry);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
     const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
     const metricsStreamId = `${tag.key}/metrics`;
@@ -968,7 +960,7 @@ const buildQueueImpl = <
         Effect.gen(function* () {
           yield* Effect.forkScoped(
             Stream.runForEach(handle.metrics, (m) =>
-              Schema.encodeEffect(queueMetrics)(m).pipe(
+              encodeMetric(m).pipe(
                 Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
                 Effect.orDie,
               ),
@@ -976,7 +968,7 @@ const buildQueueImpl = <
           );
           yield* Effect.forkScoped(
             Stream.runForEach(handle.logs, (l) =>
-              Schema.encodeEffect(queueLogEntry)(l).pipe(
+              encodeLog(l).pipe(
                 Effect.flatMap((enc) => store.append(logsStreamId, enc)),
                 Effect.orDie,
               ),
@@ -1042,24 +1034,14 @@ const buildQueueImpl = <
               ),
           }),
       },
-      // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
-      // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
-      // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
-      add: (itemOrItems) =>
-        (Array.isArray(itemOrItems)
-          ? handle.add(itemOrItems)
-          : handle.add(itemOrItems)
-        ).pipe(Effect.orDie),
-      prioritize: (itemOrItems) =>
-        (Array.isArray(itemOrItems)
-          ? handle.prioritize(itemOrItems)
-          : handle.prioritize(itemOrItems)
-        ).pipe(Effect.orDie),
-      defer: (itemOrItems) =>
-        (Array.isArray(itemOrItems)
-          ? handle.defer(itemOrItems)
-          : handle.defer(itemOrItems)
-        ).pipe(Effect.orDie),
+      // The item (or batch) IS the payload — `add`/`prioritize`/`defer` forward it straight to the
+      // engine, whose `QueueEnqueue` union overload resolves `T | ReadonlyArray<T>` directly (no
+      // `Array.isArray` narrowing needed). `orDie`: the engine re-validates on enqueue, but the payload
+      // was already decoded/validated on the wire, so that validation failure is impossible here —
+      // `orDie` turns the impossible-failure channel into a defect, keeping the impl's `E` clean.
+      add: (itemOrItems) => handle.add(itemOrItems).pipe(Effect.orDie),
+      prioritize: (itemOrItems) => handle.prioritize(itemOrItems).pipe(Effect.orDie),
+      defer: (itemOrItems) => handle.defer(itemOrItems).pipe(Effect.orDie),
       // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
       // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
       // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
