@@ -769,6 +769,46 @@ export type QueueEvent<T, E = unknown> =
     };
 
 /**
+ * The engine-facing store recorder — Storage-free semantic writes the engine calls at the
+ * `publishEvent` sites. Built by `QueueResource.layer` from `pipe(Store.effects(tag.key, engine
+ * write-extension), Store.swallowWriteErrors)` with `Storage` discharged from the baked default, so
+ * the engine handle stays `Storage`-free. Each narrow write funnels to the shared `event.append`;
+ * `record` is the base append alias for queue-level facts without a narrow write. @internal
+ */
+export interface QueueStoreWriter<T, E = unknown> {
+  readonly enqueued: (
+    entries: ReadonlyArray<QueueEntry<T>>,
+    priority: Priority,
+    batchId?: string,
+  ) => Effect.Effect<void>;
+  readonly started: (entry: QueueEntry<T>) => Effect.Effect<void>;
+  readonly completed: (
+    entry: QueueEntry<T>,
+    elapsed: Duration.Duration,
+  ) => Effect.Effect<void>;
+  readonly failed: (
+    entry: QueueEntry<T>,
+    cause: Cause.Cause<E>,
+    elapsed: Duration.Duration,
+  ) => Effect.Effect<void>;
+  readonly exited: (
+    entry: QueueEntry<T>,
+    exit: Exit.Exit<void, E>,
+    elapsed: Duration.Duration,
+  ) => Effect.Effect<void>;
+  readonly retryScheduled: (
+    entry: QueueEntry<T>,
+    cause: Cause.Cause<E>,
+    nextAttempt: number,
+  ) => Effect.Effect<void>;
+  readonly retryExhausted: (
+    entry: QueueEntry<T>,
+    cause: Cause.Cause<E>,
+  ) => Effect.Effect<void>;
+  readonly record: (event: QueueEvent<T, E>) => Effect.Effect<void>;
+}
+
+/**
  * Queue declaration metadata for {@link QueueResourceDefinition} and
  * {@link QueueResourceServiceDefinition}.
  *
@@ -1089,11 +1129,11 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
   /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
   readonly refill?: QueueRefill<T, E, QueueEnqueueErrors, R>;
   /**
-   * Internal hook — persist each published event to the resource's store. Wired by
-   * `QueueResource.layer` from the baked-in store; called at the source (`publishEvent`) so no burst
-   * is dropped by a late `Stream.fromPubSub` subscription. @internal
+   * Internal store recorder — the engine records each published event through its narrow, semantic
+   * writes ({@link QueueStoreWriter}) at the source (`publishEvent`) so no burst is dropped by a late
+   * `Stream.fromPubSub` subscription. Wired by `QueueResource.layer` from the baked-in store. @internal
    */
-  readonly recordEvent?: (event: QueueEvent<T, E>) => Effect.Effect<void>;
+  readonly store?: QueueStoreWriter<T, E>;
 };
 
 /**
@@ -1237,8 +1277,8 @@ type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
   readonly onFailure?: QueueOnFailure<T, E, R>;
   readonly refill?: QueueRefill<T, E, EEnqueue, R>;
-  /** Internal store recorder — see {@link QueueResourceConfigWithItemSchema.recordEvent}. @internal */
-  readonly recordEvent?: (event: QueueEvent<T, E>) => Effect.Effect<void>;
+  /** Internal store recorder — see {@link QueueResourceConfigWithItemSchema.store}. @internal */
+  readonly store?: QueueStoreWriter<T, E>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -2130,13 +2170,40 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Deferred.succeed(metricsFlush, undefined),
     );
 
+    // Store side of `publishEvent`: dispatch each event to the recorder's narrow, semantic write
+    // (`store.completed(entry, elapsed)`, …); queue-level facts without a narrow write ride the base
+    // `record`. The hub fan-out above is untouched — only the store side changed.
+    const recordToStore = (
+      store: QueueStoreWriter<T, E>,
+      event: QueueEvent<T, E>,
+    ): Effect.Effect<void> => {
+      switch (event._tag) {
+        case "Enqueued":
+          return store.enqueued(event.entries, event.priority, event.batchId);
+        case "Started":
+          return store.started(event.entry);
+        case "Completed":
+          return store.completed(event.entry, event.elapsed);
+        case "Failed":
+          return store.failed(event.entry, event.cause, event.elapsed);
+        case "Exit":
+          return store.exited(event.entry, event.exit, event.elapsed);
+        case "RetryScheduled":
+          return store.retryScheduled(event.entry, event.cause, event.nextAttempt);
+        case "RetryExhausted":
+          return store.retryExhausted(event.entry, event.cause);
+        default:
+          return store.record(event);
+      }
+    };
+
     const publishEvent = (event: QueueEvent<T, E>): Effect.Effect<void> =>
       Effect.gen(function* () {
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
         yield* recordEventMetric(event);
         yield* PubSub.publish(eventsHub, event);
         // Persist to the resource store at the source, so no burst is dropped by a late subscriber.
-        if (config.recordEvent !== undefined) yield* config.recordEvent(event);
+        if (config.store !== undefined) yield* recordToStore(config.store, event);
         if (isSignificant(event)) yield* requestMetricsFlush;
       });
 

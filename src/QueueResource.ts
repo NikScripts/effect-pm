@@ -62,16 +62,17 @@ import {
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
-  builtInQueueStoreContract,
-  type BuiltInQueueContract,
+  engineQueueStoreContract,
+  makeQueueStoreAnalyticsContract,
+  type QueueStoreAnalyticsContract,
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueueErrors,
-  QueueEvent,
   QueueHandle,
   QueueResourceConfigWithItemSchema,
+  QueueStoreWriter,
 } from "./internal/queueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { LogEntrySchema } from "./LogEntry";
@@ -788,23 +789,40 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     const effectiveConfig = yield* foldConfiguredSpec<
       QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
-    // Persist the queue's lifecycle events to its store (the observability plane). `Store.resolveOrDie`
-    // resolves the store from the baked-in default (or an app override) — a declared dependency, never
-    // `serviceOption`, and it can't fail (the default materializes any scope). The recorder runs at the
-    // source in `publishEvent`, so no event burst is dropped by a late subscriber.
-    const recordEvent = yield* Store.resolveOrDie(
-      tag.key,
-      builtInQueueStoreContract(tag),
-    ).pipe(
-      Effect.map(
-        (eventStore) => (event: QueueEvent<Schema.Struct<F>["Type"], E>) =>
-          eventStore.record(event).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(`Queue "${tag.key}" event persist failed`, cause),
-            ),
-          ),
-      ),
+    // Persist the queue's lifecycle events to its store (the observability plane). The engine records
+    // through narrow, semantic writes over the engine write-extension contract: `Store.effects` builds
+    // the pure recorder and `Store.swallowWriteErrors` guards the base append. `Storage` (the baked-in
+    // in-memory default, or an app override) is captured here and provided so the engine handle stays
+    // `Storage`-free — the exact discharge point the old eager `resolveOrDie` used. It can't fail (the
+    // default materializes any scope); the recorder runs at the source in `publishEvent`, so no event
+    // burst is dropped by a late subscriber.
+    const storeEffects = Store.swallowWriteErrors(
+      Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const guardWrite = (
+      write: Effect.Effect<void, never, Store.Storage>,
+    ): Effect.Effect<void> =>
+      Effect.provide(write, storageContext).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(`Queue "${tag.key}" event persist failed`, cause),
+        ),
+      );
+    const store: QueueStoreWriter<Schema.Struct<F>["Type"], E> = {
+      enqueued: (entries, priority, batchId) =>
+        guardWrite(storeEffects.enqueued(entries, priority, batchId)),
+      started: (entry) => guardWrite(storeEffects.started(entry)),
+      completed: (entry, elapsed) => guardWrite(storeEffects.completed(entry, elapsed)),
+      failed: (entry, cause, elapsed) =>
+        guardWrite(storeEffects.failed(entry, cause, elapsed)),
+      exited: (entry, exit, elapsed) =>
+        guardWrite(storeEffects.exited(entry, exit, elapsed)),
+      retryScheduled: (entry, cause, nextAttempt) =>
+        guardWrite(storeEffects.retryScheduled(entry, cause, nextAttempt)),
+      retryExhausted: (entry, cause) =>
+        guardWrite(storeEffects.retryExhausted(entry, cause)),
+      record: (event) => guardWrite(storeEffects.record(event)),
+    };
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
@@ -812,7 +830,7 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
       name: tag.key,
       ...effectiveConfig,
       itemSchema,
-      recordEvent,
+      store,
     } as QueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R | RR>,
@@ -1067,23 +1085,19 @@ export const configure = <
  * @public
  */
 export function store<const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
-  typeof facetStoreRegistration<Tag, BuiltInQueueContract<Tag>>
+  typeof facetStoreRegistration<Tag, QueueStoreAnalyticsContract<Tag>>
 >;
 export function store<
   const Tag extends QueueStoreTag,
   const Shapes extends StoreShapes,
 >(tag: Tag, extended: Shapes): ReturnType<
-  typeof facetStoreRegistration<
-    Tag,
-    BuiltInQueueContract<Tag>,
-    Shapes
-  >
+  typeof facetStoreRegistration<Tag, QueueStoreAnalyticsContract<Tag>, Shapes>
 >;
 export function store(tag: QueueStoreTag, extended?: StoreShapes) {
-  const builtIn = builtInQueueStoreContract(tag);
+  const contract = makeQueueStoreAnalyticsContract(tag);
   return extended === undefined
-    ? facetStoreRegistration(tag, builtIn)
-    : facetStoreRegistration(tag, builtIn, extended);
+    ? facetStoreRegistration(tag, contract)
+    : facetStoreRegistration(tag, contract, extended);
 }
 
 // The light `Tag` lives here (no engine) so `QueueResource.Tag` member access tree-shakes.
