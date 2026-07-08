@@ -119,6 +119,15 @@ describe("QueueResource.store — analytics read-extension", () => {
         "RetryExhausted",
       ]);
 
+      const eventsForJ2 = yield* store.events({ entryId: "j2" });
+      expect(eventsForJ2.map((e) => e._tag)).toEqual([
+        "Enqueued",
+        "Started",
+        "Failed",
+        "RetryScheduled",
+        "RetryExhausted",
+      ]);
+
       const lastFailure = yield* store.lastFailure();
       expect(Option.isSome(lastFailure)).toBe(true);
       expect(Option.getOrThrow(lastFailure).entry.entryId).toBe("j2");

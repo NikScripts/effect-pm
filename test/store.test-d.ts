@@ -6,7 +6,7 @@ import * as Store from "../src/Store";
 import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
 import {
   builtInRunResourceStoreContract,
-  type RunFact,
+  runFactSchemaForTag,
 } from "../src/internal/store/runResourceStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
@@ -110,7 +110,10 @@ type RunFactsResult = ReturnType<RunGateHandle["facts"]> extends Effect.Effect<
   ? A
   : never;
 
-void ({} as RunFactsResult satisfies ReadonlyArray<RunFact>);
+const fetchGateFactSchema = runFactSchemaForTag(FetchGate);
+type FetchGateRunFact = Schema.Schema.Type<typeof fetchGateFactSchema>;
+
+void ({} as RunFactsResult satisfies ReadonlyArray<FetchGateRunFact>);
 
 type _QueueReadPayload = Parameters<MailQueueHandle["events"]>[0];
 void ({} as _QueueReadPayload satisfies { readonly limit?: number } | undefined);
@@ -260,3 +263,38 @@ type ThermometerReadings = ThermometerHandle["readings"];
 declare const _thermReadings: ThermometerReadings;
 void _thermReadings.read();
 void _thermReadings.append({ value: 1 });
+
+// Store.extend — tier-2 engine writes merge onto tier-1 custom methods
+const runEngineContract = Store.extend(
+  (handles) => ({
+    started: (row: {
+      readonly id: string;
+      readonly resourceId: string;
+      readonly runId: string;
+      readonly occurredAt: number;
+      readonly concurrency: number;
+    }) => handles.fact.append({ _tag: "Started", ...row }),
+  }),
+  runGateContract,
+);
+
+type RunEngineHandle = Store.HandleOf<typeof runEngineContract>;
+declare const _runEngineHandle: RunEngineHandle;
+void _runEngineHandle.facts();
+void _runEngineHandle.started({
+  id: "run-2/started",
+  resourceId: FetchGate.key,
+  runId: "run-2",
+  occurredAt: 3,
+  concurrency: 1,
+});
+
+type RunEngineEffects = Store.StoreEffectsOf<typeof runEngineContract>;
+declare const _runEngineEffects: RunEngineEffects;
+void _runEngineEffects.started({
+  id: "run-3/started",
+  resourceId: FetchGate.key,
+  runId: "run-3",
+  occurredAt: 4,
+  concurrency: 1,
+});

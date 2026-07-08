@@ -6,12 +6,16 @@
  * - **Tier 2** — engine write-extension (`engineRunResourceStoreContract`)
  * - **Tier 3** — analytics read-extension (`makeRunResourceStoreAnalyticsContract`)
  *
+ * Tier 2/3 compose tier 1 via {@link Store.extend} — shapes stay on tier 1;
+ * extensions only add custom methods (engine writes or analytics reads).
+ *
  * @module internal/store/runResourceStoreSpec
  * @internal
  */
 
 import { Effect, Option, Schema, Stream } from "effect";
 import * as Store from "../../Store";
+import { failureRate, recent } from "./analytics";
 import { makeRunResourceFactEvent, runFactReadPayload } from "../runResourceEvent";
 import { errorOf, successOf } from "../runTagSchemas";
 import { runGateStatus } from "../runResourceSchema";
@@ -102,11 +106,17 @@ export interface RunStoreStats {
   readonly failed: number;
 }
 
+/** Read payload for built-in `facts`. @internal */
+export type RunFactReadPayload = {
+  readonly limit?: number;
+  readonly runId?: string;
+};
+
 /** Shared write surface for tier-1 contracts. @internal */
 type RunResourceStoreWrites = {
   readonly record: (fact: RunFact) => Effect.Effect<void, StoreWriteError>;
   readonly facts: (
-    payload?: { readonly limit?: number; readonly runId?: string },
+    payload?: RunFactReadPayload,
   ) => Effect.Effect<ReadonlyArray<RunFact>>;
   readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void, StoreWriteError>;
   readonly stateHistory: (
@@ -123,29 +133,55 @@ export type BuiltInRunResourceContract = StoreContractValue<
   RunResourceStoreWrites
 >;
 
+/** Post-filter `fact.read` when `runId` is present on the read payload. @internal */
+const factsRead = <Row extends { readonly runId: string }>(
+  read: (payload?: RunFactReadPayload) => Effect.Effect<ReadonlyArray<Row>>,
+) =>
+  (payload?: RunFactReadPayload): Effect.Effect<ReadonlyArray<Row>> =>
+    payload?.runId === undefined
+      ? read(payload)
+      : Effect.map(read(payload), (rows) => rows.filter((row) => row.runId === payload.runId));
+
+/** Tier-1 custom methods over `fact` + `state` shape handles. @internal */
+const runResourceTier1Methods = <FactRow extends { readonly runId: string }>({
+  fact,
+  state,
+}: {
+  readonly fact: {
+    readonly append: (row: FactRow | ReadonlyArray<FactRow>) => Effect.Effect<void, StoreWriteError>;
+    readonly read: (payload?: RunFactReadPayload) => Effect.Effect<ReadonlyArray<FactRow>>;
+  };
+  readonly state: {
+    readonly append: (row: RunStateChange) => Effect.Effect<void, StoreWriteError>;
+    readonly read: (payload?: { readonly limit?: number }) => Effect.Effect<ReadonlyArray<RunStateChange>>;
+  };
+}) => ({
+  record: fact.append,
+  facts: factsRead(fact.read),
+  recordStateChange: state.append,
+  stateHistory: state.read,
+});
+
 /** Build the run store contract (optional success / error schemas). @internal */
 export const makeRunResourceStoreContract = (
   success?: Schema.Top,
   error?: Schema.Top,
-): BuiltInRunResourceContract =>
-  Store.contract(
+) => {
+  const factSchema = makeRunResourceFactEvent(success, error);
+  type FactRow = Schema.Schema.Type<typeof factSchema>;
+  return Store.contract(
     {
-      fact: Store.shape(makeRunResourceFactEvent(success, error), runFactReadPayload),
+      fact: Store.shape(factSchema, runFactReadPayload),
       state: Store.shape(runStateChangeSchema, runStateReadPayload),
     },
-    ({ fact, state }) => ({
-      record: fact.append,
-      facts: fact.read,
-      recordStateChange: state.append,
-      stateHistory: state.read,
-    }),
-  ) as BuiltInRunResourceContract;
+    (handles) => runResourceTier1Methods<FactRow>(handles),
+  );
+};
 
 /** Built-in run-resource store contract for a tag (reads `success` / `error` from tag). @internal */
-export const builtInRunResourceStoreContract = (
-  tag: StoreScopeTag,
-): BuiltInRunResourceContract =>
-  makeRunResourceStoreContract(successOf(tag), errorOf(tag));
+export const builtInRunResourceStoreContract = <const Tag extends StoreScopeTag>(
+  tag: Tag,
+) => makeRunResourceStoreContract(successOf(tag), errorOf(tag));
 
 // ============================================================================
 // Tier 2 — engine write-extension (semantic writes → fact/state append)
@@ -180,49 +216,44 @@ export type RunStoreFailedInput = {
   readonly error: unknown;
 };
 
+/** Narrow semantic fact writes for the engine tap. @internal */
+const engineRunResourceWrites = (
+  append: (row: unknown) => Effect.Effect<void, StoreWriteError>,
+) => ({
+  started: (row: RunStoreStartedInput) =>
+    append({ _tag: "Started", ...row }),
+  completed: (row: RunStoreCompletedInput) =>
+    (row.success === undefined
+      ? append({
+          _tag: "Completed",
+          id: row.id,
+          resourceId: row.resourceId,
+          runId: row.runId,
+          occurredAt: row.occurredAt,
+          durationMs: row.durationMs,
+        })
+      : append({
+          _tag: "Completed",
+          id: row.id,
+          resourceId: row.resourceId,
+          runId: row.runId,
+          occurredAt: row.occurredAt,
+          durationMs: row.durationMs,
+          success: row.success,
+        })),
+  failed: (row: RunStoreFailedInput) =>
+    append({ _tag: "Failed", ...row }),
+});
+
 /** Build the engine write-extension contract. @internal */
 export const makeEngineRunResourceStoreContract = (
   success?: Schema.Top,
   error?: Schema.Top,
-) => {
-  const factSchema = makeRunResourceFactEvent(success, error);
-  type FactRow = Schema.Schema.Type<typeof factSchema>;
-  return Store.contract(
-    {
-      fact: Store.shape(factSchema, runFactReadPayload),
-      state: Store.shape(runStateChangeSchema, runStateReadPayload),
-    },
-    ({ fact, state }) => ({
-      record: fact.append,
-      facts: fact.read,
-      recordStateChange: state.append,
-      stateHistory: state.read,
-      started: (row: RunStoreStartedInput) =>
-        fact.append({ _tag: "Started", ...row } as Extract<FactRow, { readonly _tag: "Started" }>),
-      completed: (row: RunStoreCompletedInput) =>
-        (row.success === undefined
-          ? fact.append({
-              _tag: "Completed",
-              id: row.id,
-              resourceId: row.resourceId,
-              runId: row.runId,
-              occurredAt: row.occurredAt,
-              durationMs: row.durationMs,
-            } as Extract<FactRow, { readonly _tag: "Completed" }>)
-          : fact.append({
-              _tag: "Completed",
-              id: row.id,
-              resourceId: row.resourceId,
-              runId: row.runId,
-              occurredAt: row.occurredAt,
-              durationMs: row.durationMs,
-              success: row.success,
-            } as Extract<FactRow, { readonly _tag: "Completed" }>)),
-      failed: (row: RunStoreFailedInput) =>
-        fact.append({ _tag: "Failed", ...row } as Extract<FactRow, { readonly _tag: "Failed" }>),
-    }),
+) =>
+  Store.extend(
+    (handles) => engineRunResourceWrites((row) => handles.fact.append(row as never)),
+    makeRunResourceStoreContract(success, error),
   );
-};
 
 /** Engine write-extension contract for a tag. @internal */
 export const engineRunResourceStoreContract = (tag: StoreScopeTag) =>
@@ -230,7 +261,7 @@ export const engineRunResourceStoreContract = (tag: StoreScopeTag) =>
 
 /** Engine write-extension contract type. @internal */
 export type EngineRunResourceStoreContract = ReturnType<
-  typeof engineRunResourceStoreContract
+  typeof makeEngineRunResourceStoreContract
 >;
 
 // ============================================================================
@@ -263,6 +294,82 @@ export type RunStoreReads<Tag extends StoreScopeTag> = {
   >;
 };
 
+/** Analytics derivations over a tag's fact rows. @internal */
+const runResourceAnalyticsMethods = <
+  TagFactRow extends { readonly _tag: string; readonly runId: string },
+  TagCompleted extends TagFactRow,
+  TagFailed extends TagFactRow,
+  TagStarted extends TagFactRow,
+>(options: {
+  readonly fact: {
+    readonly read: (payload?: RunFactReadPayload) => Effect.Effect<ReadonlyArray<TagFactRow>>;
+  };
+  readonly storeClass: { readonly scopeKey: string; readonly contract: StoreContractValue };
+  readonly isStarted: (row: TagFactRow) => row is TagStarted;
+  readonly isCompleted: (row: TagFactRow) => row is TagCompleted;
+  readonly isFailed: (row: TagFactRow) => row is TagFailed;
+}) => {
+  const readAll = (): Effect.Effect<ReadonlyArray<TagFactRow>> => options.fact.read();
+
+  return {
+    completed: (): Effect.Effect<ReadonlyArray<TagCompleted>> =>
+      Effect.map(readAll(), (rows) => rows.filter(options.isCompleted)),
+    failed: (): Effect.Effect<ReadonlyArray<TagFailed>> =>
+      Effect.map(readAll(), (rows) => rows.filter(options.isFailed)),
+    recent: (n: number): Effect.Effect<ReadonlyArray<TagFactRow>> => recent(readAll, n),
+    history: (runId: string): Effect.Effect<ReadonlyArray<TagFactRow>> =>
+      Effect.map(options.fact.read(), (rows) => rows.filter((row) => row.runId === runId)),
+    lastFailure: (): Effect.Effect<Option.Option<TagFailed>> =>
+      Effect.map(readAll(), (rows) => {
+        const failures = rows.filter(options.isFailed);
+        return failures.length === 0
+          ? Option.none()
+          : Option.some(failures[failures.length - 1]!);
+      }),
+    stats: (): Effect.Effect<RunStoreStats> =>
+      Effect.map(readAll(), (rows) => {
+        let started = 0;
+        let completed = 0;
+        let failed = 0;
+        for (const row of rows) {
+          if (options.isStarted(row)) started += 1;
+          else if (options.isCompleted(row)) completed += 1;
+          else if (options.isFailed(row)) failed += 1;
+        }
+        return { started, completed, failed };
+      }),
+    failureRate: (): Effect.Effect<number> =>
+      failureRate(readAll, options.isCompleted, options.isFailed),
+    meanDurationMs: (): Effect.Effect<number> =>
+      Effect.map(readAll(), (rows) => {
+        const durations = rows
+          .filter(options.isCompleted)
+          .map((row) => (row as TagCompleted & { readonly durationMs: number }).durationMs);
+        if (durations.length === 0) return 0;
+        return durations.reduce((a, b) => a + b, 0) / durations.length;
+      }),
+    factChanges: (): Stream.Stream<TagFactRow, StoreJournalDecodeError, Store.Storage> =>
+      Stream.unwrap(
+        Store.changes(
+          options.storeClass,
+          (shapes) => (shapes as { readonly fact: (typeof shapes)["fact"] }).fact,
+        ),
+      ) as Stream.Stream<TagFactRow, StoreJournalDecodeError, Store.Storage>,
+    stateChanges: (): Stream.Stream<RunStateChange, StoreJournalDecodeError, Store.Storage> =>
+      Stream.unwrap(
+        Store.changes(
+          options.storeClass,
+          (shapes) => (shapes as { readonly state: (typeof shapes)["state"] }).state,
+        ),
+      ) as Stream.Stream<RunStateChange, StoreJournalDecodeError, Store.Storage>,
+  };
+};
+
+/** Analytics read-extension contract type for a tag. @internal */
+export type RunResourceStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
+  typeof makeRunResourceStoreAnalyticsContract<Tag>
+>;
+
 /** Build the analytics read-extension contract for a tag. @internal */
 export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
@@ -277,80 +384,21 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
   const isCompleted = (row: TagFactRow): row is TagCompleted => row._tag === "Completed";
   const isFailed = (row: TagFactRow): row is TagFailed => row._tag === "Failed";
 
-  const base = builtInRunResourceStoreContract(tag);
-  const storeClass = { scopeKey: tag.key, contract: base };
+  const tier1 = builtInRunResourceStoreContract(tag);
+  const storeClass = { scopeKey: tag.key, contract: tier1 };
 
-  return Store.contract(
-    {
-      fact: Store.shape(tagFactSchema, runFactReadPayload),
-      state: Store.shape(runStateChangeSchema, runStateReadPayload),
-    },
-    ({ fact, state }) => ({
-      record: fact.append,
-      facts: fact.read,
-      recordStateChange: state.append,
-      stateHistory: state.read,
-      completed: (): Effect.Effect<ReadonlyArray<TagCompleted>> =>
-        Effect.map(fact.read(), (rows) => rows.filter(isCompleted)),
-      failed: (): Effect.Effect<ReadonlyArray<TagFailed>> =>
-        Effect.map(fact.read(), (rows) => rows.filter(isFailed)),
-      recent: (n: number): Effect.Effect<ReadonlyArray<TagFactRow>> =>
-        Effect.map(fact.read(), (rows) =>
-          n <= 0 ? [] : rows.slice(Math.max(0, rows.length - n)),
-        ),
-      history: (runId: string): Effect.Effect<ReadonlyArray<TagFactRow>> =>
-        Effect.map(fact.read(), (rows) => rows.filter((row) => row.runId === runId)),
-      lastFailure: (): Effect.Effect<Option.Option<TagFailed>> =>
-        Effect.map(fact.read(), (rows) => {
-          const failures = rows.filter(isFailed);
-          return failures.length === 0
-            ? Option.none()
-            : Option.some(failures[failures.length - 1]!);
-        }),
-      stats: (): Effect.Effect<RunStoreStats> =>
-        Effect.map(fact.read(), (rows) => {
-          let started = 0;
-          let completed = 0;
-          let failed = 0;
-          for (const row of rows) {
-            if (isStarted(row)) started += 1;
-            else if (isCompleted(row)) completed += 1;
-            else if (isFailed(row)) failed += 1;
-          }
-          return { started, completed, failed };
-        }),
-      failureRate: (): Effect.Effect<number> =>
-        Effect.map(fact.read(), (rows) => {
-          let completed = 0;
-          let failed = 0;
-          for (const row of rows) {
-            if (isCompleted(row)) completed += 1;
-            else if (isFailed(row)) failed += 1;
-          }
-          const total = completed + failed;
-          return total === 0 ? 0 : failed / total;
-        }),
-      meanDurationMs: (): Effect.Effect<number> =>
-        Effect.map(fact.read(), (rows) => {
-          const durations = rows.filter(isCompleted).map((row) => row.durationMs);
-          if (durations.length === 0) return 0;
-          return durations.reduce((a, b) => a + b, 0) / durations.length;
-        }),
-      factChanges: (): Stream.Stream<TagFactRow, StoreJournalDecodeError, Store.Storage> =>
-        Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.fact)),
-      stateChanges: (): Stream.Stream<
-        RunStateChange,
-        StoreJournalDecodeError,
-        Store.Storage
-      > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.state)),
-    }),
+  return Store.extend(
+    (handles) =>
+      runResourceAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
+        fact: handles.fact,
+        storeClass,
+        isStarted,
+        isCompleted,
+        isFailed,
+      }),
+    tier1,
   );
 };
-
-/** Analytics read-extension contract type for a tag. @internal */
-export type RunResourceStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
-  typeof makeRunResourceStoreAnalyticsContract<Tag>
->;
 
 /** @deprecated Internal flat spec — use {@link builtInRunResourceStoreContract}. @internal */
 export const builtInRunResourceStoreSpec = (tag: StoreScopeTag) =>
