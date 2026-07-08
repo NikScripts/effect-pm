@@ -233,7 +233,7 @@ describe("Process.serve / serveRemote — store auto-write", () => {
       );
       yield* Effect.gen(function* () {
         yield* TestClock.adjust(Duration.millis(200));
-        const store = yield* Store.withDefault(
+        const store = yield* Store.resolveOrDie(
           ServeRemoteExec.key,
           builtInProcessStoreContract(ServeRemoteExec),
         );
