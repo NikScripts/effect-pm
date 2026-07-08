@@ -98,6 +98,7 @@ import {
   withRegistrationRetention,
 } from "./internal/store/registration";
 import {
+  CUSTOM_APPEND_ALIAS,
   emptyPayloadSchema,
   isStoreContractValue,
   makeShapeRefs,
@@ -860,6 +861,94 @@ const callAt = (
   return node(...args);
 };
 
+/** Metadata stamped on an {@link effects} object so transforms can tell writes from reads. @internal */
+interface StoreEffectsMeta {
+  readonly scope: string;
+  readonly writePaths: ReadonlyArray<string>;
+}
+
+/** Non-enumerable marker carrying {@link StoreEffectsMeta} (invisible to method access / destructuring). @internal */
+const effectsMetaSym = Symbol.for("@nikscripts/effect-pm/Store/effectsMeta");
+
+/** @internal */
+const stampEffectsMeta = (target: object, meta: StoreEffectsMeta): void => {
+  Object.defineProperty(target, effectsMetaSym, {
+    value: meta,
+    enumerable: false,
+  });
+};
+
+/** @internal */
+const readEffectsMeta = (target: unknown): StoreEffectsMeta | undefined => {
+  if (typeof target !== "object" || target === null || !(effectsMetaSym in target)) {
+    return undefined;
+  }
+  const meta = target[effectsMetaSym];
+  if (
+    typeof meta !== "object" ||
+    meta === null ||
+    !("scope" in meta) ||
+    !("writePaths" in meta)
+  ) {
+    return undefined;
+  }
+  const scope = meta.scope;
+  const writePaths = meta.writePaths;
+  if (typeof scope !== "string" || !Array.isArray(writePaths)) {
+    return undefined;
+  }
+  return {
+    scope,
+    writePaths: writePaths.filter((path): path is string => typeof path === "string"),
+  };
+};
+
+/** The dotted paths of a contract's append-backed (write) methods — leaf appends + append aliases. @internal */
+const writePathsOf = (contract: StoreContractValue): ReadonlyArray<string> => {
+  const paths: Array<string> = [];
+  for (const shapeKey of shapeRowsByKey(contract.shapes).keys()) {
+    paths.push(`${shapeKey}.append`);
+  }
+  for (const [name, entry] of Object.entries(contract.customEntries)) {
+    if (entry._tag === CUSTOM_APPEND_ALIAS) {
+      paths.push(name);
+    }
+  }
+  return paths;
+};
+
+/** Flatten an effects object to a dotted-key map of its method leaves (functions). @internal */
+const flattenEffects = (
+  node: unknown,
+  prefix: string,
+  out: Record<string, unknown>,
+): void => {
+  if (typeof node !== "object" || node === null) {
+    return;
+  }
+  // Tree-walk idiom (as in `nestHandle`).
+  const record = node as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    const path = prefix === "" ? key : `${prefix}.${key}`;
+    if (typeof value === "function") {
+      out[path] = value;
+    } else {
+      flattenEffects(value, path, out);
+    }
+  }
+};
+
+/** Apply a type-erased method leaf, dying if it is somehow not callable. @internal */
+const invokeMethod = (
+  method: unknown,
+  args: ReadonlyArray<unknown>,
+): Effect.Effect<unknown, unknown> => {
+  if (typeof method !== "function") {
+    return Effect.die("Store.swallowWriteErrors: write path is not a method");
+  }
+  return method(...args);
+};
+
 /**
  * Build a PURE object of effects from a contract — the {@link HandleOf} structure (nested shape tree +
  * custom methods) where each method is `(...args) => withDefault(scope, contract).flatMap((handle) =>
@@ -896,9 +985,68 @@ export const effects = <const C extends StoreContractValue>(
   for (const name of Object.keys(contract.customEntries)) {
     flat[name] = method(name);
   }
+  const built = nestHandle(flat);
+  stampEffectsMeta(built, {
+    scope: typeof scope === "string" ? scope : scope.key,
+    writePaths: writePathsOf(contract),
+  });
   // Same generic-object structural-rebuild idiom as `makeShapeHandles` / `makeShapeRefs`: the effects
   // object is assembled by dynamic assignment (then nested), so its type is asserted once here.
-  return nestHandle(flat) as StoreEffectsOf<C>;
+  return built as StoreEffectsOf<C>;
+};
+
+/**
+ * Wrap the **write** methods of a {@link effects} object so a fire-and-forget append that *fails* is
+ * **logged and swallowed** (succeeds as `void`) instead of surfacing its error. Composes with `pipe`:
+ * `pipe(Store.effects(scope, contract), Store.swallowWriteErrors)`.
+ *
+ * Scope of the guard, precisely:
+ * - **Write failures are swallowed** — a journal/IO write error is caught (`Effect.catchAll`), logged
+ *   at warning level, and the effect completes successfully.
+ * - **Defects are NOT swallowed** — an encode/serialization mismatch (a bug: the value does not fit the
+ *   declared shape, dies in {@link effects}' append path) and a wiring die (no store in context) are
+ *   **defects**, not failures, so they propagate untouched.
+ * - **Reads and all non-write methods are left exactly as-is.**
+ *
+ * Type-preserving: writes are already `Effect<void, never, Storage>` publicly, so this only adds the
+ * runtime guard over the type-erased journal failure — the exact input type is returned unchanged.
+ *
+ * @remarks
+ * Typed as an identity generic (`<Effects>(effects: Effects) => Effects`) rather than
+ * `(effects: StoreEffectsOf<C>) => StoreEffectsOf<C>`: `C` is not inferable through the opaque
+ * `StoreEffectsOf<C>`, so the latter form would default `C` and *widen* the result, breaking both
+ * type-preservation and `pipe` composition. The identity generic returns the caller's exact
+ * `StoreEffectsOf<C>` and composes.
+ *
+ * @public
+ */
+export const swallowWriteErrors = <Effects extends object>(
+  effects: Effects,
+): Effects => {
+  const meta = readEffectsMeta(effects);
+  if (meta === undefined) {
+    return effects;
+  }
+
+  const flat: Record<string, unknown> = {};
+  flattenEffects(effects, "", flat);
+
+  for (const path of meta.writePaths) {
+    const method = flat[path];
+    if (typeof method === "function") {
+      flat[path] = (...args: ReadonlyArray<unknown>) =>
+        invokeMethod(method, args).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(`${meta.scope} ${path}: store write failed`, error),
+          ),
+        );
+    }
+  }
+
+  const built = nestHandle(flat);
+  stampEffectsMeta(built, meta);
+  // Same structural-rebuild idiom as `effects`: the guarded object is reassembled by dynamic assignment.
+  return built as Effects;
 };
 
 

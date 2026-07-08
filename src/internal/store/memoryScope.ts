@@ -121,8 +121,15 @@ export const makeScopeHandle = <S extends StoreSpec>(
             // `append` receives DECODED domain values. `Schema.toCodecJson` is Effect's own
             // schema→JSON codec — it serializes rich types (`DateTime`, `Exit`, `Cause`, `Duration`)
             // to a JSON-safe form and decodes them back, which the naive object walk cannot.
-            const wire = yield* Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one);
-            const encoded = yield* encodeJournalPayload(wire);
+            //
+            // An encode/serialization failure here means the value does not fit the declared shape —
+            // a programming bug, not a runtime condition — so it `orDie`s as a defect (surfacing the
+            // bug) rather than becoming a catchable failure. The `journal.write` below is left as a
+            // normal failure: a journal/IO write error stays in the cause and remains catchable.
+            const wire = yield* Effect.orDie(
+              Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one),
+            );
+            const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
             yield* sideEffects.journal.write({
               event: name,
               primaryKey: sideEffects.scopeKey,
