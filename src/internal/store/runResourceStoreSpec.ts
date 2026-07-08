@@ -3,11 +3,11 @@
  *
  * Three tiers (mirrors {@link QueueResource}):
  * - **Tier 1** — lean base (`builtInRunResourceStoreContract`)
- * - **Tier 2** — engine write-extension (`engineRunResourceStoreContract`)
- * - **Tier 3** — analytics read-extension (`makeRunResourceStoreAnalyticsContract`)
+ * - **Tier 2** — analytics read-extension (`makeRunResourceStoreAnalyticsContract`)
  *
- * Tier 2/3 compose tier 1 via {@link Store.extend} — shapes stay on tier 1;
- * extensions only add custom methods (engine writes or analytics reads).
+ * Tier 2 composes tier 1 via {@link Store.extend} — shapes stay on tier 1;
+ * the extension only adds analytics read methods. The engine writes via shape
+ * `append` handles (`fact.append` / `state.append`) directly.
  *
  * @module internal/store/runResourceStoreSpec
  * @internal
@@ -184,90 +184,7 @@ export const builtInRunResourceStoreContract = <const Tag extends StoreScopeTag>
 ) => makeRunResourceStoreContract(successOf(tag), errorOf(tag));
 
 // ============================================================================
-// Tier 2 — engine write-extension (semantic writes → fact/state append)
-// ============================================================================
-
-/** Row accepted by narrow `started` / `completed` / `failed` writes. @internal */
-export type RunStoreStartedInput = {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly runId: string;
-  readonly occurredAt: number;
-  readonly concurrency: number;
-};
-
-/** Row accepted by narrow `completed` writes. @internal */
-export type RunStoreCompletedInput = {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly runId: string;
-  readonly occurredAt: number;
-  readonly durationMs: number;
-  readonly success?: unknown;
-};
-
-/** Row accepted by narrow `failed` writes. @internal */
-export type RunStoreFailedInput = {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly runId: string;
-  readonly occurredAt: number;
-  readonly durationMs: number;
-  readonly error: unknown;
-};
-
-/** Narrow semantic fact writes for the engine tap. @internal */
-const engineRunResourceWrites = (
-  append: (row: unknown) => Effect.Effect<void, StoreWriteError>,
-) => ({
-  started: (row: RunStoreStartedInput) =>
-    append({ _tag: "Started", ...row }),
-  completed: (row: RunStoreCompletedInput) =>
-    (row.success === undefined
-      ? append({
-          _tag: "Completed",
-          id: row.id,
-          resourceId: row.resourceId,
-          runId: row.runId,
-          occurredAt: row.occurredAt,
-          durationMs: row.durationMs,
-        })
-      : append({
-          _tag: "Completed",
-          id: row.id,
-          resourceId: row.resourceId,
-          runId: row.runId,
-          occurredAt: row.occurredAt,
-          durationMs: row.durationMs,
-          success: row.success,
-        })),
-  failed: (row: RunStoreFailedInput) =>
-    append({ _tag: "Failed", ...row }),
-});
-
-/** Build the engine write-extension contract. @internal */
-export const makeEngineRunResourceStoreContract = (
-  success?: Schema.Top,
-  error?: Schema.Top,
-) => {
-  const base = makeRunResourceStoreContract(success, error);
-  return Store.extend(
-    ({ fact }) => engineRunResourceWrites((row) => fact.append(row as never)),
-    base,
-  );
-};
-
-/** Engine write-extension contract for a tag. @internal */
-export const engineRunResourceStoreContract = (tag: StoreScopeTag) =>
-  makeEngineRunResourceStoreContract(successOf(tag), errorOf(tag));
-
-/** Engine write-extension contract type. @internal */
-export type EngineRunResourceStoreContract = ReturnType<
-  typeof makeEngineRunResourceStoreContract
->;
-
-// ============================================================================
-// Tier 3 — analytics read-extension (pure derivations over facts + state)
+// Tier 2 — analytics read-extension (pure derivations over facts + state)
 // ============================================================================
 
 /**

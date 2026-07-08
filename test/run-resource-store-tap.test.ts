@@ -9,13 +9,14 @@ const scopeKey = "@test/failing-store";
 const failingBridge = {
   at: () =>
     Effect.succeed({
-      record: () => Effect.fail(new StoreWriteError({ cause: "blocked-fact" })),
-      recordStateChange: () => Effect.fail(new StoreWriteError({ cause: "blocked-state" })),
-      facts: () => Effect.succeed([]),
-      stateHistory: () => Effect.succeed([]),
-      started: () => Effect.fail(new StoreWriteError({ cause: "blocked-started" })),
-      completed: () => Effect.fail(new StoreWriteError({ cause: "blocked-completed" })),
-      failed: () => Effect.fail(new StoreWriteError({ cause: "blocked-failed" })),
+      fact: {
+        append: () => Effect.fail(new StoreWriteError({ cause: "blocked-fact" })),
+        read: () => Effect.succeed([]),
+      },
+      state: {
+        append: () => Effect.fail(new StoreWriteError({ cause: "blocked-state" })),
+        read: () => Effect.succeed([]),
+      },
     }),
   changes: () => Effect.die(new Error("unused in store tests")),
 } as unknown as StorageApi;

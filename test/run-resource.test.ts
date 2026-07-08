@@ -475,12 +475,16 @@ describe("RunResource.layer — store failure isolation", () => {
   const failingBridgeLayer = Layer.succeed(Storage, {
     at: () =>
       Effect.succeed({
-        record: () =>
-          Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-fact" })),
-        recordStateChange: () =>
-          Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-state" })),
-        facts: () => Effect.succeed([]),
-        stateHistory: () => Effect.succeed([]),
+        fact: {
+          append: () =>
+            Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-fact" })),
+          read: () => Effect.succeed([]),
+        },
+        state: {
+          append: () =>
+            Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-state" })),
+          read: () => Effect.succeed([]),
+        },
       }),
     changes: () => Effect.die(new Error("unused")),
   } as unknown as StorageApi);

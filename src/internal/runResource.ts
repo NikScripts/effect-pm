@@ -14,7 +14,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import {
-  engineRunResourceStoreContract,
+  builtInRunResourceStoreContract,
   type RunResourceStateChangeReason,
   type RunStateChange,
 } from "./store/runResourceStoreSpec";
@@ -150,30 +150,12 @@ const makeRunResourceStoreWriter = (options: {
   readonly scopeKey: string;
   readonly tag?: StoreScopeTag;
   readonly storeEffects: {
-    readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void>;
-    readonly started: (row: {
-      readonly id: string;
-      readonly resourceId: string;
-      readonly runId: string;
-      readonly occurredAt: number;
-      readonly concurrency: number;
-    }) => Effect.Effect<void>;
-    readonly completed: (row: {
-      readonly id: string;
-      readonly resourceId: string;
-      readonly runId: string;
-      readonly occurredAt: number;
-      readonly durationMs: number;
-      readonly success?: unknown;
-    }) => Effect.Effect<void>;
-    readonly failed: (row: {
-      readonly id: string;
-      readonly resourceId: string;
-      readonly runId: string;
-      readonly occurredAt: number;
-      readonly durationMs: number;
-      readonly error: unknown;
-    }) => Effect.Effect<void>;
+    readonly fact: {
+      readonly append: (row: unknown) => Effect.Effect<void>;
+    };
+    readonly state: {
+      readonly append: (change: RunStateChange) => Effect.Effect<void>;
+    };
   };
 }): Effect.Effect<RunResourceStoreWriter> =>
   Effect.gen(function* () {
@@ -205,11 +187,12 @@ const makeRunResourceStoreWriter = (options: {
             previous,
             current,
           });
-          yield* storeEffects.recordStateChange(change);
+          yield* storeEffects.state.append(change);
         }),
       recordRunStarted: (runId, occurredAt, concurrency) =>
         Effect.flatMap(nextFactId(runId, "Started"), (id) =>
-          storeEffects.started({
+          storeEffects.fact.append({
+            _tag: "Started",
             id,
             resourceId,
             runId,
@@ -219,18 +202,31 @@ const makeRunResourceStoreWriter = (options: {
         ),
       recordRunCompleted: (runId, occurredAt, durationMs, success) =>
         Effect.flatMap(nextFactId(runId, "Completed"), (id) =>
-          storeEffects.completed({
-            id,
-            resourceId,
-            runId,
-            occurredAt,
-            durationMs,
-            ...(persistSuccess ? { success } : {}),
-          }),
+          storeEffects.fact.append(
+            persistSuccess
+              ? {
+                  _tag: "Completed",
+                  id,
+                  resourceId,
+                  runId,
+                  occurredAt,
+                  durationMs,
+                  success,
+                }
+              : {
+                  _tag: "Completed",
+                  id,
+                  resourceId,
+                  runId,
+                  occurredAt,
+                  durationMs,
+                },
+          ),
         ),
       recordRunFailed: (runId, occurredAt, durationMs, error) =>
         Effect.flatMap(nextFactId(runId, "Failed"), (id) =>
-          storeEffects.failed({
+          storeEffects.fact.append({
+            _tag: "Failed",
             id,
             resourceId,
             runId,
@@ -374,7 +370,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const storageContext = yield* Effect.context<Store.Storage>();
     const storeEffects = Store.provideContext(
       Store.catchWriteErrors(
-        Store.effects(scopeKey, engineRunResourceStoreContract(scopeTag)),
+        Store.effects(scopeKey, builtInRunResourceStoreContract(scopeTag)),
       ),
       storageContext,
     );
@@ -382,7 +378,10 @@ export const makeRunResourceHandleEffect = <T, A, E>(
       resourceId,
       scopeKey,
       tag: config.tag,
-      storeEffects,
+      storeEffects: storeEffects as {
+        readonly fact: { readonly append: (row: unknown) => Effect.Effect<void> };
+        readonly state: { readonly append: (change: RunStateChange) => Effect.Effect<void> };
+      },
     });
     const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
