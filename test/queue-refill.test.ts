@@ -1,6 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Ref } from "effect";
 import * as QueueResource from "../src/QueueResource";
+import { layerDefaultMemory } from "../src/Store";
+
+const withDefaultStore = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.provide(effect, layerDefaultMemory);
 
 const waitUntil = (predicate: Effect.Effect<boolean>) =>
   Effect.gen(function* () {
@@ -19,7 +23,7 @@ describe("QueueResource refill", () => {
       });
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
       expect((yield* Ref.get(processed)).sort()).toEqual([1, 2, 3]);
-    }).pipe(Effect.scoped),
+    }).pipe(withDefaultStore, Effect.scoped),
   );
 
   it.live("refill.onDrained re-polls the source on each drain until empty", () =>
@@ -45,6 +49,6 @@ describe("QueueResource refill", () => {
       yield* queue.add([1]); // prime; each drain pulls the next from `source`
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
       expect(yield* Ref.get(processed)).toEqual([1, 2, 3]);
-    }).pipe(Effect.scoped),
+    }).pipe(withDefaultStore, Effect.scoped),
   );
 });

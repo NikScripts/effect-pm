@@ -21,8 +21,8 @@ typed-success pattern.
 
 ## Adoption steps (completed)
 1. **Transform layer** — `runResourceStoreTap.ts` builds `Store.catchWriteErrors(Store.effects(…,
-   engineRunResourceStoreContract(tag)))`; `buildRunImpl` pre-builds the tap with captured `Storage`
-   (`provideRunResourceStoreEffects`), mirroring `buildQueueImpl`.
+   engineRunResourceStoreContract(tag)))`; `buildRunImpl` pre-builds the tap with seq-id minting,
+   mirroring `buildQueueImpl`. `Storage` is satisfied by the merged toolkit layer, not per-write `provide`.
 2. **Three-tier store** — `builtInRunResourceStoreContract` (tier 1), `engineRunResourceStoreContract`
    (tier 2: `started` / `completed` / `failed`), `makeRunResourceStoreAnalyticsContract` (tier 3:
    `completed`, `failed`, `recent`, `history`, `lastFailure`, `stats`, `failureRate`, `meanDurationMs`,

@@ -72,7 +72,6 @@ import {
 import {
   buildRunResourceStoreEffects,
   makeRunResourceStoreTapFromEffects,
-  provideRunResourceStoreEffects,
 } from "./internal/runResourceStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type { StoreScopeTag } from "./internal/store/registration";
@@ -409,7 +408,6 @@ const buildRunImpl = <
 ): Effect.Effect<any, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
-    const storageContext = yield* Effect.context<Store.Storage>();
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
@@ -422,7 +420,6 @@ const buildRunImpl = <
       scopeKey: tag.key,
       tag,
       storeEffects,
-      provideStorage: provideRunResourceStoreEffects(storageContext),
     });
     const handle = yield* internal.makeRunResourceHandleEffect({
       name: effectiveConfig.name ?? tag.key,

@@ -127,7 +127,7 @@ const makeObservedRun =
     update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
     reason: RunResourceStateChangeReason,
     durationMs?: number,
-  ): Effect.Effect<void> =>
+  ): Effect.Effect<void, never, Storage> =>
     Effect.gen(function* () {
       const observedAt = yield* Clock.currentTimeMillis;
       const previous = yield* SubscriptionRef.get(statusRef);

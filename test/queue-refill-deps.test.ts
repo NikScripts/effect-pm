@@ -1,6 +1,7 @@
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
+import { layerDefaultMemory } from "../src/Store";
 
 // A refill loader that needs its OWN service dependency (like wow's Prisma repo) — distinct from
 // the worker, which needs nothing. Probes whether the refill's R is surfaced + provided.
@@ -46,7 +47,9 @@ it("refill loader gets its own service dependency", () =>
       const done = yield* Fiber.join(completed);
       expect(done._tag === "Some" && done.value.completed >= 3).toBe(true);
     }).pipe(
-      Effect.provide(queueLayer.pipe(Layer.provide(SourceLive))),
+      Effect.provide(
+        queueLayer.pipe(Layer.provide(SourceLive), Layer.provideMerge(layerDefaultMemory)),
+      ),
       Effect.scoped,
     ),
   ));

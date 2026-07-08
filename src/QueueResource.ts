@@ -33,7 +33,7 @@
  *
  * @module QueueResource
  */
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
@@ -890,6 +890,11 @@ const buildQueueImpl = <
     // Capture the FULL ambient context (worker `R` + refill `RR`): the worker effect and the
     // refill loader both run ambiently, so the captured context must cover their union.
     const context = yield* Effect.context<R | RR>();
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const runtimeContext = Context.merge(context, storageContext);
+    const provideRuntime = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R | RR | Store.Storage>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, runtimeContext);
     // Fold any `.configure` patches in context (keyed by the tag id) onto the base config — so
     // per-env overrides (concurrency / rateLimit / …) merged as layers take effect at build.
     const effectiveConfig = yield* foldConfiguredSpec<
@@ -905,11 +910,11 @@ const buildQueueImpl = <
     // through narrow, semantic writes over the engine write-extension contract: `Store.effects` builds
     // the pure recorder and `Store.catchWriteErrors` narrows each write's `StoreWriteError` out —
     // logging + swallowing a journal/IO write hiccup so a store failure never breaks the queue (an
-    // encode/wiring **defect** still propagates). `Storage` (the baked-in in-memory default, or an app
-    // override) is captured here and provided so the engine handle stays `Storage`-free — the exact
-    // discharge point the old eager `resolveOrDie` used. It can't fail (the default materializes any
-    // scope); the recorder runs at the source in `publishEvent`, so no event burst is dropped by a late
-    // subscriber.
+    // encode/wiring **defect** still propagates). Each write still carries `Storage` in its requirement;
+    // `QueueResource.layer` merges {@link Store.layerDefaultMemory} (or an app override wins via
+    // `Layer.provideMerge`), so `publishEvent` satisfies it at the layer boundary — not per-write
+    // `Effect.provide`. The recorder runs at the source in `publishEvent`, so no event burst is dropped
+    // by a late subscriber.
     // The engine write-extension contract's event schema is erased at the schema level (Effect's
     // `.Type` reduction can't collapse a `Schema.Union` with a *generic* success field). The typed
     // success value `A` rides the `QueueStoreWriter<Item, E, A>` surface below — its `completed`
@@ -918,27 +923,23 @@ const buildQueueImpl = <
     const storeEffects = Store.catchWriteErrors(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
-    const storageContext = yield* Effect.context<Store.Storage>();
-    const provideStorage = <A>(
-      write: Effect.Effect<A, never, Store.Storage>,
-    ): Effect.Effect<A> => Effect.provide(write, storageContext);
     const store: QueueStoreWriter<
       Schema.Struct<F>["Type"],
       E,
       QueueSuccessValueOf<Success>
     > = {
       enqueued: (entries, priority, batchId) =>
-        provideStorage(storeEffects.enqueued(entries, priority, batchId)),
-      started: (entry) => provideStorage(storeEffects.started(entry)),
+        storeEffects.enqueued(entries, priority, batchId),
+      started: (entry) => storeEffects.started(entry),
       completed: (entry, success, elapsed) =>
-        provideStorage(storeEffects.completed(entry, success, elapsed)),
+        storeEffects.completed(entry, success, elapsed),
       failed: (entry, cause, elapsed) =>
-        provideStorage(storeEffects.failed(entry, cause, elapsed)),
+        storeEffects.failed(entry, cause, elapsed),
       retryScheduled: (entry, cause, nextAttempt) =>
-        provideStorage(storeEffects.retryScheduled(entry, cause, nextAttempt)),
+        storeEffects.retryScheduled(entry, cause, nextAttempt),
       retryExhausted: (entry, cause) =>
-        provideStorage(storeEffects.retryExhausted(entry, cause)),
-      record: (event) => provideStorage(storeEffects.record(event)),
+        storeEffects.retryExhausted(entry, cause),
+      record: (event) => storeEffects.record(event),
     };
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
@@ -954,9 +955,7 @@ const buildQueueImpl = <
       R | RR,
       QueueSuccessValueOf<Success>
     >);
-    const provideR = <Out, Err>(
-      effect: Effect.Effect<Out, Err, R | RR>,
-    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+    const provideR = provideRuntime;
 
     // History capture (optional): when a HistoryStore is provided, fork fibers that append each
     // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
@@ -1006,11 +1005,11 @@ const buildQueueImpl = <
         statusSub,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
       ),
-      start: provideR(handle.start),
+      start: provideRuntime(handle.start),
       pause: handle.pause,
       resume: handle.resume,
-      shutdown: handle.shutdown,
-      clear: provideR(handle.clear),
+      shutdown: provideRuntime(handle.shutdown),
+      clear: provideRuntime(handle.clear),
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>
@@ -1061,12 +1060,12 @@ const buildQueueImpl = <
       // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
       // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
       // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
-      enqueue: (entries) => provideR(handle.enqueue(entries)),
-      release: ({ options }) => provideR(handle.release(options)),
-      releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
+      enqueue: (entries) => provideRuntime(handle.enqueue(entries)),
+      release: ({ options }) => provideRuntime(handle.release(options)),
+      releaseEncoded: ({ options }) => provideRuntime(handle.releaseEncoded(options)),
       deadLetter: ({ selector, options }) =>
-        provideR(handle.deadLetter(selector, options)),
-      drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
+        provideRuntime(handle.deadLetter(selector, options)),
+      drop: ({ selector, options }) => provideRuntime(handle.drop(selector, options)),
       events: handle.events,
     };
     return impl;

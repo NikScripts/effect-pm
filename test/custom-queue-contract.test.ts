@@ -1,6 +1,7 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { expect, it } from "@effect/vitest";
 import { CustomQueueResource } from "../src";
+import { layerDefaultMemory } from "../src/Store";
 import { methodMeta, specOf } from "../src/Resource";
 
 const JobSchema = Schema.Struct({ id: Schema.String });
@@ -60,5 +61,5 @@ it.live("customQueueResource.layer drives add(item, level)", () =>
         }),
       ),
     );
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.provide(layerDefaultMemory), Effect.scoped),
 );
