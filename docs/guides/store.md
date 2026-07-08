@@ -121,7 +121,11 @@ const contract = Store.contract(
 Allowed in part 2: shape aliases (flat or nested), bare `Effect`s, effect functions. No `readWith` or
 ad-hoc query helpers.
 
-### Extend
+### Extend — `Store.extend` (the tier primitive)
+
+`Store.extend` is the composable counterpart to `Store.contract`: a base is built once with `contract`,
+and each **tier** on top of it is an `extend` — more shapes, more custom methods, or both. This is how
+you stack contracts; you never rebuild a base with `contract` to add a tier.
 
 ```ts
 const extended = baseContract.pipe(
@@ -129,6 +133,31 @@ const extended = baseContract.pipe(
   Store.extend((shapes) => ({ combined: shapes.extra.read })),
 );
 ```
+
+**Concrete-preservation.** Prefer the **data-first** form `Store.extend(methodsFn, base)` when the methods
+read the base's shapes. Fed the `base` alongside its methods builder, `extend` infers each method's exact
+return type and merges it as `base.custom & …`, so the concrete method signatures survive all the way onto
+`Store.effects` — never a widened `Record<string, unknown>`. The builder receives the base's shape handles,
+so `event.append` / `event.read` are typed for the base's own row schemas.
+
+```ts
+const base = Store.contract({ event: eventSchema }, ({ event }) => ({
+  record: event.append,
+  events: event.read,
+}));
+
+const engine = Store.extend(
+  ({ event }) => ({
+    completed: (entry: Entry, success: Success, elapsed: Duration.Duration) =>
+      event.append({ _tag: "Completed", entry, success, elapsed }),
+  }),
+  base,
+);
+// engine.custom.completed keeps its exact (entry, success, elapsed) => Effect<void, StoreWriteError> type
+```
+
+This is how the queue stacks its three tiers — lean base (`contract`) → engine write-extension (`extend`) →
+analytics read-extension (`extend`); see [`queue-resource.md`](./queue-resource.md).
 
 ## Resolving a handle — `resolve` / `resolveOrDie`
 

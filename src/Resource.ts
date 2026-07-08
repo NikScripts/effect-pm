@@ -676,6 +676,163 @@ export const mapSubscribable = <A, B>(
   changes: Stream.map(source.changes, f),
 });
 
+// ============================================================================
+// Impl transform — walk an impl per its spec and map every Effect method
+// ============================================================================
+
+/**
+ * Wrap a type-erased impl member so its returned {@link Effect} passes through `transform`. A member that
+ * is a **function** `(...args) => Effect` → `(...args) => transform(fn(...args))`; a **bare** `Effect`
+ * member → `transform(member)` directly. Only ever handed an **Effect method's** impl member — the
+ * {@link mapEffects} walk skips `stream: true` leaves (streams and {@link ref} → {@link Subscribable}
+ * members) before it reaches here. @internal
+ */
+const mapEffectMember = (
+  member: unknown,
+  transform: (
+    effect: Effect.Effect<unknown, unknown, unknown>,
+  ) => Effect.Effect<unknown, unknown, unknown>,
+): unknown => {
+  if (typeof member === "function") {
+    // function → Effect: same call-then-transform idiom as `Store.mapMethod`.
+    return (...args: ReadonlyArray<unknown>) => transform(member(...args));
+  }
+  // bare Effect member (e.g. a no-payload `effectFn` — `start`/`pause`): transform it directly. The
+  // leaf is type-erased by the spec-driven walk, so the Effect type is asserted once here (the same
+  // tree-walk/rebuild idiom as `flattenImpl` / `nestService`).
+  return transform(member as Effect.Effect<unknown, unknown, unknown>);
+};
+
+/**
+ * Remove the requirement channel `R` from every **Effect method** in an impl shape — the per-method-precise
+ * result of {@link provideContext}. Mirrors `Store.CatchWriteError`, but **subtracts** the provided context
+ * `Ctx` from each method's requirement rather than catching an error — sound like `Effect.provideContext`
+ * (`R` → `Exclude<R, Ctx>`), so a requirement the context does **not** cover survives as a residual (and a
+ * later `ImplOf` assignment catches it) instead of being silently claimed `never`. A method
+ * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, Exclude<R, Ctx>>`; a bare `Effect<S, E, R>` →
+ * `Effect<S, E, Exclude<R, Ctx>>`; a {@link Subscribable} (a {@link ref} field's impl) and a {@link Stream}
+ * (a `stream` field's impl, or a group's `live`) pass through untouched; a nested method group recurses.
+ * @public
+ */
+export type ProvidedContext<T, Ctx> = T extends Subscribable<infer A>
+  ? Subscribable<A>
+  : T extends Stream.Stream<infer A, infer E, infer R>
+    ? Stream.Stream<A, E, R>
+    : T extends (...args: infer Args) => Effect.Effect<infer S, infer E, infer R>
+      ? (...args: Args) => Effect.Effect<S, E, Exclude<R, Ctx>>
+      : T extends Effect.Effect<infer S, infer E, infer R>
+        ? Effect.Effect<S, E, Exclude<R, Ctx>>
+        : T extends (...args: ReadonlyArray<never>) => unknown
+          ? T
+          : T extends object
+            ? { readonly [K in keyof T]: ProvidedContext<T[K], Ctx> }
+            : T;
+
+/**
+ * Add `Req` to the requirement channel of every **Effect method** in an impl shape — the inverse of
+ * {@link ProvidedContext}, and a parameterized cousin of `Store.AddStorageReq`. Use it to annotate a
+ * **pre-provide** impl (each worker method still carrying its requirement `Req`) so every method's
+ * destructured params still get their contextual types from the spec, before {@link provideContext}
+ * strips `Req` back off to yield the {@link ImplOf} shape. A method `(...a) => Effect<S, E, R>` →
+ * `(...a) => Effect<S, E, R | Req>`; a bare `Effect<S, E, R>` → `Effect<S, E, R | Req>`; a
+ * {@link Subscribable} / {@link Stream} member passes through untouched; a nested group recurses.
+ *
+ * @public
+ */
+export type WithRequirement<T, Req> = T extends Subscribable<infer A>
+  ? Subscribable<A>
+  : T extends Stream.Stream<infer A, infer E, infer R>
+    ? Stream.Stream<A, E, R>
+    : T extends (...args: infer Args) => Effect.Effect<infer S, infer E, infer R>
+      ? (...args: Args) => Effect.Effect<S, E, R | Req>
+      : T extends Effect.Effect<infer S, infer E, infer R>
+        ? Effect.Effect<S, E, R | Req>
+        : T extends (...args: ReadonlyArray<never>) => unknown
+          ? T
+          : T extends object
+            ? { readonly [K in keyof T]: WithRequirement<T[K], Req> }
+            : T;
+
+/**
+ * The generic impl-transform primitive — the Resource counterpart to `Store.mapEffects`. Walk `impl`
+ * **per its `spec`** ({@link flattenSpec} keys aligned onto the impl via {@link flattenImpl}) and pass each
+ * **Effect method**'s returned {@link Effect} through `transform`, then re-nest ({@link nestService}). A
+ * `stream: true` leaf — a {@link Resource.stream} member (a {@link Stream} impl) **or** a {@link ref} field
+ * (a {@link Subscribable} impl) — is left untouched, as is a {@link LocalMethod} leaf.
+ *
+ * `transform` is applied uniformly; whether it changes types is expressed through the result:
+ * - **Type-preserving** transforms (`withSpan` / `retry`) leave the type unchanged — `Out` defaults to
+ *   `Impl`.
+ * - **Type-changing** transforms (stripping `R`, like {@link provideContext}) supply an explicit `Out`
+ *   computed per method by a mapped type (e.g. {@link ProvidedContext}).
+ *
+ * @example Type-preserving — trace every resource method
+ * ```ts
+ * const traced = Resource.mapEffects(impl, MyTag[Resource.specSym], (e) => Effect.withSpan(e, "resource"));
+ * ```
+ *
+ * @public
+ */
+export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
+  impl: Impl,
+  spec: S,
+  transform: (
+    effect: Effect.Effect<unknown, unknown, unknown>,
+  ) => Effect.Effect<unknown, unknown, unknown>,
+): Out => {
+  const flatSpec = flattenSpec(spec);
+  // Tree-walk/rebuild idiom (as in `flattenImpl` at every wire call site): the impl is a type-erased
+  // record here, walked by the spec's flat paths.
+  const flatImpl = flattenImpl(impl as Record<string, unknown>, flatSpec);
+
+  const mapped: Record<string, unknown> = {};
+  for (const [path, member] of Object.entries(flatImpl)) {
+    const leaf = flatSpec[path];
+    // Leave streams (and `ref` → Subscribable, which is `stream: true`) and local members untouched;
+    // map only the Effect methods.
+    if (
+      leaf === undefined ||
+      isLocalMethod(leaf) ||
+      (Predicate.hasProperty(leaf, "stream") && leaf.stream === true)
+    ) {
+      mapped[path] = member;
+    } else {
+      mapped[path] = mapEffectMember(member, transform);
+    }
+  }
+
+  const built = nestService(mapped);
+  // Same structural-rebuild idiom as `Store.mapEffects`: the reassembled object is asserted once here
+  // (as `Out` — the caller-supplied per-method result, or `Impl`).
+  return built as Out;
+};
+
+/**
+ * Provide a {@link Context.Context} to **every Effect method** of an impl — the one-liner that replaces a
+ * repetitive per-method `Effect.provideContext(...)` wrapping. One-liner over {@link mapEffects}; the
+ * result **subtracts** the provided context `Ctx` from each method's requirement (see
+ * {@link ProvidedContext}) — `R` → `Exclude<R, Ctx>` — so a worker-`R`-carrying impl whose context fully
+ * covers `R` becomes the `R`-free shape {@link ImplOf} expects, and a method needing more than `Ctx`
+ * provides keeps a residual requirement (caught at the `ImplOf` assignment) rather than a false `never`.
+ * Providing the context to a method that carries no `R` is a harmless no-op, so it applies uniformly.
+ * {@link Stream} and {@link Subscribable} members are left untouched.
+ *
+ * ```ts
+ * const context = yield* Effect.context<R | RR>();
+ * return Resource.provideContext(impl, MyTag[Resource.specSym], context);
+ * ```
+ *
+ * @public
+ */
+export const provideContext = <Impl, const S extends Spec, Ctx>(
+  impl: Impl,
+  spec: S,
+  context: Context.Context<Ctx>,
+): ProvidedContext<Impl, Ctx> =>
+  mapEffects<Impl, S, ProvidedContext<Impl, Ctx>>(impl, spec, (effect) =>
+    Effect.provideContext(effect, context),
+  );
+
 /**
  * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
  * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`

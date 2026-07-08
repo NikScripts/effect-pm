@@ -635,9 +635,41 @@ const extendCore = <
 >;
 
 /**
- * Extend a contract — shapes, methods, or both. Pipeable.
+ * Extend an existing contract with more shapes, more custom methods, or both — the composable
+ * counterpart to {@link contract} (which builds one from scratch).
+ *
+ * **Concrete-preservation guarantee.** When a `methods` builder is supplied *together with* its
+ * `base` (the data-first forms `extend(methods, base)` and `extend(shapes, methods, base)`), the
+ * builder's return `Custom` is inferred at its exact type and merged as `Base["custom"] & Custom`.
+ * Each method therefore keeps its precise signature all the way onto {@link effects} — e.g.
+ * `completed: (entry, success, elapsed) => Effect<void, StoreWriteError, Storage>`, never a widened
+ * `Record<string, unknown>`. The `methods` builder receives the base's shape handles
+ * ({@link ShapeHandles} over `Base["shapes"]`, plus any newly declared `shapes`), so `event.append`
+ * / `event.read` are typed for the base's own row schemas.
+ *
+ * The pipeable / data-last forms (`extend(methods)` and `extend(shapes, methods)`) still preserve
+ * the builder's return `Custom` concretely, but — because the `base` is not yet known when the
+ * builder is written — its shape handles are typed generically (the newly declared `shapes` only,
+ * for `extend(shapes, methods)`). Prefer the data-first forms when methods must read base shapes.
+ *
+ * @example Add methods to a base contract (data-first — full concrete handles)
+ * ```ts
+ * const base = Store.contract({ event: eventSchema }, ({ event }) => ({
+ *   record: event.append,
+ *   events: event.read,
+ * }));
+ *
+ * const extended = Store.extend(
+ *   ({ event }) => ({
+ *     started: (entry: Entry) => event.append({ _tag: "Started", entry }),
+ *   }),
+ *   base,
+ * );
+ * // extended["custom"].started is the exact `(entry: Entry) => Effect<void, StoreWriteError>`
+ * ```
  *
  * @public
+ * @category constructors
  */
 export const extend: {
   <const Shapes extends StoreShapes>(
@@ -645,32 +677,40 @@ export const extend: {
   ): <const Base extends StoreContractValue>(
     base: Base,
   ) => StoreContractValue<Base["shapes"] & Shapes, Base["custom"]>;
-  <const Base extends StoreContractValue>(
-    methods: StoreMethodsFn<Base["shapes"]>,
-  ): (base: Base) => StoreContractValue<Base["shapes"], MergedCustom<Base, StoreMethodsFn<Base["shapes"]>>>;
-  <const Shapes extends StoreShapes, const Base extends StoreContractValue>(
+  <const Custom extends Readonly<Record<string, unknown>>>(
+    methods: (shapes: ShapeHandles<StoreShapes>) => Custom,
+  ): <const Base extends StoreContractValue>(
+    base: Base,
+  ) => StoreContractValue<Base["shapes"], Base["custom"] & Custom>;
+  <
+    const Shapes extends StoreShapes,
+    const Custom extends Readonly<Record<string, unknown>>,
+  >(
     shapes: Shapes,
-    methods: StoreMethodsFn<Base["shapes"] & Shapes>,
-  ): (base: Base) => StoreContractValue<
-    Base["shapes"] & Shapes,
-    MergedCustom<Base, StoreMethodsFn<Base["shapes"] & Shapes>>
-  >;
+    methods: (shapes: ShapeHandles<Shapes>) => Custom,
+  ): <const Base extends StoreContractValue>(
+    base: Base,
+  ) => StoreContractValue<Base["shapes"] & Shapes, Base["custom"] & Custom>;
   <const Shapes extends StoreShapes, const Base extends StoreContractValue>(
     shapes: Shapes,
     base: Base,
   ): StoreContractValue<Base["shapes"] & Shapes, Base["custom"]>;
-  <const Base extends StoreContractValue>(
-    methods: StoreMethodsFn<Base["shapes"]>,
+  <
+    const Base extends StoreContractValue,
+    const Custom extends Readonly<Record<string, unknown>>,
+  >(
+    methods: (shapes: ShapeHandles<Base["shapes"]>) => Custom,
     base: Base,
-  ): StoreContractValue<Base["shapes"], MergedCustom<Base, StoreMethodsFn<Base["shapes"]>>>;
-  <const Shapes extends StoreShapes, const Base extends StoreContractValue>(
+  ): StoreContractValue<Base["shapes"], Base["custom"] & Custom>;
+  <
+    const Shapes extends StoreShapes,
+    const Base extends StoreContractValue,
+    const Custom extends Readonly<Record<string, unknown>>,
+  >(
     shapes: Shapes,
-    methods: StoreMethodsFn<Base["shapes"] & Shapes>,
+    methods: (shapes: ShapeHandles<Base["shapes"] & Shapes>) => Custom,
     base: Base,
-  ): StoreContractValue<
-    Base["shapes"] & Shapes,
-    MergedCustom<Base, StoreMethodsFn<Base["shapes"] & Shapes>>
-  >;
+  ): StoreContractValue<Base["shapes"] & Shapes, Base["custom"] & Custom>;
 } = ((first: unknown, second?: unknown, third?: unknown) => {
   if (isMethodsFn(first) && second === undefined) {
     return <const Base extends StoreContractValue>(base: Base) => extendCore(base, undefined, first);
