@@ -8,9 +8,8 @@
  * - **Public** (`makeProcessStoreAnalyticsContract`) — base + analytics **reads** over the same log.
  *   Registered via {@link Process.store}.
  *
- * Extensions spread {@link processStoreBaseMethods} into separate internal/public
- * {@link Store.contract} values (same `event.append` SSOT; distinct per-trigger effects).
- * {@link Store.extend} is not used here — it does not preserve {@link Store.effects} method types.
+ * Tiers 2+3 stack on the lean base via {@link Store.extend} (type-preserving) — engine narrow
+ * writes and public analytics reads each close over the same `event.append` / `event.read` SSOT.
  *
  * @module internal/store/processStoreSpec
  * @internal
@@ -249,14 +248,16 @@ export const makeEngineProcessStoreContract = (
     isStartupRun: input.isStartupRun,
   });
 
-  return Store.contract(
+  const base = Store.contract(
     {
       event: Store.shape(processEventSchema(wire?.success, wire?.error), processEventReadPayload),
     },
-    (handles) => ({
-      ...processStoreBaseMethods(handles),
+    processStoreBaseMethods,
+  );
+  return Store.extend(
+    ({ event }) => ({
       recordStarted: (input: ProcessStoreStartedInput) =>
-        handles.event.append({
+        event.append({
           _tag: "RunStarted",
           processId,
           scheduleKey: input.scheduleKey,
@@ -266,7 +267,7 @@ export const makeEngineProcessStoreContract = (
       recordCompleted: (
         input: ProcessStoreTerminalInput & { readonly success?: unknown },
       ) =>
-        handles.event.append({
+        event.append({
           _tag: "RunCompleted",
           ...terminalRow(input),
           ...(input.success !== undefined ? { success: input.success } : {}),
@@ -274,17 +275,18 @@ export const makeEngineProcessStoreContract = (
       recordFailed: (
         input: ProcessStoreTerminalInput & { readonly error: unknown },
       ) =>
-        handles.event.append({
+        event.append({
           _tag: "RunFailed",
           ...terminalRow(input),
           error: input.error,
         }),
       recordInterrupted: (input: ProcessStoreTerminalInput) =>
-        handles.event.append({
+        event.append({
           _tag: "RunInterrupted",
           ...terminalRow(input),
         }),
     }),
+    base,
   );
 };
 
@@ -305,77 +307,76 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
 ) => {
   const base = builtInProcessStoreContract(tag);
   const storeClass = { scopeKey: tag.key, contract: base };
-  const wire = processWireFromTag(tag);
-  const rowSchema = processEventSchema(wire.success, wire.error);
-  type EventRow = (typeof rowSchema)["Type"];
-
-  const isFailed = (event: EventRow): event is ProcessStoreFailed<Tag> =>
+  const isFailed = (event: ProcessStoreEvent<Tag>): event is ProcessStoreFailed<Tag> =>
     event._tag === "RunFailed";
 
-  const isCompleted = (event: EventRow): event is ProcessStoreCompleted<Tag> =>
+  const isCompleted = (event: ProcessStoreEvent<Tag>): event is ProcessStoreCompleted<Tag> =>
     event._tag === "RunCompleted";
 
-  const isStarted = (event: EventRow): event is ProcessStoreStarted<Tag> =>
+  const isStarted = (event: ProcessStoreEvent<Tag>): event is ProcessStoreStarted<Tag> =>
     event._tag === "RunStarted";
 
-  const isTerminal = (event: EventRow): boolean =>
+  const isTerminal = (event: ProcessStoreEvent<Tag>): boolean =>
     event._tag === "RunCompleted" ||
     event._tag === "RunFailed" ||
     event._tag === "RunInterrupted";
 
-  return Store.contract(
-    {
-      event: Store.shape(rowSchema, processEventReadPayload),
-    },
-    (handles) => ({
-      ...processStoreBaseMethods(handles),
+  return Store.extend(
+    ({ event }) => ({
       failures: (): Effect.Effect<ReadonlyArray<ProcessStoreFailed<Tag>>> =>
-        Effect.map(handles.event.read(), (events) => events.filter(isFailed)),
+        Effect.map(event.read(), (events) =>
+          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed),
+        ),
       completions: (): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
-        Effect.map(handles.event.read(), (events) => events.filter(isCompleted)),
-      interruptions: (): Effect.Effect<ReadonlyArray<EventRow>> =>
-        Effect.map(handles.event.read(), (events) =>
-          events.filter((e) => e._tag === "RunInterrupted"),
+        Effect.map(event.read(), (events) => events.filter(isCompleted)),
+      interruptions: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
+            (e) => e._tag === "RunInterrupted",
+          ),
         ),
       inFlight: (): Effect.Effect<ReadonlyArray<ProcessStoreStarted<Tag>>> =>
-        Effect.map(handles.event.read(), (events) => {
+        Effect.map(event.read(), (events) => {
+          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
           const terminated = new Set<string>();
-          for (const e of events) {
+          for (const e of rows) {
             if (isTerminal(e)) {
               terminated.add(runKey(e.startedAt, e.scheduleKey));
             }
           }
-          return events.filter(
+          return rows.filter(
             (e): e is ProcessStoreStarted<Tag> =>
               isStarted(e) &&
               !terminated.has(runKey(e.startedAt, e.scheduleKey)),
           );
         }),
       lastFailure: (): Effect.Effect<Option.Option<ProcessStoreFailed<Tag>>> =>
-        Effect.map(handles.event.read(), (events) => {
-          const failures = events.filter(isFailed);
+        Effect.map(event.read(), (events) => {
+          const failures = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed);
           return failures.length === 0
             ? Option.none()
             : Option.some(failures[failures.length - 1]!);
         }),
       lastCompletion: (): Effect.Effect<Option.Option<ProcessStoreCompleted<Tag>>> =>
-        Effect.map(handles.event.read(), (events) => {
-          const completions = events.filter(isCompleted);
+        Effect.map(event.read(), (events) => {
+          const completions = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted);
           return completions.length === 0
             ? Option.none()
             : Option.some(completions[completions.length - 1]!);
         }),
-      recent: (n: number): Effect.Effect<ReadonlyArray<EventRow>> =>
-        Effect.map(handles.event.read(), (events) =>
-          n <= 0 ? [] : events.slice(Math.max(0, events.length - n)),
-        ),
+      recent: (n: number): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) => {
+          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+          return n <= 0 ? [] : rows.slice(Math.max(0, rows.length - n));
+        }),
       stats: (): Effect.Effect<ProcessStoreStats> =>
-        Effect.map(handles.event.read(), (events) => {
+        Effect.map(event.read(), (events) => {
+          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
           let started = 0;
           let completed = 0;
           let failed = 0;
           let interrupted = 0;
-          for (const e of events) {
+          for (const e of rows) {
             switch (e._tag) {
               case "RunStarted":
                 started += 1;
@@ -396,10 +397,11 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
           return { started, completed, failed, interrupted };
         }),
       failureRate: (): Effect.Effect<number> =>
-        Effect.map(handles.event.read(), (events) => {
+        Effect.map(event.read(), (events) => {
+          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
           let completed = 0;
           let failed = 0;
-          for (const e of events) {
+          for (const e of rows) {
             if (e._tag === "RunCompleted") completed += 1;
             else if (e._tag === "RunFailed") failed += 1;
           }
@@ -407,8 +409,8 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
           return total === 0 ? 0 : failed / total;
         }),
       durationStats: (): Effect.Effect<ProcessStoreDurationStats> =>
-        Effect.map(handles.event.read(), (events) => {
-          const durations = events
+        Effect.map(event.read(), (events) => {
+          const durations = (events as ReadonlyArray<ProcessStoreEvent<Tag>>)
             .filter(isCompleted)
             .map((e) => e.durationMs);
           if (durations.length === 0) {
@@ -426,19 +428,21 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
         }),
       bySchedule: (
         scheduleKey: string | null,
-      ): Effect.Effect<ReadonlyArray<EventRow>> =>
-        Effect.map(handles.event.read(), (events) =>
-          events.filter((e) => e.scheduleKey === scheduleKey),
+      ): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
+            (e) => e.scheduleKey === scheduleKey,
+          ),
         ),
-      startupRuns: (): Effect.Effect<ReadonlyArray<EventRow>> =>
-        Effect.map(handles.event.read(), (events) =>
-          events.filter((e) => e.isStartupRun),
+      startupRuns: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter((e) => e.isStartupRun),
         ),
       longestRuns: (
         n: number,
       ): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
-        Effect.map(handles.event.read(), (events) =>
-          [...events.filter(isCompleted)]
+        Effect.map(event.read(), (events) =>
+          [...(events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted)]
             .sort((a, b) => b.durationMs - a.durationMs)
             .slice(0, Math.max(0, n)),
         ),
@@ -448,6 +452,7 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
         Store.Storage
       > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
     }),
+    base,
   );
 };
 

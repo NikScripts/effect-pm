@@ -103,6 +103,7 @@ import type {
   ResourceTag,
   Spec,
   Subscribable,
+  WithRequirement,
 } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
@@ -2270,8 +2271,6 @@ const buildProcessImpl = <A, E, R>(
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
-    const provideR = <Out, Err>(effect: Effect.Effect<Out, Err, R>): Effect.Effect<Out, Err> =>
-      Effect.provide(effect, context);
 
     const config = yield* foldConfiguredSpec<ProcessLayerConfig<A, E, R>>(tag.key, baseConfig);
 
@@ -2387,7 +2386,7 @@ const buildProcessImpl = <A, E, R>(
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
     const start = Effect.gen(function* () {
       if ((yield* Ref.get(fiberRef)) !== null) return;
-      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs, provideR), scope);
+      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs), scope);
       yield* Ref.set(fiberRef, fiber);
     });
     const stop = Effect.gen(function* () {
@@ -2408,32 +2407,6 @@ const buildProcessImpl = <A, E, R>(
     const statusChanges = Stream.tick(statusPollInterval).pipe(
       Stream.mapEffect(() => readStatus),
     );
-    const base: ImplOf<ProcessSpec> = {
-      status: { get: readStatus, changes: statusChanges },
-      start,
-      stop,
-      runImmediately: handle.runImmediately().pipe(tapLogs, provideR),
-      logs: {
-        live: logsStream,
-        history: ({ limit, since, until }: HistoryQuery) =>
-          Option.match(history, {
-            onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
-            onSome: (store) =>
-              store.read(logsStreamId, { limit, since, until }).pipe(
-                Effect.flatMap((rows) =>
-                  Effect.forEach(rows, (row) =>
-                    Schema.decodeUnknownEffect(processLogEntry)(row).pipe(Effect.orDie),
-                  ),
-                ),
-              ),
-          }),
-      },
-    };
-
-    // Grafted members: present only when the tag composes them in, and served by their path key via
-    // the tag's full flat spec (`schedule.*` / `result`). They widen the runtime record beyond the
-    // base `ImplOf`, so they're spread on (not declared) — the base annotation is what `Resource`'s
-    // layer/serve type against, while the runtime object carries whatever the composed spec declares.
     const scheduleMembers =
       mode?._tag === "inline"
         ? {
@@ -2449,7 +2422,31 @@ const buildProcessImpl = <A, E, R>(
     const resultMembers =
       resultRef !== undefined ? { result: Resource.subscribable(resultRef) } : {};
 
-    return { ...base, ...scheduleMembers, ...resultMembers };
+    // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
+    const impl: WithRequirement<ImplOf<ProcessSpec>, R> = {
+      status: { get: readStatus, changes: statusChanges },
+      start,
+      stop,
+      runImmediately: handle.runImmediately().pipe(tapLogs),
+      logs: {
+        live: logsStream,
+        history: ({ limit, since, until }: HistoryQuery) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
+            onSome: (store) =>
+              store.read(logsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((rows) =>
+                  Effect.forEach(rows, (row) =>
+                    Schema.decodeUnknownEffect(processLogEntry)(row).pipe(Effect.orDie),
+                  ),
+                ),
+              ),
+          }),
+      },
+      ...scheduleMembers,
+      ...resultMembers,
+    };
+    return Resource.provideContext(impl, tag[specSym], context);
   });
 
 // ============================================================================
