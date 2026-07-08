@@ -788,11 +788,11 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     const effectiveConfig = yield* foldConfiguredSpec<
       QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
-    // Persist the queue's lifecycle events to its store (the observability plane). `Store.withDefault`
+    // Persist the queue's lifecycle events to its store (the observability plane). `Store.resolveOrDie`
     // resolves the store from the baked-in default (or an app override) — a declared dependency, never
     // `serviceOption`, and it can't fail (the default materializes any scope). The recorder runs at the
     // source in `publishEvent`, so no event burst is dropped by a late subscriber.
-    const recordEvent = yield* Store.withDefault(
+    const recordEvent = yield* Store.resolveOrDie(
       tag.key,
       builtInQueueStoreContract(tag),
     ).pipe(

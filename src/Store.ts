@@ -833,11 +833,11 @@ const isStoreClassWithShapes = (value: unknown): value is StoreClassWithShapes =
  *
  * Fails {@link StoreScopeNotRegistered} when the provided storage doesn't carry this scope — the
  * **opt-in** path (e.g. persist only if the app wired durable storage for me). For the always-on
- * observability path, use {@link withDefault}.
+ * observability path, use {@link resolveOrDie}.
  *
  * @public
  */
-export const withStorage = <const C extends StoreContractValue>(
+export const resolve = <const C extends StoreContractValue>(
   scope: string | StoreScopeTag,
   contract: C,
 ): Effect.Effect<StoreHandleOf<C>, StoreScopeNotRegistered, Storage> =>
@@ -846,27 +846,39 @@ export const withStorage = <const C extends StoreContractValue>(
   );
 
 /**
- * Like {@link withStorage}, but **guarantees** a handle. With the baked-in default store in context
- * (it materializes any scope on demand), this never fails — the always-on observability path, where a
- * resource's engine records unconditionally with no service-sniffing. If a *custom* store is in
- * context and lacks this scope, that's a wiring error and it dies with a clear message (bake the
- * default so it can materialize the scope).
+ * Like {@link resolve}, but **guarantees** a handle (`resolve` hardened with `orDie`). With the baked-in
+ * default store in context (it materializes any scope on demand), this never fails — the always-on
+ * observability path, where a resource's engine records unconditionally with no service-sniffing. If a
+ * *custom* store is in context and lacks this scope, that's a wiring error and it dies with a clear
+ * message (bake the default so it can materialize the scope).
  *
  * @public
  */
-export const withDefault = <const C extends StoreContractValue>(
+export const resolveOrDie = <const C extends StoreContractValue>(
   scope: string | StoreScopeTag,
   contract: C,
 ): Effect.Effect<StoreHandleOf<C>, never, Storage> =>
-  withStorage(scope, contract).pipe(
+  resolve(scope, contract).pipe(
     Effect.catchTag("StoreScopeNotRegistered", (e) =>
       Effect.die(
-        `Store.withDefault: scope "${e.key}" is not registered in the provided store, and no default ` +
+        `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store, and no default ` +
           `store is in context to materialize it. Provide the in-memory default (Service.layerMemory / ` +
           `the resource layer's baked default) so the scope resolves.`,
       ),
     ),
   );
+
+/**
+ * @deprecated Renamed to {@link resolve} (opt-in resolver; may fail `StoreScopeNotRegistered`).
+ * @public
+ */
+export const withStorage = resolve;
+
+/**
+ * @deprecated Renamed to {@link resolveOrDie} (guaranteed resolver; dies on an unregistered custom store).
+ * @public
+ */
+export const withDefault = resolveOrDie;
 
 /** Navigate a resolved handle to the (possibly dotted) method at `path` and apply it. @internal */
 const callAt = (
@@ -991,11 +1003,11 @@ const invokeMethod = (
 
 /**
  * Build a PURE object of effects from a contract — the {@link HandleOf} structure (nested shape tree +
- * custom methods) where each method is `(...args) => withDefault(scope, contract).flatMap((handle) =>
+ * custom methods) where each method is `(...args) => resolveOrDie(scope, contract).flatMap((handle) =>
  * handle.<path>(...args))`. So every method carries `Storage` in its requirement (see {@link StoreEffectsOf}),
- * the error channel stays clean ({@link withDefault} dies on an unregistered custom store rather than
+ * the error channel stays clean ({@link resolveOrDie} dies on an unregistered custom store rather than
  * surfacing `StoreScopeNotRegistered`), and there is **no** resolution / `yield*` / memo cell here — the
- * handle memo lives in the storage bridge's `.at`. No error handling (a future `withGuard` owns that).
+ * handle memo lives in the storage bridge's `.at`. No error handling ({@link swallowWriteErrors} owns that).
  *
  * @example
  * ```ts
@@ -1013,7 +1025,7 @@ export const effects = <const C extends StoreContractValue>(
   const method =
     (path: string) =>
     (...args: ReadonlyArray<unknown>) =>
-      withDefault(scope, contract).pipe(
+      resolveOrDie(scope, contract).pipe(
         Effect.flatMap((handle) => callAt(handle, path, args)),
       );
 
@@ -1226,7 +1238,7 @@ export const store: {
   const contract = scopeOrContract as StoreContractValue;
   return <T extends StoreScopeTag>(tag: T) =>
     Object.assign(tag, {
-      store: withStorage(tag.key, contract),
+      store: resolve(tag.key, contract),
     });
 }) as never;
 
