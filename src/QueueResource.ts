@@ -954,10 +954,6 @@ const buildQueueImpl = <
       R | RR,
       QueueSuccessValueOf<Success>
     >);
-    const provideR = <Out, Err>(
-      effect: Effect.Effect<Out, Err, R | RR>,
-    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
-
     // History capture (optional): when a HistoryStore is provided, fork fibers that append each
     // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
     // it back. serviceOption → no store means append is skipped and history reads return empty.
@@ -996,7 +992,16 @@ const buildQueueImpl = <
       get: handle.statusNow,
       changes: handle.status,
     };
-    const impl: ImplOf<QueueInstanceSpec<F>> = {
+    // Worker methods are built UNWRAPPED (each still carrying the worker `R | RR` in its requirement);
+    // `Resource.provideContext` below discharges `context` into every Effect method uniformly (a no-op
+    // on the ones that carry no `R`, like pause/resume/shutdown) — replacing the old per-method
+    // `provideR(...)` wrapping — and its `ProvidedContext` result strips `R` so the impl satisfies
+    // `ImplOf`. Stream / Subscribable members (`status`/`size`/`isEmpty`/`*.live`/`events`) pass through
+    // untouched.
+    const impl: Resource.WithRequirement<
+      ImplOf<QueueInstanceSpec<F>>,
+      R | RR
+    > = {
       status: statusSub,
       size: Resource.mapSubscribable(
         statusSub,
@@ -1006,11 +1011,11 @@ const buildQueueImpl = <
         statusSub,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
       ),
-      start: provideR(handle.start),
+      start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
       shutdown: handle.shutdown,
-      clear: provideR(handle.clear),
+      clear: handle.clear,
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>
@@ -1041,35 +1046,39 @@ const buildQueueImpl = <
       // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
       // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
       add: (itemOrItems) =>
-        provideR(
-          Array.isArray(itemOrItems)
-            ? handle.add(itemOrItems)
-            : handle.add(itemOrItems),
+        (Array.isArray(itemOrItems)
+          ? handle.add(itemOrItems)
+          : handle.add(itemOrItems)
         ).pipe(Effect.orDie),
       prioritize: (itemOrItems) =>
-        provideR(
-          Array.isArray(itemOrItems)
-            ? handle.prioritize(itemOrItems)
-            : handle.prioritize(itemOrItems),
+        (Array.isArray(itemOrItems)
+          ? handle.prioritize(itemOrItems)
+          : handle.prioritize(itemOrItems)
         ).pipe(Effect.orDie),
       defer: (itemOrItems) =>
-        provideR(
-          Array.isArray(itemOrItems)
-            ? handle.defer(itemOrItems)
-            : handle.defer(itemOrItems),
+        (Array.isArray(itemOrItems)
+          ? handle.defer(itemOrItems)
+          : handle.defer(itemOrItems)
         ).pipe(Effect.orDie),
       // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
       // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
       // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
-      enqueue: (entries) => provideR(handle.enqueue(entries)),
-      release: ({ options }) => provideR(handle.release(options)),
-      releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
+      enqueue: (entries) => handle.enqueue(entries),
+      release: ({ options }) => handle.release(options),
+      releaseEncoded: ({ options }) => handle.releaseEncoded(options),
       deadLetter: ({ selector, options }) =>
-        provideR(handle.deadLetter(selector, options)),
-      drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
+        handle.deadLetter(selector, options),
+      drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return impl;
+    // Discharge the captured worker context into every Effect method; the `ProvidedContext` result is
+    // `R`-free, so it satisfies `ImplOf` — annotated here to localize the assignability check.
+    const provided: ImplOf<QueueInstanceSpec<F>> = Resource.provideContext(
+      impl,
+      tag[specSym],
+      context,
+    );
+    return provided;
   });
 
 export const layer = <
