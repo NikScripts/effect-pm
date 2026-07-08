@@ -214,9 +214,10 @@ export type QueueStoreCompleted<Tag extends QueueStoreTag> = Omit<
 
 /**
  * Build the engine **write-extension** contract from an item schema (no tag) — the lean base
- * (`event` shape → `record` + `events`) plus narrow, semantic writes, each taking only its own
- * fields and funnelling to the shared `event.append`. Built with {@link Store.contract} (not
- * `Store.extend`) so the concrete write-method types survive onto the materialized effects object.
+ * (`event` shape → `record` + `events`) {@link Store.extend}ed with narrow, semantic writes, each
+ * taking only its own fields and funnelling to the shared `event.append`. Because `extend` is fed
+ * the `base` alongside its methods builder, the concrete write-method types survive onto the
+ * materialized effects object (see the concrete-preservation guarantee on {@link Store.extend}).
  * @internal
  */
 export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
@@ -242,13 +243,17 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
     typeof eventSchema.Type,
     { readonly _tag: "Failed" }
   >["cause"];
-  return Store.contract(
+  const base = Store.contract(
     {
       event: Store.shape(eventSchema, queueEventReadPayload),
     },
     ({ event }) => ({
       record: event.append,
       events: event.read,
+    }),
+  );
+  return Store.extend(
+    ({ event }) => ({
       enqueued: (entries: ReadonlyArray<Entry>, priority: Priority, batchId?: string) =>
         event.append({
           _tag: "Enqueued",
@@ -266,6 +271,7 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
       retryExhausted: (entry: Entry, cause: FailCause) =>
         event.append({ _tag: "RetryExhausted", entry, cause }),
     }),
+    base,
   );
 };
 
@@ -380,11 +386,12 @@ const percentile = (sortedMs: ReadonlyArray<number>, p: number): number =>
 
 /**
  * Build the **read-extended** analytics contract for a queue tag — the lean base (`event` shape →
- * `record` + `events`) plus the advanced analytics reads ({@link QueueStoreReads}). Built with
- * {@link Store.contract} (not `Store.extend`) so the concrete read-method types survive onto the
- * resolved handle. Pure derivations close over the `event` shape's `read`; `changes()` resolves the
- * live journal stream via {@link Store.changes} on the base contract (whose `event` shape it
- * selects). @internal
+ * `record` + `events`) {@link Store.extend}ed with the advanced analytics reads
+ * ({@link QueueStoreReads}). Because `extend` is fed the `base` alongside its methods builder, the
+ * concrete read-method types survive onto the resolved handle (see the concrete-preservation
+ * guarantee on {@link Store.extend}). Pure derivations close over the `event` shape's `read`;
+ * `changes()` resolves the live journal stream via {@link Store.changes} on the base contract
+ * (whose `event` shape it selects). @internal
  */
 export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>(tag: Tag) => {
   const base = builtInQueueStoreContract(tag);
@@ -400,21 +407,8 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
   const isTerminal = (event: QueueStoreEvent<Tag>): boolean =>
     event._tag === "Completed" || event._tag === "Failed";
 
-  const wire = queueWireFromTag(tag);
-  return Store.contract(
-    {
-      event: Store.shape(
-        buildQueueEvent(
-          queueItemSchemaFromTag(tag),
-          wire.success ?? Schema.Void,
-          wire.error ?? Schema.Unknown,
-        ),
-        queueEventReadPayload,
-      ),
-    },
+  return Store.extend(
     ({ event }) => ({
-      record: event.append,
-      events: event.read,
       failures: (): Effect.Effect<ReadonlyArray<QueueStoreFailed<Tag>>> =>
         Effect.map(event.read(), (events) => events.filter(isFailed)),
       deadLettered: (): Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>> =>
@@ -553,6 +547,7 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
         Store.Storage
       > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
     }),
+    base,
   );
 };
 
