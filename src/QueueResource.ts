@@ -33,7 +33,7 @@
  *
  * @module QueueResource
  */
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Stream, pipe } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
@@ -915,8 +915,9 @@ const buildQueueImpl = <
     // success value `A` rides the `QueueStoreWriter<Item, E, A>` surface below — its `completed`
     // takes `A`, funnelled into this contract's `unknown`-typed narrow write (A ⊆ unknown), and the
     // typed value is layered back on the decoded read side (`QueueStoreCompleted`).
-    const storeEffects = Store.catchWriteErrors(
+    const storeEffects = pipe(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
+      Store.catchWriteErrors,
     );
     const storageContext = yield* Effect.context<Store.Storage>();
     const provideStorage = <A>(

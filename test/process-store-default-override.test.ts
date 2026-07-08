@@ -33,8 +33,11 @@ describe("Process.layer — baked-in default store", () => {
           builtInProcessStoreContract(DefaultExec),
         );
         const events = yield* store.events();
-        expect(events.length).toBeGreaterThanOrEqual(1);
-        expect(events[0]?._tag).toBe("RunCompleted");
+        expect(events.length).toBeGreaterThanOrEqual(2);
+        expect(events.some((row) => row._tag === "RunStarted")).toBe(true);
+        expect(events.find((row) => row._tag === "RunCompleted")?._tag).toBe(
+          "RunCompleted",
+        );
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
   );

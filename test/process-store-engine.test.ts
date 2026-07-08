@@ -68,9 +68,10 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(VoidExec);
         const events = yield* store.events();
-        expect(events.length).toBeGreaterThanOrEqual(1);
-        expect(events[0]?._tag).toBe("RunCompleted");
-        expect(events[0]).toMatchObject({
+        expect(events.length).toBeGreaterThanOrEqual(2);
+        expect(events.some((row) => row._tag === "RunStarted")).toBe(true);
+        const completed = events.find((row) => row._tag === "RunCompleted");
+        expect(completed).toMatchObject({
           processId: VoidExec.key,
           isStartupRun: true,
         });

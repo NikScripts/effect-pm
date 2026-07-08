@@ -57,6 +57,7 @@ import {
   Scope,
   Stream,
   SubscriptionRef,
+  pipe,
 } from "effect";
 import {
   configureLayer,
@@ -108,9 +109,15 @@ import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";
-import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
+import {
+  engineProcessStoreContract,
+  makeProcessStoreAnalyticsContract,
+  type ProcessStoreAnalyticsContract,
+  type ProcessStoreEvent,
+  type ProcessStoreStartedInput,
+  type ProcessStoreTerminalInput,
+} from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
-import { makeProcessStorePersist, makeProcessStoreTap, type ProcessStoreTap } from "./internal/processStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
 // Public types
@@ -350,12 +357,35 @@ interface ProcessMirror {
   readonly lastRunDurationMillis: MutableRef.MutableRef<Option.Option<number>>;
 }
 
+/**
+ * Engine-facing process store recorder — Storage-free semantic writes at run boundaries.
+ * Built in {@link buildProcessImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
+ * `Storage` discharged once at layer build (queue golden pattern).
+ * @internal
+ */
+interface ProcessStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
+  readonly recordStarted: (input: ProcessStoreStartedInput) => Effect.Effect<void>;
+  readonly recordCompleted: (
+    input: ProcessStoreTerminalInput & { readonly success?: unknown },
+  ) => Effect.Effect<void>;
+  readonly recordFailed: (
+    input: ProcessStoreTerminalInput & { readonly error: unknown },
+  ) => Effect.Effect<void>;
+  readonly recordInterrupted: (input: ProcessStoreTerminalInput) => Effect.Effect<void>;
+  readonly record: (event: ProcessStoreEvent<Tag>) => Effect.Effect<void>;
+  readonly hasPriorExecutions: () => Effect.Effect<boolean>;
+}
+
 interface ProcessBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
   readonly scheduleInitializer?: ProcessScheduleInitializer<RUser>;
-  /** @internal Store tap when built via {@link layer}. */
-  readonly storeTap?: ProcessStoreTap;
+  /** @internal Store recorder when built via {@link layer}. */
+  readonly store?: ProcessStoreWriter;
+  /** @internal Tag SSOT for store wire schemas when {@link store} is wired. */
+  readonly storeScopeTag?: StoreScopeTag;
+  /** @internal Latest success value for store capture when the tag stamps `success`. */
+  readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
 }
 
 export interface ProcessScheduleControls {
@@ -502,7 +532,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     clear: Effect.void,
   };
 
-  const { name, userEffect, storeTap } = state;
+  const { name, userEffect, store, storeScopeTag, resultRef } = state;
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
@@ -517,12 +547,56 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     lastRunDurationMillis: MutableRef.make<Option.Option<number>>(Option.none()),
   };
 
-  const storePersist = makeProcessStorePersist({ storeTap });
+  const whenStore = (
+    write: (recorder: ProcessStoreWriter) => Effect.Effect<void>,
+  ): Effect.Effect<void> =>
+    store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
-  const recordStoreCompleted = storePersist.recordCompleted;
-  const recordStoreFailed = storePersist.recordFailed;
-  const recordStoreInterrupted = storePersist.recordInterrupted;
-  const readHasPriorExecutions = storePersist.hasPriorExecutions;
+  const recordStoreStarted = (args: {
+    readonly scheduleKey: string | null;
+    readonly startedAt: number;
+    readonly isStartupRun: boolean;
+  }): Effect.Effect<void> =>
+    whenStore((recorder) => recorder.recordStarted(args));
+
+  const recordStoreCompleted = (args: {
+    readonly scheduleKey: string | null;
+    readonly startedAt: number;
+    readonly completedAt: number;
+    readonly isStartupRun: boolean;
+    readonly success?: unknown;
+  }): Effect.Effect<void> =>
+    whenStore((recorder) => recorder.recordCompleted(args));
+
+  const recordStoreFailed = (args: {
+    readonly scheduleKey: string | null;
+    readonly startedAt: number;
+    readonly completedAt: number;
+    readonly isStartupRun: boolean;
+    readonly error: unknown;
+  }): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.recordFailed({
+        ...args,
+        error:
+          storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
+            ? args.error
+            : String(args.error),
+      }),
+    );
+
+  const recordStoreInterrupted = (args: {
+    readonly scheduleKey: string | null;
+    readonly startedAt: number;
+    readonly completedAt: number;
+    readonly isStartupRun: boolean;
+  }): Effect.Effect<void> =>
+    whenStore((recorder) => recorder.recordInterrupted(args));
+
+  const readHasPriorExecutions = (): Effect.Effect<boolean> =>
+    store !== undefined
+      ? store.hasPriorExecutions()
+      : Effect.succeed(false);
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
@@ -537,6 +611,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       );
       const hasPrior = yield* readHasPriorExecutions();
       const isStartupRun = !hasPrior;
+
+      yield* recordStoreStarted({
+        scheduleKey: Option.getOrNull(scheduleIdentifier),
+        startedAt: executedAt,
+        isStartupRun,
+      });
 
       const runUserEffect = userEffect.pipe(
         Effect.provideService(ProcessScheduleContextTag, {
@@ -601,11 +681,20 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             mirror.lastRunDurationMillis,
             Option.some(completedAt - executedAt),
           );
+          const successValue =
+            storeScopeTag !== undefined && successOf(storeScopeTag) !== undefined
+              ? resultRef !== undefined
+                ? Option.getOrUndefined(yield* SubscriptionRef.get(resultRef))
+                : Exit.isSuccess(exit)
+                  ? exit.value
+                  : undefined
+              : undefined;
           yield* recordStoreCompleted({
             scheduleKey: Option.getOrNull(scheduleIdentifier),
             startedAt: executedAt,
             completedAt,
             isStartupRun,
+            ...(successValue !== undefined ? { success: successValue } : {}),
           });
           yield* Effect.logDebug(
             `✅ Process '${name}' run completed at ${String(executedAt)}`,
@@ -997,7 +1086,11 @@ export interface ProcessMakeOptions<E, RUser> {
    * @internal Wired by {@link layer} for store-backed execution history.
    * Not part of the public {@link make} API.
    */
-  readonly _storeTap?: ProcessStoreTap;
+  readonly _store?: ProcessStoreWriter;
+  /** @internal Tag SSOT paired with {@link _store}. */
+  readonly _storeScopeTag?: StoreScopeTag;
+  /** @internal Success ref paired with value-returning layer builds. */
+  readonly _resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
   /**
@@ -1052,7 +1145,9 @@ const buildProcess = <E, RUser>(
       pollingLayer: config.polling,
       scheduleLayer,
       scheduleInitializer,
-      storeTap: config._storeTap,
+      store: config._store,
+      storeScopeTag: config._storeScopeTag,
+      resultRef: config._resultRef,
     });
   }
   return createProcess({
@@ -1060,7 +1155,9 @@ const buildProcess = <E, RUser>(
     userEffect: config.effect,
     scheduleLayer,
     scheduleInitializer,
-    storeTap: config._storeTap,
+    store: config._store,
+    storeScopeTag: config._storeScopeTag,
+    resultRef: config._resultRef,
   });
 };
 
@@ -2261,17 +2358,30 @@ const buildProcessImpl = <A, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
-    const storeTap = yield* makeProcessStoreTap({
-      scopeKey: tag.key,
-      tag,
-      resultRef,
-    });
+    const storeEffects = pipe(
+      Store.effects(tag.key, engineProcessStoreContract(tag)),
+      Store.catchWriteErrors,
+    );
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const provideStorage = <A>(
+      write: Effect.Effect<A, never, Store.Storage>,
+    ): Effect.Effect<A> => Effect.provide(write, storageContext);
+    const store: ProcessStoreWriter = {
+      recordStarted: (input) => provideStorage(storeEffects.recordStarted(input)),
+      recordCompleted: (input) => provideStorage(storeEffects.recordCompleted(input)),
+      recordFailed: (input) => provideStorage(storeEffects.recordFailed(input)),
+      recordInterrupted: (input) => provideStorage(storeEffects.recordInterrupted(input)),
+      record: (event) => provideStorage(storeEffects.record(event)),
+      hasPriorExecutions: () => provideStorage(storeEffects.hasPriorExecutions()),
+    };
 
     const handle = make(tag.key, {
       effect: captured,
       ...(config.polling !== undefined ? { polling: config.polling } : {}),
       scheduleLayer: Layer.succeedContext(scheduleCtx),
-      _storeTap: storeTap,
+      _store: store,
+      _storeScopeTag: tag,
+      _resultRef: resultRef,
     });
 
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
@@ -2466,7 +2576,7 @@ export const configure = <A = void, E = never, R = never>(
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
-  typeof facetStoreRegistration<Tag, BuiltInProcessContract>
+  typeof facetStoreRegistration<Tag, ProcessStoreAnalyticsContract<Tag>>
 >;
 export function store<
   const Tag extends StoreScopeTag,
@@ -2474,12 +2584,12 @@ export function store<
 >(tag: Tag, extended: Shapes): ReturnType<
   typeof facetStoreRegistration<
     Tag,
-    BuiltInProcessContract,
+    ProcessStoreAnalyticsContract<Tag>,
     Shapes
   >
 >;
 export function store(tag: StoreScopeTag, extended?: StoreShapes) {
-  const builtIn = builtInProcessStoreContract(tag);
+  const builtIn = makeProcessStoreAnalyticsContract(tag);
   return extended === undefined
     ? facetStoreRegistration(tag, builtIn)
     : facetStoreRegistration(tag, builtIn, extended);
