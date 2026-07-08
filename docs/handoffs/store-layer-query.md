@@ -1,13 +1,55 @@
-# Store layer query — design handoff
+# Store layer query — design handoff (informational)
 
-**Audience:** Store agent implementing read helpers on the EventJournal-backed `Store` stack.
+**Audience:** Store agent exploring read helpers on the EventJournal-backed `Store` stack.
 
-**Status:** Proposed — not implemented. Companion to `store-backing.md` (journal mapping) and
-`store-cutover-00-store-core.md` (Storage as defaulted service).
+**Status:** **Informational proposal only — not approved for implementation.**
 
-**Context:** Today every `store.<shape>.read` walks `EventJournal.entries` independently. There is no
-public API to read multiple scopes, multiple shapes, or the whole layer in one pass. This handoff
-defines **layer query as the primitive**; per-scope and per-shape reads become filtered views.
+| | |
+|---|---|
+| **Owner** | Nik (package owner) |
+| **Approval** | **All public APIs, names, and behavior changes described here require explicit owner approval before shipping.** Treat every signature, export, and semantic choice in this doc as a draft. |
+| **Implementation** | **Do not land public API or changeset entries from this doc without sign-off.** Internal spike / prototype behind `@internal` is fine if it helps evaluation — do not export or document as shipped. |
+| **Companion docs** | [`store-backing.md`](../guides/store-backing.md) (journal mapping), [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) (Storage as defaulted service), [`store.md`](../guides/store.md) (current user guide) |
+
+---
+
+## Why this doc exists
+
+A Process/docs agent investigated “read all scopes / whole layer” and found **no public bulk-read API**
+today. Per-scope `store.<shape>.read` each walks `EventJournal.entries` independently. This handoff
+captures a **proposed direction** — layer query as the primitive, scoped reads as filters — for the
+Store agent to refine, challenge, or replace. **The owner has not approved the API surface below.**
+
+---
+
+## Current read surface (shipped today — do not break without approval)
+
+Use this as the baseline the proposal must remain compatible with (delegate internally, same behavior).
+
+| API | Granularity | Notes |
+|-----|-------------|-------|
+| `yield* AppStore.at(scope)` | One registered scope → typed handle | `src/internal/store/defineStore.ts` |
+| `yield* Tag.store` | One scope via tag attachment | `src/Store.ts` |
+| `store.<shape>.read(payload?)` | One shape | `src/internal/store/memoryScope.ts` |
+| Custom aliases (`events`, `facts`, …) | One shape via contract part 2 | `src/internal/store/contractDef.ts` |
+| `Store.withDefault` / `Store.withStorage` | Materialize one scope handle | `src/Store.ts` |
+| `Store.Storage` → `bridge.at(scope, contract)` | Low-level one scope | `src/internal/store/bridge.ts` |
+| `Store.changes(scope)` | Append stream, **one** scope | `src/internal/store/scopeBridge.ts` |
+
+**Not available today:** multi-scope read, multi-shape read in one call, layer-wide dump, typed union
+across registrations. `EventJournal.entries` is used internally only (`memoryScope.ts`).
+
+**Separate stack (out of scope here):** `RuntimeStorage` + legacy facets (`QueueResourceStore.entries`,
+etc.) — see [`STORAGE.md`](../STORAGE.md).
+
+---
+
+## Proposal summary
+
+**Idea:** one `layerQuery` journal scan; aggregate/standalone static methods and shape `.read` filter it.
+Registrations supply schemas for a typed row union; default `Storage` bridge returns `unknown` payloads.
+
+**This is a design sketch, not a locked spec.**
 
 ---
 
@@ -137,7 +179,11 @@ Pass registry into `layerQuery` implementation; bridges call it.
 
 ---
 
-## API surface
+## API surface (draft — owner approval required)
+
+> **Naming, exports, and which helpers ship are not final.** The Store agent should propose a
+> minimal surface to the owner before adding `exports` subpaths, changesets, or `docs/guides/store.md`
+> sections. Convenience helpers (`queryAll`, `queryScopes`) are optional and especially need approval.
 
 ### 1. `StorageApi` extension
 
@@ -250,16 +296,29 @@ Add `.test-d.ts` assertions: narrowing on `row.scopeKey` + `row.shape` refines `
 
 ---
 
-## Implementation order
+## Suggested implementation order (after owner approval)
 
-1. **`layerQuery` engine** + `ShapeRegistry` builder from `NormalizedStoreRegistration[]`
-2. **Wire `StorageApi.layerQuery`** on `buildScopeBridge` and `buildDefaultScopeBridge`
-3. **Public `Store.layerQuery`**
-4. **Refactor `memoryScope` shape `.read`** to delegate (existing tests must stay green)
-5. **Static `layerQuery` on `StoreServiceClass` and `StandaloneStore`**
-6. **Type exports + `test/store-layer-query.test-d.ts`**
-7. **Runtime tests:** memory + SQLite; multi-scope; unknown payloads on default bridge; retention
-8. **Docs:** `docs/guides/store.md` — “Layer query” section; cross-link here
+1. **Owner sign-off** on minimal public surface (see checklist below).
+2. **`layerQuery` engine** + `ShapeRegistry` builder from `NormalizedStoreRegistration[]`.
+3. **Wire `StorageApi.layerQuery`** on `buildScopeBridge` and `buildDefaultScopeBridge`.
+4. **Public `Store.layerQuery`** (only exports approved by owner).
+5. **Refactor `memoryScope` shape `.read`** to delegate — existing tests must stay green; behavior
+   change needs explicit approval.
+6. **Static `layerQuery` on aggregate / standalone** — only if approved (may defer to phase 2).
+7. **Type exports + `.test-d.ts`** for approved types.
+8. **Runtime tests:** memory + SQLite; multi-scope; unknown on default bridge; retention.
+9. **Docs + changeset** — only after API freeze.
+
+### Owner approval checklist (before public ship)
+
+- [ ] Primitive name: `layerQuery` vs `queryLayer` vs other
+- [ ] Row type name: `StoreLayerRow` / `LayerRow` / other
+- [ ] Whether `StorageApi` grows a new method vs free function on `Store` only
+- [ ] Aggregate static methods vs instance-only access
+- [ ] Convenience: `queryAll` / `queryScopes` — ship or omit
+- [ ] Foreign `scopeKey` on aggregate: fail vs untyped passthrough
+- [ ] Internal refactor of shape `.read` in same PR or follow-up
+- [ ] Changeset + `docs/guides/store.md` wording
 
 ---
 
@@ -309,11 +368,38 @@ pnpm exec vitest run test/store.test.ts test/store-default.test.ts \
 
 ---
 
-## Open questions for Store agent
+## Open questions (for Store agent → owner)
 
 1. **Global vs per-scope limit:** when both `maxRows` retention and `limit` apply, document ordering
-   (handoff recommends: retention cap per scope first, then time window, then global `limit`).
-2. **Aggregate foreign keys:** fail `StoreScopeNotRegistered` vs return untyped rows — handoff
+   (draft recommends: retention cap per scope first, then time window, then global `limit`).
+2. **Aggregate foreign keys:** fail `StoreScopeNotRegistered` vs return untyped rows — draft
    recommends **fail** for typed aggregate API.
-3. **Schema export:** whether to expose a runtime `Schema` for the registration union (useful for
-   RPC/logging) or type-only union.
+3. **Schema export:** runtime `Schema` for the registration union (RPC/logging) vs type-only union.
+4. **Phase split:** ship primitive `Store.layerQuery` first, defer aggregate static methods?
+5. **Alternative designs:** e.g. journal export stream, registration-scoped iterator only — worth
+   comparing before committing.
+
+---
+
+## Key source files (read before implementing)
+
+| File | Relevance |
+|------|-----------|
+| `src/internal/store/memoryScope.ts` | Today’s per-shape read + append; `rowsForScope`, retention |
+| `src/internal/store/scopeBridge.ts` | `buildScopeBridge`, `buildDefaultScopeBridge` |
+| `src/internal/store/bridge.ts` | `StorageApi` type |
+| `src/internal/store/defineStore.ts` | `StoreBundle`, `storeRegsSym`, `at` |
+| `src/internal/store/registrationNormalize.ts` | `NormalizedStoreRegistration` |
+| `src/internal/store/contractDef.ts` | `contract.normalized`, shape schemas |
+| `src/internal/store/sqliteLayer.ts` | `buildBundle`, layer boot |
+| `src/internal/store/helpers.ts` | `applyQueryOpts`, `queryOptsFromReadPayload` |
+| `src/Store.ts` | Public `Storage`, `withDefault`, `changes` |
+| `docs/guides/store-backing.md` | Journal field mapping |
+
+---
+
+## Related handoffs
+
+- [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) — Storage defaulted service, no `serviceOption`
+- [`store-and-logs-design.md`](./store-and-logs-design.md) — two-plane model
+- Process agent review: [`process-store-cutover-review.md`](./process-store-cutover-review.md) — serialization / tap notes (separate from layer query)

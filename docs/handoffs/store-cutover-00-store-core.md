@@ -116,3 +116,9 @@ for subscribers; the **store row** follows the rule above.
 
 - [x] `success` persistence — terminal rows carry optional `success` when the tag stamps `success`.
 - [x] `error` encoding — presence-driven typed vs `String` fallback (§5).
+
+## Proposals (informational — owner approval required)
+
+- **Layer query / bulk read** — draft design for multi-scope and whole-layer reads on EventJournal
+  `Store`. **Not approved for implementation.** See [`store-layer-query.md`](./store-layer-query.md).
+  Store agent: refine or replace; do not ship public API without owner sign-off.
