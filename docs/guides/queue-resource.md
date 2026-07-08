@@ -28,13 +28,13 @@ class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", J
 ### Typed outcome slots (`success` / `error`)
 
 The config-object form of the tag declares the worker's **outcome wire schemas** — these type the
-lifecycle event log (and, in turn, the store analytics). `error` is the important one today:
+worker's return, the lifecycle event log, and (in turn) the store analytics:
 
 ```ts
 class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
   payload: Job,
-  error: RosterError,     // → Failed.cause is Cause<RosterError>, not Cause<unknown>
-  // success: RosterResult,  // future: see "Full-capture" below
+  error: RosterError,       // → Failed.cause is Cause<RosterError>, not Cause<unknown>
+  success: RosterResult,    // → worker MUST return Effect<RosterResult, …>; Completed.success is RosterResult
 }) {}
 ```
 
@@ -42,7 +42,7 @@ class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
 
 | Field | Purpose |
 |---|---|
-| `effect: (item, ctx) => Effect<void, E, R>` | Process one item (required). Success channel is **`void`** (see Full-capture). |
+| `effect: (item, ctx) => Effect<A, E, R>` | Process one item (required). `A` is the tag's `success` schema type, or **`void`** when no `success` is declared (see Full-capture). |
 | `itemSchema` | Validate enqueue + enable encoded handoff / durability. |
 | `concurrency` | Max items processing at once (default 5). |
 | `rateLimit` | Effect `RateLimiter` options applied before the concurrency gate. |
@@ -112,13 +112,17 @@ consumer can reconstruct `Exit<A, E>` from the two if needed. The engine capture
 result at the source (`exit.value` / `exit.cause`) and threads it straight in — analytics read the typed
 value off `Completed` / `Failed` with no separate Exit handling.
 
-**Honest status of typed success.** The worker `effect` is `Effect<void, E, R>` — fire-and-forget — so
-today **`Completed.success` is `void`**. The capture path is real (`success: exit.value` is threaded
-through the whole stack: `queueEvent` schema → `completed(entry, success, elapsed)` write → the
-`slowest` analytics), but because the worker return type is `void`, the value carried is `void`. A
-**meaningful typed success value** (workers returning `Effect<A, E, R>` so `Completed.success: A` is a
-real payload) is a **documented future enhancement**, not something that carries data today. Typed
-**error** capture (`Failed.cause: Cause<E>`) *is* live now — declare `error` on the tag.
+**Typed success.** When the tag declares a `success` schema, the worker `effect` is **required** to return
+`Effect<A, E, R>` (`A` = the schema's type), and `Completed.success` carries that typed `A` — threaded through
+the whole stack: worker return → `success: exit.value` → `completed(entry, success, elapsed)` write → the
+`slowest` / analytics reads. With **no** `success` schema the worker stays `Effect<void, E, R>` (fire-and-forget)
+and `Completed.success` is `void`. Typed **error** capture (`Failed.cause: Cause<E>`) is live the same way —
+declare `error` on the tag.
+
+One type-system caveat: the **RPC / consumer-facing `events` stream** types `Completed.success` as `unknown`
+(the runtime value is the real `A`) — `ResourceTag` is spec-invariant and Effect can't reduce a union's `.Type`
+through a generic field. The typed `A` lands everywhere else: the worker return, the engine event,
+`store.completed`, and the `QueueResource.store` analytics (`slowest` / `lastFailure` / …).
 
 ## Tier 1 — lean base (`record` / `events`)
 
@@ -208,7 +212,7 @@ Given `const store = yield* JobsStore.at(Jobs)`:
 | `changes()` | live `Stream<Event, StoreJournalDecodeError, Storage>` | `store.changes().pipe(Stream.take(2))` |
 
 `Failed` / `Completed` / `Entry` / `Event` are the decoded members of the queue event union for this
-tag — `Failed.cause` is the typed `Cause<E>`, `Completed.success` is currently `void` (see Full-capture).
+tag — `Failed.cause` is the typed `Cause<E>`, and `Completed.success` is the tag's typed `success` schema (or `void` if none) (see Full-capture).
 
 Real usage of every read is exercised in `test/queue-store-analytics.test.ts`.
 
