@@ -249,11 +249,13 @@ const engineRunResourceWrites = (
 export const makeEngineRunResourceStoreContract = (
   success?: Schema.Top,
   error?: Schema.Top,
-) =>
-  Store.extend(
-    (handles) => engineRunResourceWrites((row) => handles.fact.append(row as never)),
-    makeRunResourceStoreContract(success, error),
+) => {
+  const base = makeRunResourceStoreContract(success, error);
+  return Store.extend(
+    ({ fact }) => engineRunResourceWrites((row) => fact.append(row as never)),
+    base,
   );
+};
 
 /** Engine write-extension contract for a tag. @internal */
 export const engineRunResourceStoreContract = (tag: StoreScopeTag) =>
@@ -384,8 +386,8 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
   const isCompleted = (row: TagFactRow): row is TagCompleted => row._tag === "Completed";
   const isFailed = (row: TagFactRow): row is TagFailed => row._tag === "Failed";
 
-  const tier1 = builtInRunResourceStoreContract(tag);
-  const storeClass = { scopeKey: tag.key, contract: tier1 };
+  const base = builtInRunResourceStoreContract(tag);
+  const storeClass = { scopeKey: tag.key, contract: base };
 
   return Store.extend(
     (handles) =>
@@ -396,7 +398,7 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
         isCompleted,
         isFailed,
       }),
-    tier1,
+    base,
   );
 };
 

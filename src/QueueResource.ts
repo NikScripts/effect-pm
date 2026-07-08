@@ -33,7 +33,7 @@
  *
  * @module QueueResource
  */
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
@@ -890,11 +890,6 @@ const buildQueueImpl = <
     // Capture the FULL ambient context (worker `R` + refill `RR`): the worker effect and the
     // refill loader both run ambiently, so the captured context must cover their union.
     const context = yield* Effect.context<R | RR>();
-    const storageContext = yield* Effect.context<Store.Storage>();
-    const runtimeContext = Context.merge(context, storageContext);
-    const provideRuntime = <Out, Err>(
-      effect: Effect.Effect<Out, Err, R | RR | Store.Storage>,
-    ): Effect.Effect<Out, Err> => Effect.provide(effect, runtimeContext);
     // Fold any `.configure` patches in context (keyed by the tag id) onto the base config — so
     // per-env overrides (concurrency / rateLimit / …) merged as layers take effect at build.
     const effectiveConfig = yield* foldConfiguredSpec<
@@ -923,23 +918,27 @@ const buildQueueImpl = <
     const storeEffects = Store.catchWriteErrors(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const provideStorage = <A>(
+      write: Effect.Effect<A, never, Store.Storage>,
+    ): Effect.Effect<A> => Effect.provide(write, storageContext);
     const store: QueueStoreWriter<
       Schema.Struct<F>["Type"],
       E,
       QueueSuccessValueOf<Success>
     > = {
       enqueued: (entries, priority, batchId) =>
-        storeEffects.enqueued(entries, priority, batchId),
-      started: (entry) => storeEffects.started(entry),
+        provideStorage(storeEffects.enqueued(entries, priority, batchId)),
+      started: (entry) => provideStorage(storeEffects.started(entry)),
       completed: (entry, success, elapsed) =>
-        storeEffects.completed(entry, success, elapsed),
+        provideStorage(storeEffects.completed(entry, success, elapsed)),
       failed: (entry, cause, elapsed) =>
-        storeEffects.failed(entry, cause, elapsed),
+        provideStorage(storeEffects.failed(entry, cause, elapsed)),
       retryScheduled: (entry, cause, nextAttempt) =>
-        storeEffects.retryScheduled(entry, cause, nextAttempt),
+        provideStorage(storeEffects.retryScheduled(entry, cause, nextAttempt)),
       retryExhausted: (entry, cause) =>
-        storeEffects.retryExhausted(entry, cause),
-      record: (event) => storeEffects.record(event),
+        provideStorage(storeEffects.retryExhausted(entry, cause)),
+      record: (event) => provideStorage(storeEffects.record(event)),
     };
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
@@ -955,8 +954,6 @@ const buildQueueImpl = <
       R | RR,
       QueueSuccessValueOf<Success>
     >);
-    const provideR = provideRuntime;
-
     // History capture (optional): when a HistoryStore is provided, fork fibers that append each
     // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
     // it back. serviceOption → no store means append is skipped and history reads return empty.
@@ -995,7 +992,16 @@ const buildQueueImpl = <
       get: handle.statusNow,
       changes: handle.status,
     };
-    const impl: ImplOf<QueueInstanceSpec<F>> = {
+    // Worker methods are built UNWRAPPED (each still carrying the worker `R | RR` in its requirement);
+    // `Resource.provideContext` below discharges `context` into every Effect method uniformly (a no-op
+    // on the ones that carry no `R`, like pause/resume/shutdown) — a single subtractive
+    // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
+    // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
+    // (`status`/`size`/`isEmpty`/`*.live`/`events`) pass through untouched.
+    const impl: Resource.WithRequirement<
+      ImplOf<QueueInstanceSpec<F>>,
+      R | RR
+    > = {
       status: statusSub,
       size: Resource.mapSubscribable(
         statusSub,
@@ -1005,11 +1011,11 @@ const buildQueueImpl = <
         statusSub,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
       ),
-      start: provideRuntime(handle.start),
+      start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
-      shutdown: provideRuntime(handle.shutdown),
-      clear: provideRuntime(handle.clear),
+      shutdown: handle.shutdown,
+      clear: handle.clear,
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>
@@ -1040,35 +1046,39 @@ const buildQueueImpl = <
       // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
       // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
       add: (itemOrItems) =>
-        provideR(
-          Array.isArray(itemOrItems)
-            ? handle.add(itemOrItems)
-            : handle.add(itemOrItems),
+        (Array.isArray(itemOrItems)
+          ? handle.add(itemOrItems)
+          : handle.add(itemOrItems)
         ).pipe(Effect.orDie),
       prioritize: (itemOrItems) =>
-        provideR(
-          Array.isArray(itemOrItems)
-            ? handle.prioritize(itemOrItems)
-            : handle.prioritize(itemOrItems),
+        (Array.isArray(itemOrItems)
+          ? handle.prioritize(itemOrItems)
+          : handle.prioritize(itemOrItems)
         ).pipe(Effect.orDie),
       defer: (itemOrItems) =>
-        provideR(
-          Array.isArray(itemOrItems)
-            ? handle.defer(itemOrItems)
-            : handle.defer(itemOrItems),
+        (Array.isArray(itemOrItems)
+          ? handle.defer(itemOrItems)
+          : handle.defer(itemOrItems)
         ).pipe(Effect.orDie),
       // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
       // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
       // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
-      enqueue: (entries) => provideRuntime(handle.enqueue(entries)),
-      release: ({ options }) => provideRuntime(handle.release(options)),
-      releaseEncoded: ({ options }) => provideRuntime(handle.releaseEncoded(options)),
+      enqueue: (entries) => handle.enqueue(entries),
+      release: ({ options }) => handle.release(options),
+      releaseEncoded: ({ options }) => handle.releaseEncoded(options),
       deadLetter: ({ selector, options }) =>
-        provideRuntime(handle.deadLetter(selector, options)),
-      drop: ({ selector, options }) => provideRuntime(handle.drop(selector, options)),
+        handle.deadLetter(selector, options),
+      drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return impl;
+    // Discharge the captured worker context into every Effect method; the `ProvidedContext` result is
+    // `R`-free, so it satisfies `ImplOf` — annotated here to localize the assignability check.
+    const provided: ImplOf<QueueInstanceSpec<F>> = Resource.provideContext(
+      impl,
+      tag[specSym],
+      context,
+    );
+    return provided;
   });
 
 export const layer = <

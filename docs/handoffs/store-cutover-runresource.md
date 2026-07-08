@@ -1,6 +1,6 @@
 # Store cutover — RunResource (adopt the transform-layer machinery)
 
-Status: **done** on `cursor/run-resource-persistence-upgrade-a009`. The engine tap uses the Store transform
+Status: **done** on `cursor/store-extend-tier-refactor-a009`. The engine tap uses the Store transform
 layer (`Store.effects` + `Store.catchWriteErrors`), tier-2 semantic writes, and tier-3 analytics on
 `RunResource.store(tag)`. Facts use PascalCase `_tag` rows (`Started` / `Completed` / `Failed`) with typed
 `success` / `error` when the tag declares wire slots. Queue (`QueueResource`) remains the reference template.
@@ -24,11 +24,13 @@ typed-success pattern.
    engineRunResourceStoreContract(tag)))`; `buildRunImpl` pre-builds the tap with seq-id minting,
    mirroring `buildQueueImpl`. `Storage` is satisfied by the merged toolkit layer, not per-write `provide`.
 2. **Three-tier store** — `builtInRunResourceStoreContract` (tier 1), `engineRunResourceStoreContract`
-   (tier 2: `started` / `completed` / `failed`), `makeRunResourceStoreAnalyticsContract` (tier 3:
-   `completed`, `failed`, `recent`, `history`, `lastFailure`, `stats`, `failureRate`, `meanDurationMs`,
-   `factChanges`, `stateChanges`). `RunResource.store(tag)` registers tier 3.
+   (tier 2: `started` / `completed` / `failed` via `Store.extend`), `makeRunResourceStoreAnalyticsContract`
+   (tier 3: analytics reads via `Store.extend`). `RunResource.store(tag)` registers tier 3.
 3. **Typed full-capture** — tag `success` / `error` slots drive persisted `Completed.success` and
    `Failed.error` (presence-driven; untyped tags stringify failures via `extractRunFailure`).
+4. **Impl requirement discharge** — adopt `Resource.provideContext` in `buildRunImpl` (mirror
+   `buildQueueImpl`): build the impl unwrapped, then one subtractive transform instead of per-method
+   `Effect.provide`.
 
 ## Slim-down options (if tier 3 is too much)
 - Revert `RunResource.store` to tier-1 `builtInRunResourceStoreContract` only (drop analytics reads).

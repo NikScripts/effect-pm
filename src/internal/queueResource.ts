@@ -111,7 +111,6 @@ import {
 import { isJsonValue } from "./json";
 import type { JsonValue } from "../ProcessStoreEvent";
 import { DurableQueueStore } from "../DurableQueueStore";
-import { layerDefaultMemory, type Storage } from "../Store";
 import type { LaneStore } from "./laneStore";
 import { laneStoreFactoryFromConfig } from "./laneStoreFactory";
 import { levelToDefaultPriority } from "./priorityMapping";
@@ -152,9 +151,6 @@ export {
 // ============================================================================
 // Public Types
 // ============================================================================
-
-/** Worker requirements plus the defaulted {@link Storage} service (store persistence). @public */
-export type QueueHandleRequirements<R> = R | Storage;
 
 /**
  * Priority level for queue items.
@@ -329,8 +325,8 @@ export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemE
  * @public
  */
 export interface QueueEnqueue<T, E = never, R = never> {
-  (item: T): Effect.Effect<void, E, QueueHandleRequirements<R>>;
-  (items: ReadonlyArray<T>): Effect.Effect<void, E, QueueHandleRequirements<R>>;
+  (item: T): Effect.Effect<void, E, R>;
+  (items: ReadonlyArray<T>): Effect.Effect<void, E, R>;
 }
 
 /**
@@ -343,8 +339,8 @@ export interface QueueEnqueue<T, E = never, R = never> {
  * @public
  */
 export interface QueueEnqueueEntries<T, R = never> {
-  (entry: QueueEntry<T>): Effect.Effect<void, never, QueueHandleRequirements<R>>;
-  (entries: ReadonlyArray<QueueEntry<T>>): Effect.Effect<void, never, QueueHandleRequirements<R>>;
+  (entry: QueueEntry<T>): Effect.Effect<void, never, R>;
+  (entries: ReadonlyArray<QueueEntry<T>>): Effect.Effect<void, never, R>;
 }
 
 /**
@@ -465,7 +461,7 @@ export interface QueueHandleApi<
    *
    * After {@link shutdown}, `start` is a no-op (warning logged).
    */
-  readonly start: Effect.Effect<void, never, QueueHandleRequirements<R>>;
+  readonly start: Effect.Effect<void, never, R>;
 
   /**
    * Pause processing. Workers block before their next item.
@@ -486,37 +482,36 @@ export interface QueueHandleApi<
    * items always finish. Idempotent — a second call is a no-op. Emits `ShutdownRequested` /
    * `ShutdownComplete` on the {@link QueueHandleApi.events} stream.
    */
-  readonly shutdown: Effect.Effect<void, never, QueueHandleRequirements<R>>;
+  readonly shutdown: Effect.Effect<void>;
   /**
    * Drain all pending items from all priority queues and reset the completed
    * counter. Returns the number of items cleared. Workers remain alive.
    */
-  readonly clear: Effect.Effect<number, never, QueueHandleRequirements<R>>;
+  readonly clear: Effect.Effect<number, never, R>;
   /**
    * Export pending entries for handoff and remove them from this queue.
    *
    * This first release scope is pending-only: in-flight items finish on the
    * source queue.
    */
-  readonly release: (options?: QueueReleaseOptions) =>
-    Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueHandleRequirements<R>>;
+  readonly release: (options?: QueueReleaseOptions) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
   /**
    * Export pending entries for remote/wire handoff.
    *
    * Requires `itemSchema`; local decoded handoff can use {@link QueueHandleApi.release}.
    */
   readonly releaseEncoded: (options?: QueueReleaseOptions) =>
-    Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, QueueHandleRequirements<R>>;
+    Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, R>;
   /** Remove pending entries and route them to a dead-letter path. */
   readonly deadLetter: (
     selector: QueueEntrySelector<T> | QueueEntry<T>,
     options: QueueRouteOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
   /** Remove pending entries without preserving them for handoff. */
   readonly drop: (
     selector: QueueEntrySelector<T> | QueueEntry<T>,
     options: QueueRouteOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
 }
 
 /**
@@ -548,7 +543,7 @@ export interface QueueEngineHandle<
   readonly enqueueAtLevel: (
     items: T | ReadonlyArray<T>,
     level: number,
-  ) => Effect.Effect<void, EEnqueue, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<void, EEnqueue, R>;
   /** Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`). */
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
 }
@@ -775,40 +770,39 @@ export type QueueEvent<T, E = unknown, A = void> =
     };
 
 /**
- * The engine-facing store recorder — semantic writes the engine calls at the `publishEvent` sites.
- * Built by `QueueResource.layer` from `pipe(Store.effects(tag.key, engine write-extension),
- * Store.catchWriteErrors)`. Each method returns the guarded store effect (`Storage` rides the
- * requirement; the toolkit layer merges {@link Store.layerDefaultMemory} at the boundary). Each narrow
- * write funnels to the shared `event.append`; `record` is the base append alias for queue-level facts
- * without a narrow write. @internal
+ * The engine-facing store recorder — Storage-free semantic writes the engine calls at the
+ * `publishEvent` sites. Built by `QueueResource.layer` from `pipe(Store.effects(tag.key, engine
+ * write-extension), Store.catchWriteErrors)` with `Storage` discharged from the baked default, so
+ * the engine handle stays `Storage`-free. Each narrow write funnels to the shared `event.append`;
+ * `record` is the base append alias for queue-level facts without a narrow write. @internal
  */
 export interface QueueStoreWriter<T, E = unknown, A = void> {
   readonly enqueued: (
     entries: ReadonlyArray<QueueEntry<T>>,
     priority: Priority,
     batchId?: string,
-  ) => Effect.Effect<void, never, Storage>;
-  readonly started: (entry: QueueEntry<T>) => Effect.Effect<void, never, Storage>;
+  ) => Effect.Effect<void>;
+  readonly started: (entry: QueueEntry<T>) => Effect.Effect<void>;
   readonly completed: (
     entry: QueueEntry<T>,
     success: A,
     elapsed: Duration.Duration,
-  ) => Effect.Effect<void, never, Storage>;
+  ) => Effect.Effect<void>;
   readonly failed: (
     entry: QueueEntry<T>,
     cause: Cause.Cause<E>,
     elapsed: Duration.Duration,
-  ) => Effect.Effect<void, never, Storage>;
+  ) => Effect.Effect<void>;
   readonly retryScheduled: (
     entry: QueueEntry<T>,
     cause: Cause.Cause<E>,
     nextAttempt: number,
-  ) => Effect.Effect<void, never, Storage>;
+  ) => Effect.Effect<void>;
   readonly retryExhausted: (
     entry: QueueEntry<T>,
     cause: Cause.Cause<E>,
-  ) => Effect.Effect<void, never, Storage>;
-  readonly record: (event: QueueEvent<T, E, A>) => Effect.Effect<void, never, Storage>;
+  ) => Effect.Effect<void>;
+  readonly record: (event: QueueEvent<T, E, A>) => Effect.Effect<void>;
 }
 
 /**
@@ -864,7 +858,7 @@ export interface QueueResourceServiceDefinition<
 > extends Context.ServiceClass<Self, Id, QueueHandle<T, E, EEnqueue, R>>,
     Omit<QueueResourceMetadata<Id, T, E, EEnqueue, R>, "tag"> {
   readonly tag: Context.Key<Self, QueueHandle<T, E, EEnqueue, R>>;
-  readonly layer: Layer.Layer<Self | Storage, never, R>;
+  readonly layer: Layer.Layer<Self, never, R>;
   /** Factory defaults before configure layers (`ResourceConfigure` module). */
   readonly defaultSpec: QueueResourceConfig<T, E, R>;
   /**
@@ -1404,7 +1398,7 @@ const isQueueEntry = <T>(value: QueueEntrySelector<T> | QueueEntry<T>): value is
 // `R` (from emitExceeded) — not RateLimiterTag.
 type RateLimitAwait<T, R> = (
   internal: InternalItem<T>,
-) => Effect.Effect<void, RateLimiterError, QueueHandleRequirements<R>>;
+) => Effect.Effect<void, RateLimiterError, R>;
 
 interface RateLimitExceededEmit<T> {
   readonly internal: InternalItem<T>;
@@ -1475,7 +1469,7 @@ const isRateLimitExceededReason = (
 const acquireQueueRateLimitAwait = <T, R>(
   queueName: string,
   rateLimit: QueueResourceRateLimitOptions,
-  emitExceeded: (payload: RateLimitExceededEmit<T>) => Effect.Effect<void, never, QueueHandleRequirements<R>>,
+  emitExceeded: (payload: RateLimitExceededEmit<T>) => Effect.Effect<void, never, R>,
 ): Effect.Effect<RateLimitAwait<T, R>, never, RateLimiterTag> =>
   Effect.gen(function* () {
     assertValidRateLimit(rateLimit);
@@ -1621,7 +1615,7 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
  */
 function buildQueueEngine<T, E, EEnqueue, R, A = void>(
   bindings: BuildQueueEngineBindings<T, E, EEnqueue, R, A>,
-): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R | Storage> {
+): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> {
   const levelCount = bindings.levelCount ?? bindings.config.levelCount ?? 3;
   const makeLaneStore =
     bindings.makeLaneStore ??
@@ -1669,7 +1663,7 @@ const makeQueueEffectWithoutSchema = <
     InferQueueWorkerRequirements<C>
   >,
   never,
-  Scope.Scope | InferQueueWorkerRequirements<C> | Storage
+  Scope.Scope | InferQueueWorkerRequirements<C>
 > =>
   buildQueueEngine({
     config,
@@ -1691,7 +1685,7 @@ const makeQueueEffectWithSchema = <
     InferQueueWorkerSuccess<C>
   >,
   never,
-  Scope.Scope | InferQueueWorkerRequirements<C> | Storage
+  Scope.Scope | InferQueueWorkerRequirements<C>
 > => {
   const queueName = config.name ?? "anonymous";
   const descriptor = makeQueueItemCodecDescriptor(queueName, config.itemSchema);
@@ -1767,14 +1761,14 @@ function makeQueueEffect<
 ): Effect.Effect<
   MakeQueueEffectResult<QueueConfigFromEffect<F, O>>,
   never,
-  Scope.Scope | InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>> | Storage
+  Scope.Scope | InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>
 >;
 function makeQueueEffect<const C extends QueueResourceConfig<any, any, any, any>>(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
   MakeQueueEffectResult<C>,
   never,
-  Scope.Scope | InferQueueWorkerRequirements<C> | Storage
+  Scope.Scope | InferQueueWorkerRequirements<C>
 >;
 function makeQueueEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any, any>,
@@ -1814,10 +1808,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     { readonly high: number; readonly normal: number; readonly low: number },
     QueueStatus
   > = defaultQueueProjection,
-): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R | Storage> =>
+): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
-    type QueueEnv = QueueHandleRequirements<R>;
     const concurrency = config.concurrency ?? 5;
     const shutdownMode = config.shutdownMode ?? "drain";
     const capacity = config.capacity ?? 50_000;
@@ -2203,7 +2196,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const recordToStore = (
       store: QueueStoreWriter<T, E, A>,
       event: QueueEvent<T, E, A>,
-    ): Effect.Effect<void, never, Storage> => {
+    ): Effect.Effect<void> => {
       switch (event._tag) {
         case "Enqueued":
           return store.enqueued(event.entries, event.priority, event.batchId);
@@ -2222,7 +2215,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       }
     };
 
-    const publishEvent = (event: QueueEvent<T, E, A>): Effect.Effect<void, never, QueueEnv> =>
+    const publishEvent = (event: QueueEvent<T, E, A>): Effect.Effect<void> =>
       Effect.gen(function* () {
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
         yield* recordEventMetric(event);
@@ -2302,7 +2295,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // draining → off (exactly once), emit `ShutdownComplete`, and refresh the snapshot so its
     // `phase` reads `"off"`. Called after each item finishes and at shutdown initiation (covers
     // the already-idle case). The `getAndSet` guard makes the transition idempotent.
-    const finalizeShutdownIfDrained: Effect.Effect<void, never, QueueEnv> = Effect.gen(function* () {
+    const finalizeShutdownIfDrained: Effect.Effect<void> = Effect.gen(function* () {
       if ((yield* Ref.get(phaseRef)) !== "draining") return;
       const pending = yield* totalPendingEffect;
       const inFlight = yield* Ref.get(inFlightRef);
@@ -2380,7 +2373,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 
     const emitRateLimitExceeded = (
       payload: RateLimitExceededEmit<T>,
-    ): Effect.Effect<void, never, QueueEnv> =>
+    ): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         const entry = queueEntryFromInternal(payload.internal);
 
@@ -2436,7 +2429,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       level: number,
       retries = 0,
       enqueuedAt?: number,
-    ): Effect.Effect<void, never, QueueEnv> =>
+    ): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         const shutdown = yield* Ref.get(isShutdownRef);
         if (shutdown) {
@@ -2573,7 +2566,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
      */
     const enqueueEntries = (
       input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>,
-    ): Effect.Effect<void, never, QueueEnv> => {
+    ): Effect.Effect<void, never, R> => {
       const entries = Array.isArray(input)
         ? (input as ReadonlyArray<QueueEntry<T>>)
         : [input as QueueEntry<T>];
@@ -2636,7 +2629,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const retryInternal = (
       internal: InternalItem<T>,
       exit: Exit.Exit<A, E>,
-    ): Effect.Effect<void, never, QueueEnv> =>
+    ): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
         const entry = queueEntryFromInternal(internal);
@@ -2718,7 +2711,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                 ),
               ),
             );
-    const processItemBody = (internal: InternalItem<T>): Effect.Effect<void, never, QueueEnv> =>
+    const processItemBody = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
           const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
           const startedAt = DateTime.makeUnsafe(start);
@@ -2814,14 +2807,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         Effect.annotateLogs({ "queue.entryId": internal.entryId }),
       );
 
-    const skipRateLimitedItem = (internal: InternalItem<T>): Effect.Effect<void, never, QueueEnv> =>
+    const skipRateLimitedItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         if (config.key !== undefined && internal.key !== undefined) {
           yield* Ref.update(activeKeys, HashSet.remove(internal.key));
         }
       });
 
-    const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, QueueEnv> =>
+    const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         if (rateLimitAwait !== undefined) {
           // rateLimitAwait already holds the resolved limiter — no per-item layer provide.
@@ -2855,7 +2848,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
      * The double latch-await ensures that items taken during a race with
      * `pause` are held until resume, preserving priority ordering.
      */
-    const workerLoop = (workerId: number): Effect.Effect<void, never, QueueEnv> =>
+    const workerLoop = (workerId: number): Effect.Effect<void, never, R> =>
       withQueueLogAnnotations(
         queueName,
         Effect.annotateLogs(
@@ -2903,7 +2896,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // in-memory lanes (which drive concurrency / rate-limit / workers as usual). Blocks on a full
     // bounded lane (natural flow control); polls when the store is empty. A poisoned payload (decode
     // failure) is dropped from the store so it can't wedge the feeder.
-    const feederLoop: Effect.Effect<void, never, QueueEnv> | undefined =
+    const feederLoop: Effect.Effect<void, never, R> | undefined =
       persist === undefined
         ? undefined
         : Effect.forever(
@@ -3069,7 +3062,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // finishActive shutdown: drain every pending lane, release their dedup keys, and emit one
     // `Dropped` event for the discarded entries (reason "shutdown"), so only in-flight items
     // remain to finish. (drain mode skips this — it processes the queued items instead.)
-    const discardPendingOnShutdown: Effect.Effect<void, never, QueueEnv> = Effect.gen(function* () {
+    const discardPendingOnShutdown: Effect.Effect<void> = Effect.gen(function* () {
       const drained = yield* laneStore.drain;
       const discarded: Array<QueueEntry<T>> = [];
       for (const internal of drained) {
@@ -3177,7 +3170,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       );
     };
 
-    const releasePending = (options?: QueueReleaseOptions): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueEnv> =>
+    const releasePending = (options?: QueueReleaseOptions): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R> =>
       Effect.gen(function* () {
         const releaseId = options?.releaseId ?? nextReleaseId();
         const internals =
@@ -3204,7 +3197,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 
     const releaseEncodedPending = (
       options?: QueueReleaseOptions,
-    ): Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, QueueEnv> =>
+    ): Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, R> =>
       Effect.gen(function* () {
         if (encodeForRelease === undefined) {
           return yield* new QueueMissingItemSchemaError({ queue: queueName });
@@ -3247,7 +3240,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       selector: QueueEntrySelector<T> | QueueEntry<T>,
       options: QueueRouteOptions,
       kind: "dead-lettered" | "dropped",
-    ): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueEnv> =>
+    ): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R> =>
       Effect.gen(function* () {
         const internals = isQueueEntry(selector)
           ? []
@@ -3487,8 +3480,8 @@ const queueServiceLayerFromDefaultSpec = <
   base: Context.Service<Self, H>,
   resourceId: Name,
   defaultSpec: C,
-  run: (config: C) => Effect.Effect<H, never, Scope.Scope | InferQueueWorkerRequirements<C> | Storage>,
-): Layer.Layer<Self, never, InferQueueWorkerRequirements<C> | Storage> =>
+  run: (config: C) => Effect.Effect<H, never, Scope.Scope | InferQueueWorkerRequirements<C>>,
+): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>> =>
   Layer.effect(base)(
     foldConfiguredSpec(resourceId, defaultSpec).pipe(Effect.flatMap(run)),
   );
@@ -3557,7 +3550,7 @@ const queueResourceServiceWithoutSchema = <
         makeQueueEffectWithoutSchema,
       ),
       named,
-    ).pipe(Layer.provideMerge(layerDefaultMemory)),
+    ),
   }) satisfies ServiceDef;
 };
 
@@ -3616,7 +3609,7 @@ const queueResourceServiceWithSchema = <
         makeQueueEffectWithSchema,
       ),
       named,
-    ).pipe(Layer.provideMerge(layerDefaultMemory)),
+    ),
     item,
   }) satisfies ServiceDef;
 };

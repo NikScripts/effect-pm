@@ -148,7 +148,30 @@ The engine never builds a `QueueEvent` object and calls generic `record`. It ext
 | `retryScheduled` | `(entry, cause, nextAttempt)` |
 | `retryExhausted` | `(entry, cause)` |
 
-The engine builds its recorder with the transform layer — this is the pattern to copy:
+`engineQueueStoreContract(tag)` is the **lean base `Store.extend`-ed** with these writes — never a
+`Store.contract` rebuild. Because `extend` is fed the `base` alongside its methods builder, each write keeps
+its exact signature (the concrete-preservation guarantee), so `Store.effects` materializes
+`completed: (entry, success, elapsed) => Effect<void, StoreWriteError, Storage>`, never a widened
+`Record<string, unknown>`:
+
+```ts
+// Inside engineQueueStoreContract, conceptually:
+const engineContract = Store.extend(
+  ({ event }) => ({
+    enqueued: (entries: ReadonlyArray<Entry>, priority: Priority, batchId?: string) =>
+      event.append({ _tag: "Enqueued", entries, priority, ...(batchId ? { batchId } : {}) }),
+    started: (entry: Entry) => event.append({ _tag: "Started", entry }),
+    completed: (entry: Entry, success: Success, elapsed: Duration.Duration) =>
+      event.append({ _tag: "Completed", entry, success, elapsed }),
+    failed: (entry: Entry, cause: Cause.Cause<E>, elapsed: Duration.Duration) =>
+      event.append({ _tag: "Failed", entry, cause, elapsed }),
+    // retryScheduled / retryExhausted …
+  }),
+  base, // the Tier-1 lean base (event shape → record / events)
+);
+```
+
+The engine builds its recorder over that contract with the transform layer — this is the pattern to copy:
 
 ```ts
 // Inside QueueResource.layer, conceptually:
@@ -166,7 +189,9 @@ the queue** — an encode/wiring **defect** still propagates. Queue-level facts 
 ## Tier 3 — consumer analytics read-extension
 
 `QueueResource.store(queue)` is the registration app code puts on a `Store.Service`. It is the lean
-base **plus** advanced analytics reads — pure derivations over the persisted event log:
+base **plus** advanced analytics reads — pure derivations over the persisted event log. Internally it is
+the same lean base `Store.extend`-ed with the analytics reads, so the concrete read signatures are
+preserved exactly like Tier 2 (base = `Store.contract`, every tier = `Store.extend`):
 
 ```ts
 class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", jobSchema) {}
@@ -221,6 +246,24 @@ Real usage of every read is exercised in `test/queue-store-analytics.test.ts`.
 `JobsStore.layerMemory` keeps the analytics in-process; `JobsStore.layer({ filename })` persists the
 event log to SQLite so analytics survive restarts. Same tag → an app store layer overrides the queue's
 baked-in in-memory default.
+
+## The impl side — one `Resource.provideContext`
+
+The three-tier contracts are only half the golden model. The queue's resource **impl** uses the
+mirror-image primitive. `buildQueueImpl` constructs every worker method **unwrapped** — each still carrying
+the worker requirement `R | RR` — then discharges it in a single call:
+
+```ts
+const context = yield* Effect.context<R | RR>();
+return Resource.provideContext(impl, tag[Resource.specSym], context);
+```
+
+`Resource.provideContext` is the Resource counterpart to `Store.catchWriteErrors` — a one-liner over
+`Resource.mapEffects` that `Effect.provideContext`s every Effect method uniformly (`R` → `Exclude<R, Ctx>`),
+a no-op on the ones carrying no `R` (`start` / `pause` / `resume` / `shutdown`), and leaving `Stream` /
+`Subscribable` members (`status` / `size` / `isEmpty` / `events`) untouched. It's **subtractive**: whatever
+the context doesn't cover survives as a residual requirement (caught at the `ImplOf` assignment), never
+falsely claimed `never`. One call — no per-method `Effect.provideContext(...)` wrapping.
 
 ## See also
 

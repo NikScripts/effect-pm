@@ -38,11 +38,21 @@ Read first: `docs/guides/store.md` (the model), `docs/guides/store-migration.md`
    ```
    Provide `Storage` once at the boundary (baked-in default or app layer). Template: `buildQueueImpl` in
    `QueueResource.ts`.
-2. **(Recommended) Three-tier.** Split the process contract into a lean base + an engine write-extension
+2. **(Recommended) Three-tier — stack with `Store.extend`, not a `Store.contract` rebuild.** Build the lean
+   base once with `Store.contract`, then `Store.extend(methodsFn, base)` it into an engine write-extension
    (narrow semantic writes — `recordCompleted`/`recordFailed`/`recordInterrupted` funneling to
-   `event.append`), and expose a consumer read-extension (`Process.store(tag)`, analogous to
-   `QueueResource.store`) with analytics reads over the event log.
-3. **(Optional) Typed full-capture.** If a process's `success` should carry a real value, adopt the worker-A
+   `event.append`), and `Store.extend` the same base again into a consumer read-extension (`Process.store(tag)`,
+   analogous to `QueueResource.store`) with analytics reads over the event log. `Store.extend` is
+   type-preserving (fed the `base`, it keeps each write/read's concrete signature onto `Store.effects`) — do
+   **not** rebuild the base with `Store.contract` per tier. Template: `queueStoreSpec.ts`.
+3. **Discharge the impl requirement with `Resource.provideContext`, not per-method provides.** Build the
+   process impl **unwrapped** (each worker method still carrying the worker `R`), then discharge it in one
+   call: `Resource.provideContext(impl, tag[Resource.specSym], context)` (from
+   `yield* Effect.context<R>()`). It's the Resource mirror of `Store.catchWriteErrors` — a subtractive
+   one-liner over `Resource.mapEffects` (`R` → `Exclude<R, Ctx>`, a no-op where there's no `R`, Stream /
+   Subscribable members untouched) — no per-method `Effect.provideContext(...)` wrapping. Template:
+   `buildQueueImpl` in `QueueResource.ts`.
+4. **(Optional) Typed full-capture.** If a process's `success` should carry a real value, adopt the worker-A
    pattern (schema slot → return type). Today `RunCompleted.success` is populated when the tag stamps
    `success`; the queue shows the fully-typed version.
 

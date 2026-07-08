@@ -42,7 +42,6 @@ import {
   type QueueEntrySelector,
   type QueueEvent,
   type QueueHandlePhantomWorkerFailures,
-  type QueueHandleRequirements,
   type QueueMetrics,
   type QueueOnFailure,
   type QueueReleaseEncodingError,
@@ -79,7 +78,7 @@ export interface CustomQueueEnqueue<T, EEnqueue = never, R = never> {
   (
     items: T | ReadonlyArray<T>,
     level?: number | string,
-  ): Effect.Effect<void, EEnqueue, QueueHandleRequirements<R>>;
+  ): Effect.Effect<void, EEnqueue, R>;
 }
 
 /** Control + observe surface for custom N-level queues. @public */
@@ -101,25 +100,25 @@ export interface CustomQueueHandleApi<
   readonly statusNow: Effect.Effect<CustomQueueStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly logs: Stream.Stream<LogEntry>;
-  readonly start: Effect.Effect<void, never, QueueHandleRequirements<R>>;
+  readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void, never, QueueHandleRequirements<R>>;
-  readonly clear: Effect.Effect<number, never, QueueHandleRequirements<R>>;
+  readonly shutdown: Effect.Effect<void>;
+  readonly clear: Effect.Effect<number, never, R>;
   readonly release: (
     options?: QueueReleaseOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
   readonly releaseEncoded: (
     options?: QueueReleaseOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, R>;
   readonly deadLetter: (
     selector: QueueEntrySelector<T> | QueueEntry<T>,
     options: QueueRouteOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
   readonly drop: (
     selector: QueueEntrySelector<T> | QueueEntry<T>,
     options: QueueRouteOptions,
-  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, QueueHandleRequirements<R>>;
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
 }
 
 /** @public */

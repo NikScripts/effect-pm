@@ -59,8 +59,10 @@
 
 import { Context, Effect, Layer, Schema, Scope } from "effect";
 import * as Resource from "./Resource";
+import { specSym } from "./Resource";
 import type {
   HandlerContextOf,
+  ImplOf,
   Local,
   ResourceTag,
 } from "./Resource";
@@ -446,7 +448,11 @@ const buildRunImpl = <
           ? (handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)()
           : handle.run(input as Schema.Schema.Type<I>),
     };
-    return impl;
+    return Resource.provideContext(
+      impl as Resource.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>,
+      tag[specSym],
+      context,
+    );
   });
 
 const runTag = <Self>() => {

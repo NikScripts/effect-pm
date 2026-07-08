@@ -48,6 +48,9 @@ schema is exactly what forced casts.
 
 ### 1. Split the contract into tiers
 
+Build the lean base **once** with `Store.contract`, then stack each tier on top with `Store.extend` — never
+rebuild the base with `Store.contract` to add a tier.
+
 ```ts
 // TIER 1 — lean base: one event shape + record/events aliases
 const base = Store.contract(
@@ -58,23 +61,24 @@ const base = Store.contract(
   }),
 );
 
-// TIER 2 — engine write-extension: narrow typed writes, all funnel to event.append
-const engineContract = Store.contract(
-  { event: Store.shape(myEventSchema) },
+// TIER 2 — engine write-extension: Store.extend the base with narrow typed writes,
+// each funnelling to the shared event.append
+const engineContract = Store.extend(
   ({ event }) => ({
-    record: event.append,
-    events: event.read,
     started: (entry: Entry) => event.append({ _tag: "Started", entry }),
     completed: (entry: Entry, success: Success, elapsed: Duration.Duration) =>
       event.append({ _tag: "Completed", entry, success, elapsed }),
     failed: (entry: Entry, cause: Cause.Cause<E>, elapsed: Duration.Duration) =>
       event.append({ _tag: "Failed", entry, cause, elapsed }),
   }),
+  base,
 );
 ```
 
-Build the write-extension with `Store.contract` (not `Store.extend`) so the concrete write-method types
-survive onto the materialized effects object.
+`Store.extend(methodsFn, base)` is **type-preserving**: fed the `base` alongside its methods builder, it
+infers each write's exact signature and merges it as `base.custom & …`, so the concrete write-method types
+survive onto the materialized effects object — a widened `Record<string, unknown>` never appears — and the
+base's own `record` / `events` come through unchanged. That's why the tiers stack with `Store.extend`.
 
 ### 2. Build the recorder once with the transform layer
 
@@ -98,17 +102,18 @@ directly; do **not** wrap each write in `Effect.provide` with a captured context
 
 ### 3. Give consumers a read-extension
 
+Same tier discipline — `Store.extend` the same lean `base` with analytics reads (pure derivations over
+`event.read`), never a `Store.contract` rebuild:
+
 ```ts
 // TIER 3 — analytics reads over the same event log, registered by app code
 export const myResourceStore = (tag: MyTag) =>
-  facetRegistration(tag, Store.contract(
-    { event: Store.shape(myEventSchema, readPayload) },
+  facetRegistration(tag, Store.extend(
     ({ event }) => ({
-      record: event.append,
-      events: event.read,
       failures: () => Effect.map(event.read(), (evs) => evs.filter((e) => e._tag === "Failed")),
       // …derivations…
     }),
+    base,
   ));
 ```
 
@@ -119,6 +124,24 @@ class MyStore extends Store.Service<MyStore>("@app/MyStore")(myResourceStore(MyT
 const s = yield* MyStore.at(MyTag);
 const fs = yield* s.failures();
 ```
+
+### 4. Discharge the impl requirement with `Resource.provideContext`
+
+The recorder is only the store half. The resource **impl** gets the mirror-image treatment. Build every
+worker method **unwrapped** — each still carrying the worker requirement `R` — then discharge it in **one**
+call, the Resource counterpart to `Store.catchWriteErrors`:
+
+```ts
+const context = yield* Effect.context<R>();
+return Resource.provideContext(impl, MyTag[Resource.specSym], context);
+```
+
+`Resource.provideContext` walks the impl per its spec and `Effect.provideContext`s each Effect method, so
+`R` → `Exclude<R, Ctx>` uniformly — a no-op on methods that carry no `R` (`pause` / `resume` / `shutdown`),
+and `Stream` / `Subscribable` members pass through untouched. It's **subtractive**: a method needing more
+than the context provides keeps a residual requirement (caught at the `ImplOf` assignment) instead of a
+false `never`. No per-method `Effect.provideContext(...)` wrapping. Template: `buildQueueImpl` in
+`QueueResource.ts`.
 
 ## Full-capture note (outcome events)
 

@@ -276,7 +276,11 @@ const queueTier1Methods = <Row extends { readonly _tag: string }>({
 });
 
 /**
- * Build the engine **write-extension** contract from an item schema (no tag).
+ * Build the engine **write-extension** contract from an item schema (no tag) — the lean base
+ * (`event` shape → `record` + `events`) {@link Store.extend}ed with narrow, semantic writes, each
+ * taking only its own fields and funnelling to the shared `event.append`. Because `extend` is fed
+ * the `base` alongside its methods builder, the concrete write-method types survive onto the
+ * materialized effects object (see the concrete-preservation guarantee on {@link Store.extend}).
  * @internal
  */
 export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
@@ -297,26 +301,32 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
     typeof eventSchema.Type,
     { readonly _tag: "Failed" }
   >["cause"];
+  const base = Store.contract(
+    {
+      event: Store.shape(eventSchema, queueEventReadPayload),
+    },
+    (handles) => queueTier1Methods<typeof eventSchema.Type>(handles),
+  );
   return Store.extend(
-    (handles) => ({
+    ({ event }) => ({
       enqueued: (entries: ReadonlyArray<Entry>, priority: Priority, batchId?: string) =>
-        handles.event.append({
+        event.append({
           _tag: "Enqueued",
           entries,
           priority,
           ...(batchId !== undefined ? { batchId } : {}),
         }),
-      started: (entry: Entry) => handles.event.append({ _tag: "Started", entry }),
+      started: (entry: Entry) => event.append({ _tag: "Started", entry }),
       completed: (entry: Entry, success: SuccessValue, elapsed: Duration.Duration) =>
-        handles.event.append({ _tag: "Completed", entry, success, elapsed }),
+        event.append({ _tag: "Completed", entry, success, elapsed }),
       failed: (entry: Entry, cause: FailCause, elapsed: Duration.Duration) =>
-        handles.event.append({ _tag: "Failed", entry, cause, elapsed }),
+        event.append({ _tag: "Failed", entry, cause, elapsed }),
       retryScheduled: (entry: Entry, cause: FailCause, nextAttempt: number) =>
-        handles.event.append({ _tag: "RetryScheduled", entry, cause, nextAttempt }),
+        event.append({ _tag: "RetryScheduled", entry, cause, nextAttempt }),
       retryExhausted: (entry: Entry, cause: FailCause) =>
-        handles.event.append({ _tag: "RetryExhausted", entry, cause }),
+        event.append({ _tag: "RetryExhausted", entry, cause }),
     }),
-    makeQueueStoreContract(itemSchema, wire),
+    base,
   );
 };
 
@@ -568,14 +578,19 @@ export type QueueStoreAnalyticsContract<Tag extends QueueStoreTag> = ReturnType<
 >;
 
 /**
- * Build the **read-extended** analytics contract for a queue tag.
- * @internal
+ * Build the **read-extended** analytics contract for a queue tag — the lean base (`event` shape →
+ * `record` + `events`) {@link Store.extend}ed with the advanced analytics reads
+ * ({@link QueueStoreReads}). Because `extend` is fed the `base` alongside its methods builder, the
+ * concrete read-method types survive onto the resolved handle (see the concrete-preservation
+ * guarantee on {@link Store.extend}). Pure derivations close over the `event` shape's `read`;
+ * `changes()` resolves the live journal stream via {@link Store.changes} on the base contract
+ * (whose `event` shape it selects). @internal
  */
 export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>(
   tag: Tag,
 ) => {
-  const tier1 = builtInQueueStoreContract(tag);
-  const storeClass = { scopeKey: tag.key, contract: tier1 };
+  const base = builtInQueueStoreContract(tag);
+  const storeClass = { scopeKey: tag.key, contract: base };
   const isFailed = (event: QueueStoreEvent<Tag>): event is QueueStoreFailed<Tag> =>
     event._tag === "Failed";
   const isCompleted = (event: QueueStoreEvent<Tag>): event is QueueStoreCompleted<Tag> =>
@@ -597,6 +612,6 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
         isRetryExhausted,
         isTerminal,
       }),
-    tier1,
+    base,
   );
 };
