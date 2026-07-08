@@ -113,7 +113,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 
 const store = yield* Prices.store;
 yield* store.record({
-  _tag: "RunCompleted",
+  _tag: "Completed",
   processId: Prices.key,
   scheduleKey: null,
   startedAt: 1,
@@ -129,9 +129,9 @@ const rows = yield* store.events({ limit: 10 });
 
 | Field | Rule |
 |-------|------|
-| **`_tag`** | `RunCompleted` \| `RunFailed` \| `RunInterrupted` |
-| **`success`** | On `RunCompleted` **only if** the tag stamps `success`; field name is `success` (not `result`) |
-| **`error`** | Always on `RunFailed`; typed when the tag stamps `error`, otherwise **`string`** (`String` of the fail value) |
+| **`_tag`** | `Started` \| `Completed` \| `Failed` \| `Interrupted` |
+| **`success`** | On `Completed` **only if** the tag stamps `success`; field name is `success` (not `result`) |
+| **`error`** | Always on `Failed`; typed when the tag stamps `error`, otherwise **`string`** (`String` of the fail value) |
 | **`isStartupRun`** | `true` when no prior execution row exists for this process |
 
 Rich types (`DateTime`, tagged errors, etc.) round-trip when the journal uses schema codecs — stamp

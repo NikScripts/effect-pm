@@ -85,11 +85,11 @@ fact/state union).
 
 Persisted store rows use the **same slot names as the tag factory** (`success`, `error`) and
 **PascalCase `_tag`** discriminators. Tag config and store wire align — no `result` on
-`RunCompleted` / `Completed`.
+`Completed`.
 
 | Convention | Rule |
 |------------|------|
-| **`_tag`** | PascalCase only — `RunCompleted`, `RunFailed`, `Completed`, `Failed`, `RunStarted`, … Retire kebab `type` strings (`run-resource.run.failed`, …). **RunResource** store facts still need this migration; handle API (`record` / `facts` / `stateHistory`) is correct. |
+| **`_tag`** | PascalCase only — `Started`, `Completed`, `Failed`, `Interrupted`, … Retire kebab `type` strings on **fact/event rows** (`run-resource.run.failed`, …). State-transition `reason` strings on RunResource may remain kebab (separate shape). |
 | **`success`** | Present on terminal success rows **iff** the tag declares a `success` schema. Field name is `success` (not `result`). Value is the **decoded** worker/run return — journal encodes on append. |
 | **`error`** | Always on terminal failure rows. Presence-driven by the tag's `error` schema (see below). |
 
@@ -111,7 +111,7 @@ Queue `Failed` without an `error` schema uses the same `error: string` field (no
 for subscribers; the **store row** follows the rule above.
 
 **Not the live-handle `result` ref:** Process's reactive `result` Subscribable (latest success
-`Option`) is unrelated — only the persisted `RunCompleted.success` field follows this table.
+`Option`) is unrelated — only the persisted `Completed.success` field follows this table.
 
 ## Store-core TODO
 

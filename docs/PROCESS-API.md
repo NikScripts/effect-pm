@@ -141,7 +141,7 @@ These exports remain for custom schedule implementations; the schedule-driven ru
 
 | Plane | API | Backing | Process execution history? |
 |-------|-----|---------|----------------------------|
-| **Store (EventJournal)** | `Store.Service`, `Process.store(tag)` | `layerMemory` / SQLite `SqlEventJournal` | **Yes** — `RunCompleted` / `RunFailed` / `RunInterrupted` |
+| **Store (EventJournal)** | `Store.Service`, `Process.store(tag)` | `layerMemory` / SQLite `SqlEventJournal` | **Yes** — `Started` / `Completed` / `Failed` / `Interrupted` |
 | **Legacy facets** | `ProcessStorage`, `src/store/*` facets | `RuntimeStorage` / `layerProcessStore` | **No** — queue entries, lifecycle, logs only |
 
 ### `Process.store` (built-in execution contract)
@@ -173,9 +173,10 @@ Layer.provideMerge(AppStore.layerMemory, Process.layer(MyProcess, { effect, poll
 
 | `_tag` | When | Notable fields |
 |--------|------|----------------|
-| `RunCompleted` | Tick succeeded | Optional **`success`** iff tag stamps `success` |
-| `RunFailed` | Tick failed (non-interrupt) | **`error`** — typed if tag stamps `error`, else `string` |
-| `RunInterrupted` | Tick interrupted | Base timing fields only |
+| `Started` | Tick began | Base timing fields + `isStartupRun` |
+| `Completed` | Tick succeeded | Optional **`success`** iff tag stamps `success` |
+| `Failed` | Tick failed (non-interrupt) | **`error`** — typed if tag stamps `error`, else `string` |
+| `Interrupted` | Tick interrupted | Base timing fields only |
 
 Shared base fields: `processId`, `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, `isStartupRun`.
 

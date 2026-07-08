@@ -71,7 +71,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `queue.ratelimit.exceeded` × 1 | `QueueResource` worker when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
 
 **Process execution history:** **`Process.layer`** / **`serve`** / **`serveRemote`** auto-append
-`RunCompleted` / `RunFailed` / `RunInterrupted` via a baked-in default in-memory store. Register
+`Started` / `Completed` / `Failed` / `Interrupted` via a baked-in default in-memory store. Register
 **`Process.store(tag)`** on an app **`Store.Service`** when you need durable storage or `yield* Tag.store`
 query handles.
 

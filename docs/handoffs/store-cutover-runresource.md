@@ -1,51 +1,30 @@
 # Store cutover — RunResource (adopt the transform-layer machinery)
 
-Status: **done** on `cursor/store-extend-tier-refactor-a009`. The engine tap uses the Store transform
-layer (`Store.effects` + `Store.catchWriteErrors`), tier-2 semantic writes, and tier-3 analytics on
+Status: **done** on `cursor/store-extend-tier-refactor-a009`. The engine uses the Store transform
+layer (`Store.effects` + `Store.catchWriteErrors` + `Store.provideContext`), tier-1 shape appends
+(`fact.append` / `state.append` directly — no `recordRun*` writer methods), and tier-2 analytics on
 `RunResource.store(tag)`. Facts use PascalCase `_tag` rows (`Started` / `Completed` / `Failed`) with typed
-`success` / `error` when the tag declares wire slots. Queue (`QueueResource`) remains the reference template.
+`success` / `error` when the tag declares wire slots. `Resource.builtResource` backs `layer` / `serve` /
+`serveRemote`. Queue (`QueueResource`) remains the reference for tier-2 narrow queue lifecycle writes.
 
 Read first: `docs/guides/store.md`, `docs/guides/store-migration.md`, `docs/guides/queue-resource.md`.
 
-## What changed in the store API
-Same as the process cutover — see `store-cutover-process.md` "What changed": `resolve`/`resolveOrDie` (was
-`withStorage`/`withDefault`), the co-located `Store.Storage` service, `StoreWriteError` honest write typing
-(reads = `StoreJournalDecodeError`, encode = defect), the `mapEffects`/`catchWriteErrors` transform layer
-(one guard for all writes, a custom write transformed exactly once), three-tier stores, and the worker-A
-typed-success pattern.
+## Completed
 
-## Already done by the store-machinery merge (no action)
-- `BuiltInRunResourceContract.record` **and** `.recordStateChange` aligned to `Effect<void, StoreWriteError>`.
-  Run has **two** writes — `record` on the `fact` shape, `recordStateChange` on the `state` shape.
-- `Store.withDefault` → `Store.resolveOrDie` wherever the run tap resolved it.
+- **Transform layer** — `Store.catchWriteErrors(Store.effects(…, builtInRunResourceStoreContract(tag)))`;
+  `Store.provideContext` discharges `Storage` once at the gate boundary.
+- **Direct append** — `makeObservedRun` builds fact rows and calls `fact.append` inline (Process golden pattern).
+- **Two-tier store** — `builtInRunResourceStoreContract` (tier 1: `fact` + `state` shapes),
+  `makeRunResourceStoreAnalyticsContract` (tier 2: analytics reads). `RunResource.store(tag)` registers tier 2.
+- **Typed full-capture** — tag `success` / `error` slots drive persisted `Completed.success` and
+  `Failed.error` (presence-driven; untyped tags stringify failures via `extractRunFailure`).
+- **Resource bundle** — `buildRunImpl` returns `Resource.builtResource`; `layer` uses `grantLocal`.
 
-## Adoption steps (completed)
-1. **Transform layer** — `runResourceStoreTap.ts` builds `Store.catchWriteErrors(Store.effects(…,
-   engineRunResourceStoreContract(tag)))`; `buildRunImpl` pre-builds the tap with seq-id minting,
-   mirroring `buildQueueImpl`. `Storage` is satisfied by the merged toolkit layer, not per-write `provide`.
-2. **Three-tier store** — `builtInRunResourceStoreContract` (tier 1), `engineRunResourceStoreContract`
-   (tier 2: `started` / `completed` / `failed` via `Store.extend`), `makeRunResourceStoreAnalyticsContract`
-   (tier 3: analytics reads via `Store.extend`). `RunResource.store(tag)` registers tier 3.
-3. **Typed full-capture** — tag `success` / `error` slots drive persisted `Completed.success` and
-   `Failed.error` (presence-driven; untyped tags stringify failures via `extractRunFailure`).
-4. **Impl requirement discharge** — adopt `Resource.provideContext` in `buildRunImpl` (mirror
-   `buildQueueImpl`): build the impl unwrapped, then one subtractive transform instead of per-method
-   `Effect.provide`.
+## State `reason` strings (unchanged)
 
-## Slim-down options (if tier 3 is too much)
-- Revert `RunResource.store` to tier-1 `builtInRunResourceStoreContract` only (drop analytics reads).
-- Keep tier 2 + transform layer only (minimum from the handoff).
-- Inline tap build inside `makeRunResourceStoreTap` only (drop `buildRunImpl` pre-build).
-
-## StoreWriteError — don't over-worry it
-Write-path only, `@internal` on the contract types, swallowed at every call site (the tap guard / the
-transform), never on a run handle / public signature / the wire. See `queue-resource.md`.
-
-## Keep (still valid)
-- PascalCase `_tag` rows (`Started` / `Completed` / `Failed`), retiring kebab `type` strings.
-- Presence-driven typed `error` on `RunFailed` facts (replacing `cause: string` / `Cause.pretty`).
-- Baked-in default store on `RunResource.layer`/`serve`/`Service.layer`; override with
-  `Layer.provideMerge(AppStore.layerMemory)`.
+State transitions still use kebab `reason` values (`run-resource.run.started`, …) on the **`state`**
+shape — separate from fact `_tag` rows. Fact tags are PascalCase only.
 
 ## Verify
-`pnpm run typecheck` (both projects) + the run-resource + run-resource store suites.
+
+`pnpm run typecheck` + run-resource / store suites.
