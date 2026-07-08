@@ -384,6 +384,7 @@ export interface QueueHandleApi<
   E = never,
   EEnqueue = never,
   R = never,
+  A = void,
 > {
   /** Enqueue items at **normal** priority. */
   readonly add: QueueEnqueue<T, EEnqueue, R>;
@@ -418,7 +419,7 @@ export interface QueueHandleApi<
    * slow subscriber never backpressures the worker (lossy under load — enable a durable store
    * for guaranteed delivery). Subscribe for dashboards / CLI `--watch` / a TUI.
    */
-  readonly events: Stream.Stream<QueueEvent<T, E>>;
+  readonly events: Stream.Stream<QueueEvent<T, E, A>>;
 
   /**
    * Live **current-state snapshot** stream — emits the current {@link QueueStatus} and every
@@ -523,7 +524,8 @@ export type QueueHandle<
   E = never,
   EEnqueue = never,
   R = never,
-> = QueueHandleApi<T, E, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
+  A = void,
+> = QueueHandleApi<T, E, EEnqueue, R, A> & QueueHandlePhantomWorkerFailures<E>;
 
 /**
  * Engine handle — includes custom-queue hooks used by {@link CustomQueueResource}.
@@ -535,7 +537,8 @@ export interface QueueEngineHandle<
   E = never,
   EEnqueue = never,
   R = never,
-> extends QueueHandle<T, E, EEnqueue, R> {
+  A = void,
+> extends QueueHandle<T, E, EEnqueue, R, A> {
   /** Enqueue at an explicit lane index (custom queues). */
   readonly enqueueAtLevel: (
     items: T | ReadonlyArray<T>,
@@ -799,7 +802,7 @@ export interface QueueStoreWriter<T, E = unknown, A = void> {
     entry: QueueEntry<T>,
     cause: Cause.Cause<E>,
   ) => Effect.Effect<void>;
-  readonly record: (event: QueueEvent<T, E>) => Effect.Effect<void>;
+  readonly record: (event: QueueEvent<T, E, A>) => Effect.Effect<void>;
 }
 
 /**
@@ -1071,13 +1074,13 @@ export interface QueueOnFailure<T, E, R> {
  *
  * @public
  */
-export interface QueueRefill<T, E, EEnqueue, R> {
+export interface QueueRefill<T, E, EEnqueue, R, A = void> {
   /** Run `load` once when the worker pool starts (bootstrap). @default false */
   readonly onStart?: boolean;
   /** Run `load` each time the queue drains to empty (re-poll the source). @default false */
   readonly onDrained?: boolean;
   /** Load + enqueue work. Handle its own errors (best-effort). */
-  readonly load: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
+  readonly load: (queue: QueueHandle<T, E, EEnqueue, R, A>) => Effect.Effect<void, never, R>;
 }
 
 /**
@@ -1115,19 +1118,24 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
  */
 export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
 
-export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
+export type QueueResourceConfigWithItemSchema<T, E, R, A = void> = QueueResourceConfigBase<T> & {
   readonly itemSchema: Schema.Codec<T, unknown, never, never>;
-  readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
+  /**
+   * Process each item. The **success channel `A`** is driven by the tag's `success` wire schema
+   * (default `void`): with a `success` schema the worker must return `Effect<A, E, R>` and that
+   * value rides `Completed.success` / `store.completed`; without one it stays `Effect<void, E, R>`.
+   */
+  readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<A, E, R>;
   /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
   readonly onFailure?: QueueOnFailure<T, E, R>;
   /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
-  readonly refill?: QueueRefill<T, E, QueueEnqueueErrors, R>;
+  readonly refill?: QueueRefill<T, E, QueueEnqueueErrors, R, A>;
   /**
    * Internal store recorder — the engine records each published event through its narrow, semantic
    * writes ({@link QueueStoreWriter}) at the source (`publishEvent`) so no burst is dropped by a late
    * `Stream.fromPubSub` subscription. Wired by `QueueResource.layer` from the baked-in store. @internal
    */
-  readonly store?: QueueStoreWriter<T, E>;
+  readonly store?: QueueStoreWriter<T, E, A>;
 };
 
 /**
@@ -1139,9 +1147,9 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
  *
  * @public
  */
-export type QueueResourceConfig<T, E, R> =
+export type QueueResourceConfig<T, E, R, A = void> =
   | QueueResourceConfigWithoutItemSchema<T, E, R>
-  | QueueResourceConfigWithItemSchema<T, E, R>;
+  | QueueResourceConfigWithItemSchema<T, E, R, A>;
 
 /** @public Config fields for {@link QueueResource.make} / {@link QueueResource.Service} without `effect`. */
 export type QueueResourceOptionsWithoutItemSchema<T, E, R> = Omit<
@@ -1187,7 +1195,12 @@ const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray
 
 const queueResourceKind = "queue" as const;
 
-type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<infer _T, infer _E, infer _R>
+type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<
+  infer _T,
+  infer _E,
+  infer _R,
+  infer _A
+>
   ? QueueEnqueueErrors
   : never;
 
@@ -1217,8 +1230,18 @@ export type InferQueueItem<
  * @public
  */
 export type InferQueueWorkerError<
-  C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
+  C extends { readonly effect: (...args: any[]) => Effect.Effect<any, any, any> },
 > = Effect.Error<ReturnType<C["effect"]>>;
+
+/**
+ * Infer worker **`A`** (success channel) from `effect`'s **`Effect`** return type — the value that
+ * rides `Completed.success` / `store.completed`. `void` when the worker returns `Effect<void, …>`.
+ *
+ * @public
+ */
+export type InferQueueWorkerSuccess<
+  C extends { readonly effect: (...args: any[]) => Effect.Effect<any, any, any> },
+> = Effect.Success<ReturnType<C["effect"]>>;
 
 type NormalizeQueueRequirements<R> = unknown extends R
   ? [R] extends [unknown]
@@ -1241,15 +1264,15 @@ type InferQueueOnFailureRequirements<C> = C extends {
  * @public
  */
 export type InferQueueWorkerRequirements<
-  C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
+  C extends { readonly effect: (...args: any[]) => Effect.Effect<any, any, any> },
 > = NormalizeQueueRequirements<
   Effect.Services<ReturnType<C["effect"]>> | InferQueueOnFailureRequirements<C>
 >;
 
 
-const hasItemSchema = <T, E, R>(
-  config: QueueResourceConfig<T, E, R>,
-): config is QueueResourceConfigWithItemSchema<T, E, R> => config.itemSchema !== undefined;
+const hasItemSchema = <T, E, R, A = void>(
+  config: QueueResourceConfig<T, E, R, A>,
+): config is QueueResourceConfigWithItemSchema<T, E, R, A> => config.itemSchema !== undefined;
 
 /** @public Merged config shape for positional queue factories. */
 export type QueueConfigFromEffect<
@@ -1267,12 +1290,12 @@ export type QueueConfigFromEffect<
  *
  * @internal
  */
-type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
-  readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
+type QueueRuntimeConfig<T, E, EEnqueue, R, A = void> = QueueResourceConfigBase<T> & {
+  readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<A, E, R>;
   readonly onFailure?: QueueOnFailure<T, E, R>;
-  readonly refill?: QueueRefill<T, E, EEnqueue, R>;
+  readonly refill?: QueueRefill<T, E, EEnqueue, R, A>;
   /** Internal store recorder — see {@link QueueResourceConfigWithItemSchema.store}. @internal */
-  readonly store?: QueueStoreWriter<T, E>;
+  readonly store?: QueueStoreWriter<T, E, A>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -1567,8 +1590,8 @@ const validateItemsWithSchema = <T>(
 };
 
 /** Extension point for {@link CustomQueueResource} and other queue presets. @internal */
-interface BuildQueueEngineBindings<T, E, EEnqueue, R> {
-  readonly config: QueueRuntimeConfig<T, E, EEnqueue, R>;
+interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
+  readonly config: QueueRuntimeConfig<T, E, EEnqueue, R, A>;
   readonly validateForEnqueue: ValidateForEnqueue<T, EEnqueue>;
   readonly encodeForRelease: ReleaseEntryEncoder<T> | undefined;
   readonly persistCodec: PersistCodec<T> | undefined;
@@ -1590,9 +1613,9 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R> {
  *
  * @internal
  */
-function buildQueueEngine<T, E, EEnqueue, R>(
-  bindings: BuildQueueEngineBindings<T, E, EEnqueue, R>,
-): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> {
+function buildQueueEngine<T, E, EEnqueue, R, A = void>(
+  bindings: BuildQueueEngineBindings<T, E, EEnqueue, R, A>,
+): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> {
   const levelCount = bindings.levelCount ?? bindings.config.levelCount ?? 3;
   const makeLaneStore =
     bindings.makeLaneStore ??
@@ -1611,19 +1634,21 @@ function buildQueueEngine<T, E, EEnqueue, R>(
   );
 }
 
-type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any>> =
-  [C] extends [QueueResourceConfigWithItemSchema<any, any, any>]
+type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any, any>> =
+  [C] extends [QueueResourceConfigWithItemSchema<any, any, any, any>]
     ? QueueHandle<
         InferQueueItem<C>,
         InferQueueWorkerError<C>,
         QueueEnqueueErrors,
-        InferQueueWorkerRequirements<C>
+        InferQueueWorkerRequirements<C>,
+        InferQueueWorkerSuccess<C>
       >
     : QueueHandle<
         InferQueueItem<C>,
         InferQueueWorkerError<C>,
         never,
-        InferQueueWorkerRequirements<C>
+        InferQueueWorkerRequirements<C>,
+        InferQueueWorkerSuccess<C>
       >;
 
 const makeQueueEffectWithoutSchema = <
@@ -1648,7 +1673,7 @@ const makeQueueEffectWithoutSchema = <
   });
 
 const makeQueueEffectWithSchema = <
-  const C extends QueueResourceConfigWithItemSchema<any, any, any>,
+  const C extends QueueResourceConfigWithItemSchema<any, any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -1656,7 +1681,8 @@ const makeQueueEffectWithSchema = <
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     QueueEnqueueErrors,
-    InferQueueWorkerRequirements<C>
+    InferQueueWorkerRequirements<C>,
+    InferQueueWorkerSuccess<C>
   >,
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
@@ -1709,9 +1735,9 @@ const makeQueueEffectWithSchema = <
 };
 
 const makeQueueEffectFromConfig = (
-  config: QueueResourceConfig<any, any, any>,
+  config: QueueResourceConfig<any, any, any, any>,
 ): Effect.Effect<
-  QueueHandle<unknown, unknown, unknown, unknown>,
+  QueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
   // Internal erased boundary: the worker's requirement is `any` here (the config is
   // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
@@ -1737,7 +1763,7 @@ function makeQueueEffect<
   never,
   Scope.Scope | InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>
 >;
-function makeQueueEffect<const C extends QueueResourceConfig<any, any, any>>(
+function makeQueueEffect<const C extends QueueResourceConfig<any, any, any, any>>(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
   MakeQueueEffectResult<C>,
@@ -1745,10 +1771,10 @@ function makeQueueEffect<const C extends QueueResourceConfig<any, any, any>>(
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
 function makeQueueEffect(
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any>,
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any, any>,
   options?: QueueResourceOptionsWithoutItemSchema<any, any, any> | QueueResourceOptionsWithItemSchema<any, any, any>,
 ): Effect.Effect<
-  QueueHandle<unknown, unknown, unknown, unknown>,
+  QueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
   // Erased overload-impl boundary — the precise `R` (`Scope.Scope |
   // InferQueueWorkerRequirements<...>`) is on the overloads above; here the worker
@@ -1767,8 +1793,8 @@ type ValidateForEnqueue<T, EEnqueue> = (
   operation: "add" | "prioritize" | "defer",
 ) => Effect.Effect<ReadonlyArray<T>, EEnqueue>;
 
-const makeQueueRuntime = <T, E, EEnqueue, R>(
-  config: QueueRuntimeConfig<T, E, EEnqueue, R>,
+const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
+  config: QueueRuntimeConfig<T, E, EEnqueue, R, A>,
   validateForEnqueue: ValidateForEnqueue<T, EEnqueue>,
   encodeForRelease: ReleaseEntryEncoder<T> | undefined,
   persistCodec: PersistCodec<T> | undefined,
@@ -1782,7 +1808,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     { readonly high: number; readonly normal: number; readonly low: number },
     QueueStatus
   > = defaultQueueProjection,
-): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
+): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
@@ -1909,7 +1935,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // lags), so the fan-out `events` stream can't backpressure or OOM the queue. Guaranteed
     // delivery stays on the durable store tier. Each `events` consumer subscribes
     // independently via `Stream.fromPubSub`.
-    const eventsHub = yield* PubSub.sliding<QueueEvent<T, E>>(1024);
+    const eventsHub = yield* PubSub.sliding<QueueEvent<T, E, A>>(1024);
 
     // ─── Windowed metrics (.metrics) ───
     // Counters are accumulated INLINE in publishEvent (synchronous, at the source), never by
@@ -1998,7 +2024,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         totalCount: wait !== undefined ? acc.totalCount + 1 : acc.totalCount,
       };
     };
-    const accumulate = (acc: WindowAccum, event: QueueEvent<T, E>): WindowAccum => {
+    const accumulate = (acc: WindowAccum, event: QueueEvent<T, E, A>): WindowAccum => {
       switch (event._tag) {
         case "Enqueued":
           return { ...acc, enqueued: acc.enqueued + event.entries.length };
@@ -2029,7 +2055,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
     };
     // Events that should close the metrics window early (the UI wants to see their effect now).
-    const isSignificant = (event: QueueEvent<T, E>): boolean =>
+    const isSignificant = (event: QueueEvent<T, E, A>): boolean =>
       event._tag === "Drained" ||
       event._tag === "Cleared" ||
       event._tag === "Released" ||
@@ -2129,7 +2155,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       });
     };
     // Mirror each accumulated event onto its OTEL counter (same dispatch as `accumulate`).
-    const recordEventMetric = (event: QueueEvent<T, E>): Effect.Effect<void> => {
+    const recordEventMetric = (event: QueueEvent<T, E, A>): Effect.Effect<void> => {
       switch (event._tag) {
         case "Enqueued":
           return Metric.update(enqueuedCounter, event.entries.length);
@@ -2168,8 +2194,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // (`store.completed(entry, elapsed)`, …); queue-level facts without a narrow write ride the base
     // `record`. The hub fan-out above is untouched — only the store side changed.
     const recordToStore = (
-      store: QueueStoreWriter<T, E>,
-      event: QueueEvent<T, E>,
+      store: QueueStoreWriter<T, E, A>,
+      event: QueueEvent<T, E, A>,
     ): Effect.Effect<void> => {
       switch (event._tag) {
         case "Enqueued":
@@ -2189,7 +2215,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
     };
 
-    const publishEvent = (event: QueueEvent<T, E>): Effect.Effect<void> =>
+    const publishEvent = (event: QueueEvent<T, E, A>): Effect.Effect<void> =>
       Effect.gen(function* () {
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
         yield* recordEventMetric(event);
@@ -2322,7 +2348,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // Managed fiber collections. Scope close interrupts all fibers automatically.
     const workerFibers = yield* FiberSet.make<void>();
     /** Set before workers process items (autoStart or manual `start`). */
-    const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R> } = {};
+    const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R, A> } = {};
 
     const rateLimitLog =
       config.rateLimit === undefined
@@ -2602,7 +2628,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const retryInternal = (
       internal: InternalItem<T>,
-      exit: Exit.Exit<void, E>,
+      exit: Exit.Exit<A, E>,
     ): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
@@ -2933,7 +2959,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // Self-refill (optional): load work from a source on start / drain — best-effort (logged).
     const refillConfig = config.refill;
     const runRefill = (
-      handle: QueueHandle<T, E, EEnqueue, R>,
+      handle: QueueHandle<T, E, EEnqueue, R, A>,
     ): Effect.Effect<void, never, R> =>
       refillConfig === undefined ? Effect.void : refillConfig.load(handle);
 
@@ -3249,7 +3275,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     // ─── Build public handle ───
 
-    const queueHandle: QueueEngineHandle<T, E, EEnqueue, R> = {
+    const queueHandle: QueueEngineHandle<T, E, EEnqueue, R, A> = {
       add: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "normal", "add"),
       prioritize: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "high", "prioritize"),
       defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
@@ -3395,8 +3421,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 // ============================================================================
 
 const queueResourceLayerFromConfig = (
-  tag: Context.Key<any, QueueHandle<any, any, any, any>>,
-  config: QueueResourceConfig<any, any, any>,
+  tag: Context.Key<any, QueueHandle<any, any, any, any, any>>,
+  config: QueueResourceConfig<any, any, any, any>,
 ): Layer.Layer<any, never, any> => {
   const resourceId = config.name ?? "anonymous";
   const defaultSpec = { ...config, name: resourceId };

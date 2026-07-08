@@ -15,7 +15,8 @@
 import { DateTime, Duration, Effect, Option, Schema, Stream } from "effect";
 import type { ResourceTag, Spec, SpecOf } from "../../Resource";
 import { specSym } from "../../Resource";
-import { queueEntry, queueEvent, queueSpec } from "../../QueueResource";
+import { buildQueueEvent, queueEntry, queueSpec } from "../../QueueResource";
+import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../QueueResource";
 import { successOf, errorOf } from "../queueTagSchemas";
 import type { Priority, QueueEvent } from "../queueResource";
 import * as Store from "../../Store";
@@ -40,7 +41,16 @@ type QueueSpecFromTag<Tag extends QueueStoreTag> = SpecOf<Tag & ResourceTag<unkn
 
 /** Struct fields of the queue item from a tag. @internal */
 type QueueItemFields<Tag extends QueueStoreTag> =
-  QueueSpecFromTag<Tag> extends QueueInstanceSpec<infer F extends Schema.Struct.Fields> ? F : never;
+  QueueSpecFromTag<Tag> extends QueueInstanceSpec<infer F extends Schema.Struct.Fields>
+    ? F
+    : never;
+
+/**
+ * The worker `success` **schema** carried on a queue tag — recovered from the phantom
+ * {@link QueueSuccessCarrier} intersected onto the tag (the SSOT for the typed success value `A`).
+ * @internal
+ */
+export type QueueSuccessSchemaFromTag<Tag extends QueueStoreTag> = QueueSuccessSchemaOf<Tag>;
 
 /** Item row schema carried on a {@link QueueResource} tag (from `QueueInstanceSpec<F>`). @internal */
 export type QueueItemSchemaFromTag<Tag extends QueueStoreTag> = Schema.Struct<QueueItemFields<Tag>>;
@@ -48,17 +58,28 @@ export type QueueItemSchemaFromTag<Tag extends QueueStoreTag> = Schema.Struct<Qu
 /** Item value type carried on a queue tag. @internal */
 export type QueueItemOf<Tag extends QueueStoreTag> = Schema.Struct<QueueItemFields<Tag>>["Type"];
 
+/** The worker `success` value type (`A`) carried on a queue tag (default `void`). @internal */
+export type QueueSuccessOf<Tag extends QueueStoreTag> = QueueSuccessSchemaFromTag<Tag>["Type"];
+
 /**
- * The persisted queue event schema for a tag — the shared `queueEvent` union with the tag's
- * `success` / `error` wire slots fed in. `successOf` / `errorOf` are runtime reads erased to
- * `Schema.Top`, so the persisted `Completed.success` / `Failed.cause` decode as `unknown` at the
- * type level (matching the fed runtime contract). @internal
+ * The persisted queue event **schema** for a tag — the shared `queueEvent` union built with the
+ * **erased** (`Schema.Top`) success/error slots. The success schema is kept concrete-erased here
+ * (not the tag's generic success schema) because Effect's `.Type` reduction does not collapse a
+ * `Schema.Union` that carries a *generic* field, which would break every `SchemaDecoded`/`event.append`
+ * downstream. The typed success value `A` is layered back on at the **decoded** level via
+ * {@link QueueStoreCompleted} (a type-level override; the runtime value genuinely is `A`). @internal
  */
-export type QueueEventSchemaOf<Tag extends QueueStoreTag> = ReturnType<
-  typeof queueEvent<QueueItemSchemaFromTag<Tag>, Schema.Top, Schema.Top>
+export type QueueEventSchemaOf<Tag extends QueueStoreTag> = QueueEventSchema<
+  QueueItemSchemaFromTag<Tag>,
+  Schema.Top,
+  Schema.Top
 >;
 
-/** The persisted queue event for a tag — the same union the live `.events` stream carries. @internal */
+/**
+ * The persisted queue event for a tag — the same union the live `.events` stream carries. The
+ * base `record` / `events` surface stays **erased** (`success: unknown`); the typed success value
+ * `A` is layered on only the analytics read {@link QueueStoreCompleted}. @internal
+ */
 export type QueueEventOf<Tag extends QueueStoreTag> = QueueEvent<
   QueueItemOf<Tag>,
   unknown,
@@ -70,7 +91,11 @@ export const queueEventReadPayload = Schema.Struct({
   limit: Schema.optional(Schema.Number),
 });
 
-/** The `success` / `error` wire schemas recovered from a queue tag (erased to `Schema.Top`). @internal */
+/**
+ * The `success` / `error` wire schemas for the store event schema — kept **erased** to `Schema.Top`
+ * at the schema level (typed success rides `QueueStoreCompleted` at the decoded level, see
+ * {@link QueueEventSchemaOf}). @internal
+ */
 type QueueWireSchemas = {
   readonly success?: Schema.Top;
   readonly error?: Schema.Top;
@@ -124,7 +149,14 @@ export const makeQueueStoreContract = <Item extends Schema.Top>(
 ) =>
   Store.contract(
     {
-      event: Store.shape(queueEvent(itemSchema, wire), queueEventReadPayload),
+      event: Store.shape(
+        buildQueueEvent(
+          itemSchema,
+          wire?.success ?? Schema.Void,
+          wire?.error ?? Schema.Unknown,
+        ),
+        queueEventReadPayload,
+      ),
     },
     ({ event }) => ({
       record: event.append,
@@ -168,11 +200,17 @@ export type QueueStoreFailed<Tag extends QueueStoreTag> = Extract<
   { readonly _tag: "Failed" }
 >;
 
-/** The persisted `Completed` variant for a tag. @internal */
-export type QueueStoreCompleted<Tag extends QueueStoreTag> = Extract<
-  QueueStoreEvent<Tag>,
-  { readonly _tag: "Completed" }
->;
+/**
+ * The persisted `Completed` variant for a tag, with `success` typed as the tag's worker success
+ * value `A` (recovered from the tag's spec). The persisted **schema** is erased (see
+ * {@link QueueEventSchemaOf}), so `success` is re-typed here at the decoded level; the runtime value
+ * genuinely is `A` (the engine records `exit.value`), so the `isCompleted` guard narrows the erased
+ * `unknown` success to this `A` subtype without a cast. @internal
+ */
+export type QueueStoreCompleted<Tag extends QueueStoreTag> = Omit<
+  Extract<QueueStoreEvent<Tag>, { readonly _tag: "Completed" }>,
+  "success"
+> & { readonly success: QueueSuccessOf<Tag> };
 
 /**
  * Build the engine **write-extension** contract from an item schema (no tag) — the lean base
@@ -185,13 +223,18 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
   itemSchema: Item,
   wire?: QueueWireSchemas,
 ) => {
-  const eventSchema = queueEvent(itemSchema, wire);
+  const eventSchema = buildQueueEvent(
+    itemSchema,
+    wire?.success ?? Schema.Void,
+    wire?.error ?? Schema.Unknown,
+  );
   // The decoded entry exactly as `event.append` expects it — the SAME `queueEntry(itemSchema)` the
   // event schema is built from (so no interface/schema drift under a generic item).
   type Entry = ReturnType<typeof queueEntry<Item>>["Type"];
-  // The worker success / failure-cause types read straight off the built event schema, so the
-  // narrow writes carry exactly what `event.append` expects (typed from the tag's wire slots).
-  type Success = Extract<
+  // The worker success / failure-cause types read straight off the built (erased) event schema. The
+  // engine passes the concrete typed value through `QueueStoreWriter<T, E, A>` at the call site, which
+  // is assignable to this `unknown` success (the typed `A` is layered on the decoded read side).
+  type SuccessValue = Extract<
     typeof eventSchema.Type,
     { readonly _tag: "Completed" }
   >["success"];
@@ -214,7 +257,7 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
           ...(batchId !== undefined ? { batchId } : {}),
         }),
       started: (entry: Entry) => event.append({ _tag: "Started", entry }),
-      completed: (entry: Entry, success: Success, elapsed: Duration.Duration) =>
+      completed: (entry: Entry, success: SuccessValue, elapsed: Duration.Duration) =>
         event.append({ _tag: "Completed", entry, success, elapsed }),
       failed: (entry: Entry, cause: FailCause, elapsed: Duration.Duration) =>
         event.append({ _tag: "Failed", entry, cause, elapsed }),
@@ -357,10 +400,15 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
   const isTerminal = (event: QueueStoreEvent<Tag>): boolean =>
     event._tag === "Completed" || event._tag === "Failed";
 
+  const wire = queueWireFromTag(tag);
   return Store.contract(
     {
       event: Store.shape(
-        queueEvent(queueItemSchemaFromTag(tag), queueWireFromTag(tag)),
+        buildQueueEvent(
+          queueItemSchemaFromTag(tag),
+          wire.success ?? Schema.Void,
+          wire.error ?? Schema.Unknown,
+        ),
         queueEventReadPayload,
       ),
     },

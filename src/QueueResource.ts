@@ -239,21 +239,23 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
  *
  * @public
  */
-export const queueEvent = <
+/**
+ * Build the `events` union schema with **concrete** `success` / `error` wire schemas (no defaulting
+ * `??`, so `Completed.success` is exactly `Success`, no `| void` widening). This is the concrete
+ * builder the spec / store / engine consume so their decoded `.Type` reduces; the defaulting
+ * {@link queueEvent} overloads wrap it. @internal
+ */
+export const buildQueueEvent = <
   Sch extends Schema.Top,
-  Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Unknown,
+  Success extends Schema.Top,
+  Error extends Schema.Top,
 >(
   itemSchema: Sch,
-  wire?: {
-    readonly success?: Success;
-    readonly error?: Error;
-  },
+  successSchema: Success,
+  errorSchema: Error,
 ) => {
   const entry = queueEntry(itemSchema);
   const entries = Schema.Array(entry);
-  const successSchema = wire?.success ?? Schema.Void;
-  const errorSchema = wire?.error ?? Schema.Unknown;
   const cause = Schema.Cause(errorSchema, Schema.Unknown);
   return Schema.Union([
     Schema.TaggedStruct("Start", { queueId: Schema.String }),
@@ -316,6 +318,35 @@ export const queueEvent = <
     }),
   ]);
 };
+
+/**
+ * The `events` union schema for a queue item schema `Sch`, with the worker's `success` return
+ * (on `Completed`) and `error` failure (the `Cause`) wire slots. `Success` decodes exactly (no
+ * `| void` widening) — the source of the typed `Completed.success` (`A`) that flows to the worker
+ * `effect` return type, `store.completed`, and the analytics reads. @public
+ */
+export type QueueEventSchema<
+  Sch extends Schema.Top,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Unknown,
+> = ReturnType<typeof buildQueueEvent<Sch, Success, Error>>;
+
+export const queueEvent = <
+  Sch extends Schema.Top,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Unknown,
+>(
+  itemSchema: Sch,
+  wire?: {
+    readonly success?: Success;
+    readonly error?: Error;
+  },
+) =>
+  buildQueueEvent(
+    itemSchema,
+    wire?.success ?? Schema.Void,
+    wire?.error ?? Schema.Unknown,
+  );
 
 /**
  * Selector for the entry-routing verbs (`deadLetter` / `drop`), parameterized by `itemSchema`
@@ -495,7 +526,13 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
   // trips over RPC. The payload is `item | item[]` (a single-schema union payload); the layer
   // recovers the bare `itemSchema` from `add.payload.members[0]`.
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
-  const eventSchema = queueEvent(itemSchema);
+  // The `events` stream's `Completed.success` / `Failed.cause` ride the wire **erased** to
+  // `unknown` (a `Schema.Union` carrying a *generic* success field would defeat Effect's `.Type`
+  // reduction, and the spec must be invariant-uniform so the tag's `layer` overloads type-check).
+  // The typed success value `A` is carried on the tag via {@link QueueSuccessCarrier} and drives the
+  // worker `effect` return + the store analytics; the live `handle.events` (typed `A`) still fits
+  // this `unknown` slot (`A ⊆ unknown`).
+  const eventSchema = buildQueueEvent(itemSchema, Schema.Unknown, Schema.Unknown);
   return {
   ...queueControlSpec,
   add: Resource.effectFn(Schema.Void, {
@@ -561,6 +598,23 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
   };
 };
 
+/**
+ * A phantom marker intersected onto a {@link Tag} to carry the worker `success` **schema** (`A`'s
+ * schema) at the type level, without touching the (invariant, RPC-facing) spec. The `layer` / `serve`
+ * config and the store analytics recover `A` from here (default {@link Schema.Void}). Type-only — no
+ * runtime field; the runtime `success` schema still rides the `successSym` stamp. @public
+ */
+export interface QueueSuccessCarrier<Success extends Schema.Top = typeof Schema.Void> {
+  readonly [queueSuccessCarrierSym]?: Success;
+}
+
+declare const queueSuccessCarrierSym: unique symbol;
+
+/** The worker `success` **schema** carried on a tag (via {@link QueueSuccessCarrier}). @internal */
+export type QueueSuccessSchemaOf<Tag> = Tag extends QueueSuccessCarrier<infer Success>
+  ? Success
+  : typeof Schema.Void;
+
 /** The spec of a queue instance whose item is `Schema.Struct<F>` — control surface + data plane. */
 type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
   typeof queueSpec<F>
@@ -594,9 +648,12 @@ export const kind = "@nikscripts/effect-pm/QueueResource";
  *
  * @public
  */
-export interface QueueTagConfig<F extends Schema.Struct.Fields> {
+export interface QueueTagConfig<
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+> {
   readonly payload: Schema.Struct<F>;
-  readonly success?: Schema.Top;
+  readonly success?: Success;
   readonly error?: Schema.Top;
   readonly description?: string;
   readonly node?: NodeKey<unknown>;
@@ -627,8 +684,8 @@ const stampQueueWireSchemas = <T extends object>(
 
 /** The 2nd arg is the config-object form (not a payload schema). */
 const isQueueTagConfig = <F extends Schema.Struct.Fields>(
-  value: Schema.Struct<F> | QueueTagConfig<F>,
-): value is QueueTagConfig<F> => !Schema.isSchema(value);
+  value: Schema.Struct<F> | QueueTagConfig<F, Schema.Top>,
+): value is QueueTagConfig<F, Schema.Top> => !Schema.isSchema(value);
 
 const queueTag = <Self>() => {
   // (key, payload, { description?, node }) — node-bound
@@ -638,35 +695,45 @@ const queueTag = <Self>() => {
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
   // (key, payload, success, error?) — wire slots (success is a schema; ordered before the options
-  // overload so a Schema.Top 3rd arg is never mistaken for an options bag)
-  function build<F extends Schema.Struct.Fields>(
+  // overload so a Schema.Top 3rd arg is never mistaken for an options bag). `Success` is captured on
+  // the phantom {@link QueueSuccessCarrier} — the tag's spec stays uniform (invariant), and the
+  // captured schema drives the worker `effect` return type + store analytics.
+  function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
     key: string,
     payload: Schema.Struct<F>,
-    success: Schema.Top,
+    success: Success,
     error?: Schema.Top,
-  ): ResourceTag<Self, QueueInstanceSpec<F>>;
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
   // (key, payload, { description? }?) — legacy options, no wire slots
   function build<F extends Schema.Struct.Fields>(
     key: string,
     payload: Schema.Struct<F>,
     options?: { readonly description?: string },
-  ): ResourceTag<Self, QueueInstanceSpec<F>>;
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier;
   // (key, { payload, success?, error?, description?, node }) — config object, node-bound
-  function build<F extends Schema.Struct.Fields, HSelf>(
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top,
+    HSelf,
+  >(
     key: string,
-    config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
+    config: QueueTagConfig<F, Success> & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf> & QueueSuccessCarrier<Success>;
   // (key, { payload, success?, error?, description? }) — config object
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top = typeof Schema.Void,
+  >(
+    key: string,
+    config: QueueTagConfig<F, Success>,
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    config: QueueTagConfig<F>,
-  ): ResourceTag<Self, QueueInstanceSpec<F>>;
-  function build<F extends Schema.Struct.Fields>(
-    key: string,
-    second: Schema.Struct<F> | QueueTagConfig<F>,
+    second: Schema.Struct<F> | QueueTagConfig<F, Schema.Top>,
     third?: Schema.Top | QueueTagPositionalOptions,
     fourth?: Schema.Top,
-  ): ResourceTag<Self, QueueInstanceSpec<F>> {
+    // Uniform spec (the precise per-form `Success` rides the phantom carrier on the overloads).
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Schema.Top> {
     // Resolve the five inputs from the positional or config-object form. Positional 3rd arg is the
     // wire `success` schema (then 4th = `error`) when it is a schema, else the legacy options bag.
     const resolved = isQueueTagConfig(second)
@@ -724,8 +791,8 @@ const queueTag = <Self>() => {
  *
  * @public
  */
-export type QueueLayerConfig<A, E, R, RR = never> = Omit<
-  QueueResourceConfigWithItemSchema<A, E, R>,
+export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
+  QueueResourceConfigWithItemSchema<Item, E, R, A>,
   "itemSchema" | "refill"
 > & {
   /**
@@ -745,10 +812,17 @@ export type QueueLayerConfig<A, E, R, RR = never> = Omit<
     readonly onDrained?: boolean;
     /** Load + enqueue work from a source. Handle its own errors (best-effort). */
     readonly load: (
-      queue: QueueHandle<A, E, QueueEnqueueErrors, never>,
+      queue: QueueHandle<Item, E, QueueEnqueueErrors, never, A>,
     ) => Effect.Effect<void, never, RR>;
   };
 };
+
+/**
+ * The worker `success` value type (`A`) carried on a queue instance spec's `Success` wire schema —
+ * the decoded type of the tag's `success` slot (default `void`). The layer/serve config's `effect`
+ * return type and the store analytics both recover `A` from here. @internal
+ */
+type QueueSuccessValueOf<Success extends Schema.Top> = Success["Type"];
 
 /**
  * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
@@ -783,9 +857,22 @@ type QueueItemFields = Record<
  * The queue spec has no {@link Resource.local} members, so the resulting impl satisfies both
  * `ImplOf` (for `Resource.layer` / `Resource.serve`) and `ServeImplOf` (for `Resource.serveRemote`).
  */
-const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+const buildQueueImpl = <
+  Self,
+  F extends QueueItemFields,
+  E,
+  R,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
+  config: QueueLayerConfig<
+    Schema.Struct<F>["Type"],
+    QueueSuccessValueOf<Success>,
+    E,
+    R,
+    RR
+  >,
 ) =>
   Effect.gen(function* () {
     // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member. `specSym`
@@ -806,7 +893,13 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     // Fold any `.configure` patches in context (keyed by the tag id) onto the base config — so
     // per-env overrides (concurrency / rateLimit / …) merged as layers take effect at build.
     const effectiveConfig = yield* foldConfiguredSpec<
-      QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
+      QueueLayerConfig<
+        Schema.Struct<F>["Type"],
+        QueueSuccessValueOf<Success>,
+        E,
+        R,
+        RR
+      >
     >(tag.key, config);
     // Persist the queue's lifecycle events to its store (the observability plane). The engine records
     // through narrow, semantic writes over the engine write-extension contract: `Store.effects` builds
@@ -817,6 +910,11 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     // discharge point the old eager `resolveOrDie` used. It can't fail (the default materializes any
     // scope); the recorder runs at the source in `publishEvent`, so no event burst is dropped by a late
     // subscriber.
+    // The engine write-extension contract's event schema is erased at the schema level (Effect's
+    // `.Type` reduction can't collapse a `Schema.Union` with a *generic* success field). The typed
+    // success value `A` rides the `QueueStoreWriter<Item, E, A>` surface below — its `completed`
+    // takes `A`, funnelled into this contract's `unknown`-typed narrow write (A ⊆ unknown), and the
+    // typed value is layered back on the decoded read side (`QueueStoreCompleted`).
     const storeEffects = Store.catchWriteErrors(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
@@ -824,7 +922,11 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     const provideStorage = <A>(
       write: Effect.Effect<A, never, Store.Storage>,
     ): Effect.Effect<A> => Effect.provide(write, storageContext);
-    const store: QueueStoreWriter<Schema.Struct<F>["Type"], E> = {
+    const store: QueueStoreWriter<
+      Schema.Struct<F>["Type"],
+      E,
+      QueueSuccessValueOf<Success>
+    > = {
       enqueued: (entries, priority, batchId) =>
         provideStorage(storeEffects.enqueued(entries, priority, batchId)),
       started: (entry) => provideStorage(storeEffects.started(entry)),
@@ -846,7 +948,12 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
       ...effectiveConfig,
       itemSchema,
       store,
-    } as QueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+    } as QueueResourceConfigWithItemSchema<
+      Schema.Struct<F>["Type"],
+      E,
+      R | RR,
+      QueueSuccessValueOf<Success>
+    >);
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R | RR>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
@@ -971,9 +1078,16 @@ export const layer = <
   E = never,
   R = never,
   RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
+  config: QueueLayerConfig<
+    Schema.Struct<F>["Type"],
+    QueueSuccessValueOf<Success>,
+    E,
+    R,
+    RR
+  >,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
@@ -1006,9 +1120,16 @@ export const serveRemote = <
   E = never,
   R = never,
   RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
+  config: QueueLayerConfig<
+    Schema.Struct<F>["Type"],
+    QueueSuccessValueOf<Success>,
+    E,
+    R,
+    RR
+  >,
 ) =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serveRemote(tag, impl)),
@@ -1037,9 +1158,16 @@ export const serve = <
   E = never,
   R = never,
   RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
+  config: QueueLayerConfig<
+    Schema.Struct<F>["Type"],
+    QueueSuccessValueOf<Success>,
+    E,
+    R,
+    RR
+  >,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
@@ -1079,9 +1207,18 @@ export const configure = <
   E = never,
   R = never,
   RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
+  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
+  patch: ConfigPatch<
+    QueueLayerConfig<
+      Schema.Struct<F>["Type"],
+      QueueSuccessValueOf<Success>,
+      E,
+      R,
+      RR
+    >
+  >,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 /**
