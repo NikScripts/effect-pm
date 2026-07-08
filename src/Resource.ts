@@ -833,6 +833,57 @@ export const provideContext = <Impl, const S extends Spec, Ctx>(
     Effect.provideContext(effect, context),
   );
 
+/** Runtime marker for a {@link BuiltResource} bundle. @internal */
+export const builtResourceSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/BuiltResource",
+);
+
+/**
+ * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
+ * Effect methods, paired with the {@link Context.Context} captured at build time. {@link layer} /
+ * {@link serve} grant locally via {@link grantLocal}; {@link serveRemote} defers discharge to each wire
+ * call via {@link invokeWireMethodWithContext} so one materialization backs both paths.
+ *
+ * @public
+ */
+export interface BuiltResource<S extends Spec, R> {
+  readonly [builtResourceSym]: true;
+  readonly impl: WithRequirement<ImplOf<S>, R>;
+  readonly workerContext: Context.Context<R>;
+}
+
+/** True when `u` is a {@link BuiltResource} bundle. @public */
+export const isBuiltResource = (u: unknown): u is BuiltResource<Spec, unknown> =>
+  Predicate.hasProperty(u, builtResourceSym);
+
+/**
+ * Pair a pre-provide impl with the worker context captured at build time. Pass `tag` so the concrete
+ * {@link Spec} `S` is pinned for {@link BuiltResource} typing.
+ *
+ * @public
+ */
+export const builtResource = <Self, S extends Spec, R>(
+  _tag: ResourceTag<Self, S>,
+  impl: WithRequirement<ImplOf<S>, R>,
+  workerContext: Context.Context<R>,
+): BuiltResource<S, R> => ({
+  [builtResourceSym]: true as const,
+  impl,
+  workerContext,
+});
+
+/**
+ * Discharge a {@link BuiltResource}'s captured worker context into every Effect method — yields the
+ * `R`-free {@link ImplOf} shape for {@link layer} / the local grant in {@link serve}.
+ *
+ * @public
+ */
+export const grantLocal = <Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  built: BuiltResource<S, R>,
+): ImplOf<S> =>
+  provideContext(built.impl, tag[specSym], built.workerContext) as ImplOf<S>;
+
 /**
  * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
  * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`
@@ -2109,6 +2160,23 @@ const invokeWireMethod = (
   return member(payload);
 };
 
+/** Like {@link invokeWireMethod}, but discharges `context` into each returned {@link Effect} / {@link Stream}. @internal */
+const invokeWireMethodWithContext = (
+  member: unknown,
+  method: AnyMethod,
+  payload: unknown,
+  context: Context.Context<unknown>,
+): unknown => {
+  const invoked = invokeWireMethod(member, method, payload);
+  if (Effect.isEffect(invoked)) {
+    return Effect.provideContext(invoked, context);
+  }
+  if (Stream.isStream(invoked)) {
+    return Stream.provideContext(invoked, context);
+  }
+  return invoked;
+};
+
 /**
  * One served resource's registry entry — its group (folded into the shared server), wire id, kind, and
  * readiness derivation. {@link serve} appends it; {@link httpServer} reads them for the merged server +
@@ -2234,15 +2302,24 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: Impl,
+  impl: Impl | BuiltResource<S, any>,
 ): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
+  const wireImpl = isBuiltResource(impl) ? impl.impl : impl;
+  const workerContext = isBuiltResource(impl) ? impl.workerContext : undefined;
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
-  const flatImpl = flattenImpl(impl as Record<string, unknown>, tag[specSym]);
+  const flatImpl = flattenImpl(wireImpl as Record<string, unknown>, tag[specSym]);
   for (const [key, member] of Object.entries(flatImpl)) {
     handlers[wireTag(tag.groupId, key)] = (payload) =>
-      invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
+      workerContext === undefined
+        ? invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload)
+        : invokeWireMethodWithContext(
+            member,
+            tag[specSym][key] as AnyMethod,
+            payload,
+            workerContext,
+          );
   }
   // dynamic handler construction (the group's `toLayer` boundary); the outer assertion **preserves**
   // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
@@ -2264,7 +2341,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
               groupId: tag.groupId,
               group,
               kind: kindOf(tag) ?? "resource",
-              readiness: readinessCheckServed(tag, impl),
+              readiness: readinessCheckServed(tag, wireImpl),
             }),
         }),
       ),
@@ -2292,22 +2369,37 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  */
 export const serve = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
-  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+  impl:
+    | ImplOf<S>
+    | BuiltResource<S, R>
+    | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> =>
   Layer.unwrap(
-    Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) =>
-      Layer.merge(
-        localLayer(tag, built),
+    Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
+      if (isBuiltResource(built)) {
+        const bundle = built as BuiltResource<S, R>;
+        return Layer.merge(
+          localLayer(tag, grantLocal(tag, bundle)),
+          serveRemote(tag, bundle as any) as unknown as Layer.Layer<
+            HandlerContextOf<S>,
+            never,
+            never
+          >,
+        );
+      }
+      const granted = built as ImplOf<S>;
+      return Layer.merge(
+        localLayer(tag, granted),
         // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
         // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
         // `R` was discharged by the Effect form above, so the handlers are requirement-free.
-        serveRemote(tag, built as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
+        serveRemote(tag, granted as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
           HandlerContextOf<S>,
           never,
           never
         >,
-      ),
-    ),
+      );
+    }),
   );
 
 /** Options for {@link httpServer}. @public */

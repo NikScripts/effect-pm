@@ -37,6 +37,7 @@ import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
+import type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 import type {
   HandlerContextOf,
   NodeKey,
@@ -847,6 +848,17 @@ type QueueItemFields = Record<
   Schema.Codec<unknown, unknown, never, never>
 >;
 
+/** The `tag:` param shape shared by every queue verb ({@link buildQueueImpl} / {@link layer} /
+ *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link ResourceTag}
+ *  intersected with its worker-`success` carrier. @internal */
+type QueueTagFor<Self, F extends QueueItemFields, Success extends Schema.Top> =
+  ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
+
+/** The worker-`config:` param shape shared by every queue verb — {@link QueueLayerConfig} with the
+ *  instance item type + worker-`success` value recovered from `F` / `Success`. @internal */
+type QueueVerbConfig<F extends QueueItemFields, E, R, RR, Success extends Schema.Top> =
+  QueueLayerConfig<Schema.Struct<F>["Type"], QueueSuccessValueOf<Success>, E, R, RR>;
+
 /**
  * Build the live {@link QueueEngine} handle behind `tag` and map it onto the toolkit service
  * impl — the single adapter shared by the **local** layer ({@link layer}) and the **served**
@@ -865,14 +877,8 @@ const buildQueueImpl = <
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
-  config: QueueLayerConfig<
-    Schema.Struct<F>["Type"],
-    QueueSuccessValueOf<Success>,
-    E,
-    R,
-    RR
-  >,
+  tag: QueueTagFor<Self, F, Success>,
+  config: QueueVerbConfig<F, E, R, RR, Success>,
 ) =>
   Effect.gen(function* () {
     // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member. `specSym`
@@ -918,28 +924,16 @@ const buildQueueImpl = <
     const storeEffects = Store.catchWriteErrors(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
+    // Discharge `Storage` from every recorder method in one shot (`Store.provideContext`, the Store-side
+    // mirror of `Resource.provideContext`) — the subtractive result leaves each narrow write as
+    // `Effect<void>`, so it satisfies `QueueStoreWriter` (Storage-free) directly; the extra base
+    // `event.append/read` members it also carries are unused here (a wider object is assignable).
     const storageContext = yield* Effect.context<Store.Storage>();
-    const provideStorage = <A>(
-      write: Effect.Effect<A, never, Store.Storage>,
-    ): Effect.Effect<A> => Effect.provide(write, storageContext);
     const store: QueueStoreWriter<
       Schema.Struct<F>["Type"],
       E,
       QueueSuccessValueOf<Success>
-    > = {
-      enqueued: (entries, priority, batchId) =>
-        provideStorage(storeEffects.enqueued(entries, priority, batchId)),
-      started: (entry) => provideStorage(storeEffects.started(entry)),
-      completed: (entry, success, elapsed) =>
-        provideStorage(storeEffects.completed(entry, success, elapsed)),
-      failed: (entry, cause, elapsed) =>
-        provideStorage(storeEffects.failed(entry, cause, elapsed)),
-      retryScheduled: (entry, cause, nextAttempt) =>
-        provideStorage(storeEffects.retryScheduled(entry, cause, nextAttempt)),
-      retryExhausted: (entry, cause) =>
-        provideStorage(storeEffects.retryExhausted(entry, cause)),
-      record: (event) => provideStorage(storeEffects.record(event)),
-    };
+    > = Store.provideContext(storeEffects, storageContext);
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
@@ -958,30 +952,52 @@ const buildQueueImpl = <
     // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
     // it back. serviceOption → no store means append is skipped and history reads return empty.
     const history = yield* Effect.serviceOption(HistoryStore);
+    // Hoist both codecs once (encoders parallel to decoders): the encoder is reused per stream element
+    // in the append forks below rather than reconstructed on every element.
+    const encodeMetric = Schema.encodeEffect(queueMetrics);
+    const encodeLog = Schema.encodeEffect(queueLogEntry);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
     const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
     const metricsStreamId = `${tag.key}/metrics`;
     const logsStreamId = `${tag.key}/logs`;
+    // WRITE-fork helper: encode each stream element and append it to the history store under `streamId`,
+    // forked into the scope. Shared by the metrics + logs forks (byte-identical modulo stream/encoder).
+    const forkAppend = <A>(
+      hist: HistoryStoreShape,
+      stream: Stream.Stream<A>,
+      streamId: string,
+      encode: (a: A) => Effect.Effect<unknown, Schema.SchemaError>,
+    ) =>
+      Effect.forkScoped(
+        Stream.runForEach(stream, (x) =>
+          encode(x).pipe(
+            Effect.flatMap((enc) => hist.append(streamId, enc)),
+            Effect.orDie,
+          ),
+        ),
+      );
+    // READ helper: read `streamId` back from the history store (empty when none provided) and decode each
+    // entry. Shared by the metrics + logs `history` queries (identical modulo streamId/decoder).
+    const readHistory = <A>(
+      streamId: string,
+      decode: (e: unknown) => Effect.Effect<A, Schema.SchemaError>,
+      opts: HistoryReadOptions,
+    ): Effect.Effect<ReadonlyArray<A>> =>
+      Option.match(history, {
+        onNone: () => Effect.succeed<ReadonlyArray<A>>([]),
+        onSome: (hist) =>
+          hist.read(streamId, opts).pipe(
+            Effect.flatMap((arr) =>
+              Effect.forEach(arr, (e) => decode(e).pipe(Effect.orDie)),
+            ),
+          ),
+      });
     yield* Option.match(history, {
       onNone: () => Effect.void,
-      onSome: (store) =>
+      onSome: (hist) =>
         Effect.gen(function* () {
-          yield* Effect.forkScoped(
-            Stream.runForEach(handle.metrics, (m) =>
-              Schema.encodeEffect(queueMetrics)(m).pipe(
-                Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
-                Effect.orDie,
-              ),
-            ),
-          );
-          yield* Effect.forkScoped(
-            Stream.runForEach(handle.logs, (l) =>
-              Schema.encodeEffect(queueLogEntry)(l).pipe(
-                Effect.flatMap((enc) => store.append(logsStreamId, enc)),
-                Effect.orDie,
-              ),
-            ),
-          );
+          yield* forkAppend(hist, handle.metrics, metricsStreamId, encodeMetric);
+          yield* forkAppend(hist, handle.logs, logsStreamId, encodeLog);
         }),
     });
     // Annotated so the method params get contextual typing from the spec (and the impl is
@@ -1019,47 +1035,21 @@ const buildQueueImpl = <
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>
-          Option.match(history, {
-            onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
-            onSome: (store) =>
-              store.read(metricsStreamId, { limit, since, until }).pipe(
-                Effect.flatMap((arr) =>
-                  Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
-                ),
-              ),
-          }),
+          readHistory(metricsStreamId, decodeMetric, { limit, since, until }),
       },
       logs: {
         live: handle.logs,
         history: ({ limit, since, until }) =>
-          Option.match(history, {
-            onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
-            onSome: (store) =>
-              store.read(logsStreamId, { limit, since, until }).pipe(
-                Effect.flatMap((arr) =>
-                  Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
-                ),
-              ),
-          }),
+          readHistory(logsStreamId, decodeLog, { limit, since, until }),
       },
-      // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
-      // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
-      // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
-      add: (itemOrItems) =>
-        (Array.isArray(itemOrItems)
-          ? handle.add(itemOrItems)
-          : handle.add(itemOrItems)
-        ).pipe(Effect.orDie),
-      prioritize: (itemOrItems) =>
-        (Array.isArray(itemOrItems)
-          ? handle.prioritize(itemOrItems)
-          : handle.prioritize(itemOrItems)
-        ).pipe(Effect.orDie),
-      defer: (itemOrItems) =>
-        (Array.isArray(itemOrItems)
-          ? handle.defer(itemOrItems)
-          : handle.defer(itemOrItems)
-        ).pipe(Effect.orDie),
+      // The item (or batch) IS the payload — `add`/`prioritize`/`defer` forward it straight to the
+      // engine, whose `QueueEnqueue` union overload resolves `T | ReadonlyArray<T>` directly (no
+      // `Array.isArray` narrowing needed). `orDie`: the engine re-validates on enqueue, but the payload
+      // was already decoded/validated on the wire, so that validation failure is impossible here —
+      // `orDie` turns the impossible-failure channel into a defect, keeping the impl's `E` clean.
+      add: (itemOrItems) => handle.add(itemOrItems).pipe(Effect.orDie),
+      prioritize: (itemOrItems) => handle.prioritize(itemOrItems).pipe(Effect.orDie),
+      defer: (itemOrItems) => handle.defer(itemOrItems).pipe(Effect.orDie),
       // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
       // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
       // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
@@ -1071,14 +1061,7 @@ const buildQueueImpl = <
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    // Discharge the captured worker context into every Effect method; the `ProvidedContext` result is
-    // `R`-free, so it satisfies `ImplOf` — annotated here to localize the assignability check.
-    const provided: ImplOf<QueueInstanceSpec<F>> = Resource.provideContext(
-      impl,
-      tag[specSym],
-      context,
-    );
-    return provided;
+    return Resource.builtResource(tag, impl, context);
   });
 
 export const layer = <
@@ -1089,17 +1072,13 @@ export const layer = <
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
-  config: QueueLayerConfig<
-    Schema.Struct<F>["Type"],
-    QueueSuccessValueOf<Success>,
-    E,
-    R,
-    RR
-  >,
+  tag: QueueTagFor<Self, F, Success>,
+  config: QueueVerbConfig<F, E, R, RR, Success>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+    Effect.map(buildQueueImpl(tag, config), (built) =>
+      Resource.layer(tag, Resource.grantLocal(tag, built)),
+    ),
     // The observability store is baked in: the in-memory default backs every queue unless the app
     // provided its own, and it's exposed so persisted events read back via `Storage`.
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
@@ -1131,17 +1110,13 @@ export const serveRemote = <
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
-  config: QueueLayerConfig<
-    Schema.Struct<F>["Type"],
-    QueueSuccessValueOf<Success>,
-    E,
-    R,
-    RR
-  >,
+  tag: QueueTagFor<Self, F, Success>,
+  config: QueueVerbConfig<F, E, R, RR, Success>,
 ) =>
   Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serveRemote(tag, impl)),
+    Effect.map(buildQueueImpl(tag, config), (built) =>
+      Resource.serveRemote(tag, built as any),
+    ),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
@@ -1169,21 +1144,15 @@ export const serve = <
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>,
-  config: QueueLayerConfig<
-    Schema.Struct<F>["Type"],
-    QueueSuccessValueOf<Success>,
-    E,
-    R,
-    RR
-  >,
+  tag: QueueTagFor<Self, F, Success>,
+  config: QueueVerbConfig<F, E, R, RR, Success>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
 > =>
   Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+    Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built as any)),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**

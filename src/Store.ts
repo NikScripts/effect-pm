@@ -497,6 +497,29 @@ export type CatchWriteError<T> = T extends (
         : T;
 
 /**
+ * Remove the requirement channel `Ctx` from every method in a resolved-effects shape, recursing into
+ * nested sub-trees — the per-method-precise result of {@link provideContext}. Mirrors
+ * {@link CatchWriteError}, but **subtracts** the provided context `Ctx` from each method's requirement
+ * rather than catching an error — sound like `Effect.provideContext` (`R` → `Exclude<R, Ctx>`), so a
+ * requirement the context does **not** cover survives as a residual (caught at a later assignment)
+ * instead of being silently claimed `never`. A write method
+ * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, Exclude<R, Ctx>>`; a bare {@link Effect} custom
+ * member is subtracted too; the {@link StoreEffectsVariance} brand's non-effect members pass through
+ * (the function-passthrough branch keeps `_C` intact); a sub-tree recurses. @public
+ */
+export type StoreProvidedContext<T, Ctx> = T extends (
+  ...args: infer A
+) => Effect.Effect<infer S, infer E, infer R>
+  ? (...args: A) => Effect.Effect<S, E, Exclude<R, Ctx>>
+  : T extends Effect.Effect<infer S, infer E, infer R>
+    ? Effect.Effect<S, E, Exclude<R, Ctx>>
+    : T extends (...args: ReadonlyArray<never>) => unknown
+      ? T
+      : T extends object
+        ? { readonly [K in keyof T]: StoreProvidedContext<T[K], Ctx> }
+        : T;
+
+/**
  * Brand identifier for an {@link effects} object — Effect's v4 `TypeId` shape (a string-literal id,
  * present at runtime). @public
  */
@@ -1166,6 +1189,34 @@ const swallowWrite = (
 export const catchWriteErrors = <Effects extends StoreEffectsVariance<StoreContractValue>>(
   effects: Effects,
 ): CatchWriteError<Effects> => mapEffects<Effects, CatchWriteError<Effects>>(effects, swallowWrite);
+
+/**
+ * Provide a {@link Context.Context} to **every method** of an {@link effects} object — the one-liner
+ * that replaces a repetitive per-method `Effect.provideContext(...)` wrapping. One-liner over
+ * {@link mapEffects}, exactly parallel to {@link catchWriteErrors}; the result **subtracts** the
+ * provided context `Ctx` from each method's requirement (see {@link StoreProvidedContext}) — `R` →
+ * `Exclude<R, Ctx>` — so an effects object whose only requirement is {@link Storage} becomes the
+ * `Storage`-free shape a downstream consumer expects, while a method needing more than `Ctx` provides
+ * keeps a residual requirement (caught at the assignment) rather than a false `never`. Providing the
+ * context to a method that carries no `R` is a harmless no-op, so it applies uniformly.
+ *
+ * ```ts
+ * const storageContext = yield* Effect.context<Store.Storage>();
+ * const store = Store.provideContext(storeEffects, storageContext); // methods become Effect<void>
+ * ```
+ *
+ * @public
+ */
+export const provideContext = <
+  Effects extends StoreEffectsVariance<StoreContractValue>,
+  Ctx,
+>(
+  effects: Effects,
+  context: Context.Context<Ctx>,
+): StoreProvidedContext<Effects, Ctx> =>
+  mapEffects<Effects, StoreProvidedContext<Effects, Ctx>>(effects, (effect) =>
+    Effect.provideContext(effect, context),
+  );
 
 
 // ============================================================================

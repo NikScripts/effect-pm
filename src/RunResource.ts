@@ -59,7 +59,6 @@
 
 import { Context, Effect, Layer, Schema, Scope } from "effect";
 import * as Resource from "./Resource";
-import { specSym } from "./Resource";
 import type {
   HandlerContextOf,
   ImplOf,
@@ -71,10 +70,6 @@ import {
   makeRunResourceStoreAnalyticsContract,
   type RunResourceStoreAnalyticsContract,
 } from "./internal/store/runResourceStoreSpec";
-import {
-  buildRunResourceStoreEffects,
-  makeRunResourceStoreTapFromEffects,
-} from "./internal/runResourceStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type { StoreScopeTag } from "./internal/store/registration";
 import {
@@ -416,18 +411,10 @@ const buildRunImpl = <
     const effectiveConfig = yield* foldConfiguredSpec<
       RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
     >(tag.key, { ...config, name: tag.key });
-    const storeEffects = buildRunResourceStoreEffects(tag.key, tag);
-    const storeTap = yield* makeRunResourceStoreTapFromEffects({
-      resourceId: effectiveConfig.name ?? tag.key,
-      scopeKey: tag.key,
-      tag,
-      storeEffects,
-    });
     const handle = yield* internal.makeRunResourceHandleEffect({
       name: effectiveConfig.name ?? tag.key,
       scopeKey: tag.key,
       tag,
-      storeTap,
       effect: (input: Schema.Schema.Type<I>) => provideR(effectiveConfig.effect(input)),
       concurrency: effectiveConfig.concurrency,
     });
@@ -448,9 +435,9 @@ const buildRunImpl = <
           ? (handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)()
           : handle.run(input as Schema.Schema.Type<I>),
     };
-    return Resource.provideContext(
+    return Resource.builtResource(
+      tag,
       impl as Resource.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>,
-      tag[specSym],
       context,
     );
   });
@@ -561,7 +548,9 @@ export const layer = <
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   withDefaultStoreBridge(
     Layer.unwrap(
-      Effect.map(buildRunImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Resource.layer(tag, Resource.grantLocal(tag, built)),
+      ),
     ),
   );
 
@@ -588,8 +577,8 @@ export function serveRemote(
     Layer.unwrap(
       Effect.map(
         buildRunImpl(tag, config),
-        (impl) =>
-          Resource.serveRemote(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
+        (built) =>
+          Resource.serveRemote(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
       ),
     ) as Layer.Layer<any, any, any>,
   );
@@ -622,7 +611,7 @@ export function serve(
     Layer.unwrap(
       Effect.map(
         buildRunImpl(tag, config),
-        (impl) => Resource.serve(tag as any, impl as any) as unknown as Layer.Layer<any, any, any>,
+        (built) => Resource.serve(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
       ),
     ) as Layer.Layer<any, any, any>,
   );
@@ -692,7 +681,11 @@ export const Service = <Self>() => {
         Layer.unwrap(
           Effect.map(
             buildRunImpl(tag as ResourceTag<any, any>, layerConfig),
-            (impl) => Resource.layer(tag as ResourceTag<any, any>, impl),
+            (built) =>
+              Resource.layer(
+                tag as ResourceTag<any, any>,
+                Resource.grantLocal(tag as ResourceTag<any, any>, built),
+              ),
           ),
         ) as Layer.Layer<Self, never, R | Store.Storage>,
       ),

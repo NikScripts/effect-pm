@@ -13,17 +13,17 @@ import {
   Semaphore,
   SubscriptionRef,
 } from "effect";
-import type { RunResourceStateChangeReason } from "./store/runResourceStoreSpec";
-import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
-import { Storage } from "../Store";
-import type { StoreScopeTag } from "./store/registration";
 import {
-  makeRunResourceStoreTap,
-  nextRunId,
-  type RunResourceStoreTap,
-} from "./runResourceStoreTap";
+  engineRunResourceStoreContract,
+  type RunResourceStateChangeReason,
+  type RunStateChange,
+} from "./store/runResourceStoreSpec";
+import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+import * as Store from "../Store";
+import type { StoreScopeTag } from "./store/registration";
+import { errorOf, successOf } from "./runTagSchemas";
+import { makeRunStateChange, extractRunFailure } from "./runResourceFacts";
 import { runStatusTransitions } from "./runResourceStatus";
-import { extractRunFailure } from "./runResourceFacts";
 
 // ============================================================================
 // Engine types
@@ -67,7 +67,6 @@ export interface RunResourceConfig<T, A, E> {
   readonly name?: string;
   readonly scopeKey?: string;
   readonly tag?: StoreScopeTag;
-  readonly storeTap?: RunResourceStoreTap;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
 }
@@ -82,6 +81,38 @@ export interface RunResourceRunnerConfig {
 export interface RunResourceRunner {
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>;
 }
+
+/** Engine-facing store writer — `Storage` discharged at the gate boundary. @internal */
+interface RunResourceStoreWriter {
+  readonly recordStateChange: (
+    reason: RunResourceStateChangeReason,
+    previous: RunGateStatus | null,
+    current: RunGateStatus,
+  ) => Effect.Effect<void>;
+  readonly recordRunStarted: (
+    runId: string,
+    occurredAt: number,
+    concurrency: number,
+  ) => Effect.Effect<void>;
+  readonly recordRunCompleted: (
+    runId: string,
+    occurredAt: number,
+    durationMs: number,
+    success?: unknown,
+  ) => Effect.Effect<void>;
+  readonly recordRunFailed: (
+    runId: string,
+    occurredAt: number,
+    durationMs: number,
+    error: unknown,
+  ) => Effect.Effect<void>;
+}
+
+/** Mint a stable run id for the current attempt. @internal */
+export const nextRunId = (
+  resourceId: string,
+  runSeq: number,
+): string => `${resourceId}/run/${String(runSeq)}`;
 
 const makeInitialStatus = (
   resourceId: string,
@@ -114,12 +145,109 @@ const makeStatusSubscribables = (
   } as const;
 };
 
+const makeRunResourceStoreWriter = (options: {
+  readonly resourceId: string;
+  readonly scopeKey: string;
+  readonly tag?: StoreScopeTag;
+  readonly storeEffects: {
+    readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void>;
+    readonly started: (row: {
+      readonly id: string;
+      readonly resourceId: string;
+      readonly runId: string;
+      readonly occurredAt: number;
+      readonly concurrency: number;
+    }) => Effect.Effect<void>;
+    readonly completed: (row: {
+      readonly id: string;
+      readonly resourceId: string;
+      readonly runId: string;
+      readonly occurredAt: number;
+      readonly durationMs: number;
+      readonly success?: unknown;
+    }) => Effect.Effect<void>;
+    readonly failed: (row: {
+      readonly id: string;
+      readonly resourceId: string;
+      readonly runId: string;
+      readonly occurredAt: number;
+      readonly durationMs: number;
+      readonly error: unknown;
+    }) => Effect.Effect<void>;
+  };
+}): Effect.Effect<RunResourceStoreWriter> =>
+  Effect.gen(function* () {
+    const scopeTag = options.tag ?? { key: options.scopeKey };
+    const { storeEffects, resourceId } = options;
+    const stateSeqRef = yield* Ref.make(0);
+    const factSeqRef = yield* Ref.make(0);
+    const persistSuccess = successOf(scopeTag) !== undefined;
+    const persistTypedError = errorOf(scopeTag) !== undefined;
+
+    const nextStateId = (): Effect.Effect<string> =>
+      Ref.updateAndGet(stateSeqRef, (n) => n + 1).pipe(
+        Effect.map((seq) => `${resourceId}/state/${String(seq)}`),
+      );
+
+    const nextFactId = (runId: string, suffix: string): Effect.Effect<string> =>
+      Ref.updateAndGet(factSeqRef, (n) => n + 1).pipe(
+        Effect.map((seq) => `${runId}/${suffix}/${String(seq)}`),
+      );
+
+    return {
+      recordStateChange: (reason, previous, current) =>
+        Effect.gen(function* () {
+          const change = makeRunStateChange({
+            id: yield* nextStateId(),
+            resourceId,
+            changedAt: current.observedAt,
+            reason,
+            previous,
+            current,
+          });
+          yield* storeEffects.recordStateChange(change);
+        }),
+      recordRunStarted: (runId, occurredAt, concurrency) =>
+        Effect.flatMap(nextFactId(runId, "Started"), (id) =>
+          storeEffects.started({
+            id,
+            resourceId,
+            runId,
+            occurredAt,
+            concurrency,
+          }),
+        ),
+      recordRunCompleted: (runId, occurredAt, durationMs, success) =>
+        Effect.flatMap(nextFactId(runId, "Completed"), (id) =>
+          storeEffects.completed({
+            id,
+            resourceId,
+            runId,
+            occurredAt,
+            durationMs,
+            ...(persistSuccess ? { success } : {}),
+          }),
+        ),
+      recordRunFailed: (runId, occurredAt, durationMs, error) =>
+        Effect.flatMap(nextFactId(runId, "Failed"), (id) =>
+          storeEffects.failed({
+            id,
+            resourceId,
+            runId,
+            occurredAt,
+            durationMs,
+            error: persistTypedError ? error : String(error),
+          }),
+        ),
+    };
+  });
+
 const makeObservedRun =
   <T, A, E>(
     sem: Semaphore.Semaphore,
     effect: (input: T) => Effect.Effect<A, E>,
     statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
-    storeTap: RunResourceStoreTap,
+    store: RunResourceStoreWriter,
     runSeqRef: Ref.Ref<number>,
     concurrency: number,
   ): RunGateRun<T, A, E> => {
@@ -127,13 +255,13 @@ const makeObservedRun =
     update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
     reason: RunResourceStateChangeReason,
     durationMs?: number,
-  ): Effect.Effect<void, never, Storage> =>
+  ): Effect.Effect<void> =>
     Effect.gen(function* () {
       const observedAt = yield* Clock.currentTimeMillis;
       const previous = yield* SubscriptionRef.get(statusRef);
       const current = update(previous, observedAt, durationMs);
       yield* SubscriptionRef.set(statusRef, current);
-      yield* storeTap.recordStateChange(reason, previous, current);
+      yield* store.recordStateChange(reason, previous, current);
     });
 
   const runBody = (input: T) => {
@@ -164,7 +292,7 @@ const makeObservedRun =
             (yield* SubscriptionRef.get(statusRef)).resourceId,
             runSeq,
           );
-          yield* storeTap.recordRunStarted(runId, startedAt, concurrency);
+          yield* store.recordRunStarted(runId, startedAt, concurrency);
           const started = runStatusTransitions.started;
           yield* publishStatus(started.update, started.reason);
 
@@ -175,7 +303,7 @@ const makeObservedRun =
                   const endedAt = yield* Clock.currentTimeMillis;
                   const durationMs = Math.max(0, endedAt - startedAt);
                   if (Exit.isSuccess(exit)) {
-                    yield* storeTap.recordRunCompleted(
+                    yield* store.recordRunCompleted(
                       runId,
                       endedAt,
                       durationMs,
@@ -191,7 +319,7 @@ const makeObservedRun =
                       durationMs,
                     );
                   } else {
-                    yield* storeTap.recordRunFailed(
+                    yield* store.recordRunFailed(
                       runId,
                       endedAt,
                       durationMs,
@@ -219,7 +347,7 @@ const makeObservedRun =
  */
 export const makeRunGateHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunGateHandle<T, A, E>, never, Storage> =>
+): Effect.Effect<RunGateHandle<T, A, E>, never, Store.Storage> =>
   Effect.map(makeRunResourceHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
@@ -231,10 +359,11 @@ export const makeRunGateHandleEffect = <T, A, E>(
  */
 export const makeRunResourceHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunResourceHandle<T, A, E>, never, Storage> => {
+): Effect.Effect<RunResourceHandle<T, A, E>, never, Store.Storage> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
   const scopeKey = config.scopeKey ?? resourceId;
+  const scopeTag = config.tag ?? { key: scopeKey };
 
   return Effect.gen(function* () {
     const sem = yield* Semaphore.make(concurrency);
@@ -242,8 +371,19 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
-    const storeTap =
-      config.storeTap ?? (yield* makeRunResourceStoreTap(resourceId, scopeKey, config.tag));
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const storeEffects = Store.provideContext(
+      Store.catchWriteErrors(
+        Store.effects(scopeKey, engineRunResourceStoreContract(scopeTag)),
+      ),
+      storageContext,
+    );
+    const store = yield* makeRunResourceStoreWriter({
+      resourceId,
+      scopeKey,
+      tag: config.tag,
+      storeEffects,
+    });
     const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
       `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
@@ -253,7 +393,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
         sem,
         config.effect,
         statusRef,
-        storeTap,
+        store,
         runSeqRef,
         concurrency,
       ),

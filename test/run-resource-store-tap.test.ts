@@ -2,8 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
 import { Storage, type StorageApi } from "../src/Store";
 import { StoreWriteError } from "../src/internal/store/errors";
-import { makeRunResourceStoreTap } from "../src/internal/runResourceStoreTap";
-import type { RunGateStatus } from "../src/internal/runResource";
+import { makeRunResourceHandleEffect } from "../src/internal/runResource";
 
 const scopeKey = "@test/failing-store";
 
@@ -18,29 +17,10 @@ const failingBridge = {
       completed: () => Effect.fail(new StoreWriteError({ cause: "blocked-completed" })),
       failed: () => Effect.fail(new StoreWriteError({ cause: "blocked-failed" })),
     }),
-  changes: () => Effect.die(new Error("unused in tap tests")),
+  changes: () => Effect.die(new Error("unused in store tests")),
 } as unknown as StorageApi;
 
-const previousStatus: RunGateStatus = {
-  resourceId: scopeKey,
-  observedAt: 1,
-  configVersion: 1,
-  concurrency: 1,
-  waiting: 0,
-  inFlight: 0,
-  completed: 0,
-  failed: 0,
-  interrupted: 0,
-  totalDurationMs: 0,
-};
-
-const currentStatus: RunGateStatus = {
-  ...previousStatus,
-  observedAt: 2,
-  inFlight: 1,
-};
-
-describe("makeRunResourceStoreTap", () => {
+describe("makeRunResourceHandleEffect store writes", () => {
   it.effect("swallows StoreWriteError via Store.catchWriteErrors", () => {
     const captured: Array<string> = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
@@ -48,16 +28,15 @@ describe("makeRunResourceStoreTap", () => {
     });
 
     return Effect.gen(function* () {
-      const tap = yield* makeRunResourceStoreTap(scopeKey, scopeKey);
+      const handle = yield* makeRunResourceHandleEffect<void, void, never>({
+        name: scopeKey,
+        scopeKey,
+        effect: () => Effect.void,
+        concurrency: 1,
+      });
 
-      yield* tap.recordRunStarted("run-1", 1, 1);
-      yield* tap.recordRunCompleted("run-1", 2, 1);
-      yield* tap.recordRunFailed("run-2", 3, 1, "boom");
-      yield* tap.recordStateChange(
-        "run-resource.run.started",
-        previousStatus,
-        currentStatus,
-      );
+      yield* handle.run();
+      yield* handle.run();
 
       expect(captured.some((line) => line.includes("store write failed"))).toBe(true);
     }).pipe(
