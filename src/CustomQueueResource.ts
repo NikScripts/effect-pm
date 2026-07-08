@@ -37,7 +37,7 @@ import {
   queueEncodedEntry,
   queueEntryAttributes,
   queueEntryTimestamps,
-  queueEvent,
+  buildQueueEvent,
   queueLogEntry,
   queueMetrics,
   queuePriority,
@@ -215,7 +215,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
   const level = customQueueLevel(levelConfig.namedLevels);
   const entry = customQueueEntry(itemSchema);
-  const eventSchema = queueEvent(itemSchema);
+  const eventSchema = buildQueueEvent(itemSchema, Schema.Void, Schema.Unknown);
   return {
     ...customQueueControlSpec,
     add: Resource.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({

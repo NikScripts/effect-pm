@@ -3,7 +3,7 @@
  *
  * @remarks
  * Per-domain storage facets in `src/store/*` (e.g.
- * {@link QueueResourceStore})
+ * {@link ProcessLifecycleStore})
  * are declared with `ProcessStore.Service<Self>()(id, ...sections)`,
  * where each section is a partial of the facet:
  *
@@ -116,8 +116,8 @@ export const ProcessStore = {
  *
  * @example
  * ```ts
- * const mock: QueueResourceStore.Type = { ... };
- * const bound: QueueResourceStore.IdentifierType = { ... };
+ * const mock: ProcessLifecycleStore.Type = { ... };
+ * const bound: ProcessLifecycleStore.IdentifierType = { ... };
  * ```
  *
  * @public

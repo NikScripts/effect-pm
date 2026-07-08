@@ -1,6 +1,6 @@
 /**
  * Buffered engine writes to the built-in {@link Process} {@link Store} contract
- * (`builtInProcessStoreContract`) via {@link Store.withDefault}.
+ * (`builtInProcessStoreContract`) via {@link Store.resolveOrDie}.
  *
  * @module internal/processStoreTap
  * @internal
@@ -114,7 +114,7 @@ export const makeProcessStoreTap = (options: {
 }): Effect.Effect<ProcessStoreTap, never, Store.Storage | Scope.Scope> =>
   Effect.gen(function* () {
     const contract = builtInProcessStoreContract(options.tag);
-    const store = yield* Store.withDefault(options.scopeKey, contract);
+    const store = yield* Store.resolveOrDie(options.scopeKey, contract);
     const scope = yield* Effect.scope;
     const errorSchema = errorOf(options.tag);
     const queue = yield* Queue.bounded<ProcessStoreEventRow>(bufferCapacity);

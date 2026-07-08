@@ -15,6 +15,7 @@ import { makeRunResourceFactEvent, runFactReadPayload } from "../runResourceEven
 import { errorOf, successOf } from "../runTagSchemas";
 import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
+import type { StoreWriteError } from "./errors";
 import type { StoreScopeTag } from "./registration";
 
 /** Reasons attached to run gate state transitions. @internal */
@@ -60,11 +61,11 @@ export type BuiltInRunResourceContract = StoreContractValue<
     readonly state: StoreShapeDef<typeof runStateChangeSchema, typeof runStateReadPayload>;
   },
   {
-    readonly record: (fact: RunFact) => Effect.Effect<void>;
+    readonly record: (fact: RunFact) => Effect.Effect<void, StoreWriteError>;
     readonly facts: (
       payload?: { readonly limit?: number; readonly runId?: string },
     ) => Effect.Effect<ReadonlyArray<RunFact>>;
-    readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void>;
+    readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void, StoreWriteError>;
     readonly stateHistory: (
       payload?: { readonly limit?: number },
     ) => Effect.Effect<ReadonlyArray<RunStateChange>>;

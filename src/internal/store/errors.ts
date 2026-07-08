@@ -42,6 +42,17 @@ export class StoreJournalDecodeError extends Data.TaggedError("StoreJournalDecod
   readonly detail?: string;
 }> {}
 
+/**
+ * A journal/IO **write** failure surfaced by the storage layer's append path — the categorized,
+ * catchable error that write methods honestly carry in their error channel. Wraps the underlying
+ * journal/IO write cause. An encode/serialization mismatch stays a defect (`orDie`); this is only the
+ * genuine write failure. {@link Store.catchWriteErrors} narrows it out (logs + swallows). @public
+ */
+export class StoreWriteError extends Data.TaggedError("StoreWriteError")<{
+  readonly cause: unknown;
+  readonly detail?: string;
+}> {}
+
 /** @internal */
 export class StoreJournalQueryError extends Data.TaggedError("StoreJournalQueryError")<{
   readonly operation: "retention";

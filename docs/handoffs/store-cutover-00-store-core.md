@@ -6,13 +6,15 @@ the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) 
 
 ## Done and on the integration branch
 
-- **Store Stage 1 — default in-memory backing.** `layerDefaultMemory` (`internal/store/scopeBridge.ts`,
+- **Store Stage 1 — default in-memory backing.** `layerDefaultMemory` (`Store.ts`,
   `buildDefaultScopeBridge`) provides {@link Storage} from one in-memory `EventJournal`, materializing
   any scope on demand. `store-default.test.ts` proves it. **This is the always-present default** — see the
   resolution decision below.
 - **Precise handle resolution (tightening).** `bridge.at` is generic (`at<Input>(scopeKey, input)` →
   `StoreHandleOf<Input>`); `Tag.store` / `Resource.store` / `AppStore.at(tag)` return the **precise**
   `Store.HandleOf<contract>`. Removes the consumer casts (see "Action for every module").
+- **`Storage` public API** — {@link Storage}, {@link StorageApi}, and {@link layerDefaultMemory} are
+  `@public` so third-party engines declare the bridge as a dependency (`withDefault` / `withStorage`).
 
 ## Decisions locked
 
@@ -22,8 +24,8 @@ The store is **always in context**, exactly like `Clock` / `Logger` / `Random`: 
 default (in-memory), a real `Store.Service` overrides it. So **there is no "is there a store?" question** —
 and therefore **no `Effect.serviceOption(Storage)` anywhere, no `Option.match`, no no-op branch.**
 
-- Engines resolve the store as a **plain declared dependency**: `const bridge = yield* Storage`.
-  Because it is always provided, the `yield*` always succeeds.
+- Engines resolve the store as a **plain declared dependency**: `yield* Storage` or
+  `yield* Store.withDefault(scopeKey, contract)`. Because it is always provided, the `yield*` always succeeds.
 - "No store wired" is not `Option.none` — it is the default implementation doing its thing.
 - **Emit path never sniffs.** Resolve once (as a dependency), emit unconditionally.
 
@@ -114,3 +116,9 @@ for subscribers; the **store row** follows the rule above.
 
 - [x] `success` persistence — terminal rows carry optional `success` when the tag stamps `success`.
 - [x] `error` encoding — presence-driven typed vs `String` fallback (§5).
+
+## Proposals (informational — owner approval required)
+
+- **Layer query / bulk read** — draft design for multi-scope and whole-layer reads on EventJournal
+  `Store`. **Not approved for implementation.** See [`store-layer-query.md`](./store-layer-query.md).
+  Store agent: refine or replace; do not ship public API without owner sign-off.

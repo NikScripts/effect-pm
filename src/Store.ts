@@ -27,6 +27,23 @@
  * {@link changes} streams {@link StoreChangeEvent} on every successful append (operator plumbing).
  * {@link retention} caps row count per registration — oldest rows drop after each append.
  *
+ * ## Engine authoring
+ *
+ * Toolkit engines (Process, Queue, RunResource, custom resources) resolve store handles through
+ * {@link Storage} — a **defaulted service** always in context when {@link layerDefaultMemory} is
+ * merged (or when an app {@link Service} overrides it). Declare it as a dependency; never
+ * `Effect.serviceOption`.
+ *
+ * - {@link withDefault} — always-on observability (`record` unconditionally).
+ * - {@link withStorage} — opt-in when the app registered the scope on a custom store.
+ * - `yield* Storage` then `bridge.at(scopeKey, contract)` — low-level; prefer the façades.
+ *
+ * Bake the default into a resource layer:
+ *
+ * ```ts
+ * myLayer.pipe(Layer.provideMerge(Store.layerDefaultMemory))
+ * ```
+ *
  * @example Shape-first contract
  * ```ts
  * import * as Store from "@nikscripts/effect-pm/Store";
@@ -63,7 +80,7 @@
  * @module Store
  */
 
-import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
+import { Context, Effect, Layer, Predicate, Schema, Scope, Stream } from "effect";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
 import * as SqlEventJournal from "effect/unstable/eventlog/SqlEventJournal";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -85,7 +102,8 @@ import type { NormalizedStoreRegistration } from "./internal/store/registrationN
 import {
   StoreScopeNotRegistered,
   StoreChangeEvent,
-  type StoreJournalDecodeError,
+  StoreJournalDecodeError,
+  StoreWriteError,
   type StoreSqliteConnectionError,
 } from "./internal/store/errors";
 import {
@@ -100,11 +118,21 @@ import {
 import {
   emptyPayloadSchema,
   isStoreContractValue,
+  makeShapeRefs,
   makeStoreContractValue,
   makeStoreShape,
   mergeStoreContracts,
+  nestHandle,
+  resolveShapeRef,
+  shapeRowsByKey,
+  type AllShapeRows,
   type MergedCustom,
+  type SchemaDecoded,
   type ShapeHandles,
+  type ShapeRef,
+  type ShapeRefs,
+  type ShapesOfStore,
+  type StoreClassWithShapes,
   type StoreContractValue,
   type StoreMethodsFn,
   type StoreShapeDef,
@@ -121,27 +149,37 @@ export type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreHandleFromContract } from "./internal/store/spec";
 export type { MergedCustom, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
 
-export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent } from "./internal/store/errors";
+export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, StoreWriteError } from "./internal/store/errors";
 
 // ============================================================================
 // Storage service tag + layers
 // ============================================================================
 //
 // The `Storage` service is co-located with its layer builders here (Effect's
-// service-with-layers pattern, like `EventJournal` holds the tag + `layerMemory`). Internal
-// store modules stay one-directional: they consume the pure `StorageApi` type from
-// `./internal/store/bridge` and never import this tag value.
+// service-with-layers pattern, like `EventJournal` holds the tag + `layerMemory`).
 
 /**
- * The storage service every store handle resolves through — an app {@link Service} layer, or the
- * baked-in in-memory default. Carries the (internal) {@link StorageApi} scope bridge.
+ * Scope bridge every store handle resolves through — provided by an app {@link Service} layer or
+ * {@link layerDefaultMemory}. Toolkit and third-party engines declare this as a dependency and
+ * resolve handles via {@link withDefault} / {@link withStorage} (preferred) or `bridge.at`.
  *
- * @internal
+ * @example Engine — resolve once at layer build
+ * ```ts
+ * const store = yield* Store.resolveOrDie(tag.key, builtInMyStoreContract(tag));
+ * yield* store.record(event);
+ * ```
+ *
+ * @public
  */
 export class Storage extends Context.Service<Storage, StorageApi>()(
   "@nikscripts/effect-pm/Store/Storage",
 ) {}
 
+/**
+ * API carried by {@link Storage}: materialize a typed handle for a `scopeKey` + contract.
+ *
+ * @public
+ */
 export type { StorageApi } from "./internal/store/bridge";
 
 /** Layer attachments shared by aggregate and standalone store classes. @internal */
@@ -395,9 +433,10 @@ const applyStoreDefaultLogLevel = <
 };
 
 /**
- * The baked-in default store: provides {@link Storage} from a process-local in-memory journal so
- * `Tag.store` / `Resource.store` resolve with **no app {@link Service} provided**. An app store
- * provides the same tag and overrides this by plain layer composition.
+ * Baked-in default store layer: provides {@link Storage} from a process-local in-memory
+ * `EventJournal`. Materializes any scope on demand so {@link withDefault} never fails when this
+ * layer is in context. Merge into toolkit layers; apps override with `Layer.provideMerge` and a
+ * registered {@link Service}.
  *
  * @public
  */
@@ -420,6 +459,75 @@ export type Contract<C extends StoreContractValue = StoreContractValue> = C;
  * @public
  */
 export type HandleOf<C extends StoreContractValue> = StoreHandleFromContract<C>;
+
+/**
+ * Add {@link Storage} to the requirement channel of every method in a resolved-handle shape, recursing
+ * into nested sub-trees. Mirrors the `AsShape`/tree recursion so it does not trip `TS2589`: a method
+ * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, R | Storage>`; a bare {@link Effect} custom
+ * member gains `Storage` too; a sub-tree recurses; anything else passes through. @internal
+ */
+export type AddStorageReq<T> = T extends (
+  ...args: infer A
+) => Effect.Effect<infer S, infer E, infer R>
+  ? (...args: A) => Effect.Effect<S, E, R | Storage>
+  : T extends Effect.Effect<infer S, infer E, infer R>
+    ? Effect.Effect<S, E, R | Storage>
+    : T extends Record<string, unknown>
+      ? { readonly [K in keyof T]: AddStorageReq<T[K]> }
+      : T;
+
+/**
+ * Remove {@link StoreWriteError} from the error channel of every method in a resolved-effects shape,
+ * recursing into nested sub-trees — the per-method-precise result of {@link catchWriteErrors}. A write
+ * method `(...a) => Effect<S, StoreWriteError | E, R>` → `(...a) => Effect<S, E, R>`; a read (whose `E`
+ * lacks `StoreWriteError`) is unchanged (`Exclude<E, StoreWriteError>` is a no-op); the
+ * {@link StoreEffectsVariance} brand's non-effect members pass through (the function-passthrough branch
+ * keeps `_C` intact). @internal
+ */
+export type CatchWriteError<T> = T extends (
+  ...args: infer A
+) => Effect.Effect<infer S, infer E, infer R>
+  ? (...args: A) => Effect.Effect<S, Exclude<E, StoreWriteError>, R>
+  : T extends Effect.Effect<infer S, infer E, infer R>
+    ? Effect.Effect<S, Exclude<E, StoreWriteError>, R>
+    : T extends (...args: ReadonlyArray<never>) => unknown
+      ? T
+      : T extends object
+        ? { readonly [K in keyof T]: CatchWriteError<T[K]> }
+        : T;
+
+/**
+ * Brand identifier for an {@link effects} object — Effect's v4 `TypeId` shape (a string-literal id,
+ * present at runtime). @public
+ */
+export type TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
+
+/** @public */
+export const TypeId: TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
+
+/**
+ * Variance carrier for the {@link effects} brand — mirrors Effect's `Stream.Variance`. `C` is
+ * **covariant** (Effect's `(_: never) => C` encoding), so a specific contract's effects satisfy the wide
+ * `StoreEffectsVariance<StoreContractValue>` constraint that {@link mapEffects} / {@link catchWriteErrors}
+ * take. @public
+ */
+export interface StoreEffectsVariance<out C extends StoreContractValue> {
+  readonly [TypeId]: { readonly _C: (_: never) => C };
+}
+
+/**
+ * The object of effects produced by {@link effects}: the {@link HandleOf} structure (nested shape tree +
+ * custom methods) with {@link Storage} added to every method's requirement channel, carrying the
+ * {@link StoreEffectsVariance} brand.
+ *
+ * @public
+ */
+export type StoreEffectsOf<C extends StoreContractValue> = AddStorageReq<StoreHandleFromContract<C>> &
+  StoreEffectsVariance<C>;
+
+/** True for a value branded as a {@link effects} object. @public */
+export const isStoreEffects = (u: unknown): u is StoreEffectsOf<StoreContractValue> =>
+  Predicate.hasProperty(u, TypeId);
 
 /** Scope keys (tuple registrations) or accessor keys (object registrations) on a store class. @public */
 export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
@@ -641,7 +749,41 @@ export const retention =
 // ============================================================================
 
 /**
- * Stream append events for a registered scope — one {@link StoreChangeEvent} per successful append.
+ * Decode a change-event payload against a shape's row schema, re-tagging failures. A bare
+ * `Schema.Schema<unknown>` carries `DecodingServices: unknown`, so the decode requirement is
+ * `unknown` here; the public {@link changes} overloads pin the stream requirement to `never`
+ * independently, so callers never see it. @internal
+ */
+const decodeChangeRow = (
+  row: Schema.Schema<unknown>,
+  payload: unknown,
+): Effect.Effect<unknown, StoreJournalDecodeError, unknown> =>
+  Schema.decodeUnknownEffect(Schema.toCodecJson(row))(payload).pipe(
+    Effect.mapError(
+      (cause) =>
+        new StoreJournalDecodeError({
+          cause,
+          detail: "Failed to decode store change-event payload against its shape row schema",
+        }),
+    ),
+  );
+
+/** Resolve the store's scope changes stream, dying if the scope is unregistered (wiring error). @internal */
+const storeChangesStream = (
+  store: StoreClassWithShapes,
+): Effect.Effect<
+  Stream.Stream<StoreChangeEvent, StoreJournalDecodeError>,
+  never,
+  Storage | Scope.Scope
+> => Effect.flatMap(Storage, (bridge) => Effect.orDie(bridge.changes(store.scopeKey)));
+
+/**
+ * Stream store changes. Three forms:
+ *
+ * - `changes(scope)` — coarse firehose of {@link StoreChangeEvent}s for a scope (string or tag).
+ * - `changes(store)` — decoded rows of **every** shape on the store (discriminated union).
+ * - `changes(store, select)` — decoded rows of the **one** shape the selector navigates to, e.g.
+ *   `changes(store, (shapes) => shapes.sensors.temperature)`.
  *
  * Requires a {@link Service.layer} / {@link store.layer} that installed the scope bridge.
  *
@@ -655,16 +797,79 @@ export const retention =
  *
  * @public
  */
-export const changes = (
+export function changes<S extends StoreClassWithShapes, Row extends Schema.Schema<unknown>>(
+  store: S,
+  select: (shapes: ShapeRefs<ShapesOfStore<S>>) => ShapeRef<Row>,
+): Effect.Effect<
+  Stream.Stream<SchemaDecoded<Row>, StoreJournalDecodeError>,
+  never,
+  Storage | Scope.Scope
+>;
+export function changes<S extends StoreClassWithShapes>(
+  store: S,
+): Effect.Effect<
+  Stream.Stream<AllShapeRows<ShapesOfStore<S>>, StoreJournalDecodeError>,
+  never,
+  Storage | Scope.Scope
+>;
+export function changes(
   scope: string | StoreScopeTag,
 ): Effect.Effect<
   Stream.Stream<StoreChangeEvent, StoreJournalDecodeError>,
   StoreScopeNotRegistered,
   Storage | Scope.Scope
-> =>
-  Effect.flatMap(Storage, (bridge) =>
-    bridge.changes(typeof scope === "string" ? scope : scope.key),
-  );
+>;
+export function changes(
+  storeOrScope: string | StoreScopeTag | StoreClassWithShapes,
+  select?: (shapes: ShapeRefs<StoreShapes>) => ShapeRef<Schema.Schema<unknown>>,
+): Effect.Effect<
+  Stream.Stream<unknown, StoreJournalDecodeError, unknown>,
+  StoreScopeNotRegistered,
+  Storage | Scope.Scope
+> {
+  if (isStoreClassWithShapes(storeOrScope)) {
+    const store = storeOrScope;
+    if (select !== undefined) {
+      const ref = resolveShapeRef(select(makeShapeRefs(store.contract.shapes)));
+      return storeChangesStream(store).pipe(
+        Effect.map((stream) =>
+          stream.pipe(
+            Stream.filter((event) => event.method === ref.shapeKey),
+            Stream.mapEffect((event) => decodeChangeRow(ref.row, event.payload)),
+          ),
+        ),
+      );
+    }
+    const rowByKey = shapeRowsByKey(store.contract.shapes);
+    return storeChangesStream(store).pipe(
+      Effect.map((stream) =>
+        stream.pipe(
+          Stream.mapEffect((event) => {
+            const row = rowByKey.get(event.method);
+            return row === undefined
+              ? Effect.die(
+                  new StoreJournalDecodeError({
+                    cause: `no shape row schema registered for change method "${event.method}"`,
+                    detail: "Store.changes(store)",
+                  }),
+                )
+              : decodeChangeRow(row, event.payload);
+          }),
+        ),
+      ),
+    );
+  }
+  const key = typeof storeOrScope === "string" ? storeOrScope : storeOrScope.key;
+  return Effect.flatMap(Storage, (bridge) => bridge.changes(key));
+}
+
+/** True for a single-scope store class carrying its contract — the typed {@link changes} forms. @internal */
+const isStoreClassWithShapes = (value: unknown): value is StoreClassWithShapes =>
+  (typeof value === "object" || typeof value === "function") &&
+  value !== null &&
+  "scopeKey" in value &&
+  "contract" in value &&
+  isStoreContractValue(value.contract);
 
 // ============================================================================
 // Storage resolution — the ergonomic façade over the (internal) scope bridge
@@ -677,11 +882,11 @@ export const changes = (
  *
  * Fails {@link StoreScopeNotRegistered} when the provided storage doesn't carry this scope — the
  * **opt-in** path (e.g. persist only if the app wired durable storage for me). For the always-on
- * observability path, use {@link withDefault}.
+ * observability path, use {@link resolveOrDie}.
  *
  * @public
  */
-export const withStorage = <const C extends StoreContractValue>(
+export const resolve = <const C extends StoreContractValue>(
   scope: string | StoreScopeTag,
   contract: C,
 ): Effect.Effect<StoreHandleOf<C>, StoreScopeNotRegistered, Storage> =>
@@ -690,27 +895,232 @@ export const withStorage = <const C extends StoreContractValue>(
   );
 
 /**
- * Like {@link withStorage}, but **guarantees** a handle. With the baked-in default store in context
- * (it materializes any scope on demand), this never fails — the always-on observability path, where a
- * resource's engine records unconditionally with no service-sniffing. If a *custom* store is in
- * context and lacks this scope, that's a wiring error and it dies with a clear message (bake the
- * default so it can materialize the scope).
+ * Like {@link resolve}, but **guarantees** a handle (`resolve` hardened with `orDie`). With the baked-in
+ * default store in context (it materializes any scope on demand), this never fails — the always-on
+ * observability path, where a resource's engine records unconditionally with no service-sniffing. If a
+ * *custom* store is in context and lacks this scope, that's a wiring error and it dies with a clear
+ * message (bake the default so it can materialize the scope).
  *
  * @public
  */
-export const withDefault = <const C extends StoreContractValue>(
+export const resolveOrDie = <const C extends StoreContractValue>(
   scope: string | StoreScopeTag,
   contract: C,
 ): Effect.Effect<StoreHandleOf<C>, never, Storage> =>
-  withStorage(scope, contract).pipe(
+  resolve(scope, contract).pipe(
     Effect.catchTag("StoreScopeNotRegistered", (e) =>
       Effect.die(
-        `Store.withDefault: scope "${e.key}" is not registered in the provided store, and no default ` +
+        `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store, and no default ` +
           `store is in context to materialize it. Provide the in-memory default (Service.layerMemory / ` +
           `the resource layer's baked default) so the scope resolves.`,
       ),
     ),
   );
+
+/** Navigate a resolved handle to the (possibly dotted) method at `path` and apply it. @internal */
+const callAt = (
+  handle: unknown,
+  path: string,
+  args: ReadonlyArray<unknown>,
+): Effect.Effect<unknown> => {
+  let node: unknown = handle;
+  for (const part of path.split(".")) {
+    // Tree-walk idiom (as in `nestHandle` / `Resource.nestService`).
+    node = (node as Record<string, unknown>)[part];
+  }
+  if (typeof node !== "function") {
+    return Effect.die(`Store.effects: no resolvable method at "${path}"`);
+  }
+  return node(...args);
+};
+
+/**
+ * Stamp the honest (present-at-runtime) {@link TypeId} brand so {@link isStoreEffects} and the
+ * {@link mapEffects} / {@link catchWriteErrors} constraint are backed by a real property, not a phantom.
+ * Non-enumerable so it stays invisible to method access / destructuring / the {@link flattenEffects}
+ * walk. @internal
+ */
+const stampEffectsBrand = (target: object): void => {
+  Object.defineProperty(target, TypeId, {
+    value: { _C: (_: never) => _ },
+    enumerable: false,
+  });
+};
+
+/** Flatten an effects object to a dotted-key map of its method leaves (functions). @internal */
+const flattenEffects = (
+  node: unknown,
+  prefix: string,
+  out: Record<string, unknown>,
+): void => {
+  if (typeof node !== "object" || node === null) {
+    return;
+  }
+  // Tree-walk idiom (as in `nestHandle`).
+  const record = node as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    const path = prefix === "" ? key : `${prefix}.${key}`;
+    if (typeof value === "function") {
+      out[path] = value;
+    } else {
+      flattenEffects(value, path, out);
+    }
+  }
+};
+
+/**
+ * Wrap a type-erased method leaf so its returned {@link Effect} is passed through `transform`. Dies if
+ * the leaf is somehow not callable (a structural invariant the {@link flattenEffects} walk guarantees).
+ * @internal
+ */
+const mapMethod =
+  (
+    method: unknown,
+    transform: (effect: Effect.Effect<unknown, unknown, unknown>) => Effect.Effect<unknown, unknown, unknown>,
+  ) =>
+  (...args: ReadonlyArray<unknown>): Effect.Effect<unknown, unknown, unknown> => {
+    if (typeof method !== "function") {
+      return Effect.die("Store.mapEffects: effects leaf is not a method");
+    }
+    return transform(method(...args));
+  };
+
+/**
+ * Build a PURE object of effects from a contract — the {@link HandleOf} structure (nested shape tree +
+ * custom methods) where each method is `(...args) => resolveOrDie(scope, contract).flatMap((handle) =>
+ * handle.<path>(...args))`. So every method carries `Storage` in its requirement (see {@link StoreEffectsOf}),
+ * the error channel stays clean ({@link resolveOrDie} dies on an unregistered custom store rather than
+ * surfacing `StoreScopeNotRegistered`), and there is **no** resolution / `yield*` / memo cell here — the
+ * handle memo lives in the storage bridge's `.at`. No error handling ({@link catchWriteErrors} owns that).
+ *
+ * Write methods honestly carry {@link StoreWriteError} in their error channel (a journal/IO write
+ * failure); {@link catchWriteErrors} narrows it out. Reads carry no error.
+ *
+ * @example
+ * ```ts
+ * const store = Store.effects("sensors", sensorContract);
+ * yield* store.sensors.temperature.append({ celsius: 21 });   // Effect<void, StoreWriteError, Storage>
+ * const rows = yield* store.sensors.temperature.read();       // Effect<ReadonlyArray<…>, never, Storage>
+ * ```
+ *
+ * @public
+ */
+export const effects = <const C extends StoreContractValue>(
+  scope: string | StoreScopeTag,
+  contract: C,
+): StoreEffectsOf<C> => {
+  const method =
+    (path: string) =>
+    (...args: ReadonlyArray<unknown>) =>
+      resolveOrDie(scope, contract).pipe(
+        Effect.flatMap((handle) => callAt(handle, path, args)),
+      );
+
+  const flat: Record<string, unknown> = {};
+  for (const shapeKey of shapeRowsByKey(contract.shapes).keys()) {
+    flat[`${shapeKey}.append`] = method(`${shapeKey}.append`);
+    flat[`${shapeKey}.read`] = method(`${shapeKey}.read`);
+  }
+  for (const name of Object.keys(contract.customEntries)) {
+    flat[name] = method(name);
+  }
+  const built = nestHandle(flat);
+  stampEffectsBrand(built);
+  // Same generic-object structural-rebuild idiom as `makeShapeHandles` / `makeShapeRefs`: the effects
+  // object is assembled by dynamic assignment (then nested), so its type is asserted once here.
+  return built as StoreEffectsOf<C>;
+};
+
+/**
+ * The generic transform primitive: walk **every** method on a {@link effects} object (nested shape
+ * leaves + custom methods) and pass each method's returned {@link Effect} through `transform`, then
+ * re-nest and re-stamp the {@link TypeId} brand. Composes with `pipe`.
+ *
+ * `transform` is applied uniformly; whether it changes types is expressed through the result:
+ * - **Type-preserving** transforms (`withSpan` / `retry` / `timed`, whose signature is
+ *   `Effect<A, E, R> → Effect<A, E, R>`) leave the type unchanged — `Out` defaults to `Effects`.
+ * - **Type-changing** transforms (narrowing `E`, like {@link catchWriteErrors}) supply an explicit
+ *   `Out` computed per method by a mapped type (e.g. {@link CatchWriteError}), so the change flows
+ *   through each method precisely.
+ *
+ * @remarks
+ * `Effects` is constrained to the {@link StoreEffectsVariance} brand (not `StoreEffectsOf<C>`): `C` is
+ * not inferable through the opaque handle type, so that form would default `C` and widen; the brand
+ * constraint rejects a bare `{}` while `C`'s covariant encoding lets a specific contract's effects
+ * satisfy the wide constraint. `transform`'s `unknown`-channel signature accepts both a polymorphic
+ * type-preserving transform and a concrete narrowing one without an `any`.
+ *
+ * @example Type-preserving — trace every store method
+ * ```ts
+ * const traced = Store.mapEffects(store, (effect) => Effect.withSpan(effect, "store"));
+ * ```
+ *
+ * @public
+ */
+export const mapEffects = <
+  Effects extends StoreEffectsVariance<StoreContractValue>,
+  Out = Effects,
+>(
+  effects: Effects,
+  transform: (
+    effect: Effect.Effect<unknown, unknown, unknown>,
+  ) => Effect.Effect<unknown, unknown, unknown>,
+): Out => {
+  const flat: Record<string, unknown> = {};
+  flattenEffects(effects, "", flat);
+
+  const mapped: Record<string, unknown> = {};
+  for (const [path, method] of Object.entries(flat)) {
+    mapped[path] = mapMethod(method, transform);
+  }
+
+  const built = nestHandle(mapped);
+  stampEffectsBrand(built);
+  // Same structural-rebuild idiom as `effects`: the mapped object is reassembled by dynamic assignment,
+  // so its type is asserted once here (as `Out` — the caller-supplied per-method result, or `Effects`).
+  return built as Out;
+};
+
+/** True for a {@link StoreWriteError} value (in-process `_tag` discriminator). @internal */
+const isStoreWriteError = (u: unknown): u is StoreWriteError =>
+  Predicate.hasProperty(u, "_tag") && u._tag === "StoreWriteError";
+
+/**
+ * The {@link catchWriteErrors} write guard: swallow a {@link StoreWriteError} **failure** (log at
+ * warning level, succeed as `void`), re-raise any other failure untouched, and leave **defects** alone
+ * (`Effect.catch` recovers failures only — an encode/serialization mismatch or wiring die stays a
+ * defect and propagates). A no-op on reads (they never fail with `StoreWriteError`). @internal
+ */
+const swallowWrite = (
+  effect: Effect.Effect<unknown, unknown, unknown>,
+): Effect.Effect<unknown, unknown, unknown> =>
+  Effect.catch(effect, (error) =>
+    isStoreWriteError(error)
+      ? Effect.logWarning("store write failed", error)
+      : Effect.fail(error),
+  );
+
+/**
+ * Narrow {@link StoreWriteError} out of the error channel of a {@link effects} object's **write**
+ * methods — a fire-and-forget append that fails a journal/IO write is **logged and swallowed**
+ * (succeeds as `void`). One-liner over {@link mapEffects}. Composes with `pipe`:
+ * `pipe(Store.effects(scope, contract), Store.catchWriteErrors)`.
+ *
+ * Scope of the guard, precisely:
+ * - **Write failures are swallowed** — the `StoreWriteError` is caught, logged, and the effect
+ *   completes successfully; `StoreWriteError` is removed from `E` (see {@link CatchWriteError}).
+ * - **Defects are NOT swallowed** — an encode/serialization mismatch (a bug: the value does not fit the
+ *   declared shape, dies in the append path) and a wiring die (no store in context) are **defects**,
+ *   not failures, so they propagate untouched.
+ * - **Reads and every other error are left exactly as-is** — `Exclude<E, StoreWriteError>` is a no-op
+ *   where `StoreWriteError` is absent.
+ *
+ * @public
+ */
+export const catchWriteErrors = <Effects extends StoreEffectsVariance<StoreContractValue>>(
+  effects: Effects,
+): CatchWriteError<Effects> => mapEffects<Effects, CatchWriteError<Effects>>(effects, swallowWrite);
+
 
 // ============================================================================
 // Aggregate factories
@@ -845,7 +1255,7 @@ export const store: {
   const contract = scopeOrContract as StoreContractValue;
   return <T extends StoreScopeTag>(tag: T) =>
     Object.assign(tag, {
-      store: withStorage(tag.key, contract),
+      store: resolve(tag.key, contract),
     });
 }) as never;
 
@@ -881,6 +1291,15 @@ export const register = <
 export declare namespace Store {
   /** @public */
   export type Contract<C extends StoreContractValue = StoreContractValue> = C;
+
+  /** @public */
+  export { Storage };
+
+  /** @public */
+  export type { StorageApi };
+
+  /** @public */
+  export { layerDefaultMemory };
 
   /** @public */
   export type HandleOf<C extends StoreContractValue> = StoreHandleFromContract<C>;
