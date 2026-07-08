@@ -29,10 +29,19 @@ typed-success pattern.
    ```
    `catchWriteErrors` guards **both** write shapes uniformly (each carries `StoreWriteError`) — no need for
    a per-write helper. Provide `Storage` once at the boundary. Template: `buildQueueImpl` in `QueueResource.ts`.
-2. **(Recommended) Three-tier** — lean base + engine write-extension (narrow writes over `fact`/`state`) +
-   consumer read-extension (`RunResource.store(tag)` with analytics over facts + state history), mirroring
-   `QueueResource.store`.
-3. **(Optional) Typed full-capture** — adopt the tag's `success`/`error` schema slots (worker-A pattern) if a
+2. **(Recommended) Three-tier — stack with `Store.extend`, not a `Store.contract` rebuild.** Build the lean
+   base once with `Store.contract`, then `Store.extend(methodsFn, base)` it into an engine write-extension
+   (narrow writes over `fact`/`state`) and, again over the same base, a consumer read-extension
+   (`RunResource.store(tag)` with analytics over facts + state history), mirroring `QueueResource.store`.
+   `Store.extend` is type-preserving (fed the `base`, each write/read keeps its concrete signature onto
+   `Store.effects`) — do **not** rebuild the base with `Store.contract` per tier. Template: `queueStoreSpec.ts`.
+3. **Discharge the impl requirement with `Resource.provideContext`, not per-method provides.** Build the run
+   impl **unwrapped** (each method still carrying the worker `R`), then discharge it in one call:
+   `Resource.provideContext(impl, tag[Resource.specSym], context)` (from `yield* Effect.context<R>()`). It's
+   the Resource mirror of `Store.catchWriteErrors` — a subtractive one-liner over `Resource.mapEffects`
+   (`R` → `Exclude<R, Ctx>`, a no-op where there's no `R`, Stream / Subscribable members untouched) — no
+   per-method `Effect.provideContext(...)` wrapping. Template: `buildQueueImpl` in `QueueResource.ts`.
+4. **(Optional) Typed full-capture** — adopt the tag's `success`/`error` schema slots (worker-A pattern) if a
    run should carry a typed result.
 
 ## StoreWriteError — don't over-worry it

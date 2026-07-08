@@ -994,10 +994,10 @@ const buildQueueImpl = <
     };
     // Worker methods are built UNWRAPPED (each still carrying the worker `R | RR` in its requirement);
     // `Resource.provideContext` below discharges `context` into every Effect method uniformly (a no-op
-    // on the ones that carry no `R`, like pause/resume/shutdown) — replacing the old per-method
-    // `provideR(...)` wrapping — and its `ProvidedContext` result strips `R` so the impl satisfies
-    // `ImplOf`. Stream / Subscribable members (`status`/`size`/`isEmpty`/`*.live`/`events`) pass through
-    // untouched.
+    // on the ones that carry no `R`, like pause/resume/shutdown) — a single subtractive
+    // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
+    // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
+    // (`status`/`size`/`isEmpty`/`*.live`/`events`) pass through untouched.
     const impl: Resource.WithRequirement<
       ImplOf<QueueInstanceSpec<F>>,
       R | RR
