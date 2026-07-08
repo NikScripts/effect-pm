@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Deferred, Duration, Effect, Layer, Schema } from "effect";
+import { Data, DateTime, Deferred, Duration, Effect, Layer, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
@@ -8,6 +8,10 @@ import { builtInProcessStoreContract } from "../src/internal/store/processStoreS
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
+const Snapshot = Schema.Struct({
+  at: Schema.DateTimeUtc,
+  count: Schema.Number,
+});
 
 class VoidExec extends Process.Tag<VoidExec>()("test/engine/Void") {}
 
@@ -19,13 +23,30 @@ class FailingExec extends Process.Tag<FailingExec>()(
   FetchErr,
 ) {}
 
+class StringFailExec extends Process.Tag<StringFailExec>()("test/engine/StringFail") {}
+
+class RichSuccessExec extends Process.Tag<RichSuccessExec>()(
+  "test/engine/RichSuccess",
+  Snapshot,
+) {}
+
 class InterruptExec extends Process.Tag<InterruptExec>()("test/engine/Interrupt") {}
+
+class ServeExec extends Process.Tag<ServeExec>()("test/engine/Serve") {}
+
+class ServeRemoteExec extends Process.Tag<ServeRemoteExec>()("test/engine/ServeRemote") {}
+
+class Boom extends Data.TaggedError("Boom")<{ readonly code: number }> {}
 
 class EngineStore extends Store.Service<EngineStore>("@test/EngineStore")(
   Store.register(VoidExec, builtInProcessStoreContract(VoidExec)),
   Store.register(PricedExec, builtInProcessStoreContract(PricedExec)),
   Store.register(FailingExec, builtInProcessStoreContract(FailingExec)),
+  Store.register(StringFailExec, builtInProcessStoreContract(StringFailExec)),
+  Store.register(RichSuccessExec, builtInProcessStoreContract(RichSuccessExec)),
   Store.register(InterruptExec, builtInProcessStoreContract(InterruptExec)),
+  Store.register(ServeExec, builtInProcessStoreContract(ServeExec)),
+  Store.register(ServeRemoteExec, builtInProcessStoreContract(ServeRemoteExec)),
 ) {}
 
 const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
@@ -47,9 +68,10 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(VoidExec);
         const events = yield* store.events();
-        expect(events.length).toBeGreaterThanOrEqual(1);
-        expect(events[0]?._tag).toBe("RunCompleted");
-        expect(events[0]).toMatchObject({
+        expect(events.length).toBeGreaterThanOrEqual(2);
+        expect(events.some((row) => row._tag === "RunStarted")).toBe(true);
+        const completed = events.find((row) => row._tag === "RunCompleted");
+        expect(completed).toMatchObject({
           processId: VoidExec.key,
           isStartupRun: true,
         });
@@ -131,6 +153,93 @@ describe("Process.layer — Process.store auto-write", () => {
           processId: InterruptExec.key,
           isStartupRun: true,
         });
+      }).pipe(Effect.provide(live), Effect.scoped);
+    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+  );
+
+  it.effect("stringifies RunFailed.error when the tag has no error schema", () =>
+    Effect.gen(function* () {
+      const boom = new Boom({ code: 9 });
+      const live = processLayer(
+        Process.layer(StringFailExec, {
+          effect: Effect.fail(boom),
+          polling: Polling.spaced(Duration.millis(50)),
+        }),
+      );
+      yield* Effect.gen(function* () {
+        yield* StringFailExec;
+        yield* TestClock.adjust(Duration.millis(200));
+        const store = yield* EngineStore.at(StringFailExec);
+        const events = yield* store.events();
+        const failed = events.find((row) => row._tag === "RunFailed");
+        expect(failed).toMatchObject({
+          error: String(boom),
+        });
+        expect(typeof failed?.error).toBe("string");
+      }).pipe(Effect.provide(live), Effect.scoped);
+    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+  );
+
+  it.effect("round-trips rich success values through the journal codec", () =>
+    Effect.gen(function* () {
+      const at = DateTime.makeUnsafe("2026-02-01T12:00:00.000Z");
+      const live = processLayer(
+        Process.layer(RichSuccessExec, {
+          effect: Effect.succeed({ at, count: 7 }),
+          polling: Polling.spaced(Duration.millis(50)),
+        }),
+      );
+      yield* Effect.gen(function* () {
+        yield* RichSuccessExec;
+        yield* TestClock.adjust(Duration.millis(200));
+        const store = yield* EngineStore.at(RichSuccessExec);
+        const events = yield* store.events();
+        const completed = events.find((row) => row._tag === "RunCompleted");
+        expect(completed).toMatchObject({
+          success: { at, count: 7 },
+        });
+      }).pipe(Effect.provide(live), Effect.scoped);
+    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+  );
+});
+
+describe("Process.serve / serveRemote — store auto-write", () => {
+  it.effect("Process.serve records terminal runs via the baked-in store", () =>
+    Effect.gen(function* () {
+      const live = Layer.provideMerge(
+        EngineStore.layerMemory,
+        Process.serve(ServeExec, {
+          effect: Effect.void,
+          polling: Polling.spaced(Duration.millis(50)),
+        }),
+      );
+      yield* Effect.gen(function* () {
+        yield* ServeExec;
+        yield* TestClock.adjust(Duration.millis(200));
+        const store = yield* EngineStore.at(ServeExec);
+        const events = yield* store.events();
+        expect(events.some((row) => row._tag === "RunCompleted")).toBe(true);
+      }).pipe(Effect.provide(live), Effect.scoped);
+    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+  );
+
+  it.effect("Process.serveRemote records terminal runs without granting the local tag", () =>
+    Effect.gen(function* () {
+      const live = Layer.provideMerge(
+        EngineStore.layerMemory,
+        Process.serveRemote(ServeRemoteExec, {
+          effect: Effect.void,
+          polling: Polling.spaced(Duration.millis(50)),
+        }),
+      );
+      yield* Effect.gen(function* () {
+        yield* TestClock.adjust(Duration.millis(200));
+        const store = yield* Store.resolveOrDie(
+          ServeRemoteExec.key,
+          builtInProcessStoreContract(ServeRemoteExec),
+        );
+        const events = yield* store.events();
+        expect(events.some((row) => row._tag === "RunCompleted")).toBe(true);
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );

@@ -76,9 +76,10 @@ yield* proc.logs.history({ limit: 100 }) // past captured lines
 
 ### Execution analytics (`Process.store`)
 
-On **`Process.layer`** / **`serve`** / **`serveRemote`**, finished runs auto-append to the built-in
-execution contract via a **default in-memory store** merged into the layer. Override with an app
-**`Store.Service`** when you need durable storage or a registered `Tag.store` handle:
+**Toolkit layers only** — `Process.layer` / `serve` / `serveRemote` auto-append terminal runs.
+**`Process.make`** does not; use `layer` or manual `store.record`.
+
+Override the default in-memory store when you register the tag on an app **`Store.Service`**:
 
 ```ts
 import { Layer } from "effect";

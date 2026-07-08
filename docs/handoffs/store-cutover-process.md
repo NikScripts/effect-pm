@@ -27,6 +27,11 @@ Read first: `docs/guides/store.md` (the model), `docs/guides/store-migration.md`
 ## Already done by the store-machinery merge (no action)
 - `BuiltInProcessContract.record` **aligned to `Effect<void, StoreWriteError>`** (cast-free).
 - `Store.withDefault` → `Store.resolveOrDie` in `processStoreTap.ts` + `process-store-default-override.test.ts`.
+- Terminal runs on **`Process.layer` / `serve` / `serveRemote`** append to **`Process.store(tag)`** (declared **`Store.Storage`**, default in-memory store merged into layer).
+- **`Process.make`** — supervisor only; **no** auto-append.
+- **`ProcessExecutionStore` facet deleted** — module, subpath, `ProcessStorage` alias, tests.
+- `RunCompleted.success` from latest run when tag carries `success`.
+- `Process.result` removed; positional `success` / `error` on `Tag`.
 
 ## Adoption steps (remaining)
 1. **Convert the recorder to the transform layer.** `processStoreTap.ts` currently does
@@ -67,4 +72,11 @@ transform). It never reaches a process handle, a public signature, or the wire (
   app root with `Layer.provideMerge(AppStore.layerMemory)` or `AppStore.layer({ filename })`.
 
 ## Verify
-`pnpm run typecheck` (both projects) + `pnpm exec vitest run` the process store + toolkit suites.
+
+```bash
+pnpm run typecheck
+pnpm run build
+pnpm exec vitest run test/process-toolkit.test.ts test/process-store-contract.test.ts \
+  test/process-store-engine.test.ts test/process-store-default-override.test.ts \
+  test/process-store-sqlite.test.ts test/process-contract-shape.test-d.ts
+```

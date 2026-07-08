@@ -312,5 +312,3 @@ Store.register("events", contract).pipe(Store.logLevelWarn)     // durable log-e
 - [`store-migration.md`](./store-migration.md) — old tap/bridge → the new machinery
 - [`queue-resource.md`](./queue-resource.md) — the golden three-tier example
 - [`../handoffs/store-and-logs-design.md`](../handoffs/store-and-logs-design.md)
-</content>
-</invoke>

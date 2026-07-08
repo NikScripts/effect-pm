@@ -61,8 +61,9 @@ fact/state union).
 ## Action for EVERY module
 
 - **Cast removal.** With the tightening, `... as BuiltInXContract` is unnecessary. Mirror
-  `builtInQueueStoreContract` (cast-free). `processStoreSpec.ts` still has `... as BuiltInProcessContract` —
-  delete it; RunResource's contract likewise.
+  `builtInQueueStoreContract` (cast-free). ~~`processStoreSpec.ts` still has `... as BuiltInProcessContract`~~
+  **Process:** factory cast removed — `record` accepts `ProcessStoreEventRow` via a narrow `event.append`
+  bridge; journal encodes on append. RunResource's contract likewise.
 - **No `serviceOption` on `Storage`.** Resolve it as a declared dependency (§1). (`serviceOption`
   is still correct for the **durability** plane — `DurableQueueStore` — and irrelevant for the legacy facets
   being deleted.)

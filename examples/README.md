@@ -33,7 +33,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) → [`process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) |
+| **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → legacy facet demos in [`process-store-memory.ts`](./forms/process-store/process-store-memory.ts) |
 
 ---
 
@@ -57,19 +57,25 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiResource.Service` + `ApiMetrics.Tag` |
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar capture |
 
-### ProcessStore
+### Process store (EventJournal)
+
+| File | Teaches |
+|------|---------|
+| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Process.layer`** + **`Process.store(tag)`** — auto-append on terminal runs, app store override |
+
+Start here for execution history. **`Process.make`** does not auto-append.
+
+### ProcessStorage (legacy RuntimeStorage facets)
 
 | File | Teaches |
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
-| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + ProcessStorage facet reads + RunResource run facts on SQLite |
-| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | `Process.layer` + `Process.store(tag)` auto-write |
+| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + facet reads + RunResource run facts on SQLite |
 
-Storage options:
+Storage options (two planes):
 
-- `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
-- `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
-- `Store.Service` + `Process.store(tag)` — built-in execution contract; engine auto-writes on `Process.layer` (default in-memory store baked in; override with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))`).
+- **`Store.Service` + `Process.store(tag)`** — execution events (`RunCompleted` / `RunFailed` / `RunInterrupted`) on EventJournal; auto-write on **`Process.layer`** only.
+- **`ProcessStorage.layer`** / **`layerProcessStore`** — legacy facet rows (queue entries, lifecycle, logs) on `RuntimeStorage`.
 - `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
 
 ### Schedule

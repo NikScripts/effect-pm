@@ -8,11 +8,11 @@ This document complements the [README](../README.md) with a concise **spec-style
 
 | Piece | Role |
 |--------|------|
-| **`Process.make`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. |
+| **`Process.make`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. **Does not** auto-append execution store rows. |
 | **Schedule primitive** (internal) | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. Surfaced publicly via `Process.scheduleInMemory` / `Process.scheduleDefine` and the `Process.Schedule` resource. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
-| **Storage facets** | Optional analytics: execution rows + lifecycle events via `ProcessStorage` / durable adapters. |
-| **`Process.Tag`** | The toolkit wrapper: this stack as a location-transparent `Resource` (lifecycle + observability + schedule control). |
+| **`Process.Tag` + toolkit layers** | Location-transparent `Resource` (lifecycle + observation + schedule). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**. |
+| **Legacy `ProcessStorage` facets** | Optional analytics rows (`RuntimeStorage`) — queue entries, lifecycle, logs. **Not** process execution history (that is **`Process.store`** on the EventJournal `Store`). |
 
 **`start` / `runImmediately`** drive the schedule. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
@@ -33,6 +33,10 @@ This document complements the [README](../README.md) with a concise **spec-style
 | `polling` | no | `Layer.Layer<PollingService, never, never>` — repeat cadence inside an instance. Omit and provide at fork time. |
 | `schedule` | no | Either a schedule initializer (`({ set, add, clear }) => Effect`) or a schedule layer (`Process.scheduleInMemory(…)` / `Process.scheduleDefine(…)`). When omitted, defaults to an **always-armed** schedule. Use `Process.scheduleInMemory()` (no argument) for an empty store (disarmed until mutation). |
 | `scheduleLayer` | no | Explicit schedule service layer; takes precedence over `schedule`. When both are omitted, an **always-armed** schedule is used. |
+
+**Persistence:** `Process.make` does **not** wire execution store appends. Use **`Process.layer`** /
+**`serve`** / **`serveRemote`** for automatic terminal-run history, or **`Process.store(tag)`** and
+`store.record` for manual writes.
 
 ### `Process.make` overloads
 
@@ -133,73 +137,58 @@ These exports remain for custom schedule implementations; the schedule-driven ru
 
 ---
 
-## `ProcessStore`, `ProcessStorage`, and `RuntimeStorage`
+## Storage: two planes
 
-`ProcessStore` is the public builder used by storage facets
-(`ProcessStore.Service`, `ProcessStore.record`, `ProcessStore.read`).
-Applications do not `yield* ProcessStore`.
-
-`ProcessStorage` is the combined built-in storage layer host. Use
-`ProcessStorage.layer` for in-memory development/tests, or
-`@nikscripts/effect-pm/storage/sqlite`'s `layerProcessStore({ filename })` for
-durable local storage. Both provide the same per-domain facets.
-
-`RuntimeStorage` is the generic row storage port underneath those facets. Storage
-adapters persist normalized `RuntimeRecord` rows; facets map domain operations
-onto those rows and expose domain reads.
-
-Dependency direction:
-
-```text
-runtime module -> store facet -> RuntimeStorage -> memory / SQLite / custom
-```
-
-Read run history through the Store bridge registered by **`RunResource.store(tag)`**:
-
-```typescript
-import { Effect } from "effect";
-import * as RunResource from "@nikscripts/effect-pm/RunResource";
-import * as Store from "@nikscripts/effect-pm/Store";
-
-class MyGate extends RunResource.Tag<MyGate>()("@app/Gate", {
-  payload: Schema.String,
-  success: Schema.Number,
-}) {}
-
-const registration = RunResource.store(MyGate);
-
-const program = Effect.gen(function* () {
-  const store = yield* Store.at(registration.scopeKey, registration.contract);
-  const facts = yield* store.facts({ limit: 50 });
-  yield* Effect.log(`run facts: ${String(facts.length)}`);
-});
-```
+| Plane | API | Backing | Process execution history? |
+|-------|-----|---------|----------------------------|
+| **Store (EventJournal)** | `Store.Service`, `Process.store(tag)` | `layerMemory` / SQLite `SqlEventJournal` | **Yes** — `RunCompleted` / `RunFailed` / `RunInterrupted` |
+| **Legacy facets** | `ProcessStorage`, `src/store/*` facets | `RuntimeStorage` / `layerProcessStore` | **No** — queue entries, lifecycle, logs only |
 
 ### `Process.store` (built-in execution contract)
 
-On **`Process.layer`** / **`serve`** / **`serveRemote`**, the engine auto-appends terminal runs to
-**`Process.store(tag)`** via a **baked-in default in-memory store**. Override with an app
-**`Store.Service`** at the root when you need durable storage or registered query handles:
+**Registration** — one line on your app store:
 
 ```typescript
-import * as Store from "@nikscripts/effect-pm/Store";
-
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
 ) {}
+```
 
+**Handle** — `yield* MyProcess.store` exposes:
+
+| Method | Role |
+|--------|------|
+| `record(event)` | Append one terminal execution row |
+| `events({ limit? })` | Read rows newest-first (optional limit) |
+| `hasPriorExecutions()` | Whether any row exists for this process |
+
+**Auto-append** — only on **`Process.layer` / `serve` / `serveRemote`**. Those layers merge
+**`Store.layerDefaultMemory`** so the engine always has **`Store.Storage`**. Override at the app root:
+
+```typescript
 Layer.provideMerge(AppStore.layerMemory, Process.layer(MyProcess, { effect, polling }));
 ```
 
-Query execution events via `yield* MyProcess.store` → `events()`.
+**Wire rows** (PascalCase `_tag`):
 
-The removed monolith service (`yield* ProcessStore`, `ProcessStore.events`,
-`ProcessStore.file`, `@nikscripts/effect-pm/storage/file`) is intentionally not
-documented as a compatibility path.
+| `_tag` | When | Notable fields |
+|--------|------|----------------|
+| `RunCompleted` | Tick succeeded | Optional **`success`** iff tag stamps `success` |
+| `RunFailed` | Tick failed (non-interrupt) | **`error`** — typed if tag stamps `error`, else `string` |
+| `RunInterrupted` | Tick interrupted | Base timing fields only |
 
----
+Shared base fields: `processId`, `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, `isStartupRun`.
 
-## `RunResource.store` (run facts / state history)
+**Removed:** `ProcessExecutionStore` facet, `@nikscripts/effect-pm/store/ProcessExecution`,
+`process.execution.completed` runtime facet. Do not import execution history from `ProcessStorage`.
+
+### `ProcessStorage` and legacy facets (optional)
+
+`ProcessStorage` composes built-in **RuntimeStorage** facets (queue rows, lifecycle, logs). It does
+**not** replace **`Process.store`**. Use `ProcessStorage.layer` or `layerProcessStore({ filename })`
+when you need facet analytics; use **`Process.store`** + **`Store.Service`** for execution events.
+
+### `RunResource.store` (run facts / state history)
 
 > The legacy **`RunResourceStore`** ProcessStorage facet and `@nikscripts/effect-pm/store/RunResource`
 > subpath are removed. Run persistence goes through the app **Store bridge** only.
@@ -213,7 +202,7 @@ documented as a compatibility path.
 | `(yield* store).recordStateChange(change)` | Append a gate state transition row. |
 | `(yield* store).stateHistory(payload?)` | Read persisted state transitions. |
 
-The gate engine writes automatically when **`StoreScopeBridgeTag`** is in context (via
+The gate engine writes automatically when **`Store.Storage`** is in context (via
 **`Store.layerDefaultMemory`** or a real **`Store.Service`**). Writes use
 **`ProcessStore.catchErrorAndLog`** so storage failures do not fail gated work.
 
