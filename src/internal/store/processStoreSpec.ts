@@ -17,6 +17,8 @@ import {
 } from "../processEvent";
 import { errorOf, successOf } from "../processTagSchemas";
 import * as Store from "../../Store";
+import type { StoreContractValue, StoreShapeDef } from "./contractDef";
+import type { StoreWriteError } from "./errors";
 import type { StoreScopeTag } from "./registration";
 
 /** Row accepted by the built-in process store tap; journal encodes on append. @internal */
@@ -44,7 +46,21 @@ const processEventSchema = (
 export const processStoreEventSchema = processEventSchema;
 
 /** Built-in process store contract — one `event` shape. @internal */
-export type BuiltInProcessContract = ReturnType<typeof makeProcessStoreContract>;
+export type BuiltInProcessContract = StoreContractValue<
+  {
+    readonly event: StoreShapeDef<
+      Schema.Schema<unknown>,
+      typeof processEventReadPayload
+    >;
+  },
+  {
+    readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void, StoreWriteError>;
+    readonly events: (
+      payload?: { readonly limit?: number },
+    ) => Effect.Effect<ReadonlyArray<ProcessStoreEventRow>>;
+    readonly hasPriorExecutions: () => Effect.Effect<boolean>;
+  }
+>;
 
 /** Build the process store contract (optional success / error schemas). @internal */
 export const makeProcessStoreContract = (
@@ -58,7 +74,7 @@ export const makeProcessStoreContract = (
     ({ event }) => {
       const appendRow = event.append as (
         row: ProcessStoreEventRow,
-      ) => Effect.Effect<void>;
+      ) => Effect.Effect<void, StoreWriteError>;
       return {
         record: appendRow,
         events: event.read,

@@ -28,7 +28,7 @@ describe("Process.layer — baked-in default store", () => {
       yield* Effect.gen(function* () {
         yield* DefaultExec;
         yield* TestClock.adjust(Duration.millis(200));
-        const store = yield* Store.withDefault(
+        const store = yield* Store.resolveOrDie(
           DefaultExec.key,
           builtInProcessStoreContract(DefaultExec),
         );

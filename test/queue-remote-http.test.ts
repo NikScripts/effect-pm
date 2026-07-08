@@ -30,7 +30,7 @@ const clientHttp = (port: number) =>
 
 // run `use` against a real engine served over http with the given worker config.
 const withServer = <A, E>(
-  config: QueueLayerConfig<NumberItem, never, never>,
+  config: QueueLayerConfig<NumberItem, void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
 ) => {
   const server = Resource.httpServer([

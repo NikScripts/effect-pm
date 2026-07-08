@@ -77,7 +77,6 @@ Storage options (two planes):
 - **`Store.Service` + `Process.store(tag)`** — execution events (`RunCompleted` / `RunFailed` / `RunInterrupted`) on EventJournal; auto-write on **`Process.layer`** only.
 - **`ProcessStorage.layer`** / **`layerProcessStore`** — legacy facet rows (queue entries, lifecycle, logs) on `RuntimeStorage`.
 - `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
-- `QueueResourceStore` — queue semantic storage facet.
 
 ### Schedule
 

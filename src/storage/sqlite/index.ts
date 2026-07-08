@@ -55,7 +55,6 @@ import type { SqlError } from "effect/unstable/sql/SqlError";
 import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
-import type { QueueResourceStore } from "../../store/queueResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import {
   RuntimeStorageConnectionError,
@@ -161,7 +160,6 @@ export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
   | LogStore
-  | QueueResourceStore
   | ProcessLifecycleStore,
   RuntimeStorageConnectionError | RuntimeStorageSchemaError,
   Scope.Scope
@@ -180,7 +178,6 @@ export const layerProcessStoreOrDie = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
   | LogStore
-  | QueueResourceStore
   | ProcessLifecycleStore,
   never,
   Scope.Scope

@@ -8,7 +8,7 @@
 import { Effect, Schema, Stream } from "effect";
 import type { Scope } from "effect/Scope";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
-import { StoreScopeNotRegistered } from "./errors";
+import { StoreScopeNotRegistered, StoreWriteError } from "./errors";
 import {
   isStoreContractValue,
   materializeContractHandle,
@@ -121,16 +121,45 @@ export const makeScopeHandle = <S extends StoreSpec>(
             // `append` receives DECODED domain values. `Schema.toCodecJson` is Effect's own
             // schema→JSON codec — it serializes rich types (`DateTime`, `Exit`, `Cause`, `Duration`)
             // to a JSON-safe form and decodes them back, which the naive object walk cannot.
-            const wire = yield* Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one);
-            const encoded = yield* encodeJournalPayload(wire);
-            yield* sideEffects.journal.write({
-              event: name,
-              primaryKey: sideEffects.scopeKey,
-              payload: encoded,
-              effect: () => Effect.void,
-            });
+            //
+            // An encode/serialization failure here means the value does not fit the declared shape —
+            // a programming bug, not a runtime condition — so it `orDie`s as a defect (surfacing the
+            // bug) rather than becoming a catchable failure. The `journal.write` below is left as a
+            // normal failure: a journal/IO write error stays in the cause and remains catchable.
+            const wire = yield* Effect.orDie(
+              Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one),
+            );
+            const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
+            // The journal/IO write is the genuine catchable write failure — surface it as
+            // `StoreWriteError` (the encode above already `orDie`s a schema mismatch as a defect).
+            yield* sideEffects.journal
+              .write({
+                event: name,
+                primaryKey: sideEffects.scopeKey,
+                payload: encoded,
+                effect: () => Effect.void,
+              })
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new StoreWriteError({
+                      cause,
+                      detail: `append to scope "${sideEffects.scopeKey}" (event "${name}")`,
+                    }),
+                ),
+              );
             if (sideEffects.maxRows !== undefined) {
-              yield* trimScopeRetention(sideEffects.scopeKey, sideEffects.maxRows);
+              // Retention trim is part of the same write path — a trim IO failure is a write hiccup,
+              // not a bug, so it too becomes a catchable `StoreWriteError` (swallowed by the guard).
+              yield* trimScopeRetention(sideEffects.scopeKey, sideEffects.maxRows).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new StoreWriteError({
+                      cause,
+                      detail: `retention trim on scope "${sideEffects.scopeKey}"`,
+                    }),
+                ),
+              );
             }
           }
         });
@@ -170,22 +199,6 @@ export const materializeStoreHandle = <Input extends StoreSpec | StoreContractVa
     return materializeContractHandle(input, sideEffects) as StoreHandleOf<Input>;
   }
   return makeScopeHandle(input, sideEffects) as StoreHandleOf<Input>;
-};
-
-/** @internal */
-export const acquireFromScopes = <Input extends StoreSpec | StoreContractValue>(
-  scopes: ReadonlyMap<string, ScopeState>,
-  key: string,
-  input: Input,
-): Effect.Effect<StoreHandleOf<Input>, StoreScopeNotRegistered, EventJournal.EventJournal> => {
-  const scope = scopes.get(key);
-  return scope === undefined
-    ? Effect.fail(new StoreScopeNotRegistered({ key }))
-    : EventJournal.EventJournal.pipe(
-        Effect.map((journal) =>
-          materializeStoreHandle(input, { journal, scopeKey: key, maxRows: scope.maxRows }),
-        ),
-      );
 };
 
 /** @internal */

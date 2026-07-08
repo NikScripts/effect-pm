@@ -1,33 +1,49 @@
-# Store cutover — RunResource
+# Store cutover — RunResource (adopt the transform-layer machinery)
 
-Prereq: `store-cutover-00-store-core.md` (**the store is a defaulted service; resolve it as a declared
-dependency; NEVER `serviceOption`**).
+Status: the run-resource store cutover **landed** on `cursor/run-resource-persistence-upgrade-a009` against
+the *earlier* store API (a tap + `StoreScopeBridgeTag` + a `recordWrite`/`catchErrorAndLog` guard). The
+store machinery has since evolved — the transform layer, three-tier stores, honest write typing, and typed
+full-capture are all merged to integration. **This is the adoption handoff.** The queue (`QueueResource`)
+is the worked reference.
 
-## ✅ Done (run-resource branch)
+Read first: `docs/guides/store.md`, `docs/guides/store-migration.md`, `docs/guides/queue-resource.md`.
 
-- Declared dependency: `yield* StoreScopeBridgeTag` once at tap build; **Store bridge only** — no `RunResourceStore` facet writes.
-- Cast-free contract in `runResourceStoreSpec.ts` (mirrors queue).
-- Handle cast removed from tap.
-- `ProcessStore.catchErrorAndLog` → `catchErrorAndLog` from `internal/store/helpers`.
-- Public `Store.layerDefaultMemory`; **`RunResource.layer` / `serve` / `Service.layer` merge it automatically**; override with `Layer.provideMerge(AppStore.layerMemory)`.
-- Layer `RIn` includes `StoreScopeBridgeTag` on `layer` / `serve` / `Service.layer` / `make`.
+## What changed in the store API
+Same as the process cutover — see `store-cutover-process.md` "What changed": `resolve`/`resolveOrDie` (was
+`withStorage`/`withDefault`), the co-located `Store.Storage` service, `StoreWriteError` honest write typing
+(reads = `StoreJournalDecodeError`, encode = defect), the `mapEffects`/`catchWriteErrors` transform layer
+(one guard for all writes, a custom write transformed exactly once), three-tier stores, and the worker-A
+typed-success pattern.
 
-## 🔴 Was wrong — fixed in `internal/runResourceStoreTap.ts`
+## Already done by the store-machinery merge (no action)
+- `BuiltInRunResourceContract.record` **and** `.recordStateChange` aligned to `Effect<void, StoreWriteError>`.
+  Run has **two** writes — `record` on the `fact` shape, `recordStateChange` on the `state` shape.
+- `Store.withDefault` → `Store.resolveOrDie` wherever the run tap resolved it.
 
-~~1. **`serviceOption` on the new store bridge.**~~  
-~~2. **Cast on the handle.**~~
+## Adoption steps (remaining)
+1. **Convert the recorder to the transform layer.** `runResourceStoreTap.ts` routes every write through a
+   `recordWrite` helper (`catchErrorAndLog`). Replace with the transform:
+   ```ts
+   const store = pipe(Store.effects(scopeKey, engineRunContract(tag)), Store.catchWriteErrors);
+   // yield* store.record(fact)   /   yield* store.recordStateChange(change)   // both guarded by the transform
+   ```
+   `catchWriteErrors` guards **both** write shapes uniformly (each carries `StoreWriteError`) — no need for
+   a per-write helper. Provide `Storage` once at the boundary. Template: `buildQueueImpl` in `QueueResource.ts`.
+2. **(Recommended) Three-tier** — lean base + engine write-extension (narrow writes over `fact`/`state`) +
+   consumer read-extension (`RunResource.store(tag)` with analytics over facts + state history), mirroring
+   `QueueResource.store`.
+3. **(Optional) Typed full-capture** — adopt the tag's `success`/`error` schema slots (worker-A pattern) if a
+   run should carry a typed result.
 
-## Keep
+## StoreWriteError — don't over-worry it
+Write-path only, `@internal` on the contract types, swallowed at every call site (the tap guard / the
+transform), never on a run handle / public signature / the wire. See `queue-resource.md`.
 
-- The fact/state event shapes as the store's tagged-union rows (`record`/`events` / `stateHistory`),
-  aligned with queue/process — **`_tag` in PascalCase** (`RunStarted`, `RunCompleted`, `RunFailed`),
-  retiring kebab `type` strings (`run-resource.run.*`). Handle API unchanged.
-- **`error` on `RunFailed` facts** — same presence-driven rule as store-core §5 (typed when tag stamps
-  `error`; `String` fallback when not). Replace today's `cause: string` (`Cause.pretty`) on the store row.
-
-## Note
-
-The `bridge.at` 2-arg signature update was already applied during the Store-tightening merge — no action there.
+## Keep (still valid)
+- PascalCase `_tag` rows (`RunStarted`/`RunCompleted`/`RunFailed`), retiring kebab `type` strings.
+- Presence-driven typed `error` on `RunFailed` facts (replacing `cause: string` / `Cause.pretty`).
+- Baked-in default store on `RunResource.layer`/`serve`/`Service.layer`; override with
+  `Layer.provideMerge(AppStore.layerMemory)`.
 
 ## Verify
-`pnpm typecheck` (both) + the run-resource + run-resource store suites.
+`pnpm run typecheck` (both projects) + the run-resource + run-resource store suites.

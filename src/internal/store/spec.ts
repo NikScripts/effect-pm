@@ -17,7 +17,11 @@ import {
   type NormalizeShape,
   type ShapeNamespaceMembers,
   type StoreContractValue,
+  type StoreShapeInputLeaf,
+  type StoreShapes,
+  type StoreShapeTree,
 } from "./contractDef";
+import type { StoreWriteError } from "./errors";
 import type { MergedSpecForKey as MergedSpecForKeyType } from "./specMerge";
 
 export type { StoreShapes, StoreShapeInput, StoreContractValue } from "./contractDef";
@@ -62,8 +66,27 @@ export type ShapeNamespace<
   N extends { readonly row: Schema.Schema<unknown>; readonly read: Schema.Schema<unknown> },
 > = Simplify<ShapeNamespaceMembers<N["row"], N["read"]>>;
 
-/** Shape keys on a materialized contract handle. @internal */
-type ShapeHandleKeys<C extends StoreContractValue> = keyof C["normalized"] & string;
+/**
+ * Reconstruct a leaf shape's `{ append, read }` members. The leaf's row/read schemas are recovered by
+ * {@link NormalizeShape}'s `infer … extends` (the store's analogue of `Resource.AsMethod`): prop-presence
+ * inference is **F-independent**, so it reduces under a generic row schema (e.g. `queueEvent<F>`) without
+ * `TS2589` — unlike `Extract`/`&`/deep-mapping. This is the exact per-leaf computation the flat handle
+ * already used, so a flat contract's leaf type is unchanged. @internal
+ */
+export type AsShape<T extends StoreShapeInputLeaf> = ShapeNamespace<NormalizeShape<T>>;
+
+/**
+ * The materialized handle's **shape tree** — recurses the contract's shape tree exactly like
+ * `ShapeHandles` in `contractDef`: a leaf → its {@link AsShape} members, a sub-tree → nested handles.
+ * A flat contract is the depth-1 case, so its handle type is byte-identical to before. @internal
+ */
+export type StoreShapeHandleTree<Shapes extends StoreShapes> = {
+  readonly [K in keyof Shapes & string]: Shapes[K] extends StoreShapeInputLeaf
+    ? AsShape<Shapes[K]>
+    : Shapes[K] extends StoreShapeTree
+      ? StoreShapeHandleTree<Shapes[K]>
+      : never;
+};
 
 /** Custom method keys on a materialized contract handle. @internal */
 type CustomHandleKeys<C extends StoreContractValue> = Exclude<
@@ -107,11 +130,9 @@ type CustomMethodOf<
           : C["custom"][K]
   : C["custom"][K];
 
-/** Handle materialized from a {@link StoreContractValue}. @internal */
+/** Handle materialized from a {@link StoreContractValue} — nested shape tree plus top-level custom methods. @internal */
 export type StoreHandleFromContract<C extends StoreContractValue> = Simplify<
-  Simplify<{
-    readonly [K in ShapeHandleKeys<C>]: ShapeNamespace<C["normalized"][K]>;
-  }> & Simplify<{
+  Simplify<StoreShapeHandleTree<C["shapes"]>> & Simplify<{
     readonly [K in CustomHandleKeys<C>]: CustomMethodOf<C, K>;
   }>
 >;
@@ -121,7 +142,7 @@ export type FlatStoreHandleOf<S extends StoreSpec> = Simplify<{
   -readonly [K in keyof S as S[K] extends StoreSpecEntry ? K : never]: S[K] extends StoreAppendEntry<
     infer A
   >
-    ? (payload: A) => Effect.Effect<void>
+    ? (payload: A) => Effect.Effect<void, StoreWriteError>
     : S[K] extends StoreQueryEntry<infer P, infer A>
       ? (payload: P) => Effect.Effect<A>
       : never;
