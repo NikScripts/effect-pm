@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
-import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import { Storage, type StorageApi } from "../src/Store";
+import { StoreWriteError } from "../src/internal/store/errors";
 import { makeRunResourceStoreTap } from "../src/internal/runResourceStoreTap";
 import type { RunGateStatus } from "../src/internal/runResource";
 
@@ -10,12 +10,13 @@ const scopeKey = "@test/failing-store";
 const failingBridge = {
   at: () =>
     Effect.succeed({
-      record: () =>
-        Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-fact" })),
-      recordStateChange: () =>
-        Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-state" })),
+      record: () => Effect.fail(new StoreWriteError({ cause: "blocked-fact" })),
+      recordStateChange: () => Effect.fail(new StoreWriteError({ cause: "blocked-state" })),
       facts: () => Effect.succeed([]),
       stateHistory: () => Effect.succeed([]),
+      started: () => Effect.fail(new StoreWriteError({ cause: "blocked-started" })),
+      completed: () => Effect.fail(new StoreWriteError({ cause: "blocked-completed" })),
+      failed: () => Effect.fail(new StoreWriteError({ cause: "blocked-failed" })),
     }),
   changes: () => Effect.die(new Error("unused in tap tests")),
 } as unknown as StorageApi;
@@ -40,7 +41,7 @@ const currentStatus: RunGateStatus = {
 };
 
 describe("makeRunResourceStoreTap", () => {
-  it.effect("swallows store write failures via catchErrorAndLog", () => {
+  it.effect("swallows StoreWriteError via Store.catchWriteErrors", () => {
     const captured: Array<string> = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
       captured.push(String(message));
@@ -58,9 +59,7 @@ describe("makeRunResourceStoreTap", () => {
         currentStatus,
       );
 
-      expect(captured.some((line) => line.includes("RunResource store write failed"))).toBe(
-        true,
-      );
+      expect(captured.some((line) => line.includes("store write failed"))).toBe(true);
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

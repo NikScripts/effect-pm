@@ -16,7 +16,6 @@ import {
 import type { RunResourceStateChangeReason } from "./store/runResourceStoreSpec";
 import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
 import { Storage } from "../Store";
-import type { StoreScopeNotRegistered } from "./store/errors";
 import type { StoreScopeTag } from "./store/registration";
 import {
   makeRunResourceStoreTap,
@@ -68,6 +67,7 @@ export interface RunResourceConfig<T, A, E> {
   readonly name?: string;
   readonly scopeKey?: string;
   readonly tag?: StoreScopeTag;
+  readonly storeTap?: RunResourceStoreTap;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
 }
@@ -219,7 +219,7 @@ const makeObservedRun =
  */
 export const makeRunGateHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunGateHandle<T, A, E>, StoreScopeNotRegistered, Storage> =>
+): Effect.Effect<RunGateHandle<T, A, E>, never, Storage> =>
   Effect.map(makeRunResourceHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
@@ -231,7 +231,7 @@ export const makeRunGateHandleEffect = <T, A, E>(
  */
 export const makeRunResourceHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunResourceHandle<T, A, E>, StoreScopeNotRegistered, Storage> => {
+): Effect.Effect<RunResourceHandle<T, A, E>, never, Storage> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
   const scopeKey = config.scopeKey ?? resourceId;
@@ -242,7 +242,8 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
-    const storeTap = yield* makeRunResourceStoreTap(resourceId, scopeKey, config.tag);
+    const storeTap =
+      config.storeTap ?? (yield* makeRunResourceStoreTap(resourceId, scopeKey, config.tag));
     const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
       `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,

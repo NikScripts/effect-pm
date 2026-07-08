@@ -66,9 +66,14 @@ import type {
 } from "./Resource";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
-  builtInRunResourceStoreContract,
-  type BuiltInRunResourceContract,
+  makeRunResourceStoreAnalyticsContract,
+  type RunResourceStoreAnalyticsContract,
 } from "./internal/store/runResourceStoreSpec";
+import {
+  buildRunResourceStoreEffects,
+  makeRunResourceStoreTapFromEffects,
+  provideRunResourceStoreEffects,
+} from "./internal/runResourceStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type { StoreScopeTag } from "./internal/store/registration";
 import {
@@ -80,7 +85,6 @@ import {
 import * as internal from "./internal/runResource";
 import { errorSym, successSym } from "./internal/runTagSchemas";
 import * as Store from "./Store";
-import type { StoreScopeNotRegistered } from "./internal/store/errors";
 import {
   runGateStatus,
   runSpec,
@@ -165,7 +169,7 @@ export interface RunResourceServiceDefinition<
   R = never,
 > extends RunResourceTagDefinition<Self, I, A, E> {
   readonly defaultSpec: RunResourceServiceConfig<I, A, E, R> & { readonly name: Name };
-  readonly layer: Layer.Layer<Self | Store.Storage, StoreScopeNotRegistered, R>;
+  readonly layer: Layer.Layer<Self | Store.Storage, never, R>;
   readonly configure: (
     patch: ConfigPatch<
       RunResourceLayerConfig<
@@ -402,19 +406,29 @@ const buildRunImpl = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Effect.Effect<any, StoreScopeNotRegistered, R | Scope.Scope | Store.Storage> =>
+): Effect.Effect<any, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
+    const storageContext = yield* Effect.context<Store.Storage>();
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
     const effectiveConfig = yield* foldConfiguredSpec<
       RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
     >(tag.key, { ...config, name: tag.key });
+    const storeEffects = buildRunResourceStoreEffects(tag.key, tag);
+    const storeTap = yield* makeRunResourceStoreTapFromEffects({
+      resourceId: effectiveConfig.name ?? tag.key,
+      scopeKey: tag.key,
+      tag,
+      storeEffects,
+      provideStorage: provideRunResourceStoreEffects(storageContext),
+    });
     const handle = yield* internal.makeRunResourceHandleEffect({
       name: effectiveConfig.name ?? tag.key,
       scopeKey: tag.key,
       tag,
+      storeTap,
       effect: (input: Schema.Schema.Type<I>) => provideR(effectiveConfig.effect(input)),
       concurrency: effectiveConfig.concurrency,
     });
@@ -541,7 +555,7 @@ export const layer = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, StoreScopeNotRegistered, R> =>
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (impl) => Resource.layer(tag, impl)),
@@ -562,7 +576,7 @@ export function serveRemote<
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, StoreScopeNotRegistered, R>;
+): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemote(
   tag: ResourceTag<any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
@@ -594,7 +608,7 @@ export function serve<
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
-  StoreScopeNotRegistered,
+  never,
   R
 >;
 export function serve(
@@ -677,7 +691,7 @@ export const Service = <Self>() => {
             buildRunImpl(tag as ResourceTag<any, any>, layerConfig),
             (impl) => Resource.layer(tag as ResourceTag<any, any>, impl),
           ),
-        ) as Layer.Layer<Self, StoreScopeNotRegistered, R | Store.Storage>,
+        ) as Layer.Layer<Self, never, R | Store.Storage>,
       ),
       run: makeStaticRun(tag),
     });
@@ -693,12 +707,13 @@ export const Service = <Self>() => {
 export { runTag as Tag };
 
 /**
- * Register this run gate on an app {@link Store.Service} — built-in fact and state-history shapes.
+ * Register this run gate on an app {@link Store.Service} — built-in analytics reads over run facts
+ * and state history (tier 3), with the tag's `success` / `error` wire slots.
  *
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
-  typeof facetStoreRegistration<Tag, BuiltInRunResourceContract>
+  typeof facetStoreRegistration<Tag, RunResourceStoreAnalyticsContract<Tag>>
 >;
 export function store<
   const Tag extends StoreScopeTag,
@@ -706,15 +721,15 @@ export function store<
 >(tag: Tag, extended: Shapes): ReturnType<
   typeof facetStoreRegistration<
     Tag,
-    BuiltInRunResourceContract,
+    RunResourceStoreAnalyticsContract<Tag>,
     Shapes
   >
 >;
 export function store(tag: StoreScopeTag, extended?: StoreShapes) {
-  const builtIn = builtInRunResourceStoreContract(tag);
+  const contract = makeRunResourceStoreAnalyticsContract(tag);
   return extended === undefined
-    ? facetStoreRegistration(tag, builtIn)
-    : facetStoreRegistration(tag, builtIn, extended);
+    ? facetStoreRegistration(tag, contract)
+    : facetStoreRegistration(tag, contract, extended);
 }
 
 /**

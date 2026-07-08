@@ -1,33 +1,26 @@
 /**
- * Persistence tap for the RunResource gate engine — writes to the Store bridge only.
+ * Persistence tap for the RunResource gate engine — writes through the Store transform layer.
  *
- * The engine targets {@link builtInRunResourceStoreContract} via {@link Storage}.
+ * The engine records via {@link engineRunResourceStoreContract} + {@link Store.effects} +
+ * {@link Store.catchWriteErrors} (same pattern as {@link QueueResource} `buildQueueImpl`).
  *
  * @module internal/runResourceStoreTap
  * @internal
  */
 
-import { Effect, Ref } from "effect";
-import { Storage } from "../Store";
-import { catchErrorAndLog } from "./store/helpers";
-import type { StoreScopeNotRegistered } from "./store/errors";
+import { Context, Effect, Ref } from "effect";
+import * as Store from "../Store";
 import { errorOf, successOf } from "./runTagSchemas";
 import type { RunGateStatus } from "./runResource";
+import { makeRunStateChange } from "./runResourceFacts";
 import {
-  makeRunCompletedFact,
-  makeRunFailedFact,
-  makeRunStartedFact,
-  makeRunStateChange,
-} from "./runResourceFacts";
-import {
-  builtInRunResourceStoreContract,
-  type BuiltInRunResourceContract,
+  engineRunResourceStoreContract,
+  type EngineRunResourceStoreContract,
   type RunResourceStateChangeReason,
 } from "./store/runResourceStoreSpec";
-import type { StoreHandleFromContract } from "./store/spec";
 import type { StoreScopeTag } from "./store/registration";
 
-/** Engine-facing store tap — Store bridge only. @internal */
+/** Engine-facing store tap — Storage-free after build. @internal */
 export interface RunResourceStoreTap {
   readonly recordStateChange: (
     reason: RunResourceStateChangeReason,
@@ -53,34 +46,39 @@ export interface RunResourceStoreTap {
   ) => Effect.Effect<void>;
 }
 
-type RunStoreHandle = Pick<
-  StoreHandleFromContract<BuiltInRunResourceContract>,
-  "record" | "recordStateChange"
->;
+/** Guarded store effects for the engine write-extension contract. @internal */
+export type RunResourceStoreEffects = ReturnType<typeof buildRunResourceStoreEffects>;
 
-const makeRecordWrite =
-  (resourceId: string) =>
-  (label: string, effect: Effect.Effect<void, unknown>): Effect.Effect<void> =>
-    effect.pipe(
-      catchErrorAndLog({
-        message: `RunResource store write failed for "${resourceId}" ${label}`,
-        level: "warning",
-        annotations: { resourceId, label },
-      }),
-    );
-
-/** Resolve the store bridge once and build the engine tap. @internal */
-export const makeRunResourceStoreTap = (
-  resourceId: string,
+/** Build {@link Store.catchWriteErrors}(`Store.effects`(…)) for a scope. @internal */
+export const buildRunResourceStoreEffects = (
   scopeKey: string,
   tag?: StoreScopeTag,
-): Effect.Effect<RunResourceStoreTap, StoreScopeNotRegistered, Storage> =>
+) => {
+  const scopeTag = tag ?? { key: scopeKey };
+  return Store.catchWriteErrors(
+    Store.effects(scopeKey, engineRunResourceStoreContract(scopeTag)),
+  );
+};
+
+/** Discharge `Storage` from guarded store effects (Queue `provideStorage` pattern). @internal */
+export const provideRunResourceStoreEffects =
+  (storageContext: Context.Context<Store.Storage>) =>
+  <A>(write: Effect.Effect<A, never, Store.Storage>): Effect.Effect<A> =>
+    Effect.provide(write, storageContext);
+
+/** Build a Storage-free tap from pre-built guarded effects. @internal */
+export const makeRunResourceStoreTapFromEffects = (options: {
+  readonly resourceId: string;
+  readonly scopeKey: string;
+  readonly tag?: StoreScopeTag;
+  readonly storeEffects: RunResourceStoreEffects;
+  readonly provideStorage: <A>(
+    write: Effect.Effect<A, never, Store.Storage>,
+  ) => Effect.Effect<A>;
+}): Effect.Effect<RunResourceStoreTap> =>
   Effect.gen(function* () {
-    const bridge = yield* Storage;
-    const scopeTag = tag ?? { key: scopeKey };
-    const contract = builtInRunResourceStoreContract(scopeTag);
-    const store: RunStoreHandle = yield* bridge.at(scopeKey, contract);
-    const recordWrite = makeRecordWrite(resourceId);
+    const scopeTag = options.tag ?? { key: options.scopeKey };
+    const { storeEffects, provideStorage, resourceId } = options;
     const stateSeqRef = yield* Ref.make(0);
     const factSeqRef = yield* Ref.make(0);
     const persistSuccess = successOf(scopeTag) !== undefined;
@@ -110,7 +108,7 @@ export const makeRunResourceStoreTap = (
           previous,
           current,
         });
-        yield* recordWrite(`state ${reason}`, store.recordStateChange(change));
+        yield* provideStorage(storeEffects.recordStateChange(change));
       });
 
     const recordRunStarted = (
@@ -118,16 +116,17 @@ export const makeRunResourceStoreTap = (
       occurredAt: number,
       concurrency: number,
     ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        const fact = makeRunStartedFact({
-          id: yield* nextFactId(runId, "Started"),
-          resourceId,
-          runId,
-          occurredAt,
-          concurrency,
-        });
-        yield* recordWrite(`fact started ${runId}`, store.record(fact));
-      });
+      Effect.flatMap(nextFactId(runId, "Started"), (id) =>
+        provideStorage(
+          storeEffects.started({
+            id,
+            resourceId,
+            runId,
+            occurredAt,
+            concurrency,
+          }),
+        ),
+      );
 
     const recordRunCompleted = (
       runId: string,
@@ -135,17 +134,18 @@ export const makeRunResourceStoreTap = (
       durationMs: number,
       success?: unknown,
     ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        const fact = makeRunCompletedFact({
-          id: yield* nextFactId(runId, "Completed"),
-          resourceId,
-          runId,
-          occurredAt,
-          durationMs,
-          ...(persistSuccess ? { success } : {}),
-        });
-        yield* recordWrite(`fact completed ${runId}`, store.record(fact));
-      });
+      Effect.flatMap(nextFactId(runId, "Completed"), (id) =>
+        provideStorage(
+          storeEffects.completed({
+            id,
+            resourceId,
+            runId,
+            occurredAt,
+            durationMs,
+            ...(persistSuccess ? { success } : {}),
+          }),
+        ),
+      );
 
     const recordRunFailed = (
       runId: string,
@@ -153,17 +153,18 @@ export const makeRunResourceStoreTap = (
       durationMs: number,
       error: unknown,
     ): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        const fact = makeRunFailedFact({
-          id: yield* nextFactId(runId, "Failed"),
-          resourceId,
-          runId,
-          occurredAt,
-          durationMs,
-          error: persistTypedError ? error : String(error),
-        });
-        yield* recordWrite(`fact failed ${runId}`, store.record(fact));
-      });
+      Effect.flatMap(nextFactId(runId, "Failed"), (id) =>
+        provideStorage(
+          storeEffects.failed({
+            id,
+            resourceId,
+            runId,
+            occurredAt,
+            durationMs,
+            error: persistTypedError ? error : String(error),
+          }),
+        ),
+      );
 
     return {
       recordStateChange,
@@ -173,8 +174,29 @@ export const makeRunResourceStoreTap = (
     };
   });
 
+/** Resolve guarded store effects once and build the engine tap. @internal */
+export const makeRunResourceStoreTap = (
+  resourceId: string,
+  scopeKey: string,
+  tag?: StoreScopeTag,
+): Effect.Effect<RunResourceStoreTap, never, Store.Storage> =>
+  Effect.gen(function* () {
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const storeEffects = buildRunResourceStoreEffects(scopeKey, tag);
+    return yield* makeRunResourceStoreTapFromEffects({
+      resourceId,
+      scopeKey,
+      tag,
+      storeEffects,
+      provideStorage: provideRunResourceStoreEffects(storageContext),
+    });
+  });
+
 /** Mint a stable run id for the current attempt. @internal */
 export const nextRunId = (
   resourceId: string,
   runSeq: number,
 ): string => `${resourceId}/run/${String(runSeq)}`;
+
+/** @internal */
+export type { EngineRunResourceStoreContract };
