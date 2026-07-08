@@ -20,10 +20,6 @@ import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../QueueResource
 import { successOf, errorOf } from "../queueTagSchemas";
 import type { Priority, QueueEvent } from "../queueResource";
 import * as Store from "../../Store";
-import {
-  failureRate,
-  recent,
-} from "./analytics";
 import type {
   SchemaDecoded,
   StoreContractValue,
@@ -93,14 +89,7 @@ export type QueueEventOf<Tag extends QueueStoreTag> = QueueEvent<
 /** Read payload for the built-in `events` query. @internal */
 export const queueEventReadPayload = Schema.Struct({
   limit: Schema.optional(Schema.Number),
-  entryId: Schema.optional(Schema.String),
 });
-
-/** Optional read payload for `events`. @internal */
-export type QueueEventReadPayload = {
-  readonly limit?: number;
-  readonly entryId?: string;
-};
 
 /**
  * The `success` / `error` wire schemas for the store event schema — kept **erased** to `Schema.Top`
@@ -129,7 +118,7 @@ export type BuiltInQueueContract<Tag extends QueueStoreTag> = StoreContractValue
   {
     readonly record: (event: QueueEventOf<Tag>) => Effect.Effect<void, StoreWriteError>;
     readonly events: (
-      payload?: QueueEventReadPayload,
+      payload?: { readonly limit?: number },
     ) => Effect.Effect<ReadonlyArray<QueueEventOf<Tag>>>;
   }
 >;
@@ -150,38 +139,6 @@ export const queueItemSchemaFromTag = <Tag extends QueueStoreTag>(
   return itemSchema as QueueItemSchemaFromTag<Tag>;
 };
 
-/** True when a persisted event references `entryId`. @internal */
-const eventTouchesEntry = (
-  event: { readonly _tag: string } & Record<string, unknown>,
-  entryId: string,
-): boolean => {
-  if ("entry" in event && typeof event.entry === "object" && event.entry !== null &&
-    "entryId" in event.entry && event.entry.entryId === entryId) {
-    return true;
-  }
-  if ("entries" in event && Array.isArray(event.entries)) {
-    return event.entries.some(
-      (entry) =>
-        typeof entry === "object" &&
-        entry !== null &&
-        "entryId" in entry &&
-        entry.entryId === entryId,
-    );
-  }
-  return false;
-};
-
-/** Post-filter `event.read` when `entryId` is present on the read payload. @internal */
-const eventsRead = <Row extends { readonly _tag: string }>(
-  read: (payload?: QueueEventReadPayload) => Effect.Effect<ReadonlyArray<Row>>,
-) =>
-  (payload?: QueueEventReadPayload): Effect.Effect<ReadonlyArray<Row>> =>
-    payload?.entryId === undefined
-      ? read(payload)
-      : Effect.map(read(payload), (events) =>
-          events.filter((event) => eventTouchesEntry(event, payload.entryId!)),
-        );
-
 /**
  * Build the queue store contract from an item schema directly (no tag) — used by the engine, which
  * has the item schema but not always a tag (`QueueResource.make`). @internal
@@ -189,20 +146,23 @@ const eventsRead = <Row extends { readonly _tag: string }>(
 export const makeQueueStoreContract = <Item extends Schema.Top>(
   itemSchema: Item,
   wire?: QueueWireSchemas,
-) => {
-  const eventSchema = buildQueueEvent(
-    itemSchema,
-    wire?.success ?? Schema.Void,
-    wire?.error ?? Schema.Unknown,
-  );
-  type EventRow = typeof eventSchema.Type;
-  return Store.contract(
+) =>
+  Store.contract(
     {
-      event: Store.shape(eventSchema, queueEventReadPayload),
+      event: Store.shape(
+        buildQueueEvent(
+          itemSchema,
+          wire?.success ?? Schema.Void,
+          wire?.error ?? Schema.Unknown,
+        ),
+        queueEventReadPayload,
+      ),
     },
-    (handles) => queueTier1Methods<EventRow>(handles),
+    ({ event }) => ({
+      record: event.append,
+      events: event.read,
+    }),
   );
-};
 
 /**
  * Built-in queue store contract for a tag. Delegates to {@link makeQueueStoreContract} with the
@@ -252,29 +212,6 @@ export type QueueStoreCompleted<Tag extends QueueStoreTag> = Omit<
   "success"
 > & { readonly success: QueueSuccessOf<Tag> };
 
-/** Entry id on a decoded queue store event, when present. @internal */
-const queueStoreEventEntryId = <Tag extends QueueStoreTag>(
-  event: QueueStoreEvent<Tag>,
-): string | undefined => ("entry" in event ? event.entry.entryId : undefined);
-
-/** The engine write-extension contract type for a tag. @internal */
-export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
-  typeof engineQueueStoreContract<Tag>
->;
-
-/** Tier-1 custom methods over the `event` shape. @internal */
-const queueTier1Methods = <Row extends { readonly _tag: string }>({
-  event,
-}: {
-  readonly event: {
-    readonly append: (row: Row | ReadonlyArray<Row>) => Effect.Effect<void, StoreWriteError>;
-    readonly read: (payload?: QueueEventReadPayload) => Effect.Effect<ReadonlyArray<Row>>;
-  };
-}) => ({
-  record: event.append,
-  events: eventsRead(event.read),
-});
-
 /**
  * Build the engine **write-extension** contract from an item schema (no tag) — the lean base
  * (`event` shape → `record` + `events`) {@link Store.extend}ed with narrow, semantic writes, each
@@ -292,7 +229,12 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
     wire?.success ?? Schema.Void,
     wire?.error ?? Schema.Unknown,
   );
+  // The decoded entry exactly as `event.append` expects it — the SAME `queueEntry(itemSchema)` the
+  // event schema is built from (so no interface/schema drift under a generic item).
   type Entry = ReturnType<typeof queueEntry<Item>>["Type"];
+  // The worker success / failure-cause types read straight off the built (erased) event schema. The
+  // engine passes the concrete typed value through `QueueStoreWriter<T, E, A>` at the call site, which
+  // is assignable to this `unknown` success (the typed `A` is layered on the decoded read side).
   type SuccessValue = Extract<
     typeof eventSchema.Type,
     { readonly _tag: "Completed" }
@@ -305,7 +247,10 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
     {
       event: Store.shape(eventSchema, queueEventReadPayload),
     },
-    (handles) => queueTier1Methods<typeof eventSchema.Type>(handles),
+    ({ event }) => ({
+      record: event.append,
+      events: event.read,
+    }),
   );
   return Store.extend(
     ({ event }) => ({
@@ -338,6 +283,11 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
  */
 export const engineQueueStoreContract = <const Tag extends QueueStoreTag>(tag: Tag) =>
   makeEngineQueueStoreContract(queueItemSchemaFromTag(tag), queueWireFromTag(tag));
+
+/** The engine write-extension contract type for a tag. @internal */
+export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
+  typeof engineQueueStoreContract<Tag>
+>;
 
 // ============================================================================
 // Tier 3 — advanced analytics read-extension (pure derivations over `event.read`)
@@ -400,6 +350,23 @@ export type QueueStoreReads<Tag extends QueueStoreTag> = {
   >;
 };
 
+const eventEntryId = <Tag extends QueueStoreTag>(
+  event: QueueStoreEvent<Tag>,
+): string | undefined => ("entry" in event ? event.entry.entryId : undefined);
+
+const eventTouchesEntry = <Tag extends QueueStoreTag>(
+  event: QueueStoreEvent<Tag>,
+  entryId: string,
+): boolean => {
+  if ("entry" in event) {
+    return event.entry.entryId === entryId;
+  }
+  if ("entries" in event) {
+    return event.entries.some((entry) => entry.entryId === entryId);
+  }
+  return false;
+};
+
 const eventEnqueuedAtMillis = <Tag extends QueueStoreTag>(
   event: QueueStoreEvent<Tag>,
 ): number | undefined => {
@@ -417,166 +384,6 @@ const eventEnqueuedAtMillis = <Tag extends QueueStoreTag>(
 const percentile = (sortedMs: ReadonlyArray<number>, p: number): number =>
   sortedMs[Math.min(sortedMs.length - 1, Math.floor((p / 100) * sortedMs.length))] ?? 0;
 
-/** Analytics derivations over a tag's event log. @internal */
-const queueAnalyticsMethods = <Tag extends QueueStoreTag>(options: {
-  readonly event: {
-    readonly read: (payload?: QueueEventReadPayload) => Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>>;
-  };
-  readonly storeClass: { readonly scopeKey: string; readonly contract: StoreContractValue };
-  readonly isFailed: (event: QueueStoreEvent<Tag>) => event is QueueStoreFailed<Tag>;
-  readonly isCompleted: (event: QueueStoreEvent<Tag>) => event is QueueStoreCompleted<Tag>;
-  readonly isRetryExhausted: (
-    event: QueueStoreEvent<Tag>,
-  ) => event is Extract<QueueStoreEvent<Tag>, { readonly _tag: "RetryExhausted" }>;
-  readonly isTerminal: (event: QueueStoreEvent<Tag>) => boolean;
-}) => {
-  const readAll = (): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> => options.event.read();
-
-  return {
-    failures: (): Effect.Effect<ReadonlyArray<QueueStoreFailed<Tag>>> =>
-      Effect.map(readAll(), (events) => events.filter(options.isFailed)),
-    deadLettered: (): Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>> =>
-      Effect.map(readAll(), (events) =>
-        events.filter(options.isRetryExhausted).map((e) => e.entry),
-      ),
-    inFlight: (): Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>> =>
-      Effect.map(readAll(), (events) => {
-        const terminated = new Set<string>();
-        for (const e of events) {
-          if (options.isTerminal(e)) {
-            const id = queueStoreEventEntryId(e);
-            if (id !== undefined) terminated.add(id);
-          }
-        }
-        const out: Array<QueueStoreEntry<Tag>> = [];
-        const seen = new Set<string>();
-        for (const e of events) {
-          if (
-            e._tag === "Started" &&
-            !terminated.has(e.entry.entryId) &&
-            !seen.has(e.entry.entryId)
-          ) {
-            seen.add(e.entry.entryId);
-            out.push(e.entry);
-          }
-        }
-        return out;
-      }),
-    history: (entryId: string): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> =>
-      Effect.map(options.event.read(), (events) =>
-        events.filter((e) => eventTouchesEntry(e, entryId)),
-      ),
-    lastFailure: (): Effect.Effect<Option.Option<QueueStoreFailed<Tag>>> =>
-      Effect.map(readAll(), (events) => {
-        const failures = events.filter(options.isFailed);
-        return failures.length === 0
-          ? Option.none()
-          : Option.some(failures[failures.length - 1]!);
-      }),
-    slowest: (n: number): Effect.Effect<ReadonlyArray<QueueStoreCompleted<Tag>>> =>
-      Effect.map(readAll(), (events) =>
-        [...events.filter(options.isCompleted)]
-          .sort((a, b) => Duration.toMillis(b.elapsed) - Duration.toMillis(a.elapsed))
-          .slice(0, Math.max(0, n)),
-      ),
-    recent: (n: number): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> =>
-      recent(readAll, n),
-    since: (
-      when: DateTime.DateTime,
-    ): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> =>
-      Effect.map(readAll(), (events) => {
-        const cutoff = DateTime.toEpochMillis(when);
-        return events.filter((e) => {
-          const at = eventEnqueuedAtMillis(e);
-          return at !== undefined && at >= cutoff;
-        });
-      }),
-    stats: (): Effect.Effect<QueueStoreStats> =>
-      Effect.map(readAll(), (events) => {
-        let enqueued = 0;
-        let started = 0;
-        let completed = 0;
-        let failed = 0;
-        let retried = 0;
-        let deadLettered = 0;
-        for (const e of events) {
-          switch (e._tag) {
-            case "Enqueued":
-              enqueued += e.entries.length;
-              break;
-            case "Started":
-              started += 1;
-              break;
-            case "Completed":
-              completed += 1;
-              break;
-            case "Failed":
-              failed += 1;
-              break;
-            case "RetryScheduled":
-              retried += 1;
-              break;
-            case "RetryExhausted":
-              deadLettered += 1;
-              break;
-            default:
-              break;
-          }
-        }
-        return { enqueued, started, completed, failed, retried, deadLettered };
-      }),
-    failureRate: (): Effect.Effect<number> =>
-      failureRate(
-        readAll,
-        (e): e is QueueStoreCompleted<Tag> => e._tag === "Completed",
-        options.isFailed,
-      ),
-    latency: (): Effect.Effect<QueueStoreLatency> =>
-      Effect.map(readAll(), (events) => {
-        const durationsMs: Array<number> = [];
-        for (const e of events) {
-          if (e._tag === "Completed") {
-            durationsMs.push(Duration.toMillis(e.elapsed));
-          }
-        }
-        if (durationsMs.length === 0) {
-          return {
-            mean: Duration.zero,
-            p50: Duration.zero,
-            p95: Duration.zero,
-            p99: Duration.zero,
-            max: Duration.zero,
-          };
-        }
-        const sorted = [...durationsMs].sort((a, b) => a - b);
-        const mean = durationsMs.reduce((a, b) => a + b, 0) / durationsMs.length;
-        return {
-          mean: Duration.millis(mean),
-          p50: Duration.millis(percentile(sorted, 50)),
-          p95: Duration.millis(percentile(sorted, 95)),
-          p99: Duration.millis(percentile(sorted, 99)),
-          max: Duration.millis(sorted[sorted.length - 1]!),
-        };
-      }),
-    changes: (): Stream.Stream<
-      QueueStoreEvent<Tag>,
-      StoreJournalDecodeError,
-      Store.Storage
-    > =>
-      Stream.unwrap(
-        Store.changes(
-          options.storeClass,
-          (shapes) => (shapes as { readonly event: (typeof shapes)["event"] }).event,
-        ),
-      ) as Stream.Stream<QueueStoreEvent<Tag>, StoreJournalDecodeError, Store.Storage>,
-  };
-};
-
-/** The read-extended analytics contract type for a tag. @internal */
-export type QueueStoreAnalyticsContract<Tag extends QueueStoreTag> = ReturnType<
-  typeof makeQueueStoreAnalyticsContract<Tag>
->;
-
 /**
  * Build the **read-extended** analytics contract for a queue tag — the lean base (`event` shape →
  * `record` + `events`) {@link Store.extend}ed with the advanced analytics reads
@@ -586,9 +393,7 @@ export type QueueStoreAnalyticsContract<Tag extends QueueStoreTag> = ReturnType<
  * `changes()` resolves the live journal stream via {@link Store.changes} on the base contract
  * (whose `event` shape it selects). @internal
  */
-export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>(
-  tag: Tag,
-) => {
+export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>(tag: Tag) => {
   const base = builtInQueueStoreContract(tag);
   const storeClass = { scopeKey: tag.key, contract: base };
   const isFailed = (event: QueueStoreEvent<Tag>): event is QueueStoreFailed<Tag> =>
@@ -603,15 +408,150 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
     event._tag === "Completed" || event._tag === "Failed";
 
   return Store.extend(
-    (handles) =>
-      queueAnalyticsMethods<Tag>({
-        event: handles.event,
-        storeClass,
-        isFailed,
-        isCompleted,
-        isRetryExhausted,
-        isTerminal,
-      }),
+    ({ event }) => ({
+      failures: (): Effect.Effect<ReadonlyArray<QueueStoreFailed<Tag>>> =>
+        Effect.map(event.read(), (events) => events.filter(isFailed)),
+      deadLettered: (): Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          events.filter(isRetryExhausted).map((e) => e.entry),
+        ),
+      inFlight: (): Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>> =>
+        Effect.map(event.read(), (events) => {
+          const terminated = new Set<string>();
+          for (const e of events) {
+            if (isTerminal(e)) {
+              const id = eventEntryId(e);
+              if (id !== undefined) terminated.add(id);
+            }
+          }
+          const out: Array<QueueStoreEntry<Tag>> = [];
+          const seen = new Set<string>();
+          for (const e of events) {
+            if (
+              e._tag === "Started" &&
+              !terminated.has(e.entry.entryId) &&
+              !seen.has(e.entry.entryId)
+            ) {
+              seen.add(e.entry.entryId);
+              out.push(e.entry);
+            }
+          }
+          return out;
+        }),
+      history: (entryId: string): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          events.filter((e) => eventTouchesEntry(e, entryId)),
+        ),
+      lastFailure: (): Effect.Effect<Option.Option<QueueStoreFailed<Tag>>> =>
+        Effect.map(event.read(), (events) => {
+          const failures = events.filter(isFailed);
+          return failures.length === 0
+            ? Option.none()
+            : Option.some(failures[failures.length - 1]!);
+        }),
+      slowest: (n: number): Effect.Effect<ReadonlyArray<QueueStoreCompleted<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          [...events.filter(isCompleted)]
+            .sort((a, b) => Duration.toMillis(b.elapsed) - Duration.toMillis(a.elapsed))
+            .slice(0, Math.max(0, n)),
+        ),
+      recent: (n: number): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) =>
+          n <= 0 ? [] : events.slice(Math.max(0, events.length - n)),
+        ),
+      since: (
+        when: DateTime.DateTime,
+      ): Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>> =>
+        Effect.map(event.read(), (events) => {
+          const cutoff = DateTime.toEpochMillis(when);
+          return events.filter((e) => {
+            const at = eventEnqueuedAtMillis(e);
+            return at !== undefined && at >= cutoff;
+          });
+        }),
+      stats: (): Effect.Effect<QueueStoreStats> =>
+        Effect.map(event.read(), (events) => {
+          let enqueued = 0;
+          let started = 0;
+          let completed = 0;
+          let failed = 0;
+          let retried = 0;
+          let deadLettered = 0;
+          for (const e of events) {
+            switch (e._tag) {
+              case "Enqueued":
+                enqueued += e.entries.length;
+                break;
+              case "Started":
+                started += 1;
+                break;
+              case "Completed":
+                completed += 1;
+                break;
+              case "Failed":
+                failed += 1;
+                break;
+              case "RetryScheduled":
+                retried += 1;
+                break;
+              case "RetryExhausted":
+                deadLettered += 1;
+                break;
+              default:
+                break;
+            }
+          }
+          return { enqueued, started, completed, failed, retried, deadLettered };
+        }),
+      failureRate: (): Effect.Effect<number> =>
+        Effect.map(event.read(), (events) => {
+          let completed = 0;
+          let failed = 0;
+          for (const e of events) {
+            if (e._tag === "Completed") completed += 1;
+            else if (e._tag === "Failed") failed += 1;
+          }
+          const total = completed + failed;
+          return total === 0 ? 0 : failed / total;
+        }),
+      latency: (): Effect.Effect<QueueStoreLatency> =>
+        Effect.map(event.read(), (events) => {
+          const durationsMs: Array<number> = [];
+          for (const e of events) {
+            if (e._tag === "Completed") {
+              durationsMs.push(Duration.toMillis(e.elapsed));
+            }
+          }
+          if (durationsMs.length === 0) {
+            return {
+              mean: Duration.zero,
+              p50: Duration.zero,
+              p95: Duration.zero,
+              p99: Duration.zero,
+              max: Duration.zero,
+            };
+          }
+          const sorted = [...durationsMs].sort((a, b) => a - b);
+          const mean = durationsMs.reduce((a, b) => a + b, 0) / durationsMs.length;
+          return {
+            mean: Duration.millis(mean),
+            p50: Duration.millis(percentile(sorted, 50)),
+            p95: Duration.millis(percentile(sorted, 95)),
+            p99: Duration.millis(percentile(sorted, 99)),
+            max: Duration.millis(sorted[sorted.length - 1]!),
+          };
+        }),
+      changes: (): Stream.Stream<
+        QueueStoreEvent<Tag>,
+        StoreJournalDecodeError,
+        Store.Storage
+      > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
+    }),
     base,
   );
 };
+
+/** The read-extended analytics contract type for a tag. @internal */
+export type QueueStoreAnalyticsContract<Tag extends QueueStoreTag> = ReturnType<
+  typeof makeQueueStoreAnalyticsContract<Tag>
+>;

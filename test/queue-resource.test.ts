@@ -37,10 +37,6 @@ const QueueResource = {
   Service: engineQueueService,
 };
 import * as Resource from "../src/Resource";
-import { layerDefaultMemory } from "../src/Store";
-
-const withDefaultStore = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.provide(effect, layerDefaultMemory);
 
 const fastConfig = { concurrency: 2 };
 
@@ -94,7 +90,7 @@ describe("QueueResource.make — basic processing", () => {
       const final = yield* Ref.get(results);
       expect(final).toHaveLength(3);
       expect(final.sort()).toEqual([1, 2, 3]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("emits lifecycle events on the `events` stream", () =>
@@ -114,7 +110,7 @@ describe("QueueResource.make — basic processing", () => {
       // one successful item → Started, then Completed (the worker outcome, recorded once)
       expect(tags).toContain("Started");
       expect(tags).toContain("Completed");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("emits a Failed event when an item fails", () =>
@@ -133,7 +129,7 @@ describe("QueueResource.make — basic processing", () => {
       // a failure with no retry hook is terminal → Started, then Failed (the worker outcome, once)
       expect(tags).toContain("Started");
       expect(tags).toContain("Failed");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("emits queue-level events (Enqueued, Drained)", () =>
@@ -153,7 +149,7 @@ describe("QueueResource.make — basic processing", () => {
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
       expect(tags).toContain("Enqueued");
       expect(tags).toContain("Drained");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("emits a Cleared event when the queue is cleared", () =>
@@ -175,7 +171,7 @@ describe("QueueResource.make — basic processing", () => {
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
       expect(tags).toContain("Enqueued");
       expect(tags).toContain("Cleared");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("reflects pending sizes + paused on the status stream", () =>
@@ -197,7 +193,7 @@ describe("QueueResource.make — basic processing", () => {
       const last = snapshots[snapshots.length - 1];
       expect(last?.sizes.normal).toBe(2);
       expect(last?.paused).toBe(true);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("emits windowed metrics on the metrics stream", () =>
@@ -227,7 +223,7 @@ describe("QueueResource.make — basic processing", () => {
       expect(m?.avgWaitMillis.high).toBeUndefined();
       expect(m?.avgExecutionMillis).toBeGreaterThanOrEqual(0);
       expect(m?.avgTotalMillis).toBeGreaterThanOrEqual(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("re-enqueues an entry taken straight off the events stream", () =>
@@ -262,7 +258,7 @@ describe("QueueResource.make — basic processing", () => {
       const final = yield* Ref.get(seen);
       expect(final).toEqual([7, 7]);
       expect(event?.entry.item).toBe(7);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("auto re-enqueues a failing item up to `attempts` (no hook)", () =>
@@ -290,7 +286,7 @@ describe("QueueResource.make — basic processing", () => {
       expect(tags.filter((t) => t === "RetryScheduled").length).toBe(2);
       expect(tags).toContain("RetryExhausted");
       expect(yield* Ref.get(tries)).toBe(3);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("Failed events carry the typed worker error (catchTag on the cause)", () =>
@@ -325,7 +321,7 @@ describe("QueueResource.make — basic processing", () => {
       yield* queue.add(42);
       yield* Fiber.join(fiber);
       expect(yield* Ref.get(caught)).toEqual([42]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("treats a single string as one item, not an iterable batch", () =>
@@ -341,7 +337,7 @@ describe("QueueResource.make — basic processing", () => {
       yield* waitUntilCompleted(queue, 1);
       const final = yield* Ref.get(results);
       expect(final).toEqual(["hello"]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("processes prioritized items before normal", () =>
@@ -360,7 +356,7 @@ describe("QueueResource.make — basic processing", () => {
       const highIdx = final.indexOf("high-1");
       const norm2Idx = final.indexOf("normal-2");
       expect(highIdx).toBeLessThan(norm2Idx);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("processes items in priority order (high > normal > low)", () =>
@@ -382,7 +378,7 @@ describe("QueueResource.make — basic processing", () => {
       expect(final[0]).toBe("high-1");
       expect(final[1]).toBe("normal-1");
       expect(final[2]).toBe("low-1");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -398,7 +394,7 @@ describe("QueueResource.make — size and status", () => {
       yield* Effect.sleep(Duration.millis(10));
       const s = yield* queue.size;
       expect(s).toBeGreaterThan(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("completed counts processed items", () =>
@@ -412,7 +408,7 @@ describe("QueueResource.make — size and status", () => {
       yield* waitUntilCompleted(queue, 3);
       const c = yield* queue.completed;
       expect(c).toBe(3);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("clear empties queues and resets counter", () =>
@@ -428,7 +424,7 @@ describe("QueueResource.make — size and status", () => {
       expect(cleared).toBeGreaterThan(0);
       const c = yield* queue.completed;
       expect(c).toBe(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("release exports pending entries and releases dedupe keys", () =>
@@ -455,7 +451,7 @@ describe("QueueResource.make — size and status", () => {
       yield* queue.resume;
       yield* waitUntilCompleted(queue, 1);
       expect(yield* Ref.get(processed)).toEqual(["a"]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("releaseEncoded requires itemSchema", () =>
@@ -472,7 +468,7 @@ describe("QueueResource.make — size and status", () => {
 
       expect(error).toBeInstanceOf(QueueMissingItemSchemaError);
       expect(yield* queue.size).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("drop and deadLetter remove matching pending entries", () =>
@@ -493,7 +489,7 @@ describe("QueueResource.make — size and status", () => {
       expect(droppedEntries.map((entry) => entry.key)).toEqual(["drop-me"]);
       expect(deadLetteredEntries.map((entry) => entry.key)).toEqual(["dead-letter-me"]);
       expect(yield* queue.size).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -522,7 +518,7 @@ describe("QueueResource.make — pause/resume", () => {
       expect(whilePaused).toBe(0);
       expect(afterPause).toBe(2);
       expect(afterResume).toBe(4);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -543,7 +539,7 @@ describe("QueueResource.make — dedup (key)", () => {
       const results = yield* Ref.get(processed);
       expect(results).toHaveLength(2);
       expect(results.sort()).toEqual(["a", "b"]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("releases keys for pending items removed by clear", () =>
@@ -568,7 +564,7 @@ describe("QueueResource.make — dedup (key)", () => {
 
       const results = yield* Ref.get(processed);
       expect(results).toEqual(["a"]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -582,7 +578,7 @@ describe("QueueResource.layer + Tag", () => {
         never
       >()("@test/TestQueue");
       expect(tag.key).toBe("@test/TestQueue");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("layer produces a working queue via make", () =>
@@ -596,7 +592,7 @@ describe("QueueResource.layer + Tag", () => {
       yield* waitUntilCompleted(queue, 1);
       const c = yield* queue.completed;
       expect(c).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("positional make matches config object form", () =>
@@ -608,7 +604,7 @@ describe("QueueResource.layer + Tag", () => {
       yield* queue.add([7]);
       yield* waitUntilCompleted(queue, 1);
       expect(yield* queue.completed).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -652,7 +648,7 @@ describe("QueueResource.make — events", () => {
       expect(normal?.items).toEqual([1, 2]);
       expect(normal?.attempts).toEqual([1, 1]);
       expect(high?.items).toEqual([3]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("start is idempotent (manual autoStart)", () =>
@@ -670,7 +666,7 @@ describe("QueueResource.make — events", () => {
       yield* waitUntilCompleted(queue, 2);
       yield* Effect.sleep(Duration.millis(20));
       expect([...(yield* Ref.get(handled))].sort()).toEqual([1, 2]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -694,7 +690,7 @@ describe("QueueResource.make — self-enqueue guard", () => {
       expect(result).toEqual(["hello"]);
       const c = yield* queue.completed;
       expect(c).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("allows enqueue of different items from effect", () =>
@@ -717,7 +713,7 @@ describe("QueueResource.make — self-enqueue guard", () => {
       expect(result).toContain("parent");
       expect(result).toContain("child-1");
       expect(result).toContain("child-2");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -740,7 +736,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* waitUntilCompleted(queue, 2);
       const after = yield* Ref.get(results);
       expect(after.sort()).toEqual([1, 2]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("start is idempotent", () =>
@@ -758,7 +754,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* waitUntilCompleted(queue, 1);
       const final = yield* Ref.get(results);
       expect(final).toEqual([1]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("start after shutdown does not process queued items", () =>
@@ -776,7 +772,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* Effect.sleep(Duration.millis(30));
       const r = yield* Ref.get(results);
       expect(r).toHaveLength(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("shutdown (drain, default) processes queued items, then phase → off", () =>
@@ -810,7 +806,7 @@ describe("QueueResource.make — autoStart", () => {
       // adds after shutdown are rejected (queue is off)
       yield* queue.add([5]);
       expect(yield* queue.size).toBe(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("shutdown (finishActive) discards queued items, then phase → off", () =>
@@ -844,7 +840,7 @@ describe("QueueResource.make — autoStart", () => {
       expect([...(yield* Ref.get(dropped))].sort((a, b) => a - b)).toEqual([
         1, 2, 3,
       ]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("shutdown is idempotent and reports the draining phase", () =>
@@ -867,7 +863,7 @@ describe("QueueResource.make — autoStart", () => {
       while ((yield* queue.statusNow).phase !== "off") {
         yield* Effect.sleep(Duration.millis(5));
       }
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("Drained event fires only after queues drain empty (manual start)", () =>
@@ -892,7 +888,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* waitUntilCount(drains, 1);
       expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
       void queue;
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("no Drained event with default autoStart and no work", () =>
@@ -907,7 +903,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* Effect.sleep(Duration.millis(120));
       expect(yield* Ref.get(drains)).toBe(0);
       void queue;
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("Drained event fires only after processed work drains empty (default autoStart)", () =>
@@ -930,7 +926,7 @@ describe("QueueResource.make — autoStart", () => {
 
       expect(yield* Ref.get(handled)).toEqual([1]);
       expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   // (The old "does not invoke onDrained before the queue is yielded" test is dropped: with
@@ -990,7 +986,7 @@ describe("QueueResource.make — autoStart", () => {
         expect(yield* Ref.get(handled)).toEqual([1]);
         expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
       }).pipe(Effect.provide(DrainedQueue.layer));
-    }).pipe(withDefaultStore),
+    }),
   );
 
   it.live("QueueResource.layer with Tag does not cold-start onDrained", () =>
@@ -1039,7 +1035,7 @@ describe("QueueResource.make — autoStart", () => {
       expect(yield* queue.clear).toBe(1);
       yield* waitUntilCount(drains, 1);
       expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -1063,7 +1059,7 @@ describe("QueueResource.make — itemSchema", () => {
       );
       expect(error).toBeInstanceOf(QueueItemValidationError);
       expect(yield* queue.size).toBe(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("fails batch enqueue atomically when any item is invalid", () =>
@@ -1082,7 +1078,7 @@ describe("QueueResource.make — itemSchema", () => {
       );
       expect(error).toBeInstanceOf(QueueBatchValidationError);
       expect(yield* queue.size).toBe(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it("itemSchema uses the queue id for codec metadata (defaults to v1)", () => {
@@ -1116,7 +1112,7 @@ describe("QueueResource.make — itemSchema", () => {
       const elapsed = (yield* Clock.currentTimeMillis) - t0;
       expect(yield* Ref.get(starts)).toBe(3);
       expect(elapsed).toBeGreaterThanOrEqual(140);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("emits RateLimitExceeded events", () =>
@@ -1141,7 +1137,7 @@ describe("QueueResource.make — itemSchema", () => {
       yield* Effect.sleep(Duration.millis(20));
 
       expect(yield* Ref.get(hits)).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("releaseEncoded exports JSON payloads for schema-backed queues", () =>
@@ -1162,7 +1158,7 @@ describe("QueueResource.make — itemSchema", () => {
       expect(released[0]?.releaseId).toBe("encoded-release-1");
       expect(released[0]?.item.id).toBe("test-release-encoded/item@v1");
       expect(yield* queue.size).toBe(0);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -1195,7 +1191,7 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
       // items are offered, so a fast worker can race ahead) — assert the multiset.
       expect(final.filter((s) => s === "+2")).toHaveLength(1);
       expect(final.filter((s) => s === "done")).toHaveLength(2);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("catches the typed worker error nested under a Failed handler", () =>
@@ -1225,7 +1221,7 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
       yield* queue.add(99);
       yield* Fiber.join(fiber);
       expect(yield* Ref.get(caught)).toEqual([99]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -1264,7 +1260,7 @@ describe("QueueResource.make — enqueue (entry re-injection)", () => {
       yield* queue.resume;
       yield* waitUntilCompleted(queue, 2);
       expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([10, 20]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -1293,7 +1289,7 @@ describe("QueueResource.make — onFailure disposition", () => {
       expect(tags).toContain("Dropped");
       expect(tags).not.toContain("RetryScheduled");
       expect(yield* Ref.get(tries)).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("'deadLetter' emits DeadLettered and receives the typed cause", () =>
@@ -1324,7 +1320,7 @@ describe("QueueResource.make — onFailure disposition", () => {
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
       expect(tags).toContain("DeadLettered");
       expect(yield* Ref.get(seenCause)).toEqual([42]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("'retry' re-enqueues even when attempts is unset", () =>
@@ -1352,7 +1348,7 @@ describe("QueueResource.make — onFailure disposition", () => {
       expect(tags).toContain("RetryScheduled");
       expect(tags).toContain("Completed");
       expect(yield* Ref.get(tries)).toBe(2);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("'default' falls back to the queue's auto re-enqueue policy", () =>
@@ -1379,7 +1375,7 @@ describe("QueueResource.make — onFailure disposition", () => {
       expect(tags.filter((t) => t === "RetryScheduled").length).toBe(1);
       expect(tags).toContain("RetryExhausted");
       expect(yield* Ref.get(tries)).toBe(2);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -1415,7 +1411,7 @@ describe("QueueResource.make — OTEL metrics", () => {
           m.attributes?.priority === "normal",
       );
       expect(wait?.state).toMatchObject({ count: 3 });
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });
 
@@ -1443,7 +1439,7 @@ describe("QueueResource.make — log capture (.logs)", () => {
       expect(entry?.level).toBe("Info"); // level preserved
       expect(entry?.annotations.queueId).toBe("test-logs-worker");
       expect(entry?.annotations["queue.entryId"]).toBeDefined(); // attributed to the job
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("captures the engine layer's own logs (shutdown)", () =>
@@ -1468,7 +1464,7 @@ describe("QueueResource.make — log capture (.logs)", () => {
       expect(entry?.message).toContain("shutting down");
       expect(entry?.level).toBe("Info");
       expect(entry?.annotations.queueId).toBe("test-logs-engine");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("the level threshold filters out lower levels", () =>
@@ -1491,7 +1487,7 @@ describe("QueueResource.make — log capture (.logs)", () => {
       const entry = Array.from(yield* Fiber.join(collected))[0];
       expect(entry?.level).toBe("Warn");
       expect(entry?.message).toContain("warn 1");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("logs is an empty stream when capture is off (default)", () =>
@@ -1507,7 +1503,7 @@ describe("QueueResource.make — log capture (.logs)", () => {
       yield* waitUntilCompleted(queue, 1);
       // Stream.empty completes immediately with no element
       expect(Option.isNone(yield* Fiber.join(head))).toBe(true);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("a late subscriber replays the recent log tail, then goes live", () =>
@@ -1527,6 +1523,6 @@ describe("QueueResource.make — log capture (.logs)", () => {
         Stream.filter(queue.logs, (e) => e.message.includes("done 1")),
       );
       expect(Option.isSome(replayed)).toBe(true);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });

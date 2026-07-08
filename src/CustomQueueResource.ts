@@ -11,11 +11,10 @@
  *
  * @module CustomQueueResource
  */
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
-import * as Store from "./Store";
 import type {
   HandlerContextOf,
   NodeKey,
@@ -408,11 +407,6 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
       itemSchemaFromCustomQueueAdd(addMethod.payload);
     const context = yield* Effect.context<R | RR>();
-    const storageContext = yield* Effect.context<Store.Storage>();
-    const runtimeContext = Context.merge(context, storageContext);
-    const provideRuntime = <Out, Err>(
-      effect: Effect.Effect<Out, Err, R | RR | Store.Storage>,
-    ): Effect.Effect<Out, Err> => Effect.provide(effect, runtimeContext);
     const effectiveConfig = yield* foldConfiguredSpec<
       CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
@@ -421,7 +415,9 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       ...effectiveConfig,
       itemSchema,
     } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
-    const provideR = provideRuntime;
+    const provideR = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R | RR>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
@@ -464,7 +460,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       start: provideR(handle.start),
       pause: handle.pause,
       resume: handle.resume,
-      shutdown: provideRuntime(handle.shutdown),
+      shutdown: handle.shutdown,
       clear: provideR(handle.clear),
       metrics: {
         live: handle.metrics,
@@ -498,12 +494,12 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       ) => provideR(handle.add(itemOrItems, level)).pipe(Effect.orDie)) as ImplOf<
         CustomQueueInstanceSpec<F>
       >["add"],
-      enqueue: (entries) => provideRuntime(handle.enqueue(entries)),
-      release: ({ options }) => provideRuntime(handle.release(options)),
-      releaseEncoded: ({ options }) => provideRuntime(handle.releaseEncoded(options)),
+      enqueue: (entries) => provideR(handle.enqueue(entries)),
+      release: ({ options }) => provideR(handle.release(options)),
+      releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
       deadLetter: ({ selector, options }) =>
-        provideRuntime(handle.deadLetter(selector, options)),
-      drop: ({ selector, options }) => provideRuntime(handle.drop(selector, options)),
+        provideR(handle.deadLetter(selector, options)),
+      drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
       events: handle.events,
     };
     return impl;
@@ -519,10 +515,10 @@ export const layer = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+): Layer.Layer<Self | Local<Self>, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
 
 /**
  * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
@@ -570,13 +566,13 @@ export const serve = <
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
   never,
-  R | RR | Store.Storage
+  R | RR
 > =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
       Resource.serve(tag, impl),
     ),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
 
 /** @public */
 export const configure = <

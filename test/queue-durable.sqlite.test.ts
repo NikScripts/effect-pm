@@ -5,7 +5,6 @@ import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { DurableQueueStore } from "../src/DurableQueueStore";
 import * as QueueResource from "../src/QueueResource";
 import { SQLiteDurableQueueStore } from "../src/storage/sqlite";
-import { layerDefaultMemory } from "../src/Store";
 
 // A DurableQueueStore over a shared in-memory SQLite client — the same store can back two queue
 // instances (to simulate a restart).
@@ -39,7 +38,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         yield* queue.add([1, 2, 3]);
         yield* waitUntil(Effect.map(queue.completed, (c) => c >= 3));
         expect(yield* queue.size).toBe(0); // store drained on completion
-      }).pipe(Effect.provide(Layer.mergeAll(storeLayer, layerDefaultMemory)), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
       expect((yield* Ref.get(results)).sort()).toEqual([1, 2, 3]);
     }),
   );
@@ -58,7 +57,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         });
         yield* queue.add([10, 20, 30]);
         expect(yield* queue.size).toBe(3); // persisted, pending
-      }).pipe(Effect.provide(Layer.mergeAll(storeLayer, layerDefaultMemory)), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
       // Instance 2: same store, fresh runtime — recovers + processes the leftover work.
       const results = yield* Ref.make<Array<number>>([]);
@@ -69,7 +68,7 @@ describe("QueueResource persist (SQLite durability)", () => {
           effect: (n: number) => Ref.update(results, (a) => [...a, n]),
         });
         yield* waitUntil(Effect.map(queue.completed, (c) => c >= 3));
-      }).pipe(Effect.provide(Layer.mergeAll(storeLayer, layerDefaultMemory)), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
       expect((yield* Ref.get(results)).sort()).toEqual([10, 20, 30]);
     }),
@@ -93,7 +92,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         yield* waitUntil(Effect.map(Ref.get(runs), (n) => n >= 2));
         // after dead-lettering, no pending work remains
         yield* waitUntil(Effect.map(queue.size, (s) => s === 0));
-      }).pipe(Effect.provide(Layer.mergeAll(storeLayer, layerDefaultMemory)), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
       expect(yield* Ref.get(runs)).toBe(2); // tried twice, then dead-lettered
     }),
   );
@@ -112,7 +111,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         const released = yield* queue.release({});
         expect(released.map((e) => e.item).sort()).toEqual([1, 2, 3]);
         expect(yield* queue.size).toBe(0); // store drained
-      }).pipe(Effect.provide(Layer.mergeAll(storeLayer, layerDefaultMemory)), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
     }),
   );
 
@@ -133,7 +132,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         expect(yield* queue.size).toBe(1); // only item 3 remains in the store
         const left = yield* queue.release({});
         expect(left.map((e) => e.item)).toEqual([3]);
-      }).pipe(Effect.provide(Layer.mergeAll(storeLayer, layerDefaultMemory)), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
     }),
   );
 });

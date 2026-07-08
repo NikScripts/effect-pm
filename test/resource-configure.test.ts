@@ -4,10 +4,6 @@ import * as Process from "../src/Process";
 import { foldConfig } from "../src/ResourceConfigure";
 import * as QueueResource from "../src/QueueResource";
 import type { EffectContext } from "../src/QueueResource";
-import { layerDefaultMemory } from "../src/Store";
-
-const withDefaultStore = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.provide(effect, layerDefaultMemory);
 
 describe("ResourceConfigure", () => {
   it("foldConfig stacks partial patches and function updaters", () => {
@@ -61,12 +57,11 @@ describe("ResourceConfigure", () => {
           yield* Effect.sleep(Duration.millis(5));
         }
         expect(yield* Ref.get(handled)).toBe(101);
-      }      ).pipe(
+      }).pipe(
         Effect.provide(TestQueue.layer.pipe(Layer.provideMerge(configureLayers))),
-        withDefaultStore,
         Effect.scoped,
       );
-    }).pipe(withDefaultStore),
+    }),
   );
 
   it.live("QueueResource.Service configure can patch rateLimit", () =>
@@ -108,7 +103,7 @@ describe("ResourceConfigure", () => {
       expect(yield* Ref.get(starts)).toBe(2);
       expect(elapsed).toBeGreaterThanOrEqual(50);
       expect(elapsed).toBeLessThan(800);
-    }).pipe(withDefaultStore),
+    }),
   );
 
   it.effect("Process.Service buildConfiguredProcess applies configure patches", () =>

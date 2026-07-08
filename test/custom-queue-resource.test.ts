@@ -1,10 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Ref, Stream } from "effect";
 import * as CustomQueueResource from "../src/CustomQueueResource";
-import { layerDefaultMemory } from "../src/Store";
-
-const withDefaultStore = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.provide(effect, layerDefaultMemory);
 
 const waitUntilCompleted = (
   queue: { readonly completed: Effect.Effect<number> },
@@ -35,7 +31,7 @@ describe("CustomQueueResource.make", () => {
       yield* queue.start;
       yield* waitUntilCompleted(queue, 3);
       expect(yield* Ref.get(seen)).toEqual([2, 3, 1]);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("resolves named levels and reports Record sizes", () =>
@@ -56,7 +52,7 @@ describe("CustomQueueResource.make", () => {
       const status = yield* queue.statusNow;
       expect(status.sizes).toEqual(sizes);
       expect(status.phase).toBe("running");
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("weighted take algorithm favors higher level indices", () =>
@@ -88,7 +84,7 @@ describe("CustomQueueResource.make", () => {
       const { g1, g3 } = yield* Ref.get(samples);
       expect(g1).toBeGreaterThan(0);
       expect(g3).toBeGreaterThan(g1 * 2);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.live("status stream emits CustomQueueStatus snapshots", () =>
@@ -107,6 +103,6 @@ describe("CustomQueueResource.make", () => {
       const snapshots = yield* Fiber.join(collected);
       expect(snapshots).toHaveLength(2);
       expect(snapshots[1]?.sizes["2"]).toBe(1);
-    }).pipe(withDefaultStore, Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 });

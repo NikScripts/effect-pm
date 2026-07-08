@@ -905,11 +905,11 @@ const buildQueueImpl = <
     // through narrow, semantic writes over the engine write-extension contract: `Store.effects` builds
     // the pure recorder and `Store.catchWriteErrors` narrows each write's `StoreWriteError` out —
     // logging + swallowing a journal/IO write hiccup so a store failure never breaks the queue (an
-    // encode/wiring **defect** still propagates). Each write still carries `Storage` in its requirement;
-    // `QueueResource.layer` merges {@link Store.layerDefaultMemory} (or an app override wins via
-    // `Layer.provideMerge`), so `publishEvent` satisfies it at the layer boundary — not per-write
-    // `Effect.provide`. The recorder runs at the source in `publishEvent`, so no event burst is dropped
-    // by a late subscriber.
+    // encode/wiring **defect** still propagates). `Storage` (the baked-in in-memory default, or an app
+    // override) is captured here and provided so the engine handle stays `Storage`-free — the exact
+    // discharge point the old eager `resolveOrDie` used. It can't fail (the default materializes any
+    // scope); the recorder runs at the source in `publishEvent`, so no event burst is dropped by a late
+    // subscriber.
     // The engine write-extension contract's event schema is erased at the schema level (Effect's
     // `.Type` reduction can't collapse a `Schema.Union` with a *generic* success field). The typed
     // success value `A` rides the `QueueStoreWriter<Item, E, A>` surface below — its `completed`

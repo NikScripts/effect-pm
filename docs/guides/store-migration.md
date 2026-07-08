@@ -96,9 +96,13 @@ no per-call guard — `Store.effects` makes `Storage` ride each method's require
 succeeds as `void`). An encode/serialization mismatch or wiring die is a **defect** and still
 propagates.
 
-Provide `Storage` once at the **layer boundary** — merge {@link Store.layerDefaultMemory} on the resource
-layer (or an app `Store.Service` override via `Layer.provideMerge`). The engine `yield*`s store effects
-directly; do **not** wrap each write in `Effect.provide` with a captured context.
+Provide `Storage` once at the boundary (the baked-in in-memory default, or an app store layer):
+
+```ts
+const storageContext = yield* Effect.context<Store.Storage>();
+const provide = <A>(w: Effect.Effect<A, never, Store.Storage>) => Effect.provide(w, storageContext);
+// engine calls: provide(store.completed(entry, success, elapsed))
+```
 
 ### 3. Give consumers a read-extension
 

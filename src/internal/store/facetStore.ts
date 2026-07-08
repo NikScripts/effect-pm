@@ -7,10 +7,10 @@
 
 import {
   mergeStoreContracts,
-  type ExtendCustom,
+  type MergedCustom,
   type StoreContractValue,
+  type StoreMethodsFn,
   type StoreShapes,
-  type ShapeHandles,
 } from "./contractDef";
 import {
   makeRegistration,
@@ -50,18 +50,18 @@ export function facetStoreRegistration<
   const Tag extends StoreScopeTag,
   const BuiltIn extends StoreContractValue,
   const Extended extends StoreShapes,
-  const Added extends Readonly<Record<string, unknown>>,
+  const Methods extends StoreMethodsFn<BuiltIn["shapes"] & Extended>,
 >(
   tag: Tag,
   builtIn: BuiltIn,
   extended: Extended,
-  methods: (handles: ShapeHandles<BuiltIn["shapes"] & Extended>) => Added,
+  methods: Methods,
 ): RegisteredWithContract<
   ScopeKeyOf<Tag>,
   BuiltIn["spec"],
   StoreContractValue<
     BuiltIn["shapes"] & Extended,
-    ExtendCustom<BuiltIn, Added>
+    MergedCustom<BuiltIn, Methods>
   >,
   Tag
 >;
@@ -71,7 +71,7 @@ export function facetStoreRegistration(
   tag: StoreScopeTag,
   builtIn: StoreContractValue,
   extended?: StoreShapes,
-  methods?: (handles: ShapeHandles<StoreShapes>) => Readonly<Record<string, unknown>>,
+  methods?: StoreMethodsFn<StoreShapes>,
 ): StoreRegistration {
   const contract =
     extended === undefined
