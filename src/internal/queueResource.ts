@@ -680,15 +680,17 @@ export interface QueueMetrics {
 
 /**
  * The live **lifecycle event** union — the element of {@link QueueHandleApi.events}. A discrete
- * fact emitted as the queue runs; subscribe to observe (dashboard / CLI `--watch` / TUI).
- * Failure-bearing variants carry the worker error `E` typed (`Cause<E>` / `Exit<void, E>`), so a
- * subscriber can `e.exit.pipe(Effect.catchTags(...))` on it; `E` defaults to `unknown` for the
+ * fact emitted as the queue runs; subscribe to observe (dashboard / CLI `--watch` / TUI). The
+ * worker outcome is recorded **once**: `Completed` carries the typed `success` value (`A`) and
+ * `Failed` the typed `Cause<E>`, so a subscriber can `Effect.failCause(e.cause).pipe(
+ * Effect.catchTags(...))` on a failure (there is no separate `Exit` event — reconstruct
+ * `Exit<A, E>` from the two if needed). `E` defaults to `unknown` and `A` to `void` for the
  * erased / wire form. The non-streamable `retry` affordance the old callbacks received is
  * dropped — a subscriber holds the handle to drive control.
  *
  * @public
  */
-export type QueueEvent<T, E = unknown> =
+export type QueueEvent<T, E = unknown, A = void> =
   | { readonly _tag: "Start"; readonly queueId: string }
   | {
       readonly _tag: "Enqueued";
@@ -700,18 +702,14 @@ export type QueueEvent<T, E = unknown> =
   | {
       readonly _tag: "Completed";
       readonly entry: QueueEntry<T>;
+      /** The worker's typed success value (the `Exit.value` of a successful run). */
+      readonly success: A;
       readonly elapsed: Duration.Duration;
     }
   | {
       readonly _tag: "Failed";
       readonly entry: QueueEntry<T>;
       readonly cause: Cause.Cause<E>;
-      readonly elapsed: Duration.Duration;
-    }
-  | {
-      readonly _tag: "Exit";
-      readonly entry: QueueEntry<T>;
-      readonly exit: Exit.Exit<void, E>;
       readonly elapsed: Duration.Duration;
     }
   | {
@@ -775,7 +773,7 @@ export type QueueEvent<T, E = unknown> =
  * the engine handle stays `Storage`-free. Each narrow write funnels to the shared `event.append`;
  * `record` is the base append alias for queue-level facts without a narrow write. @internal
  */
-export interface QueueStoreWriter<T, E = unknown> {
+export interface QueueStoreWriter<T, E = unknown, A = void> {
   readonly enqueued: (
     entries: ReadonlyArray<QueueEntry<T>>,
     priority: Priority,
@@ -784,16 +782,12 @@ export interface QueueStoreWriter<T, E = unknown> {
   readonly started: (entry: QueueEntry<T>) => Effect.Effect<void>;
   readonly completed: (
     entry: QueueEntry<T>,
+    success: A,
     elapsed: Duration.Duration,
   ) => Effect.Effect<void>;
   readonly failed: (
     entry: QueueEntry<T>,
     cause: Cause.Cause<E>,
-    elapsed: Duration.Duration,
-  ) => Effect.Effect<void>;
-  readonly exited: (
-    entry: QueueEntry<T>,
-    exit: Exit.Exit<void, E>,
     elapsed: Duration.Duration,
   ) => Effect.Effect<void>;
   readonly retryScheduled: (
@@ -2183,11 +2177,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         case "Started":
           return store.started(event.entry);
         case "Completed":
-          return store.completed(event.entry, event.elapsed);
+          return store.completed(event.entry, event.success, event.elapsed);
         case "Failed":
           return store.failed(event.entry, event.cause, event.elapsed);
-        case "Exit":
-          return store.exited(event.entry, event.exit, event.elapsed);
         case "RetryScheduled":
           return store.retryScheduled(event.entry, event.cause, event.nextAttempt);
         case "RetryExhausted":
@@ -2720,11 +2712,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
 
           const entry = queueEntryFromInternal(internal, { startedAt, completedAt });
-          // fan-out events (unconditional — observe outcomes via the `events` stream)
-          yield* publishEvent({ _tag: "Exit", entry, exit, elapsed });
+          // fan-out the worker outcome once (unconditional — observe via the `events` stream).
+          // `Completed` carries the worker's typed success value (`exit.value`); `Failed` the
+          // typed `Cause`. No separate `Exit` event — the two already encode success-vs-failure.
           yield* publishEvent(
             Exit.isSuccess(exit)
-              ? { _tag: "Completed", entry, elapsed }
+              ? { _tag: "Completed", entry, success: exit.value, elapsed }
               : { _tag: "Failed", entry, cause: exit.cause, elapsed },
           );
           yield* Metric.update(

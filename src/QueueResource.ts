@@ -225,20 +225,36 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
 
 /**
  * The **lifecycle event** union — the element of the `events` stream: discrete entry / worker
- * / queue facts. Parameterized by `itemSchema` (events carry entries). A `Schema` tagged
- * union (encodable; it crosses RPC) — subscribers discriminate on `_tag`.
+ * / queue facts. Parameterized by `itemSchema` (events carry entries) and the optional `wire`
+ * slots — the worker's `success` return (on `Completed`) and its `error` failure (the
+ * `Cause` on `Failed` / `RetryScheduled` / `RetryExhausted`). A `Schema` tagged union
+ * (encodable; it crosses RPC) — subscribers discriminate on `_tag`.
  *
- * Failure-bearing variants carry an encoded `Cause`/`Exit` of `unknown` (the engine's worker
- * error type isn't part of the queue's wire contract); the non-encodable `retry` affordance
- * the old callbacks received is dropped — a subscriber holds the handle to drive control.
+ * `success` defaults to {@link Schema.Void} and `error` to {@link Schema.Unknown} when the slot
+ * is absent (the untyped / `CustomQueueResource` fallback). The worker outcome is recorded
+ * **once** — `Completed` (with the typed `success`) or `Failed` (with the typed `cause`); there
+ * is no separate `Exit` event (a consumer reconstructs `Exit<A, E>` from the two if needed). The
+ * non-encodable `retry` affordance the old callbacks received is dropped — a subscriber holds the
+ * handle to drive control.
  *
  * @public
  */
-export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
+export const queueEvent = <
+  Sch extends Schema.Top,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Unknown,
+>(
+  itemSchema: Sch,
+  wire?: {
+    readonly success?: Success;
+    readonly error?: Error;
+  },
+) => {
   const entry = queueEntry(itemSchema);
   const entries = Schema.Array(entry);
-  const cause = Schema.Cause(Schema.Unknown, Schema.Unknown);
-  const exit = Schema.Exit(Schema.Void, Schema.Unknown, Schema.Unknown);
+  const successSchema = wire?.success ?? Schema.Void;
+  const errorSchema = wire?.error ?? Schema.Unknown;
+  const cause = Schema.Cause(errorSchema, Schema.Unknown);
   return Schema.Union([
     Schema.TaggedStruct("Start", { queueId: Schema.String }),
     Schema.TaggedStruct("Enqueued", {
@@ -247,9 +263,12 @@ export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
       batchId: Schema.optionalKey(Schema.String),
     }),
     Schema.TaggedStruct("Started", { entry }),
-    Schema.TaggedStruct("Completed", { entry, elapsed: Schema.Duration }),
+    Schema.TaggedStruct("Completed", {
+      entry,
+      success: successSchema,
+      elapsed: Schema.Duration,
+    }),
     Schema.TaggedStruct("Failed", { entry, cause, elapsed: Schema.Duration }),
-    Schema.TaggedStruct("Exit", { entry, exit, elapsed: Schema.Duration }),
     Schema.TaggedStruct("RetryScheduled", {
       entry,
       cause,
@@ -809,11 +828,10 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
       enqueued: (entries, priority, batchId) =>
         provideStorage(storeEffects.enqueued(entries, priority, batchId)),
       started: (entry) => provideStorage(storeEffects.started(entry)),
-      completed: (entry, elapsed) => provideStorage(storeEffects.completed(entry, elapsed)),
+      completed: (entry, success, elapsed) =>
+        provideStorage(storeEffects.completed(entry, success, elapsed)),
       failed: (entry, cause, elapsed) =>
         provideStorage(storeEffects.failed(entry, cause, elapsed)),
-      exited: (entry, exit, elapsed) =>
-        provideStorage(storeEffects.exited(entry, exit, elapsed)),
       retryScheduled: (entry, cause, nextAttempt) =>
         provideStorage(storeEffects.retryScheduled(entry, cause, nextAttempt)),
       retryExhausted: (entry, cause) =>

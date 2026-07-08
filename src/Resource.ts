@@ -3059,8 +3059,8 @@ type HandlersContext<Cases> = {
  *   Failed:  ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
  *   Drained: ({ completed })    => Effect.log(`drained @ ${completed}`),
  * }))
- * yield* Resource.runForEachTag(jobs.events, "Exit", (e) =>
- *   e.exit.pipe(Effect.catchTags({ Timeout: …, Rejected: … })),
+ * yield* Resource.runForEachTag(jobs.events, "Failed", (e) =>
+ *   Effect.failCause(e.cause).pipe(Effect.catchTags({ Timeout: …, Rejected: … })),
  * )
  * ```
  *

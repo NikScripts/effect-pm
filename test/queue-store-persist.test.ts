@@ -74,9 +74,8 @@ describe("QueueResource → baked store persistence", () => {
       }).pipe(Effect.timeout(Duration.seconds(3)));
 
       const tags = (yield* store.events()).map((e) => e._tag);
-      // Narrow writes: `started`, `exited`, `failed`, `retryExhausted` all funnelled to the log.
+      // Narrow writes: `started`, `failed`, `retryExhausted` all funnelled to the log.
       expect(tags).toContain("Started");
-      expect(tags).toContain("Exit");
       expect(tags).toContain("Failed");
       expect(tags).toContain("RetryExhausted");
     }).pipe(

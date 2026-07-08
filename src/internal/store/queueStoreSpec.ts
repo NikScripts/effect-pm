@@ -3,19 +3,20 @@
  *
  * The store persists the **same** `QueueEvent<T>` union the engine already publishes on the live
  * `.events` stream (one event model for wire + persistence — `queue-persistence-design.md`), using
- * the existing `queueEvent(itemSchema)` schema as the codec. So the handle is just `record` (append
- * a built event) + `events` (read them back) — no event model of its own, no object-literal
- * construction against a schema-decoded generic (which is what forced casts / collapsed hovers).
+ * the shared `queueEvent(itemSchema, { success, error })` schema (the tag's `success` / `error` wire
+ * slots fed in) as the codec. So the handle is just `record` (append a built event) + `events` (read
+ * them back) — no event model of its own, no object-literal construction against a schema-decoded
+ * generic (which is what forced casts / collapsed hovers).
  *
  * @module internal/store/queueStoreSpec
  * @internal
  */
 
 import { DateTime, Duration, Effect, Option, Schema, Stream } from "effect";
-import type { Cause, Exit } from "effect";
 import type { ResourceTag, Spec, SpecOf } from "../../Resource";
 import { specSym } from "../../Resource";
 import { queueEntry, queueEvent, queueSpec } from "../../QueueResource";
+import { successOf, errorOf } from "../queueTagSchemas";
 import type { Priority, QueueEvent } from "../queueResource";
 import * as Store from "../../Store";
 import type {
@@ -47,19 +48,45 @@ export type QueueItemSchemaFromTag<Tag extends QueueStoreTag> = Schema.Struct<Qu
 /** Item value type carried on a queue tag. @internal */
 export type QueueItemOf<Tag extends QueueStoreTag> = Schema.Struct<QueueItemFields<Tag>>["Type"];
 
+/**
+ * The persisted queue event schema for a tag — the shared `queueEvent` union with the tag's
+ * `success` / `error` wire slots fed in. `successOf` / `errorOf` are runtime reads erased to
+ * `Schema.Top`, so the persisted `Completed.success` / `Failed.cause` decode as `unknown` at the
+ * type level (matching the fed runtime contract). @internal
+ */
+export type QueueEventSchemaOf<Tag extends QueueStoreTag> = ReturnType<
+  typeof queueEvent<QueueItemSchemaFromTag<Tag>, Schema.Top, Schema.Top>
+>;
+
 /** The persisted queue event for a tag — the same union the live `.events` stream carries. @internal */
-export type QueueEventOf<Tag extends QueueStoreTag> = QueueEvent<QueueItemOf<Tag>>;
+export type QueueEventOf<Tag extends QueueStoreTag> = QueueEvent<
+  QueueItemOf<Tag>,
+  unknown,
+  unknown
+>;
 
 /** Read payload for the built-in `events` query. @internal */
 export const queueEventReadPayload = Schema.Struct({
   limit: Schema.optional(Schema.Number),
 });
 
+/** The `success` / `error` wire schemas recovered from a queue tag (erased to `Schema.Top`). @internal */
+type QueueWireSchemas = {
+  readonly success?: Schema.Top;
+  readonly error?: Schema.Top;
+};
+
+/** Read the `success` / `error` wire slots off a queue tag for the store event schema. @internal */
+const queueWireFromTag = (tag: QueueStoreTag): QueueWireSchemas => ({
+  success: successOf(tag),
+  error: errorOf(tag),
+});
+
 /** Built-in queue store contract for a tag — one `event` shape over the shared event schema. @internal */
 export type BuiltInQueueContract<Tag extends QueueStoreTag> = StoreContractValue<
   {
     readonly event: StoreShapeDef<
-      ReturnType<typeof queueEvent<QueueItemSchemaFromTag<Tag>>>,
+      QueueEventSchemaOf<Tag>,
       typeof queueEventReadPayload
     >;
   },
@@ -91,10 +118,13 @@ export const queueItemSchemaFromTag = <Tag extends QueueStoreTag>(
  * Build the queue store contract from an item schema directly (no tag) — used by the engine, which
  * has the item schema but not always a tag (`QueueResource.make`). @internal
  */
-export const makeQueueStoreContract = <Item extends Schema.Top>(itemSchema: Item) =>
+export const makeQueueStoreContract = <Item extends Schema.Top>(
+  itemSchema: Item,
+  wire?: QueueWireSchemas,
+) =>
   Store.contract(
     {
-      event: Store.shape(queueEvent(itemSchema), queueEventReadPayload),
+      event: Store.shape(queueEvent(itemSchema, wire), queueEventReadPayload),
     },
     ({ event }) => ({
       record: event.append,
@@ -104,11 +134,12 @@ export const makeQueueStoreContract = <Item extends Schema.Top>(itemSchema: Item
 
 /**
  * Built-in queue store contract for a tag. Delegates to {@link makeQueueStoreContract} with the
- * tag's item schema. @internal
+ * tag's item schema and its `success` / `error` wire slots (the tag SSOT). @internal
  */
 export const builtInQueueStoreContract = <const Tag extends QueueStoreTag>(
   tag: Tag,
-): BuiltInQueueContract<Tag> => makeQueueStoreContract(queueItemSchemaFromTag(tag));
+): BuiltInQueueContract<Tag> =>
+  makeQueueStoreContract(queueItemSchemaFromTag(tag), queueWireFromTag(tag));
 
 /** @deprecated Internal flat spec — use {@link builtInQueueStoreContract}. @internal */
 export const builtInQueueStoreSpec = (tag: QueueStoreTag) => builtInQueueStoreContract(tag).spec;
@@ -122,7 +153,7 @@ export const builtInQueueStoreSpec = (tag: QueueStoreTag) => builtInQueueStoreCo
  * `Store.changes` hand back (the same shape the live `.events` stream carries). @internal
  */
 export type QueueStoreEvent<Tag extends QueueStoreTag> = SchemaDecoded<
-  ReturnType<typeof queueEvent<QueueItemSchemaFromTag<Tag>>>
+  QueueEventSchemaOf<Tag>
 >;
 
 /** A decoded queue entry as persisted on the event union (row of `Started`/`Completed`/…). @internal */
@@ -150,13 +181,27 @@ export type QueueStoreCompleted<Tag extends QueueStoreTag> = Extract<
  * `Store.extend`) so the concrete write-method types survive onto the materialized effects object.
  * @internal
  */
-export const makeEngineQueueStoreContract = <Item extends Schema.Top>(itemSchema: Item) => {
+export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
+  itemSchema: Item,
+  wire?: QueueWireSchemas,
+) => {
+  const eventSchema = queueEvent(itemSchema, wire);
   // The decoded entry exactly as `event.append` expects it — the SAME `queueEntry(itemSchema)` the
   // event schema is built from (so no interface/schema drift under a generic item).
   type Entry = ReturnType<typeof queueEntry<Item>>["Type"];
+  // The worker success / failure-cause types read straight off the built event schema, so the
+  // narrow writes carry exactly what `event.append` expects (typed from the tag's wire slots).
+  type Success = Extract<
+    typeof eventSchema.Type,
+    { readonly _tag: "Completed" }
+  >["success"];
+  type FailCause = Extract<
+    typeof eventSchema.Type,
+    { readonly _tag: "Failed" }
+  >["cause"];
   return Store.contract(
     {
-      event: Store.shape(queueEvent(itemSchema), queueEventReadPayload),
+      event: Store.shape(eventSchema, queueEventReadPayload),
     },
     ({ event }) => ({
       record: event.append,
@@ -169,15 +214,13 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(itemSchema
           ...(batchId !== undefined ? { batchId } : {}),
         }),
       started: (entry: Entry) => event.append({ _tag: "Started", entry }),
-      completed: (entry: Entry, elapsed: Duration.Duration) =>
-        event.append({ _tag: "Completed", entry, elapsed }),
-      failed: (entry: Entry, cause: Cause.Cause<unknown>, elapsed: Duration.Duration) =>
+      completed: (entry: Entry, success: Success, elapsed: Duration.Duration) =>
+        event.append({ _tag: "Completed", entry, success, elapsed }),
+      failed: (entry: Entry, cause: FailCause, elapsed: Duration.Duration) =>
         event.append({ _tag: "Failed", entry, cause, elapsed }),
-      exited: (entry: Entry, exit: Exit.Exit<void, unknown>, elapsed: Duration.Duration) =>
-        event.append({ _tag: "Exit", entry, exit, elapsed }),
-      retryScheduled: (entry: Entry, cause: Cause.Cause<unknown>, nextAttempt: number) =>
+      retryScheduled: (entry: Entry, cause: FailCause, nextAttempt: number) =>
         event.append({ _tag: "RetryScheduled", entry, cause, nextAttempt }),
-      retryExhausted: (entry: Entry, cause: Cause.Cause<unknown>) =>
+      retryExhausted: (entry: Entry, cause: FailCause) =>
         event.append({ _tag: "RetryExhausted", entry, cause }),
     }),
   );
@@ -190,7 +233,7 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(itemSchema
  * Drained / …) still ride the base `record` (a guarded append alias). @internal
  */
 export const engineQueueStoreContract = <const Tag extends QueueStoreTag>(tag: Tag) =>
-  makeEngineQueueStoreContract(queueItemSchemaFromTag(tag));
+  makeEngineQueueStoreContract(queueItemSchemaFromTag(tag), queueWireFromTag(tag));
 
 /** The engine write-extension contract type for a tag. @internal */
 export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
@@ -211,7 +254,7 @@ export interface QueueStoreStats {
   readonly deadLettered: number;
 }
 
-/** Latency distribution (from `elapsed` on `Completed`/`Exit`). @internal */
+/** Latency distribution (from `elapsed` on `Completed`). @internal */
 export interface QueueStoreLatency {
   readonly mean: Duration.Duration;
   readonly p50: Duration.Duration;
@@ -230,7 +273,7 @@ export type QueueStoreReads<Tag extends QueueStoreTag> = {
   readonly failures: () => Effect.Effect<ReadonlyArray<QueueStoreFailed<Tag>>>;
   /** Entries dead-lettered (from `RetryExhausted`). */
   readonly deadLettered: () => Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>>;
-  /** `Started` entries with no later terminal (`Completed`/`Failed`/`Exit`) event. */
+  /** `Started` entries with no later terminal (`Completed`/`Failed`) event. */
   readonly inFlight: () => Effect.Effect<ReadonlyArray<QueueStoreEntry<Tag>>>;
   /** All events referencing `entryId`, in order. */
   readonly history: (entryId: string) => Effect.Effect<ReadonlyArray<QueueStoreEvent<Tag>>>;
@@ -248,7 +291,7 @@ export type QueueStoreReads<Tag extends QueueStoreTag> = {
   readonly stats: () => Effect.Effect<QueueStoreStats>;
   /** `failed / (completed + failed)`; `0` when the denominator is `0`. */
   readonly failureRate: () => Effect.Effect<number>;
-  /** Latency distribution over `Completed`/`Exit` `elapsed`. */
+  /** Latency distribution over `Completed` `elapsed`. */
   readonly latency: () => Effect.Effect<QueueStoreLatency>;
   /** Live decoded event stream (via {@link Store.changes}). */
   readonly changes: () => Stream.Stream<
@@ -312,11 +355,14 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
   ): event is Extract<QueueStoreEvent<Tag>, { readonly _tag: "RetryExhausted" }> =>
     event._tag === "RetryExhausted";
   const isTerminal = (event: QueueStoreEvent<Tag>): boolean =>
-    event._tag === "Completed" || event._tag === "Failed" || event._tag === "Exit";
+    event._tag === "Completed" || event._tag === "Failed";
 
   return Store.contract(
     {
-      event: Store.shape(queueEvent(queueItemSchemaFromTag(tag)), queueEventReadPayload),
+      event: Store.shape(
+        queueEvent(queueItemSchemaFromTag(tag), queueWireFromTag(tag)),
+        queueEventReadPayload,
+      ),
     },
     ({ event }) => ({
       record: event.append,
@@ -430,7 +476,7 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
         Effect.map(event.read(), (events) => {
           const durationsMs: Array<number> = [];
           for (const e of events) {
-            if (e._tag === "Completed" || e._tag === "Exit") {
+            if (e._tag === "Completed") {
               durationsMs.push(Duration.toMillis(e.elapsed));
             }
           }

@@ -107,9 +107,8 @@ describe("QueueResource.make — basic processing", () => {
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add(1);
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
-      // one successful item → Started, then Exit + Completed
+      // one successful item → Started, then Completed (the worker outcome, recorded once)
       expect(tags).toContain("Started");
-      expect(tags).toContain("Exit");
       expect(tags).toContain("Completed");
     }).pipe(Effect.scoped),
   );
@@ -127,9 +126,8 @@ describe("QueueResource.make — basic processing", () => {
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add(1);
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
-      // a failure with no retry hook is terminal → Started, Exit, Failed
+      // a failure with no retry hook is terminal → Started, then Failed (the worker outcome, once)
       expect(tags).toContain("Started");
-      expect(tags).toContain("Exit");
       expect(tags).toContain("Failed");
     }).pipe(Effect.scoped),
   );
@@ -291,12 +289,12 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("Exit events carry the typed worker error (catchTag on the exit)", () =>
+  it.live("Failed events carry the typed worker error (catchTag on the cause)", () =>
     Effect.gen(function* () {
       class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
       const caught = yield* Ref.make<Array<number>>([]);
       const queue = yield* QueueResource.make({
-        name: "test-typed-exit",
+        name: "test-typed-failed",
         effect: (n: number) => Effect.fail(new Boom({ n })),
         concurrency: 1,
       });
@@ -305,14 +303,14 @@ describe("QueueResource.make — basic processing", () => {
           Stream.take(
             Stream.filter(
               queue.events,
-              (e): e is Extract<typeof e, { readonly _tag: "Exit" }> =>
-                e._tag === "Exit",
+              (e): e is Extract<typeof e, { readonly _tag: "Failed" }> =>
+                e._tag === "Failed",
             ),
             1,
           ),
-          // e.exit is Exit<void, Boom> — catchTag on it, fully typed
+          // e.cause is Cause<Boom> — reconstruct the failed effect and catchTag on it, fully typed
           (e) =>
-            e.exit.pipe(
+            Effect.failCause(e.cause).pipe(
               Effect.catchTag("Boom", (err) =>
                 Ref.update(caught, (a) => [...a, err.n]),
               ),
@@ -1181,7 +1179,7 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
             Enqueued: (e) =>
               Ref.update(seen, (a) => [...a, `+${String(e.entries.length)}`]),
             Completed: () => Ref.update(seen, (a) => [...a, "done"]),
-            // Drained, Start, Started, Exit deliberately unhandled → ignored
+            // Drained, Start, Started deliberately unhandled → ignored
           }),
         ),
       );
@@ -1196,7 +1194,7 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("catches the typed worker error nested under an Exit handler", () =>
+  it.live("catches the typed worker error nested under a Failed handler", () =>
     Effect.gen(function* () {
       class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
       const caught = yield* Ref.make<Array<number>>([]);
@@ -1209,8 +1207,8 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
         queue.events.pipe(
           Stream.take(3),
           Resource.runForEachTag({
-            Exit: (e) =>
-              e.exit.pipe(
+            Failed: (e) =>
+              Effect.failCause(e.cause).pipe(
                 Effect.catchTag("Boom", (err) =>
                   Ref.update(caught, (a) => [...a, err.n]),
                 ),

@@ -4,7 +4,6 @@ import {
   DateTime,
   Duration,
   Effect,
-  Exit,
   Fiber,
   Option,
   Schema,
@@ -60,7 +59,7 @@ describe("QueueResource.store — analytics read-extension", () => {
       // - j1: Enqueued → Started → Completed (elapsed 100ms)
       // - j2: Enqueued → Started → Failed (30ms) → RetryScheduled → RetryExhausted (dead-lettered)
       // - j3: Enqueued → Started (still in-flight, no terminal)
-      // - j4: Exit (elapsed 250ms)
+      // - j4: Completed (elapsed 250ms)
       const e1 = entry("j1", t0 + 10, { startedAt: t0 + 20, completedAt: t0 + 120 });
       const e2 = entry("j2", t0 + 30);
       const e3 = entry("j3", t0 + 40);
@@ -68,7 +67,12 @@ describe("QueueResource.store — analytics read-extension", () => {
 
       yield* store.record({ _tag: "Enqueued", entries: [e1], priority: "normal" });
       yield* store.record({ _tag: "Started", entry: e1 });
-      yield* store.record({ _tag: "Completed", entry: e1, elapsed: Duration.millis(100) });
+      yield* store.record({
+        _tag: "Completed",
+        entry: e1,
+        success: undefined,
+        elapsed: Duration.millis(100),
+      });
 
       yield* store.record({ _tag: "Enqueued", entries: [e2], priority: "normal" });
       yield* store.record({ _tag: "Started", entry: e2 });
@@ -90,9 +94,9 @@ describe("QueueResource.store — analytics read-extension", () => {
       yield* store.record({ _tag: "Started", entry: e3 });
 
       yield* store.record({
-        _tag: "Exit",
+        _tag: "Completed",
         entry: e4,
-        exit: Exit.succeed(undefined),
+        success: undefined,
         elapsed: Duration.millis(250),
       });
 
@@ -120,33 +124,33 @@ describe("QueueResource.store — analytics read-extension", () => {
       expect(Option.getOrThrow(lastFailure).entry.entryId).toBe("j2");
 
       const slowest = yield* store.slowest(2);
-      // Only `Completed` events (j1, 100ms) — Exit is excluded from `slowest`.
-      expect(slowest.map((c) => c.entry.entryId)).toEqual(["j1"]);
+      // `Completed` events by descending elapsed: j4 (250ms) then j1 (100ms).
+      expect(slowest.map((c) => c.entry.entryId)).toEqual(["j4", "j1"]);
       expect(slowest.every((c) => c._tag === "Completed")).toBe(true);
 
       const recent = yield* store.recent(2);
-      expect(recent.map((e) => e._tag)).toEqual(["Started", "Exit"]);
+      expect(recent.map((e) => e._tag)).toEqual(["Started", "Completed"]);
 
       const since = yield* store.since(DateTime.makeUnsafe(t0 + 40));
-      // Only events whose entry was enqueued at/after t0+40: j3 (Enqueued, Started) + j4 (Exit).
-      expect(since.map((e) => e._tag).sort()).toEqual(["Enqueued", "Exit", "Started"]);
+      // Only events whose entry was enqueued at/after t0+40: j3 (Enqueued, Started) + j4 (Completed).
+      expect(since.map((e) => e._tag).sort()).toEqual(["Completed", "Enqueued", "Started"]);
 
       const stats = yield* store.stats();
       expect(stats).toEqual({
         enqueued: 3,
         started: 3,
-        completed: 1,
+        completed: 2,
         failed: 1,
         retried: 1,
         deadLettered: 1,
       });
 
       const failureRate = yield* store.failureRate();
-      // completed 1, failed 1 → 0.5
-      expect(failureRate).toBe(0.5);
+      // completed 2, failed 1 → 1/3
+      expect(failureRate).toBe(1 / 3);
 
       const latency = yield* store.latency();
-      // elapsed from Completed (100ms) + Exit (250ms) → mean 175, max 250
+      // elapsed from Completed j1 (100ms) + j4 (250ms) → mean 175, max 250
       expect(Duration.toMillis(latency.max)).toBe(250);
       expect(Duration.toMillis(latency.mean)).toBe(175);
     }).pipe(Effect.provide(JobsStore.layerMemory), Effect.scoped),
@@ -173,6 +177,7 @@ describe("QueueResource.store — analytics read-extension", () => {
       yield* store.record({
         _tag: "Completed",
         entry: entry("live-1", t0),
+        success: undefined,
         elapsed: Duration.millis(5),
       });
 
