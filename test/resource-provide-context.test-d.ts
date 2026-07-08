@@ -57,6 +57,40 @@ void ({} as typeof provided.feed satisfies Stream.Stream<number>);
 void ({} as typeof provided.value satisfies Resource.Subscribable<number>);
 void ({} as typeof provided.group.live satisfies Stream.Stream<number>);
 
+// --- Soundness: `provideContext` is SUBTRACTIVE (`Exclude<R, Ctx>`), not an unconditional strip to
+// `never`. A method needing a service the provided context does NOT cover keeps a residual requirement,
+// so the mistake surfaces at the `ImplOf` assignment instead of crashing at runtime. ---
+class Dep2 extends Context.Service<Dep2, string>()(
+  "@nikscripts/effect-pm/test/resource-provide-context.test-d/Dep2",
+) {}
+
+const implPartial: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep | Dep2> = {
+  value: { get: Effect.succeed(1), changes: Stream.make(1) },
+  feed: Stream.make(1),
+  scaled: Effect.flatMap(Dep2, () => Effect.map(Dep, (n) => n)), // needs BOTH Dep and Dep2
+  add: ({ by }) => Effect.as(Dep, void by),
+  group: {
+    live: Stream.make(1),
+    history: Effect.succeed<ReadonlyArray<number>>([]),
+  },
+};
+
+// Provide ONLY `Dep` — `Dep2` is left uncovered.
+const partial = Resource.provideContext(implPartial, T[Resource.specSym], Context.make(Dep, 1));
+
+// `scaled` retains the residual `Dep2` (subtractive) — NOT a false `never`. This mutual-assignability
+// assertion fails to compile if `ProvidedContext` ever regresses to an unconditional `never` (a `never`
+// residual is not `Dep2`), locking in the subtractive soundness on the path everything runs on.
+type ScaledResidual = typeof partial.scaled extends Effect.Effect<unknown, unknown, infer R>
+  ? R
+  : never;
+type ResidualIsExactlyDep2 = [ScaledResidual] extends [Dep2]
+  ? [Dep2] extends [ScaledResidual]
+    ? true
+    : false
+  : false;
+true satisfies ResidualIsExactlyDep2;
+
 // `mapEffects` with a type-preserving transform returns the same shape (Out defaults to Impl).
 const traced = Resource.mapEffects(provided, T[Resource.specSym], (e) =>
   Effect.withSpan(e, "resource"),

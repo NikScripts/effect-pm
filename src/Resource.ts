@@ -705,24 +705,27 @@ const mapEffectMember = (
 
 /**
  * Remove the requirement channel `R` from every **Effect method** in an impl shape — the per-method-precise
- * result of {@link provideContext}. Mirrors `Store.CatchWriteError`, but strips `R` (a provided context)
- * rather than an error. A method `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, never>`; a bare
- * `Effect<S, E, R>` → `Effect<S, E, never>`; a {@link Subscribable} (a {@link ref} field's impl) and a
- * {@link Stream} (a `stream` field's impl, or a group's `live`) pass through untouched; a nested method
- * group recurses. @internal
+ * result of {@link provideContext}. Mirrors `Store.CatchWriteError`, but **subtracts** the provided context
+ * `Ctx` from each method's requirement rather than catching an error — sound like `Effect.provideContext`
+ * (`R` → `Exclude<R, Ctx>`), so a requirement the context does **not** cover survives as a residual (and a
+ * later `ImplOf` assignment catches it) instead of being silently claimed `never`. A method
+ * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, Exclude<R, Ctx>>`; a bare `Effect<S, E, R>` →
+ * `Effect<S, E, Exclude<R, Ctx>>`; a {@link Subscribable} (a {@link ref} field's impl) and a {@link Stream}
+ * (a `stream` field's impl, or a group's `live`) pass through untouched; a nested method group recurses.
+ * @public
  */
-export type ProvidedContext<T> = T extends Subscribable<infer A>
+export type ProvidedContext<T, Ctx> = T extends Subscribable<infer A>
   ? Subscribable<A>
   : T extends Stream.Stream<infer A, infer E, infer R>
     ? Stream.Stream<A, E, R>
-    : T extends (...args: infer Args) => Effect.Effect<infer S, infer E, infer _R>
-      ? (...args: Args) => Effect.Effect<S, E, never>
-      : T extends Effect.Effect<infer S, infer E, infer _R>
-        ? Effect.Effect<S, E, never>
+    : T extends (...args: infer Args) => Effect.Effect<infer S, infer E, infer R>
+      ? (...args: Args) => Effect.Effect<S, E, Exclude<R, Ctx>>
+      : T extends Effect.Effect<infer S, infer E, infer R>
+        ? Effect.Effect<S, E, Exclude<R, Ctx>>
         : T extends (...args: ReadonlyArray<never>) => unknown
           ? T
           : T extends object
-            ? { readonly [K in keyof T]: ProvidedContext<T[K]> }
+            ? { readonly [K in keyof T]: ProvidedContext<T[K], Ctx> }
             : T;
 
 /**
@@ -807,10 +810,12 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
 /**
  * Provide a {@link Context.Context} to **every Effect method** of an impl — the one-liner that replaces a
  * repetitive per-method `Effect.provideContext(...)` wrapping. One-liner over {@link mapEffects}; the
- * result strips the provided `R` from each method (see {@link ProvidedContext}), so a worker-`R`-carrying
- * impl becomes the `R`-free shape {@link ImplOf} expects. Providing the context to a method that carries no
- * `R` is a harmless no-op, so it applies uniformly. {@link Stream} and {@link Subscribable} members are
- * left untouched.
+ * result **subtracts** the provided context `Ctx` from each method's requirement (see
+ * {@link ProvidedContext}) — `R` → `Exclude<R, Ctx>` — so a worker-`R`-carrying impl whose context fully
+ * covers `R` becomes the `R`-free shape {@link ImplOf} expects, and a method needing more than `Ctx`
+ * provides keeps a residual requirement (caught at the `ImplOf` assignment) rather than a false `never`.
+ * Providing the context to a method that carries no `R` is a harmless no-op, so it applies uniformly.
+ * {@link Stream} and {@link Subscribable} members are left untouched.
  *
  * ```ts
  * const context = yield* Effect.context<R | RR>();
@@ -819,13 +824,12 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
  *
  * @public
  */
-export const provideContext = <Impl, const S extends Spec>(
+export const provideContext = <Impl, const S extends Spec, Ctx>(
   impl: Impl,
   spec: S,
-  // Contravariant `Context<in Services>`: `never` accepts any concrete `Context<R>` argument.
-  context: Context.Context<never>,
-): ProvidedContext<Impl> =>
-  mapEffects<Impl, S, ProvidedContext<Impl>>(impl, spec, (effect) =>
+  context: Context.Context<Ctx>,
+): ProvidedContext<Impl, Ctx> =>
+  mapEffects<Impl, S, ProvidedContext<Impl, Ctx>>(impl, spec, (effect) =>
     Effect.provideContext(effect, context),
   );
 
