@@ -840,9 +840,11 @@ export const builtResourceSym: unique symbol = Symbol.for(
 
 /**
  * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
- * Effect methods, paired with the {@link Context.Context} captured at build time. {@link layer} /
- * {@link serve} grant locally via {@link grantLocal}; {@link serveRemote} defers discharge to each wire
- * call via {@link invokeWireMethodWithContext} so one materialization backs both paths.
+ * Effect methods, paired with the {@link Context.Context} captured at build time. Used by
+ * {@link QueueResource}, {@link RunResource}, and {@link Process} (any toolkit resource that builds
+ * its driver under ambient `R`). {@link layer} / {@link serve} grant locally via {@link grantLocal};
+ * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
+ * one materialization backs both paths.
  *
  * @public
  */

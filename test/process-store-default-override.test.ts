@@ -34,9 +34,9 @@ describe("Process.layer — baked-in default store", () => {
         );
         const events = yield* store.events();
         expect(events.length).toBeGreaterThanOrEqual(2);
-        expect(events.some((row) => row._tag === "RunStarted")).toBe(true);
-        expect(events.find((row) => row._tag === "RunCompleted")?._tag).toBe(
-          "RunCompleted",
+        expect(events.some((row) => row._tag === "Started")).toBe(true);
+        expect(events.find((row) => row._tag === "Completed")?._tag).toBe(
+          "Completed",
         );
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
@@ -57,7 +57,7 @@ describe("Process.layer — baked-in default store", () => {
         const store = yield* OverrideStore.at(OverrideExec);
         const events = yield* store.events();
         expect(events.length).toBeGreaterThanOrEqual(1);
-        expect(events.find((row) => row._tag === "RunCompleted")).toMatchObject({
+        expect(events.find((row) => row._tag === "Completed")).toMatchObject({
           success: { symbol: "OVERRIDE", usd: 1 },
         });
       }).pipe(Effect.provide(live), Effect.scoped);

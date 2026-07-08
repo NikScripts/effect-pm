@@ -69,8 +69,8 @@ describe("Process.layer — Process.store auto-write", () => {
         const store = yield* EngineStore.at(VoidExec);
         const events = yield* store.events();
         expect(events.length).toBeGreaterThanOrEqual(2);
-        expect(events.some((row) => row._tag === "RunStarted")).toBe(true);
-        const completed = events.find((row) => row._tag === "RunCompleted");
+        expect(events.some((row) => row._tag === "Started")).toBe(true);
+        const completed = events.find((row) => row._tag === "Completed");
         expect(completed).toMatchObject({
           processId: VoidExec.key,
           isStartupRun: true,
@@ -93,7 +93,7 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(PricedExec);
         const events = yield* store.events();
-        const completed = events.find((row) => row._tag === "RunCompleted");
+        const completed = events.find((row) => row._tag === "Completed");
         expect(completed).toMatchObject({
           success: { symbol: "AAPL", usd: 42 },
         });
@@ -118,7 +118,7 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(FailingExec);
         const events = yield* store.events();
-        const failed = events.find((row) => row._tag === "RunFailed");
+        const failed = events.find((row) => row._tag === "Failed");
         expect(failed).toMatchObject({
           error: { _tag: "FetchError", status: 503 },
         });
@@ -126,7 +126,7 @@ describe("Process.layer — Process.store auto-write", () => {
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
 
-  it.effect("records RunInterrupted when a run is interrupted mid-effect", () =>
+  it.effect("records Interrupted when a run is interrupted mid-effect", () =>
     Effect.gen(function* () {
       const entered = yield* Deferred.make<void, never>();
       const hold = yield* Deferred.make<void, never>();
@@ -148,7 +148,7 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* Effect.yieldNow;
         const store = yield* EngineStore.at(InterruptExec);
         const events = yield* store.events();
-        const interrupted = events.find((row) => row._tag === "RunInterrupted");
+        const interrupted = events.find((row) => row._tag === "Interrupted");
         expect(interrupted).toMatchObject({
           processId: InterruptExec.key,
           isStartupRun: true,
@@ -157,7 +157,7 @@ describe("Process.layer — Process.store auto-write", () => {
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
 
-  it.effect("stringifies RunFailed.error when the tag has no error schema", () =>
+  it.effect("stringifies Failed.error when the tag has no error schema", () =>
     Effect.gen(function* () {
       const boom = new Boom({ code: 9 });
       const live = processLayer(
@@ -171,7 +171,7 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(StringFailExec);
         const events = yield* store.events();
-        const failed = events.find((row) => row._tag === "RunFailed");
+        const failed = events.find((row) => row._tag === "Failed");
         expect(failed).toMatchObject({
           error: String(boom),
         });
@@ -194,7 +194,7 @@ describe("Process.layer — Process.store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(RichSuccessExec);
         const events = yield* store.events();
-        const completed = events.find((row) => row._tag === "RunCompleted");
+        const completed = events.find((row) => row._tag === "Completed");
         expect(completed).toMatchObject({
           success: { at, count: 7 },
         });
@@ -218,7 +218,7 @@ describe("Process.serve / serveRemote — store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* EngineStore.at(ServeExec);
         const events = yield* store.events();
-        expect(events.some((row) => row._tag === "RunCompleted")).toBe(true);
+        expect(events.some((row) => row._tag === "Completed")).toBe(true);
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
@@ -239,7 +239,7 @@ describe("Process.serve / serveRemote — store auto-write", () => {
           builtInProcessStoreContract(ServeRemoteExec),
         );
         const events = yield* store.events();
-        expect(events.some((row) => row._tag === "RunCompleted")).toBe(true);
+        expect(events.some((row) => row._tag === "Completed")).toBe(true);
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );

@@ -17,7 +17,7 @@
 
 - **Removed `ProcessExecutionStore`** facet, `@nikscripts/effect-pm/store/ProcessExecution` subpath, and `ProcessStorage.ProcessExecution` alias.
 - Use **`Process.store(tag)`** on an app **`Store.Service`** — built-in contract with `record` / `events` / `hasPriorExecutions`.
-- **Wire rows** use PascalCase `_tag` (`RunCompleted`, `RunFailed`, `RunInterrupted`), optional **`success`** (when the tag stamps `success`), and **`error`** on failures (typed when the tag stamps `error`; otherwise `string`).
+- **Wire rows** use PascalCase `_tag` (`Started`, `Completed`, `Failed`, `Interrupted`), optional **`success`** (when the tag stamps `success`), and **`error`** on failures (typed when the tag stamps `error`; otherwise `string`).
 
 ### Toolkit layers vs `Process.make`
 

@@ -111,7 +111,7 @@ import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";
 import {
-  engineProcessStoreContract,
+  builtInProcessStoreContract,
   makeProcessStoreAnalyticsContract,
   type ProcessStoreAnalyticsContract,
   type ProcessStoreEvent,
@@ -359,20 +359,12 @@ interface ProcessMirror {
 }
 
 /**
- * Engine-facing process store recorder — Storage-free semantic writes at run boundaries.
+ * Engine-facing process store recorder — Storage-free writes at run boundaries.
  * Built in {@link buildProcessImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
- * `Storage` discharged once at layer build (queue golden pattern).
+ * `Storage` discharged once via {@link Store.provideContext} (queue / run-resource golden pattern).
  * @internal
  */
 interface ProcessStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
-  readonly recordStarted: (input: ProcessStoreStartedInput) => Effect.Effect<void>;
-  readonly recordCompleted: (
-    input: ProcessStoreTerminalInput & { readonly success?: unknown },
-  ) => Effect.Effect<void>;
-  readonly recordFailed: (
-    input: ProcessStoreTerminalInput & { readonly error: unknown },
-  ) => Effect.Effect<void>;
-  readonly recordInterrupted: (input: ProcessStoreTerminalInput) => Effect.Effect<void>;
   readonly record: (event: ProcessStoreEvent<Tag>) => Effect.Effect<void>;
   readonly hasPriorExecutions: () => Effect.Effect<boolean>;
 }
@@ -553,21 +545,38 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void> =>
     store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
-  const recordStoreStarted = (args: {
-    readonly scheduleKey: string | null;
-    readonly startedAt: number;
-    readonly isStartupRun: boolean;
-  }): Effect.Effect<void> =>
-    whenStore((recorder) => recorder.recordStarted(args));
+  const processId = storeScopeTag?.key ?? name;
 
-  const recordStoreCompleted = (args: {
-    readonly scheduleKey: string | null;
-    readonly startedAt: number;
-    readonly completedAt: number;
-    readonly isStartupRun: boolean;
-    readonly success?: unknown;
-  }): Effect.Effect<void> =>
-    whenStore((recorder) => recorder.recordCompleted(args));
+  const terminalRow = (input: ProcessStoreTerminalInput) => ({
+    processId,
+    scheduleKey: input.scheduleKey,
+    startedAt: input.startedAt,
+    completedAt: input.completedAt,
+    durationMs: input.completedAt - input.startedAt,
+    isStartupRun: input.isStartupRun,
+  });
+
+  const recordStoreStarted = (args: ProcessStoreStartedInput): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Started",
+        processId,
+        scheduleKey: args.scheduleKey,
+        startedAt: args.startedAt,
+        isStartupRun: args.isStartupRun,
+      }),
+    );
+
+  const recordStoreCompleted = (
+    args: ProcessStoreTerminalInput & { readonly success?: unknown },
+  ): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Completed",
+        ...terminalRow(args),
+        ...(args.success !== undefined ? { success: args.success } : {}),
+      }),
+    );
 
   const recordStoreFailed = (args: {
     readonly scheduleKey: string | null;
@@ -577,8 +586,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     readonly error: unknown;
   }): Effect.Effect<void> =>
     whenStore((recorder) =>
-      recorder.recordFailed({
-        ...args,
+      recorder.record({
+        _tag: "Failed",
+        ...terminalRow(args),
         error:
           storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
             ? args.error
@@ -586,13 +596,13 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       }),
     );
 
-  const recordStoreInterrupted = (args: {
-    readonly scheduleKey: string | null;
-    readonly startedAt: number;
-    readonly completedAt: number;
-    readonly isStartupRun: boolean;
-  }): Effect.Effect<void> =>
-    whenStore((recorder) => recorder.recordInterrupted(args));
+  const recordStoreInterrupted = (args: ProcessStoreTerminalInput): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Interrupted",
+        ...terminalRow(args),
+      }),
+    );
 
   const readHasPriorExecutions = (): Effect.Effect<boolean> =>
     store !== undefined
@@ -1480,7 +1490,7 @@ export const processLogEntry = LogEntrySchema;
 export { processEventReadPayload };
 
 /**
- * Execution event union for void processes (no `success` field on `RunCompleted`).
+ * Execution event union for void processes (no `success` field on `Completed`).
  *
  * @public
  */
@@ -2267,7 +2277,7 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
 const buildProcessImpl = <A, E, R>(
   tag: ResourceTag<any, any>,
   baseConfig: ProcessLayerConfig<A, E, R>,
-): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope | Store.Storage> =>
+): Effect.Effect<Resource.BuiltResource<ProcessSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
@@ -2358,21 +2368,11 @@ const buildProcessImpl = <A, E, R>(
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
     const storeEffects = pipe(
-      Store.effects(tag.key, engineProcessStoreContract(tag)),
+      Store.effects(tag.key, builtInProcessStoreContract(tag)),
       Store.catchWriteErrors,
     );
     const storageContext = yield* Effect.context<Store.Storage>();
-    const provideStorage = <A>(
-      write: Effect.Effect<A, never, Store.Storage>,
-    ): Effect.Effect<A> => Effect.provide(write, storageContext);
-    const store: ProcessStoreWriter = {
-      recordStarted: (input) => provideStorage(storeEffects.recordStarted(input)),
-      recordCompleted: (input) => provideStorage(storeEffects.recordCompleted(input)),
-      recordFailed: (input) => provideStorage(storeEffects.recordFailed(input)),
-      recordInterrupted: (input) => provideStorage(storeEffects.recordInterrupted(input)),
-      record: (event) => provideStorage(storeEffects.record(event)),
-      hasPriorExecutions: () => provideStorage(storeEffects.hasPriorExecutions()),
-    };
+    const store: ProcessStoreWriter = Store.provideContext(storeEffects, storageContext);
 
     const handle = make(tag.key, {
       effect: captured,
@@ -2446,7 +2446,11 @@ const buildProcessImpl = <A, E, R>(
       ...scheduleMembers,
       ...resultMembers,
     };
-    return Resource.provideContext(impl, tag[specSym], context);
+    return Resource.builtResource(
+      tag,
+      impl as WithRequirement<ImplOf<ProcessSpec>, R>,
+      context,
+    );
   });
 
 // ============================================================================
@@ -2488,7 +2492,9 @@ export function layer(
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
-      Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(baseTag, impl)),
+      Effect.map(buildProcessImpl(tag, config), (built) =>
+        Resource.layer(baseTag, Resource.grantLocal(baseTag, built)),
+      ),
     ),
   );
 }
@@ -2515,7 +2521,7 @@ export function serve(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (impl): Layer.Layer<any, any, any> => Resource.serve(baseTag, impl),
+        (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
       ),
     ),
   );
@@ -2540,7 +2546,7 @@ export function serveRemote(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (impl): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, impl),
+        (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
       ),
     ),
   );

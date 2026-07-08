@@ -1,15 +1,13 @@
 /**
- * Built-in {@link Process} store contracts — shared base + extensions.
+ * Built-in {@link Process} store contract.
  *
- * - **Base** (`makeProcessStoreBaseContract`) — one `event` shape; `record` / `events` /
- *   `hasPriorExecutions`. Shared journal SSOT for both internal and public effects.
- * - **Internal** (`engineProcessStoreContract`) — base + narrow semantic **writes** (each funnels to
- *   the same `event.append`). Engine uses `Store.effects` + `catchWriteErrors` on this contract.
- * - **Public** (`makeProcessStoreAnalyticsContract`) — base + analytics **reads** over the same log.
- *   Registered via {@link Process.store}.
+ * Two tiers (mirrors {@link RunResource} / {@link QueueResource}):
+ * - **Tier 1** — lean base (`builtInProcessStoreContract`)
+ * - **Tier 2** — analytics read-extension (`makeProcessStoreAnalyticsContract`)
  *
- * Tiers 2+3 stack on the lean base via {@link Store.extend} (type-preserving) — engine narrow
- * writes and public analytics reads each close over the same `event.append` / `event.read` SSOT.
+ * Tier 2 composes tier 1 via {@link Store.extend} — shapes stay on tier 1;
+ * the extension only adds analytics read methods. The engine writes via shape
+ * `event.append` directly (`store.record`).
  *
  * @module internal/store/processStoreSpec
  * @internal
@@ -32,18 +30,6 @@ import type { ShapeHandles } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
 import type { StoreScopeTag } from "./registration";
 
-/** @internal */
-type ProcessWireSchemas = {
-  readonly success?: Schema.Top;
-  readonly error?: Schema.Top;
-};
-
-/** Read `success` / `error` wire slots off a process tag. @internal */
-const processWireFromTag = (tag: StoreScopeTag): ProcessWireSchemas => ({
-  success: successOf(tag),
-  error: errorOf(tag),
-});
-
 const processEventSchema = (
   success?: Schema.Top,
   error?: Schema.Top,
@@ -64,14 +50,14 @@ export type ProcessEventSchemaOf<_Tag extends StoreScopeTag> = typeof processExe
  * (`success?: unknown`, `error: unknown`). @internal
  */
 export type ProcessEventOf<_Tag extends StoreScopeTag> =
-  | Extract<ProcessExecutionEventVoid, { readonly _tag: "RunStarted" }>
-  | (Extract<ProcessExecutionEventVoid, { readonly _tag: "RunCompleted" }> & {
+  | Extract<ProcessExecutionEventVoid, { readonly _tag: "Started" }>
+  | (Extract<ProcessExecutionEventVoid, { readonly _tag: "Completed" }> & {
     readonly success?: unknown;
   })
-  | (Omit<Extract<ProcessExecutionEventVoid, { readonly _tag: "RunFailed" }>, "error"> & {
+  | (Omit<Extract<ProcessExecutionEventVoid, { readonly _tag: "Failed" }>, "error"> & {
     readonly error: unknown;
   })
-  | Extract<ProcessExecutionEventVoid, { readonly _tag: "RunInterrupted" }>;
+  | Extract<ProcessExecutionEventVoid, { readonly _tag: "Interrupted" }>;
 
 /** Event union schema for a process store contract. @internal */
 export const processStoreEventSchema = processEventSchema;
@@ -82,19 +68,19 @@ export type ProcessStoreEvent<Tag extends StoreScopeTag = StoreScopeTag> = Proce
 /** @internal */
 export type ProcessStoreFailed<Tag extends StoreScopeTag> = Extract<
   ProcessStoreEvent<Tag>,
-  { readonly _tag: "RunFailed" }
+  { readonly _tag: "Failed" }
 >;
 
 /** @internal */
 export type ProcessStoreCompleted<Tag extends StoreScopeTag> = Extract<
   ProcessStoreEvent<Tag>,
-  { readonly _tag: "RunCompleted" }
+  { readonly _tag: "Completed" }
 >;
 
 /** @internal */
 export type ProcessStoreStarted<Tag extends StoreScopeTag> = Extract<
   ProcessStoreEvent<Tag>,
-  { readonly _tag: "RunStarted" }
+  { readonly _tag: "Started" }
 >;
 
 /** Lifetime execution counts. @internal */
@@ -203,7 +189,7 @@ export const makeProcessStoreBaseContract = (
     processStoreBaseMethods,
   );
 
-/** Built-in process store contract for a tag (tier-1 / tests / simple registration). @internal */
+/** Built-in process store contract for a tag (tier-1 / engine / tests / simple registration). @internal */
 export const builtInProcessStoreContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ): ProcessStoreBaseContract<Tag> =>
@@ -211,10 +197,6 @@ export const builtInProcessStoreContract = <const Tag extends StoreScopeTag>(
 
 /** @deprecated Use {@link ProcessStoreBaseContract}. @internal */
 export type BuiltInProcessContract<Tag extends StoreScopeTag> = ProcessStoreBaseContract<Tag>;
-
-// ============================================================================
-// Internal — engine write-extension (narrow triggers → shared event.append)
-// ============================================================================
 
 /** Narrow write inputs — engine supplies `processId` when building rows. @internal */
 export type ProcessStoreStartedInput = {
@@ -231,72 +213,6 @@ export type ProcessStoreTerminalInput = {
   readonly isStartupRun: boolean;
 };
 
-/**
- * Build the internal engine contract — base + narrow semantic writes, each funnelling to
- * `event.append`. @internal
- */
-export const makeEngineProcessStoreContract = (
-  processId: string,
-  wire?: ProcessWireSchemas,
-) => {
-  const terminalRow = (input: ProcessStoreTerminalInput) => ({
-    processId,
-    scheduleKey: input.scheduleKey,
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
-    durationMs: input.completedAt - input.startedAt,
-    isStartupRun: input.isStartupRun,
-  });
-
-  const base = Store.contract(
-    {
-      event: Store.shape(processEventSchema(wire?.success, wire?.error), processEventReadPayload),
-    },
-    processStoreBaseMethods,
-  );
-  return Store.extend(
-    ({ event }) => ({
-      recordStarted: (input: ProcessStoreStartedInput) =>
-        event.append({
-          _tag: "RunStarted",
-          processId,
-          scheduleKey: input.scheduleKey,
-          startedAt: input.startedAt,
-          isStartupRun: input.isStartupRun,
-        }),
-      recordCompleted: (
-        input: ProcessStoreTerminalInput & { readonly success?: unknown },
-      ) =>
-        event.append({
-          _tag: "RunCompleted",
-          ...terminalRow(input),
-          ...(input.success !== undefined ? { success: input.success } : {}),
-        }),
-      recordFailed: (
-        input: ProcessStoreTerminalInput & { readonly error: unknown },
-      ) =>
-        event.append({
-          _tag: "RunFailed",
-          ...terminalRow(input),
-          error: input.error,
-        }),
-      recordInterrupted: (input: ProcessStoreTerminalInput) =>
-        event.append({
-          _tag: "RunInterrupted",
-          ...terminalRow(input),
-        }),
-    }),
-    base,
-  );
-};
-
-/** Internal engine contract for a tag. @internal */
-export const engineProcessStoreContract = (tag: StoreScopeTag) =>
-  makeEngineProcessStoreContract(tag.key, processWireFromTag(tag));
-
-/** @internal */
-export type EngineProcessStoreContract = ReturnType<typeof engineProcessStoreContract>;
-
 // ============================================================================
 // Public — analytics read-extension (derivations over shared event.read)
 // ============================================================================
@@ -308,18 +224,18 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
   const base = builtInProcessStoreContract(tag);
   const storeClass = { scopeKey: tag.key, contract: base };
   const isFailed = (event: ProcessStoreEvent<Tag>): event is ProcessStoreFailed<Tag> =>
-    event._tag === "RunFailed";
+    event._tag === "Failed";
 
   const isCompleted = (event: ProcessStoreEvent<Tag>): event is ProcessStoreCompleted<Tag> =>
-    event._tag === "RunCompleted";
+    event._tag === "Completed";
 
   const isStarted = (event: ProcessStoreEvent<Tag>): event is ProcessStoreStarted<Tag> =>
-    event._tag === "RunStarted";
+    event._tag === "Started";
 
   const isTerminal = (event: ProcessStoreEvent<Tag>): boolean =>
-    event._tag === "RunCompleted" ||
-    event._tag === "RunFailed" ||
-    event._tag === "RunInterrupted";
+    event._tag === "Completed" ||
+    event._tag === "Failed" ||
+    event._tag === "Interrupted";
 
   return Store.extend(
     ({ event }) => ({
@@ -332,7 +248,7 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
       interruptions: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
         Effect.map(event.read(), (events) =>
           (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
-            (e) => e._tag === "RunInterrupted",
+            (e) => e._tag === "Interrupted",
           ),
         ),
       inFlight: (): Effect.Effect<ReadonlyArray<ProcessStoreStarted<Tag>>> =>
@@ -378,16 +294,16 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
           let interrupted = 0;
           for (const e of rows) {
             switch (e._tag) {
-              case "RunStarted":
+              case "Started":
                 started += 1;
                 break;
-              case "RunCompleted":
+              case "Completed":
                 completed += 1;
                 break;
-              case "RunFailed":
+              case "Failed":
                 failed += 1;
                 break;
-              case "RunInterrupted":
+              case "Interrupted":
                 interrupted += 1;
                 break;
               default:
@@ -402,8 +318,8 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
           let completed = 0;
           let failed = 0;
           for (const e of rows) {
-            if (e._tag === "RunCompleted") completed += 1;
-            else if (e._tag === "RunFailed") failed += 1;
+            if (e._tag === "Completed") completed += 1;
+            else if (e._tag === "Failed") failed += 1;
           }
           const total = completed + failed;
           return total === 0 ? 0 : failed / total;

@@ -39,11 +39,11 @@ const program = Effect.gen(function* () {
 
     const store = yield* DemoStore.at(PricesProcess);
     const events = yield* store.events();
-    const completed = events.find((row) => row._tag === "RunCompleted");
+    const completed = events.find((row) => row._tag === "Completed");
     yield* Effect.log(`built-in store: ${String(events.length)} event(s)`);
     const price =
       completed !== undefined &&
-      completed._tag === "RunCompleted" &&
+      completed._tag === "Completed" &&
       "success" in completed &&
       completed.success !== undefined
         ? yield* Schema.decodeUnknownEffect(Price)(completed.success).pipe(Effect.option)

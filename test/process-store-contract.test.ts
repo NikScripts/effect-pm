@@ -34,7 +34,7 @@ describe("Process store contract", () => {
     Effect.gen(function* () {
       const store = yield* ProcessStore.at(VoidProc);
       yield* store.record({
-        _tag: "RunCompleted",
+        _tag: "Completed",
         processId: VoidProc.key,
         scheduleKey: null,
         startedAt: 1,
@@ -44,7 +44,7 @@ describe("Process store contract", () => {
       });
       const events = yield* store.events();
       expect(events).toHaveLength(1);
-      expect(events[0]?._tag).toBe("RunCompleted");
+      expect(events[0]?._tag).toBe("Completed");
       expect(yield* store.hasPriorExecutions()).toBe(true);
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
   );
@@ -53,7 +53,7 @@ describe("Process store contract", () => {
     Effect.gen(function* () {
       const store = yield* ProcessStore.at(PricedProc);
       yield* store.record({
-        _tag: "RunCompleted",
+        _tag: "Completed",
         processId: PricedProc.key,
         scheduleKey: null,
         startedAt: 10,
@@ -64,7 +64,7 @@ describe("Process store contract", () => {
       });
       const events = yield* store.events();
       expect(events[0]).toMatchObject({
-        _tag: "RunCompleted",
+        _tag: "Completed",
         success: { symbol: "AAPL", usd: 1 },
       });
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),
@@ -76,11 +76,11 @@ describe("Process store contract", () => {
     expect(Process.successOf(VoidProc)).toBeUndefined();
   });
 
-  it.effect("RunFailed carries typed error when error schema is stamped", () =>
+  it.effect("Failed carries typed error when error schema is stamped", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore.at(PricedErrProc);
       yield* store.record({
-        _tag: "RunFailed",
+        _tag: "Failed",
         processId: PricedErrProc.key,
         scheduleKey: null,
         startedAt: 1,
@@ -91,7 +91,7 @@ describe("Process store contract", () => {
       });
       const events = yield* store.events();
       expect(events[0]).toMatchObject({
-        _tag: "RunFailed",
+        _tag: "Failed",
         error: { _tag: "FetchError", status: 404 },
       });
     }).pipe(Effect.provide(ProcessStore.layerMemory), Effect.scoped),

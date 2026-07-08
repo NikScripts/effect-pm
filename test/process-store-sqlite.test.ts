@@ -32,7 +32,7 @@ describe("Process.layer — durable SQLite store", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* SqliteStore.at(SqliteExec);
         const events = yield* store.events();
-        expect(events.some((row) => row._tag === "RunCompleted")).toBe(true);
+        expect(events.some((row) => row._tag === "Completed")).toBe(true);
       }).pipe(Effect.provide(Layer.mergeAll(live, clock)), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
@@ -52,7 +52,7 @@ describe("Process.layer — durable SQLite store", () => {
         Effect.gen(function* () {
           const store = yield* SqliteStore.at(SqliteExec);
           yield* store.record({
-            _tag: "RunCompleted",
+            _tag: "Completed",
             processId: SqliteExec.key,
             scheduleKey: null,
             startedAt: 1,
@@ -69,7 +69,7 @@ describe("Process.layer — durable SQLite store", () => {
           const events = yield* store.events();
           expect(events).toHaveLength(1);
           expect(events[0]).toMatchObject({
-            _tag: "RunCompleted",
+            _tag: "Completed",
             processId: SqliteExec.key,
             isStartupRun: true,
           });
