@@ -791,37 +791,34 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     >(tag.key, config);
     // Persist the queue's lifecycle events to its store (the observability plane). The engine records
     // through narrow, semantic writes over the engine write-extension contract: `Store.effects` builds
-    // the pure recorder and `Store.swallowWriteErrors` guards the base append. `Storage` (the baked-in
-    // in-memory default, or an app override) is captured here and provided so the engine handle stays
-    // `Storage`-free — the exact discharge point the old eager `resolveOrDie` used. It can't fail (the
-    // default materializes any scope); the recorder runs at the source in `publishEvent`, so no event
-    // burst is dropped by a late subscriber.
-    const storeEffects = Store.swallowWriteErrors(
+    // the pure recorder and `Store.catchWriteErrors` narrows each write's `StoreWriteError` out —
+    // logging + swallowing a journal/IO write hiccup so a store failure never breaks the queue (an
+    // encode/wiring **defect** still propagates). `Storage` (the baked-in in-memory default, or an app
+    // override) is captured here and provided so the engine handle stays `Storage`-free — the exact
+    // discharge point the old eager `resolveOrDie` used. It can't fail (the default materializes any
+    // scope); the recorder runs at the source in `publishEvent`, so no event burst is dropped by a late
+    // subscriber.
+    const storeEffects = Store.catchWriteErrors(
       Store.effects(tag.key, engineQueueStoreContract(tag)),
     );
     const storageContext = yield* Effect.context<Store.Storage>();
-    const guardWrite = (
-      write: Effect.Effect<void, never, Store.Storage>,
-    ): Effect.Effect<void> =>
-      Effect.provide(write, storageContext).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(`Queue "${tag.key}" event persist failed`, cause),
-        ),
-      );
+    const provideStorage = <A>(
+      write: Effect.Effect<A, never, Store.Storage>,
+    ): Effect.Effect<A> => Effect.provide(write, storageContext);
     const store: QueueStoreWriter<Schema.Struct<F>["Type"], E> = {
       enqueued: (entries, priority, batchId) =>
-        guardWrite(storeEffects.enqueued(entries, priority, batchId)),
-      started: (entry) => guardWrite(storeEffects.started(entry)),
-      completed: (entry, elapsed) => guardWrite(storeEffects.completed(entry, elapsed)),
+        provideStorage(storeEffects.enqueued(entries, priority, batchId)),
+      started: (entry) => provideStorage(storeEffects.started(entry)),
+      completed: (entry, elapsed) => provideStorage(storeEffects.completed(entry, elapsed)),
       failed: (entry, cause, elapsed) =>
-        guardWrite(storeEffects.failed(entry, cause, elapsed)),
+        provideStorage(storeEffects.failed(entry, cause, elapsed)),
       exited: (entry, exit, elapsed) =>
-        guardWrite(storeEffects.exited(entry, exit, elapsed)),
+        provideStorage(storeEffects.exited(entry, exit, elapsed)),
       retryScheduled: (entry, cause, nextAttempt) =>
-        guardWrite(storeEffects.retryScheduled(entry, cause, nextAttempt)),
+        provideStorage(storeEffects.retryScheduled(entry, cause, nextAttempt)),
       retryExhausted: (entry, cause) =>
-        guardWrite(storeEffects.retryExhausted(entry, cause)),
-      record: (event) => guardWrite(storeEffects.record(event)),
+        provideStorage(storeEffects.retryExhausted(entry, cause)),
+      record: (event) => provideStorage(storeEffects.record(event)),
     };
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would

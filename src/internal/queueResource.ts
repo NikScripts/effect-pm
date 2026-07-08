@@ -771,7 +771,7 @@ export type QueueEvent<T, E = unknown> =
 /**
  * The engine-facing store recorder — Storage-free semantic writes the engine calls at the
  * `publishEvent` sites. Built by `QueueResource.layer` from `pipe(Store.effects(tag.key, engine
- * write-extension), Store.swallowWriteErrors)` with `Storage` discharged from the baked default, so
+ * write-extension), Store.catchWriteErrors)` with `Storage` discharged from the baked default, so
  * the engine handle stays `Storage`-free. Each narrow write funnels to the shared `event.append`;
  * `record` is the base append alias for queue-level facts without a narrow write. @internal
  */

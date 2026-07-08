@@ -60,7 +60,7 @@ void ({} as TempAppend satisfies (
   row:
     | { readonly celsius: number }
     | ReadonlyArray<{ readonly celsius: number }>,
-) => Effect.Effect<void>);
+) => Effect.Effect<void, Store.StoreWriteError>);
 void ({} as TempRead satisfies () => Effect.Effect<ReadonlyArray<{ readonly celsius: number }>>);
 void _handle.sensors.temperature.append({ celsius: 21 });
 void _handle.sensors.temperature.read();
@@ -81,7 +81,7 @@ void _flat.readings.append({ value: 1 });
 void _flat.readings.read();
 void ({} as FlatHandle["readings"]["append"] satisfies (
   row: { readonly value: number } | ReadonlyArray<{ readonly value: number }>,
-) => Effect.Effect<void>);
+) => Effect.Effect<void, Store.StoreWriteError>);
 
 // ============================================================================
 // Effect / Stream extractors.

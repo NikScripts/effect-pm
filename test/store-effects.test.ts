@@ -23,7 +23,7 @@ describe("Store.effects", () => {
     const store = Store.effects("sensors", nestedContract);
     expect(Store.isStoreEffects(store)).toBe(true);
     // The transform preserves the brand (rebuilt object is re-stamped).
-    expect(Store.isStoreEffects(Store.swallowWriteErrors(store))).toBe(true);
+    expect(Store.isStoreEffects(Store.catchWriteErrors(store))).toBe(true);
     expect(Store.isStoreEffects({})).toBe(false);
     expect(Store.isStoreEffects(null)).toBe(false);
     // The brand is non-enumerable — invisible to method access / destructuring.

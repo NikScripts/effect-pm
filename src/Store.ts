@@ -86,6 +86,7 @@ import {
   StoreScopeNotRegistered,
   StoreChangeEvent,
   StoreJournalDecodeError,
+  StoreWriteError,
   type StoreSqliteConnectionError,
 } from "./internal/store/errors";
 import {
@@ -98,7 +99,6 @@ import {
   withRegistrationRetention,
 } from "./internal/store/registration";
 import {
-  CUSTOM_APPEND_ALIAS,
   emptyPayloadSchema,
   isStoreContractValue,
   makeShapeRefs,
@@ -132,7 +132,7 @@ export type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreHandleFromContract } from "./internal/store/spec";
 export type { MergedCustom, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
 
-export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent } from "./internal/store/errors";
+export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, StoreWriteError } from "./internal/store/errors";
 
 // ============================================================================
 // Storage service tag + layers
@@ -449,6 +449,26 @@ export type AddStorageReq<T> = T extends (
       : T;
 
 /**
+ * Remove {@link StoreWriteError} from the error channel of every method in a resolved-effects shape,
+ * recursing into nested sub-trees — the per-method-precise result of {@link catchWriteErrors}. A write
+ * method `(...a) => Effect<S, StoreWriteError | E, R>` → `(...a) => Effect<S, E, R>`; a read (whose `E`
+ * lacks `StoreWriteError`) is unchanged (`Exclude<E, StoreWriteError>` is a no-op); the
+ * {@link StoreEffectsVariance} brand's non-effect members pass through (the function-passthrough branch
+ * keeps `_C` intact). @internal
+ */
+export type CatchWriteError<T> = T extends (
+  ...args: infer A
+) => Effect.Effect<infer S, infer E, infer R>
+  ? (...args: A) => Effect.Effect<S, Exclude<E, StoreWriteError>, R>
+  : T extends Effect.Effect<infer S, infer E, infer R>
+    ? Effect.Effect<S, Exclude<E, StoreWriteError>, R>
+    : T extends (...args: ReadonlyArray<never>) => unknown
+      ? T
+      : T extends object
+        ? { readonly [K in keyof T]: CatchWriteError<T[K]> }
+        : T;
+
+/**
  * Brand identifier for an {@link effects} object — Effect's v4 `TypeId` shape (a string-literal id,
  * present at runtime). @public
  */
@@ -460,7 +480,8 @@ export const TypeId: TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
 /**
  * Variance carrier for the {@link effects} brand — mirrors Effect's `Stream.Variance`. `C` is
  * **covariant** (Effect's `(_: never) => C` encoding), so a specific contract's effects satisfy the wide
- * `StoreEffectsVariance<StoreContractValue>` constraint that {@link swallowWriteErrors} takes. @public
+ * `StoreEffectsVariance<StoreContractValue>` constraint that {@link mapEffects} / {@link catchWriteErrors}
+ * take. @public
  */
 export interface StoreEffectsVariance<out C extends StoreContractValue> {
   readonly [TypeId]: { readonly _C: (_: never) => C };
@@ -868,18 +889,6 @@ export const resolveOrDie = <const C extends StoreContractValue>(
     ),
   );
 
-/**
- * @deprecated Renamed to {@link resolve} (opt-in resolver; may fail `StoreScopeNotRegistered`).
- * @public
- */
-export const withStorage = resolve;
-
-/**
- * @deprecated Renamed to {@link resolveOrDie} (guaranteed resolver; dies on an unregistered custom store).
- * @public
- */
-export const withDefault = resolveOrDie;
-
 /** Navigate a resolved handle to the (possibly dotted) method at `path` and apply it. @internal */
 const callAt = (
   handle: unknown,
@@ -897,76 +906,17 @@ const callAt = (
   return node(...args);
 };
 
-/** Metadata stamped on an {@link effects} object so transforms can tell writes from reads. @internal */
-interface StoreEffectsMeta {
-  readonly scope: string;
-  readonly writePaths: ReadonlyArray<string>;
-}
-
-/**
- * Non-enumerable carrier of {@link StoreEffectsMeta}, invisible to method access / destructuring. A
- * genuinely **private** symbol (not in the global registry, not exported) — the runtime detail
- * `swallowWriteErrors` reads; it is NOT the public {@link TypeId} brand. @internal
- */
-const effectsMetaSym = Symbol("effectsMeta");
-
-/** @internal */
-const stampEffectsMeta = (target: object, meta: StoreEffectsMeta): void => {
-  Object.defineProperty(target, effectsMetaSym, {
-    value: meta,
-    enumerable: false,
-  });
-};
-
 /**
  * Stamp the honest (present-at-runtime) {@link TypeId} brand so {@link isStoreEffects} and the
- * {@link swallowWriteErrors} constraint are backed by a real property, not a phantom. Non-enumerable so
- * it stays invisible to method access / destructuring. @internal
+ * {@link mapEffects} / {@link catchWriteErrors} constraint are backed by a real property, not a phantom.
+ * Non-enumerable so it stays invisible to method access / destructuring / the {@link flattenEffects}
+ * walk. @internal
  */
 const stampEffectsBrand = (target: object): void => {
   Object.defineProperty(target, TypeId, {
     value: { _C: (_: never) => _ },
     enumerable: false,
   });
-};
-
-/** @internal */
-const readEffectsMeta = (target: unknown): StoreEffectsMeta | undefined => {
-  if (typeof target !== "object" || target === null || !(effectsMetaSym in target)) {
-    return undefined;
-  }
-  const meta = target[effectsMetaSym];
-  if (
-    typeof meta !== "object" ||
-    meta === null ||
-    !("scope" in meta) ||
-    !("writePaths" in meta)
-  ) {
-    return undefined;
-  }
-  const scope = meta.scope;
-  const writePaths = meta.writePaths;
-  if (typeof scope !== "string" || !Array.isArray(writePaths)) {
-    return undefined;
-  }
-  return {
-    scope,
-    writePaths: writePaths.filter((path): path is string => typeof path === "string"),
-  };
-};
-
-/** The dotted paths of a contract's append-backed (write) methods — leaf appends + append aliases. @internal */
-const writePathsOf = (contract: StoreContractValue): ReadonlyArray<string> => {
-  const paths: Array<string> = [];
-  for (const shapeKey of shapeRowsByKey(contract.shapes).keys()) {
-    paths.push(`${shapeKey}.append`);
-  }
-  for (const [name, entry] of Object.entries(contract.customEntries)) {
-    if (entry._tag === CUSTOM_APPEND_ALIAS) {
-      paths.push(name);
-    }
-  }
-  return paths;
 };
 
 /** Flatten an effects object to a dotted-key map of its method leaves (functions). @internal */
@@ -990,16 +940,22 @@ const flattenEffects = (
   }
 };
 
-/** Apply a type-erased method leaf, dying if it is somehow not callable. @internal */
-const invokeMethod = (
-  method: unknown,
-  args: ReadonlyArray<unknown>,
-): Effect.Effect<unknown, unknown> => {
-  if (typeof method !== "function") {
-    return Effect.die("Store.swallowWriteErrors: write path is not a method");
-  }
-  return method(...args);
-};
+/**
+ * Wrap a type-erased method leaf so its returned {@link Effect} is passed through `transform`. Dies if
+ * the leaf is somehow not callable (a structural invariant the {@link flattenEffects} walk guarantees).
+ * @internal
+ */
+const mapMethod =
+  (
+    method: unknown,
+    transform: (effect: Effect.Effect<unknown, unknown, unknown>) => Effect.Effect<unknown, unknown, unknown>,
+  ) =>
+  (...args: ReadonlyArray<unknown>): Effect.Effect<unknown, unknown, unknown> => {
+    if (typeof method !== "function") {
+      return Effect.die("Store.mapEffects: effects leaf is not a method");
+    }
+    return transform(method(...args));
+  };
 
 /**
  * Build a PURE object of effects from a contract — the {@link HandleOf} structure (nested shape tree +
@@ -1007,12 +963,15 @@ const invokeMethod = (
  * handle.<path>(...args))`. So every method carries `Storage` in its requirement (see {@link StoreEffectsOf}),
  * the error channel stays clean ({@link resolveOrDie} dies on an unregistered custom store rather than
  * surfacing `StoreScopeNotRegistered`), and there is **no** resolution / `yield*` / memo cell here — the
- * handle memo lives in the storage bridge's `.at`. No error handling ({@link swallowWriteErrors} owns that).
+ * handle memo lives in the storage bridge's `.at`. No error handling ({@link catchWriteErrors} owns that).
+ *
+ * Write methods honestly carry {@link StoreWriteError} in their error channel (a journal/IO write
+ * failure); {@link catchWriteErrors} narrows it out. Reads carry no error.
  *
  * @example
  * ```ts
  * const store = Store.effects("sensors", sensorContract);
- * yield* store.sensors.temperature.append({ celsius: 21 });   // Effect<void, never, Storage>
+ * yield* store.sensors.temperature.append({ celsius: 21 });   // Effect<void, StoreWriteError, Storage>
  * const rows = yield* store.sensors.temperature.read();       // Effect<ReadonlyArray<…>, never, Storage>
  * ```
  *
@@ -1038,10 +997,6 @@ export const effects = <const C extends StoreContractValue>(
     flat[name] = method(name);
   }
   const built = nestHandle(flat);
-  stampEffectsMeta(built, {
-    scope: typeof scope === "string" ? scope : scope.key,
-    writePaths: writePathsOf(contract),
-  });
   stampEffectsBrand(built);
   // Same generic-object structural-rebuild idiom as `makeShapeHandles` / `makeShapeRefs`: the effects
   // object is assembled by dynamic assignment (then nested), so its type is asserted once here.
@@ -1049,60 +1004,94 @@ export const effects = <const C extends StoreContractValue>(
 };
 
 /**
- * Wrap the **write** methods of a {@link effects} object so a fire-and-forget append that *fails* is
- * **logged and swallowed** (succeeds as `void`) instead of surfacing its error. Composes with `pipe`:
- * `pipe(Store.effects(scope, contract), Store.swallowWriteErrors)`.
+ * The generic transform primitive: walk **every** method on a {@link effects} object (nested shape
+ * leaves + custom methods) and pass each method's returned {@link Effect} through `transform`, then
+ * re-nest and re-stamp the {@link TypeId} brand. Composes with `pipe`.
  *
- * Scope of the guard, precisely:
- * - **Write failures are swallowed** — a journal/IO write error is caught (`Effect.catchAll`), logged
- *   at warning level, and the effect completes successfully.
- * - **Defects are NOT swallowed** — an encode/serialization mismatch (a bug: the value does not fit the
- *   declared shape, dies in {@link effects}' append path) and a wiring die (no store in context) are
- *   **defects**, not failures, so they propagate untouched.
- * - **Reads and all non-write methods are left exactly as-is.**
- *
- * Type-preserving: writes are already `Effect<void, never, Storage>` publicly, so this only adds the
- * runtime guard over the type-erased journal failure — the exact input type is returned unchanged.
+ * `transform` is applied uniformly; whether it changes types is expressed through the result:
+ * - **Type-preserving** transforms (`withSpan` / `retry` / `timed`, whose signature is
+ *   `Effect<A, E, R> → Effect<A, E, R>`) leave the type unchanged — `Out` defaults to `Effects`.
+ * - **Type-changing** transforms (narrowing `E`, like {@link catchWriteErrors}) supply an explicit
+ *   `Out` computed per method by a mapped type (e.g. {@link CatchWriteError}), so the change flows
+ *   through each method precisely.
  *
  * @remarks
- * Typed as an identity generic constrained to the {@link StoreEffectsVariance} brand rather than
- * `(effects: StoreEffectsOf<C>) => StoreEffectsOf<C>`: `C` is not inferable through the opaque
- * `StoreEffectsOf<C>`, so that form would default `C` and *widen* the result, breaking both
- * type-preservation and `pipe` composition. `Effects` infers as the caller's exact `StoreEffectsOf<C>`
- * (returned unchanged, composes through `pipe`), while the brand constraint rejects a bare `{}` / plain
- * object — `C`'s covariant encoding lets a specific contract's effects satisfy the wide constraint.
+ * `Effects` is constrained to the {@link StoreEffectsVariance} brand (not `StoreEffectsOf<C>`): `C` is
+ * not inferable through the opaque handle type, so that form would default `C` and widen; the brand
+ * constraint rejects a bare `{}` while `C`'s covariant encoding lets a specific contract's effects
+ * satisfy the wide constraint. `transform`'s `unknown`-channel signature accepts both a polymorphic
+ * type-preserving transform and a concrete narrowing one without an `any`.
+ *
+ * @example Type-preserving — trace every store method
+ * ```ts
+ * const traced = Store.mapEffects(store, (effect) => Effect.withSpan(effect, "store"));
+ * ```
  *
  * @public
  */
-export const swallowWriteErrors = <Effects extends StoreEffectsVariance<StoreContractValue>>(
+export const mapEffects = <
+  Effects extends StoreEffectsVariance<StoreContractValue>,
+  Out = Effects,
+>(
   effects: Effects,
-): Effects => {
-  const meta = readEffectsMeta(effects);
-  if (meta === undefined) {
-    return effects;
-  }
-
+  transform: (
+    effect: Effect.Effect<unknown, unknown, unknown>,
+  ) => Effect.Effect<unknown, unknown, unknown>,
+): Out => {
   const flat: Record<string, unknown> = {};
   flattenEffects(effects, "", flat);
 
-  for (const path of meta.writePaths) {
-    const method = flat[path];
-    if (typeof method === "function") {
-      flat[path] = (...args: ReadonlyArray<unknown>) =>
-        invokeMethod(method, args).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(`${meta.scope} ${path}: store write failed`, error),
-          ),
-        );
-    }
+  const mapped: Record<string, unknown> = {};
+  for (const [path, method] of Object.entries(flat)) {
+    mapped[path] = mapMethod(method, transform);
   }
 
-  const built = nestHandle(flat);
-  stampEffectsMeta(built, meta);
+  const built = nestHandle(mapped);
   stampEffectsBrand(built);
-  // Same structural-rebuild idiom as `effects`: the guarded object is reassembled by dynamic assignment.
-  return built as Effects;
+  // Same structural-rebuild idiom as `effects`: the mapped object is reassembled by dynamic assignment,
+  // so its type is asserted once here (as `Out` — the caller-supplied per-method result, or `Effects`).
+  return built as Out;
 };
+
+/** True for a {@link StoreWriteError} value (in-process `_tag` discriminator). @internal */
+const isStoreWriteError = (u: unknown): u is StoreWriteError =>
+  Predicate.hasProperty(u, "_tag") && u._tag === "StoreWriteError";
+
+/**
+ * The {@link catchWriteErrors} write guard: swallow a {@link StoreWriteError} **failure** (log at
+ * warning level, succeed as `void`), re-raise any other failure untouched, and leave **defects** alone
+ * (`Effect.catch` recovers failures only — an encode/serialization mismatch or wiring die stays a
+ * defect and propagates). A no-op on reads (they never fail with `StoreWriteError`). @internal
+ */
+const swallowWrite = (
+  effect: Effect.Effect<unknown, unknown, unknown>,
+): Effect.Effect<unknown, unknown, unknown> =>
+  Effect.catch(effect, (error) =>
+    isStoreWriteError(error)
+      ? Effect.logWarning("store write failed", error)
+      : Effect.fail(error),
+  );
+
+/**
+ * Narrow {@link StoreWriteError} out of the error channel of a {@link effects} object's **write**
+ * methods — a fire-and-forget append that fails a journal/IO write is **logged and swallowed**
+ * (succeeds as `void`). One-liner over {@link mapEffects}. Composes with `pipe`:
+ * `pipe(Store.effects(scope, contract), Store.catchWriteErrors)`.
+ *
+ * Scope of the guard, precisely:
+ * - **Write failures are swallowed** — the `StoreWriteError` is caught, logged, and the effect
+ *   completes successfully; `StoreWriteError` is removed from `E` (see {@link CatchWriteError}).
+ * - **Defects are NOT swallowed** — an encode/serialization mismatch (a bug: the value does not fit the
+ *   declared shape, dies in the append path) and a wiring die (no store in context) are **defects**,
+ *   not failures, so they propagate untouched.
+ * - **Reads and every other error are left exactly as-is** — `Exclude<E, StoreWriteError>` is a no-op
+ *   where `StoreWriteError` is absent.
+ *
+ * @public
+ */
+export const catchWriteErrors = <Effects extends StoreEffectsVariance<StoreContractValue>>(
+  effects: Effects,
+): CatchWriteError<Effects> => mapEffects<Effects, CatchWriteError<Effects>>(effects, swallowWrite);
 
 
 // ============================================================================

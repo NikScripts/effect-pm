@@ -31,11 +31,12 @@ const queueEffects = Store.effects("queue", flatContract);
 type TempAppend = typeof sensorEffects.sensors.temperature.append;
 type TempRead = typeof sensorEffects.sensors.temperature.read;
 
+// Raw `Store.effects` writes honestly carry `StoreWriteError` (narrowed out by `catchWriteErrors`).
 void ({} as TempAppend satisfies (
   row:
     | { readonly celsius: number }
     | ReadonlyArray<{ readonly celsius: number }>,
-) => Effect.Effect<void, never, Store.Storage>);
+) => Effect.Effect<void, Store.StoreWriteError, Store.Storage>);
 
 void ({} as TempRead satisfies (
   payload?: {},
@@ -60,12 +61,12 @@ void ({} as HumidityRead satisfies (
 // Default per-shape effects on the flat leaf.
 void ({} as typeof queueEffects.event.append satisfies (
   row: { readonly id: string } | ReadonlyArray<{ readonly id: string }>,
-) => Effect.Effect<void, never, Store.Storage>);
+) => Effect.Effect<void, Store.StoreWriteError, Store.Storage>);
 
 // Custom methods (append/read aliases) carry `Storage` too.
 void ({} as typeof queueEffects.record satisfies (
   row: { readonly id: string } | ReadonlyArray<{ readonly id: string }>,
-) => Effect.Effect<void, never, Store.Storage>);
+) => Effect.Effect<void, Store.StoreWriteError, Store.Storage>);
 
 void ({} as typeof queueEffects.events satisfies (
   payload?: {},
@@ -78,29 +79,34 @@ void ({} as RecordCtx satisfies Store.Storage);
 void ({} as Store.Storage satisfies RecordCtx);
 
 // ============================================================================
-// TypeId brand — swallowWriteErrors is type-preserving, composes, and rejects non-branded input.
+// TypeId brand — catchWriteErrors narrows writes, composes via pipe, rejects non-branded input.
 // ============================================================================
 
-const guarded = Store.swallowWriteErrors(sensorEffects);
-type Sensor = typeof sensorEffects;
-type Guarded = typeof guarded;
-// Same `StoreEffectsOf` type in and out (mutually assignable).
-type SamePreserved = [Sensor] extends [Guarded]
-  ? [Guarded] extends [Sensor]
-    ? true
-    : false
-  : false;
-true satisfies SamePreserved;
+const guarded = Store.catchWriteErrors(sensorEffects);
 
-// `pipe(...)` composes and preserves the exact type.
-const piped = pipe(Store.effects("sensors", nestedContract), Store.swallowWriteErrors);
-type Piped = typeof piped;
-type PipedSame = [Piped] extends [Sensor] ? ([Sensor] extends [Piped] ? true : false) : false;
-true satisfies PipedSame;
+// A write narrows `StoreWriteError` out of its error channel.
+void ({} as typeof guarded.sensors.temperature.append satisfies (
+  row:
+    | { readonly celsius: number }
+    | ReadonlyArray<{ readonly celsius: number }>,
+) => Effect.Effect<void, never, Store.Storage>);
+
+// A read is untouched — same `Effect<Array, never, Storage>` (no `| void` pollution).
+void ({} as typeof guarded.sensors.temperature.read satisfies (
+  payload?: {},
+) => Effect.Effect<ReadonlyArray<{ readonly celsius: number }>, never, Store.Storage>);
+
+// The result is still branded, so it re-composes through `pipe`.
+const piped = pipe(Store.effects("sensors", nestedContract), Store.catchWriteErrors);
+void ({} as typeof piped.sensors.temperature.append satisfies (
+  row:
+    | { readonly celsius: number }
+    | ReadonlyArray<{ readonly celsius: number }>,
+) => Effect.Effect<void, never, Store.Storage>);
 
 // A bare object is NOT a branded effects object — the constraint rejects it.
 // @ts-expect-error - `{}` lacks the StoreEffects TypeId brand
-Store.swallowWriteErrors({});
+Store.catchWriteErrors({});
 
 // `isStoreEffects` narrows an `unknown` to a branded effects object.
 declare const maybe: unknown;

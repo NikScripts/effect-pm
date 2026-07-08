@@ -8,7 +8,7 @@
 import { Effect, Schema, Stream } from "effect";
 import type { Scope } from "effect/Scope";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
-import { StoreScopeNotRegistered } from "./errors";
+import { StoreScopeNotRegistered, StoreWriteError } from "./errors";
 import {
   isStoreContractValue,
   materializeContractHandle,
@@ -130,14 +130,36 @@ export const makeScopeHandle = <S extends StoreSpec>(
               Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one),
             );
             const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
-            yield* sideEffects.journal.write({
-              event: name,
-              primaryKey: sideEffects.scopeKey,
-              payload: encoded,
-              effect: () => Effect.void,
-            });
+            // The journal/IO write is the genuine catchable write failure — surface it as
+            // `StoreWriteError` (the encode above already `orDie`s a schema mismatch as a defect).
+            yield* sideEffects.journal
+              .write({
+                event: name,
+                primaryKey: sideEffects.scopeKey,
+                payload: encoded,
+                effect: () => Effect.void,
+              })
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new StoreWriteError({
+                      cause,
+                      detail: `append to scope "${sideEffects.scopeKey}" (event "${name}")`,
+                    }),
+                ),
+              );
             if (sideEffects.maxRows !== undefined) {
-              yield* trimScopeRetention(sideEffects.scopeKey, sideEffects.maxRows);
+              // Retention trim is part of the same write path — a trim IO failure is a write hiccup,
+              // not a bug, so it too becomes a catchable `StoreWriteError` (swallowed by the guard).
+              yield* trimScopeRetention(sideEffects.scopeKey, sideEffects.maxRows).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new StoreWriteError({
+                      cause,
+                      detail: `retention trim on scope "${sideEffects.scopeKey}"`,
+                    }),
+                ),
+              );
             }
           }
         });

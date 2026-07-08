@@ -21,6 +21,7 @@ import {
   type StoreShapes,
   type StoreShapeTree,
 } from "./contractDef";
+import type { StoreWriteError } from "./errors";
 import type { MergedSpecForKey as MergedSpecForKeyType } from "./specMerge";
 
 export type { StoreShapes, StoreShapeInput, StoreContractValue } from "./contractDef";
@@ -141,7 +142,7 @@ export type FlatStoreHandleOf<S extends StoreSpec> = Simplify<{
   -readonly [K in keyof S as S[K] extends StoreSpecEntry ? K : never]: S[K] extends StoreAppendEntry<
     infer A
   >
-    ? (payload: A) => Effect.Effect<void>
+    ? (payload: A) => Effect.Effect<void, StoreWriteError>
     : S[K] extends StoreQueryEntry<infer P, infer A>
       ? (payload: P) => Effect.Effect<A>
       : never;

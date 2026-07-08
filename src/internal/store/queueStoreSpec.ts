@@ -23,7 +23,7 @@ import type {
   StoreContractValue,
   StoreShapeDef,
 } from "./contractDef";
-import type { StoreJournalDecodeError } from "./errors";
+import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
 import type { StoreScopeTag } from "./registration";
 
 /** Queue tag shape for store registration — `specSym` carries the flat wire spec. @internal */
@@ -64,7 +64,7 @@ export type BuiltInQueueContract<Tag extends QueueStoreTag> = StoreContractValue
     >;
   },
   {
-    readonly record: (event: QueueEventOf<Tag>) => Effect.Effect<void>;
+    readonly record: (event: QueueEventOf<Tag>) => Effect.Effect<void, StoreWriteError>;
     readonly events: (
       payload?: { readonly limit?: number },
     ) => Effect.Effect<ReadonlyArray<QueueEventOf<Tag>>>;
@@ -185,7 +185,7 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(itemSchema
 
 /**
  * The engine write-extension contract for a tag. The queue engine records through these narrow
- * writes (via {@link Store.effects} + {@link Store.swallowWriteErrors}) instead of building a
+ * writes (via {@link Store.effects} + {@link Store.catchWriteErrors}) instead of building a
  * `QueueEvent` object + generic `record`; queue-level facts without a narrow write (Start /
  * Drained / …) still ride the base `record` (a guarded append alias). @internal
  */

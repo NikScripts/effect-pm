@@ -9,6 +9,7 @@ import { Effect, Pipeable, Schema } from "effect";
 import type { Simplify } from "effect/Types";
 import { storeAppend, storeQuery } from "./builders";
 import { StoreShapeNotMaterialized } from "./errors";
+import type { StoreWriteError } from "./errors";
 import { makeScopeHandle } from "./memoryScope";
 import type { AppendSideEffects } from "./memoryScope";
 import type { StoreSpec } from "./spec";
@@ -130,7 +131,7 @@ export type ShapeNamespaceMembers<
 > = {
   readonly append: (
     row: SchemaDecoded<Row> | ReadonlyArray<SchemaDecoded<Row>>,
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<void, StoreWriteError>;
   readonly read: IsOptionalReadPayload<Schema.Schema.Type<Read>> extends true
     ? (payload?: SchemaDecoded<Read>) => Effect.Effect<ReadonlyArray<SchemaDecoded<Row>>>
     : (payload: SchemaDecoded<Read>) => Effect.Effect<ReadonlyArray<SchemaDecoded<Row>>>;
