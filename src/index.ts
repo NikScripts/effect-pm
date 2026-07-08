@@ -335,43 +335,6 @@ export type {
   ProcessLifecycleRecordInput,
   ProcessLifecycleTag,
 } from "./store/processLifecycle";
-export type {
-  QueueResourceStoreDedupeKeyStatus,
-  QueueResourceStoreEntryStatus,
-  QueueResourceStoreLifecycleTag,
-  QueueResourceStorePriority,
-  QueueDedupeKeyAddedChange,
-  QueueDedupeKeyChange,
-  QueueDedupeKeyChangeType,
-  QueueDedupeKeyHydratedChange,
-  QueueDedupeKeyQuery,
-  QueueDedupeKeyReleasedChange,
-  QueueEntryCompletedFact,
-  QueueEntryDeadLetteredFact,
-  QueueEntryDroppedFact,
-  QueueEntryEnqueuedFact,
-  QueueEntryExhaustedFact,
-  QueueEntryFact,
-  QueueEntryFactType,
-  QueueEntryFailedFact,
-  QueueEntryQuery,
-  QueueEntryReleasedFact,
-  QueueEntryRetriedFact,
-  QueueEntryStartedFact,
-  QueueLifecycleChange,
-  QueueLifecycleChangeType,
-  QueueLifecycleClearedChange,
-  QueueLifecycleDrainedChange,
-  QueueLifecyclePausedChange,
-  QueueLifecycleQuery,
-  QueueLifecycleResumedChange,
-  QueueLifecycleShutdownChange,
-  QueueLifecycleStartedChange,
-  QueueRateLimitExceededFact,
-  QueueRateLimitExceededFactType,
-  QueueRateLimitQuery,
-} from "./store/queueResource";
-export { QueueResourceStore } from "./store/queueResource";
 
 // Types - Process
 export type {

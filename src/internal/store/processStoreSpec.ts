@@ -18,6 +18,7 @@ import {
 import { errorOf, successOf } from "../processTagSchemas";
 import * as Store from "../../Store";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
+import type { StoreWriteError } from "./errors";
 import type { StoreScopeTag } from "./registration";
 
 /** Row accepted by the built-in process store handle (schema validates on append). @internal */
@@ -42,7 +43,7 @@ export type BuiltInProcessContract = StoreContractValue<
     >;
   },
   {
-    readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void>;
+    readonly record: (event: ProcessStoreEventRow) => Effect.Effect<void, StoreWriteError>;
     readonly events: (
       payload?: { readonly limit?: number },
     ) => Effect.Effect<ReadonlyArray<ProcessStoreEventRow>>;

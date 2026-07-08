@@ -3,7 +3,7 @@
  * {@link ProcessStore} facet.
  *
  * @remarks
- * One-stop shop for apps that want the remaining legacy facets at once. Compose
+ * One-stop shop for apps that want all built-in facets at once. Compose
  * either:
  *
  * - {@link ProcessStorage.layerRuntimeStorage} — facets only; expects
@@ -38,8 +38,8 @@
  *
  * ### Facet classes (aliases)
  *
- * Each property is a **facet store class** (`QueueResourceStore`, …) under a
- * shorter import path: **`ProcessStorage.QueueResource`** === **`QueueResourceStore`**.
+ * Each property is a **facet store class** (`LogStore`, …) under a
+ * shorter import path: **`ProcessStorage.Log`** === **`LogStore`**.
  * Layers and **`Effect.serviceOption`** work the same from here or
  * **`@nikscripts/effect-pm/store/*`**.
  *
@@ -50,13 +50,11 @@ import { Layer } from "effect";
 import { RuntimeStorage } from "./RuntimeStorage";
 import { LogStore } from "./store/log";
 import { ProcessLifecycleStore } from "./store/processLifecycle";
-import { QueueResourceStore } from "./store/queueResource";
 
 const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 
 const facetLayers = Layer.mergeAll(
   LogStore.layerRuntimeStorage,
-  QueueResourceStore.layerRuntimeStorage,
   processLifecycleLayer,
 );
 
@@ -82,18 +80,16 @@ export const layer = Layer.provide(facetLayers, RuntimeStorage.layer);
 
 /**
  * Facet class aliases (same tags as the public `*Store` facet services) under shorter
- * names: `ProcessStorage.QueueResource` === {@link QueueResourceStore}, etc.
+ * names: `ProcessStorage.Log` === {@link LogStore}, etc.
  *
  * @public
  */
 export {
   LogStore as Log,
-  QueueResourceStore as QueueResource,
   ProcessLifecycleStore as ProcessLifecycle,
 };
 
 /** Union of every service composed by {@link layerRuntimeStorage}. @public */
 export type Services =
   | LogStore
-  | QueueResourceStore
   | ProcessLifecycleStore;

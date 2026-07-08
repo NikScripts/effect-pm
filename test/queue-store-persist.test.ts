@@ -13,6 +13,8 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class EmailQueue extends QueueResource.Tag<EmailQueue>()("@app/EmailQueue", jobSchema) {}
 
+class FailingQueue extends QueueResource.Tag<FailingQueue>()("@app/FailingQueue", jobSchema) {}
+
 describe("QueueResource → baked store persistence", () => {
   it.live("persists lifecycle events to the baked-in store, readable back", () =>
     Effect.gen(function* () {
@@ -44,6 +46,43 @@ describe("QueueResource → baked store persistence", () => {
       Effect.provide(
         QueueResource.layer(EmailQueue, {
           effect: () => Effect.void,
+          autoStart: true,
+        }),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.live("records failures + retry-exhaustion through the narrow semantic writes", () =>
+    Effect.gen(function* () {
+      const queue = yield* FailingQueue;
+      yield* queue.add({ id: "boom" });
+
+      const bridge = yield* Storage;
+      const store = yield* bridge.at(
+        "@app/FailingQueue",
+        builtInQueueStoreContract(FailingQueue),
+      );
+
+      // Wait for the terminal RetryExhausted to land (attempts: 1 → no re-enqueue).
+      yield* Effect.gen(function* () {
+        while (
+          (yield* store.events()).filter((e) => e._tag === "RetryExhausted").length < 1
+        ) {
+          yield* Effect.sleep(Duration.millis(20));
+        }
+      }).pipe(Effect.timeout(Duration.seconds(3)));
+
+      const tags = (yield* store.events()).map((e) => e._tag);
+      // Narrow writes: `started`, `failed`, `retryExhausted` all funnelled to the log.
+      expect(tags).toContain("Started");
+      expect(tags).toContain("Failed");
+      expect(tags).toContain("RetryExhausted");
+    }).pipe(
+      Effect.provide(
+        QueueResource.layer(FailingQueue, {
+          effect: () => Effect.fail("boom" as const),
+          attempts: 1,
           autoStart: true,
         }),
       ),

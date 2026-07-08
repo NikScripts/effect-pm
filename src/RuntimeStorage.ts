@@ -14,7 +14,7 @@
  * set of indexed columns plus a generic `payload` JSON blob. Facets pick
  * which columns they need (and document what `processType`,
  * `subjectType`, `key`, `indexA-H` mean for their wire types — see
- * `src/store/queueResource.ts` for a worked example).
+ * `src/store/runResource.ts` for a worked example).
  *
  * Error channels distinguish logical storage outcomes from operational durable
  * failures. Duplicate ids and readonly rows are logical contract failures.
