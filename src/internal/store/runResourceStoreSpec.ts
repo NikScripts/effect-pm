@@ -1,8 +1,11 @@
 /**
- * Built-in {@link RunResource} store contract.
+ * Built-in {@link RunResource} store contracts — shared base + extensions.
  *
- * Persists run lifecycle facts (`started` / `completed` / `failed`) and gate state transitions
- * for operator history — the durable counterpart to live {@link Subscribable} views on the handle.
+ * - **Base** — `fact` + `state` shapes; `record` / `facts` / `recordStateChange` / `stateHistory`.
+ * - **Internal** (`engineRunResourceStoreContract`) — narrow semantic **writes** per lifecycle trigger,
+ *   each funnelling to `fact.append` or `state.append`. Engine uses `Store.effects` +
+ *   `catchWriteErrors`.
+ * - **Public** — tier-1 only today via {@link RunResource.store}; analytics read-extension TBD.
  *
  * @module internal/store/runResourceStoreSpec
  * @internal
@@ -10,9 +13,16 @@
 
 import { Schema } from "effect";
 import type { Effect } from "effect";
-import * as Store from "../../Store";
+import {
+  makeRunCompletedFact,
+  makeRunFailedFact,
+  makeRunStartedFact,
+  makeRunStateChange,
+} from "../runResourceFacts";
+import type { RunGateStatus } from "../runResource";
 import { runGateStatus } from "../runResourceSchema";
-import type { StoreContractValue, StoreShapeDef } from "./contractDef";
+import * as Store from "../../Store";
+import type { ShapeHandles, StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreWriteError } from "./errors";
 import type { StoreScopeTag } from "./registration";
 
@@ -93,8 +103,25 @@ export type RunFact = Schema.Schema.Type<typeof runFactSchema>;
 /** Persisted state transition for a tag scope. @internal */
 export type RunStateChange = Schema.Schema.Type<typeof runStateChangeSchema>;
 
-/** Built-in run-resource store contract. @internal */
-export type BuiltInRunResourceContract = StoreContractValue<
+type RunResourceShapeHandles = ShapeHandles<{
+  readonly fact: ReturnType<
+    typeof Store.shape<typeof runFactSchema, typeof runFactReadPayload>
+  >;
+  readonly state: ReturnType<
+    typeof Store.shape<typeof runStateChangeSchema, typeof runStateReadPayload>
+  >;
+}>;
+
+/** Shared base methods — internal/public extensions close over the same append/read handles. @internal */
+const runResourceStoreBaseMethods = ({ fact, state }: RunResourceShapeHandles) => ({
+  record: fact.append,
+  facts: fact.read,
+  recordStateChange: state.append,
+  stateHistory: state.read,
+});
+
+/** Base run-resource store contract. @internal */
+export type RunResourceStoreBaseContract = StoreContractValue<
   {
     readonly fact: StoreShapeDef<typeof runFactSchema, typeof runFactReadPayload>;
     readonly state: StoreShapeDef<typeof runStateChangeSchema, typeof runStateReadPayload>;
@@ -111,19 +138,118 @@ export type BuiltInRunResourceContract = StoreContractValue<
   }
 >;
 
-/** Built-in run-resource store contract for a tag. @internal */
+/** Built-in run-resource store contract for a tag (tier-1 / tests). @internal */
 export const builtInRunResourceStoreContract = (
   _tag: StoreScopeTag,
-): BuiltInRunResourceContract =>
+): RunResourceStoreBaseContract =>
   Store.contract(
     {
       fact: Store.shape(runFactSchema, runFactReadPayload),
       state: Store.shape(runStateChangeSchema, runStateReadPayload),
     },
-    ({ fact, state }) => ({
-      record: fact.append,
-      facts: fact.read,
-      recordStateChange: state.append,
-      stateHistory: state.read,
+    runResourceStoreBaseMethods,
+  );
+
+/** @deprecated Use {@link RunResourceStoreBaseContract}. @internal */
+export type BuiltInRunResourceContract = RunResourceStoreBaseContract;
+
+// ============================================================================
+// Internal — engine write-extension (narrow triggers → shared fact/state append)
+// ============================================================================
+
+/** @internal */
+export type RunResourceRunStartedInput = {
+  readonly id: string;
+  readonly runId: string;
+  readonly occurredAt: number;
+  readonly concurrency: number;
+};
+
+/** @internal */
+export type RunResourceRunCompletedInput = {
+  readonly id: string;
+  readonly runId: string;
+  readonly occurredAt: number;
+  readonly durationMs: number;
+};
+
+/** @internal */
+export type RunResourceRunFailedInput = {
+  readonly id: string;
+  readonly runId: string;
+  readonly occurredAt: number;
+  readonly durationMs: number;
+  readonly cause: string;
+};
+
+/**
+ * Build the internal engine contract — base + narrow semantic writes per lifecycle trigger.
+ * @internal
+ */
+export const makeEngineRunResourceStoreContract = (resourceId: string) =>
+  Store.contract(
+    {
+      fact: Store.shape(runFactSchema, runFactReadPayload),
+      state: Store.shape(runStateChangeSchema, runStateReadPayload),
+    },
+    (handles) => ({
+      ...runResourceStoreBaseMethods(handles),
+      recordRunStarted: (input: RunResourceRunStartedInput) =>
+        handles.fact.append(
+          makeRunStartedFact({
+            id: input.id,
+            resourceId,
+            runId: input.runId,
+            occurredAt: input.occurredAt,
+            concurrency: input.concurrency,
+          }),
+        ),
+      recordRunCompleted: (input: RunResourceRunCompletedInput) =>
+        handles.fact.append(
+          makeRunCompletedFact({
+            id: input.id,
+            resourceId,
+            runId: input.runId,
+            occurredAt: input.occurredAt,
+            durationMs: input.durationMs,
+          }),
+        ),
+      recordRunFailed: (input: RunResourceRunFailedInput) =>
+        handles.fact.append(
+          makeRunFailedFact({
+            id: input.id,
+            resourceId,
+            runId: input.runId,
+            occurredAt: input.occurredAt,
+            durationMs: input.durationMs,
+            cause: input.cause,
+          }),
+        ),
+      recordGateStateChange: (input: {
+        readonly id: string;
+        readonly changedAt: number;
+        readonly reason: RunResourceStateChangeReason;
+        readonly previous: RunGateStatus | null;
+        readonly current: RunGateStatus;
+      }) =>
+        handles.state.append(
+          makeRunStateChange({
+            id: input.id,
+            resourceId,
+            changedAt: input.changedAt,
+            reason: input.reason,
+            previous: input.previous,
+            current: input.current,
+          }),
+        ),
     }),
   );
+
+/** Internal engine contract for a resource id + scope tag. @internal */
+export const engineRunResourceStoreContract = (
+  resourceId: string,
+  _tag?: StoreScopeTag,
+) => makeEngineRunResourceStoreContract(resourceId);
+
+/** @internal */
+export type EngineRunResourceStoreContract = ReturnType<typeof engineRunResourceStoreContract>;
