@@ -1,84 +1,51 @@
-# Supervisor protocol — docs are the bus
+# Supervisor protocol
 
-**Owner rule (2026-07-09):** Agents coordinate through **repo docs + git**, not owner relay. The supervisor reads those signals and catches gaps. Owner only steps in when they notice something wrong.
+**Owner rules:**
 
----
-
-## Communication model
-
-```mermaid
-flowchart LR
-  A1[Agent 1] -->|handoff Status + agent-status.md + branch| IS[integration/storage]
-  A2[Agent 2] -->|same| IS
-  B[Agent B] -->|same| IS
-  SUP[Supervisor cloud] -->|read docs + git + verify| IS
-  SUP -->|merge / critique / next handoff| IS
-  OWN[Owner] -->|override only| SUP
-```
-
-| Channel | Who writes | Who reads |
-|---------|------------|-----------|
-| **Active handoff** (`agent-*-*.md`) | Implementer | Supervisor, next agent |
-| **[`agent-status.md`](./agent-status.md)** | Every agent, each push | Supervisor (dashboard) |
-| **Agent reports** (`reports/*.md`) | Module owner at session end | Supervisor, docs-release |
-| **`integration-sync-*.md`** | Supervisor or agent stub | Everyone — merge context |
-| **Git** (branch, commits, diff) | Implementer | Supervisor — ground truth |
-
-**Not required:** owner pasting chat logs. Optional: owner flags mistakes; supervisor investigates via docs/git.
+1. **Agents show ALL work in the chat** the owner is pairing with — not file lists, not “tests pass.” Paste the actual prose, code, and command output.
+2. **Supervisor coordinates via docs + git** so the owner does not relay between agents.
+3. **Supervisor recaps show the work** (excerpts, outcomes), not `git diff --stat` laundry lists.
 
 ---
 
-## What every agent writes (on each push)
+## What agents paste in chat (every slice — mandatory)
 
-### 1. Handoff `## Status` + `## Session log`
+When you finish a slice, paste **the work itself**:
 
-In the assigned handoff file:
+| Work type | Paste this |
+|-----------|------------|
+| **Docs rewrite** | The full new section(s) — not “updated STORAGE.md” |
+| **New code** | Full file or full changed functions |
+| **Tests** | Full new test cases + verbatim `pnpm test` / vitest output |
+| **Investigation** | Conclusion + quoted code from repo proving it |
+| **Blocked** | Exact reason + the code path you traced |
 
-- Check `[x]` slices with **evidence** (file path or test name), not vibes
-- Append a **Session log** entry (see template in [`agent-status.md`](./agent-status.md))
+**Forbidden as slice output:** `git diff --stat`, bullet lists of filenames only, “handoff marked complete” with no content.
 
-### 2. Row on [`agent-status.md`](./agent-status.md)
-
-Update your row: branch, commit SHA, slice, verification one-liner, **Gaps** (honest), blockers.
-
-### 3. Git
-
-Push branch. Supervisor uses:
-
-```bash
-git fetch origin integration/storage <branch>
-git log --oneline origin/integration/storage..origin/<branch>
-git diff --stat origin/integration/storage...origin/<branch>
-pnpm run typecheck && pnpm test   # on branch tip before merge
-```
-
-Do **not** mark handoff complete without pushed commits and `agent-status.md` updated.
+Also update [`agent-status.md`](./agent-status.md) (one row) and append **Session log** in your handoff — that is for supervisor/async, not a substitute for chat.
 
 ---
 
-## Supervisor duties (no owner relay)
+## Supervisor duties
 
-1. Read [`agent-status.md`](./agent-status.md) + active handoffs + [`integration-sync`](./integration-sync-2026-07-07.md)
-2. Fetch branches; verify claims vs diff
-3. Run typecheck/tests before merge (or trust CI if wired)
-4. Mean critique in owner thread — what landed, what’s missing, merge hazards
-5. Merge when green; update `agent-status.md` + integration-sync stub
-6. Write **next session handoff** so agents never go idle without a doc target
-
-Owner should not need to relay unless they spot a process failure.
+1. Read `agent-status.md`, handoffs, git — **without owner relay**
+2. Recap for owner using **substantive excerpts** of what landed
+3. Verify typecheck/tests on branch tip before merge
+4. Mean critique: claimed vs actual work
+5. Merge when green; write next handoff
 
 ---
 
-## Agent roster (current)
+## Agent roster
 
 ### Cursor Cloud
 
-| Agent | Handoff | Notes |
-|-------|---------|-------|
-| **1** | [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md) | Rebase onto tip before merge |
-| **2** | [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md) | Rebase onto tip before merge |
+| Agent | Handoff |
+|-------|---------|
+| **1** | [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md) |
+| **2** | [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md) |
 
-### Local Claude — **B → A → C**
+### Local Claude — B → A → C
 
 | Phase | Agent | Handoff |
 |-------|-------|---------|
@@ -86,18 +53,18 @@ Owner should not need to relay unless they spot a process failure.
 | **2** | **A** | [`agent-a-html-standards-corpus.md`](./agent-a-html-standards-corpus.md) |
 | **3** | **C** | [`agent-c-standards-audit.md`](./agent-c-standards-audit.md) |
 
-Archived: Session 1 handoffs (merged). Index: [`reports/README.md`](./reports/README.md).
+Index: [`reports/README.md`](./reports/README.md) · dashboard: [`agent-status.md`](./agent-status.md)
 
 ---
 
-## Session log template (append to handoff file)
+## Session log template (handoff file — async)
 
 ```markdown
 ### Session log YYYY-MM-DD HH:MM UTC
-
-- **Branch:** `cursor/...` @ `abcdef1`
-- **Slices done:** B, C — …
-- **Verification:** typecheck OK; N tests passed
+- **Branch:** @ `sha`
+- **Slices done:** …
+- **Verification:** …
 - **Gaps:** …
-- **Blockers:** none | …
 ```
+
+Chat gets the **full work**; session log gets the **pointer**.

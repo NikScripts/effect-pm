@@ -5,7 +5,9 @@
 **Branch:** `action/html-doc-platform` from **`integration/storage`**  
 **Blocks:** Agent A (standards corpus), Agent C (audit)
 
-**Docs bus:** Update [`agent-status.md`](./agent-status.md) + handoff `## Status` on every push — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus (async):** Update [`agent-status.md`](./agent-status.md) on every push.
+
+**Owner chat (mandatory):** Paste **all work** each slice — full HTML pages, full vite config, serve URL + test output. **No diff file lists.**
 
 ---
 

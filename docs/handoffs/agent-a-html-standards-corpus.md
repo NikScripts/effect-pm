@@ -5,7 +5,9 @@
 **Branch:** `action/html-standards-corpus` from **`integration/storage`** (must include B's `docs:serve` + nav)  
 **Blocks:** Agent C (standards audit)
 
-**Docs bus:** Update [`agent-status.md`](./agent-status.md) + handoff `## Status` on every push — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus (async):** Update [`agent-status.md`](./agent-status.md) on every push.
+
+**Owner chat (mandatory):** Paste **each complete HTML chapter** as you write it. **No diff file lists.**
 
 ---
 
