@@ -17,7 +17,7 @@ import { Effect, Schema } from "effect";
 import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
 
 const Job = Schema.Struct({ id: Schema.String });
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
+class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
 ```
 
 - **`QueueResource.layer(Tag, config)`** — local layer (auto-starts workers).
@@ -43,7 +43,7 @@ class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
 | Field | Purpose |
 |---|---|
 | `effect: (item, ctx) => Effect<A, E, R>` | Process one item (required). `A` is the tag's `success` schema type, or **`void`** when no `success` is declared (see Full-capture). |
-| `itemSchema` | Validate enqueue + enable encoded handoff / durability. |
+| `payload` (on **Tag** config object) | Item schema SSOT — validates enqueue, wire, store, and durability. Not repeated on `layer()` config. |
 | `concurrency` | Max items processing at once (default 5). |
 | `rateLimit` | Effect `RateLimiter` options applied before the concurrency gate. |
 | `attempts` | Auto re-enqueue failed items up to N. |
@@ -76,13 +76,15 @@ those are folded into the layer's requirement `R` (the **union** of worker + ref
 
 ## Durability
 
-Durability is **presence-driven** — provide a `DurableQueueStore` layer (and give the queue an
-`itemSchema`) and the queue's *work* becomes durable:
+Durability is **presence-driven** — provide a `DurableQueueStore` layer and declare **`payload`** on the
+tag — the queue's *work* becomes durable:
 
 ```ts
 import { SQLiteDurableQueueStore } from "@nikscripts/effect-pm/storage/sqlite";
 
-QueueResource.layer(RosterQueue, { effect, itemSchema: Job })
+class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
+
+QueueResource.layer(RosterQueue, { effect })
   .pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
 ```
 
@@ -126,7 +128,7 @@ through a generic field. The typed `A` lands everywhere else: the worker return,
 
 ## Tier 1 — lean base (`record` / `events`)
 
-One `event` shape over the shared `queueEvent(itemSchema, { success, error })` schema — the *same*
+One `event` shape over the shared `queueEvent(payloadSchema, { success, error })` schema — the *same*
 union the live `.events` stream carries (one event model for wire + persistence). Two custom methods:
 
 - `record(event)` — append a fully-formed lifecycle event.
