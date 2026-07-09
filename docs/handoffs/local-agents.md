@@ -1,6 +1,9 @@
 # Local agents (Claude) — prompts & protocol
 
 **Order:** **B → A → C** · **Integration base:** `integration/storage`  
+
+> **⛔ PAUSED:** Agent B stopped pending platform decision. Read [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) before restarting B.
+
 **Owner chat format:** [`supervisor-protocol.md`](./supervisor-protocol.md) — **Before / After** fenced blocks, never `git diff`.
 
 Update [`agent-status.md`](./agent-status.md) on every push (async). Paste **all work** in owner chat each slice.
@@ -35,10 +38,11 @@ Update [`agent-status.md`](./agent-status.md) on every push (async). Paste **all
 
 ---
 
-## Agent B — PHASE 1: doc server (start here)
+## Agent B — PHASE 1: doc server — **PAUSED**
 
-**Handoff:** [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md)  
-**Branch:** `action/html-doc-platform`
+> **Do not start** until [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) § Decision is filled. Scaffold assumed plain HTML; owner wants dashboard-aligned or Foldkit/RSC evaluation.
+
+**Handoff:** [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md) · **Decision doc:** [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md)
 
 ### Mission
 

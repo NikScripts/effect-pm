@@ -1,6 +1,8 @@
-# Agent B — HTML doc platform (local Claude) — **PHASE 1**
+# Agent B — HTML doc platform (local Claude) — **PAUSED**
 
-**Order:** **B before A** — serve docs from day one (Tailscale / phone). Agent A writes HTML into this tree after the server works.  
+**Status:** **PAUSED** — see [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md). Do not implement until owner selects stack (shipped `/web` dashboard vs HTML corpus vs Foldkit vs RSC).
+
+**Order:** **B before A** — serve docs from day one (Tailscale / phone). Agent A writes content after B ships the **chosen** platform.  
 **Agent:** Local Claude (**Agent B**)  
 **Branch:** `action/html-doc-platform` from **`integration/storage`**  
 **Blocks:** Agent A (standards corpus), Agent C (audit)
