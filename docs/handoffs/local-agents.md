@@ -11,13 +11,13 @@
 ## Short prompt (Agent B — restart)
 
 ```
-Read docs/handoffs/agent-b-html-doc-platform.md (full brief) and docs/handoffs/docs-platform-architecture-decision.md.
+Read docs/handoffs/agent-b-html-doc-platform.md and docs/handoffs/docs-platform-architecture-decision.md.
 
-You are Agent B. Branch action/html-doc-platform from integration/storage (tip b8f487a).
+You are Agent B. Do NOT write code yet.
 
-Build the bespoke docs app shell — NOT Dashboard, NOT the old plain HTML scaffold. Agent pages live as HTML under docs/site/content/. Tailscale read on phone via pnpm run docs:serve.
+Slice 0: have a real planning conversation with me. Read the handoff § Slice 0 — ask 3–5 questions at a time (styling, content format, phone UX, site scope, what must not be throwaway). Follow up on my answers. When we're aligned, write docs/handoffs/agent-b-plan.md and wait for my explicit approval before Slice 1.
 
-Slice 1: open with a short Tailwind-vs-alternatives brief for the owner (see handoff § Owner conversation), then ship the shell. Complete all 5 slices in agent-b-html-doc-platform.md. Before/After blocks each slice.
+After approval: branch action/html-doc-platform from integration/storage and execute the plan (Slices 1–5). Before/After blocks each slice.
 ```
 
 ---
