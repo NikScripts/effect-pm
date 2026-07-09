@@ -5,7 +5,7 @@
 **Branch:** `action/html-standards-corpus` from **`integration/storage`** (must include B's `docs:serve` + nav)  
 **Blocks:** Agent C (standards audit)
 
-**Chat rule:** After each chapter, post rule count + `http://<host>:5190/standards/<file>.html` path — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus:** Update [`agent-status.md`](./agent-status.md) + handoff `## Status` on every push — see [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 

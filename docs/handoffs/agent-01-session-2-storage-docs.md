@@ -4,7 +4,7 @@
 **Agent:** Store cutover owner (Agent 1) — long session, **5 slices**, do not stop between slices  
 **Supervisor merges** when green; you keep working on the same branch until all slices done.
 
-**Chat rule:** Post full diff stat, test output, and slice checklist in chat after **each** slice — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus:** Update [`agent-status.md`](./agent-status.md) + handoff `## Status` on every push — see [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 

@@ -5,7 +5,7 @@
 **Branch:** `action/html-doc-platform` from **`integration/storage`**  
 **Blocks:** Agent A (standards corpus), Agent C (audit)
 
-**Chat rule:** Post `pnpm run docs:serve` URL, port, and screenshot-equivalent nav HTML after each slice — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus:** Update [`agent-status.md`](./agent-status.md) + handoff `## Status` on every push — see [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 

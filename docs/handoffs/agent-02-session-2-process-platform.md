@@ -4,7 +4,7 @@
 **Agent:** Process owner (Agent 2) — long session, **5 slices**, continue on same branch through all slices  
 **Session 1 merged:** cast-free `builtInProcessStoreContract`, agent report, `process.md` / `PROCESS-API` touch-up.
 
-**Chat rule:** Post full diff stat, test output, and slice checklist in chat after **each** slice — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus:** Update [`agent-status.md`](./agent-status.md) + handoff `## Status` on every push — see [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 

@@ -1,6 +1,6 @@
 # Agent reports — sync 2026-07-07
 
-**Active agent handoffs** (long sessions — multiple slices per branch):
+**Active agent handoffs** — supervisor reads [`agent-status.md`](../agent-status.md) + git (no owner relay). Protocol: [`supervisor-protocol.md`](../supervisor-protocol.md).
 
 | Agent | Handoff | Scope |
 |-------|---------|-------|
