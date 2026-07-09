@@ -222,6 +222,7 @@
     "example:form:polling-accelerating-reset-cadence": "tsx examples/forms/polling/polling-accelerating-reset-cadence.ts",
     "example:form:polling-accelerating-peek-cadence": "tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",
     "example:process-layer-store-auto-write": "tsx examples/forms/process-store/process-layer-store-auto-write.ts",
+    "example:process-layer-typed-error-store": "tsx examples/forms/process-store/process-layer-typed-error-store.ts",
     "prepare": "effect-language-service patch && effect-tsgo patch"
   },
   "dependencies": {

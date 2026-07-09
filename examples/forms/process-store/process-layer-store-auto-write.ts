@@ -25,13 +25,10 @@ class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
 const storeEnv = Layer.mergeAll(DemoStore.layerMemory, TestClock.layer());
 
 const program = Effect.gen(function* () {
-  const live = Layer.provideMerge(
-    DemoStore.layerMemory,
-    Process.layer(PricesProcess, {
-      effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
-      polling: Polling.spaced(Duration.millis(50)),
-    }),
-  );
+  const live = Process.layer(PricesProcess, {
+    effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
+    polling: Polling.spaced(Duration.millis(50)),
+  }).pipe(Layer.provideMerge(DemoStore.layerMemory));
 
   yield* Effect.gen(function* () {
     yield* PricesProcess;

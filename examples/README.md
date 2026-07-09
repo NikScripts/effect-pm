@@ -62,6 +62,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | File | Teaches |
 |------|---------|
 | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Process.layer`** + **`Process.store(tag)`** — auto-append on terminal runs, app store override |
+| [`forms/process-store/process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) | Tag `{ error }` → typed `Failed.error` in execution history |
 
 Start here for execution history. **`Process.make`** does not auto-append.
 

@@ -66,3 +66,24 @@ swap it once that lands so Process stops importing the internal `StoreScopeBridg
 
 **Not merged:** only this review doc is shared to integration. The branch's code is left for the Process
 owner to act on.
+
+---
+
+## Review 2026-07-09 (`integration/storage` after Agent 2 Session 2)
+
+**Status:** Process store cutover is **done** on the integration line. This review's 🔴 gaps are largely resolved.
+
+| Original gap | Current state |
+|--------------|---------------|
+| Bespoke `ProcessStoreTap` | **Deleted** — engine writes via `store.record` in `Process.ts` (`recordStoreStarted` / `recordStoreFailed` / …) |
+| Cast on `builtInProcessStoreContract` | **Removed** — `BuiltInProcessContract` + erased `ProcessEventSchemaOf` (queue pattern) |
+| Wrong append direction / hand-rolled JSON | **Fixed** on integration — shared journal codec (`Schema.toCodecJson`); see `store-cutover-00-store-core.md` §5 |
+| Rich `success` / `error` round-trip | **Tested** — `test/process-store-engine.test.ts` (memory engine path) + `test/process-store-sqlite.test.ts` (typed `Failed.error` journal codec on SQLite) |
+| `Store.withDefault` façade | **Renamed** — `Store.resolve` / `Store.resolveOrDie`; engine uses `Store.effects` + `Store.provideContext` |
+
+**Remaining product gap (not store):** Tag `error` is stamped (`errorSym` on tag) but **not wired into RPC** —
+`processSpec` lifecycle methods are `Schema.Void` + `Schema.Never` error. Store path uses typed/fallback
+encoding per store-core §5. See Process agent report § RPC error wire blocker.
+
+**Deliberate divergence kept:** Process persists a **primitive execution event union** (not the queue's
+full live `QueueEvent` taxonomy). Documented in [`store-cutover-process.md`](./store-cutover-process.md).

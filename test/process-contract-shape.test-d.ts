@@ -18,6 +18,14 @@ class Health extends Process.Tag<Health>()("shape/Health") {}
 // value-returning — gains a reactive `result` via positional success
 class Prices extends Process.Tag<Prices>()("shape/Prices", { success: Price }) {}
 
+class PricedErr extends Process.Tag<PricedErr>()("shape/PricedErr", {
+  success: Price,
+  error: Schema.TaggedStruct("FetchError", { status: Schema.Number }),
+}) {}
+
+// error stamp is store-only today — processSpec RPC methods keep Schema.Never (see agent report § RPC blocker)
+void Process.errorOf(PricedErr);
+
 // owns an inline schedule — gains the `schedule` verb group (id optional on windows)
 class Matches extends Process.Tag<Matches>()("shape/Matches").pipe(
   Process.schedule([
