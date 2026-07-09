@@ -139,7 +139,10 @@ PR → `integration/storage` with cast-free contract (or documented blocker), re
 
 ## Status
 
-- [ ] Baseline green
-- [ ] Cast removed (or blocker documented in report)
-- [ ] Agent report + docs refreshed
-- [ ] PR open → `integration/storage`
+- [x] Baseline green
+- [x] Cast removed — `BuiltInProcessContract` + erased `ProcessEventSchemaOf` (mirrors queue)
+- [x] Agent report + docs refreshed
+- [x] PR open → `integration/storage`
+
+**Complete:** 2026-07-09 — Agent 2 Process close-out. Cast-free `builtInProcessStoreContract`; see
+[`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md).

@@ -48,9 +48,8 @@ const layer = Process.layer(LiveScores, {
 
 ### Tag wire schemas (`success` / `error`)
 
-Declare on the tag — positional or config object. Names match Effect `Resource.Method` slots
-(`payload` / `success` / `error`). Process has **no** tag-level `payload` (the tick body is in
-layer config).
+Declare on the tag via the **config object** (names match Effect `Resource.Method` slots:
+`success` / `error`). Process has **no** tag-level `payload` (the tick body is in layer config).
 
 ```ts
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
@@ -60,20 +59,16 @@ const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 class Health extends Process.Tag<Health>()("app/Health") {}
 
 // value-returning — gains `result.get` / `result.changes` (Option until first success)
-class Prices extends Process.Tag<Prices>()("app/Prices", Price) {}
+class Prices extends Process.Tag<Prices>()("app/Prices", { success: Price }) {}
 
-// value + typed fail channel on store rows and RPC
-class PricesE extends Process.Tag<PricesE>()("app/Prices", Price, FetchErr) {}
-
-// config object overload
-class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
+// value + typed fail channel on store rows
+class PricesE extends Process.Tag<PricesE>()("app/Prices", {
   success: Price,
   error: FetchErr,
-  description: "Polls vendor prices",
 }) {}
 ```
 
-**Removed:** `Process.result(Schema)` pipe — use positional `success` or `{ success }` on the tag.
+**Removed:** `Process.result(Schema)` pipe and positional schema overloads — use `{ success?, error?, … }` on the tag.
 
 ### Schedule (pipeable)
 
@@ -193,6 +188,7 @@ the toolkit path (armed/disarmed, polling cadence, `runImmediately`).
 
 ## See also
 
+- [../handoffs/store-cutover-process.md](../handoffs/store-cutover-process.md) — store cutover status (authoritative)
 - [toolkit-by-example.md](./toolkit-by-example.md) — location-transparent resources
 - [store.md](./store.md) — `Store.Service`, contracts, SQLite backing
 - [history-and-persistence.md](./history-and-persistence.md) — log/metrics history (`HistoryStore`)

@@ -39,11 +39,14 @@ const processEventSchema = (
     : makeProcessExecutionEvent(success, error);
 
 /**
- * The persisted process event **schema** for a tag — kept **erased** at the schema level (the void
- * union from {@link processExecutionEventVoid}); typed success/error ride at the decoded level on
- * analytics reads. @internal
+ * Erased persisted event **schema** for contract typing — `success` / `error` wire slots are
+ * `Schema.Top` here (mirrors {@link QueueEventSchemaOf}). Runtime validation uses the tag's wire
+ * slots in {@link makeProcessStoreBaseContract}; decoded rows use {@link ProcessEventOf}.
+ * @internal
  */
-export type ProcessEventSchemaOf<_Tag extends StoreScopeTag> = typeof processExecutionEventVoid;
+export type ProcessEventSchemaOf<_Tag extends StoreScopeTag> = ReturnType<
+  typeof makeProcessExecutionEvent<Schema.Top, Schema.Top>
+>;
 
 /**
  * The persisted process event for a tag — the base `record` / `events` surface stays **erased**
@@ -155,8 +158,8 @@ const processStoreBaseMethods = ({ event }: ProcessEventHandles) => ({
     Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
 });
 
-/** Base process store contract — one `event` shape. @internal */
-export type ProcessStoreBaseContract<Tag extends StoreScopeTag> = StoreContractValue<
+/** Built-in process store contract for a tag — one `event` shape (mirrors {@link BuiltInQueueContract}). @internal */
+export type BuiltInProcessContract<Tag extends StoreScopeTag> = StoreContractValue<
   {
     readonly event: StoreShapeDef<
       ProcessEventSchemaOf<Tag>,
@@ -173,6 +176,9 @@ export type ProcessStoreBaseContract<Tag extends StoreScopeTag> = StoreContractV
     readonly hasPriorExecutions: () => Effect.Effect<boolean>;
   }
 >;
+
+/** @deprecated Use {@link BuiltInProcessContract}. @internal */
+export type ProcessStoreBaseContract<Tag extends StoreScopeTag> = BuiltInProcessContract<Tag>;
 
 /**
  * Build the shared base contract (optional success / error schemas on the event union).
@@ -192,11 +198,8 @@ export const makeProcessStoreBaseContract = (
 /** Built-in process store contract for a tag (tier-1 / engine / tests / simple registration). @internal */
 export const builtInProcessStoreContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
-): ProcessStoreBaseContract<Tag> =>
-  makeProcessStoreBaseContract(successOf(tag), errorOf(tag)) as ProcessStoreBaseContract<Tag>;
-
-/** @deprecated Use {@link ProcessStoreBaseContract}. @internal */
-export type BuiltInProcessContract<Tag extends StoreScopeTag> = ProcessStoreBaseContract<Tag>;
+): BuiltInProcessContract<Tag> =>
+  makeProcessStoreBaseContract(successOf(tag), errorOf(tag));
 
 /** Narrow write inputs — engine supplies `processId` when building rows. @internal */
 export type ProcessStoreStartedInput = {

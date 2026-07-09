@@ -205,7 +205,7 @@ when you need facet analytics; use **`Process.store`** + **`Store.Service`** for
 
 The gate engine writes automatically when **`Store.Storage`** is in context (via
 **`Store.layerDefaultMemory`** or a real **`Store.Service`**). Writes use
-**`ProcessStore.catchErrorAndLog`** so storage failures do not fail gated work.
+**`Store.catchWriteErrors`** so storage failures do not fail gated work.
 
 For live in-process observation (no durability), read toolkit handle
 **`Subscribable`** views (`status`, `waiting`, `inFlight`, …) or subscribe via

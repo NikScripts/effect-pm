@@ -73,7 +73,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 **Process execution history:** **`Process.layer`** / **`serve`** / **`serveRemote`** auto-append
 `Started` / `Completed` / `Failed` / `Interrupted` via a baked-in default in-memory store. Register
 **`Process.store(tag)`** on an app **`Store.Service`** when you need durable storage or `yield* Tag.store`
-query handles.
+query handles. Cutover details: [handoffs/store-cutover-process.md](./handoffs/store-cutover-process.md).
 
 **RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` /
 **`Storage`** via **`Store.layerDefaultMemory`** merged into **`RunResource.layer` / `serve` / `Service.layer`**).
