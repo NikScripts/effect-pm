@@ -1,250 +1,282 @@
 # Storage
 
-**Single source of truth for persistence in this package.** Read this before changing `src/store/*`, `ProcessStore`, or `RuntimeStorage`.
+**Single source of truth for persistence in this package.** Read this before changing `src/Store.ts`,
+toolkit store registration (`*.store(tag)`), `src/store/*` legacy facets, or engine store wiring.
 
-## Rules
-
-- **`RuntimeStorage` is all storage** — one **`RuntimeStorage`** service in context.
-  Provide one durable adapter (`layerProcessStore` — sqlite, redis, or hybrid).
-  Facets: all via `ProcessStorage.layerRuntimeStorage`, or **individual**
-  `QueueResourceStore.layerRuntimeStorage` (etc.) for only what you use — each still uses the
-  same `RuntimeStorage`. **Hybrid** = one adapter routing internally (e.g. SQL +
-  Redis), not a second store beside it. See [plans/15-runtime-storage-hybrid.md](./plans/15-runtime-storage-hybrid.md).
-- **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
-- **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
-- **Optional storage.** Domain code uses **static emitters** on facet stores (`QueueResourceStore.recordEntry`, …). No-op without layer; when storage is present, read and write failures surface typed errors. Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry.
-- **Reads:** `Effect.serviceOption(QueueResourceStore)` (etc.) then `Option.match({ onNone, onSome: (store) => store.read(...) })` — never static read methods on the facet class. No `Effect.serviceOption(ProcessStore)` monolith in domain modules.
-- **No backward compat.** Delete legacy APIs; no `@deprecated` shims.
-- **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `LogStore` (`log.entry`).
-- **Durable:** `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
-
-Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
+Verify: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm build`
 
 ---
 
-## Facets and layout
+## Two planes (do not conflate)
 
-| Tag | Subpath | File |
-|-----|---------|------|
-| `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
-| `LogStore` | `store/Log` | `src/store/log.ts` |
-| `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
-| `ProcessStore` | `ProcessStore` | facet builder |
-| `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
-| `RuntimeStorage` | `RuntimeStorage` | `src/RuntimeStorage.ts` |
+| Plane | API | Backing | Who writes |
+|-------|-----|---------|------------|
+| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Process, Queue, CustomQueue, RunResource |
+| **RuntimeStorage facets (legacy observability)** | `ProcessStorage`, `LogStore`, `ProcessLifecycleStore` | `RuntimeStorage` rows (`layerProcessStore`, in-memory adapter) | Log relay, lifecycle hooks — **not** toolkit execution history |
 
-Internal only: `src/internal/store/{spine,service,helpers}.ts` — type-agnostic plumbing (per-facet handle into `RuntimeStorage`, builder, predicate / window helpers). Facet-specific encoders / decoders never live here.
+Execution history for processes, queues, and run gates lives on the **Store bridge only**. The old
+`ProcessExecutionStore`, `QueueResourceStore`, and `RunResourceStore` **facet classes are deleted**
+from `src/` — engines no longer dual-write to facet emitters.
 
-Context key: `@nikscripts/effect-pm/store/<file>/<ServiceTag>`
-
-Import `store/QueueResource` for the **storage facet**, not `@nikscripts/effect-pm/QueueResource` (worker).
-
-### `ProcessStorage` facet aliases
-
-`ProcessStorage` combines layers **and** exposes facet **store classes** under shorter
-property names (same **`Context`** tags as `*Store`):
-
-| Alias | Canonical class |
-|-------|----------------|
-| **`ProcessStorage.Log`** | **`LogStore`** |
-| **`ProcessStorage.QueueResource`** | **`QueueResourceStore`** *(storage facet)* |
-| **`ProcessStorage.ProcessLifecycle`** | **`ProcessLifecycleStore`** |
-
-Run and process execution history use the app **Store bridge** (`RunResource.store`, `Process.store`) — not
-`ProcessStorage` facet aliases.
-
-Use either import style; **`Effect.serviceOption`**, **`Layer`**, and static emitters behave identically.
+Deep design: [`handoffs/store-cutover-00-store-core.md`](./handoffs/store-cutover-00-store-core.md) ·
+guides: [`guides/store.md`](./guides/store.md), [`guides/store-backing.md`](./guides/store-backing.md).
 
 ---
 
-## Wire events
+## Golden model
 
-Each facet writes one or more `RuntimeRecord.type` strings. Records carry `processType` / `processId` / optional `subjectType` / `subjectId` / `key` / `indexA-H` columns the facet uses for indexed predicates; everything else lives in `payload` JSON owned by the facet.
+### `Store.Service` + registration
 
-| `type` | Writer | Reader |
-|--------|--------|--------|
-| `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` → read methods |
-| `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
-| `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
-| `queue.lifecycle.<tag>` × 6 | `QueueResource` worker → static `recordLifecycle` / `recordLifecycleBatch` (Started, Paused, Resumed, Shutdown, Cleared, Drained) | `.lifecycle` |
-| `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch`. Worker emits `added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `released` on completion, `release`, drop, dead-letter, and `clear`. The `hydrated` variant is decode-only — defined for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
-| `queue.ratelimit.exceeded` × 1 | `QueueResource` worker when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
+Apps declare an aggregate store and register toolkit scopes:
 
-**Process execution history:** **`Process.layer`** / **`serve`** / **`serveRemote`** auto-append
-`Started` / `Completed` / `Failed` / `Interrupted` via a baked-in default in-memory store. Register
-**`Process.store(tag)`** on an app **`Store.Service`** when you need durable storage or `yield* Tag.store`
-query handles. Cutover details: [handoffs/store-cutover-process.md](./handoffs/store-cutover-process.md).
+```ts
+import * as Store from "@nikscripts/effect-pm/Store";
+import * as Process from "@nikscripts/effect-pm/Process";
 
-**RunResource engine:** when a gate runs, the worker appends to the **Store bridge** only (`RunResource.store` /
-**`Storage`** via **`Store.layerDefaultMemory`** merged into **`RunResource.layer` / `serve` / `Service.layer`**).
-**Queue** still uses legacy **`QueueResourceStore`** facet emitters for some paths until the engine store tap lands.
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Process.store(MyProcess),
+  QueueResource.store(MyQueue),
+) {}
+```
+
+Each toolkit exposes `Resource.store(tag)` (and optional analytics extensions). Registration attaches
+a **built-in contract** (`builtInProcessStoreContract`, `builtInQueueStoreContract`, …) derived from
+the tag's wire slots (`payload` / `success` / `error` where applicable).
+
+Resolve handles:
+
+- `yield* AppStore.at(Tag)` — tag-first on the aggregate
+- `yield* Tag.store` — when the tag carries a `.store` attachment
+- `Store.effects(scopeKey, contract)` — engine-internal materialization
+
+### `Storage` — declared dependency, never `serviceOption`
+
+`Storage` is a **defaulted service** (like `Clock`). Toolkit layers merge
+`Store.layerDefaultMemory` via `Layer.provideMerge`, so engines always `yield* Storage` and
+materialize handles — **no** `Effect.serviceOption(Storage)`, **no** forked-fiber store sniffing.
+
+```ts
+// Engine pattern (QueueResource.buildQueueImpl — representative)
+const store = yield* materializeEngineQueueStoreForTag(tag);
+// publishEvent → store.record / narrow writes (enqueued, completed, …)
+```
+
+Apps override the default at the root:
+
+```ts
+Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/data.sqlite" }), resourceLayers)
+```
+
+Later `Storage` layer wins on merge. Do not hard-provide inside a toolkit layer in a way that blocks
+override.
+
+### Tiers (per resource)
+
+| Tier | Role | Example |
+|------|------|---------|
+| **1 — lean base** | One `event` shape → `record` + `events` | `builtInQueueStoreContract(tag)` |
+| **2 — engine writes** | Narrow semantic methods (`completed`, `failed`, …) funnel to `event.append` | `makeEngineQueueStoreContract` / materialized writer |
+| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueResource.store`, `Process.store` |
+
+Tag wire is SSOT — layer config must not override `payload` / `success` / `error`
+([`result-schema-and-rpc-validation.md`](./handoffs/result-schema-and-rpc-validation.md)).
+
+### Toolkit layers
+
+`layer` / `serve` / `serveRemote` on Process, QueueResource, CustomQueueResource, and RunResource all
+merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
+`Resource.builtResource` + `grantLocal` where applicable.
+
+**Future (not shipped):** queue write-path buffer off the worker hot path — see
+[`handoffs/store-cutover-queue.md`](./handoffs/store-cutover-queue.md) §Future.
+
+---
+
+## What remains on `RuntimeStorage` facets
+
+`ProcessStorage.layer` / `layerRuntimeStorage` composes **two** built-in facets only:
+
+| Facet | Subpath | File | Purpose |
+|-------|---------|------|---------|
+| `LogStore` | `store/Log` | `src/store/log.ts` | Durable `log.entry` rows (relay / capture) |
+| `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` | `process.lifecycle.changed` |
+
+Aliases: `ProcessStorage.Log`, `ProcessStorage.ProcessLifecycle`.
+
+**Removed from engine paths** (do not document as writers):
+
+- `QueueResourceStore` — deleted; queue engine uses Store bridge
+- `ProcessExecutionStore` — deleted; process engine uses `Process.store(tag)`
+- `RunResourceStore` facet — deleted; run engine uses `RunResource.store(tag)`
+
+`package.json` may still list a `store/QueueResource` subpath from an earlier release — there is no
+`src/store/queueResource.ts` on `integration/storage`. Import queue history via
+`QueueResource.store(tag)` / `builtInQueueStoreContract`, not a facet class.
+
+Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeBridge,memoryScope}.ts`.
+
+---
+
+## Per-toolkit store
+
+### QueueResource + CustomQueueResource
+
+- **Contract:** `builtInQueueStoreContract(tag)` — cast-free; full `QueueEvent<T>` lifecycle union
+  (persisted == streamed). See [`handoffs/store-cutover-queue.md`](./handoffs/store-cutover-queue.md).
+- **Engine:** `materializeEngineQueueStoreForTag` / `materializeEngineQueueStoreForItem` in
+  `buildQueueImpl` / `buildCustomQueueImpl`; `publishEvent` → `recordToStore` at source
+  (`src/internal/queueResource.ts`).
+- **Registration:** `QueueResource.store(tag)` / `CustomQueueResource.store(tag)` for Tier 3 analytics.
+- **Tag:** config object `{ payload, success?, error? }` (+ lane fields on CQR).
+
+### Process
+
+- **Contract:** `builtInProcessStoreContract(tag)` — execution union (`Started` / `Completed` / …).
+- **Engine:** `Store.effects` + contract in `buildProcessImpl` (`src/Process.ts`).
+- **Registration:** `Process.store(tag)`.
+- **Handoff:** [`handoffs/store-cutover-process.md`](./handoffs/store-cutover-process.md).
+
+### RunResource
+
+- **Contract:** `builtInRunResourceStoreContract(tag)` — fact/state union.
+- **Engine:** declared `Storage` + contract in `src/internal/runResource.ts`.
+- **Registration:** `RunResource.store(tag)`.
+- **Handoff:** [`handoffs/store-cutover-runresource.md`](./handoffs/store-cutover-runresource.md).
+
+---
+
+## Wire events (Store bridge)
+
+### Queue / CustomQueue
+
+One `event` shape per queue scope. Rows are the **`QueueEvent<T>`** tagged union the live `.events`
+stream carries (`Enqueued`, `Started`, `Completed`, `Failed`, lifecycle, `RateLimitExceeded`, …).
+Lane is on the entry, not a separate event union (CQR shares the same union).
+
+Optional `success` / `error` on persisted terminal rows follow tag presence
+([`store-cutover-00-store-core.md`](./handoffs/store-cutover-00-store-core.md) §5).
+
+**Not written anymore:** legacy `queue.entry.*`, `queue.lifecycle.*`, `queue.dedupe-key.*`,
+`queue.ratelimit.exceeded` **RuntimeStorage** facet types — those were the old facet plane.
+
+### Process
+
+`Started` / `Completed` / `Failed` / `Interrupted` rows on `Process.store(tag)`; auto-append from
+`Process.layer` / `serve` / `serveRemote` via baked-in default memory store.
+
+### RunResource
+
+Gate run facts appended to `RunResource.store(tag)` when a gate executes.
 
 ---
 
 ## Usage
 
+### App store + process auto-write
+
+From `examples/forms/process-store/process-layer-store-auto-write.ts`:
+
 ```ts
-import { Layer } from "effect";
-import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
 import * as Store from "@nikscripts/effect-pm/Store";
-import { Process } from "@nikscripts/effect-pm";
+import * as Process from "@nikscripts/effect-pm/Process";
+
+class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
+  Process.store(PricesProcess),
+) {}
+
+const live = Layer.provideMerge(
+  DemoStore.layerMemory,
+  Process.layer(PricesProcess, { effect, polling }),
+);
+
+const store = yield* DemoStore.at(PricesProcess);
+const events = yield* store.events();
+```
+
+`Process.layer` merges `layerDefaultMemory` — events land even without a custom `AppStore` until you
+override with `Layer.provideMerge(AppStore.layer(...), ...)`.
+
+### Queue persist + read back
+
+```ts
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
+import * as Store from "@nikscripts/effect-pm/Store";
+
+class Mail extends QueueResource.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
+  QueueResource.store(Mail),
+) {}
+
+// Layer includes materialized engine store + layerDefaultMemory
+Effect.provide(program, QueueResource.layer(Mail, { effect, autoStart: true }));
+
+const store = yield* AppStore.at(Mail);
+const events = yield* store.events();
+```
+
+Or register on an app aggregate: `class AppStore extends Store.Service(...)(
+  QueueResource.store(Mail),
+) {}` then `yield* AppStore.at(Mail)`.
+
+### Legacy facets (log + lifecycle only)
+
+```ts
+import { ProcessStorage } from "@nikscripts/effect-pm";
+import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
+
+// In-memory (tests)
+Effect.provide(program, ProcessStorage.layer);
+
+// Durable RuntimeStorage + facets
+Effect.provide(
+  program,
+  Layer.provide(ProcessStorage.layerRuntimeStorage, layerProcessStore({ filename: ".effect-pm/data.sqlite" })),
+);
+```
+
+Facet reads still use `Effect.serviceOption(LogStore)` / `yield* ProcessLifecycleStore` where the
+facet is optional observability — **distinct** from `Storage` on the Store bridge.
+
+### Durable toolkit store (SQLite)
+
+```ts
+class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
+  QueueResource.store(MyQueue),
 ) {}
 
 const live = Layer.provideMerge(
   AppStore.layer({ filename: ".effect-pm/process.db" }),
-  Process.layer(MyProcess, { effect, polling }),
+  Process.layer(MyProcess, { effect }),
+  QueueResource.layer(MyQueue, { effect }),
 );
-
-const store = yield* MyProcess.store;
-const events = yield* store.events({ limit: 50 });
-```
-
-```ts
-import { ProcessStorage } from "@nikscripts/effect-pm";
-
-Effect.provide(program, ProcessStorage.layer); // in-memory, all facets
-Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }));
 ```
 
 ---
 
-## Authoring a facet (`ProcessStore.Service`)
+## Optional ports (separate from Store bridge)
 
-Template: `src/store/queueResource.ts`, tests: `test/queue-resource-store-facet.test.ts` (if present).
+| Port | Role |
+|------|------|
+| `HistoryStore` | Metrics/logs history sidecar (optional `serviceOption` in toolkit impls) |
+| `DurableQueueStore` | Durability plane for queue refill (`serviceOption` — correct here) |
+| `layerProcessStore` | SQLite adapter for **RuntimeStorage** facets |
 
-A facet is declared with up to **three** sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
+---
 
-| Section | Shape | Adds to the facet |
-|--------|-------|-------------------|
-| `ProcessStore.record({ ... })` | `{ [name]: (s) => method }` | Per-method **static optional emitters** (`Facet.recordX(...)`) and instance write methods. |
-| `ProcessStore.read((s) => ({ ... }))` | factory of read methods | Instance read methods (yield the facet to dispatch). |
-| `ProcessStore.withIdentifier((id, s) => ({ ... }))` | factory of identifier-bound methods | `Facet.for(id)` / `Facet.withIdentifier(id)` returning the bound API. |
+## Authoring notes
 
-`record` and `read` are required; `withIdentifier` is optional.
-
-```ts
-export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDomain>()(
-  "@nikscripts/effect-pm/store/myDomain/ProcessStoreMyDomain",
-  ProcessStore.record({
-    recordThing: (s) => (fact: MyFact) => s.create(makeMyDomainRecord(fact)),
-  }),
-  ProcessStore.read((s) => ({
-    // Pure-storage read: every filter is pushed into the predicate, so
-    // `query?.opts` (including `limit`) flows straight through.
-    things: (query?: MyQuery) =>
-      s.read(runtimeRecordQuery(myDomainPredicates(query), query?.opts)).pipe(
-        Effect.map((records) => decodeThings(records)),
-      ),
-    // Post-filter read: an `attributes.X` filter that storage cannot push
-    // down. Strip `limit` from the storage query (`windowOpts`) and apply
-    // it to the projected result via `applyQueryOpts` — otherwise a
-    // sparse post-filter can collapse a `limit: N` query to zero rows.
-    thingsScopedByAttribute: (scope: string, opts?: QueryOpts) =>
-      s.read(runtimeRecordQuery(myDomainPredicates(undefined), windowOpts(opts))).pipe(
-        Effect.map((records) =>
-          applyQueryOpts(
-            decodeThingsForScope(records, scope),
-            opts,
-            (thing) => thing.occurredAt,
-          ),
-        ),
-      ),
-  })),
-  // Optional: if your facet has a natural identifier (resourceId, queueId,
-  // processId, …), bind it once via `for(...)` instead of repeating it in
-  // every method call. Reuse the same private read helpers as the
-  // `ProcessStore.read(...)` section so behavior cannot drift.
-  ProcessStore.withIdentifier((thingId, s) => ({
-    things: (query?: Omit<MyQuery, "thingId">) =>
-      readThings(s, { thingId, ...query }),
-  })),
-) {}
-
-export declare namespace ProcessStoreMyDomain {
-  export type Type = ProcessStore.Service.Type<typeof ProcessStoreMyDomain>;
-  export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreMyDomain>;
-  // Only declare `IdentifierType` when the facet provides `withIdentifier`.
-  export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessStoreMyDomain
-  >;
-}
-```
-
-### Identifier-bound APIs (`for` / `withIdentifier`)
-
-Facets that have a single dominant identifier expose a sticky-scope binding:
-
-```ts
-const queue = yield* QueueResourceStore.for("@app/Email");
-yield* queue.entries();              // queueId baked in
-yield* queue.entriesByKey("user-42"); // queueId still baked in
-yield* queue.dedupeKeys();            // queueId still baked in
-```
-
-Equivalent: `yield* QueueResourceStore.withIdentifier("@app/Email")`.
-
-Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` for the live pattern.
-
-Built-in `withIdentifier` facets (subpath → bound id):
-
-| Facet | Subpath | Binds |
-|-------|---------|-------|
-| `QueueResourceStore` | `store/QueueResource` | `queueId` |
-| `ProcessLifecycleStore` | `store/ProcessLifecycle` | `processId` |
-
-The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
-
-| Method | Purpose |
-|--------|---------|
-| `s.runId` | Id minted when the facet spine is built; stamped on every write from that layer. **Not** sufficient alone for live-instance identity — runtime identity / singleton runs (`instanceId`, cross-runtime leases) are on the [roadmap](./plans/README.md). |
-| `s.create` / `s.createBatch` | Insert one / many records |
-| `s.upsert` | Insert-or-replace one record |
-| `s.read(query?)` | Run a `RuntimeRecordQuery` (predicate, orderBy, limit, offset) |
-| `s.update(query, patch)` / `s.delete(query)` | Mutating reads |
-
-The facet **owns** all wire-shape work:
-
-- **Encoders** (`makeMyDomainRecord`, etc.) build `Omit<RuntimeRecord, "runId" | "createdAt">` from the facet's domain types.
-- **Decoders** project `RuntimeRecord[]` back to the facet's domain types.
-- **Predicates** push `processId` / `type` / `key` / `indexA-H` filters into `RuntimeRecordQuery`. Things you cannot index (e.g. payload sub-fields) post-filter after `s.read`.
-- **Limit semantics**: when *all* filters compile to `RuntimeRecordPredicate`, pass `query?.opts` straight through — the storage `limit` and the projection `limit` agree. When *any* filter is post-applied in TypeScript, swap to `windowOpts(opts)` at the storage call and `applyQueryOpts(rows, opts, ...)` after decode (see `src/store/processGroup.ts` for a live example).
-
-**Cut-over checklist:** domain types in the facet file → encoders / decoders / predicates inline → static emitters in the feature module that owns the writes → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test (mirror `test/store.test.ts` + engine integration tests such as `test/run-resource.test.ts`).
-
-**Do not:** add a shared envelope; expose row codecs from `ProcessStore` or `internal/store/`; hand-roll `serviceOption` in feature modules.
-
-**Adapters:** implement `RuntimeStorageService` (e.g. `src/storage/sqlite/`); wire via `ProcessStorage.layerRuntimeStorage` or `layerProcessStore`. Adapters never speak the facet vocabulary — they store and query generic `RuntimeRecord` rows.
-
-`RuntimeStorageError` separates logical failures (duplicate id, readonly row)
-from operational failures (connection, schema, query, decode, transaction,
-unavailable). Durable adapters map driver and decode failures into those public
-tags instead of leaking the underlying SQLite / Redis error types.
-
-SQLite exposes typed acquisition failures from `layerProcessStore`; use
-`layerProcessStoreOrDie` only at application edges that intentionally treat
-database open/schema failures as defects.
-
-### Storage failure semantics
-
-| Surface | Storage present + failure | Storage absent |
-|---------|---------------------------|----------------|
-| `RuntimeStorageService` | Fails with `RuntimeStorageError` | Not applicable |
-| Facet instance reads/writes | Fail with typed storage/facet errors | Not applicable |
-| Static facet emitters | Fail with typed storage/facet errors | No-op success |
-| `ProcessStore.catchErrorAndLog(...)` | Logs structured details and succeeds | Succeeds |
-
-Use static emitters directly when storage failure should fail the caller. Pipe
-through `ProcessStore.catchErrorAndLog(...)` when a write is observability-only
-and must not change process / queue success.
+- **New toolkit persistence:** `builtIn*StoreContract(tag)` + `materializeEngine*` or `Store.effects`;
+  declare `Storage`; merge `layerDefaultMemory` on public layers.
+- **Do not:** `serviceOption(Storage)` in engines; facet dual-write; positional tag schema overloads.
+- **Tests:** `test/store-default.test.ts`, `test/queue-store-persist.test.ts`,
+  `test/custom-queue-store-persist.test.ts`, `test/process-store-default-override.test.ts`.
 
 ---
 
 ## Pending work
 
-Storage-related future items live in the [roadmap](./plans/README.md): **hybrid `RuntimeStorage`**
-(SQL + Redis), **Postgres backends** for `HistoryStore` / `DurableQueueStore`, **storage-adapter
-integration testing**, **runtime identity & singleton runs** (durable cross-runtime lease), and
-**richer history vocabulary + listener hooks**.
+Future items: [`plans/README.md`](./plans/README.md) — hybrid `RuntimeStorage`, Postgres adapters,
+queue write-buffer, richer history vocabulary. Implemented Store-bridge behavior belongs in this file
+and toolkit handoffs, not `docs/plans/`.
