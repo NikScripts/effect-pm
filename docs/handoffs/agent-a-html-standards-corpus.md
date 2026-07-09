@@ -7,7 +7,7 @@
 
 **Docs bus (async):** Update [`agent-status.md`](./agent-status.md) on every push.
 
-**Owner chat (mandatory):** Paste **each complete HTML chapter** as you write it. **No diff file lists.**
+**Owner chat (mandatory):** After each chapter, post **Before / After** (before = `(none — new file)` for new HTML). Full chapter in After block. Template in [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 

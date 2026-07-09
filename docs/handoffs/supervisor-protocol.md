@@ -8,21 +8,44 @@
 
 ---
 
-## What agents paste in chat (every slice — mandatory)
+## What agents paste in owner chat (every slice — mandatory)
 
-When you finish a slice, paste **the work itself**:
+**Format: separate Before / After blocks — never unified diffs, never file lists.**
 
-| Work type | Paste this |
-|-----------|------------|
-| **Docs rewrite** | The full new section(s) — not “updated STORAGE.md” |
-| **New code** | Full file or full changed functions |
-| **Tests** | Full new test cases + verbatim `pnpm test` / vitest output |
-| **Investigation** | Conclusion + quoted code from repo proving it |
-| **Blocked** | Exact reason + the code path you traced |
+Use this template per slice:
 
-**Forbidden as slice output:** `git diff --stat`, bullet lists of filenames only, “handoff marked complete” with no content.
+~~~
+### Slice N — [title]
 
-Also update [`agent-status.md`](./agent-status.md) (one row) and append **Session log** in your handoff — that is for supervisor/async, not a substitute for chat.
+**Before** (`path/to/file` or “none — new file”):
+
+```language
+…unchanged or prior content…
+```
+
+**After**:
+
+```language
+…full new content for that slice…
+```
+
+**Verify** (verbatim terminal output):
+
+```text
+…pnpm run docs:serve / typecheck / test output…
+```
+~~~
+
+| Work type | Before block | After block |
+|-----------|--------------|-------------|
+| New file | `(none — new file)` | **Full file** |
+| Edit | **Full prior section/function** | **Full new section/function** |
+| Delete | **Full removed content** | `(removed)` |
+| Investigation | **Current code** | **N/A — write Finding + Recommendation prose below blocks** |
+
+**Forbidden:** `git diff`, `git diff --stat`, filename-only bullets, “updated X” without blocks.
+
+Also update [`agent-status.md`](./agent-status.md) + session log in handoff (async).
 
 ---
 

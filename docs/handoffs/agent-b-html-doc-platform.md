@@ -7,7 +7,7 @@
 
 **Docs bus (async):** Update [`agent-status.md`](./agent-status.md) on every push.
 
-**Owner chat (mandatory):** Paste **all work** each slice — full HTML pages, full vite config, serve URL + test output. **No diff file lists.**
+**Owner chat (mandatory):** After each slice, post **Before / After** code blocks (separate fenced blocks, not diffs). Template in [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 
