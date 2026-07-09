@@ -89,4 +89,4 @@ Commit per slice or one commit — your choice. Push branch. Open draft PR → `
 - [x] `STORAGE.md` describes golden store model (no engine facet dual-write)
 - [x] Store + integration-sync reports match `integration/storage` code
 - [x] Grep sweep clean in scoped paths (or documented exceptions in docs-release report)
-- [ ] PR open → `integration/storage`
+- [x] PR open → `integration/storage` — see PR link in session chat / compare URL
