@@ -11,10 +11,19 @@
  *
  * @module CustomQueueResource
  */
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Scope, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
+import * as Store from "./Store";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import {
+  makeQueueStoreAnalyticsContract,
+  materializeEngineQueueStoreForItem,
+  type QueueStoreAnalyticsContract,
+  type QueueStoreTag,
+} from "./internal/store/queueStoreSpec";
+import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   HandlerContextOf,
   NodeKey,
@@ -397,7 +406,7 @@ const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
 const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-) =>
+): Effect.Effect<ImplOf<CustomQueueInstanceSpec<F>>, never, R | RR | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
     // at this introspection boundary.
@@ -410,10 +419,12 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     const effectiveConfig = yield* foldConfiguredSpec<
       CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
+    const store = yield* materializeEngineQueueStoreForItem(tag.key, itemSchema);
     const handle = yield* makeCustomQueueEffect({
       name: tag.key,
       ...effectiveConfig,
       itemSchema,
+      store,
     } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R | RR>,
@@ -515,10 +526,10 @@ export const layer = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self>, never, R | RR> =>
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
-  );
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
@@ -543,7 +554,7 @@ export const serveRemote = <
     Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
       Resource.serveRemote(tag, impl),
     ),
-  );
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the
@@ -564,7 +575,7 @@ export const serve = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
 > =>
@@ -572,7 +583,7 @@ export const serve = <
     Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
       Resource.serve(tag, impl),
     ),
-  );
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /** @public */
 export const configure = <
@@ -585,6 +596,37 @@ export const configure = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
+
+/**
+ * Register this custom queue on an app {@link Store.Service} — built-in analytics spec with the tag's
+ * `itemSchema` injected. Pass a bare spec object to add app-specific methods (merged with built-in):
+ *
+ * ```ts
+ * CustomQueueResource.store(Jobs)
+ * CustomQueueResource.store(Jobs, {
+ *   laneAudit: laneAuditSchema,
+ * }, ({ laneAudit, event }) => ({
+ *   appendLaneAudit: laneAudit.append,
+ * }))
+ * ```
+ *
+ * @public
+ */
+export function store<const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, QueueStoreAnalyticsContract<Tag>>
+>;
+export function store<
+  const Tag extends QueueStoreTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<Tag, QueueStoreAnalyticsContract<Tag>, Shapes>
+>;
+export function store(tag: QueueStoreTag, extended?: StoreShapes) {
+  const contract = makeQueueStoreAnalyticsContract(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, contract)
+    : facetStoreRegistration(tag, contract, extended);
+}
 
 // The light `Tag` lives here (no engine) so `CustomQueueResource.Tag` member access tree-shakes.
 export { customQueueTag as Tag };

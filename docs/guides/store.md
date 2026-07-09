@@ -256,6 +256,21 @@ journal/IO write failure to `StoreWriteError`, while the **encode** step stays `
 mismatch is a bug → defect). No method needs to be marked "a write" — the error type says so, and
 `catchWriteErrors` acts on exactly that.
 
+## Multi-engine store specs (queue family)
+
+`QueueResource` and `CustomQueueResource` share one queue engine (`buildQueueEngine` /
+`publishEvent`). Persistence uses the same three-tier model:
+
+1. **Tier 1 (lean base)** — `record` / `events` over `QueueEvent<T>`.
+2. **Tier 2 (engine writes)** — narrow semantic writes (`enqueued`, `started`, `completed`, …) via
+   `Store.extend`, materialized with `materializeEngineQueueStoreForTag` (toolkit tags) or
+   `materializeEngineQueueStoreForItem` (schema-first: `CustomQueueResource.make`, no tag).
+3. **Tier 3 (analytics reads)** — `QueueResource.store(tag)` / `CustomQueueResource.store(tag)` —
+   pure derivations over `events`; no engine narrow writes on the public registration.
+
+Toolkit `layer` / `serve` / `serveRemote` merge `Store.layerDefaultMemory` and wire tier 2 at build
+time. Custom queues use `void` / `unknown` wire slots (no `success` / `error` on the tag).
+
 ## Registration paths
 
 | Form | Example | Bundle keys |
@@ -264,6 +279,7 @@ mismatch is a bug → defect). No method needs to be marked "a write" — the er
 | Named object | `Service({ temp: reg })` | accessor name (`temp`) |
 | Resource tag | `Resource.store(Tag, contract)` | tag `.key` |
 | Queue tag | `QueueResource.store(Tag)` | tag `.key` (built-in analytics contract) |
+| Custom queue tag | `CustomQueueResource.store(Tag)` | tag `.key` (same analytics contract; shared `QueueEvent<T>`) |
 | Run gate | `RunResource.store(Tag)` | tag `.key` |
 | String scope | `Store.register("scope", contract)` | `"scope"` |
 | Standalone | `Store.store("scope", contract)` | `yield* MyStore` directly |

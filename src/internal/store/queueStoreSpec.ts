@@ -12,7 +12,7 @@
  * @internal
  */
 
-import { DateTime, Duration, Effect, Option, Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Option, pipe, Schema, Stream } from "effect";
 import type { ResourceTag, Spec, SpecOf } from "../../Resource";
 import { specSym } from "../../Resource";
 import { buildQueueEvent, queueEntry, queueSpec } from "../../QueueResource";
@@ -20,6 +20,12 @@ import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../QueueResource
 import { successOf, errorOf } from "../queueTagSchemas";
 import type { Priority, QueueEvent } from "../queueResource";
 import * as Store from "../../Store";
+import type {
+  CatchWriteError,
+  Storage,
+  StoreEffectsOf,
+  StoreProvidedContext,
+} from "../../Store";
 import type {
   SchemaDecoded,
   StoreContractValue,
@@ -130,11 +136,18 @@ export const queueItemSchemaFromTag = <Tag extends QueueStoreTag>(
   const addMethod = tag[specSym].add as {
     readonly payload?: {
       readonly members?: ReadonlyArray<Schema.Schema<unknown>>;
+      readonly elements?: ReadonlyArray<{
+        readonly members: ReadonlyArray<Schema.Schema<unknown>>;
+      }>;
     };
   };
-  const itemSchema = addMethod.payload?.members?.[0];
+  const itemSchema =
+    addMethod.payload?.members?.[0] ??
+    addMethod.payload?.elements?.[0]?.members?.[0];
   if (itemSchema === undefined) {
-    throw new Error(`QueueResource.store: tag ${tag.key} has no item schema on spec.add`);
+    throw new Error(
+      `Queue store: tag ${tag.key} has no item schema on spec.add (expected union or pair payload)`,
+    );
   }
   return itemSchema as QueueItemSchemaFromTag<Tag>;
 };
@@ -288,6 +301,51 @@ export const engineQueueStoreContract = <const Tag extends QueueStoreTag>(tag: T
 export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
   typeof engineQueueStoreContract<Tag>
 >;
+
+/**
+ * Storage-free engine store handle — SSOT derived from {@link makeEngineQueueStoreContract} after
+ * {@link Store.catchWriteErrors} + {@link Store.provideContext}. Shared by {@link QueueResource} and
+ * {@link CustomQueueResource} engines. @internal
+ */
+export type MaterializedEngineQueueStore<Item extends Schema.Top> = StoreProvidedContext<
+  CatchWriteError<StoreEffectsOf<ReturnType<typeof makeEngineQueueStoreContract<Item>>>>,
+  Storage
+>;
+
+/**
+ * Materialize engine queue store effects for a scope + item schema (multi-engine path — no tag).
+ * @internal
+ */
+export const materializeEngineQueueStoreForItem = <Item extends Schema.Top>(
+  scopeKey: string,
+  itemSchema: Item,
+  wire?: QueueWireSchemas,
+): Effect.Effect<MaterializedEngineQueueStore<Item>, never, Storage> =>
+  Effect.gen(function* () {
+    const storageContext = yield* Effect.context<Storage>();
+    const storeEffects = pipe(
+      Store.effects(scopeKey, makeEngineQueueStoreContract(itemSchema, wire)),
+      Store.catchWriteErrors,
+    );
+    return Store.provideContext(storeEffects, storageContext);
+  });
+
+/**
+ * Materialize engine queue store effects for a toolkit tag (wire slots from tag SSOT).
+ * @internal
+ */
+export const materializeEngineQueueStoreForTag = <const Tag extends QueueStoreTag>(
+  tag: Tag,
+): Effect.Effect<
+  MaterializedEngineQueueStore<QueueItemSchemaFromTag<Tag>>,
+  never,
+  Storage
+> =>
+  materializeEngineQueueStoreForItem(
+    tag.key,
+    queueItemSchemaFromTag(tag),
+    queueWireFromTag(tag),
+  );
 
 // ============================================================================
 // Tier 3 — advanced analytics read-extension (pure derivations over `event.read`)

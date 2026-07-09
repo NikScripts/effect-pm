@@ -17,8 +17,8 @@ CustomQueueResource.Tag<Jobs>()("@app/Jobs", {
 })
 ```
 
-- [ ] Land the config-object-only `Tag` (no `success`/`error` slots, no positional-triplet overload).
-- [ ] Supersedes the earlier "trailing `{ success?, error? }` bag" proposal (result-schema doc §C / sync
+- [x] Land the config-object-only `Tag` (no `success`/`error` slots, no positional-triplet overload).
+- [x] Supersedes the earlier "trailing `{ success?, error? }` bag" proposal (result-schema doc §C / sync
       cross-cutting #6) — dropped.
 
 ## Store cutover — mostly free
@@ -28,11 +28,11 @@ CustomQueue shares the queue **engine** (`buildQueueEngine` / `makeQueueRuntime`
 `StoreScopeBridgeTag` as a declared dependency — **no `serviceOption`**, store-core §1 — and `publishEvent`
 persists), CustomQueue inherits event persistence with no separate engine work.
 
-- [ ] After the queue cutover: confirm CustomQueue's events flow to its store (it uses the same
+- [x] After the queue cutover: confirm CustomQueue's events flow to its store (it uses the same
       `publishEvent`), and that its custom-lane events (if any beyond the shared `QueueEvent<T>` set) are
       represented. If CQR emits lane-specific events not in `QueueEvent<T>`, decide whether they join the
-      union or stay live-only.
-- [ ] Cast check: no `... as` identity cast in any CQR store contract (mirror `builtInQueueStoreContract`).
+      union or stay live-only. **Done:** CQR shares `QueueEvent<T>`; lane is on the entry, not a separate event union.
+- [x] Cast check: no `... as` identity cast in any CQR store contract (mirror `builtInQueueStoreContract`).
 
 ## Verify
 `pnpm typecheck` (both) + `test/custom-queue-contract.test.ts` + CQR suites.

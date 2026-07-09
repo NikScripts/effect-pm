@@ -33,7 +33,7 @@
  *
  * @module QueueResource
  */
-import { Effect, Layer, Option, Schema, Stream, pipe } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
@@ -63,8 +63,8 @@ import {
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
-  engineQueueStoreContract,
   makeQueueStoreAnalyticsContract,
+  materializeEngineQueueStoreForTag,
   type QueueStoreAnalyticsContract,
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
@@ -73,7 +73,6 @@ import type {
   QueueEnqueueErrors,
   QueueHandle,
   QueueResourceConfigWithItemSchema,
-  QueueStoreWriter,
 } from "./internal/queueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { LogEntrySchema } from "./LogEntry";
@@ -921,20 +920,7 @@ const buildQueueImpl = <
     // success value `A` rides the `QueueStoreWriter<Item, E, A>` surface below — its `completed`
     // takes `A`, funnelled into this contract's `unknown`-typed narrow write (A ⊆ unknown), and the
     // typed value is layered back on the decoded read side (`QueueStoreCompleted`).
-    const storeEffects = pipe(
-      Store.effects(tag.key, engineQueueStoreContract(tag)),
-      Store.catchWriteErrors,
-    );
-    // Discharge `Storage` from every recorder method in one shot (`Store.provideContext`, the Store-side
-    // mirror of `Resource.provideContext`) — the subtractive result leaves each narrow write as
-    // `Effect<void>`, so it satisfies `QueueStoreWriter` (Storage-free) directly; the extra base
-    // `event.append/read` members it also carries are unused here (a wider object is assignable).
-    const storageContext = yield* Effect.context<Store.Storage>();
-    const store: QueueStoreWriter<
-      Schema.Struct<F>["Type"],
-      E,
-      QueueSuccessValueOf<Success>
-    > = Store.provideContext(storeEffects, storageContext);
+    const store = yield* materializeEngineQueueStoreForTag(tag);
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
