@@ -3,7 +3,7 @@
 **Integration branch:** `integration/storage` (base for this agent — **branch off it**, do not wait on other agents)  
 **Supervisor:** cloud agent supervisor (tracks scope; you paste the Cursor branch name when the run starts)  
 **Agent type:** **Cursor Cloud Agent** — one long session, multiple slices, single PR back to `integration/storage`  
-**Completed branch:** `cursor/store-cutover-closeout-ce05` (`ad6ce18`)
+**Completed branch:** `cursor/store-cutover-closeout-ce05` (`61b9963`)
 
 ---
 
@@ -125,7 +125,16 @@ Paste the branch name to the supervisor when the run exists.
 
 ## Done when
 
+### Phase 1 (slices A–E)
+
 - [x] CQR uses `builtResource` on toolkit layers (or documented blocker in PR)
 - [x] Handoffs match shipped store/tag behavior
 - [x] `pnpm run typecheck` + `pnpm test` green
-- [ ] Draft PR targeting `integration/storage` — branch `cursor/store-cutover-closeout-ce05`
+- [ ] Draft PR targeting `integration/storage` — branch pushed; open via [compare link](https://github.com/NikScripts/effect-pm/compare/integration/storage...cursor/store-cutover-closeout-ce05?expand=1) if auto-create blocked
+
+### Phase 2 (docs truth sweep + ship)
+
+- [x] Integration-sync stale rows fixed (`integration-sync-2026-07-07.md`)
+- [x] Queue agent report refreshed (`reports/2026-07-07-agent-report-queue-resource.md`)
+- [x] Queue handoff checkboxes match `integration/storage` code (`store-cutover-queue.md`)
+- [x] PR body updated with Phase 2 summary; verification commands recorded

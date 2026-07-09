@@ -28,12 +28,12 @@ as a declared dependency; NEVER `serviceOption`**).
 - [x] `Resource.builtResource` + `grantLocal` on `layer` / `serve` / `serveRemote` (worker `R` discharged
       at grant; remote path defers via wire invoke).
 - [x] Config-object-only `Tag` with optional `success` / `error` on the config object.
+- [x] `publishEvent` persists via materialized engine store (`config.store` / `recordToStore` at source).
+- [x] Legacy `QueueResourceStore` facet deleted from `src/` (engine no longer dual-writes).
 
-## Future (not this cutover)
+## Future (not this cutover — no code changes in Agent 01)
 
 1. [ ] Buffer appends off the worker hot path (one scoped daemon draining a bounded queue → `store.record`).
-2. [ ] Delete any remaining reverted `serviceOption(QueueResourceStore)` facet tier / `ProcessStore` import
-       if still present after buffer lands.
 
 ## Discarded plan items (superseded — do not redo)
 
