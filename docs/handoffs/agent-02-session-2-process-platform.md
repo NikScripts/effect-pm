@@ -81,7 +81,9 @@ Update [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent
 
 ## Done when
 
-- [ ] `Failed.error` store path tested (typed + fallback)
-- [ ] RPC `error` wired or blocker documented with owner decision ask
-- [ ] Examples + review doc current
-- [ ] PR open → `integration/storage`
+- [x] `Failed.error` store path tested (typed + fallback)
+- [x] RPC `error` wired or blocker documented with owner decision ask
+- [x] Examples + review doc current
+- [x] PR open → `integration/storage`
+
+**Session 2 complete** on `cursor/process-platform-a009` (2026-07-09).

@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, FileSystem, Layer, Path } from "effect";
+import { Duration, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -9,10 +9,17 @@ import * as Store from "../src/Store";
 import { Polling } from "../src/Polling";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
 
+const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
+
 class SqliteExec extends Process.Tag<SqliteExec>()("test/sqlite/Exec") {}
+
+class SqliteTypedFailExec extends Process.Tag<SqliteTypedFailExec>()("test/sqlite/TypedFail", {
+  error: FetchErr,
+}) {}
 
 class SqliteStore extends Store.Service<SqliteStore>("@test/SqliteProcessStore")(
   Store.register(SqliteExec, builtInProcessStoreContract(SqliteExec)),
+  Store.register(SqliteTypedFailExec, builtInProcessStoreContract(SqliteTypedFailExec)),
 ) {}
 
 const clock = TestClock.layer();
@@ -72,6 +79,50 @@ describe("Process.layer — durable SQLite store", () => {
             _tag: "Completed",
             processId: SqliteExec.key,
             isStartupRun: true,
+          });
+        }).pipe(Effect.provide(SqliteStore.layer({ filename }))),
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("typed Failed.error round-trips through SQLite journal codec", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = path.join(tmpdir(), `effect-pm-process-typed-fail-${randomUUID()}`);
+      const dir = yield* Effect.acquireRelease(
+        fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
+        (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
+      );
+      const filename = path.join(dir, "typed-fail.db");
+      const fail = yield* Schema.decodeUnknownEffect(FetchErr)({
+        _tag: "FetchError",
+        status: 418,
+      });
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const store = yield* SqliteStore.at(SqliteTypedFailExec);
+          yield* store.record({
+            _tag: "Failed",
+            processId: SqliteTypedFailExec.key,
+            scheduleKey: null,
+            startedAt: 1,
+            completedAt: 2,
+            durationMs: 1,
+            isStartupRun: true,
+            error: fail,
+          });
+        }).pipe(Effect.provide(SqliteStore.layer({ filename }))),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const store = yield* SqliteStore.at(SqliteTypedFailExec);
+          const events = yield* store.events();
+          const failed = events.find((row) => row._tag === "Failed");
+          expect(failed).toMatchObject({
+            error: { _tag: "FetchError", status: 418 },
           });
         }).pipe(Effect.provide(SqliteStore.layer({ filename }))),
       );

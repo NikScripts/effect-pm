@@ -1,7 +1,10 @@
 /**
  * @module examples/forms/process-store/process-store-events-sqlite-layer
  *
- * ProcessStorage facets (lifecycle) on SQLite + RunResource run facts on Store.
+ * **Legacy facet plane** on SQLite — `layerProcessStore` + `ProcessLifecycleStore` lifecycle reads,
+ * plus `RunResource.store` run facts. Execution history for processes uses **`Process.layer`** +
+ * **`Process.store(tag)`** (see {@link ./process-layer-store-auto-write.ts}), not these facets.
+ *
  * Run: `npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts`
  */
 

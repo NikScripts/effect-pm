@@ -69,14 +69,17 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `Tag(key, success?, error?)`, `successOf`/`errorOf` | Cast removal on `makeProcessStoreContract` (if any remain) |
-| `builtInProcessStoreContract`, `Process.store`, engine tap | **`error` stamped but unused** on RPC (store wire uses typed/fallback encoding per store-core §5) |
+| Config-object `Tag` with `{ success?, error? }`, `successOf`/`errorOf` | Cast removal ✅ (`builtInProcessStoreContract` cast-free, Session 1) |
+| `builtInProcessStoreContract`, `Process.store`, engine `store.record` path | **RPC `error` wire blocked** — store uses typed/fallback `Failed.error` (store-core §5); RPC spec unchanged (Session 2) |
 | `withDefaultMemory` on `layer` / `serve` / `serveRemote` | |
 | `ProcessExecutionStore` facet deleted; `Process.result` removed | |
-| `RunCompleted.success` / `RunFailed.error` wire (store-core §5) | |
-| `process-store-contract.test.ts`, `process-store-default-override.test.ts` | |
+| `Started` / `Completed` / `Failed` / `Interrupted` store rows + tests | |
+| `process-store-contract.test.ts`, `process-store-engine.test.ts`, sqlite typed-error test | |
 
-**Discuss / approve:** Wire `error` into typed RPC `RunFailed` vs drop from Tag until wired; symbol rename in changeset.
+**Owner decision (RPC):** Process has no request/response worker RPC like RunResource `run`. Wiring tag
+`error` onto `processSpec` would require per-tag spec rebuild (mirror `runSpec` in
+`src/internal/runResourceSchema.ts:30`). Until then, `error` is **store-only**. See agent report for
+file:line evidence.
 
 **Blind spot (RunResource agent):** Process has no `payload` on tag — two-slot only. Do not add without product call.
 
@@ -135,7 +138,7 @@ Two report sets exist — use **both**, for different layers:
 | # | Topic | Status | Notes |
 |---|--------|--------|-------|
 | 1 | **Store event taxonomy (queue)** | ✅ **Locked** — full lifecycle | Owner decision in `store-cutover-queue.md`; persisted == streamed |
-| 2 | **`error` on Process tag** | Open | Wire to RPC + typed `RunFailed` vs remove until wired |
+| 2 | **`error` on Process tag** | **Store ✅ / RPC blocked** | Store: `Process.ts:581-596` `recordStoreFailed`. RPC: `processSpec` at `Process.ts:1548-1569` uses `Schema.Never`; `errorSym` stamped at `Process.ts:1889-1890` but not grafted onto spec (contrast `runSpec` at `runResourceSchema.ts:30`) |
 | 3 | **Engine store tap pattern** | ✅ **Shipped** | Declared **`Storage`** + `materializeEngineQueueStore*` (Queue/CQR); Process inlines in `buildProcessImpl`; RunResource `runResourceStoreTap.ts` |
 | 4 | **Default store in resource layers** | ✅ **Shipped** | `Layer.provideMerge(Store.layerDefaultMemory)` on Process, RunResource, Queue, CQR toolkit entry points |
 | 5 | **Legacy facet dual-write** | ✅ **Done** | **`ProcessExecutionStore`**, **`RunResourceStore`**, **`QueueResourceStore`** facets deleted from `src/` |

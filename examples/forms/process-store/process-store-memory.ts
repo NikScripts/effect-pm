@@ -1,12 +1,15 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/process-store/process-store-memory
  *
- * ProcessStorage in-memory storage + lifecycle facet query.
+ * **Legacy facet plane** — `ProcessStorage.layer` + `ProcessLifecycleStore` lifecycle rows.
+ * This is **not** `Process.store` execution history (`Started` / `Completed` / `Failed` / `Interrupted`).
+ * For execution events, start with {@link ./process-layer-store-auto-write.ts}.
+ *
  * Run: `npx tsx examples/forms/process-store/process-store-memory.ts`
  */
 
 import { Effect } from "effect";
+import * as ProcessStorage from "../../../src/ProcessStorage";
 import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
