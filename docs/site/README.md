@@ -1,17 +1,43 @@
 # Documentation site (`docs/site/`)
 
-Normative **standards** for effect-pm live here as **HTML** (machine- and human-readable). Narrative and migration notes stay in `docs/*.md` until migrated.
+Live HTML documentation for effect-pm — **served from day one** for Tailscale / phone reading while agents edit.
 
-## Pipeline (local Claude agents)
+## Quick start (home server + Tailscale)
 
-| Agent | Handoff | Delivers |
-|-------|---------|----------|
-| **A** | [`handoffs/agent-a-html-standards-corpus.md`](./handoffs/agent-a-html-standards-corpus.md) | `standards/*.html` + `manifest.json` |
-| **B** | [`handoffs/agent-b-html-doc-platform.md`](./handoffs/agent-b-html-doc-platform.md) | Vite served platform (`docs:serve`) |
-| **C** | [`handoffs/agent-c-standards-audit.md`](./handoffs/agent-c-standards-audit.md) | Audit reports + strict fix PRs |
+```bash
+pnpm run docs:serve
+```
 
-**Web stack target:** Vite + React + Tailwind v4 — same family as `src/web/` and `examples/resource-web/`.
+| Setting | Default |
+|---------|---------|
+| Port | `5190` (`DOCS_PORT=8080 pnpm run docs:serve` to override) |
+| Bind | `0.0.0.0` (all interfaces — required for Tailscale) |
+| Phone URL | `http://<your-tailscale-ip>:5190/` |
 
-## Status
+Vite HMR reloads when HTML/CSS under `docs/site/` changes — save a file, refresh the page on your phone.
 
-Agent A not started — `standards/` directory will appear on branch `action/html-standards-corpus`.
+## Agent pipeline (order matters)
+
+| Phase | Agent | Handoff | Delivers |
+|-------|-------|---------|----------|
+| **1** | **B** | [`handoffs/agent-b-html-doc-platform.md`](./handoffs/agent-b-html-doc-platform.md) | Vite server, nav, `meta.html` template, `docs:build` |
+| **2** | **A** | [`handoffs/agent-a-html-standards-corpus.md`](./handoffs/agent-a-html-standards-corpus.md) | `standards/*.html` + populated `manifest.json` |
+| **3** | **C** | [`handoffs/agent-c-standards-audit.md`](./handoffs/agent-c-standards-audit.md) | `audits/*.html`, strict fix PRs |
+
+**Stack:** Vite 6 + Tailwind v4 (aligned with `src/web/` and `examples/resource-web/`). React shell optional — plain HTML chapters are fine initially.
+
+## Layout
+
+```
+docs/site/
+├── index.html              # Home
+├── vite.config.ts          # host: true, port 5190
+├── public/assets/site.css
+├── standards/              # Normative HTML corpus (Agent A)
+│   ├── manifest.json
+│   └── *.html
+├── content/                # Auxiliary static pages
+└── audits/                 # Agent C reports (later)
+```
+
+Legacy Markdown remains in `docs/*.md` until migrated.

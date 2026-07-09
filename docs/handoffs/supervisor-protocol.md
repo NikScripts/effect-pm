@@ -35,12 +35,12 @@ Do **not** say "handoff marked complete" without the above. Do **not** stop afte
 | **1** | Store / queue cutover / storage docs (Cursor Cloud) | [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md) |
 | **2** | Process (Cursor Cloud) | [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md) |
 
-### Local Claude agents (letters)
+### Local Claude agents (letters) — **B before A**
 
-| Agent | Handoff | Status |
-|-------|---------|--------|
-| **A** | [`agent-a-html-standards-corpus.md`](./agent-a-html-standards-corpus.md) | HTML standards SSOT — **start here** |
-| **B** | [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md) | Blocked on A |
-| **C** | [`agent-c-standards-audit.md`](./agent-c-standards-audit.md) | Blocked on A/B |
+| Phase | Agent | Handoff | Status |
+|-------|-------|---------|--------|
+| **1** | **B** | [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md) | Doc server + Tailscale serve — **start here** |
+| **2** | **A** | [`agent-a-html-standards-corpus.md`](./agent-a-html-standards-corpus.md) | HTML standards into served tree — blocked on B |
+| **3** | **C** | [`agent-c-standards-audit.md`](./agent-c-standards-audit.md) | Strict audit — blocked on A |
 
 Session 1 handoffs are archived (merged). See [`reports/README.md`](./reports/README.md).

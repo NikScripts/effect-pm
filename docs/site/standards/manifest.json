@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "generated": null,
+  "pages": [
+    {
+      "id": "standards-index",
+      "title": "Standards index",
+      "href": "standards/index.html",
+      "tags": ["meta"]
+    }
+  ],
+  "rules": []
+}

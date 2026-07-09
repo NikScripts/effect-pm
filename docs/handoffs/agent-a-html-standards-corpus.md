@@ -1,142 +1,106 @@
-# Agent A — HTML standards corpus (local Claude)
+# Agent A — HTML standards corpus (local Claude) — **PHASE 2**
 
+**Order:** **After Agent B** — content goes into the **served** `docs/site/` tree. Refresh on phone via `pnpm run docs:serve`.  
 **Agent:** Local Claude (**Agent A**)  
-**Branch:** `action/html-standards-corpus` from **`integration/storage`**  
-**Blocks:** Agent B (doc platform), Agent C (standards audit)  
-**Chat rule:** Post diff stat, file list, and a one-paragraph sample of HTML structure after each major chapter — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Branch:** `action/html-standards-corpus` from **`integration/storage`** (must include B's `docs:serve` + nav)  
+**Blocks:** Agent C (standards audit)
+
+**Chat rule:** After each chapter, post rule count + `http://<host>:5190/standards/<file>.html` path — see [`supervisor-protocol.md`](./supervisor-protocol.md).
+
+---
+
+## Prereq
+
+- Agent B merged: `pnpm run docs:serve` binds `host: true`, nav loads `standards/manifest.json`
+- Read `docs/site/standards/meta.html` (B's format template) — **follow it exactly**
 
 ---
 
 ## Mission
 
-Study this repo and **codify every style, layout, docs, and example rule** into a formal **HTML corpus** that:
+Study the repo and codify **every style, layout, docs, and example rule** into `docs/site/standards/*.html`:
 
-1. **Humans** can read in a browser (future web server — same stack as `src/web` + Vite examples)
-2. **Machines** can parse reliably (semantic HTML, stable IDs, metadata attributes)
-3. **Raw HTML** remains skimmable (clear headings, short sections — not a minified blob)
+1. Readable on your phone via Tailscale while you edit
+2. Machine-parseable (`data-rule-id`, `manifest.json`)
+3. Skimmable as raw HTML in the repo
 
-This is the **SSOT for “how effect-pm should look”** going forward. Markdown handoffs remain for migration notes; **new normative standards live in HTML**.
-
-Anthropic’s HTML-docs direction: prefer **structured HTML over Markdown** for agent-consumed standards because hierarchy, IDs, and `data-*` metadata survive parsing better than MD ambiguity.
+Markdown handoffs stay for migration notes; **normative standards live in served HTML**.
 
 ---
 
-## Read first (repo study — budget half the session)
+## Read first (repo study)
 
 | Source | Extract |
 |--------|---------|
-| [`docs/AGENTS.md`](../AGENTS.md) | Repo map, invariants, verification |
-| [`AGENTS.md`](../../AGENTS.md) | Git, vendored repos, Effect platform policy |
-| [`.cursor/rules/module-layout.mdc`](../../.cursor/rules/module-layout.mdc) | Effect-true module shape |
-| [`.cursor/rules/public-vs-internal.mdc`](../../.cursor/rules/public-vs-internal.mdc) | Public vs `internal/`, store facets |
-| [`docs/STORAGE.md`](../STORAGE.md) | Persistence rules (note: being rewritten — codify **target** golden store model from store-cutover handoffs) |
-| [`docs/handoffs/store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) | Store SSOT for persistence sections |
-| [`src/web/`](../src/web/) | Web UI conventions (Tailwind 4, component patterns) |
-| [`examples/README.md`](../../examples/README.md) | Example forms/scenarios/shared layout |
-| [`repos/effect/packages/effect/src/`](../repos/effect/) | Read-only — idiomatic Effect module shape (sample 3–5 modules: `Layer.ts`, `Cache.ts`, `RpcServer.ts`) |
-| User/engineering rules | Effect LSP hygiene, naming, testing, no unsafe casts (infer from `docs/AGENTS.md` + handoffs) |
+| [`docs/AGENTS.md`](../AGENTS.md) | Repo map, invariants |
+| [`.cursor/rules/module-layout.mdc`](../../.cursor/rules/module-layout.mdc) | Effect-true modules |
+| [`.cursor/rules/public-vs-internal.mdc`](../../.cursor/rules/public-vs-internal.mdc) | Public vs internal |
+| [`docs/STORAGE.md`](../STORAGE.md) + [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) | Persistence golden model |
+| [`examples/README.md`](../../examples/README.md) | Example layout |
+| `src/web/`, `repos/effect/packages/effect/src/` (samples) | UI + idiomatic Effect |
 
-**Do not** copy stale Markdown wholesale — **verify against `src/`** where rules claim behavior.
+Verify rules against `src/` — do not copy stale Markdown blindly.
 
 ---
 
-## Deliverable layout
+## Deliverable chapters
 
-Create under **`docs/site/standards/`**:
+Create under **`docs/site/standards/`** (register each in `manifest.json`):
 
-```
-docs/site/
-├── README.md                 # How this tree relates to Markdown docs + future platform
-└── standards/
-    ├── index.html            # Corpus home — nav to all chapters
-    ├── meta.html             # Defines the HTML format itself (for Agent B)
-    ├── module-layout.html
-    ├── public-internal.html
-    ├── effect-typescript.html
-    ├── storage-store.html
-    ├── documentation.html    # How to write docs (incl. this HTML format)
-    ├── examples.html         # forms / scenarios / shared / web examples
-    ├── web-ui.html           # src/web + Vite example apps
-    ├── testing.html
-    ├── naming-exports.html
-    └── glossary.html         # Canonical terms (Tag, facet, Store.Service, …)
-```
+| File | Topic |
+|------|--------|
+| `module-layout.html` | PascalCase modules, flat exports, internal split |
+| `public-internal.html` | Public vs `src/internal/`, store facets |
+| `effect-typescript.html` | Effect LSP hygiene, no raw Node, TaggedError |
+| `naming-exports.html` | Tags, subpaths, barrel |
+| `storage-store.html` | Store bridge, tiers, no engine facet dual-write |
+| `documentation.html` | How to write docs (this HTML format) |
+| `examples.html` | forms / scenarios / shared |
+| `web-ui.html` | `src/web`, Vite examples |
+| `testing.html` | Vitest, test-d.ts |
+| `glossary.html` | Canonical terms |
 
-You may add chapters if gaps exist; do not sprawl past ~12 top-level pages without supervisor review.
+Update `standards/index.html` nav via manifest only (per B's convention).
 
 ---
 
-## HTML format rules (define in `meta.html` and follow everywhere)
+## Session slices (one branch — do not stop early)
 
-Each standards page MUST:
+### Slice 1 — Inventory + serve check
 
-| Requirement | Detail |
-|-------------|--------|
-| **DOCTYPE + lang** | `<!DOCTYPE html><html lang="en">` |
-| **`<head>`** | `<title>`, `<meta charset="utf-8">`, `<meta name="description">`, optional `<link rel="stylesheet" href="../assets/standards.css">` (create minimal CSS) |
-| **Stable IDs** | Every rule: `id="rule-<domain>-<slug>"` on `<article>` or `<section>` |
-| **Machine metadata** | `data-rule-id`, `data-severity="must|should|may"`, `data-applies-to="src|docs|examples|test|all"` |
-| **Human structure** | `<nav>` breadcrumb, `<main>`, `<article>`, `<h1>`–`<h3>`, `<dl>` for rule/summary pairs |
-| **Code** | `<pre><code class="language-ts">` — escaped, copy-pasteable |
-| **Cross-links** | `<a href="module-layout.html#rule-...">` — no broken anchors |
-| **Index manifest** | `standards/manifest.json` — array of `{ id, title, href, tags[] }` for Agent B/C |
+- Branch from `integration/storage` with B's platform
+- `pnpm run docs:serve` — confirm phone can open `/standards/index.html`
+- Post chat: sources read, chapter outline
 
-**Raw readability:** sections ≤ ~40 lines; one rule per `<article>` when possible.
+### Slice 2 — Core chapters (3–4 HTML files)
 
-**Optional:** `<script type="application/json" id="page-rules">` block per page for ultra-machine-readable export (Agent C).
+`module-layout`, `public-internal`, `effect-typescript`, `naming-exports` — each rule in `<article data-rule-id="…">`
 
----
+### Slice 3 — Domain chapters (4–5 HTML files)
 
-## Session slices (one branch, complete all)
+`storage-store`, `documentation`, `examples`, `web-ui`, `testing`
 
-### Slice 1 — Inventory
+### Slice 4 — Glossary + manifest
 
-- Branch `action/html-standards-corpus` from `integration/storage`
-- Write `docs/site/README.md` + empty `standards/manifest.json` schema
-- Post in chat: rule source checklist (files read, gaps found)
+- Populate `manifest.json` `rules[]` from every `data-rule-id`
+- `glossary.html`
 
-### Slice 2 — `meta.html` + `index.html` + `standards.css`
+### Slice 5 — Ship
 
-- Document the HTML standard itself
-- Minimal readable CSS (system font, max-width, code blocks) — **no React yet**
-
-### Slice 3 — Core engineering chapters
-
-- `module-layout.html`, `public-internal.html`, `effect-typescript.html`, `naming-exports.html`
-- Each rule: **Must** state *why* (one sentence), *example OK*, *example violation*
-
-### Slice 4 — Domain chapters
-
-- `storage-store.html`, `documentation.html`, `examples.html`, `web-ui.html`, `testing.html`
-
-### Slice 5 — Glossary + manifest + ship
-
-- `glossary.html` — terms used consistently across chapters
-- Populate `manifest.json` from all `data-rule-id`s
-- `pnpm run typecheck` (unchanged) — no src edits required
-- Open PR → `integration/storage` (or post compare URL if local only)
+- Spot-check all pages on phone
+- PR → `integration/storage`
+- Post chat: rule count, manifest excerpt, diff stat
 
 ---
 
-## Out of scope (Agent B / C)
+## Out of scope
 
-- Vite dev server, React wrappers, component library
-- Rewriting existing `docs/*.md`
-- Auto-fixing `src/` violations
-- `repos/` edits
-
----
-
-## Done when
-
-- [ ] `docs/site/standards/` corpus with ≥10 HTML pages + manifest
-- [ ] `meta.html` defines format Agent B will componentize
-- [ ] Rules verified against `src/` samples cited in HTML
-- [ ] Chat shows file tree + sample `data-rule-id` excerpt
-- [ ] PR or compare link posted
+- Changing Vite platform structure (file B if broken)
+- `src/` edits, `repos/` edits
+- Full Markdown migration
 
 ---
 
 ## Status
 
-- [ ] Not started
+- [ ] Blocked until Agent B ships `docs:serve` + `meta.html` template
