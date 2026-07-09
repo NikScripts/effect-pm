@@ -19,6 +19,7 @@ CustomQueueResource.Tag<Jobs>()("@app/Jobs", {
 
 - [x] Config-object-only `Tag` on QueueResource, Process, RunResource, CustomQueueResource.
 - [x] CQR optional `success` / `error` — stamped like QR; store wire from tag SSOT.
+- [x] CQR `layer` / `serve` / `serveRemote` use `Resource.builtResource` + `grantLocal` (parity with QueueResource / Process).
 
 ## Store cutover — mostly free
 

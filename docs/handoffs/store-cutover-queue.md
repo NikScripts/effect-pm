@@ -23,20 +23,27 @@ as a declared dependency; NEVER `serviceOption`**).
 - `builtInQueueStoreContract(tag)` — one `event` shape persisting the shared `QueueEvent<T>` union
   (`record`/`events`), **cast-free** (the reference other modules mirror to drop their casts).
 - Store tightening + `layerDefaultMemory` (shipped; see store-core report).
+- [x] `buildQueueImpl` resolves the store via `materializeEngineQueueStoreForItem` (declared `Storage`
+      dependency — **no `serviceOption`**). `layer` / `serve` / `serveRemote` merge `Store.layerDefaultMemory`.
+- [x] `Resource.builtResource` + `grantLocal` on `layer` / `serve` / `serveRemote` (worker `R` discharged
+      at grant; remote path defers via wire invoke).
+- [x] Config-object-only `Tag` with optional `success` / `error` on the config object.
 
-## Plan (owner: me) — the defaulted-dependency shape
+## Future (not this cutover)
 
-The engine cutover is now simple, per the store-core §1/§2 decisions:
+1. [ ] Buffer appends off the worker hot path (one scoped daemon draining a bounded queue → `store.record`).
+2. [ ] Delete any remaining reverted `serviceOption(QueueResourceStore)` facet tier / `ProcessStore` import
+       if still present after buffer lands.
 
-1. [ ] `buildQueueImpl` resolves the store handle as a **plain declared dependency**:
-       `const bridge = yield* StoreScopeBridgeTag; const store = yield* bridge.at(tag.key,
-       builtInQueueStoreContract(tag))`. **No `serviceOption`, no `Option.match`, no forked-fiber, no lazy.**
-2. [ ] Buffer appends off the worker hot path (one scoped daemon draining a bounded queue → `store.record`).
-3. [ ] `publishEvent` persists via that buffer; delete the reverted `serviceOption(QueueResourceStore)` facet
-       tier and the `ProcessStore` import.
-4. [ ] The queue layer's `RIn` gains `StoreScopeBridgeTag`; the **app** provides `layerDefaultMemory` or a
-       real `Store.Service` at the root (do NOT bake it into the queue layer). Update queue tests to provide
-       one.
+## Discarded plan items (superseded — do not redo)
+
+The following were the original engine-cutover checklist; **declared-dependency materialize + `layerDefaultMemory`
+merge shipped** on `integration/storage`. Keep for history only:
+
+1. ~~`buildQueueImpl` resolves the store handle as a **plain declared dependency**~~ — **done** via
+   `materializeEngineQueueStoreForItem`.
+2. ~~The queue layer's `RIn` gains `StoreScopeBridgeTag`; app provides `layerDefaultMemory` at root~~ — **done**
+   via `Layer.provideMerge(Store.layerDefaultMemory)` on toolkit layers (apps override at root).
 
 ## Discarded (do not do — I got these wrong earlier)
 
@@ -46,6 +53,7 @@ The engine cutover is now simple, per the store-core §1/§2 decisions:
   violation, dressed up. A declared dependency needs no such helper.
 - ❌ Lazy per-event resolution.
 - ❌ `Layer.provide(layerDefaultMemory)` baked into the queue layer (hard-provides; blocks app override).
+  **Note:** shipped shape is `Layer.provideMerge(Store.layerDefaultMemory)` on toolkit layers — apps override at root.
 
 ## Why no deadlock now
 

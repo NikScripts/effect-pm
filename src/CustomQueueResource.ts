@@ -428,7 +428,11 @@ const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
 const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Effect.Effect<ImplOf<CustomQueueInstanceSpec<F>>, never, R | RR | Scope.Scope | Store.Storage> =>
+): Effect.Effect<
+  Resource.BuiltResource<CustomQueueInstanceSpec<F>, R | RR>,
+  never,
+  R | RR | Scope.Scope | Store.Storage
+> =>
   Effect.gen(function* () {
     // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
     // at this introspection boundary.
@@ -451,9 +455,6 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       itemSchema,
       store,
     } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
-    const provideR = <Out, Err>(
-      effect: Effect.Effect<Out, Err, R | RR>,
-    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
@@ -488,16 +489,21 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       get: handle.statusNow,
       changes: handle.status,
     };
-    const impl: ImplOf<CustomQueueInstanceSpec<F>> = {
+    // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
+    // discharge `context` into every Effect method uniformly — same bundle pattern as QueueResource.
+    const impl: Resource.WithRequirement<
+      ImplOf<CustomQueueInstanceSpec<F>>,
+      R | RR
+    > = {
       status: statusSub,
       size: Resource.mapSubscribable(statusSub, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Resource.mapSubscribable(statusSub, (s) => sumLaneSizes(s.sizes) === 0),
-      levelSizes: provideR(handle.levelSizes),
-      start: provideR(handle.start),
+      levelSizes: handle.levelSizes,
+      start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
       shutdown: handle.shutdown,
-      clear: provideR(handle.clear),
+      clear: handle.clear,
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>
@@ -527,18 +533,19 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       add: ((
         itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
         level?: number | string,
-      ) => provideR(handle.add(itemOrItems, level)).pipe(Effect.orDie)) as ImplOf<
-        CustomQueueInstanceSpec<F>
+      ) => handle.add(itemOrItems, level).pipe(Effect.orDie)) as Resource.WithRequirement<
+        ImplOf<CustomQueueInstanceSpec<F>>,
+        R | RR
       >["add"],
-      enqueue: (entries) => provideR(handle.enqueue(entries)),
-      release: ({ options }) => provideR(handle.release(options)),
-      releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
+      enqueue: (entries) => handle.enqueue(entries),
+      release: ({ options }) => handle.release(options),
+      releaseEncoded: ({ options }) => handle.releaseEncoded(options),
       deadLetter: ({ selector, options }) =>
-        provideR(handle.deadLetter(selector, options)),
-      drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
+        handle.deadLetter(selector, options),
+      drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return impl;
+    return Resource.builtResource(tag, impl, context);
   });
 
 /** @public */
@@ -553,7 +560,9 @@ export const layer = <
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+    Effect.map(buildCustomQueueImpl(tag, config), (built) =>
+      Resource.layer(tag, Resource.grantLocal(tag, built)),
+    ),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
@@ -576,8 +585,8 @@ export const serveRemote = <
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
   Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
-      Resource.serveRemote(tag, impl),
+    Effect.map(buildCustomQueueImpl(tag, config), (built) =>
+      Resource.serveRemote(tag, built as any),
     ),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
@@ -605,8 +614,8 @@ export const serve = <
   R | RR
 > =>
   Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
-      Resource.serve(tag, impl),
+    Effect.map(buildCustomQueueImpl(tag, config), (built) =>
+      Resource.serve(tag, built as any),
     ),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
