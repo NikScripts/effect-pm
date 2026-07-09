@@ -1,13 +1,43 @@
 # Agent B — Bespoke docs app shell (local Claude)
 
 **Status:** **UNBLOCKED** — Option 6 locked in [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md)  
-**Branch:** `action/html-doc-platform` from **`integration/storage`** (tip `b55c3d9`)  
-**Resume:** Owner has not started B yet — old `docs/site/` scaffold exists; replace per slices below.
+**Branch:** `action/html-doc-platform` from **`integration/storage`** (minimum tip **`9042ce4`** — has Slice 0 + decision doc)  
+**Resume:** Pull before Slice 0 — see § Sync below. Old `docs/site/` scaffold exists; Slice 1+ work may be spike until plan approved.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) on every push.  
 **Owner chat:** Before/After blocks per [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 **Critical:** **Slice 0 is a conversation, not code.** Do not branch, scaffold, or delete the old site until the owner approves a written plan.
+
+---
+
+## Sync (run before Slice 0)
+
+Agent B on a stale `origin/integration/storage` will **not** see required handoffs. Verify:
+
+```bash
+git fetch origin
+git log --oneline -1 origin/integration/storage   # expect 9042ce4 or later
+test -f docs/handoffs/docs-platform-architecture-decision.md && echo OK decision
+test -f docs/handoffs/agent-b-html-doc-platform.md && rg -q "Slice 0" docs/handoffs/agent-b-html-doc-platform.md && echo OK slice0
+```
+
+| File | Landed in commit |
+|------|------------------|
+| [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) | `5dee13c` |
+| § Slice 0 in this handoff | `9042ce4` |
+
+Rebase `action/html-doc-platform` onto current `origin/integration/storage` after pull so handoffs are on your branch.
+
+### If you already shipped code before Slice 0 (owner 2026-07-09)
+
+| Work | Owner decision |
+|------|----------------|
+| **Slice 1 commit** on `action/html-doc-platform` | **Keep** — useful spike (Tailscale README, serve notes); plan may adopt or replace |
+| **Slice 2 WIP** (nav.js, meta.html, manifest edits) | **Park** — `git stash` or discard; informs planning, not the contract |
+| **Unwind Slice 1?** | **No** — keep branch; do not delete `dac86513` unless plan explicitly rejects that approach |
+
+After Slice 0 approval, reconcile spike vs `agent-b-plan.md` in a single intentional Slice 1 pass.
 
 ---
 
@@ -139,4 +169,6 @@ Per **`agent-b-plan.md`**. Typical deliverables:
 
 ## Status
 
-- [ ] Slice 0 — planning conversation (no code yet)
+- [x] Branch `action/html-doc-platform` created (owner: keep Slice 1 as spike)
+- [ ] Slice 0 — planning conversation (stash/discard Slice 2 WIP first)
+- [ ] Pull/rebase to `9042ce4+` so decision doc + § Slice 0 visible
