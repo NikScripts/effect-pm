@@ -71,12 +71,55 @@ Known stale (fix or assign to module agent):
 
 ---
 
+## 2026-07-09 Agent 1 sweep (`cursor/store-platform-docs-a009`)
+
+**Scope:** `docs/STORAGE.md` full rewrite + grep fixes in scoped consumer docs (not handoffs archive, not `PROCESS-API.md` / `guides/process.md` — Agent 2).
+
+### Fixed
+
+| File | Change |
+|------|--------|
+| `docs/STORAGE.md` | Golden Store bridge model; removed engine facet dual-write |
+| `docs/guides/queue-resource.md` | `itemSchema` → tag `payload`; config-object Tag examples |
+| `docs/guides/history-and-persistence.md` | Durability section uses tag `payload` |
+| `docs/guides/toolkit-by-example.md` | Removed `itemSchema` from `serve` example |
+| `docs/RESOURCE-API.md` | Replaced `QueueResourceStore` facet query with `Store.Service` / `Tag.store` |
+| `docs/CODEBASE-INVENTORY.md` | Store bridge write/read; tag `payload` |
+| `docs/handoffs/store-cutover-00-store-core.md` | Queue facet deletion marked fixed |
+
+### Clean in scoped guides
+
+`docs/guides/store.md`, `docs/PACKAGE-GUIDE.md`, `examples/**` — no grep hits for sweep pattern.
+
+**Re-verified post-rebase (`origin/integration/storage`, 2026-07-09):**
+
+```bash
+rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md docs/PACKAGE-GUIDE.md
+# (no matches)
+```
+
+No fixes required; no exceptions for these two files.
+
+### Documented exceptions (not errors)
+
+| Location | Why left |
+|----------|----------|
+| `CHANGELOG.md` / `.changeset/*` | Historical release notes — grep hits expected |
+| `docs/handoffs/*` (archive) | Migration narrative; link to `STORAGE.md` for current truth |
+| `package.json` `store/QueueResource` export | No `src/store/queueResource.ts` — release cleanup pending |
+| Engine TSDoc / internal param names `itemSchema` | Internal codec helpers; public Tag uses `payload` |
+
+### Still open (docs-release / Agent 2)
+
+- Consolidated platform changeset
+- `PROCESS-API.md`, `guides/process.md` — Agent 2 Session 2
+- `2026-07-07-rpc-schema-names-payload-success-error.md` status table — mark Queue rename done when Agent 2 merges
+
+---
+
 ## STORAGE.md / PROCESS-API / PACKAGE-GUIDE
 
-Until Process engine tap lands:
-
-- State clearly: **RunResource** auto-writes to Store + legacy facet; **Process** legacy facet only for engine; **Queue** legacy facet only.
-- Link module reports in `docs/handoffs/reports/README.md`.
+**Updated 2026-07-09:** `STORAGE.md` describes golden Store bridge — all four toolkits on declared `Storage`; legacy execution facets deleted. **Process** API guide owned by Agent 2.
 
 ---
 

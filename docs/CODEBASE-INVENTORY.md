@@ -232,11 +232,11 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Enqueue error channel on contexts:** `QueueItemValidationError | QueueBatchValidationError` only when schema path used; without schema, still typed but validation never fails.
 
-### Config with item schema (`QueueResourceConfigWithItemSchema`)
+### Config with item schema (tag `payload`)
 
-- **`itemSchema`** — Effect `Schema` for items.
+- **`payload`** on the **Tag** config object — Effect `Schema` for items (SSOT; not on `layer()` config).
 - Same **`effect`** and lifecycle hooks as above.
-- Public **`add`/`enqueue`/…** and hook enqueues can fail validation.
+- Public **`add`/`enqueue`/…** and hook enqueues can fail validation when `payload` is declared.
 
 ### `QueueHandle` operations
 
@@ -383,15 +383,13 @@ the built-in facets over `RuntimeStorage`.
 
 ### Facet write/read (legacy `ProcessStorage` facets)
 
-**Write:** domain code calls static emitters such as
-`QueueResourceStore.recordEntry(...)` or lifecycle facet emitters for legacy paths.
-Process and RunResource write via **`Process.store(tag)`** / **`RunResource.store(tag)`** on the **Store bridge**
-(`Storage` declared dependency; default via `Store.layerDefaultMemory`).
-Static emitters no-op when the facet is absent and log write failures instead of changing caller behavior.
+**Write:** domain code on the **Store bridge** — toolkit engines auto-append via `Process.store(tag)`,
+`QueueResource.store(tag)`, `RunResource.store(tag)` (`Storage` declared dependency; default via
+`Store.layerDefaultMemory`). Legacy **Log** / **ProcessLifecycle** facets still use static emitters
+when `ProcessStorage` is provided.
 
-**Read:** acquire the owning facet (`yield* LogStore`, `yield* QueueResourceStore`, etc.)
-and call its domain read methods. Process execution history and RunResource facts read through the **Store bridge**
-registered by **`Process.store(tag)`** / **`RunResource.store(tag)`** → `yield* Tag.store`.
+**Read:** execution history via **`yield* Tag.store`** or `AppStore.at(Tag)`. Log / lifecycle via
+`yield* LogStore`, `yield* ProcessLifecycleStore` when the facet layer is present.
 
 ### Query types
 

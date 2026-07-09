@@ -329,7 +329,7 @@ worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — 
 
 ```ts
 const dropletLayer = Resource.httpServer([
-  QueueResource.serve(RosterImportQueue, { effect: importRoster, itemSchema: RosterItem }),
+  QueueResource.serve(RosterImportQueue, { effect: importRoster }),
   Process.serve(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
   Resource.serve(Database, { status: pingStatus }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })));

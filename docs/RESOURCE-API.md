@@ -729,35 +729,37 @@ import { ProcessStorage } from "@nikscripts/effect-pm"
 // Without storage — resources work fine, no analytics
 program.pipe(Effect.provide(EmailQueue.layer))
 
-// With storage — queue/run records are written automatically
+// With storage — toolkit engines auto-write to Store bridge; optional ProcessStorage adds log/lifecycle facets
 program.pipe(
   Effect.provide(Layer.mergeAll(
     EmailQueue.layer,
-    ProcessStorage.layer,  // just by being here, records activate
+    ProcessStorage.layer,  // Log + ProcessLifecycle facets (not execution history)
   ))
 )
 ```
 
-Records written by `QueueResource`:
-- `queue.entry.enqueued` — entry id, dedupe key, priority, attempt count, enqueue timestamp
-- `queue.entry.started` — entry id, dedupe key, priority, attempt count, start timestamp
-- `queue.entry.completed` / `queue.entry.failed` — duration, attempts, error when present
-- `queue.entry.retried` / `queue.entry.exhausted` — retry lifecycle
-- `queue.lifecycle.started|paused|resumed|shutdown|cleared|drained`
-
-Query queue records through the queue storage facet:
+**Queue execution history** (Store bridge) — persisted `QueueEvent<T>` rows via the engine store tap.
+Register `QueueResource.store(EmailQueue)` on an app `Store.Service` for durable analytics, or read
+the baked-in default:
 
 ```typescript
-import { QueueResourceStore } from "@nikscripts/effect-pm/store/QueueResource"
+import * as Store from "@nikscripts/effect-pm/Store";
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
 
-const queueStore = yield* QueueResourceStore
-const entries = yield* queueStore.entries("email-queue")
-const byKey = yield* queueStore.entriesByKey("delivery-123")
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  QueueResource.store(EmailQueue),
+) {}
+
+const store = yield* AppStore.at(EmailQueue);
+const events = yield* store.events({ limit: 50 });
 ```
 
+Legacy `queue.entry.*` RuntimeStorage facet rows are **not** written by the engine on
+`integration/storage`.
+
 `queue.release()` exports decoded pending entries without losing payloads,
-unlike `queue.clear()`. This local release path does not require `itemSchema`.
-`queue.releaseEncoded()` is for remote/wire handoff and requires `itemSchema`;
+unlike `queue.clear()`. This local release path does not require a tag `payload` schema.
+`queue.releaseEncoded()` is for remote/wire handoff and requires the tag's **`payload`** schema;
 it returns JSON-compatible payloads and fails with structured encoding errors
 instead of exporting incompatible data. This first release mode is pending-only:
 in-flight work stays on the source queue. `queue.drop(...)` and

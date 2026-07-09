@@ -138,14 +138,16 @@ spans hosts). Both take `{ limit?, sort?, from?, to? }`. A host's served `HostSt
 
 History is the *observability* plane. The *durability* plane is `DurableQueueStore` — a
 priority-native store so no enqueued work is lost across a restart (**at-least-once** + dedup key).
-Turn it on with `persist` + a backend layer (+ `itemSchema`, since the payload must serialize):
+Turn it on with `persist` on the layer config + a `DurableQueueStore` backend. The tag's **`payload`**
+schema must be set (config object on `QueueResource.Tag`) so items serialize:
 
 ```ts
 import { SQLiteDurableQueueStore } from "@nikscripts/effect-pm/storage/sqlite";
 
+class RosterQueue extends QueueResource.Tag<RosterQueue>()("app/Roster", { payload: RosterItem }) {}
+
 const queueLayer = QueueResource.layer(RosterQueue, {
   effect,
-  itemSchema: RosterItem,           // required for persist
   persist: { maxAttempts: 3 },      // or `true` for defaults
 }).pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
 ```

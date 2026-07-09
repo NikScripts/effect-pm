@@ -2,7 +2,7 @@
 
 **Branch:** `integration/storage` (via `cursor/store-cutover-closeout-ce05`)  
 **Agent:** Queue owner (owns CQR in same PR)  
-**Priority:** **Low** — store cutover engine path shipped; remaining work is future perf (write-buffer) and docs-release sweep.
+**Priority:** **Done** — engine store cutover shipped; only write-buffer future + docs-release grep remain.
 
 > **Correction (2026-07-09):** Config-object-only `Tag` wire, `success`/`error` stamps, engine store via
 > `materializeEngineQueueStore*` + `layerDefaultMemory`, and `Resource.builtResource` parity (including CQR)

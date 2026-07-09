@@ -73,10 +73,10 @@ fact/state union).
 - ~~**RunResource** — `internal/runResourceStoreTap.ts` resolves with `serviceOption` + handle cast~~ **Fixed**
   on run-resource branch: declared `Storage` dependency, cast-free contract, **`RunResourceStore` facet deleted**,
   `layerDefaultMemory` merged into layer entry points.
-- ~~**Process** — still on `ProcessExecutionStore` only~~ **Fixed** on integration branch: `processStoreTap.ts`,
-  **`ProcessExecutionStore` facet deleted**, `withDefaultMemory` on toolkit layers.
-- **Queue** — engine still writes legacy `QueueResourceStore` facet for some paths; store bridge tap + facet
-  deletion tracked in `store-cutover-queue.md`.
+- ~~**Process** — still on `ProcessExecutionStore` only~~ **Fixed** on integration branch: `processStoreTap.ts`
+  deleted, **`ProcessExecutionStore` facet deleted**, `withDefaultMemory` on toolkit layers.
+- ~~**Queue** — engine still writes legacy `QueueResourceStore` facet~~ **Fixed** on `integration/storage`:
+  `materializeEngineQueueStore*` + `publishEvent` → Store bridge; facet class deleted from `src/`.
 - Legacy-facet `serviceOption` calls (`HistoryStore` / `QueueResourceStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
 - Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.

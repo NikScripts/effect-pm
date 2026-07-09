@@ -1,6 +1,7 @@
 # Integration sync — 2026-07-07
 
-> **2026-07-09 (`integration/storage` @ `9dab7a3`):** Agent 2 Session 1 merged — cast-free Process store contract.
+> **2026-07-09 (`integration/storage`):** Agent 1 Session 2 — `STORAGE.md` golden-model rewrite.
+> Agent 2 Session 1 — cast-free Process store contract (`9dab7a3`).
 > **Active sessions:** Agent 1 → [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md);
 > Agent 2 → [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md).
 
@@ -53,11 +54,11 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Process contract cast removal (if any remain) |
-| Effect Msgpack journal (no direct `msgpackr`) | Optional write-path buffer (queue engine — **future**) |
-| Cast-free queue + run-resource contracts | |
-| Process / RunResource / Queue default store baked into toolkit layers | |
-| Queue/CQR engine store via `materializeEngineQueueStore*` + `publishEvent` → store | |
+| `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Optional write-path buffer (queue engine — **future**) |
+| Effect Msgpack journal (no direct `msgpackr`) | `package.json` stale `store/QueueResource` export (no src file) |
+| Cast-free queue + run-resource + process contracts | |
+| Process / RunResource / Queue / CQR default store baked into toolkit layers | |
+| All four toolkit engines on Store bridge (`materializeEngineQueueStore*`, `Store.effects`) | |
 
 **Discuss / approve:** Whether `success` value is persisted on store completion rows (store-core TODO §3).
 
@@ -69,8 +70,8 @@ Two report sets exist — use **both**, for different layers:
 
 | Shipped | Open |
 |---------|------|
-| `Tag(key, success?, error?)`, `successOf`/`errorOf` | Cast removal on `makeProcessStoreContract` (if any remain) |
-| `builtInProcessStoreContract`, `Process.store`, engine tap | **`error` stamped but unused** on RPC (store wire uses typed/fallback encoding per store-core §5) |
+| `Tag(key, success?, error?)`, `successOf`/`errorOf` | **`error` stamped but unused** on RPC (store wire uses typed/fallback encoding per store-core §5) |
+| `builtInProcessStoreContract` (cast-free), `Process.store`, engine tap | |
 | `withDefaultMemory` on `layer` / `serve` / `serveRemote` | |
 | `ProcessExecutionStore` facet deleted; `Process.result` removed | |
 | `RunCompleted.success` / `RunFailed.error` wire (store-core §5) | |
