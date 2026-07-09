@@ -91,6 +91,15 @@ Known stale (fix or assign to module agent):
 
 `docs/guides/store.md`, `docs/PACKAGE-GUIDE.md`, `examples/**` — no grep hits for sweep pattern.
 
+**Re-verified post-rebase (`origin/integration/storage`, 2026-07-09):**
+
+```bash
+rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md docs/PACKAGE-GUIDE.md
+# (no matches)
+```
+
+No fixes required; no exceptions for these two files.
+
 ### Documented exceptions (not errors)
 
 | Location | Why left |
