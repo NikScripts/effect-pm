@@ -1,70 +1,44 @@
 # Store cutover — Process (adopt the transform-layer machinery)
 
-Status: the process store cutover **landed** on `cursor/process-store-cutover-a3ad` against the *earlier*
-store API (a tap + `StoreScopeBridgeTag` + a hand-rolled `catchCause` around each write). The store
-machinery has since evolved — the transform layer, three-tier stores, honest write typing, and typed
-full-capture are all merged to integration. **This is the adoption handoff**: what changed and exactly how
-to bring the process store onto the new machinery. The queue (`QueueResource`) is the worked reference.
+Status: **done** on `cursor/store-extend-tier-refactor-a009`. Process uses the golden store pattern:
+`builtInProcessStoreContract` (tier 1), `Store.effects` + `Store.catchWriteErrors` +
+`Store.provideContext`, direct `event.append` via `store.record`, and `Resource.builtResource` for
+`layer` / `serve` / `serveRemote`. Execution event `_tag` values are `Started` / `Completed` /
+`Failed` / `Interrupted` (no `Run` prefix — aligned with RunResource facts and Queue worker events).
 
-Read first: `docs/guides/store.md` (the model), `docs/guides/store-migration.md` (tap → new, before/after),
-`docs/guides/queue-resource.md` (the three-tier + analytics + typed-success reference).
+Read first: `docs/guides/store.md`, `docs/guides/process.md`, `docs/guides/queue-resource.md`.
 
 ## What changed in the store API
+
 - `Store.withStorage` / `Store.withDefault` → **`Store.resolve` / `Store.resolveOrDie`** (aliases removed).
-- The scope bridge is the co-located **`Store.Storage`** service, resolved by `resolveOrDie`.
-- **Honest write typing:** `append` and any contract write method (`record`/…) now carry **`StoreWriteError`**
-  in the error channel; reads carry `StoreJournalDecodeError`; an encode mismatch is a **defect** (`orDie`).
-- **The transform layer:** `Store.mapEffects(effects, transform)` applies a transform to *every* store
-  method; **`Store.catchWriteErrors`** = `mapEffects` + `catchTag(StoreWriteError)` — one guard for all
-  writes (logs + swallows a journal/IO hiccup, leaves reads/defects untouched). It replaces a hand-rolled
-  `catchCause` around each write. A custom write is transformed **exactly once** (the effects object
-  delegates to the raw handle; the internal append is not re-wrapped).
-- **Three-tier stores:** lean base (`record`/`events`) + engine write-extension (narrow typed writes) +
-  consumer read-extension (analytics reads on the app-registered store).
-- **Typed full-capture:** the tag's `success`/`error` schema slots drive the outcome. A declared `success`
-  schema makes the worker return `Effect<A, …>` and `Completed.success: A` (the queue's worker-A pattern).
+- The scope bridge is the co-located **`Store.Storage`** service, resolved as a declared dependency.
+- **Honest write typing:** writes carry **`StoreWriteError`**; reads carry `StoreJournalDecodeError`.
+- **Transform layer:** `Store.catchWriteErrors` = one guard for all writes.
+- **Two-tier stores:** lean base (`record` / `events` / `hasPriorExecutions`) + analytics read-extension
+  on `Process.store(tag)`. No engine tier-2 custom writes — the engine builds rows and calls `record`.
+- **Typed full-capture:** tag `success` / `error` slots drive persisted `Completed.success` and `Failed.error`.
 
-## Already done by the store-machinery merge (no action)
-- `BuiltInProcessContract.record` **aligned to `Effect<void, StoreWriteError>`** (cast-free).
-- `Store.withDefault` → `Store.resolveOrDie` in `processStoreTap.ts` + `process-store-default-override.test.ts`.
+## Completed
 
-## Adoption steps (remaining)
-1. **Convert the recorder to the transform layer.** `processStoreTap.ts` currently does
-   `store.record(event).pipe(Effect.catchCause(→ logWarning))` in the forked drain. Replace the resolve +
-   hand-rolled guard with the transform:
-   ```ts
-   const store = pipe(Store.effects(scopeKey, engineProcessContract(tag)), Store.catchWriteErrors);
-   // drain loop: yield* store.record(event)   // already guarded — drop the per-write catchCause
-   ```
-   Provide `Storage` once at the boundary (baked-in default or app layer). Template: `buildQueueImpl` in
-   `QueueResource.ts`.
-2. **(Recommended) Three-tier — stack with `Store.extend`, not a `Store.contract` rebuild.** Build the lean
-   base once with `Store.contract`, then `Store.extend(methodsFn, base)` it into an engine write-extension
-   (narrow semantic writes — `recordCompleted`/`recordFailed`/`recordInterrupted` funneling to
-   `event.append`), and `Store.extend` the same base again into a consumer read-extension (`Process.store(tag)`,
-   analogous to `QueueResource.store`) with analytics reads over the event log. `Store.extend` is
-   type-preserving (fed the `base`, it keeps each write/read's concrete signature onto `Store.effects`) — do
-   **not** rebuild the base with `Store.contract` per tier. Template: `queueStoreSpec.ts`.
-3. **Discharge the impl requirement with `Resource.provideContext`, not per-method provides.** Build the
-   process impl **unwrapped** (each worker method still carrying the worker `R`), then discharge it in one
-   call: `Resource.provideContext(impl, tag[Resource.specSym], context)` (from
-   `yield* Effect.context<R>()`). It's the Resource mirror of `Store.catchWriteErrors` — a subtractive
-   one-liner over `Resource.mapEffects` (`R` → `Exclude<R, Ctx>`, a no-op where there's no `R`, Stream /
-   Subscribable members untouched) — no per-method `Effect.provideContext(...)` wrapping. Template:
-   `buildQueueImpl` in `QueueResource.ts`.
-4. **(Optional) Typed full-capture.** If a process's `success` should carry a real value, adopt the worker-A
-   pattern (schema slot → return type). Today `RunCompleted.success` is populated when the tag stamps
-   `success`; the queue shows the fully-typed version.
+- **`processStoreTap.ts` deleted** — store wiring inlined in `Process.ts` (`buildProcessImpl`).
+- **`ProcessExecutionStore` facet deleted** — use `Process.store(tag)` on `Store.Service`.
+- **Engine writes** — `builtInProcessStoreContract` + `store.record({ _tag: "Started", … })` at run boundaries.
+- **Storage discharge** — `Store.provideContext(storeEffects, storageContext)` once at build.
+- **Resource bundle** — `Resource.builtResource` + `Resource.grantLocal` in `layer`; `serve` / `serveRemote`
+  defer discharge per wire call.
+- **Event tags** — `Started` / `Completed` / `Failed` / `Interrupted` (BREAKING rename from `Run*`).
 
-## StoreWriteError — don't over-worry it
-Write-path only, `@internal` on the contract types, swallowed at every call site (the tap guard / the
-transform). It never reaches a process handle, a public signature, or the wire (reads carry
-`StoreJournalDecodeError`, not this). See `queue-resource.md`.
+## Toolkit layers vs `Process.make`
 
-## Keep (still valid)
-- PascalCase `_tag` rows (`RunStarted`/`RunCompleted`/`RunFailed`); presence-driven typed `error`.
-- Baked-in default store: `Process.layer`/`serve`/`serveRemote` merge `layerDefaultMemory`; override at the
-  app root with `Layer.provideMerge(AppStore.layerMemory)` or `AppStore.layer({ filename })`.
+| Entry | Auto-append execution events? |
+|-------|-------------------------------|
+| **`Process.layer` / `serve` / `serveRemote`** | **Yes** — default in-memory store merged into the layer |
+| **`Process.make`** | **No** — supervisor only; use `layer` or call `store.record` yourself |
 
 ## Verify
-`pnpm run typecheck` (both projects) + `pnpm exec vitest run` the process store + toolkit suites.
+
+```bash
+pnpm run typecheck
+pnpm test
+pnpm exec vitest run test/process-store-*.test.ts test/process-built-resource.test-d.ts test/store-event-tags.test.ts
+```

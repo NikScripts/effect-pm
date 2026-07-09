@@ -774,39 +774,15 @@ export type QueueEvent<T, E = unknown, A = void> =
 
 /**
  * The engine-facing store recorder — Storage-free semantic writes the engine calls at the
- * `publishEvent` sites. Built by `QueueResource.layer` from `pipe(Store.effects(tag.key, engine
- * write-extension), Store.catchWriteErrors)` with `Storage` discharged from the baked default, so
- * the engine handle stays `Storage`-free. Each narrow write funnels to the shared `event.append`;
- * `record` is the base append alias for queue-level facts without a narrow write. @internal
+ * `publishEvent` sites. Built by toolkit layers from
+ * {@link materializeEngineQueueStoreForTag} / {@link materializeEngineQueueStoreForItem}
+ * (`Store.effects` + {@link Store.catchWriteErrors} + {@link Store.provideContext}). Each narrow
+ * write funnels to the shared `event.append`; `record` is the base append alias for queue-level
+ * facts without a narrow write. @internal
  */
-export interface QueueStoreWriter<T, E = unknown, A = void> {
-  readonly enqueued: (
-    entries: ReadonlyArray<QueueEntry<T>>,
-    priority: Priority,
-    batchId?: string,
-  ) => Effect.Effect<void>;
-  readonly started: (entry: QueueEntry<T>) => Effect.Effect<void>;
-  readonly completed: (
-    entry: QueueEntry<T>,
-    success: A,
-    elapsed: Duration.Duration,
-  ) => Effect.Effect<void>;
-  readonly failed: (
-    entry: QueueEntry<T>,
-    cause: Cause.Cause<E>,
-    elapsed: Duration.Duration,
-  ) => Effect.Effect<void>;
-  readonly retryScheduled: (
-    entry: QueueEntry<T>,
-    cause: Cause.Cause<E>,
-    nextAttempt: number,
-  ) => Effect.Effect<void>;
-  readonly retryExhausted: (
-    entry: QueueEntry<T>,
-    cause: Cause.Cause<E>,
-  ) => Effect.Effect<void>;
-  readonly record: (event: QueueEvent<T, E, A>) => Effect.Effect<void>;
-}
+export type QueueStoreWriter<T, _E = unknown, _A = void> = import("./store/queueStoreSpec").MaterializedEngineQueueStore<
+  Schema.Codec<T, unknown, never, never>
+>;
 
 /**
  * Queue declaration metadata for {@link QueueResourceDefinition} and

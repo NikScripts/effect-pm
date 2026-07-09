@@ -40,13 +40,9 @@ class Mail extends Resource.Tag<Mail>()("@app/Mail", {
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", jobSchema) {}
+class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends RunResource.Tag<FetchGate>()(
-  "@app/FetchGate",
-  Schema.String,
-  Schema.Number,
-) {}
+class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
 const fetchGateRegistration = RunResource.store(FetchGate);
 
@@ -223,7 +219,7 @@ describe("Store.Service", () => {
         id: "run-1/started",
         resourceId: FetchGate.key,
         runId: "run-1",
-        type: "run-resource.run.started",
+        _tag: "Started",
         occurredAt: 1,
         concurrency: 2,
       });
@@ -250,7 +246,7 @@ describe("Store.Service", () => {
       const facts = yield* store.facts();
       expect(facts).toHaveLength(1);
       expect(facts[0]).toMatchObject({
-        type: "run-resource.run.started",
+        _tag: "Started",
         runId: "run-1",
       });
       const history = yield* store.stateHistory();

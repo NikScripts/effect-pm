@@ -16,7 +16,7 @@ import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class PricesProcess extends Process.Tag<PricesProcess>()("examples/Prices", Price) {}
+class PricesProcess extends Process.Tag<PricesProcess>()("examples/Prices", { success: Price }) {}
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
   Store.register(PricesProcess, builtInProcessStoreContract(PricesProcess)),
@@ -39,11 +39,11 @@ const program = Effect.gen(function* () {
 
     const store = yield* DemoStore.at(PricesProcess);
     const events = yield* store.events();
-    const completed = events.find((row) => row._tag === "RunCompleted");
+    const completed = events.find((row) => row._tag === "Completed");
     yield* Effect.log(`built-in store: ${String(events.length)} event(s)`);
     const price =
       completed !== undefined &&
-      completed._tag === "RunCompleted" &&
+      completed._tag === "Completed" &&
       "success" in completed &&
       completed.success !== undefined
         ? yield* Schema.decodeUnknownEffect(Price)(completed.success).pipe(Effect.option)

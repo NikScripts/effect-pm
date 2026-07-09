@@ -11,10 +11,20 @@
  *
  * @module CustomQueueResource
  */
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Scope, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
+import * as Store from "./Store";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import {
+  makeQueueStoreAnalyticsContract,
+  materializeEngineQueueStoreForItem,
+  type QueueStoreAnalyticsContract,
+  type QueueStoreTag,
+} from "./internal/store/queueStoreSpec";
+import { errorOf, stampQueueWireSchemas, successOf } from "./internal/queueTagSchemas";
+import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   HandlerContextOf,
   NodeKey,
@@ -211,11 +221,16 @@ type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
 export const customQueueSpec = <F extends Schema.Struct.Fields>(
   itemSchema: Schema.Struct<F>,
   levelConfig: CustomQueueLevelConfig,
+  wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
 ) => {
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
   const level = customQueueLevel(levelConfig.namedLevels);
   const entry = customQueueEntry(itemSchema);
-  const eventSchema = buildQueueEvent(itemSchema, Schema.Void, Schema.Unknown);
+  const eventSchema = buildQueueEvent(
+    itemSchema,
+    wire?.success ?? Schema.Void,
+    wire?.error ?? Schema.Unknown,
+  );
   return {
     ...customQueueControlSpec,
     add: Resource.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
@@ -309,39 +324,53 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
 export const kind = "@nikscripts/effect-pm/CustomQueueResource";
 
 /**
- * CustomQueue `Tag` config — **config-object only** (owner decision 2026-07-06): CQR's lane arity
- * makes positional wire slots a non-starter, and CQR does **not** take the `success`/`error` triplet
- * (that is a QueueResource concern). `payload` is the item schema; `levelCount` is the number of
- * priority lanes; `namedLevels` maps names → lane indices.
+ * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
+ * schema; `levelCount` is the number of priority lanes; `namedLevels` maps names → lane indices.
+ * Optional `success` / `error` wire slots match {@link QueueResource.Tag} (stamped for engine + store).
  *
  * @public
  */
-export interface CustomQueueTagConfig<F extends Schema.Struct.Fields> {
+export interface CustomQueueTagConfig<
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+> {
   readonly payload: Schema.Struct<F>;
   readonly levelCount: number;
   readonly namedLevels?: Readonly<Record<string, number>>;
+  readonly success?: Success;
+  readonly error?: Schema.Top;
   readonly description?: string;
   readonly node?: NodeKey<unknown>;
 }
 
 export const customQueueTag = <Self>() => {
-  function build<F extends Schema.Struct.Fields, HSelf>(
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top,
+    HSelf,
+  >(
     key: string,
-    config: CustomQueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
+    config: CustomQueueTagConfig<F, Success> & { readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
-  function build<F extends Schema.Struct.Fields>(
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top = typeof Schema.Void,
+  >(
     key: string,
-    config: CustomQueueTagConfig<F>,
+    config: CustomQueueTagConfig<F, Success>,
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
-  function build<F extends Schema.Struct.Fields>(
+  function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
     key: string,
-    config: CustomQueueTagConfig<F>,
+    config: CustomQueueTagConfig<F, Success>,
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>> {
     const levelConfig: CustomQueueTagLevelConfig = {
       levelCount: config.levelCount,
       namedLevels: config.namedLevels ?? {},
     };
-    const spec = customQueueSpec(config.payload, levelConfig) as CustomQueueInstanceSpec<F>;
+    const spec = customQueueSpec(config.payload, levelConfig, {
+      success: config.success,
+      error: config.error,
+    }) as CustomQueueInstanceSpec<F>;
     const base =
       config.node === undefined
         ? Resource.Tag<Self>()(key, spec, { description: config.description, kind })
@@ -350,9 +379,7 @@ export const customQueueTag = <Self>() => {
             kind,
             node: config.node,
           });
-    // Readiness from the queue's own status (SSOT): ready iff the worker pool is running.
-    // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
-    return Resource.withReadiness(base, (svc) =>
+    const ready = Resource.withReadiness(base, (svc) =>
       Effect.map(svc.status.get, (status) => ({
         ready: status.phase === "running",
         ...(status.phase === "running"
@@ -360,6 +387,10 @@ export const customQueueTag = <Self>() => {
           : { detail: `phase: ${status.phase}` }),
       })),
     );
+    return stampQueueWireSchemas(ready, {
+      success: config.success,
+      error: config.error,
+    });
   }
   return build;
 };
@@ -397,7 +428,7 @@ const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
 const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-) =>
+): Effect.Effect<ImplOf<CustomQueueInstanceSpec<F>>, never, R | RR | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
     // at this introspection boundary.
@@ -410,10 +441,15 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     const effectiveConfig = yield* foldConfiguredSpec<
       CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
+    const store = yield* materializeEngineQueueStoreForItem(tag.key, itemSchema, {
+      success: successOf(tag),
+      error: errorOf(tag),
+    });
     const handle = yield* makeCustomQueueEffect({
       name: tag.key,
       ...effectiveConfig,
       itemSchema,
+      store,
     } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R | RR>,
@@ -515,10 +551,10 @@ export const layer = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self>, never, R | RR> =>
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
-  );
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
@@ -543,7 +579,7 @@ export const serveRemote = <
     Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
       Resource.serveRemote(tag, impl),
     ),
-  );
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the
@@ -564,7 +600,7 @@ export const serve = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
 > =>
@@ -572,7 +608,7 @@ export const serve = <
     Effect.map(buildCustomQueueImpl(tag, config), (impl) =>
       Resource.serve(tag, impl),
     ),
-  );
+  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /** @public */
 export const configure = <
@@ -585,6 +621,37 @@ export const configure = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
+
+/**
+ * Register this custom queue on an app {@link Store.Service} — built-in analytics spec with the tag's
+ * `itemSchema` injected. Pass a bare spec object to add app-specific methods (merged with built-in):
+ *
+ * ```ts
+ * CustomQueueResource.store(Jobs)
+ * CustomQueueResource.store(Jobs, {
+ *   laneAudit: laneAuditSchema,
+ * }, ({ laneAudit, event }) => ({
+ *   appendLaneAudit: laneAudit.append,
+ * }))
+ * ```
+ *
+ * @public
+ */
+export function store<const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, QueueStoreAnalyticsContract<Tag>>
+>;
+export function store<
+  const Tag extends QueueStoreTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<Tag, QueueStoreAnalyticsContract<Tag>, Shapes>
+>;
+export function store(tag: QueueStoreTag, extended?: StoreShapes) {
+  const contract = makeQueueStoreAnalyticsContract(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, contract)
+    : facetStoreRegistration(tag, contract, extended);
+}
 
 // The light `Tag` lives here (no engine) so `CustomQueueResource.Tag` member access tree-shakes.
 export { customQueueTag as Tag };

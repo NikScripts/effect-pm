@@ -22,7 +22,7 @@ const doublerLayer = QueueResource.layer(Doubler, {
 });
 
 // ── queue WITHOUT a success schema (historic void channel) ───────────────────
-class Sink extends QueueResource.Tag<Sink>()("@test/Sink", jobSchema) {}
+class Sink extends QueueResource.Tag<Sink>()("@test/Sink", { payload: jobSchema }) {}
 const sinkLayer = QueueResource.layer(Sink, {
   effect: (_job) => Effect.void,
   concurrency: 1,

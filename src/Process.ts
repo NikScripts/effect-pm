@@ -57,6 +57,7 @@ import {
   Scope,
   Stream,
   SubscriptionRef,
+  pipe,
 } from "effect";
 import {
   configureLayer,
@@ -102,15 +103,22 @@ import type {
   ResourceTag,
   Spec,
   Subscribable,
+  WithRequirement,
 } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import { LogEntrySchema, logEntryFromLoggerOptions } from "./LogEntry";
 import type { LogEntry } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";
-import { builtInProcessStoreContract, type BuiltInProcessContract } from "./internal/store/processStoreSpec";
+import {
+  builtInProcessStoreContract,
+  makeProcessStoreAnalyticsContract,
+  type ProcessStoreAnalyticsContract,
+  type ProcessStoreEvent,
+  type ProcessStoreStartedInput,
+  type ProcessStoreTerminalInput,
+} from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
-import { makeProcessStorePersist, makeProcessStoreTap, type ProcessStoreTap } from "./internal/processStoreTap";
 import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
 // Public types
@@ -350,12 +358,27 @@ interface ProcessMirror {
   readonly lastRunDurationMillis: MutableRef.MutableRef<Option.Option<number>>;
 }
 
+/**
+ * Engine-facing process store recorder — Storage-free writes at run boundaries.
+ * Built in {@link buildProcessImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
+ * `Storage` discharged once via {@link Store.provideContext} (queue / run-resource golden pattern).
+ * @internal
+ */
+interface ProcessStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
+  readonly record: (event: ProcessStoreEvent<Tag>) => Effect.Effect<void>;
+  readonly hasPriorExecutions: () => Effect.Effect<boolean>;
+}
+
 interface ProcessBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
   readonly scheduleInitializer?: ProcessScheduleInitializer<RUser>;
-  /** @internal Store tap when built via {@link layer}. */
-  readonly storeTap?: ProcessStoreTap;
+  /** @internal Store recorder when built via {@link layer}. */
+  readonly store?: ProcessStoreWriter;
+  /** @internal Tag SSOT for store wire schemas when {@link store} is wired. */
+  readonly storeScopeTag?: StoreScopeTag;
+  /** @internal Latest success value for store capture when the tag stamps `success`. */
+  readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
 }
 
 export interface ProcessScheduleControls {
@@ -502,7 +525,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     clear: Effect.void,
   };
 
-  const { name, userEffect, storeTap } = state;
+  const { name, userEffect, store, storeScopeTag, resultRef } = state;
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
@@ -517,12 +540,74 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     lastRunDurationMillis: MutableRef.make<Option.Option<number>>(Option.none()),
   };
 
-  const storePersist = makeProcessStorePersist({ storeTap });
+  const whenStore = (
+    write: (recorder: ProcessStoreWriter) => Effect.Effect<void>,
+  ): Effect.Effect<void> =>
+    store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
-  const recordStoreCompleted = storePersist.recordCompleted;
-  const recordStoreFailed = storePersist.recordFailed;
-  const recordStoreInterrupted = storePersist.recordInterrupted;
-  const readHasPriorExecutions = storePersist.hasPriorExecutions;
+  const processId = storeScopeTag?.key ?? name;
+
+  const terminalRow = (input: ProcessStoreTerminalInput) => ({
+    processId,
+    scheduleKey: input.scheduleKey,
+    startedAt: input.startedAt,
+    completedAt: input.completedAt,
+    durationMs: input.completedAt - input.startedAt,
+    isStartupRun: input.isStartupRun,
+  });
+
+  const recordStoreStarted = (args: ProcessStoreStartedInput): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Started",
+        processId,
+        scheduleKey: args.scheduleKey,
+        startedAt: args.startedAt,
+        isStartupRun: args.isStartupRun,
+      }),
+    );
+
+  const recordStoreCompleted = (
+    args: ProcessStoreTerminalInput & { readonly success?: unknown },
+  ): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Completed",
+        ...terminalRow(args),
+        ...(args.success !== undefined ? { success: args.success } : {}),
+      }),
+    );
+
+  const recordStoreFailed = (args: {
+    readonly scheduleKey: string | null;
+    readonly startedAt: number;
+    readonly completedAt: number;
+    readonly isStartupRun: boolean;
+    readonly error: unknown;
+  }): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Failed",
+        ...terminalRow(args),
+        error:
+          storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
+            ? args.error
+            : String(args.error),
+      }),
+    );
+
+  const recordStoreInterrupted = (args: ProcessStoreTerminalInput): Effect.Effect<void> =>
+    whenStore((recorder) =>
+      recorder.record({
+        _tag: "Interrupted",
+        ...terminalRow(args),
+      }),
+    );
+
+  const readHasPriorExecutions = (): Effect.Effect<boolean> =>
+    store !== undefined
+      ? store.hasPriorExecutions()
+      : Effect.succeed(false);
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
@@ -537,6 +622,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       );
       const hasPrior = yield* readHasPriorExecutions();
       const isStartupRun = !hasPrior;
+
+      yield* recordStoreStarted({
+        scheduleKey: Option.getOrNull(scheduleIdentifier),
+        startedAt: executedAt,
+        isStartupRun,
+      });
 
       const runUserEffect = userEffect.pipe(
         Effect.provideService(ProcessScheduleContextTag, {
@@ -601,11 +692,20 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             mirror.lastRunDurationMillis,
             Option.some(completedAt - executedAt),
           );
+          const successValue =
+            storeScopeTag !== undefined && successOf(storeScopeTag) !== undefined
+              ? resultRef !== undefined
+                ? Option.getOrUndefined(yield* SubscriptionRef.get(resultRef))
+                : Exit.isSuccess(exit)
+                  ? exit.value
+                  : undefined
+              : undefined;
           yield* recordStoreCompleted({
             scheduleKey: Option.getOrNull(scheduleIdentifier),
             startedAt: executedAt,
             completedAt,
             isStartupRun,
+            ...(successValue !== undefined ? { success: successValue } : {}),
           });
           yield* Effect.logDebug(
             `✅ Process '${name}' run completed at ${String(executedAt)}`,
@@ -997,7 +1097,11 @@ export interface ProcessMakeOptions<E, RUser> {
    * @internal Wired by {@link layer} for store-backed execution history.
    * Not part of the public {@link make} API.
    */
-  readonly _storeTap?: ProcessStoreTap;
+  readonly _store?: ProcessStoreWriter;
+  /** @internal Tag SSOT paired with {@link _store}. */
+  readonly _storeScopeTag?: StoreScopeTag;
+  /** @internal Success ref paired with value-returning layer builds. */
+  readonly _resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
   /**
@@ -1052,7 +1156,9 @@ const buildProcess = <E, RUser>(
       pollingLayer: config.polling,
       scheduleLayer,
       scheduleInitializer,
-      storeTap: config._storeTap,
+      store: config._store,
+      storeScopeTag: config._storeScopeTag,
+      resultRef: config._resultRef,
     });
   }
   return createProcess({
@@ -1060,7 +1166,9 @@ const buildProcess = <E, RUser>(
     userEffect: config.effect,
     scheduleLayer,
     scheduleInitializer,
-    storeTap: config._storeTap,
+    store: config._store,
+    storeScopeTag: config._storeScopeTag,
+    resultRef: config._resultRef,
   });
 };
 
@@ -1382,7 +1490,7 @@ export const processLogEntry = LogEntrySchema;
 export { processEventReadPayload };
 
 /**
- * Execution event union for void processes (no `success` field on `RunCompleted`).
+ * Execution event union for void processes (no `success` field on `Completed`).
  *
  * @public
  */
@@ -1487,8 +1595,8 @@ export type ProcessSpec = typeof processSpec;
 // ============================================================================
 
 /**
- * Options for {@link Tag} — use as the sole 2nd argument (config-object overload) or merge with
- * positional `success` / `error` args.
+ * Options for {@link Tag} — the sole optional 2nd argument (config object). Wire schemas
+ * (`success`, `error`) live here; there are no positional schema overloads.
  *
  * @public
  */
@@ -1754,16 +1862,6 @@ const scheduleModeSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Process/scheduleMode",
 );
 
-/** @internal */
-const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
-  typeof value === "object" &&
-  value !== null &&
-  !Schema.isSchema(value) &&
-  ("description" in value ||
-    "node" in value ||
-    "success" in value ||
-    "error" in value);
-
 /** Graft `result` ref + stamp wire schemas on a process tag. @internal */
 const applyProcessTagSchemas = (
   tag: ResourceTag<any, any>,
@@ -1811,10 +1909,6 @@ const withProcessReadiness = (
 const buildProcessTag = <Self>(
   key: string,
   options: ProcessTagOptions | undefined,
-  positional: {
-    readonly success?: Schema.Top;
-    readonly error?: Schema.Top;
-  } = {},
 ): ResourceTag<any, any> | NodeBoundTag<any, any, unknown> => {
   const node = options?.node;
   const tagOptions = { description: options?.description, kind };
@@ -1822,8 +1916,8 @@ const buildProcessTag = <Self>(
     node === undefined
       ? Resource.Tag<Self>()(key, processSpec, tagOptions)
       : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
-  const success = positional.success ?? options?.success;
-  const error = positional.error ?? options?.error;
+  const success = options?.success;
+  const error = options?.error;
   const stamped: ResourceTag<any, any> =
     success === undefined && error === undefined
       ? base
@@ -1922,38 +2016,39 @@ export function schedule(
 // Tag factories
 // ============================================================================
 
-/** Callable shape for {@link Tag} — overloads for positional schemas + config object. @public */
+/** Callable shape for {@link Tag} — config object only (no positional schemas). @public */
 export type ProcessTagBuild<Self> = {
   (key: string): ResourceTag<Self, ProcessSpec>;
   <A extends Schema.Top>(
     key: string,
-    success: A,
+    options: ProcessTagOptions & { readonly success: A },
   ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
-    success: A,
-    error: E,
+    options: ProcessTagOptions & { readonly success: A; readonly error: E },
   ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
   <HSelf>(
     key: string,
     options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, ProcessSpec, HSelf>;
-  (key: string, options: ProcessTagOptions): ResourceTag<Self, ProcessSpec>;
+  <A extends Schema.Top, HSelf>(
+    key: string,
+    options: ProcessTagOptions & { readonly success: A; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, ProcessSpec & ResultGroupSpec<A>, HSelf>;
+  (key: string, options?: ProcessTagOptions): ResourceTag<Self, ProcessSpec>;
 };
 
 /**
  * Define a managed process as a toolkit resource. `Self` is given explicitly (Effect's `()`
  * two-stage form). The base tag carries observation + lifecycle; add a schedule with
- * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
+ * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag config object:
  *
  * ```ts
  * class Health extends Process.Tag<Health>()("app/Health") {}
  *
- * class Prices extends Process.Tag<Prices>()("app/Prices", PriceSchema) {}
+ * class Prices extends Process.Tag<Prices>()("app/Prices", { success: PriceSchema }) {}
  *
- * class PricesE extends Process.Tag<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
- *
- * class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
+ * class PricesE extends Process.Tag<PricesE>()("app/Prices", {
  *   success: PriceSchema,
  *   error: FetchErr,
  * }) {}
@@ -1966,22 +2061,9 @@ export type ProcessTagBuild<Self> = {
 export const Tag = <Self>() => {
   function build(
     key: string,
-    second?: Schema.Top | ProcessTagOptions,
-    third?: Schema.Top,
+    options?: ProcessTagOptions,
   ): ResourceTag<Self, ProcessSpec> | NodeBoundTag<Self, ProcessSpec, unknown> {
-    if (second === undefined) {
-      return buildProcessTag<Self>(key, undefined);
-    }
-    if (Schema.isSchema(second)) {
-      return buildProcessTag<Self>(key, undefined, {
-        success: second,
-        error: third,
-      });
-    }
-    if (isProcessTagOptions(second)) {
-      return buildProcessTag<Self>(key, second);
-    }
-    return buildProcessTag<Self>(key, undefined);
+    return buildProcessTag<Self>(key, options);
   }
   return build as ProcessTagBuild<Self>;
 };
@@ -2169,12 +2251,10 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
 const buildProcessImpl = <A, E, R>(
   tag: ResourceTag<any, any>,
   baseConfig: ProcessLayerConfig<A, E, R>,
-): Effect.Effect<ImplOf<ProcessSpec>, never, R | Scope.Scope | Store.Storage> =>
+): Effect.Effect<Resource.BuiltResource<ProcessSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
-    const provideR = <Out, Err>(effect: Effect.Effect<Out, Err, R>): Effect.Effect<Out, Err> =>
-      Effect.provide(effect, context);
 
     const config = yield* foldConfiguredSpec<ProcessLayerConfig<A, E, R>>(tag.key, baseConfig);
 
@@ -2261,23 +2341,26 @@ const buildProcessImpl = <A, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
-    const storeTap = yield* makeProcessStoreTap({
-      scopeKey: tag.key,
-      tag,
-      resultRef,
-    });
+    const storeEffects = pipe(
+      Store.effects(tag.key, builtInProcessStoreContract(tag)),
+      Store.catchWriteErrors,
+    );
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const store: ProcessStoreWriter = Store.provideContext(storeEffects, storageContext);
 
     const handle = make(tag.key, {
       effect: captured,
       ...(config.polling !== undefined ? { polling: config.polling } : {}),
       scheduleLayer: Layer.succeedContext(scheduleCtx),
-      _storeTap: storeTap,
+      _store: store,
+      _storeScopeTag: tag,
+      _resultRef: resultRef,
     });
 
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
     const start = Effect.gen(function* () {
       if ((yield* Ref.get(fiberRef)) !== null) return;
-      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs, provideR), scope);
+      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs), scope);
       yield* Ref.set(fiberRef, fiber);
     });
     const stop = Effect.gen(function* () {
@@ -2298,32 +2381,6 @@ const buildProcessImpl = <A, E, R>(
     const statusChanges = Stream.tick(statusPollInterval).pipe(
       Stream.mapEffect(() => readStatus),
     );
-    const base: ImplOf<ProcessSpec> = {
-      status: { get: readStatus, changes: statusChanges },
-      start,
-      stop,
-      runImmediately: handle.runImmediately().pipe(tapLogs, provideR),
-      logs: {
-        live: logsStream,
-        history: ({ limit, since, until }: HistoryQuery) =>
-          Option.match(history, {
-            onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
-            onSome: (store) =>
-              store.read(logsStreamId, { limit, since, until }).pipe(
-                Effect.flatMap((rows) =>
-                  Effect.forEach(rows, (row) =>
-                    Schema.decodeUnknownEffect(processLogEntry)(row).pipe(Effect.orDie),
-                  ),
-                ),
-              ),
-          }),
-      },
-    };
-
-    // Grafted members: present only when the tag composes them in, and served by their path key via
-    // the tag's full flat spec (`schedule.*` / `result`). They widen the runtime record beyond the
-    // base `ImplOf`, so they're spread on (not declared) — the base annotation is what `Resource`'s
-    // layer/serve type against, while the runtime object carries whatever the composed spec declares.
     const scheduleMembers =
       mode?._tag === "inline"
         ? {
@@ -2339,7 +2396,35 @@ const buildProcessImpl = <A, E, R>(
     const resultMembers =
       resultRef !== undefined ? { result: Resource.subscribable(resultRef) } : {};
 
-    return { ...base, ...scheduleMembers, ...resultMembers };
+    // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
+    const impl: WithRequirement<ImplOf<ProcessSpec>, R> = {
+      status: { get: readStatus, changes: statusChanges },
+      start,
+      stop,
+      runImmediately: handle.runImmediately().pipe(tapLogs),
+      logs: {
+        live: logsStream,
+        history: ({ limit, since, until }: HistoryQuery) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
+            onSome: (store) =>
+              store.read(logsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((rows) =>
+                  Effect.forEach(rows, (row) =>
+                    Schema.decodeUnknownEffect(processLogEntry)(row).pipe(Effect.orDie),
+                  ),
+                ),
+              ),
+          }),
+      },
+      ...scheduleMembers,
+      ...resultMembers,
+    };
+    return Resource.builtResource(
+      tag,
+      impl as WithRequirement<ImplOf<ProcessSpec>, R>,
+      context,
+    );
   });
 
 // ============================================================================
@@ -2381,7 +2466,9 @@ export function layer(
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
-      Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(baseTag, impl)),
+      Effect.map(buildProcessImpl(tag, config), (built) =>
+        Resource.layer(baseTag, Resource.grantLocal(baseTag, built)),
+      ),
     ),
   );
 }
@@ -2408,7 +2495,7 @@ export function serve(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (impl): Layer.Layer<any, any, any> => Resource.serve(baseTag, impl),
+        (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
       ),
     ),
   );
@@ -2433,7 +2520,7 @@ export function serveRemote(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (impl): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, impl),
+        (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
       ),
     ),
   );
@@ -2466,7 +2553,7 @@ export const configure = <A = void, E = never, R = never>(
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
-  typeof facetStoreRegistration<Tag, BuiltInProcessContract>
+  typeof facetStoreRegistration<Tag, ProcessStoreAnalyticsContract<Tag>>
 >;
 export function store<
   const Tag extends StoreScopeTag,
@@ -2474,12 +2561,12 @@ export function store<
 >(tag: Tag, extended: Shapes): ReturnType<
   typeof facetStoreRegistration<
     Tag,
-    BuiltInProcessContract,
+    ProcessStoreAnalyticsContract<Tag>,
     Shapes
   >
 >;
 export function store(tag: StoreScopeTag, extended?: StoreShapes) {
-  const builtIn = builtInProcessStoreContract(tag);
+  const builtIn = makeProcessStoreAnalyticsContract(tag);
   return extended === undefined
     ? facetStoreRegistration(tag, builtIn)
     : facetStoreRegistration(tag, builtIn, extended);

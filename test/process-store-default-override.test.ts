@@ -10,7 +10,7 @@ const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 class DefaultExec extends Process.Tag<DefaultExec>()("test/store-default/Default") {}
 
-class OverrideExec extends Process.Tag<OverrideExec>()("test/store-default/Override", Price) {}
+class OverrideExec extends Process.Tag<OverrideExec>()("test/store-default/Override", { success: Price }) {}
 
 class OverrideStore extends Store.Service<OverrideStore>("@test/OverrideStore")(
   Store.register(OverrideExec, builtInProcessStoreContract(OverrideExec)),
@@ -33,8 +33,11 @@ describe("Process.layer — baked-in default store", () => {
           builtInProcessStoreContract(DefaultExec),
         );
         const events = yield* store.events();
-        expect(events.length).toBeGreaterThanOrEqual(1);
-        expect(events[0]?._tag).toBe("RunCompleted");
+        expect(events.length).toBeGreaterThanOrEqual(2);
+        expect(events.some((row) => row._tag === "Started")).toBe(true);
+        expect(events.find((row) => row._tag === "Completed")?._tag).toBe(
+          "Completed",
+        );
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
@@ -54,7 +57,7 @@ describe("Process.layer — baked-in default store", () => {
         const store = yield* OverrideStore.at(OverrideExec);
         const events = yield* store.events();
         expect(events.length).toBeGreaterThanOrEqual(1);
-        expect(events.find((row) => row._tag === "RunCompleted")).toMatchObject({
+        expect(events.find((row) => row._tag === "Completed")).toMatchObject({
           success: { symbol: "OVERRIDE", usd: 1 },
         });
       }).pipe(Effect.provide(live), Effect.scoped);

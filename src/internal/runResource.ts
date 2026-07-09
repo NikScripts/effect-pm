@@ -13,15 +13,16 @@ import {
   Semaphore,
   SubscriptionRef,
 } from "effect";
-import type { RunResourceStateChangeReason } from "./store/runResourceStoreSpec";
-import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
-import { Storage } from "../Store";
-import type { StoreScopeNotRegistered } from "./store/errors";
 import {
-  makeRunResourceStoreTap,
-  nextRunId,
-  type RunResourceStoreTap,
-} from "./runResourceStoreTap";
+  builtInRunResourceStoreContract,
+  type RunResourceStateChangeReason,
+  type RunStateChange,
+} from "./store/runResourceStoreSpec";
+import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+import * as Store from "../Store";
+import type { StoreScopeTag } from "./store/registration";
+import { errorOf, successOf } from "./runTagSchemas";
+import { makeRunStateChange, extractRunFailure } from "./runResourceFacts";
 import { runStatusTransitions } from "./runResourceStatus";
 
 // ============================================================================
@@ -65,6 +66,7 @@ export type RunResourceHandle<T, A, E> = RunGateHandle<T, A, E> & {
 export interface RunResourceConfig<T, A, E> {
   readonly name?: string;
   readonly scopeKey?: string;
+  readonly tag?: StoreScopeTag;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
 }
@@ -79,6 +81,28 @@ export interface RunResourceRunnerConfig {
 export interface RunResourceRunner {
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>;
 }
+
+/** Engine-facing store context — `Storage` discharged at the gate boundary. @internal */
+interface RunResourceStoreContext {
+  readonly resourceId: string;
+  readonly persistSuccess: boolean;
+  readonly persistTypedError: boolean;
+  readonly fact: {
+    readonly append: (row: unknown) => Effect.Effect<void>;
+  };
+  readonly recordStateChange: (
+    reason: RunResourceStateChangeReason,
+    previous: RunGateStatus | null,
+    current: RunGateStatus,
+  ) => Effect.Effect<void>;
+  readonly nextFactId: (runId: string, suffix: string) => Effect.Effect<string>;
+}
+
+/** Mint a stable run id for the current attempt. @internal */
+export const nextRunId = (
+  resourceId: string,
+  runSeq: number,
+): string => `${resourceId}/run/${String(runSeq)}`;
 
 const makeInitialStatus = (
   resourceId: string,
@@ -111,12 +135,64 @@ const makeStatusSubscribables = (
   } as const;
 };
 
+const makeRunResourceStoreContext = (options: {
+  readonly resourceId: string;
+  readonly scopeKey: string;
+  readonly tag?: StoreScopeTag;
+  readonly storeEffects: {
+    readonly fact: {
+      readonly append: (row: unknown) => Effect.Effect<void>;
+    };
+    readonly state: {
+      readonly append: (change: RunStateChange) => Effect.Effect<void>;
+    };
+  };
+}): Effect.Effect<RunResourceStoreContext> =>
+  Effect.gen(function* () {
+    const scopeTag = options.tag ?? { key: options.scopeKey };
+    const { storeEffects, resourceId } = options;
+    const stateSeqRef = yield* Ref.make(0);
+    const factSeqRef = yield* Ref.make(0);
+    const persistSuccess = successOf(scopeTag) !== undefined;
+    const persistTypedError = errorOf(scopeTag) !== undefined;
+
+    const nextStateId = (): Effect.Effect<string> =>
+      Ref.updateAndGet(stateSeqRef, (n) => n + 1).pipe(
+        Effect.map((seq) => `${resourceId}/state/${String(seq)}`),
+      );
+
+    const nextFactId = (runId: string, suffix: string): Effect.Effect<string> =>
+      Ref.updateAndGet(factSeqRef, (n) => n + 1).pipe(
+        Effect.map((seq) => `${runId}/${suffix}/${String(seq)}`),
+      );
+
+    return {
+      resourceId,
+      persistSuccess,
+      persistTypedError,
+      fact: storeEffects.fact,
+      nextFactId,
+      recordStateChange: (reason, previous, current) =>
+        Effect.gen(function* () {
+          const change = makeRunStateChange({
+            id: yield* nextStateId(),
+            resourceId,
+            changedAt: current.observedAt,
+            reason,
+            previous,
+            current,
+          });
+          yield* storeEffects.state.append(change);
+        }),
+    };
+  });
+
 const makeObservedRun =
   <T, A, E>(
     sem: Semaphore.Semaphore,
     effect: (input: T) => Effect.Effect<A, E>,
     statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
-    storeTap: RunResourceStoreTap,
+    store: RunResourceStoreContext,
     runSeqRef: Ref.Ref<number>,
     concurrency: number,
   ): RunGateRun<T, A, E> => {
@@ -130,7 +206,7 @@ const makeObservedRun =
       const previous = yield* SubscriptionRef.get(statusRef);
       const current = update(previous, observedAt, durationMs);
       yield* SubscriptionRef.set(statusRef, current);
-      yield* storeTap.recordStateChange(reason, previous, current);
+      yield* store.recordStateChange(reason, previous, current);
     });
 
   const runBody = (input: T) => {
@@ -161,7 +237,15 @@ const makeObservedRun =
             (yield* SubscriptionRef.get(statusRef)).resourceId,
             runSeq,
           );
-          yield* storeTap.recordRunStarted(runId, startedAt, concurrency);
+          const startedId = yield* store.nextFactId(runId, "Started");
+          yield* store.fact.append({
+            _tag: "Started",
+            id: startedId,
+            resourceId: store.resourceId,
+            runId,
+            occurredAt: startedAt,
+            concurrency,
+          });
           const started = runStatusTransitions.started;
           yield* publishStatus(started.update, started.reason);
 
@@ -172,7 +256,27 @@ const makeObservedRun =
                   const endedAt = yield* Clock.currentTimeMillis;
                   const durationMs = Math.max(0, endedAt - startedAt);
                   if (Exit.isSuccess(exit)) {
-                    yield* storeTap.recordRunCompleted(runId, endedAt, durationMs);
+                    const completedId = yield* store.nextFactId(runId, "Completed");
+                    yield* store.fact.append(
+                      store.persistSuccess
+                        ? {
+                            _tag: "Completed",
+                            id: completedId,
+                            resourceId: store.resourceId,
+                            runId,
+                            occurredAt: endedAt,
+                            durationMs,
+                            success: exit.value,
+                          }
+                        : {
+                            _tag: "Completed",
+                            id: completedId,
+                            resourceId: store.resourceId,
+                            runId,
+                            occurredAt: endedAt,
+                            durationMs,
+                          },
+                    );
                     const completed = runStatusTransitions.completed;
                     yield* publishStatus(completed.update, completed.reason, durationMs);
                   } else if (Cause.hasInterrupts(exit.cause)) {
@@ -183,8 +287,17 @@ const makeObservedRun =
                       durationMs,
                     );
                   } else {
-                    const causeText = Cause.pretty(exit.cause);
-                    yield* storeTap.recordRunFailed(runId, endedAt, durationMs, causeText);
+                    const failedId = yield* store.nextFactId(runId, "Failed");
+                    const error = extractRunFailure(exit.cause);
+                    yield* store.fact.append({
+                      _tag: "Failed",
+                      id: failedId,
+                      resourceId: store.resourceId,
+                      runId,
+                      occurredAt: endedAt,
+                      durationMs,
+                      error: store.persistTypedError ? error : String(error),
+                    });
                     const failed = runStatusTransitions.failed;
                     yield* publishStatus(failed.update, failed.reason, durationMs);
                   }
@@ -207,7 +320,7 @@ const makeObservedRun =
  */
 export const makeRunGateHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunGateHandle<T, A, E>, StoreScopeNotRegistered, Storage> =>
+): Effect.Effect<RunGateHandle<T, A, E>, never, Store.Storage> =>
   Effect.map(makeRunResourceHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
@@ -219,10 +332,11 @@ export const makeRunGateHandleEffect = <T, A, E>(
  */
 export const makeRunResourceHandleEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunResourceHandle<T, A, E>, StoreScopeNotRegistered, Storage> => {
+): Effect.Effect<RunResourceHandle<T, A, E>, never, Store.Storage> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
   const scopeKey = config.scopeKey ?? resourceId;
+  const scopeTag = config.tag ?? { key: scopeKey };
 
   return Effect.gen(function* () {
     const sem = yield* Semaphore.make(concurrency);
@@ -230,7 +344,22 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
-    const storeTap = yield* makeRunResourceStoreTap(resourceId, scopeKey);
+    const storageContext = yield* Effect.context<Store.Storage>();
+    const storeEffects = Store.provideContext(
+      Store.catchWriteErrors(
+        Store.effects(scopeKey, builtInRunResourceStoreContract(scopeTag)),
+      ),
+      storageContext,
+    );
+    const store = yield* makeRunResourceStoreContext({
+      resourceId,
+      scopeKey,
+      tag: config.tag,
+      storeEffects: storeEffects as {
+        readonly fact: { readonly append: (row: unknown) => Effect.Effect<void> };
+        readonly state: { readonly append: (change: RunStateChange) => Effect.Effect<void> };
+      },
+    });
     const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
       `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
@@ -240,7 +369,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
         sem,
         config.effect,
         statusRef,
-        storeTap,
+        store,
         runSeqRef,
         concurrency,
       ),

@@ -147,7 +147,7 @@ import type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 
 export type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreHandleFromContract } from "./internal/store/spec";
-export type { MergedCustom, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
+export type { ExtendCustom, MergedCustom, MethodsReturn, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
 
 export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, StoreWriteError } from "./internal/store/errors";
 
@@ -647,7 +647,13 @@ const extendCore = <
       ? StoreMethodsFn<Base["shapes"] & Shapes> | undefined
       : StoreMethodsFn<Base["shapes"]> | undefined
   >
-> => mergeStoreContracts(base, shapes, methods) as StoreContractValue<
+> => (methods === undefined
+  ? shapes === undefined
+    ? mergeStoreContracts(base)
+    : mergeStoreContracts(base, shapes)
+  : shapes === undefined
+    ? mergeStoreContracts(base, undefined, methods)
+    : mergeStoreContracts(base, shapes, methods)) as StoreContractValue<
   Shapes extends StoreShapes ? Base["shapes"] & Shapes : Base["shapes"],
   MergedCustom<
     Base,
@@ -1194,7 +1200,6 @@ export const catchWriteErrors = <Effects extends StoreEffectsVariance<StoreContr
  * keeps a residual requirement (caught at the assignment) rather than a false `never`. Providing the
  * context to a method that carries no matching `R` is a harmless no-op, so it applies uniformly.
  *
- * @example Discharge `Storage` from a queue's engine recorder
  * ```ts
  * const storageContext = yield* Effect.context<Store.Storage>();
  * const store = Store.provideContext(storeEffects, storageContext); // methods become Effect<void>

@@ -9,8 +9,8 @@ import * as Resource from "../src/Resource";
 // the ControlService.make({ group, port }) replacement for wow's per-league deploy.
 const Item = Schema.Struct({ n: Schema.Number });
 class LeagueNode extends Resource.Node<LeagueNode>("serveAllQ/node") {}
-class QA extends QueueResource.Tag<QA>()("serveAllQ/A", Item, { node: LeagueNode }) {}
-class QB extends QueueResource.Tag<QB>()("serveAllQ/B", Item, { node: LeagueNode }) {}
+class QA extends QueueResource.Tag<QA>()("serveAllQ/A", { payload: Item, node: LeagueNode }) {}
+class QB extends QueueResource.Tag<QB>()("serveAllQ/B", { payload: Item, node: LeagueNode }) {}
 
 const Server = Resource.httpServer([
   QueueResource.serve(QA, { effect: (_i: { n: number }) => Effect.void }),

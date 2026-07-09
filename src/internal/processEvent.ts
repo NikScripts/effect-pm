@@ -21,10 +21,19 @@ const runFinishedBase = {
   isStartupRun: Schema.Boolean,
 } as const;
 
+const runStartedFields = {
+  processId: Schema.String,
+  scheduleKey: Schema.NullOr(Schema.String),
+  startedAt: Schema.Number,
+  isStartupRun: Schema.Boolean,
+} as const;
+
 /**
  * Build the execution event union for a process store contract.
- * When `success` is set, `RunCompleted` carries an optional `success` value.
- * When `error` is set, `RunFailed.error` uses that schema; otherwise `Schema.String`.
+ *
+ * Includes `Started` at run begin and terminal variants at finish. When `success` is set,
+ * `Completed` carries an optional `success` value. When `error` is set, `Failed.error` uses
+ * that schema; otherwise `Schema.String`.
  *
  * @internal
  */
@@ -46,9 +55,10 @@ export const makeProcessExecutionEvent = <
   };
 
   return Schema.Union([
-    Schema.TaggedStruct("RunCompleted", completedFields),
-    Schema.TaggedStruct("RunFailed", failedFields),
-    Schema.TaggedStruct("RunInterrupted", runFinishedBase),
+    Schema.TaggedStruct("Started", runStartedFields),
+    Schema.TaggedStruct("Completed", completedFields),
+    Schema.TaggedStruct("Failed", failedFields),
+    Schema.TaggedStruct("Interrupted", runFinishedBase),
   ]);
 };
 

@@ -33,7 +33,7 @@ import {
 // ── a real queue ────────────────────────────────────────────────────────────
 const NAME = "@acme/queues/MailQueue";
 const Job = Schema.Struct({ id: Schema.String });
-class MailQueue extends QueueResource.Tag<MailQueue>()(NAME, Job) {}
+class MailQueue extends QueueResource.Tag<MailQueue>()(NAME, { payload: Job }) {}
 
 class WorkerError extends Data.TaggedError("WorkerError")<{
   readonly id: string;

@@ -24,7 +24,7 @@ const expectExact = <_Check extends true>(): void => {};
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends QueueResource.Tag<Jobs>()("@test/AnalyticsJobs", jobSchema) {}
+class Jobs extends QueueResource.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
 
 type Ev = QueueStoreEvent<typeof Jobs>;
 type Entry = QueueStoreEntry<typeof Jobs>;

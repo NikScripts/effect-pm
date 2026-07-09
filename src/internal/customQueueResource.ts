@@ -55,6 +55,7 @@ import {
   QueueItemEncodingError,
   QueueItemValidationError,
   makeQueueItemCodecDescriptor,
+  type QueueStoreWriter,
 } from "./queueResource";
 
 export type { CustomQueueStatus } from "./queueProjection";
@@ -158,6 +159,8 @@ export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
     ) => Effect.Effect<void, E, R>;
     readonly onFailure?: QueueOnFailure<T, E, R>;
     readonly refill?: CustomQueueRefill<T, E, QueueEnqueueErrors, R>;
+    /** Internal store recorder — wired by {@link CustomQueueResource.layer}. @internal */
+    readonly store?: QueueStoreWriter<T, E, void>;
   };
 
 /** @public */

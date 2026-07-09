@@ -1,6 +1,8 @@
 # Agent reports — sync 2026-07-07
 
-Separate handoffs for **parallel agents**. Each report is scoped to one module (or one cross-cutting concern). Work on **`cursor/integration-result-schema-a3ad`** or merge it into your feature branch before starting.
+**Active agent handoff:** [`agent-01-store-cutover-closeout.md`](../agent-01-store-cutover-closeout.md) — branch from **`integration/storage`**, Cursor Cloud Agent, store cutover close-out.
+
+Separate handoffs for **parallel agents**. Each report is scoped to one module (or one cross-cutting concern). Work on **`integration/storage`** or merge it into your feature branch before starting.
 
 **Start here for merge context:** [`../integration-sync-2026-07-07.md`](../integration-sync-2026-07-07.md) — what landed, doc map, superseded notes, owner decisions.
 

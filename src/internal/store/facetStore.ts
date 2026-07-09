@@ -76,6 +76,8 @@ export function facetStoreRegistration(
   const contract =
     extended === undefined
       ? builtIn
-      : mergeStoreContracts(builtIn, extended, methods);
+      : methods === undefined
+        ? mergeStoreContracts(builtIn, extended)
+        : mergeStoreContracts(builtIn, extended, methods);
   return makeRegistration(tag, contract);
 }

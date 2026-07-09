@@ -10,7 +10,7 @@ class Source extends Context.Service<Source, { readonly load: () => Effect.Effec
 const SourceLive = Layer.succeed(Source, Source.of({ load: () => Effect.succeed([1, 2, 3]) }));
 
 const Item = Schema.Struct({ n: Schema.Number });
-class Q extends QueueResource.Tag<Q>()("queue-refill-deps/Q", Item) {}
+class Q extends QueueResource.Tag<Q>()("queue-refill-deps/Q", { payload: Item }) {}
 
 const queueLayer = QueueResource.layer(Q, {
   effect: (_item: { n: number }) => Effect.void, // worker needs nothing

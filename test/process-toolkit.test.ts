@@ -19,7 +19,7 @@ class SchedProc extends Process.Tag<SchedProc>()("test/toolkit/Sched").pipe(
 
 // value-returning + disarmed inline schedule, so `result` is observable before/after a manual run.
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
-class Priced extends Process.Tag<Priced>()("test/toolkit/Priced", Price).pipe(
+class Priced extends Process.Tag<Priced>()("test/toolkit/Priced", { success: Price }).pipe(
   Process.schedule([]),
 ) {}
 

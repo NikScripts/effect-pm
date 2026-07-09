@@ -10,7 +10,7 @@ import * as ApiMetrics from "../src/ApiMetrics";
 // without sniffing its spec (and a bare `Resource.Tag` reports no kind).
 const Item = Schema.Struct({ n: Schema.Number });
 
-class Q extends QueueResource.Tag<Q>()("kindtest/Q", Item) {}
+class Q extends QueueResource.Tag<Q>()("kindtest/Q", { payload: Item }) {}
 class P extends Process.Tag<P>()("kindtest/P") {}
 class C extends CustomQueueResource.Tag<C>()("kindtest/C", { payload: Item, levelCount: 3 }) {}
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}

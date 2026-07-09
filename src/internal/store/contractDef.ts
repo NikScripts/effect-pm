@@ -621,29 +621,57 @@ export function makeStoreContractValue(
 export type MergedCustom<
   Base extends StoreContractValue,
   Methods,
-> = Methods extends (handles: ShapeHandles<StoreShapes>) => infer Custom
+> = Methods extends (handles: ShapeHandles<infer _Shapes>) => infer Custom
   ? Custom extends Readonly<Record<string, unknown>>
     ? Base["custom"] & Custom
     : Base["custom"]
-  : Base["custom"];
+  : Methods extends (handles: ShapeHandles<StoreShapes>) => infer Custom
+    ? Custom extends Readonly<Record<string, unknown>>
+      ? Base["custom"] & Custom
+      : Base["custom"]
+    : Base["custom"];
 
-/** @internal */
-export const mergeStoreContracts = <
+/** Merge base custom with extension methods inferred via `const` on the callback. @internal */
+export type ExtendCustom<
+  Base extends StoreContractValue,
+  Added extends Readonly<Record<string, unknown>>,
+> = keyof Added extends never ? Base["custom"] : Base["custom"] & Added;
+
+/** Extract the custom-method record from a contract methods callback. @internal */
+export type MethodsReturn<M> = M extends (handles: infer _H) => infer R ? R : never;
+
+type MergeShapes<
+  A extends StoreContractValue,
+  B extends StoreShapes | undefined,
+> = B extends StoreShapes ? A["shapes"] & B : A["shapes"];
+
+type MergeHandles<
+  A extends StoreContractValue,
+  B extends StoreShapes | undefined,
+> = ShapeHandles<MergeShapes<A, B>>;
+
+export const mergeStoreContractsBody = <
   const A extends StoreContractValue,
-  const B extends StoreShapes,
+  const B extends StoreShapes | undefined,
+  const Methods extends
+    | ((handles: MergeHandles<A, B>) => Readonly<Record<string, unknown>>)
+    | undefined = undefined,
 >(
   base: A,
-  shapes?: B,
-  methods?: StoreMethodsFn<A["shapes"] & B>,
-): StoreContractValue<A["shapes"] & B, MergedCustom<A, typeof methods>> => {
-  const mergedShapes = { ...base.shapes, ...shapes } as A["shapes"] & B;
+  shapes: B,
+  methods?: Methods,
+): StoreContractValue<
+  MergeShapes<A, B>,
+  Methods extends undefined ? A["custom"] : ExtendCustom<A, MethodsReturn<Methods>>
+> => {
+  const mergedShapes = { ...base.shapes, ...shapes } as MergeShapes<A, B>;
   for (const key of Object.keys(shapes ?? {})) {
     if (key in base.shapes) {
       throw new Error(`Store.extend: shape "${key}" is already declared on the contract`);
     }
   }
 
-  const mergedNormalized = {} as NormalizedShapes<A["shapes"] & B>;
+  const mergedNormalized = {} as NormalizedShapes<MergeShapes<A, B>>;
   collectNormalizedInto(mergedShapes, "", mergedNormalized as Record<string, NormalizedShape>);
 
   const shapeBindings: Array<ShapeBinding> = [...base.shapeBindings];
@@ -660,7 +688,7 @@ export const mergeStoreContracts = <
 
   if (methods !== undefined) {
     const { handles, aliasByFn } = makeShapeHandles(mergedShapes, shapeBindings);
-    const built = methods(handles);
+    const built = methods(handles as MergeHandles<A, B>);
     assertDisjointCustomKeys(mergedShapes, Object.keys(built));
     mergedCustom = { ...mergedCustom, ...built };
     for (const [methodName, value] of Object.entries(built)) {
@@ -683,10 +711,53 @@ export const mergeStoreContracts = <
     shapes: mergedShapes,
     normalized: mergedNormalized,
     spec: spec as StoreSpec,
-    custom: mergedCustom as MergedCustom<A, typeof methods>,
+    custom: mergedCustom,
     customEntries,
     shapeBindings,
-  }) as StoreContractValue<A["shapes"] & B, MergedCustom<A, typeof methods>>;
+  }) as StoreContractValue<
+    MergeShapes<A, B>,
+    Methods extends undefined ? A["custom"] : ExtendCustom<A, MethodsReturn<Methods>>
+  >;
+};
+
+/** @internal */
+export function mergeStoreContracts<const A extends StoreContractValue>(
+  base: A,
+): StoreContractValue<A["shapes"], A["custom"]>;
+/** @internal */
+export function mergeStoreContracts<
+  const A extends StoreContractValue,
+  const B extends StoreShapes,
+>(
+  base: A,
+  shapes: B,
+): StoreContractValue<A["shapes"] & B, A["custom"]>;
+/** @internal */
+export function mergeStoreContracts<
+  const A extends StoreContractValue,
+  const Added extends Readonly<Record<string, unknown>>,
+>(
+  base: A,
+  shapes: undefined,
+  methods: (handles: ShapeHandles<A["shapes"]>) => Added,
+): StoreContractValue<A["shapes"], ExtendCustom<A, Added>>;
+/** @internal */
+export function mergeStoreContracts<
+  const A extends StoreContractValue,
+  const B extends StoreShapes,
+  const Added extends Readonly<Record<string, unknown>>,
+>(
+  base: A,
+  shapes: B,
+  methods: (handles: ShapeHandles<A["shapes"] & B>) => Added,
+): StoreContractValue<A["shapes"] & B, ExtendCustom<A, Added>>;
+/** @internal */
+export function mergeStoreContracts(
+  base: StoreContractValue,
+  shapes?: StoreShapes,
+  methods?: StoreMethodsFn<StoreShapes>,
+): StoreContractValue {
+  return mergeStoreContractsBody(base, shapes, methods);
 };
 
 /**
