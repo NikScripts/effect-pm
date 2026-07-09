@@ -40,11 +40,12 @@ This is **git + docs only**. No application code changes unless you find a one-l
 
 Re-run the audit script before deleting anything. These branches are **not** fully merged or still carry unique commits:
 
-| Branch | Commits ahead of `integration/storage` | Why keep |
-|--------|----------------------------------------|----------|
-| `cursor/store-cutover-closeout-ce05` | 2 | Open PR candidate — CQR `BuiltResource` + handoff sweep |
-| `cursor/result-schema-rpc-handoff-a3ad` | 2 | Docs handoffs for RPC validation (not merged) |
-| `cursor/host-health-dogfood` | 1 | Active dogfood work (not merged) |
+| Branch | Why keep |
+|--------|----------|
+| `cursor/result-schema-rpc-handoff-a3ad` | Docs handoffs for RPC validation (not merged) |
+| `cursor/host-health-dogfood` | Active dogfood work (not merged) |
+
+`cursor/store-cutover-closeout-ce05` and `cursor/branch-cleanup-a009` **merged into `integration/storage` on 2026-07-09** — safe to delete on Phase 2 cleanup.
 
 If a branch is on the keep list but later merges, a future cleanup pass may delete it.
 
@@ -152,7 +153,8 @@ Single PR → `integration/storage` containing:
 - [x] Audit complete
 - [x] Manifest written
 - [x] Remotes deleted (18 branches)
-- [x] PR open → `integration/storage`
+- [x] Merged into `integration/storage` (2026-07-09)
 
-**Complete:** 2026-07-09 — Agent 02 deleted 18 merged `cursor/*` remotes; 4 kept. Manifest:
-[`branch-cleanup-manifest.md`](./branch-cleanup-manifest.md).
+**Complete:** 2026-07-09 — Agent 2 deleted 18 merged `cursor/*` remotes; kept active branches per manifest.
+[`branch-cleanup-manifest.md`](./branch-cleanup-manifest.md). Phase 2: delete `store-cutover-closeout-ce05` and
+`branch-cleanup-a009` after supervisor merge (done).

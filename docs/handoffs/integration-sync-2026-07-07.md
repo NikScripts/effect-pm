@@ -1,10 +1,8 @@
 # Integration sync — 2026-07-07
 
-> **2026-07-09 (`integration/storage`):** Golden store model landed — `Store.extend` tiers, `Resource.builtResource` +
-> `grantLocal` on QueueResource, Process, RunResource, and CustomQueueResource; config-object-only `Tag` wire
-> (`payload` / optional `success` / `error`); CQR store + optional result schemas; engine queue store via
-> `materializeEngineQueueStore*` + `layerDefaultMemory` merge on toolkit layers. **Future:** QR write-buffer off
-> hot path (`store-cutover-queue.md` §Future). See [`agent-01-store-cutover-closeout.md`](./agent-01-store-cutover-closeout.md).
+> **2026-07-09 (`integration/storage`):** Golden store model + config-object-only tags; CQR `builtResource`
+> parity merged from `store-cutover-closeout-ce05`. Branch cleanup manifest merged (18 stale remotes removed).
+> **Active:** Agent 2 (Process) — [`agent-02-process-closeout.md`](./agent-02-process-closeout.md).
 
 **Branch:** `cursor/integration-result-schema-a3ad` (`ef914ab` and later)  
 **Purpose:** One place to see **what landed since the last merge**, which **module note to read**, and **open issues** for cross-agent review. Detailed work lives in linked handoffs — this file does not duplicate them.
