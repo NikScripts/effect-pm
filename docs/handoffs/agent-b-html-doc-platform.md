@@ -1,120 +1,95 @@
-# Agent B — HTML doc platform (local Claude) — **PAUSED**
+# Agent B — Bespoke docs app shell (local Claude)
 
-**Status:** **PAUSED** — see [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md). Do not implement until owner selects stack (shipped `/web` dashboard vs HTML corpus vs Foldkit vs RSC).
+**Status:** **UNBLOCKED** — Option 6 locked in [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md)  
+**Branch:** `action/html-doc-platform` from **`integration/storage`**
 
-**Order:** **B before A** — serve docs from day one (Tailscale / phone). Agent A writes content after B ships the **chosen** platform.  
-**Agent:** Local Claude (**Agent B**)  
-**Branch:** `action/html-doc-platform` from **`integration/storage`**  
-**Blocks:** Agent A (standards corpus), Agent C (audit)
-
-**Docs bus (async):** Update [`agent-status.md`](./agent-status.md) on every push.
-
-**Owner chat (mandatory):** After each slice, post **Before / After** code blocks (separate fenced blocks, not diffs). Template in [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus:** [`agent-status.md`](./agent-status.md) on every push.  
+**Owner chat:** Before/After blocks per [`supervisor-protocol.md`](./supervisor-protocol.md).
 
 ---
 
-## Why first
+## Mission
 
-You work over SSH on a home server with Tailscale. **Live `docs:serve`** means standards HTML updates are readable on your phone as agents edit — no waiting for a full corpus before a server exists.
+Build the **official package website shell** — a bespoke docs application, not throwaway static HTML and **not** `<Dashboard>`.
 
-**Supervisor scaffold (already on `integration/storage`):**
+| Near term | Long term |
+|-----------|-----------|
+| Vite + React + Tailwind v4 + `src/web/theme.css` tokens | Effect `Hydration` / `HydrationBoundary` (not Next) — hook only, no impl now |
+| Agent pages = **HTML files with Tailwind** under `content/` | Same app grows into full public site |
+| `pnpm run docs:serve` — Tailscale **read** on phone | |
 
-- `docs/site/vite.config.ts` — `host: true`, port `5190` (`DOCS_PORT`)
-- `docs/site/index.html`, `public/assets/site.css`, placeholder `standards/index.html`
-- `pnpm run docs:serve` (added in package.json)
-
-Your job: turn the scaffold into a **real platform** Agent A and humans use daily.
-
----
-
-## Read first
-
-| Path | Why |
-|------|-----|
-| `docs/site/README.md` | Tailscale access, layout |
-| `examples/resource-web/vite.config.ts` | `host: true`, `allowedHosts` pattern |
-| `src/web/theme.css` | Future style alignment (optional slice) |
+**Pattern:** `examples/resource-web/` (Vite, `host: true`, React entry) — **not** its Dashboard import.
 
 ---
 
-## Target layout (end of Session B)
+## Target layout
 
 ```
 docs/site/
-├── vite.config.ts          # host: true — Tailscale/LAN
-├── index.html              # Shell home + nav from manifest.json
-├── public/assets/          # site.css (+ optional fonts)
-├── standards/              # Agent A writes here — you wire nav + HMR
-│   ├── meta.html           # HTML format spec (template for A)
-│   ├── manifest.json       # Machine index — you load this in nav
-│   └── index.html
-├── content/                # Optional static pages (markdown-index, etc.)
-└── app/                    # (optional) React shell if plain HTML nav is insufficient
+├── app/
+│   ├── main.tsx
+│   ├── DocsApp.tsx          # layout, nav, mobile-readable
+│   ├── loadContent.ts       # fetch/import content/*.html
+│   └── styles.css           # @import theme + Tailwind @source
+├── content/
+│   ├── standards/           # Agent A writes here
+│   │   ├── meta.html        # format template
+│   │   └── manifest.json
+│   └── …
+├── vite.config.ts           # host: true, port 5190
+└── README.md
 ```
+
+Migrate or replace the old root `index.html` / minimal `site.css` scaffold — do not preserve throwaway structure for its own sake.
 
 ---
 
-## Session slices (one branch, complete all)
+## Slices (one branch, complete all)
 
-### Slice 1 — Verify serve + Tailscale
+### 1 — Vite React app + Tailscale serve
 
-```bash
-git checkout integration/storage && git pull
-git checkout -b action/html-doc-platform
-pnpm run docs:serve
-```
+- `docs/site/app/` like `resource-web`: React, `@tailwindcss/vite`, import `../../src/web/theme.css` (or documented `@source` path per `docs/guides/setup.md` §2b)
+- `pnpm run docs:serve` → `0.0.0.0:5190`
+- README: Tailscale **read** URL for phone
 
-- Confirm bind `0.0.0.0:5190` (or `DOCS_PORT`)
-- Document in `docs/site/README.md`: `http://<tailscale-ip>:5190/`, firewall note, `DOCS_PORT`
-- Post in chat: curl/local URL + `ss` or log line showing listen address
+### 2 — Load agent HTML pages
 
-### Slice 2 — Nav from `manifest.json`
+- Shell renders `content/**/*.html` (fetch at dev, build copies to dist)
+- Mobile-readable typography (reuse theme tokens)
 
-- Fetch/load `standards/manifest.json` on `index.html` and `standards/index.html` (vanilla JS or small module — **no React required** unless you prefer)
-- When A adds pages, nav updates without editing shell by hand
-- Add `standards/meta.html` **template** (empty rules, documents `data-rule-id` format for Agent A)
+### 3 — Nav from `content/standards/manifest.json`
 
-### Slice 3 — HTML module convention
+- Add `content/standards/meta.html` — template for Agent A (`data-rule-id`, Tailwind classes on `<article>`)
 
-Define how chapters are served:
+### 4 — `docs:build` + `docs:preview`
 
-- **Option A (preferred):** static `standards/<chapter>.html` files, linked from manifest, Vite HMR on save
-- **Option B:** `content/` HTML fragments included via `fetch` + `innerHTML` with sanitization policy documented in `meta.html`
+- Production build includes all content HTML; preview uses `host: true`
 
-Document choice in `standards/meta.html` and `docs/site/README.md`.
+### 5 — Handoff + ship
 
-### Slice 4 — Production preview
-
-- `pnpm run docs:build` → `docs/site/dist/`
-- `pnpm run docs:preview` — same `host: true` for phone check
-- Add `dist/` to `.gitignore` if not already
-
-### Slice 5 — Polish + handoff to Agent A
-
-- Optional: share CSS variables with `src/web/theme.css` (subset only — no dashboard bundle)
-- README section **“Agent A: add a chapter”** — copy `meta.html` article pattern, register in `manifest.json`, refresh phone
-- PR → `integration/storage`
+- README: “Agent A: add a chapter” (HTML + Tailwind + manifest entry)
+- Comment in `DocsApp.tsx` or README: future `HydrationBoundary` seam — no implementation
+- `agent-status.md`; PR → `integration/storage`
 
 ---
 
 ## Out of scope
 
-- Writing the full standards corpus (Agent A)
-- Auditing `src/` (Agent C)
-- Rewriting `docs/*.md`
+- Full standards corpus (Agent A)
+- `<Dashboard>` / ops widgets
+- Foldkit (optional owner demo — not this agent)
+- Next.js
+- `src/` package edits unless required for theme import path
 
 ---
 
 ## Done when
 
-- [ ] `pnpm run docs:serve` works on Tailscale IP from phone
-- [ ] Nav driven by `manifest.json`
-- [ ] `meta.html` template ready for Agent A
-- [ ] `docs:build` + `docs:preview` scripts
-- [ ] Chat shows listen URL + file tree
-
----
+- [ ] Bespoke app serves on Tailscale phone (read)
+- [ ] Agent HTML pages render with Tailwind + theme
+- [ ] `meta.html` + manifest nav
+- [ ] `docs:build` / `docs:preview` green
 
 ## Status
 
-- [ ] Not started (scaffold on integration line — extend it)
+- [ ] Not started
