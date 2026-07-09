@@ -1,6 +1,12 @@
 # Agent reports — sync 2026-07-07
 
-**Active agent handoff:** [`agent-01-store-cutover-closeout.md`](../agent-01-store-cutover-closeout.md) — branch from **`integration/storage`**, Cursor Cloud Agent, store cutover close-out.
+**Active agent handoffs** (parallel, no cross-dependencies):
+
+| Agent | Handoff | Scope |
+|-------|---------|-------|
+| 01 | [`agent-01-store-cutover-closeout.md`](../agent-01-store-cutover-closeout.md) | Store cutover close-out — **done** on `cursor/store-cutover-closeout-ce05` |
+| 02 | [`agent-02-branch-cleanup.md`](../agent-02-branch-cleanup.md) | Delete merged remote `cursor/*` branches; write manifest |
+| 03 | [`agent-03-process-closeout.md`](../agent-03-process-closeout.md) | Process cast removal + stale docs (reuse open Process agent if available) |
 
 Separate handoffs for **parallel agents**. Each report is scoped to one module (or one cross-cutting concern). Work on **`integration/storage`** or merge it into your feature branch before starting.
 
@@ -11,7 +17,7 @@ Separate handoffs for **parallel agents**. Each report is scoped to one module (
 | Report | Agent scope | Priority |
 |--------|-------------|----------|
 | [RunResource](./2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep | **Low** — mostly done; finish + verify |
-| [Process](./2026-07-07-agent-report-process.md) | Tag wire slots, store engine tap, facet retirement | **Medium** — B3 landed; facet removal open |
+| [Process](./2026-07-07-agent-report-process.md) | Tag wire slots, store contract cast, docs sweep | **Medium** — see [`agent-03-process-closeout.md`](../agent-03-process-closeout.md) |
 | [QueueResource + CustomQueueResource](./2026-07-07-agent-report-queue-resource.md) | `success`/`error` triplet, engine cutover | **High** — see corrections in integration-sync |
 | [Store](./2026-07-07-agent-report-store.md) | Bridge typing, engine wiring gaps | **Medium** — Stage 1 details in store-cutover |
 | [Docs + release](./2026-07-07-agent-report-docs-release.md) | Changesets, stale docs, examples README | **Medium** (after module PRs land) |

@@ -1,5 +1,9 @@
 # Integration sync — 2026-07-07
 
+> **2026-07-09 (`integration/storage` @ `6290856`):** Golden store model + config-object-only tags merged.
+> Agent 01 close-out on `cursor/store-cutover-closeout-ce05` (PR pending). **Parallel agents (no cross-deps):**
+> [`agent-02-branch-cleanup.md`](./agent-02-branch-cleanup.md), [`agent-03-process-closeout.md`](./agent-03-process-closeout.md).
+
 **Branch:** `cursor/integration-result-schema-a3ad` (`ef914ab` and later)  
 **Purpose:** One place to see **what landed since the last merge**, which **module note to read**, and **open issues** for cross-agent review. Detailed work lives in linked handoffs — this file does not duplicate them.
 
