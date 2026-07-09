@@ -81,4 +81,32 @@ None — every branch that failed the delete rule (`merged=no` or `ahead>0`) is 
 
 ## Post-cleanup verification
 
-After deletes, `git branch -r | grep cursor/` shows only the four kept branches above.
+After Phase 1 deletes, four branches remained. Supervisor merged Agent 1 + cleanup into
+`integration/storage` and ran Phase 2 (2026-07-09).
+
+## Phase 2 — supervisor merge cleanup (2026-07-09)
+
+**Baseline:** `origin/integration/storage` @ `3d520c6`
+
+**Merged into `integration/storage`:**
+
+- `cursor/store-cutover-closeout-ce05` — CQR `builtResource` + docs truth sweep
+- `cursor/branch-cleanup-a009` — this manifest + Agent 2 handoff
+- `cursor/agent-handoffs-a009` — Process close-out handoff (renamed to `agent-02-process-closeout.md`)
+
+**Deleted after merge (3):**
+
+| Branch | Summary |
+|--------|---------|
+| `cursor/store-cutover-closeout-ce05` | Merged — safe to delete |
+| `cursor/branch-cleanup-a009` | Merged — safe to delete |
+| `cursor/agent-handoffs-a009` | Merged — safe to delete |
+
+**Remotes remaining (2):**
+
+| Branch | Ahead | Reason |
+|--------|-------|--------|
+| `cursor/result-schema-rpc-handoff-a3ad` | 2 | Unmerged RPC docs handoff |
+| `cursor/host-health-dogfood` | 1 | Active dogfood work |
+
+**Verification:** `pnpm run typecheck` + `pnpm test` (437 tests) green on merged tip.
