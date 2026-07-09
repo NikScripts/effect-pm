@@ -6,6 +6,12 @@ Separate handoffs for **parallel agents**. Each report is scoped to one module (
 
 **Start here for merge context:** [`../integration-sync-2026-07-07.md`](../integration-sync-2026-07-07.md) — what landed, doc map, superseded notes, owner decisions.
 
+## Hygiene
+
+| Report | Scope |
+|--------|-------|
+| [Branch cleanup manifest](../branch-cleanup-manifest.md) | 2026-07-09 remote `cursor/*` audit — 18 merged branches deleted, 4 kept |
+
 ## Agent reports (review / blind spots)
 
 | Report | Agent scope | Priority |
