@@ -1,12 +1,13 @@
 # Agent reports — sync 2026-07-07
 
-**Active agent handoffs:**
+**Active agent handoffs** (long sessions — multiple slices per branch):
 
 | Agent | Handoff | Scope |
 |-------|---------|-------|
-| 1 | [`agent-01-store-cutover-closeout.md`](../agent-01-store-cutover-closeout.md) | Store cutover — **merged** into `integration/storage` (2026-07-09) |
-| 2 | [`agent-02-process-closeout.md`](../agent-02-process-closeout.md) | Process cast removal + stale docs |
-| 2 | [`agent-02-branch-cleanup.md`](../agent-02-branch-cleanup.md) | Branch cleanup — **merged** (manifest on `integration/storage`) |
+| 1 | [`agent-01-session-2-storage-docs.md`](../agent-01-session-2-storage-docs.md) | **Session 2** — `STORAGE.md` rewrite + store reports + grep sweep |
+| 2 | [`agent-02-session-2-process-platform.md`](../agent-02-session-2-process-platform.md) | **Session 2** — Process error fidelity + RPC wire + examples |
+| 1 | [`agent-01-store-cutover-closeout.md`](../agent-01-store-cutover-closeout.md) | Session 1 — **merged** |
+| 2 | [`agent-02-process-closeout.md`](../agent-02-process-closeout.md) | Session 1 — **merged** |
 
 Work on **`integration/storage`**.
 

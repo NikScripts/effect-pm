@@ -1,8 +1,8 @@
 # Integration sync — 2026-07-07
 
-> **2026-07-09 (`integration/storage`):** Golden store model + config-object-only tags; CQR `builtResource`
-> parity merged from `store-cutover-closeout-ce05`. Branch cleanup manifest merged (18 stale remotes removed).
-> **Active:** Agent 2 (Process) — [`agent-02-process-closeout.md`](./agent-02-process-closeout.md).
+> **2026-07-09 (`integration/storage` @ `9dab7a3`):** Agent 2 Session 1 merged — cast-free Process store contract.
+> **Active sessions:** Agent 1 → [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md);
+> Agent 2 → [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md).
 
 **Branch:** `cursor/integration-result-schema-a3ad` (`ef914ab` and later)  
 **Purpose:** One place to see **what landed since the last merge**, which **module note to read**, and **open issues** for cross-agent review. Detailed work lives in linked handoffs — this file does not duplicate them.
