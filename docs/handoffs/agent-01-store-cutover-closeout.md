@@ -130,7 +130,7 @@ Paste the branch name to the supervisor when the run exists.
 - [x] CQR uses `builtResource` on toolkit layers (or documented blocker in PR)
 - [x] Handoffs match shipped store/tag behavior
 - [x] `pnpm run typecheck` + `pnpm test` green
-- [ ] Draft PR targeting `integration/storage` — branch pushed; open via [compare link](https://github.com/NikScripts/effect-pm/compare/integration/storage...cursor/store-cutover-closeout-ce05?expand=1) if auto-create blocked
+- [x] Merged into `integration/storage` (2026-07-09, supervisor)
 
 ### Phase 2 (docs truth sweep + ship)
 
