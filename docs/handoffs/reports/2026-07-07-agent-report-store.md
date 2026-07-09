@@ -1,59 +1,58 @@
 # Agent report: Store (platform)
 
-**Branch:** `cursor/integration-result-schema-a3ad` — **Store typing commit `4597ee1`**  
-**Agent:** Store / internal-store owner  
-**Priority:** Medium — unblock resource engine taps and remove casts.
+**Branch:** `integration/storage`  
+**Agent:** Store / internal-store owner (Agent 1)  
+**Priority:** **Done** — Stage 1 + engine wiring shipped; open = write-buffer future + owner TODOs only.
+
+> **Correction (2026-07-09):** Prior report lines claiming "Stage 1 blocked", lazy `serviceOption` taps, and
+> Queue-on-facet-only writes are **stale**. Authoritative policy:
+> [`store-cutover-00-store-core.md`](../store-cutover-00-store-core.md) · consumer docs:
+> [`STORAGE.md`](../../STORAGE.md).
 
 ---
 
-## Shipped on integration branch
+## Shipped on `integration/storage`
 
-Commit **`4597ee1`** — *precise handle resolution*:
-
-| Change | Files |
-|--------|-------|
-| Generic `bridge.at` / `materializeStoreHandle` carry contract type through | `src/internal/store/bridge.ts`, `memoryScope.ts`, `scopeBridge.ts`, `sqliteLayer.ts` |
-| `Tag.store` / `Resource.store` return precise `StoreHandleOf<C>` | `src/Store.ts` |
-| Remove consumer `as unknown as` casts | `test/store.test.ts`, `test/store-default.test.ts`, `runResourceStoreTap.ts` |
-
-**Action:** ensure all feature branches **merge integration** before adding new store consumers.
+| Area | Status | Evidence |
+|------|--------|----------|
+| **Stage 1 — default backing** | ✅ | `Store.layerDefaultMemory`, `buildDefaultScopeBridge`; `test/store-default.test.ts` |
+| **Precise handle resolution** | ✅ | Generic `bridge.at<Input>` → `StoreHandleOf<Input>`; typed `Tag.store` |
+| **Declared `Storage` dependency** | ✅ | No `serviceOption(Storage)` in engines; `materializeEngineQueueStore*` (QR/CQR), `Store.effects` (Process), RunResource internal tap |
+| **Toolkit `layerDefaultMemory` merge** | ✅ | Process (`withDefaultMemory`), Queue, CQR, RunResource layer entry points |
+| **Legacy execution facets deleted** | ✅ | `ProcessExecutionStore`, `QueueResourceStore`, `RunResourceStore` facet **classes gone** from `src/` |
+| **Built-in contracts cast-free** | ✅ | Queue, RunResource; Process (`process-store-contract.test-d.ts`) |
+| **Journal codec** | ✅ | Effect Msgpack via `journalCodec.ts` — no direct `msgpackr` dep |
 
 ---
 
-## Open issues
+## Engine wiring (all four toolkits)
 
-### 1. Default in-memory store (Stage 1 blocker)
+| Toolkit | Contract | Engine materialization | Handoff |
+|---------|----------|------------------------|---------|
+| **QueueResource** | `builtInQueueStoreContract(tag)` | `materializeEngineQueueStoreForTag` in `buildQueueImpl` | [`store-cutover-queue.md`](../store-cutover-queue.md) |
+| **CustomQueueResource** | same union | `materializeEngineQueueStoreForItem` in `buildCustomQueueImpl` | [`store-cutover-customqueue.md`](../store-cutover-customqueue.md) |
+| **Process** | `builtInProcessStoreContract(tag)` | `Store.effects` in `buildProcessImpl` | [`store-cutover-process.md`](../store-cutover-process.md) |
+| **RunResource** | `builtInRunResourceStoreContract(tag)` | `Store.effects` in `internal/runResource.ts` | [`store-cutover-runresource.md`](../store-cutover-runresource.md) |
 
-From `2026-07-06-processstore-removal.md`:
+Queue persists full `QueueEvent<T>` lifecycle via `publishEvent` → `recordToStore` — not entry-only, not facet rows.
 
-- `Tag.store` / engine tap **fail** with `StoreScopeNotRegistered` when no `Store.Service` layer is provided.
-- Agreed direction: **bounded default in-memory store** so engines always have a handle (no `serviceOption` branching).
+---
 
-**RunResource** worked around absence via lazy `Effect.option` on bridge + legacy facet. **Long-term:** default store in `layerDefaultMemory` / scope bridge.
+## What remains on RuntimeStorage facets
 
-**Task:** implement or confirm status of default store in `src/internal/store/scopeBridge.ts` / `memoryScope.ts`; update handoff when done.
+`ProcessStorage` composes **Log** + **ProcessLifecycle** only (`src/store/log.ts`, `src/store/processLifecycle.ts`).
+Execution history is **Store bridge only**.
 
-### 2. Engine → Store not wired for Process or Queue
+---
 
-| Resource | New Store tap | Legacy facet |
-|----------|---------------|--------------|
-| RunResource | ✅ `runResourceStoreTap.ts` | ✅ `RunResourceStore` |
-| Process | ✅ store tap (`processStoreTap.ts`) | **`ProcessExecutionStore` facet deleted** |
-| QueueResource | ❌ | ✅ `QueueResourceStore` |
+## Open (low priority / future)
 
-Store agent **does not** own business events — resource agents add taps — but Store agent owns:
-
-- Bridge API stability
-- Registration / `facetStoreRegistration`
-- Journal codec (`journalCodec.ts` — Effect Msgpack, no direct msgpackr)
-
-### 3. `msgpackr` direct dependency — resolved on RunResource branch
-
-Verify `package.json` has **no** direct `msgpackr` dep; journal uses `effect/unstable/encoding/Msgpack`. If typecheck fails on fresh install, fix via Effect API — do not re-add msgpackr without a consumer.
-
-### 4. Queue store contract taxonomy
-
-`builtInQueueStoreContract` is **entry-only**. Full facet taxonomy (lifecycle, dedupe, rate limit) port undecided — see processstore-removal handoff. Store agent documents contract shape; Queue agent decides event scope.
+| Item | Owner | Notes |
+|------|-------|-------|
+| Write-path buffer (queue) | Queue | Scoped daemon off hot path — **future**; see `store-cutover-queue.md` |
+| `package.json` `store/QueueResource` subpath | release | Export may linger; no `src/store/queueResource.ts` — document exception until removed |
+| Platform changeset | owner approval | Breaking store/tag wire — needs approval |
+| Hybrid RuntimeStorage / Postgres | roadmap | `docs/plans/` |
 
 ---
 
@@ -61,12 +60,11 @@ Verify `package.json` has **no** direct `msgpackr` dep; journal uses `effect/uns
 
 | Path | Role |
 |------|------|
-| `src/Store.ts` | Public aggregate API |
-| `src/internal/store/bridge.ts` | `StoreScopeBridgeTag` |
-| `src/internal/store/memoryScope.ts`, `scopeBridge.ts` | Default / memory resolution |
+| `src/Store.ts` | Public aggregate API, `Storage`, `layerDefaultMemory` |
+| `src/internal/store/bridge.ts`, `scopeBridge.ts`, `memoryScope.ts` | Bridge + default resolution |
 | `src/internal/store/sqliteLayer.ts` | Durable layers |
 | `src/internal/store/journalCodec.ts` | Msgpack payload codec |
-| `src/internal/store/*StoreSpec.ts` | Per-resource built-in contracts |
+| `src/internal/store/{queue,process,runResource}StoreSpec.ts` | Built-in contracts |
 | `test/store.test.ts`, `test/store-default.test.ts`, `test/store.sqlite.test.ts` | Conformance |
 
 ---
@@ -75,13 +73,15 @@ Verify `package.json` has **no** direct `msgpackr` dep; journal uses `effect/uns
 
 ```bash
 pnpm run typecheck
-pnpm exec vitest run test/store.test.ts test/store-default.test.ts test/store.sqlite.test.ts
+pnpm test
+pnpm exec vitest run test/store.test.ts test/store-default.test.ts test/store.sqlite.test.ts \
+  test/queue-store-persist.test.ts test/custom-queue-store-persist.test.ts
 ```
 
 ---
 
 ## Coordination
 
-- **RunResource agent:** re-merge integration; drop tap cast if still present.
-- **Process agent:** new `processStoreTap.ts` uses same lazy `bridge.at(scopeKey, contract.spec, contract)` pattern as RunResource.
-- **Queue agent:** after rename, `builtInQueueStoreContract` reads `payloadOf(tag)`.
+- **Agent 1 (docs):** [`agent-01-session-2-storage-docs.md`](../agent-01-session-2-storage-docs.md) — `STORAGE.md` rewrite + grep sweep.
+- **Agent 2 (Process):** owns `PROCESS-API.md`, `guides/process.md` — not Store agent.
+- **Queue agent:** write-buffer only; engine store **done**.
