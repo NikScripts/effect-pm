@@ -14,8 +14,8 @@ as a declared dependency; NEVER `serviceOption`**).
    No `success` schema → `Completed { entry, elapsed }` only. No `error` schema → `Failed.error: string`
    (`String` of `findErrorOption` / `squash`), not a separate `cause` field on the store row. Mirrors
    `makeProcessExecutionEvent(success, error)` — optional typed fields appear iff the schema is present.
-3. **CustomQueue does NOT take the triplet** — config-object only, no `success`/`error` (see
-   `store-cutover-customqueue.md`).
+3. **CustomQueue** shares optional `success` / `error` on the config object (no positional schemas) — see
+   `store-cutover-customqueue.md`.
 4. **Always write thorough tests** — no approval needed for tests, ever.
 
 ## Done

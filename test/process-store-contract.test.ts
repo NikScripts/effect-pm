@@ -9,13 +9,12 @@ const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
 class VoidProc extends Process.Tag<VoidProc>()("test/store/Void") {}
 
-class PricedProc extends Process.Tag<PricedProc>()("test/store/Priced", Price) {}
+class PricedProc extends Process.Tag<PricedProc>()("test/store/Priced", { success: Price }) {}
 
-class PricedErrProc extends Process.Tag<PricedErrProc>()(
-  "test/store/PricedErr",
-  Price,
-  FetchErr,
-) {}
+class PricedErrProc extends Process.Tag<PricedErrProc>()("test/store/PricedErr", {
+  success: Price,
+  error: FetchErr,
+}) {}
 
 const pricedRegistration = Store.register(PricedProc, builtInProcessStoreContract(PricedProc));
 const pricedErrRegistration = Store.register(

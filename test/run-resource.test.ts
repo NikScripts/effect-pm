@@ -86,11 +86,7 @@ describe("RunResource.Service", () => {
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
-      const SlowGate = RunResource.Tag<{ readonly _tag: "SlowGate" }>()(
-        "@test/SlowGate",
-        Schema.String,
-        Schema.String,
-      );
+      const SlowGate = RunResource.Tag<{ readonly _tag: "SlowGate" }>()("@test/SlowGate", { payload: Schema.String, success: Schema.String });
       const gateLayer = RunResource.layer(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
@@ -149,11 +145,7 @@ describe("RunResource.Service", () => {
 });
 
 describe("RunResource.Tag + layer", () => {
-  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()(
-    "@test/TestGate",
-    Schema.Number,
-    Schema.Number,
-  );
+  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()("@test/TestGate", { payload: Schema.Number, success: Schema.Number });
 
   const testLayer = RunResource.layer(TestGate, {
     effect: (n: number) => Effect.succeed(n + 100),
@@ -277,11 +269,7 @@ describe("RunResource.make — default store bridge", () => {
 });
 
 describe("RunResource.layer — baked default store bridge", () => {
-  const BakedGate = RunResource.Tag<{ readonly _tag: "BakedGate" }>()(
-    "@test/BakedGate",
-    Schema.Number,
-    Schema.Number,
-  );
+  const BakedGate = RunResource.Tag<{ readonly _tag: "BakedGate" }>()("@test/BakedGate", { payload: Schema.Number, success: Schema.Number });
 
   const bakedLayer = RunResource.layer(BakedGate, {
     effect: (n: number) => Effect.succeed(n),
@@ -311,11 +299,7 @@ describe("RunResource.layer — baked default store bridge", () => {
 });
 
 describe("RunResource.layer — RunResource.store records", () => {
-  const StoreGate = RunResource.Tag<{ readonly _tag: "StoreGate" }>()(
-    "@test/StoreGate",
-    Schema.Number,
-    Schema.Number,
-  );
+  const StoreGate = RunResource.Tag<{ readonly _tag: "StoreGate" }>()("@test/StoreGate", { payload: Schema.Number, success: Schema.Number });
 
   const storeGateRegistration = RunResource.store(StoreGate);
 
@@ -347,12 +331,11 @@ describe("RunResource.layer — RunResource.store records", () => {
 });
 
 describe("RunResource.store — persistence fidelity", () => {
-  const FidelityGate = RunResource.Tag<{ readonly _tag: "FidelityGate" }>()(
-    "@test/FidelityGate",
-    Schema.Number,
-    Schema.Number,
-    Schema.String,
-  );
+  const FidelityGate = RunResource.Tag<{ readonly _tag: "FidelityGate" }>()("@test/FidelityGate", {
+    payload: Schema.Number,
+    success: Schema.Number,
+    error: Schema.String,
+  });
 
   const fidelityRegistration = RunResource.store(FidelityGate);
 
@@ -426,11 +409,10 @@ describe("RunResource — unit gates and interrupts", () => {
   );
 
   const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {
-    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(
-      key,
-      Schema.Void,
-      Schema.Void,
-    );
+    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(key, {
+      payload: Schema.Void,
+      success: Schema.Void,
+    });
     return {
       tag: HoldGate,
       layer: RunResource.layer(HoldGate, {
@@ -466,11 +448,10 @@ describe("RunResource — unit gates and interrupts", () => {
 describe("RunResource.layer — store failure isolation", () => {
   const scopeKey = "@test/store-failure-gate";
 
-  const FailingBridgeGate = RunResource.Tag<{ readonly _tag: "FailingBridgeGate" }>()(
-    scopeKey,
-    Schema.Number,
-    Schema.Number,
-  );
+  const FailingBridgeGate = RunResource.Tag<{ readonly _tag: "FailingBridgeGate" }>()(scopeKey, {
+    payload: Schema.Number,
+    success: Schema.Number,
+  });
 
   const failingBridgeLayer = Layer.succeed(Storage, {
     at: () =>

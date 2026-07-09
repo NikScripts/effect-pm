@@ -11,9 +11,9 @@ import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec"
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class EmailQueue extends QueueResource.Tag<EmailQueue>()("@app/EmailQueue", jobSchema) {}
+class EmailQueue extends QueueResource.Tag<EmailQueue>()("@app/EmailQueue", { payload: jobSchema }) {}
 
-class FailingQueue extends QueueResource.Tag<FailingQueue>()("@app/FailingQueue", jobSchema) {}
+class FailingQueue extends QueueResource.Tag<FailingQueue>()("@app/FailingQueue", { payload: jobSchema }) {}
 
 describe("QueueResource → baked store persistence", () => {
   it.live("persists lifecycle events to the baked-in store, readable back", () =>

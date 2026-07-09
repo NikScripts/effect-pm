@@ -16,7 +16,7 @@ import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class PricesProcess extends Process.Tag<PricesProcess>()("examples/Prices", Price) {}
+class PricesProcess extends Process.Tag<PricesProcess>()("examples/Prices", { success: Price }) {}
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
   Store.register(PricesProcess, builtInProcessStoreContract(PricesProcess)),

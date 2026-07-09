@@ -25,17 +25,17 @@ import { QueueResource } from "../../src";
 const Job = Schema.Struct({ id: Schema.String });
 
 // the fleet — one tag per queue (unique id + Self)
-class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", Job) {}
-class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", Job) {}
-class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", Job) {}
-class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", Job) {}
-class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", Job) {}
-class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", Job) {}
-class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", Job) {}
-class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", Job) {}
-class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", Job) {}
-class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job) {}
-class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job) {}
+class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", { payload: Job }) {}
+class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job }) {}
+class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", { payload: Job }) {}
+class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", { payload: Job }) {}
+class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job }) {}
+class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job }) {}
+class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job }) {}
+class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job }) {}
+class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job }) {}
+class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", { payload: Job }) {}
+class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job }) {}
 
 type AllQueues =
   | Mail

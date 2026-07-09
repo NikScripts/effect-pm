@@ -3,12 +3,11 @@ import { Effect, Option, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 
-class PriceGate extends RunResource.Tag<{ readonly _tag: "PriceGate" }>()(
-  "@test/AnalyticsPriceGate",
-  Schema.Number,
-  Schema.Number,
-  Schema.String,
-) {}
+class PriceGate extends RunResource.Tag<{ readonly _tag: "PriceGate" }>()("@test/AnalyticsPriceGate", {
+  payload: Schema.Number,
+  success: Schema.Number,
+  error: Schema.String,
+}) {}
 
 const registration = RunResource.store(PriceGate);
 

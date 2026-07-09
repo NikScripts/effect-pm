@@ -6,7 +6,7 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class HQueue extends QueueResource.Tag<HQueue>()("history/Q", NumberItem) {}
+class HQueue extends QueueResource.Tag<HQueue>()("history/Q", { payload: NumberItem }) {}
 
 it("HistoryStore.layerMemory: append + read (newest-first limit, per stream)", () =>
   Effect.runPromise(

@@ -10,7 +10,7 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class CfgQueue extends QueueResource.Tag<CfgQueue>()("cfg/Q", NumberItem) {}
+class CfgQueue extends QueueResource.Tag<CfgQueue>()("cfg/Q", { payload: NumberItem }) {}
 
 it("QueueResource.configure folds onto the layer config (paused override wins)", () =>
   Effect.runPromise(

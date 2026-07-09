@@ -129,6 +129,7 @@
     "examples/scenarios/nwslsoccer",
     "examples/queue-widget/**",
     "examples/resource-tui/**",
+    "examples/resource-web/**",
     "examples/web-dashboard/**"
   ]
 }

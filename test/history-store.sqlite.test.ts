@@ -65,7 +65,7 @@ describe("SQLiteHistoryStore", () => {
           SQLiteHistoryStore.fromSqlClient(sql).pipe(Effect.orDie),
         );
         const NumberItem = Schema.Struct({ n: Schema.Number });
-        class SQ extends QueueResource.Tag<SQ>()("sqlite-history/Q", NumberItem) {}
+        class SQ extends QueueResource.Tag<SQ>()("sqlite-history/Q", { payload: NumberItem }) {}
 
         yield* Effect.gen(function* () {
           const queue = yield* SQ;

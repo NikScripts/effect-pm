@@ -32,13 +32,6 @@
  * Declare wire schemas on the tag, then serve or connect like {@link QueueResource} / {@link Process}:
  *
  * ```ts
- * class FetchGate extends RunResource.Tag<FetchGate>()(
- *   "@app/FetchGate",
- *   SymbolSchema,
- *   PriceSchema,
- *   FetchErrSchema,
- * ) {}
- * // or:
  * class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", {
  *   payload: SymbolSchema,
  *   success: PriceSchema,
@@ -338,15 +331,6 @@ const makeStaticRun = <
       >)(input);
     })) as RunResourceStaticRun<I, A, E, Self>;
 
-const isSchemaTop = (value: unknown): value is Schema.Top =>
-  typeof value === "object" && value !== null && "ast" in value;
-
-const isTagSchemaConfig = (value: unknown): value is RunResourceTagSchemas =>
-  typeof value === "object" &&
-  value !== null &&
-  "payload" in value &&
-  "success" in value;
-
 const materializeRunTag = <
   Self,
   I extends Schema.Top,
@@ -379,6 +363,27 @@ const materializeRunTag = <
     A,
     E
   >;
+};
+
+const runTag = <Self>() => {
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top = typeof Schema.Never,
+  >(
+    key: string,
+    config: RunResourceTagSchemas<I, A, E>,
+  ): RunTagWithStaticRun<Self, I, A, E> {
+    const error = (config.error ?? Schema.Never) as E;
+    return materializeRunTag(
+      key,
+      config.payload,
+      config.success,
+      error,
+      { description: config.description },
+    );
+  }
+  return build;
 };
 
 /** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
@@ -441,72 +446,6 @@ const buildRunImpl = <
       context,
     );
   });
-
-const runTag = <Self>() => {
-  function build<I extends Schema.Top, A extends Schema.Top>(
-    key: string,
-    schemas: RunResourceTagSchemas<I, A, typeof Schema.Never>,
-  ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
-  function build<
-    I extends Schema.Top,
-    A extends Schema.Top,
-    E extends Schema.Top,
-  >(
-    key: string,
-    schemas: RunResourceTagSchemas<I, A, E>,
-  ): RunTagWithStaticRun<Self, I, A, E>;
-  function build<I extends Schema.Top, A extends Schema.Top>(
-    key: string,
-    payload: I,
-    success: A,
-    options?: { readonly description?: string },
-  ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
-  function build<
-    I extends Schema.Top,
-    A extends Schema.Top,
-    E extends Schema.Top,
-  >(
-    key: string,
-    payload: I,
-    success: A,
-    error: E,
-    options?: { readonly description?: string },
-  ): RunTagWithStaticRun<Self, I, A, E>;
-  function build(
-    key: string,
-    inputOrSchemas: Schema.Top | RunResourceTagSchemas,
-    success?: Schema.Top,
-    errorOrOptions?: Schema.Top | { readonly description?: string },
-    maybeOptions?: { readonly description?: string },
-  ): RunTagWithStaticRun<Self, any, any, any> {
-    if (isTagSchemaConfig(inputOrSchemas)) {
-      const error = (inputOrSchemas.error ?? Schema.Never) as Schema.Top;
-      return materializeRunTag(
-        key,
-        inputOrSchemas.payload,
-        inputOrSchemas.success,
-        error,
-        { description: inputOrSchemas.description },
-      );
-    }
-    const payload = inputOrSchemas;
-    const hasError =
-      errorOrOptions !== undefined &&
-      isSchemaTop(errorOrOptions);
-    const error = hasError ? errorOrOptions : Schema.Never;
-    const options = hasError ? maybeOptions : errorOrOptions as
-      | { readonly description?: string }
-      | undefined;
-    return materializeRunTag(
-      key,
-      payload,
-      success as Schema.Top,
-      error,
-      options,
-    );
-  }
-  return build;
-};
 
 // ============================================================================
 // Public API

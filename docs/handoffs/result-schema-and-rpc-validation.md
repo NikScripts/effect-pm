@@ -45,7 +45,7 @@ overload). Layer config must not override them (see §3).
 | **Process** | `key` | `success` | `error` | `Tag(key, { success?, error?, description?, node? })` |
 | **QueueResource** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success?, error?, description?, node? })` |
 | **RunResource** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success, error?, description? })` |
-| **CustomQueueResource** | `key` + **`payload`** + lane args | `success` | `error` | trailing `{ success?, error?, … }` — **TBD with CQR agent** |
+| **CustomQueueResource** | `key` + config object | `payload`, `levelCount`, optional `namedLevels`, optional `success` / `error` | `Tag(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })` |
 
 Disambiguation: when the 2nd argument is a **plain object** with `description` / `node` / wire-slot
 keys, it is the **config overload**, not a schema value.
@@ -83,8 +83,12 @@ RunResource.Tag()(key, payload, success, error)
 RunResource.Tag()(key, { payload, success, error?, description? })
 ```
 
-**CustomQueueResource** — same three wire slots after required `payload`; lane count / named levels
-follow (prefer trailing options bag: `Tag(key, payload, 3, namedLevels, { success, error })`).
+**CustomQueueResource** — config object only; same optional `success` / `error` wire slots as QueueResource
+after required lane fields:
+
+```ts
+CustomQueueResource.Tag()(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })
+```
 
 ### 3. Layer-level schema overrides — internal only, strongly discouraged publicly
 

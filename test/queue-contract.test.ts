@@ -193,7 +193,7 @@ interface NumberItem {
 type NumberIn = NumberItem | ReadonlyArray<NumberItem>;
 const asItems = (p: NumberIn): ReadonlyArray<NumberItem> =>
   "n" in p ? [p] : p;
-class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", NumberItem) {}
+class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", { payload: NumberItem }) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];
@@ -341,10 +341,9 @@ it("enqueue's wire schema (the server's decode gate) rejects malformed entries",
 });
 
 // ── QueueResource.layer: the engine wired behind the toolkit tag, run locally ──
-class LocalQueue extends QueueResource.Tag<LocalQueue>()(
-  "test/LocalQueue",
-  NumberItem,
-) {}
+class LocalQueue extends QueueResource.Tag<LocalQueue>()("test/LocalQueue", {
+  payload: NumberItem,
+}) {}
 
 it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
   const program = Effect.gen(function* () {
@@ -389,10 +388,9 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
 });
 
 // ── QueueResource.layer surfaces captured logs through the toolkit tag ──
-class LoggingQueue extends QueueResource.Tag<LoggingQueue>()(
-  "test/LoggingQueue",
-  NumberItem,
-) {}
+class LoggingQueue extends QueueResource.Tag<LoggingQueue>()("test/LoggingQueue", {
+  payload: NumberItem,
+}) {}
 
 it("QueueResource.layer surfaces captured logs via queue.logs", () => {
   const program = Effect.gen(function* () {
@@ -428,11 +426,10 @@ it("QueueResource.layer surfaces captured logs via queue.logs", () => {
 // A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
 class QueueNode extends Resource.Node<QueueNode>("queue/node") {}
-class NodeNumbers extends QueueResource.Tag<NodeNumbers>()(
-  "test/NodeNumbers",
-  NumberItem,
-  { node: QueueNode },
-) {}
+class NodeNumbers extends QueueResource.Tag<NodeNumbers>()("test/NodeNumbers", {
+  payload: NumberItem,
+  node: QueueNode,
+}) {}
 const _nodeedQueueClient: Layer.Layer<NodeNumbers, never, QueueNode> =
   Resource.client(NodeNumbers);
 void _nodeedQueueClient;

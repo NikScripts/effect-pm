@@ -2,24 +2,23 @@
 
 Prereq: `store-cutover-00-store-core.md`.
 
-## Tag API — OWNER DECISION LOCKED (2026-07-06)
+## Tag API — config object only (2026-07-09)
 
-**CQR does NOT take the `success`/`error` triplet.** It is **config-object only** — no positional wire
-slots, no `success`/`error`. The triplet is a QueueResource concern; CQR's arity (lanes) makes positional
-wire slots a non-starter, and the owner ruled it out.
+**All wire schemas live on the config object** — no positional schema overloads on any toolkit `Tag`.
+CQR takes the same optional `success` / `error` slots as {@link QueueResource.Tag} (plus lane fields).
 
 ```ts
-// CQR Tag: config object only, no success/error.
 CustomQueueResource.Tag<Jobs>()("@app/Jobs", {
   payload: Job,
   levelCount: 3,
   namedLevels: { urgent: 0, normal: 1, bulk: 2 },
+  success: ResultSchema,  // optional
+  error: WorkerErrSchema, // optional
 })
 ```
 
-- [x] Land the config-object-only `Tag` (no `success`/`error` slots, no positional-triplet overload).
-- [x] Supersedes the earlier "trailing `{ success?, error? }` bag" proposal (result-schema doc §C / sync
-      cross-cutting #6) — dropped.
+- [x] Config-object-only `Tag` on QueueResource, Process, RunResource, CustomQueueResource.
+- [x] CQR optional `success` / `error` — stamped like QR; store wire from tag SSOT.
 
 ## Store cutover — mostly free
 

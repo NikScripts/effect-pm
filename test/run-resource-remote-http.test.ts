@@ -6,12 +6,11 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as RunResource from "../src/RunResource";
 
-class RemoteGate extends RunResource.Tag<RemoteGate>()(
-  "run-remote/G",
-  Schema.Number,
-  Schema.Number,
-  Schema.String,
-) {}
+class RemoteGate extends RunResource.Tag<RemoteGate>()("run-remote/G", {
+  payload: Schema.Number,
+  success: Schema.Number,
+  error: Schema.String,
+}) {}
 
 const clientHttp = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(

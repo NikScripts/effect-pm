@@ -55,7 +55,7 @@ expectExact<
 >();
 
 // ── (b) NO success schema → the worker stays `Effect<void, …>` ───────────────
-class VoidQueue extends QueueResource.Tag<VoidQueue>()("@td/VoidQueue", jobSchema) {}
+class VoidQueue extends QueueResource.Tag<VoidQueue>()("@td/VoidQueue", { payload: jobSchema }) {}
 
 // a `void`-returning worker compiles
 const _voidLayer = QueueResource.layer(VoidQueue, {

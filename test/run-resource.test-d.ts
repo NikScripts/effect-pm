@@ -7,11 +7,7 @@ class UnitGate extends RunResource.Service<UnitGate>()("@app/UnitGate", {
   effect: () => Effect.succeed(1),
 }) {}
 
-class InputGate extends RunResource.Tag<InputGate>()(
-  "@app/InputGate",
-  Schema.Number,
-  Schema.Number,
-) {}
+class InputGate extends RunResource.Tag<InputGate>()("@app/InputGate", { payload: Schema.Number, success: Schema.Number }) {}
 
 // @ts-expect-error — void gates reject positional input
 void UnitGate.run(1);

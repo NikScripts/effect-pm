@@ -30,10 +30,9 @@ class SchemaEmailQueue extends QueueResource.Service<SchemaEmailQueue, Email, ne
 
 // Tag/layer are the unified (toolkit) forms: a service tag keyed by id + item schema, and a
 // config-object layer. (make/Service above remain the engine helpers, kept via the spread.)
-class NotificationTag extends QueueResource.Tag<NotificationTag>()(
-  "@app/NotificationTag",
-  EmailSchema,
-) {}
+class NotificationTag extends QueueResource.Tag<NotificationTag>()("@app/NotificationTag", {
+  payload: EmailSchema,
+}) {}
 
 const _makeEffectOnly = Effect.scoped(
   QueueResource.make((item: string) => Effect.logInfo(item)),

@@ -16,10 +16,9 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class RemoteQueue extends QueueResource.Tag<RemoteQueue>()(
-  "queue-remote/Q",
-  NumberItem,
-) {}
+class RemoteQueue extends QueueResource.Tag<RemoteQueue>()("queue-remote/Q", {
+  payload: NumberItem,
+}) {}
 
 // client transport: http + ndjson (matches the server's default serialization).
 const clientHttp = (port: number) =>

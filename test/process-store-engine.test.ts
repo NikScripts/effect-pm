@@ -15,20 +15,18 @@ const Snapshot = Schema.Struct({
 
 class VoidExec extends Process.Tag<VoidExec>()("test/engine/Void") {}
 
-class PricedExec extends Process.Tag<PricedExec>()("test/engine/Priced", Price) {}
+class PricedExec extends Process.Tag<PricedExec>()("test/engine/Priced", { success: Price }) {}
 
-class FailingExec extends Process.Tag<FailingExec>()(
-  "test/engine/Failing",
-  Price,
-  FetchErr,
-) {}
+class FailingExec extends Process.Tag<FailingExec>()("test/engine/Failing", {
+  success: Price,
+  error: FetchErr,
+}) {}
 
 class StringFailExec extends Process.Tag<StringFailExec>()("test/engine/StringFail") {}
 
-class RichSuccessExec extends Process.Tag<RichSuccessExec>()(
-  "test/engine/RichSuccess",
-  Snapshot,
-) {}
+class RichSuccessExec extends Process.Tag<RichSuccessExec>()("test/engine/RichSuccess", {
+  success: Snapshot,
+}) {}
 
 class InterruptExec extends Process.Tag<InterruptExec>()("test/engine/Interrupt") {}
 

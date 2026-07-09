@@ -45,3 +45,17 @@ export const errorOf = (tag: unknown): Schema.Top | undefined => {
   }
   return undefined;
 };
+
+/** Stamp `success` / `error` wire schemas onto a queue-family tag. @internal */
+export const stampQueueWireSchemas = <T extends object>(
+  tag: T,
+  schemas: { readonly success?: Schema.Top; readonly error?: Schema.Top },
+): T => {
+  if (schemas.success !== undefined) {
+    Object.assign(tag, { [successSym]: schemas.success });
+  }
+  if (schemas.error !== undefined) {
+    Object.assign(tag, { [errorSym]: schemas.error });
+  }
+  return tag;
+};

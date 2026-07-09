@@ -10,7 +10,7 @@ const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 class DefaultExec extends Process.Tag<DefaultExec>()("test/store-default/Default") {}
 
-class OverrideExec extends Process.Tag<OverrideExec>()("test/store-default/Override", Price) {}
+class OverrideExec extends Process.Tag<OverrideExec>()("test/store-default/Override", { success: Price }) {}
 
 class OverrideStore extends Store.Service<OverrideStore>("@test/OverrideStore")(
   Store.register(OverrideExec, builtInProcessStoreContract(OverrideExec)),

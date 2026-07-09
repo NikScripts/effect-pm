@@ -64,13 +64,20 @@ export class ScoresDb extends Resource.Tag<ScoresDb>()(
 
 export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
-  importJob,
-  { node: WnbaNode },
+  { payload: importJob, node: WnbaNode },
 ).pipe(
-  // depend on the scores DB: ready only when the queue is running AND the DB is connected. `base` is
-  // the queue's own `phase === "running"` check — kept, not replaced — AND-ed with the DB's readiness.
   Resource.withReadiness((_svc, base) =>
-    Resource.allReady([base, Resource.readinessOf(ScoresDb)]),
+    Effect.gen(function* () {
+      const queue = yield* base;
+      const db = yield* Resource.readinessOf(ScoresDb);
+      const ready = queue.ready && db.ready;
+      return ready
+        ? { ready: true as const }
+        : {
+            ready: false as const,
+            detail: [queue.detail, db.detail].filter(Boolean).join("; ") || undefined,
+          };
+    }),
   ),
 ) {}
 // Owns an inline schedule (seeded empty; `server.ts` seeds the live game windows at startup) so the
@@ -81,8 +88,7 @@ export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
 ).pipe(Process.schedule([])) {}
 export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
-  importJob,
-  { node: StatsNode },
+  { payload: importJob, node: StatsNode },
 ) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
   node: WnbaNode,

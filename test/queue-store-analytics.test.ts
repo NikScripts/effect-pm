@@ -18,7 +18,7 @@ import * as Store from "../src/Store";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends QueueResource.Tag<Jobs>()("@test/AnalyticsJobs", jobSchema) {}
+class Jobs extends QueueResource.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
 
 const jobsRegistration = QueueResource.store(Jobs);
 
