@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/store-platform-docs-a009` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **ready-for-merge** | `2a7c6bb` | typecheck + 437 tests (supervisor) | Rebase onto `884d901` or drops `docs/site/`; `guides/store.md` + `PACKAGE-GUIDE.md` not swept; lint unconfirmed | 2026-07-09 |
 | **2** | `cursor/process-platform-a009` | [session-2 process](./agent-02-session-2-process-platform.md) | **ready-for-merge** | `0802947` | typecheck + 438 tests (supervisor) | Rebase onto `884d901`; RPC error wire blocked (documented); STORAGE.md overlap with Agent 1 | 2026-07-09 |
-| **B** | — | [html doc platform](./agent-b-html-doc-platform.md) | **not-started** | — | scaffold on `integration/storage` (`pnpm run docs:serve`) | Waiting for implementer | 2026-07-09 |
+| **B** | — | [html doc platform](./agent-b-html-doc-platform.md) | **not-started** | — | scaffold: `pnpm run docs:serve` on tip | **Start:** [`local-agents.md`](./local-agents.md) § Agent B | 2026-07-09 |
 | **A** | — | [html standards](./agent-a-html-standards-corpus.md) | **blocked** | — | — | Blocked on Agent B | 2026-07-09 |
 | **C** | — | [standards audit](./agent-c-standards-audit.md) | **blocked** | — | — | Blocked on Agent A | 2026-07-09 |
 
