@@ -11,13 +11,13 @@
 ## Short prompt (Agent B — restart)
 
 ```
-Read docs/handoffs/local-agents.md § Agent B and docs/handoffs/docs-platform-architecture-decision.md.
+Read docs/handoffs/agent-b-html-doc-platform.md (full brief) and docs/handoffs/docs-platform-architecture-decision.md.
 
-You are Agent B. Branch action/html-doc-platform from integration/storage.
+You are Agent B. Branch action/html-doc-platform from integration/storage (tip b8f487a).
 
-Build the bespoke docs app shell (Vite + React + Tailwind + theme.css) — NOT Dashboard, NOT plain HTML scaffold. Agent pages live as HTML+Tailwind under docs/site/content/. Tailscale read on phone via pnpm run docs:serve.
+Build the bespoke docs app shell — NOT Dashboard, NOT the old plain HTML scaffold. Agent pages live as HTML under docs/site/content/. Tailscale read on phone via pnpm run docs:serve.
 
-Complete all 5 slices in agent-b-html-doc-platform.md. Before/After blocks each slice.
+Slice 1: open with a short Tailwind-vs-alternatives brief for the owner (see handoff § Owner conversation), then ship the shell. Complete all 5 slices in agent-b-html-doc-platform.md. Before/After blocks each slice.
 ```
 
 ---

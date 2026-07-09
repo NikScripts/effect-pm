@@ -1,7 +1,8 @@
 # Agent B — Bespoke docs app shell (local Claude)
 
 **Status:** **UNBLOCKED** — Option 6 locked in [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md)  
-**Branch:** `action/html-doc-platform` from **`integration/storage`**
+**Branch:** `action/html-doc-platform` from **`integration/storage`** (tip `b8f487a`)  
+**Resume:** Owner has not started B yet — old `docs/site/` scaffold exists; replace per slices below.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) on every push.  
 **Owner chat:** Before/After blocks per [`supervisor-protocol.md`](./supervisor-protocol.md).
@@ -19,6 +20,18 @@ Build the **official package website shell** — a bespoke docs application, not
 | `pnpm run docs:serve` — Tailscale **read** on phone | |
 
 **Pattern:** `examples/resource-web/` (Vite, `host: true`, React entry) — **not** its Dashboard import.
+
+---
+
+## Owner conversation (Slice 1 — before heavy styling work)
+
+Owner is **unsure Tailwind is the right long-term styling choice** for agent-authored HTML pages. Before locking the stack:
+
+1. **Brief the owner** on what Tailwind buys this project (agent-written HTML in-repo, shared `theme.css` with `/web`, Vite `@source`, phone-readable defaults).
+2. **Name 1–2 alternatives** worth considering (e.g. plain CSS + design tokens only, CSS modules on the shell with semantic classes in content, Panda CSS / UnoCSS) — tradeoffs for *agents writing HTML*, not generic blog posts.
+3. **Recommend one default** for Slice 1 implementation; proceed unless owner overrides in chat.
+
+Do **not** block the shell on this — ship Slice 1 with the recommendation; styling can be adjusted in Slice 2 if owner picks differently.
 
 ---
 
@@ -92,4 +105,4 @@ Migrate or replace the old root `index.html` / minimal `site.css` scaffold — d
 
 ## Status
 
-- [ ] Not started
+- [ ] Not started (integration tip `b8f487a`; Agents 1+2 merged; scaffold at `docs/site/` is pre-B throwaway)
