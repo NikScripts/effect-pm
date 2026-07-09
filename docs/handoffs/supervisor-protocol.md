@@ -70,6 +70,8 @@ Also update [`agent-status.md`](./agent-status.md) + session log in handoff (asy
 
 ### Local Claude — B → A → C
 
+**Full prompts:** [`local-agents.md`](./local-agents.md)
+
 | Phase | Agent | Handoff |
 |-------|-------|---------|
 | **1** | **B** | [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md) |
