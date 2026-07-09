@@ -2,7 +2,8 @@
 
 **Integration branch:** `integration/storage` (base for this agent — **branch off it**, do not wait on other agents)  
 **Supervisor:** cloud agent supervisor (tracks scope; you paste the Cursor branch name when the run starts)  
-**Agent type:** **Cursor Cloud Agent** — one long session, multiple slices, single PR back to `integration/storage`
+**Agent type:** **Cursor Cloud Agent** — one long session, multiple slices, single PR back to `integration/storage`  
+**Completed branch:** `cursor/store-cutover-closeout-ce05` (`ad6ce18`)
 
 ---
 
@@ -124,7 +125,7 @@ Paste the branch name to the supervisor when the run exists.
 
 ## Done when
 
-- [ ] CQR uses `builtResource` on toolkit layers (or documented blocker in PR)
-- [ ] Handoffs match shipped store/tag behavior
-- [ ] `pnpm run typecheck` + `pnpm test` green
-- [ ] Draft PR targeting `integration/storage`
+- [x] CQR uses `builtResource` on toolkit layers (or documented blocker in PR)
+- [x] Handoffs match shipped store/tag behavior
+- [x] `pnpm run typecheck` + `pnpm test` green
+- [ ] Draft PR targeting `integration/storage` — branch `cursor/store-cutover-closeout-ce05`
