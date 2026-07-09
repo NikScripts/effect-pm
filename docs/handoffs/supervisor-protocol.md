@@ -32,7 +32,15 @@ Do **not** say "handoff marked complete" without the above. Do **not** stop afte
 
 | Agent | Domain | Active handoff |
 |-------|--------|----------------|
-| **1** | Store / queue cutover / storage docs | [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md) |
-| **2** | Process | [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md) |
+| **1** | Store / queue cutover / storage docs (Cursor Cloud) | [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md) |
+| **2** | Process (Cursor Cloud) | [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md) |
+
+### Local Claude agents (letters)
+
+| Agent | Handoff | Status |
+|-------|---------|--------|
+| **A** | [`agent-a-html-standards-corpus.md`](./agent-a-html-standards-corpus.md) | HTML standards SSOT — **start here** |
+| **B** | [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md) | Blocked on A |
+| **C** | [`agent-c-standards-audit.md`](./agent-c-standards-audit.md) | Blocked on A/B |
 
 Session 1 handoffs are archived (merged). See [`reports/README.md`](./reports/README.md).
