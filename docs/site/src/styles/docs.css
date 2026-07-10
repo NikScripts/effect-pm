@@ -36,6 +36,12 @@
 }
 
 * { box-sizing: border-box; }
+/* Paint the root element too — this is what fills the notch / status-bar / overscroll
+   area on phones. Without it, those areas fall back to white in dark mode. */
+html {
+  background: var(--bg);
+  min-height: 100%;
+}
 body {
   margin: 0;
   background: var(--bg);

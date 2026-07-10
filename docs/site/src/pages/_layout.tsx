@@ -9,6 +9,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <>
       <meta name="description" content="Official documentation for @nikscripts/effect-pm" />
+      {/* Tint the mobile browser chrome (status bar / notch) to match the page in each mode. */}
+      <meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />
       <nav>
         <a className="brand" href="/">effect-pm</a>
         {items.map((i) => (
