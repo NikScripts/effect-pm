@@ -178,9 +178,9 @@
     "example:web-dashboard": "vite --config examples/web-dashboard/vite.config.ts examples/web-dashboard",
     "example:resource-web": "vite --config examples/resource-web/vite.config.ts examples/resource-web",
     "example:resource-web-server": "tsx examples/resource-web/server.ts",
-    "docs:serve": "vite --config docs/site/vite.config.ts docs/site",
-    "docs:build": "vite build --config docs/site/vite.config.ts docs/site",
-    "docs:preview": "vite preview --config docs/site/vite.config.ts docs/site",
+    "docs:serve": "pnpm -C docs/site dev",
+    "docs:build": "pnpm -C docs/site build",
+    "docs:preview": "pnpm -C docs/site preview",
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",
     "example:resource-cli-manager": "tsx examples/resource-cli/manager-cli.ts",
     "example:resource-tui": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/counter-tui.tsx",
@@ -223,7 +223,8 @@
     "example:form:polling-accelerating-peek-cadence": "tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",
     "example:process-layer-store-auto-write": "tsx examples/forms/process-store/process-layer-store-auto-write.ts",
     "example:process-layer-typed-error-store": "tsx examples/forms/process-store/process-layer-typed-error-store.ts",
-    "prepare": "effect-language-service patch && effect-tsgo patch"
+    "prepare": "effect-language-service patch && effect-tsgo patch",
+    "docs:install": "pnpm -C docs/site install"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -1,0 +1,157 @@
+/* Classless docs stylesheet — selectors target semantic elements only.
+   The single functional classes come from Djot attribute blocks the author sets
+   sparingly: `.must/.should/.may` (rule severity) and `.note` (callout).
+   Palette derived from src/web/theme.css (oklch, hue 260) so docs share the
+   dashboard's visual family without importing its bundle. */
+
+:root {
+  color-scheme: light dark;
+  --radius: 0.625rem;
+  --bg: oklch(0.99 0.004 260);
+  --panel: oklch(0.965 0.005 260);
+  --fg: oklch(0.24 0.01 260);
+  --muted-fg: oklch(0.5 0.01 260);
+  --card: oklch(0.955 0.006 260);
+  --border: oklch(0.9 0.008 260);
+  --primary: oklch(0.55 0.16 250);
+  --must: oklch(0.55 0.2 25);
+  --should: oklch(0.6 0.13 75);
+  --may: oklch(0.58 0.03 260);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.16 0.01 260);
+    --panel: oklch(0.19 0.012 260);
+    --fg: oklch(0.92 0.01 260);
+    --muted-fg: oklch(0.64 0.01 260);
+    --card: oklch(0.21 0.014 260);
+    --border: oklch(0.3 0.01 260);
+    --primary: oklch(0.74 0.14 250);
+    --must: oklch(0.7 0.19 25);
+    --should: oklch(0.8 0.13 82);
+    --may: oklch(0.62 0.02 260);
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 1.02rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* top nav — generated from the content manifest */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1.1rem;
+  padding: max(0.7rem, env(safe-area-inset-top)) 1.25rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+nav a { color: var(--muted-fg); text-decoration: none; }
+nav a:hover { color: var(--fg); }
+nav a[aria-current="page"] { color: var(--primary); }
+nav .brand { color: var(--fg); font-weight: 600; margin-right: auto; }
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 5rem;
+}
+
+h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0.6rem 0 1rem; text-wrap: balance; }
+h2 { font-size: 1.28rem; letter-spacing: -0.01em; margin: 2.4rem 0 0.6rem; }
+h3 { font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
+p { margin: 0.85rem 0; }
+strong { font-weight: 650; }
+ul, ol { margin: 0.85rem 0; padding-left: 1.4rem; }
+li { margin: 0.3rem 0; }
+a { color: var(--primary); text-underline-offset: 2px; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  padding: 0.08em 0.35em;
+}
+pre {
+  overflow-x: auto;
+  margin: 1.1rem 0;
+  padding: 0.95rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  line-height: 1.55;
+}
+pre code { background: none; border: none; padding: 0; font-size: 0.86rem; }
+
+/* rule severity — a section carrying one metadata class from Djot */
+section[class~="must"],
+section[class~="should"],
+section[class~="may"] {
+  border-left: 3px solid var(--border);
+  padding-left: 1.1rem;
+  margin-left: -0.2rem;
+}
+section[class~="must"] { border-left-color: var(--must); }
+section[class~="should"] { border-left-color: var(--should); }
+section[class~="may"] { border-left-color: var(--may); }
+section[class~="must"] > h2::after,
+section[class~="should"] > h2::after,
+section[class~="may"] > h2::after {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  vertical-align: 0.32em;
+  margin-left: 0.6rem;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.9;
+}
+section[class~="must"] > h2::after { content: "MUST"; color: var(--must); }
+section[class~="should"] > h2::after { content: "SHOULD"; color: var(--should); }
+section[class~="may"] > h2::after { content: "MAY"; color: var(--may); }
+
+/* the one callout class */
+.note {
+  margin: 1.2rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  color: var(--muted-fg);
+}
+
+/* live-island placeholder (stub until a real QueueWidget is wired) */
+[data-island] {
+  display: block;
+  margin: 1.2rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
