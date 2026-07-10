@@ -31,6 +31,7 @@ type WithContract<
   Tag extends StoreScopeTag | undefined = undefined,
 > = Omit<NormalizedStoreRegistration<K, A, S>, "contract" | "tag"> & {
   readonly contract: C;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- conditional empty branch
 } & (Tag extends undefined ? {} : { readonly tag: Tag });
 
 /** @internal */

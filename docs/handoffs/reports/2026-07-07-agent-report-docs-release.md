@@ -112,9 +112,9 @@ rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md do
 
 | Scope | Status |
 |-------|--------|
-| `test/**/*.test-d.ts` | ✅ ESLint override — type-level assertion files (doc-adjacent) |
-| `src/internal/store/*` empty-object / empty-interface | ⚠️ 5 pre-existing errors — **out of scope** (no Store spine edits) |
-| `src/internal/store/runResourceStoreSpec.ts` unused var | ⚠️ 1 pre-existing — **out of scope** (Store spine) |
+| `test/**/*.test-d.ts` | ✅ ESLint override — type-level assertion files |
+| `src/internal/store/*` empty-object / unused-var | ✅ eslint-disable / `_` prefix (Session 3 follow-up) |
+| **`pnpm run lint`** | ✅ **green** (branch tip) |
 
 ### Still open (not Agent 1 / needs owner)
 

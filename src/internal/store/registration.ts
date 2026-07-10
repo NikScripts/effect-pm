@@ -86,6 +86,7 @@ export type RegisteredWithContract<
   Tag extends StoreScopeTag | undefined = undefined,
 > = Omit<StoreRegistration<K, S>, "contract" | "tag"> & {
   readonly contract: C;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- conditional empty branch
 } & (Tag extends undefined ? {} : { readonly tag: Tag });
 
 /** Tag type carried on a registration, if any. @internal */
