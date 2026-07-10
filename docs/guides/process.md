@@ -70,6 +70,13 @@ class PricesE extends Process.Tag<PricesE>()("app/Prices", {
 
 **Removed:** `Process.result(Schema)` pipe and positional schema overloads — use `{ success?, error?, … }` on the tag.
 
+**Store vs RPC:** `success` and `error` on the tag drive the **execution store** wire (`Completed.success`,
+`Failed.error`) and live `result` when `success` is set. They do **not** change Process RPC error
+responses today — lifecycle RPC methods remain void with no typed failure channel. Failures from poll
+ticks are persisted via `Process.store`; remote clients observe them through store reads or logs, not
+through an RPC `error` slot. See
+[agent report § RPC error wire blocker](../handoffs/reports/2026-07-07-agent-report-process.md#rpc-error-wire-blocker).
+
 ### Schedule (pipeable)
 
 ```ts
@@ -129,27 +136,32 @@ const rows = yield* store.events({ limit: 10 });
 | **`error`** | Always on `Failed`; typed when the tag stamps `error`, otherwise **`string`** (`String` of the fail value) |
 | **`isStartupRun`** | `true` when no prior execution row exists for this process |
 
+**Encoding:** The toolkit layer writes `Failed.error` from the tick failure cause — typed when
+`errorOf(tag)` is set, else stringified. This matches store-core §5 and is independent of RPC: there
+is no typed Process RPC failure payload yet.
+
 Rich types (`DateTime`, tagged errors, etc.) round-trip when the journal uses schema codecs — stamp
 the same schemas on the tag.
+
+Example: [process-layer-typed-error-store.ts](../../examples/forms/process-store/process-layer-typed-error-store.ts).
 
 ### Auto-append on toolkit layers
 
 On **`Process.layer`** / **`serve`** / **`serveRemote`**, finished runs append automatically. The
 layer merges a **default in-memory store** (`Store.layerDefaultMemory`). Override with your app store
-when you need durability or a registered handle:
+when you need durability or a registered handle (app store merged **second** — later layer wins on
+`Store.Storage`):
 
 ```ts
 import { Layer } from "effect";
 
-const live = Layer.provideMerge(
-  AppStore.layerMemory, // first — wins over the layer's baked-in default
-  Process.layer(Prices, { effect: poll }),
+const live = Process.layer(Prices, { effect: poll }).pipe(
+  Layer.provideMerge(AppStore.layerMemory),
 );
 
 // durable
-const durable = Layer.provideMerge(
-  AppStore.layer({ filename: ".effect-pm/process.sqlite" }),
-  Process.layer(Prices, { effect: poll }),
+const durable = Process.layer(Prices, { effect: poll }).pipe(
+  Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/process.sqlite" })),
 );
 ```
 
@@ -183,11 +195,13 @@ the toolkit path (armed/disarmed, polling cadence, `runImmediately`).
 | [examples/forms/schedule/](../../examples/forms/schedule/) | Windows, `at`, controls, `scheduleDefine` |
 | [examples/forms/polling/](../../examples/forms/polling/) | Spaced / accelerating cadence, `TestClock` |
 | [examples/forms/process-store/process-layer-store-auto-write.ts](../../examples/forms/process-store/process-layer-store-auto-write.ts) | `Process.layer` + `Process.store` + override |
+| [examples/forms/process-store/process-layer-typed-error-store.ts](../../examples/forms/process-store/process-layer-typed-error-store.ts) | Typed `Failed.error` on store rows |
 
 ---
 
 ## See also
 
+- [../handoffs/reports/2026-07-07-agent-report-process.md](../handoffs/reports/2026-07-07-agent-report-process.md) — RPC `error` wire blocker (owner decision)
 - [../handoffs/store-cutover-process.md](../handoffs/store-cutover-process.md) — store cutover status (authoritative)
 - [toolkit-by-example.md](./toolkit-by-example.md) — location-transparent resources
 - [store.md](./store.md) — `Store.Service`, contracts, SQLite backing

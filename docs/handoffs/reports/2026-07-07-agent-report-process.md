@@ -54,6 +54,8 @@ Tag `error` is **stamped** on the tag object but **not grafted** onto the RPC sp
 
 **Owner ask:** Defer until Process gains a typed failure RPC surface, or fund shared per-tag spec rebuild like RunResource.
 
+**Session 3 (2026-07-10, `cursor/process-consumer-docs-a009`):** Agent 2 recommends **defer**. Consumer docs updated (`PROCESS-API.md`, `guides/process.md`) pending owner confirmation. No code or RPC spec changes in this session.
+
 ### Other optional follow-ups (out of scope Session 2)
 
 - **Typed full-capture (worker-A)** — tag `success` drives persisted rows; worker `Effect` return not schema-driven like queue.
