@@ -5,11 +5,13 @@
 // page re-renders on the phone with no restart and no filesystem access. This is the
 // mechanism that satisfies the "auto hot reload + no fs" requirement.
 
-const modules = import.meta.glob("/content/**/*.md", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+// Content lives at the docs/ root (a sibling of this app), so the reading paths reach
+// up out of the Vite root (docs/site). `legacy/` and `handoffs/` are never globbed, so
+// they're ignored. Requires `server.fs.allow` to include the parent (see waku.config.ts).
+const modules = import.meta.glob(
+  ["../../../index.md", "../../../standards/**/*.md", "../../../guides/**/*.md"],
+  { query: "?raw", import: "default", eager: true },
+) as Record<string, string>;
 
 export interface RawChapter {
   readonly slug: string;
@@ -19,8 +21,12 @@ export interface RawChapter {
 }
 
 const toEntry = (path: string, raw: string): RawChapter => {
-  // "/content/standards/queues.md" -> group "standards", slug "queues"
-  const rel = path.replace(/^\/content\//, "").replace(/\.md$/, "");
+  // key is either absolute (".../docs/guides/queues.md") or relative ("../../../guides/queues.md");
+  // normalize to "guides/queues" -> group "guides", slug "queues" (top-level -> group "").
+  const rel = (path.includes("/docs/")
+    ? path.slice(path.lastIndexOf("/docs/") + "/docs/".length)
+    : path.replace(/^(?:\.\.\/)+/, "")
+  ).replace(/\.md$/, "");
   const parts = rel.split("/");
   const slug = parts[parts.length - 1] ?? rel;
   const group = parts.length > 1 ? parts.slice(0, -1).join("/") : "";

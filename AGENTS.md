@@ -1,8 +1,8 @@
 # Agent instructions
 
-Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture, invariants, and verification commands.
+Start with [`docs/legacy/AGENTS.md`](./docs/legacy/AGENTS.md) for this package's architecture, invariants, and verification commands.
 
-**Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) only.
+**Persistence:** [`docs/legacy/STORAGE.md`](./docs/legacy/STORAGE.md) only.
 
 ## Git commit policy
 

@@ -8,7 +8,7 @@ Runnable teaching scripts organized in two layers:
 | **Scenarios** | [`scenarios/`](./scenarios/) | Descriptive compositions showing subsystems working together |
 | **Shared** | [`shared/`](./shared/) | Test doubles, harness helpers, small shared utilities |
 
-Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API tables: [docs/PROCESS-API.md](../docs/PROCESS-API.md), [docs/RESOURCE-API.md](../docs/RESOURCE-API.md).
+Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-GUIDE.md). API tables: [docs/legacy/PROCESS-API.md](../docs/legacy/PROCESS-API.md), [docs/legacy/RESOURCE-API.md](../docs/legacy/RESOURCE-API.md).
 
 **Conventions:** Each file has a one-line module header (what + how to run). Teaching notes live **inline next to the code** they describe. Imports omit `.js` extensions — examples run via `tsx` on `.ts` sources directly.
 
@@ -26,7 +26,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 | Track | Read / run in this order |
 |-------|--------------------------|
-| **Start here** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) + the toolkit-by-example guide (`docs/guides/toolkit-by-example.md`) |
+| **Start here** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) + the toolkit-by-example guide (`docs/legacy/guides/toolkit-by-example.md`) |
 | **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
 | **Queues** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → [`forms/queue/custom-queue-resource-n-level.ts`](./forms/queue/custom-queue-resource-n-level.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
@@ -147,8 +147,8 @@ Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is s
 When answering questions about **behavior**, prefer **source of truth** in this order:
 
 1. `src/*.ts` implementation + TSDoc
-2. `docs/PROCESS-API.md` / `docs/RESOURCE-API.md` for tables
-3. `docs/guides/toolkit-by-example.md` / `docs/guides/history-and-persistence.md` for patterns
+2. `docs/legacy/PROCESS-API.md` / `docs/legacy/RESOURCE-API.md` for tables
+3. `docs/legacy/guides/toolkit-by-example.md` / `docs/legacy/guides/history-and-persistence.md` for patterns
 4. **`forms/`** for a single API shape; **`scenarios/`** for composition patterns
 
-Committed agent map: [docs/AGENTS.md](../docs/AGENTS.md).
+Committed agent map: [docs/legacy/AGENTS.md](../docs/legacy/AGENTS.md).

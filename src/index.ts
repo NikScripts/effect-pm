@@ -27,7 +27,7 @@
  *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
- *   See `docs/guides/toolkit-by-example.md`.
+ *   See `docs/legacy/guides/toolkit-by-example.md`.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
@@ -37,12 +37,12 @@
  *
  * ## Where to read next
  *
- * - Toolkit by example (every resource/group/node/UI pattern): `docs/guides/toolkit-by-example.md`
- * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
- * - API tables (Process, Polling, Schedule): `docs/PROCESS-API.md`
+ * - Toolkit by example (every resource/group/node/UI pattern): `docs/legacy/guides/toolkit-by-example.md`
+ * - Narrative architecture: `docs/legacy/PACKAGE-GUIDE.md`
+ * - API tables (Process, Polling, Schedule): `docs/legacy/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
- * - Future roadmap (priority order, **not** shipped API truth): `docs/plans/README.md`
- * - Agent-oriented repo map: `docs/AGENTS.md`
+ * - Future roadmap (priority order, **not** shipped API truth): `docs/legacy/plans/README.md`
+ * - Agent-oriented repo map: `docs/legacy/AGENTS.md`
  *
  * ## Import style
  *
@@ -252,7 +252,7 @@ export type {
 
 /**
  * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},
- * and {@link RunResource.Service}. See `docs/guides/resource-configure.md`.
+ * and {@link RunResource.Service}. See `docs/legacy/guides/resource-configure.md`.
  */
 export {
   configureLayer,

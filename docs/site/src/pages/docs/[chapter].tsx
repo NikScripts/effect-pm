@@ -21,5 +21,5 @@ export const getConfig = async () =>
     ? ({ render: "dynamic" } as const)
     : ({
         render: "static",
-        staticPaths: chapters.filter((c) => c.group === "standards").map((c) => c.slug),
+        staticPaths: chapters.filter((c) => c.group !== "").map((c) => c.slug),
       } as const);

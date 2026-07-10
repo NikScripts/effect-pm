@@ -9,7 +9,7 @@
  *
  * - **`layerMemory`** — in-memory ring per stream (bounded by `capacity`). The default today.
  * - SQLite / Postgres backends land later behind the same interface (one append-only
- *   `(stream_id, ts, json)` table). See `docs/plans/18`… (history persistence plan).
+ *   `(stream_id, ts, json)` table). See `docs/legacy/plans/18`… (history persistence plan).
  *
  * **Optional**: resources read it via `Effect.serviceOption(HistoryStore)`, so with no layer
  * provided, `append` is a no-op and `*History` returns empty — you only pay for it when you opt in.

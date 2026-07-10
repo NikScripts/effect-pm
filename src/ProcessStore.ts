@@ -50,7 +50,7 @@
  * );
  * ```
  *
- * See `docs/STORAGE.md` for the full authoring guide.
+ * See `docs/legacy/STORAGE.md` for the full authoring guide.
  *
  * @module ProcessStore
  */

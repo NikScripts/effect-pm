@@ -37,12 +37,17 @@ over the tailnet with no extra rule. Nothing here is exposed to the public inter
 ## How it works
 
 ```
-content/**/*.md   →  import.meta.glob('?raw')   →  Effect pipeline           →  Waku RSC server component
-(Djot in .md)        (module graph = HMR,           (parse · Schema-validate      (SSG in build; classless HTML;
-                      no node:fs)                     · derive manifest)           live islands via data-island)
+docs/{standards,guides}/*.md  →  import.meta.glob('?raw')  →  Effect pipeline        →  Waku RSC server component
+docs/index.md (Djot in .md)      (module graph = HMR, no fs)   (parse · validate ·        (SSG in build; classless
+                                                                 derive manifest)          HTML; islands via data-island)
 ```
 
-- **`src/lib/content.ts`** — loads every content `.md` from the Vite module graph (HMR, no `fs`).
+Content lives at the **`docs/` root** (a sibling of this app), so the site is
+presentation only and Agent A owns the content. `docs/legacy/` and `docs/handoffs/`
+are never globbed, so they're ignored. `waku.config.ts` sets `server.fs.allow` +
+a watcher so out-of-root content edits **and new files** hot-reload.
+
+- **`src/lib/content.ts`** — loads `docs/{index,standards/**,guides/**}.md` from the Vite module graph (HMR, no `fs`).
 - **`src/lib/docs-content.tsx`** — the Effect service: `@djot/djot` parse → `Schema`-validated
   rules → derived manifest (typed failures on duplicate ids / missing page block) → AST→React.
 - **`src/lib/runtime.ts`** — `runServer` (RuntimeServer seam) + the future `Hydration` island note.
@@ -51,9 +56,10 @@ content/**/*.md   →  import.meta.glob('?raw')   →  Effect pipeline          
 
 ## Content
 
-Chapters live in `content/` as Djot syntax in `.md` files (named `.md` so GitHub renders
-them; parsed as Djot by the pipeline). Authoring rules and the full "add a chapter" guide
-are covered by the Agent A handoff (`meta.md`). Quick shape:
+Chapters live at the `docs/` root — `docs/standards/` (Agent A's corpus) and
+`docs/guides/` — as Djot syntax in `.md` files (named `.md` so GitHub renders them;
+parsed as Djot by the pipeline). The authoring format lives in
+[`../standards/meta.md`](../standards/meta.md). Quick shape:
 
 ```md
 {#queues title="Queues" appliesTo=all}
