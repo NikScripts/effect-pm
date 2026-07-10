@@ -61,3 +61,14 @@ const startedAt = yield* Ping.run()
 The gate is the whole point: 15 parallel `run()` calls at `concurrency: 3` start
 in batches of three. Callers see normal Effect results; the pool does the
 throttling.
+
+## Run it live
+
+A real `RunResource` running in your browser — a slow `Double` (900ms,
+concurrency 2). Hit **Run** to invoke it and watch `in-flight`; hit **Run ×5** and
+you'll see only two run at once while the rest wait behind the gate. The live
+values read straight off the service's `inFlight` subscribable — no dashboard widget.
+
+``` run-resource
+docs/Double
+```
