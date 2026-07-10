@@ -71,9 +71,7 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 - For non-trivial changes, validate with `pnpm run typecheck`, `pnpm test`,
   `pnpm run build`, and `pnpm run lint` unless the task is docs-only or the
   user explicitly narrows testing.
-- Recommend a changeset whenever public API, behavior, package metadata, or
-  release notes are affected. Creating or editing a changeset requires user
-  approval.
+- **Changesets** — see [Changeset policy](#changeset-policy) below.
 - Recommend commits, PRs, or merges when appropriate.
 - Commits, pushes, PR creation/update, and merges on major or user-owned
   branches (`main`, `develop`, release branches, or branches created by the
@@ -102,6 +100,23 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
   sensible slice, call out blockers or uncertainty, and ask for clarification
   when a decision is needed. Avoid passive endings that only summarize completed
   work; leave the user with the concrete next plan or next question.
+
+---
+
+## Changeset policy
+
+**When to add a changeset:** public API, behavior, package metadata, or release-note
+impact — same bar as before.
+
+| Action | Owner approval? | Agent duty |
+|--------|-----------------|------------|
+| **Create / edit** `.changeset/*.md` | **No** — agents may land changesets on `cursor/*` branches with the PR | **Mandatory:** paste the **full file contents** in owner chat after creating (use supervisor Before/After: Before = `(none — new file)` or prior full file; After = full new file). Do not summarize or link only. |
+| **`pnpm run version`** (`changeset version` — bumps `package.json` + `CHANGELOG.md`) | **Yes** | Propose when ready; do not run without owner OK |
+| **Publish** (`pnpm publish`, `npm run release`) | **Yes** | Owner only |
+
+**Content:** no `@deprecated` shims in migration notes — snippets only. Consolidate related
+breaking notes into one coherent changeset when possible (see
+[`handoffs/reports/2026-07-07-agent-report-docs-release.md`](./handoffs/reports/2026-07-07-agent-report-docs-release.md)).
 
 ---
 

@@ -51,7 +51,7 @@ Execution history is **Store bridge only**.
 |------|-------|-------|
 | Write-path buffer (queue) | Queue | Scoped daemon off hot path — **future**; see `store-cutover-queue.md` |
 | ~~`package.json` `store/QueueResource` subpath~~ | ✅ removed | Session 3 (`cursor/store-release-hygiene-a009`) — use `QueueResource.store(tag)` |
-| Platform changeset | owner approval | Breaking store/tag wire — needs approval |
+| Platform changeset | create + notify owner | Breaking store/tag wire — **version** needs approval |
 | Hybrid RuntimeStorage / Postgres | roadmap | `docs/plans/` |
 
 ---

@@ -45,6 +45,34 @@ Use this template per slice:
 
 **Forbidden:** `git diff`, `git diff --stat`, filename-only bullets, “updated X” without blocks.
 
+### Changesets (mandatory owner notification)
+
+Creating `.changeset/*.md` does **not** require owner approval. **`pnpm run version` and publish do.**
+
+After any create/edit, paste the **full changeset file** in owner chat:
+
+~~~
+### Changeset — `.changeset/<name>.md`
+
+**Before** (`(none — new file)` or full prior file):
+
+```markdown
+…
+```
+
+**After**:
+
+```markdown
+---
+"@nikscripts/effect-pm": minor
+---
+
+Full release note body…
+```
+~~~
+
+Policy SSOT: [`docs/AGENTS.md`](../AGENTS.md#changeset-policy).
+
 Also update [`agent-status.md`](./agent-status.md) + session log in handoff (async).
 
 ---

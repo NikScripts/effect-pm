@@ -29,7 +29,7 @@
 - Config-object-only `Process.Tag`
 - No Store spine edits unless test proves bug
 - No logs platform
-- No changeset without owner approval
+- **`pnpm run version` / publish** require owner approval (creating `.changeset/*.md` does not — paste full file in owner chat; see [`docs/AGENTS.md`](../AGENTS.md#changeset-policy))
 - If RPC `error` wire needs shared infrastructure changes → document blocker in report, do not half-ship
 
 ---

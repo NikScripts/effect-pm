@@ -6,6 +6,8 @@ Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture,
 
 **Integration branch:** `integration/storage` — store cutover + tag wire renames land here before `main`. Active handoffs index: [`docs/handoffs/reports/README.md`](./docs/handoffs/reports/README.md).
 
+**Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat. Policy: [`docs/AGENTS.md`](./docs/AGENTS.md#changeset-policy).
+
 ## Git commit policy
 
 - Do not commit or push directly on major or user-owned branches such as `main`,

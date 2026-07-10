@@ -22,7 +22,14 @@ Consolidate into **one coherent beta breaking note** (or two max: platform renam
 | (missing) Queue `itemSchema` → `payload` | Add — **rename shipped** on `integration/storage` |
 | (missing) Symbol `@nikscripts/effect-pm/Process/success` | Add |
 
-**Policy:** no `@deprecated` shims — document migration snippets only. **Owner approval required** before creating/editing changesets.
+**Policy:** no `@deprecated` shims — document migration snippets only.
+
+| Action | Owner approval? | Agent duty |
+|--------|-----------------|------------|
+| Create / edit `.changeset/*.md` | **No** | Paste **full file** in owner chat after create (supervisor Before/After) |
+| `pnpm run version` / publish | **Yes** | Propose; owner runs or approves |
+
+SSOT: [`docs/AGENTS.md`](../../AGENTS.md#changeset-policy).
 
 ### Migration block (platform)
 
@@ -120,7 +127,7 @@ rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md do
 
 | Item | Owner |
 |------|-------|
-| Consolidated platform changeset | owner approval |
+| Consolidated platform changeset | create on branch + notify owner; **version** needs approval |
 | `PROCESS-API.md`, `guides/process.md` | Agent 2 |
 | RPC fingerprint / buildId | deferred (`result-schema-and-rpc-validation.md` §4) |
 
@@ -148,4 +155,4 @@ No release without full green.
 ## Out of scope
 
 - RPC fingerprint / buildId (`result-schema-and-rpc-validation.md` §4)
-- Creating `.changeset` files without owner approval
+- Running `pnpm run version` or publish without owner approval

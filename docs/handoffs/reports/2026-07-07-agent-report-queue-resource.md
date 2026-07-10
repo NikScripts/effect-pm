@@ -62,7 +62,7 @@ CustomQueueResource.Tag<Jobs>()("@app/Jobs", {
 |------|-------|-------|
 | Write-path buffer | Queue (future) | Scoped daemon draining bounded queue → `store.record` — not blocking cutover |
 | Docs grep sweep | docs-release | `itemSchema`, `QueueResourceStore` references in guides — separate PR |
-| Platform changeset | owner approval | Breaking tag wire already shipped; changeset needs approval |
+| Platform changeset | create + notify owner | Breaking tag wire shipped; **version** needs approval |
 
 ---
 
