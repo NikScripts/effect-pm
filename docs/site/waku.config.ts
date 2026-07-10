@@ -28,7 +28,14 @@ export default defineConfig({
     // `@pm` -> the effect-pm package SOURCE, so island widgets bundle with THIS app's
     // single `effect`/`react` instance (a dual instance would break atom reactivity).
     resolve: {
-      alias: { "@pm": fileURLToPath(new URL("../../src", import.meta.url)) },
+      alias: {
+        "@pm": fileURLToPath(new URL("../../src", import.meta.url)),
+        // Node-only deps the package pulls transitively (SQLite storage, CI check).
+        // A demo queue is in-memory, so stub them out of the browser bundle.
+        "@effect/sql-sqlite-node/SqliteClient": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),
+        "@effect/sql-sqlite-node": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),
+        "is-in-ci": fileURLToPath(new URL("./shims/is-in-ci.js", import.meta.url)),
+      },
     },
     // Content is at docs/ and the package source is at repo/src — both above this app's
     // root (docs/site). Allow the dev server to read up to the repo root.
