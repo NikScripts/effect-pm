@@ -49,7 +49,7 @@ describe("QueueResource — success-value channel", () => {
     () =>
       Effect.gen(function* () {
         const q = yield* Doubler;
-        const seen = yield* Ref.make<ReadonlyArray<unknown>>([]);
+        const seen = yield* Ref.make<ReadonlyArray<number>>([]);
         yield* Stream.runForEach(q.events, (e) =>
           e._tag === "Completed"
             ? Ref.update(seen, (a) => [...a, e.success])

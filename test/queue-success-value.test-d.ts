@@ -1,11 +1,14 @@
-import { Effect, Schema } from "effect";
+import { Effect, Schema, type Stream } from "effect";
 import * as QueueResource from "../src/QueueResource";
+import type { ServiceOf, SpecOf } from "../src/Resource";
 import type { QueueStoreCompleted } from "../src/internal/store/queueStoreSpec";
 import type { StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 
-// Phase 4 — the queue Tag's `success` schema slot drives the worker `effect` return type, and the
-// typed success value `A` reaches `store.completed` / the analytics reads. No success schema → `void`.
+// Phase 4 — the queue Tag's `success` schema slot drives the worker `effect` return type, the live
+// `events` stream, and the typed success value `A` on store analytics reads. No success schema → `void`.
+
+type StreamElement<S> = S extends Stream.Stream<infer E, infer _E, infer _R> ? E : never;
 
 // ── exact type-equality harness ──────────────────────────────────────────────
 type Equals<A, B> =
@@ -38,6 +41,13 @@ QueueResource.layer(NumberQueue, {
   effect: (_job) => Effect.void,
 });
 
+// `Completed.success` on the live `events` stream is exactly `number`
+type NumberCompletedEvent = Extract<
+  StreamElement<ServiceOf<SpecOf<typeof NumberQueue>>["events"]>,
+  { readonly _tag: "Completed" }
+>;
+expectExact<Equals<NumberCompletedEvent["success"], number>>();
+
 // `Completed.success` on the analytics read is exactly `number`
 type NumberCompleted = QueueStoreCompleted<typeof NumberQueue>;
 expectExact<Equals<NumberCompleted["success"], number>>();
@@ -62,6 +72,13 @@ const _voidLayer = QueueResource.layer(VoidQueue, {
   effect: (_job) => Effect.void,
 });
 void _voidLayer;
+
+// `Completed.success` on the live `events` stream is exactly `void`
+type VoidCompletedEvent = Extract<
+  StreamElement<ServiceOf<SpecOf<typeof VoidQueue>>["events"]>,
+  { readonly _tag: "Completed" }
+>;
+expectExact<Equals<VoidCompletedEvent["success"], void>>();
 
 // `Completed.success` on the analytics read is exactly `void`
 type VoidCompleted = QueueStoreCompleted<typeof VoidQueue>;

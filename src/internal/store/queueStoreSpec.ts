@@ -40,14 +40,22 @@ export interface QueueStoreTag extends StoreScopeTag {
 }
 
 /** Spec of a queue instance whose item is `Schema.Struct<F>`. @internal */
-type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<typeof queueSpec<F>>;
+type QueueInstanceSpec<
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Unknown,
+> = ReturnType<typeof queueSpec<F, Success, Error>>;
 
 /** Nested spec recovered from a queue tag class. @internal */
 type QueueSpecFromTag<Tag extends QueueStoreTag> = SpecOf<Tag & ResourceTag<unknown, Spec>>;
 
 /** Struct fields of the queue item from a tag. @internal */
 type QueueItemFields<Tag extends QueueStoreTag> =
-  QueueSpecFromTag<Tag> extends QueueInstanceSpec<infer F extends Schema.Struct.Fields>
+  QueueSpecFromTag<Tag> extends QueueInstanceSpec<
+    infer F extends Schema.Struct.Fields,
+    infer _Success extends Schema.Top,
+    infer _Error extends Schema.Top
+  >
     ? F
     : never;
 

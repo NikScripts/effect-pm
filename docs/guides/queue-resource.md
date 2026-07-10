@@ -119,12 +119,9 @@ value off `Completed` / `Failed` with no separate Exit handling.
 the whole stack: worker return → `success: exit.value` → `completed(entry, success, elapsed)` write → the
 `slowest` / analytics reads. With **no** `success` schema the worker stays `Effect<void, E, R>` (fire-and-forget)
 and `Completed.success` is `void`. Typed **error** capture (`Failed.cause: Cause<E>`) is live the same way —
-declare `error` on the tag.
-
-One type-system caveat: the **RPC / consumer-facing `events` stream** types `Completed.success` as `unknown`
-(the runtime value is the real `A`) — `ResourceTag` is spec-invariant and Effect can't reduce a union's `.Type`
-through a generic field. The typed `A` lands everywhere else: the worker return, the engine event,
-`store.completed`, and the `QueueResource.store` analytics (`slowest` / `lastFailure` / …).
+declare `error` on the tag; the live **`events` stream** and RPC wire use the same schemas from
+{@link queueSpec} (aligned with {@link CustomQueueResource}). Store tier-1 `record` / `events` types
+remain erased at the schema level — see {@link QueueStoreCompleted} for typed analytics reads (Phase 2).
 
 ## Tier 1 — lean base (`record` / `events`)
 
