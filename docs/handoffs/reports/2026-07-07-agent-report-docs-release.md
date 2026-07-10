@@ -17,10 +17,9 @@ Consolidate into **one coherent beta breaking note** (or two max: platform renam
 
 | Existing | Action |
 |----------|--------|
-| `.changeset/run-resource-handle-rpc-store.md` | Merge into platform changeset |
-| (missing) Process tag / `Process.result` removal | Add |
-| (missing) Queue `itemSchema` → `payload` | Add — **rename shipped** on `integration/storage` |
-| (missing) Symbol `@nikscripts/effect-pm/Process/success` | Add |
+| ~~`.changeset/run-resource-handle-rpc-store.md`~~ | ✅ merged into `platform-store-tag-wire-beta.md` |
+| ~~`.changeset/process-tag-store-cutover.md`~~ | ✅ merged into `platform-store-tag-wire-beta.md` |
+| ~~Platform consolidated changeset~~ | ✅ **`.changeset/platform-store-tag-wire-beta.md`** (2026-07-10) |
 
 **Policy:** no `@deprecated` shims — document migration snippets only.
 
@@ -127,7 +126,7 @@ rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md do
 
 | Item | Owner |
 |------|-------|
-| Consolidated platform changeset | create on branch + notify owner; **version** needs approval |
+| Consolidated platform changeset | ✅ created — **`pnpm run version`** needs owner approval |
 | `PROCESS-API.md`, `guides/process.md` | Agent 2 |
 | RPC fingerprint / buildId | deferred (`result-schema-and-rpc-validation.md` §4) |
 

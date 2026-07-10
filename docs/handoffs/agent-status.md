@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | `7a3f7fa` | typecheck + 438 tests + lint green | Platform changeset: create + notify owner | 2026-07-10 |
+| **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | `0cc196f` | typecheck + 438 tests + lint green | **`pnpm run version`** when owner ready | 2026-07-10 |
 | **2** | — | [session-2 process](./agent-02-session-2-process-platform.md) | **merged** | `0802947` | typecheck + 438 tests | Idle — RPC error wire owner decision | 2026-07-09 |
 | **B** | `action/html-doc-platform` | [html doc platform](./agent-b-html-doc-platform.md) | **planning** | `dac86513` (local) | Pull `9042ce4` first | Slice 0 conversation; Slice 1 kept as spike; stash Slice 2 WIP | 2026-07-09 |
 | **A** | — | [html standards](./agent-a-html-standards-corpus.md) | **blocked** | — | — | Blocked on Agent B | 2026-07-09 |
