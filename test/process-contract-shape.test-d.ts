@@ -23,7 +23,7 @@ class PricedErr extends Process.Tag<PricedErr>()("shape/PricedErr", {
   error: Schema.TaggedStruct("FetchError", { status: Schema.Number }),
 }) {}
 
-// error stamp is store-only today — processSpec RPC methods keep Schema.Never (see agent report § RPC blocker)
+// Typed `error` on Failed — live `events` stream and store journal (void lifecycle RPCs unchanged).
 void Process.errorOf(PricedErr);
 
 // owns an inline schedule — gains the `schedule` verb group (id optional on windows)
@@ -47,6 +47,8 @@ const _proof = Effect.gen(function* () {
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
   yield* h.start; // no-payload verb → Effect property
   yield* h.runImmediately;
+  // Live execution lifecycle (same union as the store journal).
+  void h.events;
   // observability is paired by nesting (like the queue): `logs.live` stream + `logs.history` query.
   const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.history(
     {},

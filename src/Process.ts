@@ -70,6 +70,7 @@ import {
   makeProcessExecutionEvent,
   processEventReadPayload,
   processExecutionEventVoid,
+  type ProcessExecutionEvent,
 } from "./internal/processEvent";
 import {
   errorOf,
@@ -379,6 +380,10 @@ interface ProcessBuildStateBase<E, RUser> {
   readonly storeScopeTag?: StoreScopeTag;
   /** @internal Latest success value for store capture when the tag stamps `success`. */
   readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
+  /** @internal Live execution events fan-out when built via {@link layer}. */
+  readonly publishEvent?: (
+    event: ProcessExecutionEvent,
+  ) => Effect.Effect<void>;
 }
 
 export interface ProcessScheduleControls {
@@ -525,7 +530,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     clear: Effect.void,
   };
 
-  const { name, userEffect, store, storeScopeTag, resultRef } = state;
+  const { name, userEffect, store, storeScopeTag, resultRef, publishEvent } = state;
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
@@ -545,6 +550,20 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void> =>
     store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
+  const emitExecutionEvent = (
+    event: ProcessExecutionEvent,
+  ): Effect.Effect<void> =>
+    publishEvent === undefined
+      ? Effect.void
+      : publishEvent(event).pipe(Effect.asVoid);
+
+  const persistExecutionEvent = (
+    event: ProcessExecutionEvent,
+  ): Effect.Effect<void> =>
+    emitExecutionEvent(event).pipe(
+      Effect.andThen(() => whenStore((recorder) => recorder.record(event))),
+    );
+
   const processId = storeScopeTag?.key ?? name;
 
   const terminalRow = (input: ProcessStoreTerminalInput) => ({
@@ -557,26 +576,22 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   });
 
   const recordStoreStarted = (args: ProcessStoreStartedInput): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Started",
-        processId,
-        scheduleKey: args.scheduleKey,
-        startedAt: args.startedAt,
-        isStartupRun: args.isStartupRun,
-      }),
-    );
+    persistExecutionEvent({
+      _tag: "Started",
+      processId,
+      scheduleKey: args.scheduleKey,
+      startedAt: args.startedAt,
+      isStartupRun: args.isStartupRun,
+    });
 
   const recordStoreCompleted = (
     args: ProcessStoreTerminalInput & { readonly success?: unknown },
   ): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Completed",
-        ...terminalRow(args),
-        ...(args.success !== undefined ? { success: args.success } : {}),
-      }),
-    );
+    persistExecutionEvent({
+      _tag: "Completed",
+      ...terminalRow(args),
+      ...(args.success !== undefined ? { success: args.success } : {}),
+    } as ProcessExecutionEvent);
 
   const recordStoreFailed = (args: {
     readonly scheduleKey: string | null;
@@ -585,24 +600,20 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     readonly isStartupRun: boolean;
     readonly error: unknown;
   }): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Failed",
-        ...terminalRow(args),
-        error:
-          storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
-            ? args.error
-            : String(args.error),
-      }),
-    );
+    persistExecutionEvent({
+      _tag: "Failed",
+      ...terminalRow(args),
+      error:
+        storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
+          ? args.error
+          : String(args.error),
+    } as ProcessExecutionEvent);
 
   const recordStoreInterrupted = (args: ProcessStoreTerminalInput): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Interrupted",
-        ...terminalRow(args),
-      }),
-    );
+    persistExecutionEvent({
+      _tag: "Interrupted",
+      ...terminalRow(args),
+    });
 
   const readHasPriorExecutions = (): Effect.Effect<boolean> =>
     store !== undefined
@@ -1102,6 +1113,10 @@ export interface ProcessMakeOptions<E, RUser> {
   readonly _storeScopeTag?: StoreScopeTag;
   /** @internal Success ref paired with value-returning layer builds. */
   readonly _resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
+  /** @internal Live execution events fan-out (wired by {@link layer}). */
+  readonly _publishEvent?: (
+    event: ProcessExecutionEvent,
+  ) => Effect.Effect<void>;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
   /**
@@ -1159,6 +1174,7 @@ const buildProcess = <E, RUser>(
       store: config._store,
       storeScopeTag: config._storeScopeTag,
       resultRef: config._resultRef,
+      publishEvent: config._publishEvent,
     });
   }
   return createProcess({
@@ -1169,6 +1185,7 @@ const buildProcess = <E, RUser>(
     store: config._store,
     storeScopeTag: config._storeScopeTag,
     resultRef: config._resultRef,
+    publishEvent: config._publishEvent,
   });
 };
 
@@ -1497,7 +1514,8 @@ export { processEventReadPayload };
 export const processExecutionEvent = processExecutionEventVoid;
 
 /** @public */
-export type ProcessExecutionEvent = typeof processExecutionEventVoid.Type;
+/** Execution event element on the live `events` stream and store journal (void default). @public */
+export type { ProcessExecutionEvent } from "./internal/processEvent";
 
 /**
  * Build an execution event union when the process tag carries a {@link ProcessTagOptions.success}.
@@ -1538,14 +1556,20 @@ export const scheduleKind = "@nikscripts/effect-pm/Process/Schedule";
 // ============================================================================
 
 /**
- * The **base** process control + observation contract — shared by every process. Mirrors the
- * observable/controllable seams the engine supervisor exposes ({@link ProcessSnapshot} + lifecycle).
- * A base process has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
- * those verbs appear only when a process {@link schedule | owns an inline schedule}.
+ * Build the process control + observation contract with a typed `events` stream from the tag's
+ * optional `success` / `error` wire slots (same union as the store journal).
  *
  * @public
  */
-export const processSpec = {
+export const buildProcessSpec = (
+  success?: Schema.Top,
+  error?: Schema.Top,
+) => {
+  const eventSchema = makeProcessExecutionEvent(
+    success as Schema.Top | undefined,
+    error as Schema.Top | undefined,
+  );
+  return {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
   // change (uniform local + remote), mirroring the queue's `status` ref.
@@ -1568,7 +1592,11 @@ export const processSpec = {
       "Run the process effect once with tracking, out of band — independent of the trigger cadence.",
   }),
 
-  // ── observability — live stream + history query, paired by nesting ──
+  // ── observability — live streams + history query ──
+  events: Resource.stream(eventSchema).annotate({
+    description:
+      "Discrete execution lifecycle events (Started / Completed / Failed / Interrupted) — same model as the store journal.",
+  }),
   logs: {
     live: Resource.stream(processLogEntry).annotate({
       description:
@@ -1583,9 +1611,20 @@ export const processSpec = {
         "empty unless captureLogs + a HistoryStore layer are provided.",
     }),
   },
+  };
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
 // The spec is validated (without widening) at the `Resource.Tag` call site.
+
+/**
+ * The **base** process control + observation contract — shared by every process. Mirrors the
+ * observable/controllable seams the engine supervisor exposes ({@link ProcessSnapshot} + lifecycle).
+ * A base process has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
+ * those verbs appear only when a process {@link schedule | owns an inline schedule}.
+ *
+ * @public
+ */
+export const processSpec = buildProcessSpec();
 
 /** The base (schedule-less, result-less) process spec. @public */
 export type ProcessSpec = typeof processSpec;
@@ -1912,10 +1951,11 @@ const buildProcessTag = <Self>(
 ): ResourceTag<any, any> | NodeBoundTag<any, any, unknown> => {
   const node = options?.node;
   const tagOptions = { description: options?.description, kind };
+  const spec = buildProcessSpec(options?.success, options?.error);
   const base: ResourceTag<any, any> =
     node === undefined
-      ? Resource.Tag<Self>()(key, processSpec, tagOptions)
-      : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
+      ? Resource.Tag<Self>()(key, spec, tagOptions)
+      : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
   const success = options?.success;
   const error = options?.error;
   const stamped: ResourceTag<any, any> =
@@ -2318,6 +2358,10 @@ const buildProcessImpl = <A, E, R>(
         )
       : Stream.empty;
 
+    const eventsHub = yield* PubSub.sliding<ProcessExecutionEvent>(1024);
+    const publishEvent = (event: ProcessExecutionEvent) => PubSub.publish(eventsHub, event);
+    const eventsStream = Stream.fromPubSub(eventsHub);
+
     const history = yield* Effect.serviceOption(HistoryStore);
     const logsStreamId = `${tag.key}/logs`;
     if (captureLogsEnabled && Option.isSome(history)) {
@@ -2355,6 +2399,7 @@ const buildProcessImpl = <A, E, R>(
       _store: store,
       _storeScopeTag: tag,
       _resultRef: resultRef,
+      _publishEvent: publishEvent,
     });
 
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
@@ -2402,6 +2447,7 @@ const buildProcessImpl = <A, E, R>(
       start,
       stop,
       runImmediately: handle.runImmediately().pipe(tapLogs),
+      events: eventsStream,
       logs: {
         live: logsStream,
         history: ({ limit, since, until }: HistoryQuery) =>
