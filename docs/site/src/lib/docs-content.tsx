@@ -11,6 +11,7 @@ import * as React from "react";
 import { runServer } from "./runtime.js";
 import { chapters } from "./content.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
+import { QueueIsland } from "../islands/QueueIsland.js";
 
 // --- rule metadata schema (machine layer) ---------------------------------
 const Severity = Schema.Literals(["must", "should", "may"]);
@@ -101,8 +102,8 @@ const toReact = (n: any): React.ReactNode => {
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
     case "list_item": return h("li", { key: keySeq++ }, kids(n));
     case "code_block":
-      // island seam: a ```queue block becomes a live client component
-      if (n.lang === "queue") return h("div", { key: keySeq++, "data-island": "queue-widget" }, "‹live queue widget›");
+      // island seam: a ```queue block becomes a live client component (RSC boundary)
+      if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
       // everything else is Shiki-highlighted server-side (real React nodes)
       return highlightToReact(n.text, n.lang);
     default: return kids(n);
