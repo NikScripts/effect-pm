@@ -10,6 +10,7 @@ import * as djot from "@djot/djot";
 import * as React from "react";
 import { runServer } from "./runtime.js";
 import { chapters } from "./content.js";
+import { highlightToReact, loadHighlighter } from "./highlight.js";
 
 // --- rule metadata schema (machine layer) ---------------------------------
 const Severity = Schema.Literals(["must", "should", "may"]);
@@ -102,7 +103,8 @@ const toReact = (n: any): React.ReactNode => {
     case "code_block":
       // island seam: a ```queue block becomes a live client component
       if (n.lang === "queue") return h("div", { key: keySeq++, "data-island": "queue-widget" }, "‹live queue widget›");
-      return h("pre", { key: keySeq++ }, h("code", { className: n.lang ? `language-${n.lang}` : undefined }, n.text));
+      // everything else is Shiki-highlighted server-side (real React nodes)
+      return highlightToReact(n.text, n.lang);
     default: return kids(n);
   }
 };
@@ -113,15 +115,12 @@ export interface RenderedChapter {
 }
 
 // Server entry: run the Effect pipeline (RuntimeServer) and return React + meta.
-export const renderChapter = (raw: string): Promise<RenderedChapter> =>
-  runServer(
-    parseChapter(raw).pipe(
-      Effect.map(({ doc, meta }) => {
-        keySeq = 0;
-        return { element: toReact(doc), meta };
-      }),
-    ),
-  );
+export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
+  const { doc, meta } = await runServer(parseChapter(raw));
+  await loadHighlighter(); // ready the (sync) highlighter before the walk
+  keySeq = 0;
+  return { element: toReact(doc), meta };
+};
 
 // Lightweight: just the title/meta (for nav), no render.
 export const chapterMeta = (raw: string): Promise<ChapterMeta> =>
