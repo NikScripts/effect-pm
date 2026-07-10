@@ -25,8 +25,13 @@ export default defineConfig({
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.
     assetsInclude: ["**/*.md"],
-    // Content lives at docs/ (the parent of this app's root, docs/site). Allow the dev
-    // server to read it, and the standards/guides content dirs to hot-reload.
-    server: { fs: { allow: [".."] } },
+    // `@pm` -> the effect-pm package SOURCE, so island widgets bundle with THIS app's
+    // single `effect`/`react` instance (a dual instance would break atom reactivity).
+    resolve: {
+      alias: { "@pm": fileURLToPath(new URL("../../src", import.meta.url)) },
+    },
+    // Content is at docs/ and the package source is at repo/src — both above this app's
+    // root (docs/site). Allow the dev server to read up to the repo root.
+    server: { fs: { allow: ["../.."] } },
   },
 });
