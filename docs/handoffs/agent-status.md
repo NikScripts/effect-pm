@@ -2,7 +2,7 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration tip:** `7a3f7fa` on **`integration/storage`** — Session 3 release hygiene merged (2026-07-10)
+**Integration tip:** `766c62d` on **`integration/storage`** — platform changeset added (2026-07-10)
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
