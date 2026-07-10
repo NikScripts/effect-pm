@@ -19,44 +19,40 @@ Consolidate into **one coherent beta breaking note** (or two max: platform renam
 |----------|--------|
 | `.changeset/run-resource-handle-rpc-store.md` | Merge into platform changeset |
 | (missing) Process tag / `Process.result` removal | Add |
-| (missing) Queue `itemSchema` → `payload` | Add when Queue agent merges |
+| (missing) Queue `itemSchema` → `payload` | Add — **rename shipped** on `integration/storage` |
 | (missing) Symbol `@nikscripts/effect-pm/Process/success` | Add |
 
-**Policy:** no `@deprecated` shims — document migration snippets only.
+**Policy:** no `@deprecated` shims — document migration snippets only. **Owner approval required** before creating/editing changesets.
 
 ### Migration block (platform)
 
 ```ts
 // RunResource
 yield* gate.run(input)           // was: yield* gate(input)
-Tag()(key, payload, success)   // was: inputSchema, successSchema
+Tag()(key, { payload, success })   // was: inputSchema, successSchema
 
 // Process
-Tag()(key, success, error)     // was: resultSchema, errorSchema
+Tag()(key, { success, error })     // was: resultSchema, errorSchema
 // remove: .pipe(Process.result(schema))
 
-// Queue (when landed)
-Tag()(key, payload)            // was: itemSchema
+// Queue + CustomQueue (shipped)
+Tag()(key, { payload, success?, error?, … })  // was: itemSchema positional
 ```
 
 ---
 
 ## Stale docs audit
 
-Run ripgrep in `docs/`, `examples/`, `CHANGELOG.md` (not `repos/`):
-
 ```bash
 rg 'inputSchema|successSchema|resultSchema|itemSchema|errorSchema|RunGate|gate\(' docs examples CHANGELOG.md .changeset
 ```
 
-Known stale (fix or assign to module agent):
-
-| File | Issue |
-|------|-------|
-| `docs/CODEBASE-INVENTORY.md` | ✅ RunResource Service line uses `payload` / `success` |
-| `docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md` | Mark rename **done** for RR/Process; open for Queue |
+| File | Status |
+|------|--------|
+| `docs/CODEBASE-INVENTORY.md` | ✅ Store bridge + subpaths (no `store/QueueResource`) |
+| `docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md` | ✅ Queue/CQR rename **done** on `integration/storage` |
 | `docs/handoffs/result-schema-and-rpc-validation.md` | Keep fingerprint design; status table |
-| `CHANGELOG.md` | Unreleased note documents `Process.result` removal + store tap |
+| `CHANGELOG.md` | Historical — unreleased note may need refresh at release |
 | `.changeset/process-toolkit-namespace.md` | Historical — do not duplicate |
 
 ---
@@ -67,7 +63,7 @@ Known stale (fix or assign to module agent):
 |---------|-------------------|
 | `run-resource-runtime-observer.ts` | Subscribables, not RunResourceStore |
 | `process-store-events-sqlite-layer.ts` | SQLite + run facts logged |
-| Queue examples | `payload` on Tag after Queue agent |
+| Queue examples | ✅ `payload` on Tag |
 
 ---
 
@@ -98,38 +94,41 @@ rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md do
 # (no matches)
 ```
 
-No fixes required; no exceptions for these two files.
+---
 
-### Documented exceptions (not errors)
+## 2026-07-10 Agent 1 Session 3 (`cursor/store-release-hygiene-a009`)
 
-| Location | Why left |
-|----------|----------|
-| `CHANGELOG.md` / `.changeset/*` | Historical release notes — grep hits expected |
-| `docs/handoffs/*` (archive) | Migration narrative; link to `STORAGE.md` for current truth |
-| `package.json` `store/QueueResource` export | No `src/store/queueResource.ts` — release cleanup pending |
-| Engine TSDoc / internal param names `itemSchema` | Internal codec helpers; public Tag uses `payload` |
+### Closed (Agent 1 owned)
 
-### Still open (docs-release / Agent 2)
+| Item | Status |
+|------|--------|
+| `package.json` + `tsup` stale `store/QueueResource` export | ✅ **Removed** — facet file deleted; use `QueueResource.store(tag)` |
+| `AGENTS.md` + `docs/AGENTS.md` integration pointer | ✅ Points to `integration/storage` + `handoffs/reports/README.md` |
+| `2026-07-07-rpc-schema-names-payload-success-error.md` Queue status | ✅ Marked **done** on `integration/storage` |
+| `store.md` / `PACKAGE-GUIDE.md` grep | ✅ Clean (re-verified) |
+| `.cursor/rules/module-layout.mdc` + `docs/plans/15-runtime-storage-hybrid.md` | ✅ Removed stale `store/QueueResource` facet claim |
 
-- Consolidated platform changeset
-- `PROCESS-API.md`, `guides/process.md` — Agent 2 Session 2
-- `2026-07-07-rpc-schema-names-payload-success-error.md` status table — mark Queue rename done when Agent 2 merges
+### Lint (`pnpm run lint`)
+
+| Scope | Status |
+|-------|--------|
+| `test/**/*.test-d.ts` | ✅ ESLint override — type-level assertion files (doc-adjacent) |
+| `src/internal/store/*` empty-object / empty-interface | ⚠️ 5 pre-existing errors — **out of scope** (no Store spine edits) |
+| `src/internal/store/runResourceStoreSpec.ts` unused var | ⚠️ 1 pre-existing — **out of scope** (Store spine) |
+
+### Still open (not Agent 1 / needs owner)
+
+| Item | Owner |
+|------|-------|
+| Consolidated platform changeset | owner approval |
+| `PROCESS-API.md`, `guides/process.md` | Agent 2 |
+| RPC fingerprint / buildId | deferred (`result-schema-and-rpc-validation.md` §4) |
 
 ---
 
 ## STORAGE.md / PROCESS-API / PACKAGE-GUIDE
 
 **Updated 2026-07-09:** `STORAGE.md` describes golden Store bridge — all four toolkits on declared `Storage`; legacy execution facets deleted. **Process** API guide owned by Agent 2.
-
----
-
-## AGENTS.md
-
-Integration branch adds pointer to integration branch + handoff — keep in sync:
-
-```markdown
-<!-- confirm integration branch name and reports/README link -->
-```
 
 ---
 
@@ -149,4 +148,4 @@ No release without full green.
 ## Out of scope
 
 - RPC fingerprint / buildId (`result-schema-and-rpc-validation.md` §4)
-- Removing legacy `*Store` facets from ProcessStorage
+- Creating `.changeset` files without owner approval

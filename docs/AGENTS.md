@@ -33,7 +33,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
 | `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
-| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); merge target `cursor/integration-result-schema-a3ad`. |
+| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); integration branch **`integration/storage`**. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
@@ -143,6 +143,8 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 ---
 
 ## Cursor Cloud specific instructions
+
+**Integration branch:** `integration/storage` — land store/tag migrations here; see [`handoffs/reports/README.md`](./handoffs/reports/README.md) for per-module agent reports.
 
 **Environment:** Node >= 20.19.0 and pnpm 10.33.4 are declared by
 `package.json`. A `pnpm-lock.yaml` is committed; use `pnpm install` when

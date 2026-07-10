@@ -4,6 +4,8 @@ Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture,
 
 **Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) only.
 
+**Integration branch:** `integration/storage` — store cutover + tag wire renames land here before `main`. Active handoffs index: [`docs/handoffs/reports/README.md`](./docs/handoffs/reports/README.md).
+
 ## Git commit policy
 
 - Do not commit or push directly on major or user-owned branches such as `main`,
