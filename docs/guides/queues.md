@@ -81,9 +81,12 @@ Effect queues can't enumerate their pending items — you target what you know
 (`drop`, `deadLetter` by matching an item), and read counts (`size`, `completed`,
 per-priority `sizes`) rather than listing.
 
-## Live
+## Control it
 
-The dashboards render this same tag. Here's the queue widget:
+The same handle drives a UI. Below is a hand-wired control panel — live stats read
+straight off the queue's `status` stream, and buttons that call the handle
+(`add`/`prioritize`/`defer`, `pause`, `resume`, `clear`). Enqueue an item and watch
+`pending` climb, then drain to `completed`:
 
 ``` queue
 app/EmailQueue
