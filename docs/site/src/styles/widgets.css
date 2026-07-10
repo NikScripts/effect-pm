@@ -1,0 +1,66 @@
+/* Tailwind — ONLY for the dashboard widgets rendered inside islands. No preflight
+   (Tailwind's global reset would clobber the classless doc prose); just the theme
+   mapping + utilities. The dashboard tokens are scoped to `.pm-dashboard`, so nothing
+   here leaks onto the doc content. Never used in a `.md` — Tailwind lives in island code. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../../../../src/web";
+@source "../islands";
+
+/* Expose the dashboard tokens as Tailwind colors so bg-card / text-muted-foreground /
+   border utilities resolve (matches src/web/theme.css). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Actual token values — scoped to the widget wrapper only, NOT the global body. */
+.pm-dashboard {
+  --radius: 0.625rem;
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.92 0.01 260);
+  --card: oklch(0.2 0.012 260);
+  --card-foreground: oklch(0.92 0.01 260);
+  --primary: oklch(0.7 0.15 250);
+  --primary-foreground: oklch(0.16 0.01 260);
+  --secondary: oklch(0.27 0.01 260);
+  --secondary-foreground: oklch(0.92 0.01 260);
+  --muted: oklch(0.27 0.01 260);
+  --muted-foreground: oklch(0.65 0.01 260);
+  --accent: oklch(0.27 0.02 260);
+  --accent-foreground: oklch(0.92 0.01 260);
+  --destructive: oklch(0.62 0.2 25);
+  --border: oklch(0.3 0.01 260);
+  --ring: oklch(0.7 0.15 250);
+
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+/* Tailwind `border` utility sets width; the dashboard theme provides the default color. */
+.pm-dashboard *,
+.pm-dashboard ::before,
+.pm-dashboard ::after {
+  border-color: var(--border);
+  box-sizing: border-box;
+}

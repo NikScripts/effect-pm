@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "waku/config";
 
@@ -19,7 +20,7 @@ const watchDocsContent = {
 // condition wiring (500 on every route). Revisit the pin when a later beta fixes it.
 export default defineConfig({
   vite: {
-    plugins: [react(), watchDocsContent],
+    plugins: [tailwindcss(), react(), watchDocsContent],
     // Content `.md` is Djot source, not JS. Declaring it an asset stops Vite from running
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.

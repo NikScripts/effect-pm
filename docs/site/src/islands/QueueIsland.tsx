@@ -1,16 +1,16 @@
 "use client";
 
-// Minimal client island — proves the Waku RSC server→client boundary in this app:
-// the doc page is a server component; this hydrates and runs in the browser.
-// (Placeholder interactivity; the real live QueueResource widget replaces the body next.)
+// Client island. Tailwind lives HERE (island code), never in a .md doc. The dashboard
+// tokens are scoped to `.pm-dashboard`; the doc prose stays classless.
+// (Placeholder body — the real dashboard QueueCard + LogStream swap in next.)
 
 import * as React from "react";
+import "../styles/widgets.css";
 
 export function QueueIsland(): React.ReactElement {
   const [pending, setPending] = React.useState(0);
   const [done, setDone] = React.useState(0);
 
-  // "worker": drains one pending item ~every 800ms so you can watch it move.
   React.useEffect(() => {
     const id = setInterval(() => {
       setPending((p) => {
@@ -23,12 +23,21 @@ export function QueueIsland(): React.ReactElement {
   }, []);
 
   return (
-    <div data-island="queue-widget">
-      <strong>Live island</strong> — hydrated & interactive (client component).
-      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "0.6rem" }}>
-        <button type="button" onClick={() => setPending((p) => p + 1)}>Enqueue</button>
-        <span>pending: {pending}</span>
-        <span>completed: {done}</span>
+    <div className="pm-dashboard p-4 rounded-lg text-sm">
+      <div className="flex items-center justify-between border-b border-border pb-2 mb-3">
+        <span className="font-medium text-card-foreground">Live island</span>
+        <span className="text-xs text-muted-foreground">hydrated · Tailwind-scoped</span>
+      </div>
+      <div className="flex gap-3 items-center">
+        <button
+          type="button"
+          onClick={() => setPending((p) => p + 1)}
+          className="bg-primary text-primary-foreground rounded-md px-3 py-1 text-xs font-medium"
+        >
+          Enqueue
+        </button>
+        <span className="text-muted-foreground">pending <b className="text-foreground tabular-nums">{pending}</b></span>
+        <span className="text-muted-foreground">completed <b className="text-foreground tabular-nums">{done}</b></span>
       </div>
     </div>
   );
