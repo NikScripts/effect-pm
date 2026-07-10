@@ -13,6 +13,7 @@ import { chapters } from "./content.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
 import { QueueIsland } from "../islands/QueueIsland.js";
 import { RunResourceIsland } from "../islands/RunResourceIsland.js";
+import { CounterIsland } from "../islands/CounterIsland.js";
 
 // --- rule metadata schema (machine layer) ---------------------------------
 const Severity = Schema.Literals(["must", "should", "may"]);
@@ -106,6 +107,7 @@ const toReact = (n: any): React.ReactNode => {
       // island seam: a ```queue block becomes a live client component (RSC boundary)
       if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
       if (n.lang === "run-resource") return h(RunResourceIsland, { key: keySeq++ });
+      if (n.lang === "resource") return h(CounterIsland, { key: keySeq++ });
       // everything else is Shiki-highlighted server-side (real React nodes)
       return highlightToReact(n.text, n.lang);
     default: return kids(n);

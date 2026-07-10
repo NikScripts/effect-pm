@@ -1,0 +1,70 @@
+{#resource title="Resources" appliesTo=all}
+# Resources
+
+{.note}
+**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
+
+A **resource** is a service you define by its *contract* and drive through a typed
+handle. `Resource.Tag` is the base: you declare the methods, implement them with a
+layer, and the same `yield* Tag` code runs locally or over RPC — only the layer
+changes. Queues and run-gates are specialised resources; this is the raw one.
+
+## 1. Define the contract
+
+Each member is a `Resource.effect` (a read), a `Resource.effectFn` (a mutation, with
+an optional `payload`), or a `Resource.stream` (a live source). Here's a counter:
+
+``` ts
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Schema } from "effect"
+
+class Counter extends Resource.Tag<Counter>()("app/Counter", {
+  current: Resource.effect(Schema.Number),                                   // read
+  changes: Resource.stream(Schema.Number),                                   // live
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }), // mutate
+  reset: Resource.effectFn(Schema.Void),                                     // mutate
+}) {}
+```
+
+## 2. Implement it with a layer
+
+`Resource.layer` provides the implementation. Use the `Effect` form when you need
+state — here a `SubscriptionRef` holds the value, so `changes` is just its stream:
+
+``` ts
+import { Effect, SubscriptionRef } from "effect"
+
+const counterLayer = Resource.layer(
+  Counter,
+  Effect.gen(function* () {
+    const ref = yield* SubscriptionRef.make(0)
+    return {
+      current: SubscriptionRef.get(ref),
+      changes: SubscriptionRef.changes(ref),
+      increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
+      reset: SubscriptionRef.set(ref, 0),
+    }
+  }),
+)
+```
+
+## 3. Use it
+
+`yield* Counter` gives the handle — the methods, typed from the contract:
+
+``` ts
+const program = Effect.gen(function* () {
+  const counter = yield* Counter
+  yield* counter.increment({ by: 5 })
+  const now = yield* counter.current      // 5
+})
+```
+
+## 4. Control it live
+
+The same handle drives a UI. The count below reads off `changes` (live), and the
+buttons call `increment` / `reset`. This is a real `Counter` running in your browser:
+
+``` resource
+docs/Counter
+```
