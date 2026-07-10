@@ -51,7 +51,7 @@ pnpm test
 | `Process.make` | No auto store writes — document, do not change behavior |
 | Store spine | **Out of scope** — no edits to `src/Store.ts` unless a test proves a bug |
 | Logs platform | **Out of scope** — `Resource.logs`, `captureLogs`, `HistoryStore` |
-| Changeset | **Out of scope** without owner approval |
+| Changeset | Create + notify owner; **`pnpm run version` / publish** need owner approval |
 
 ---
 
