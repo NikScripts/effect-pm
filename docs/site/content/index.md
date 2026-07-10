@@ -2,7 +2,7 @@
 # effect-pm
 
 effect-pm is a toolkit for **durable, observable background work** built on
-[Effect](https://effect.website). You declare a *resource* — a queue, a run
+[Effect](https://effect.website). You declare a _resource_ — a queue, a run
 gate, a scheduled process — as a service tag, and get a typed handle plus live
 dashboards (web, TUI, CLI) over the same tag.
 

@@ -1,11 +1,11 @@
 // Content source — Vite's module graph, NOT node:fs.
 //
-// `import.meta.glob(... ?raw)` inlines every `.dj` file as a raw string and, crucially,
-// makes each one a module dependency. Editing a `.dj` therefore triggers Vite HMR and the
+// `import.meta.glob(... ?raw)` inlines every `.md` file as a raw string and, crucially,
+// makes each one a module dependency. Editing content therefore triggers Vite HMR and the
 // page re-renders on the phone with no restart and no filesystem access. This is the
 // mechanism that satisfies the "auto hot reload + no fs" requirement.
 
-const modules = import.meta.glob("/content/**/*.dj", {
+const modules = import.meta.glob("/content/**/*.md", {
   query: "?raw",
   import: "default",
   eager: true,
@@ -19,8 +19,8 @@ export interface RawChapter {
 }
 
 const toEntry = (path: string, raw: string): RawChapter => {
-  // "/content/standards/queues.dj" -> group "standards", slug "queues"
-  const rel = path.replace(/^\/content\//, "").replace(/\.dj$/, "");
+  // "/content/standards/queues.md" -> group "standards", slug "queues"
+  const rel = path.replace(/^\/content\//, "").replace(/\.md$/, "");
   const parts = rel.split("/");
   const slug = parts[parts.length - 1] ?? rel;
   const group = parts.length > 1 ? parts.slice(0, -1).join("/") : "";

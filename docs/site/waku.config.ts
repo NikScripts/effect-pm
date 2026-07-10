@@ -7,9 +7,9 @@ import { defineConfig } from "waku/config";
 export default defineConfig({
   vite: {
     plugins: [react()],
-    // `.dj` is Djot source, not JS. Declaring it an asset stops Vite from running
-    // JS import-analysis on it (which errors on edit and breaks the HMR signal),
-    // so `?raw` imports and hot-reload on content edits work cleanly.
-    assetsInclude: ["**/*.dj"],
+    // Content `.md` is Djot source (named .md so GitHub renders it), not JS. Declaring
+    // it an asset stops Vite from running JS import-analysis on it (which errors on edit
+    // and breaks the HMR signal), so `?raw` imports and hot-reload work cleanly.
+    assetsInclude: ["**/content/**/*.md"],
   },
 });

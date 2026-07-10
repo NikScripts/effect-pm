@@ -1,7 +1,8 @@
 # effect-pm docs site (`docs/site/`)
 
 The official `@nikscripts/effect-pm` website — a bespoke **Waku (RSC) + Effect** app.
-Content is authored in **Djot** and rendered classless; read over Tailscale on your phone.
+Content is authored in **Djot** (in `.md` files, so GitHub renders them) and rendered
+classless; read over Tailscale on your phone.
 
 Architecture + rationale: [`../handoffs/agent-b-plan.md`](../handoffs/agent-b-plan.md) ·
 [`../handoffs/docs-platform-architecture-decision.md`](../handoffs/docs-platform-architecture-decision.md).
@@ -25,7 +26,7 @@ On the server:
 tailscale ip -4          # e.g. 100.67.32.32
 ```
 
-Open `http://<that-ip>:5190/` on the phone. **Editing a `.dj` file auto-reloads the
+Open `http://<that-ip>:5190/` on the phone. **Editing a content file auto-reloads the
 page** — Waku emits an `rsc:update` and the browser refetches, no restart, no manual
 refresh. To change the port, edit `--port` in `docs/site/package.json`'s `dev` script.
 
@@ -36,12 +37,12 @@ over the tailnet with no extra rule. Nothing here is exposed to the public inter
 ## How it works
 
 ```
-content/**/*.dj   →  import.meta.glob('?raw')   →  Effect pipeline           →  Waku RSC server component
-(Djot source)        (module graph = HMR,           (parse · Schema-validate      (SSG in build; classless HTML;
+content/**/*.md   →  import.meta.glob('?raw')   →  Effect pipeline           →  Waku RSC server component
+(Djot in .md)        (module graph = HMR,           (parse · Schema-validate      (SSG in build; classless HTML;
                       no node:fs)                     · derive manifest)           live islands via data-island)
 ```
 
-- **`src/lib/content.ts`** — loads every `.dj` from the Vite module graph (HMR, no `fs`).
+- **`src/lib/content.ts`** — loads every content `.md` from the Vite module graph (HMR, no `fs`).
 - **`src/lib/docs-content.tsx`** — the Effect service: `@djot/djot` parse → `Schema`-validated
   rules → derived manifest (typed failures on duplicate ids / missing page block) → AST→React.
 - **`src/lib/runtime.ts`** — `runServer` (RuntimeServer seam) + the future `Hydration` island note.
@@ -50,10 +51,11 @@ content/**/*.dj   →  import.meta.glob('?raw')   →  Effect pipeline          
 
 ## Content
 
-Chapters live in `content/` as Djot. Authoring rules and the full "add a chapter" guide
-are covered by the Agent A handoff (`meta.dj`). Quick shape:
+Chapters live in `content/` as Djot syntax in `.md` files (named `.md` so GitHub renders
+them; parsed as Djot by the pipeline). Authoring rules and the full "add a chapter" guide
+are covered by the Agent A handoff (`meta.md`). Quick shape:
 
-```djot
+```md
 {#queues title="Queues" appliesTo=all}
 # Queues
 
