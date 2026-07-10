@@ -1,0 +1,6 @@
+# Djot content files (docs site). GitHub has no Djot renderer, so tell Linguist to
+# syntax-highlight `.dj` as Markdown in the file/diff view — headings, code fences,
+# lists and emphasis get colorized, which is what makes content PRs readable on GitHub.
+# (This highlights the source; the rendered reading surface is `pnpm run docs:serve`.)
+*.dj linguist-language=Markdown
+*.dj text
