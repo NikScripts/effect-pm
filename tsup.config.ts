@@ -23,7 +23,6 @@ export default defineConfig([
       MultiNode: "src/MultiNode.ts",
       ProcessStore: "src/ProcessStore.ts",
       ProcessStorage: "src/ProcessStorage.ts",
-      "store/QueueResource": "src/store/queueResource.ts",
       "store/Log": "src/store/log.ts",
       "store/ProcessLifecycle": "src/store/processLifecycle.ts",
       Query: "src/Query.ts",
