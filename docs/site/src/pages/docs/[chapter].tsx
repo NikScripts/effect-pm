@@ -9,7 +9,7 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
   const { element, meta } = await renderChapter(c.raw);
   return (
     <>
-      <title>{meta.title} — effect-pm</title>
+      <title>{`${meta.title} — effect-pm`}</title>
       {element}
     </>
   );

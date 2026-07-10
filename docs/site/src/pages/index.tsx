@@ -8,7 +8,7 @@ export default async function HomePage() {
   const { element, meta } = await renderChapter(chapter.raw);
   return (
     <>
-      <title>{meta.title} — effect-pm</title>
+      <title>{`${meta.title} — effect-pm`}</title>
       {element}
     </>
   );
