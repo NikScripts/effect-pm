@@ -28,6 +28,9 @@ export default defineConfig({
     // `@pm` -> the effect-pm package SOURCE, so island widgets bundle with THIS app's
     // single `effect`/`react` instance (a dual instance would break atom reactivity).
     resolve: {
+      // Source-imported package widgets pull react/lucide/recharts from the repo's
+      // node_modules; dedupe forces ONE react instance (else "Invalid hook call").
+      dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
       alias: {
         "@pm": fileURLToPath(new URL("../../src", import.meta.url)),
         // Node-only deps the package pulls transitively (SQLite storage, CI check).
