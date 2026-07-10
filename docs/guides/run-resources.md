@@ -1,6 +1,9 @@
 {#run-resources title="Run resources" appliesTo=all}
 # Run resources
 
+{.note}
+**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
+
 A `RunResource` wraps an effect behind a **concurrency gate** with typed input
 and output. Where a queue drains items in the background, a run resource is
 called on demand — every caller waits for its result, but only so many run at

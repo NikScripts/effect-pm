@@ -1,6 +1,9 @@
 {#queues title="Queues" appliesTo=all}
 # Queues
 
+{.note}
+**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
+
 A `QueueResource` drains a stream of items through a handler effect, with
 priority, de-duplication, automatic retry, and a pool of workers — all declared
 on the tag.

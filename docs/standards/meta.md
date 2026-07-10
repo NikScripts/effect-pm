@@ -1,6 +1,9 @@
 {#meta title="Authoring a standards chapter" appliesTo=standards}
 # Authoring a standards chapter
 
+{.note}
+**Draft template.** The authoring format may still change — treat as a working draft, not a locked spec.
+
 This is the format for the standards corpus. Each chapter is one `.md` file in
 `docs/standards/`, authored in **Djot**. The doc server (`pnpm run docs:serve`)
 renders it and derives the rule manifest automatically — add a file, refresh, it

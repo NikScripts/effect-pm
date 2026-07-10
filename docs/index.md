@@ -1,6 +1,9 @@
 {#index title="Getting started" appliesTo=all}
 # effect-pm
 
+{.note}
+**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
+
 effect-pm is a toolkit for **durable, observable background work** built on
 [Effect](https://effect.website). You declare a _resource_ — a queue, a run
 gate, a scheduled process — as a service tag, and get a typed handle plus live

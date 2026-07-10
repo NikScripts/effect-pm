@@ -1,6 +1,9 @@
 {#processes title="Processes" appliesTo=all}
 # Processes
 
+{.note}
+**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
+
 A `Process` is long-running or scheduled work — a poller, a supervisor, a
 periodic sync. You define it as a tag, then run it as a layer that ticks on a
 schedule and records its execution history.
