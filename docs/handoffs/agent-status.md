@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | — | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | `94a157b` | typecheck + 438 tests | Idle — optional Session 3 release hygiene | 2026-07-09 |
 | **2** | — | [session-2 process](./agent-02-session-2-process-platform.md) | **merged** | `0802947` | typecheck + 438 tests | Idle — RPC error wire owner decision | 2026-07-09 |
-| **B** | `action/html-doc-platform` | [html doc platform](./agent-b-html-doc-platform.md) | **planning** | `dac86513` (local) | Pull `9042ce4` first | Slice 0 conversation; Slice 1 kept as spike; stash Slice 2 WIP | 2026-07-09 |
+| **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) · [handoff](./agent-b-html-doc-platform.md) | **building (Slice 1)** | (pushing) | Slice 0 ✅ spike proved Djot→Effect→Waku RSC→SSG (waku beta.3); plan approved by owner | Building Waku app + HMR gate | 2026-07-09 |
 | **A** | — | [html standards](./agent-a-html-standards-corpus.md) | **blocked** | — | — | Blocked on Agent B | 2026-07-09 |
 | **C** | — | [standards audit](./agent-c-standards-audit.md) | **blocked** | — | — | Blocked on Agent A | 2026-07-09 |
 
