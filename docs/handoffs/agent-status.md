@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | — | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | `94a157b` | typecheck + 438 tests | Idle — optional Session 3 release hygiene | 2026-07-09 |
 | **2** | — | [session-2 process](./agent-02-session-2-process-platform.md) | **merged** | `0802947` | typecheck + 438 tests | Idle — RPC error wire owner decision | 2026-07-09 |
-| **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) · [handoff](./agent-b-html-doc-platform.md) | **building (Slice 1)** | (pushing) | Slice 0 ✅ spike proved Djot→Effect→Waku RSC→SSG (waku beta.3); plan approved by owner | Building Waku app + HMR gate | 2026-07-09 |
+| **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) · [handoff](./agent-b-html-doc-platform.md) | **building (Slices 1–2 ✅)** | `46947e5` | Waku RSC app live on Tailscale; content HMR (rsc:update, no fs); Effect pipeline + Shiki; 4 instructional pages; content in default-Djot `.md` (GitHub renders imperfectly — accepted) | Next: real island (Slice 3), SSG build verify (4), Agent A handoff + PR (5) | 2026-07-10 |
 | **A** | — | [html standards](./agent-a-html-standards-corpus.md) | **blocked** | — | — | Blocked on Agent B | 2026-07-09 |
 | **C** | — | [standards audit](./agent-c-standards-audit.md) | **blocked** | — | — | Blocked on Agent A | 2026-07-09 |
 
