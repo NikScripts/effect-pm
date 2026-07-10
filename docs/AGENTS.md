@@ -110,13 +110,39 @@ impact — same bar as before.
 
 | Action | Owner approval? | Agent duty |
 |--------|-----------------|------------|
-| **Create / edit** `.changeset/*.md` | **No** — agents may land changesets on `cursor/*` branches with the PR | **Mandatory:** paste the **full file contents** in owner chat after creating (use supervisor Before/After: Before = `(none — new file)` or prior full file; After = full new file). Do not summarize or link only. |
+| **Create / edit** `.changeset/*.md` | **No** — land on agent branches with the PR | **Mandatory:** paste the **full file contents** in owner chat after creating (use supervisor Before/After: Before = `(none — new file)` or prior full file; After = full new file). Do not summarize or link only. |
 | **`pnpm run version`** (`changeset version` — bumps `package.json` + `CHANGELOG.md`) | **Yes** | Propose when ready; do not run without owner OK |
 | **Publish** (`pnpm publish`, `npm run release`) | **Yes** | Owner only |
 
 **Content:** no `@deprecated` shims in migration notes — snippets only. Consolidate related
 breaking notes into one coherent changeset when possible (see
 [`handoffs/reports/2026-07-07-agent-report-docs-release.md`](./handoffs/reports/2026-07-07-agent-report-docs-release.md)).
+
+---
+
+## Branch policy
+
+**Format:** `<type>/<description>` — slash-separated, **kebab-case** description.
+
+| Type | Purpose | Typical merge target |
+|------|---------|---------------------|
+| **`integration/<stream>`** | Long-lived integration line for a major workstream | `main` (or umbrella `integration` first — see below) |
+| **`feature/<description>`** | Short-lived agent or developer work | Matching `integration/<stream>` per handoff |
+| **`fix/<description>`** | Focused fixes | Same as `feature/*` |
+
+**Active integration lines:**
+
+- **`integration/storage`** — store cutover, Store bridge, tag wire renames (current storage platform work).
+- **More `integration/*` lines** — owner will add parallel streams (e.g. docs platform, process wire).
+- **`integration`** (umbrella, **future**) — when multiple integration lines must collide before `main`.
+
+**Rules:**
+
+- Branch agent work from the relevant **`integration/*` tip**, not `main`, for platform migrations.
+- Open PRs → the matching **`integration/<stream>`** unless the handoff says otherwise.
+- **Push to `integration/*`** when typecheck, tests, and lint are green and the owner directs — do not block on unrelated agents.
+- Do **not** push to `main`, `develop`, release branches, or owner-owned branches without explicit approval.
+- Legacy `cursor/*` names may still exist on open PRs; **prefer `<type>/<description>` for new branches.**
 
 ---
 

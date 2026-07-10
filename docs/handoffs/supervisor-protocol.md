@@ -71,7 +71,7 @@ Full release note body…
 ```
 ~~~
 
-Policy SSOT: [`docs/AGENTS.md`](../AGENTS.md#changeset-policy).
+Policy SSOT: [`docs/AGENTS.md`](../AGENTS.md#changeset-policy) · branches: [`docs/AGENTS.md`](../AGENTS.md#branch-policy).
 
 Also update [`agent-status.md`](./agent-status.md) + session log in handoff (async).
 
