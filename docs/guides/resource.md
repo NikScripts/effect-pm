@@ -60,10 +60,55 @@ const program = Effect.gen(function* () {
 })
 ```
 
-## 4. Control it live
+## 4. Wire it to the browser
 
-The same handle drives a UI. The count below reads off `changes` (live), and the
-buttons call `increment` / `reset`. This is a real `Counter` running in your browser:
+Atoms make the resource reactive in React. `runtime.atom` turns the `changes`
+stream into a live value; `runtime.fn` turns each mutation into a callable.
+
+``` tsx
+import { Atom } from "effect/unstable/reactivity"
+import { Effect, Stream } from "effect"
+
+const runtime = Atom.runtime(counterLayer)
+const countAtom = runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.changes)))
+const increment = runtime.fn((by: number) => Effect.flatMap(Counter, (c) => c.increment({ by })))
+const reset = runtime.fn(() => Effect.flatMap(Counter, (c) => c.reset))
+```
+
+## 5. Rig up the buttons
+
+`useAtomValue` reads the live count; `useAtomSet` gives each button's handler.
+Wrap the tree in `RegistryProvider`.
+
+``` tsx
+import { RegistryProvider, useAtomValue, useAtomSet } from "@nikscripts/effect-pm/web"
+import { AsyncResult } from "effect/unstable/reactivity"
+
+function CounterPanel() {
+  const r = useAtomValue(countAtom)
+  const count = AsyncResult.isSuccess(r) ? r.value : 0
+  const inc = useAtomSet(increment)
+  const doReset = useAtomSet(reset)
+  return (
+    <div>
+      <div>{count}</div>
+      <button onClick={() => inc(1)}>Increment</button>
+      <button onClick={() => doReset(undefined)}>Reset</button>
+    </div>
+  )
+}
+
+export const App = () => (
+  <RegistryProvider>
+    <CounterPanel />
+  </RegistryProvider>
+)
+```
+
+## The result
+
+Exactly the code above — the `Counter` resource, its layer, and this UI — running
+live in your browser:
 
 ``` resource
 docs/Counter
