@@ -137,7 +137,7 @@ export type RunInstanceSpec<
 
 /** True when the wire contract declares an input payload slot. @internal */
 export const runSpecHasPayload = (payload: Schema.Top | undefined): payload is Schema.Top =>
-  payload !== undefined && payload !== Schema.Void;
+  payload !== undefined;
 
 /** Build a spec from resolved wire schemas — disambiguates unit vs parameterized. @internal */
 export const materializeRunSpec = <
