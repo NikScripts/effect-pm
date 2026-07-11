@@ -413,6 +413,9 @@ const makeStaticRun = <
       >)(input);
     })) as RunResourceStaticRun<I, A, E, Self>;
 
+const isRunTagSchemaConfig = (value: unknown): value is RunResourceTagSchemas =>
+  typeof value === "object" && value !== null && !Schema.isSchema(value);
+
 const materializeRunTag = <
   Self,
   I extends Schema.Top,
@@ -450,12 +453,52 @@ const runTag = <Self>() => {
     key: string,
     config: RunResourceTagSchemas<I, A, E>,
   ): RunTagWithStaticRun<Self, I, A, E>;
+  function build<I extends Schema.Top, A extends Schema.Top>(
+    key: string,
+    payload: I,
+    success: A,
+    options?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
   function build<
     I extends Schema.Top,
     A extends Schema.Top,
     E extends Schema.Top,
-  >(key: string, config?: RunResourceTagSchemas<I, A, E>) {
-    return materializeRunTag<Self, I, A, E>(key, config ?? {});
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    error: E,
+    options?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, I, A, E>;
+  function build(
+    key: string,
+    inputOrSchemas?: Schema.Top | RunResourceTagSchemas,
+    success?: Schema.Top,
+    errorOrOptions?: Schema.Top | { readonly description?: string },
+    maybeOptions?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, any, any, any> {
+    if (inputOrSchemas === undefined) {
+      return materializeRunTag<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>(
+        key,
+        {},
+      );
+    }
+    if (isRunTagSchemaConfig(inputOrSchemas)) {
+      return materializeRunTag<Self, any, any, any>(key, inputOrSchemas);
+    }
+    const payload = inputOrSchemas;
+    const hasError =
+      errorOrOptions !== undefined && Schema.isSchema(errorOrOptions);
+    const error = hasError ? errorOrOptions : undefined;
+    const options = hasError
+      ? maybeOptions
+      : errorOrOptions as { readonly description?: string } | undefined;
+    return materializeRunTag<Self, any, any, any>(key, {
+      payload,
+      success,
+      error,
+      description: options?.description,
+    });
   }
   return build;
 };

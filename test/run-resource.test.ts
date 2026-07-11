@@ -145,7 +145,11 @@ describe("RunResource.Service", () => {
 });
 
 describe("RunResource.Tag + layer", () => {
-  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()("@test/TestGate", { payload: Schema.Number, success: Schema.Number });
+  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()(
+    "@test/TestGate",
+    Schema.Number,
+    Schema.Number,
+  );
 
   const testLayer = RunResource.layer(TestGate, {
     effect: (n: number) => Effect.succeed(n + 100),
