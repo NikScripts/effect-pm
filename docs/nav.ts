@@ -29,6 +29,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "multi-node",
       "error-handling",
       "build-and-browser-safety",
+      "no-backward-compat",
       "verification-and-testing",
       "git-workflow",
       "design-and-approval",
