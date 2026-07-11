@@ -24,6 +24,7 @@ import {
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
 import { errorOf, stampQueueWireSchemas, successOf } from "./internal/queueTagSchemas";
+import { assertCustomQueueInstanceSpec } from "./internal/queueSpecAssert";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   HandlerContextOf,
@@ -367,10 +368,12 @@ export const customQueueTag = <Self>() => {
       levelCount: config.levelCount,
       namedLevels: config.namedLevels ?? {},
     };
-    const spec = customQueueSpec(config.payload, levelConfig, {
-      success: config.success,
-      error: config.error,
-    }) as CustomQueueInstanceSpec<F>;
+    const wire = { success: config.success, error: config.error };
+    const spec = assertCustomQueueInstanceSpec<F>(
+      customQueueSpec(config.payload, levelConfig, wire),
+      customQueueSpec(config.payload, levelConfig),
+      wire,
+    );
     const base =
       config.node === undefined
         ? Resource.Tag<Self>()(key, spec, { description: config.description, kind })
