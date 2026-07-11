@@ -54,8 +54,9 @@ const recoverItemSchema = (
     return payload.members[0];
   }
   const pairHead = payload.elements?.[0];
-  if (pairHead?.members !== undefined) {
-    return pairHead.members[0];
+  const itemFromPair = pairHead?.members?.[0];
+  if (itemFromPair !== undefined) {
+    return itemFromPair;
   }
   throw new QueueSpecShapeError({
     reason: "queue spec add.payload is not item | item[] union or pair tuple",

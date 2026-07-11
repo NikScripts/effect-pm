@@ -113,6 +113,8 @@ Apply the same `assert*` pattern to `customQueueSpec` → `CustomQueueInstanceSp
 
 **Verify:** `pnpm run typecheck && pnpm test && pnpm run lint` — 441 tests green
 
+**2026-07-11 follow-up:** fixed `recoverItemSchema` pair-tuple path — `pairHead.members[0]` guarded (`Struct | undefined` at TS line 58). **ready-for-merge** [#21](https://github.com/NikScripts/effect-pm/pull/21).
+
 ---
 
 ## Short prompt (paste to Agent 2)
