@@ -75,6 +75,32 @@ Policy SSOT: [`docs/AGENTS.md`](../AGENTS.md#changeset-policy) · branches: [`do
 
 Also update [`agent-status.md`](./agent-status.md) + session log in handoff (async).
 
+### Owner decisions (mandatory — supervisor must not be out of the loop)
+
+When the owner steers scope, architecture, or defer/ship choices **in chat**, the agent must write it to git **on the same push** as the first code/doc that reflects it — not only in the PR body.
+
+**Where:**
+
+| Situation | File |
+|-----------|------|
+| New session / scope pivot | `docs/handoffs/agent-0N-session-M-*.md` — **§ Owner decisions** + session log |
+| Cross-cutting architecture | append to [`docs/handoffs/owner-decisions.md`](./owner-decisions.md) |
+| Status | [`agent-status.md`](./agent-status.md) row + supervisor queue |
+
+**Each decision entry:**
+
+```markdown
+### YYYY-MM-DD — [topic]
+- **Owner said:** (quote or tight paraphrase)
+- **Chose:** A over B because …
+- **Rejected:** …
+- **Supervisor impact:** merge order, changeset, which agent owns follow-up
+```
+
+**Required before:** opening a PR, touching another agent's module at owner request, or declaring a prior blocker "resolved by design."
+
+**Forbidden:** "Owner approved in chat" with no file on `integration/storage` or the agent branch; supervisor learning scope from PR description alone.
+
 ---
 
 ## Supervisor duties
