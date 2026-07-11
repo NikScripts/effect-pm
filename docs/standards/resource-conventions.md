@@ -15,8 +15,8 @@ them: schemas never move into layer config (that breaks the wire SSOT and RPC sa
 never moves onto the tag (that drags the engine into the light contract).
 
 ``` ts
-// contract — on the tag
-class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", { payload: Job }) {}
+// contract — the wire schema, passed positionally
+class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", Job) {}
 
 // runtime — in the layer
 QueueResource.layer(Mail, { effect: handleJob, autoStart: true })
@@ -25,6 +25,29 @@ QueueResource.layer(Mail, { effect: handleJob, autoStart: true })
 ``` ts
 // ❌ bad — wire schema in the layer (no longer SSOT; client and server can disagree)
 QueueResource.layer(Mail, { payload: Job, effect: handleJob })
+```
+
+{#positional-schema-args .must appliesTo=src}
+## Pass tag schemas positionally when you can
+
+When a tag needs only its wire schema, pass it **positionally** — it's the clearest form. Reach for
+the `{ payload, success, error }` config object only when the tag carries more than one wire slot, or
+extra configuration. `CustomQueueResource` always takes the object, because its lane structure
+(`levelCount`, `namedLevels`) lives on the tag alongside the payload.
+
+``` ts
+// ✅ single schema → positional
+class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", Job) {}
+
+// config object — more than one wire slot
+class Ingest extends Process.Tag<Ingest>()("app/Ingest", { success: Report, error: PullFailed }) {}
+
+// CQR — always the object; lane config rides on the tag
+class Jobs extends CustomQueueResource.Tag<Jobs>()("@acme/Jobs", {
+  payload: Job,
+  levelCount: 4,
+  namedLevels: { interactive: 0, standard: 2, batch: 3 },
+}) {}
 ```
 
 {#behaviour-via-piped-combinators .must appliesTo=src}
@@ -72,16 +95,15 @@ type**, not a wider-shaped default queue. Its scheduling code is loaded only whe
 use.
 
 ``` ts
-// default — three fixed lanes
-class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", { payload: Job }) {}
+// default — three fixed lanes; schema positional
+class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", Job) {}
 
-// custom — N named lanes, a distinct type
-class Jobs extends CustomQueueResource.Tag<Jobs>()("@acme/Jobs", { payload: Job }) {}
-CustomQueueResource.layer(Jobs, {
+// custom — N named lanes, a distinct type; lane config forces the object form
+class Jobs extends CustomQueueResource.Tag<Jobs>()("@acme/Jobs", {
+  payload: Job,
   levelCount: 4,
   namedLevels: { interactive: 0, standard: 2, batch: 3 },
-  takeAlgorithm: "weighted",
-})
+}) {}
 ```
 
 {.note}
