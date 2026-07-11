@@ -28,6 +28,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "resource-conventions",
       "multi-node",
       "error-handling",
+      "build-and-browser-safety",
       "git-workflow",
       "meta",
     ],
