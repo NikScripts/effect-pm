@@ -22,20 +22,7 @@ export const runGateStatus = Schema.Struct({
   totalDurationMs: Schema.Number,
 });
 
-/**
- * Build a run-gate **instance** spec: observation refs plus the gated `run` mutation.
- *
- * @internal
- */
-export const runSpec = <
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top = typeof Schema.Never,
->(
-  payload: I,
-  success: A,
-  error: E = Schema.Never as unknown as E,
-) => ({
+const runObservationRefs = {
   status: Resource.ref(runGateStatus).annotate({
     description:
       "Live current-state snapshot: waiting, in-flight, completed, failed, interrupted, total duration.",
@@ -55,15 +42,119 @@ export const runSpec = <
   interrupted: Resource.ref(Schema.Number).annotate({
     description: "Count of runs interrupted while waiting or executing.",
   }),
-  run: Resource.effectFn(success, { payload, error }).annotate({
+} as const;
+
+const runMethodUnit = <
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+>(
+  success: A,
+  error: E = Schema.Never as unknown as E,
+) =>
+  Resource.effectFn(success, { error }).annotate({
     description:
       "Acquire a permit, run the gated effect, release the permit — returns the effect result.",
-  }),
-});
+  });
 
-/** Instance spec for a run gate typed by its wire schemas. @internal */
-export type RunInstanceSpec<
+const runMethodWithPayload = <
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
-> = ReturnType<typeof runSpec<I, A, E>>;
+>(
+  payload: I,
+  success: A,
+  error: E = Schema.Never as unknown as E,
+) =>
+  Resource.effectFn(success, { payload, error }).annotate({
+    description:
+      "Acquire a permit, run the gated effect, release the permit — returns the effect result.",
+  });
+
+/**
+ * Build a run-gate **instance** spec: observation refs plus the gated `run` mutation.
+ *
+ * Unit gates omit `payload` — `run` surfaces as an {@link Effect.Effect} property (no wire input
+ * slot). Parameterized gates pass `payload` first — `run` surfaces as `(input) => Effect`.
+ *
+ * @internal
+ */
+export function runSpec<
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+>(payload: I, success: A, error?: E): RunInstanceSpec<I, A, E>;
+export function runSpec<
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+>(success: A, error?: E): RunInstanceSpec<undefined, A, E>;
+export function runSpec(
+  payloadOrSuccess: Schema.Top,
+  successOrError?: Schema.Top,
+  error?: Schema.Top,
+): RunInstanceSpec<Schema.Top | undefined, Schema.Top, Schema.Top> {
+  if (successOrError !== undefined && error !== undefined) {
+    return {
+      ...runObservationRefs,
+      run: runMethodWithPayload(payloadOrSuccess, successOrError, error),
+    };
+  }
+  if (successOrError !== undefined) {
+    return {
+      ...runObservationRefs,
+      run: runMethodWithPayload(payloadOrSuccess, successOrError, Schema.Never),
+    };
+  }
+  return {
+    ...runObservationRefs,
+    run: runMethodUnit(payloadOrSuccess),
+  };
+}
+
+/** Instance spec for a run gate typed by its wire schemas. @internal */
+export type RunInstanceSpec<
+  I extends Schema.Top | undefined,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = I extends Schema.Top
+  ? {
+      readonly status: ReturnType<typeof Resource.ref<typeof runGateStatus>>;
+      readonly waiting: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly inFlight: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly completed: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly failed: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly interrupted: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly run: ReturnType<typeof runMethodWithPayload<I, A, E>>;
+    }
+  : {
+      readonly status: ReturnType<typeof Resource.ref<typeof runGateStatus>>;
+      readonly waiting: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly inFlight: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly completed: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly failed: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly interrupted: ReturnType<typeof Resource.ref<typeof Schema.Number>>;
+      readonly run: ReturnType<typeof runMethodUnit<A, E>>;
+    };
+
+/** True when the wire contract declares an input payload slot. @internal */
+export const runSpecHasPayload = (payload: Schema.Top | undefined): payload is Schema.Top =>
+  payload !== undefined && payload !== Schema.Void;
+
+/** Build a spec from resolved wire schemas — disambiguates unit vs parameterized. @internal */
+export const materializeRunSpec = <
+  I extends Schema.Top | undefined,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  payload: I,
+  success: A,
+  error: E,
+): RunInstanceSpec<I, A, E> =>
+  (runSpecHasPayload(payload)
+    ? {
+        ...runObservationRefs,
+        run: runMethodWithPayload(payload, success, error),
+      }
+    : {
+        ...runObservationRefs,
+        run: runMethodUnit(success, error),
+      }) as RunInstanceSpec<I, A, E>;

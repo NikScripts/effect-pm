@@ -33,8 +33,15 @@ Process — this release renames the slots, not the calling convention.
 - **`RunResource.Tag`** is a **`Resource.Tag`** with wire schemas; **`serve` / `serveRemote`**
   mirror Queue/Process.
 - Wire slots renamed: `inputSchema` → **`payload`**, `successSchema` → **`success`**,
-  `errorSchema` → **`error`** (all **optional** — default `Void` / `Void` / `Never`; positional or object).
-- **Unit gates** accept a **bare `Effect`** or `() => Effect` on `layer` / `Service` (not only thunk form).
+  `errorSchema` → **`error`** (success/error optional; **omit `payload` for unit gates**).
+- **Unit gates** — no payload slot on the contract (like Process `start` / `pause`):
+  **`run` is an `Effect` property** → `yield* gate.run` (not `gate.run()`).
+- **Parameterized gates** — declare **`payload`** → **`run` is `(input) => Effect`** →
+  `yield* gate.run(x)`.
+- **Tag arity:** `Tag(key)` / `Tag(key, success)` unit; `Tag(key, payload, success[, error])`
+  parameterized; config object `{ payload?, success?, error? }` — unit `(success, error)` pairs
+  use the object form when both schemas are explicit.
+- **Unit gates** accept a **bare `Effect`** or `() => Effect` on `layer` / `Service`.
 - **`RunResource.store(tag)`** registers built-in run fact + state-history shapes on an app
   **`Store.Service`**.
 - **`RunResource.layer` / `serve` / `Service.layer`** merge **`Store.layerDefaultMemory`**

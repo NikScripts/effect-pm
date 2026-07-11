@@ -25,8 +25,9 @@ describe("RunResource.make", () => {
         name: "@test/serial-runner",
         effect: (_: void) => work,
         concurrency: 1,
+        unit: true,
       });
-      yield* Effect.all(Array.from({ length: 30 }, () => gate.run()), {
+      yield* Effect.all(Array.from({ length: 30 }, () => gate.run), {
         concurrency: "unbounded",
       });
       const p = yield* Ref.get(peak);
@@ -43,8 +44,9 @@ describe("RunResource.make", () => {
         name: "@test/concurrency-4-runner",
         effect: (_: void) => work,
         concurrency: 4,
+        unit: true,
       });
-      yield* Effect.all(Array.from({ length: 40 }, () => gate.run()), {
+      yield* Effect.all(Array.from({ length: 40 }, () => gate.run), {
         concurrency: "unbounded",
       });
       const p = yield* Ref.get(peak);
@@ -390,7 +392,6 @@ describe("RunResource.makeRunner", () => {
 
 describe("RunResource — unit gates and interrupts", () => {
   class UnitGate extends RunResource.Service<UnitGate>()("@test/UnitGate", {
-    payload: Schema.Void,
     success: Schema.Number,
     effect: () => Effect.succeed(42),
     concurrency: 1,
@@ -409,11 +410,11 @@ describe("RunResource — unit gates and interrupts", () => {
 
   const unitLayer = UnitGate.layer;
 
-  it.live("Service.run() accepts no input for Schema.Void payload", () =>
+  it.live("Service.run accepts no input for unit gates", () =>
     Effect.gen(function* () {
       const gate = yield* UnitGate;
-      const fromHandle = yield* gate.run();
-      const fromStatic = yield* UnitGate.run();
+      const fromHandle = yield* gate.run;
+      const fromStatic = yield* UnitGate.run;
       expect(fromHandle).toBe(42);
       expect(fromStatic).toBe(42);
     }).pipe(Effect.provide(unitLayer)),
@@ -422,24 +423,21 @@ describe("RunResource — unit gates and interrupts", () => {
   it.live("Service accepts a bare Effect for unit gates", () =>
     Effect.gen(function* () {
       const gate = yield* BareEffectGate;
-      yield* gate.run();
-      yield* BareEffectGate.run();
+      yield* gate.run;
+      yield* BareEffectGate.run;
     }).pipe(Effect.provide(BareEffectGate.layer)),
   );
 
   it.live("Service accepts bare Effect when success schema is declared", () =>
     Effect.gen(function* () {
       const gate = yield* BareThunkGate;
-      expect(yield* gate.run()).toBe(99);
-      expect(yield* BareThunkGate.run()).toBe(99);
+      expect(yield* gate.run).toBe(99);
+      expect(yield* BareThunkGate.run).toBe(99);
     }).pipe(Effect.provide(BareThunkGate.layer)),
   );
 
   const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {
-    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(key, {
-      payload: Schema.Void,
-      success: Schema.Void,
-    });
+    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(key);
     return {
       tag: HoldGate,
       layer: RunResource.layer(HoldGate, {
@@ -459,7 +457,7 @@ describe("RunResource — unit gates and interrupts", () => {
 
       yield* Effect.gen(function* () {
         const gate = yield* HoldGate;
-        const inFlight = yield* Effect.forkChild(gate.run());
+        const inFlight = yield* Effect.forkChild(gate.run);
         yield* Effect.yieldNow;
         expect(yield* gate.inFlight.get).toBe(1);
         yield* Fiber.interrupt(inFlight);

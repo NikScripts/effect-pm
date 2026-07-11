@@ -34,10 +34,11 @@ describe("makeRunResourceHandleEffect store writes", () => {
         scopeKey,
         effect: () => Effect.void,
         concurrency: 1,
+        unit: true,
       });
 
-      yield* handle.run();
-      yield* handle.run();
+      yield* handle.run;
+      yield* handle.run;
 
       expect(captured.some((line) => line.includes("store write failed"))).toBe(true);
     }).pipe(

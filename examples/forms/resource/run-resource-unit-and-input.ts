@@ -9,7 +9,6 @@ import { RunResource } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/TimedWorkGate", {
-  payload: Schema.Void,
   success: Schema.Number,
   effect: () =>
     Effect.gen(function* () {
@@ -44,7 +43,7 @@ const program = Effect.gen(function* () {
 
   const timed = yield* TimedWorkGate;
   const startTimes = yield* Effect.all(
-    Array.from({ length: 15 }, () => timed.run()),
+    Array.from({ length: 15 }, () => timed.run),
     { concurrency: "unbounded" },
   );
 

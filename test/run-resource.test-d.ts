@@ -2,14 +2,16 @@ import { Effect, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 
 class UnitGate extends RunResource.Service<UnitGate>()("@app/UnitGate", {
-  payload: Schema.Void,
   success: Schema.Number,
   effect: () => Effect.succeed(1),
 }) {}
 
-class InputGate extends RunResource.Tag<InputGate>()("@app/InputGate", { payload: Schema.Number, success: Schema.Number }) {}
+class InputGate extends RunResource.Tag<InputGate>()("@app/InputGate", {
+  payload: Schema.Number,
+  success: Schema.Number,
+}) {}
 
-// @ts-expect-error — void gates reject positional input
+// @ts-expect-error — unit gates reject positional input
 void UnitGate.run(1);
 
 // @ts-expect-error — parameterized gates require input
@@ -27,3 +29,8 @@ declare const _observableHasStatus: "status" extends keyof RunResource.RunResour
   ? true
   : false;
 void (_observableHasStatus satisfies true);
+
+declare const _unitRunIsEffect: typeof UnitGate.run extends Effect.Effect<number, never, UnitGate>
+  ? true
+  : false;
+void (_unitRunIsEffect satisfies true);

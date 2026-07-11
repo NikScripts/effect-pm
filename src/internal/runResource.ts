@@ -44,7 +44,7 @@ export interface RunGateStatus {
 }
 
 type RunGateRun<T, A, E> = [T] extends [void]
-  ? () => Effect.Effect<A, E>
+  ? Effect.Effect<A, E>
   : (input: T) => Effect.Effect<A, E>;
 
 /** Minimal handle from {@link makeRunGateHandleEffect} — run only. @internal */
@@ -69,6 +69,8 @@ export interface RunResourceConfig<T, A, E> {
   readonly tag?: StoreScopeTag;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
+  /** When true, `.run` is an {@link Effect.Effect} property (no wire payload). @internal */
+  readonly unit?: boolean;
 }
 
 /** @internal */
@@ -195,6 +197,7 @@ const makeObservedRun =
     store: RunResourceStoreContext,
     runSeqRef: Ref.Ref<number>,
     concurrency: number,
+    unit: boolean,
   ): RunGateRun<T, A, E> => {
   const publishStatus = (
     update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
@@ -310,7 +313,10 @@ const makeObservedRun =
     );
   };
 
-  return ((input?: T) => runBody(input as T)) as RunGateRun<T, A, E>;
+  if (unit) {
+    return runBody(undefined as T) as RunGateRun<T, A, E>;
+  }
+  return ((input: T) => runBody(input)) as RunGateRun<T, A, E>;
 };
 
 /**
@@ -372,6 +378,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
         store,
         runSeqRef,
         concurrency,
+        config.unit ?? false,
       ),
       ...makeStatusSubscribables(statusRef),
     };

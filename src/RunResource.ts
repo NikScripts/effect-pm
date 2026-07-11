@@ -38,7 +38,7 @@
  *   error: FetchErrSchema,
  * }) {}
  *
- * // unit gate — bare effect, wire slots default to Void / Never
+ * // unit gate — omit payload; bare effect on Service / layer
  * class Tick extends RunResource.Service<Tick>()("@app/Tick", {
  *   effect: Effect.sleep("1 second"),
  * }) {}
@@ -80,8 +80,8 @@ import * as internal from "./internal/runResource";
 import { errorSym, successSym } from "./internal/runTagSchemas";
 import * as Store from "./Store";
 import {
-  runGateStatus,
-  runSpec,
+  materializeRunSpec,
+  runSpecHasPayload,
   type RunInstanceSpec,
 } from "./internal/runResourceSchema";
 
@@ -94,7 +94,7 @@ import {
  *
  * @public
  */
-export { runGateStatus };
+export { runGateStatus, runSpec } from "./internal/runResourceSchema";
 
 /**
  * This contract's canonical **kind** — stamped on every run-gate tag.
@@ -102,14 +102,6 @@ export { runGateStatus };
  * @public
  */
 export const kind = "@nikscripts/effect-pm/RunResource";
-
-/**
- * Build a run-gate **instance** spec from wire schemas — pass to {@link Resource.Tag} or use via
- * {@link Tag} / {@link Service}.
- *
- * @public
- */
-export { runSpec };
 
 /** @public */
 export type { RunInstanceSpec };
@@ -143,11 +135,19 @@ export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
 /**
  * Static `.run` shortcut on {@link Tag} / {@link Service} — adds the tag to `R`.
  *
+ * Unit gates (no payload slot) resolve to an {@link Effect.Effect}; parameterized gates resolve
+ * to `(input) => Effect`.
+ *
  * @public
  */
-export type RunResourceStaticRun<I, A, E, Self> = Schema.Schema.Type<I> extends void
-  ? () => Effect.Effect<A, E, Self>
-  : (input: Schema.Schema.Type<I>) => Effect.Effect<A, E, Self>;
+export type RunResourceStaticRun<
+  I extends Schema.Top | undefined,
+  A extends Schema.Top,
+  E extends Schema.Top,
+  Self,
+> = [I] extends [undefined]
+  ? Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>
+  : (input: Schema.Schema.Type<I>) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>;
 
 /**
  * Service factory result — tag surface plus baked-in layer and configure helpers.
@@ -157,7 +157,7 @@ export type RunResourceStaticRun<I, A, E, Self> = Schema.Schema.Type<I> extends 
 export interface RunResourceServiceDefinition<
   Self,
   Name extends string,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
   R = never,
@@ -167,7 +167,7 @@ export interface RunResourceServiceDefinition<
   readonly configure: (
     patch: ConfigPatch<
       RunResourceLayerConfig<
-        Schema.Schema.Type<I>,
+        RunPayloadDecoded<I>,
         Schema.Schema.Type<A>,
         Schema.Schema.Type<E>,
         R
@@ -177,13 +177,13 @@ export interface RunResourceServiceDefinition<
   readonly wrapGate: (
     fn: (
       previous: RunResourceLayerConfig<
-        Schema.Schema.Type<I>,
+        RunPayloadDecoded<I>,
         Schema.Schema.Type<A>,
         Schema.Schema.Type<E>,
         R
       >["effect"],
     ) => RunResourceLayerConfig<
-      Schema.Schema.Type<I>,
+      RunPayloadDecoded<I>,
       Schema.Schema.Type<A>,
       Schema.Schema.Type<E>,
       R
@@ -194,7 +194,7 @@ export interface RunResourceServiceDefinition<
 /** Tag + static `.run` shortcut. @internal */
 type RunTagWithStaticRun<
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 > = ResourceTag<Self, RunInstanceSpec<I, A, E>> & {
@@ -208,7 +208,7 @@ type RunTagWithStaticRun<
  */
 export type RunResourceTagDefinition<
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 > = RunTagWithStaticRun<Self, I, A, E>;
@@ -219,12 +219,12 @@ export type RunResourceTagDefinition<
  * @public
  */
 export interface RunResourceWireSchemas<
-  I extends Schema.Top = typeof Schema.Void,
+  I extends Schema.Top | undefined = undefined,
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > {
-  /** Wire input schema; defaults to {@link Schema.Void} (unit gate). */
-  readonly payload?: I;
+  /** Wire input schema; omit for unit gates (no payload slot on the contract). */
+  readonly payload?: I extends Schema.Top ? I : never;
   /** Wire success schema; defaults to {@link Schema.Void}. Omitted slots are not store-stamped. */
   readonly success?: A;
   /** Wire error schema; defaults to {@link Schema.Never}. Omitted slots are not store-stamped. */
@@ -237,22 +237,32 @@ export interface RunResourceWireSchemas<
  * @public
  */
 export interface RunResourceTagSchemas<
-  I extends Schema.Top = Schema.Top,
+  I extends Schema.Top | undefined = undefined,
   A extends Schema.Top = Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 > extends RunResourceWireSchemas<I, A, E> {
   readonly description?: string;
 }
 
+/** Decoded payload type for layer / service config. @internal */
+type RunPayloadDecoded<I extends Schema.Top | undefined> = [I] extends [undefined]
+  ? void
+  : Schema.Schema.Type<I>;
+
 /**
- * Gated effect for {@link layer} / {@link serve} — unit gates (`void` input) accept a bare
+ * Gated effect for {@link layer} / {@link serve} — unit gates accept a bare
  * {@link Effect.Effect} or `() => Effect`; parameterized gates use `(input) => Effect`.
  *
  * @public
  */
-export type RunResourceLayerEffect<I, A, E, R> = [I] extends [void]
+export type RunResourceLayerEffect<
+  I extends Schema.Top | undefined,
+  A,
+  E,
+  R,
+> = [I] extends [undefined]
   ? Effect.Effect<A, E, R> | (() => Effect.Effect<A, E, R>)
-  : (input: I) => Effect.Effect<A, E, R>;
+  : (input: Schema.Schema.Type<I>) => Effect.Effect<A, E, R>;
 
 /**
  * Gated effect for {@link Service} — same rules as {@link RunResourceLayerEffect} at the decoded type.
@@ -260,18 +270,11 @@ export type RunResourceLayerEffect<I, A, E, R> = [I] extends [void]
  * @public
  */
 export type RunResourceServiceEffect<
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top,
   R,
-> = [Schema.Schema.Type<I>] extends [void]
-  ? Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
-    | (() => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>)
-  : (input: Schema.Schema.Type<I>) => Effect.Effect<
-      Schema.Schema.Type<A>,
-      Schema.Schema.Type<E>,
-      R
-    >;
+> = RunResourceLayerEffect<I, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>;
 
 /**
  * Full {@link Service} config — wire schemas and the gated effect in one object.
@@ -279,7 +282,7 @@ export type RunResourceServiceEffect<
  * @public
  */
 export interface RunResourceServiceConfig<
-  I extends Schema.Top = typeof Schema.Void,
+  I extends Schema.Top | undefined = undefined,
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
   R = never,
@@ -298,11 +301,16 @@ export interface RunResourceServiceConfig<
  *
  * @public
  */
+/** Gated effect at decoded payload types — used by {@link RunResourceLayerConfig}. @internal */
+type RunResourceLayerEffectDecoded<I, A, E, R> = [I] extends [void]
+  ? Effect.Effect<A, E, R> | (() => Effect.Effect<A, E, R>)
+  : (input: I) => Effect.Effect<A, E, R>;
+
 export interface RunResourceLayerConfig<I, A, E, R> {
   /** Override telemetry / status `resourceId`; defaults to the tag key. */
   readonly name?: string;
   /** Unit gates may pass a bare effect; parameterized gates use `(input) => Effect`. */
-  readonly effect: RunResourceLayerEffect<I, A, E, R>;
+  readonly effect: RunResourceLayerEffectDecoded<I, A, E, R>;
   /**
    * Max concurrent executions through this gate.
    * @default 1
@@ -319,6 +327,8 @@ export interface RunResourceConfig<T, A, E> {
   readonly name?: string;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
+  /** When true, `.run` is an {@link Effect.Effect} property (unit gate). @public */
+  readonly unit?: boolean;
 }
 
 /**
@@ -344,20 +354,24 @@ export type RunResourceRunner = internal.RunResourceRunner;
 
 /** Resolved wire schemas with RPC defaults applied. @internal */
 const resolveRunWireSchemas = <
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top,
 >(
   config: RunResourceWireSchemas<I, A, E>,
-): { readonly payload: I; readonly success: A; readonly error: E } => ({
-  payload: (config.payload ?? Schema.Void) as I,
+): {
+  readonly payload: I;
+  readonly success: A;
+  readonly error: E;
+} => ({
+  payload: config.payload as I,
   success: (config.success ?? Schema.Void) as A,
   error: (config.error ?? Schema.Never) as E,
 });
 
 /** Normalize bare unit-gate effects and thunk forms into `(input) => Effect`. @internal */
 const toRunFn = <I, A, E, R>(
-  effect: RunResourceLayerEffect<I, A, E, R>,
+  effect: RunResourceLayerEffectDecoded<I, A, E, R>,
 ): ((input: I) => Effect.Effect<A, E, R>) => {
   if (Effect.isEffect(effect)) {
     return (() => effect) as (input: I) => Effect.Effect<A, E, R>;
@@ -365,9 +379,53 @@ const toRunFn = <I, A, E, R>(
   return effect as (input: I) => Effect.Effect<A, E, R>;
 };
 
+const isRunTagConfigObject = (
+  value: unknown,
+): value is RunResourceTagSchemas<Schema.Top | undefined, Schema.Top, Schema.Top> =>
+  typeof value === "object"
+  && value !== null
+  && !Schema.isSchema(value)
+  && ("payload" in value || "success" in value || "error" in value || "description" in value);
+
+/** Parse {@link Tag} positional schema args or a config object. @internal */
+const parseRunTagArgs = (
+  args: ReadonlyArray<unknown>,
+): RunResourceTagSchemas<Schema.Top | undefined, Schema.Top, Schema.Top> => {
+  if (args.length === 0) {
+    return {};
+  }
+  if (args.length === 1) {
+    const arg = args[0];
+    if (Schema.isSchema(arg)) {
+      return { success: arg };
+    }
+    if (isRunTagConfigObject(arg)) {
+      return arg;
+    }
+    return {};
+  }
+  if (args.every(Schema.isSchema)) {
+    if (args.length === 2) {
+      return { payload: args[0] as Schema.Top, success: args[1] as Schema.Top };
+    }
+    if (args.length === 3) {
+      return {
+        payload: args[0] as Schema.Top,
+        success: args[1] as Schema.Top,
+        error: args[2] as Schema.Top,
+      };
+    }
+  }
+  throw new Error(
+    "Invalid RunResource.Tag arguments — use Tag(key), Tag(key, success), "
+      + "Tag(key, payload, success[, error]), or Tag(key, { … }). "
+      + "Unit gates with success and error schemas use the config object form.",
+  );
+};
+
 const stampRunWireSchemas = <
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top,
 >(
@@ -389,33 +447,38 @@ const stampRunWireSchemas = <
     : tag;
 };
 
+const runMethodHasPayload = (tag: ResourceTag<any, any>): boolean => {
+  const run = tag[Resource.specSym].run as { readonly payload?: unknown };
+  return run.payload !== undefined;
+};
+
 const makeStaticRun = <
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top,
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-): RunResourceStaticRun<I, A, E, Self> =>
-  ((input?: Schema.Schema.Type<I>) =>
+): RunResourceStaticRun<I, A, E, Self> => {
+  if (!runMethodHasPayload(tag)) {
+    return Effect.gen(function* () {
+      const svc = yield* tag;
+      return yield* svc.run as Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>;
+    }) as RunResourceStaticRun<I, A, E, Self>;
+  }
+  return ((input: Schema.Schema.Type<I>) =>
     Effect.gen(function* () {
       const svc = yield* tag;
-      const run = svc.run;
-      if (input === undefined) {
-        if (typeof run === "function") {
-          return yield* (run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)();
-        }
-        return yield* (run as Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>);
-      }
-      return yield* (run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
+      return yield* (svc.run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
         Schema.Schema.Type<A>,
         Schema.Schema.Type<E>
       >)(input);
     })) as RunResourceStaticRun<I, A, E, Self>;
+};
 
 const materializeRunTag = <
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top,
 >(
@@ -423,13 +486,17 @@ const materializeRunTag = <
   config: RunResourceTagSchemas<I, A, E>,
 ): RunTagWithStaticRun<Self, I, A, E> => {
   const resolved = resolveRunWireSchemas(config);
-  const spec = runSpec(resolved.payload, resolved.success, resolved.error);
+  const wirePayload = runSpecHasPayload(resolved.payload) ? resolved.payload : undefined;
+  const spec = materializeRunSpec(wirePayload as I, resolved.success, resolved.error);
   const tag = Resource.Tag<Self>()(key, spec, {
     description: config.description,
     kind,
   });
   const ready = Resource.withReadiness(tag, (svc) =>
-    Effect.map(svc.status.get, () => ({ ready: true })),
+    Effect.map(
+      (svc as { readonly status: { readonly get: Effect.Effect<RunGateStatus> } }).status.get,
+      () => ({ ready: true }),
+    ),
   ) as ResourceTag<Self, RunInstanceSpec<I, A, E>>;
   const stamped = stampRunWireSchemas<Self, I, A, E>(ready, config, resolved);
   return Object.assign(stamped, { run: makeStaticRun(stamped) }) as RunTagWithStaticRun<
@@ -441,23 +508,43 @@ const materializeRunTag = <
 };
 
 const runTag = <Self>() => {
-  function build(key: string): RunTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
-  function build<
-    I extends Schema.Top,
-    A extends Schema.Top,
-    E extends Schema.Top = typeof Schema.Never,
-  >(
-    key: string,
-    config: RunResourceTagSchemas<I, A, E>,
-  ): RunTagWithStaticRun<Self, I, A, E>;
-  function build<
-    I extends Schema.Top,
-    A extends Schema.Top,
-    E extends Schema.Top,
-  >(key: string, config?: RunResourceTagSchemas<I, A, E>) {
-    return materializeRunTag<Self, I, A, E>(key, config ?? {});
-  }
-  return build;
+  type Build = {
+    (
+      key: string,
+    ): RunTagWithStaticRun<Self, undefined, typeof Schema.Void, typeof Schema.Never>;
+    <A extends Schema.Top>(
+      key: string,
+      success: A,
+    ): RunTagWithStaticRun<Self, undefined, A, typeof Schema.Never>;
+    <I extends Schema.Top, A extends Schema.Top>(
+      key: string,
+      payload: I,
+      success: A,
+    ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
+    <I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
+      key: string,
+      payload: I,
+      success: A,
+      error: E,
+    ): RunTagWithStaticRun<Self, I, A, E>;
+    <
+      I extends Schema.Top | undefined,
+      A extends Schema.Top,
+      E extends Schema.Top = typeof Schema.Never,
+    >(
+      key: string,
+      config: RunResourceTagSchemas<I, A, E>,
+    ): RunTagWithStaticRun<Self, I, A, E>;
+    (key: string, ...args: ReadonlyArray<unknown>): RunTagWithStaticRun<
+      Self,
+      Schema.Top | undefined,
+      Schema.Top,
+      Schema.Top
+    >;
+  };
+  const build = (key: string, ...args: ReadonlyArray<unknown>) =>
+    materializeRunTag(key, parseRunTagArgs(args));
+  return build as Build;
 };
 
 /** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
@@ -474,29 +561,41 @@ const withDefaultStoreBridge = <A, E, R>(
  */
 const buildRunImpl = <
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top,
   R,
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+  config: RunResourceLayerConfig<
+    RunPayloadDecoded<I>,
+    Schema.Schema.Type<A>,
+    Schema.Schema.Type<E>,
+    R
+  >,
 ): Effect.Effect<any, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
+    const unit = !runMethodHasPayload(tag);
     const context = yield* Effect.context<R>();
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
     const effectiveConfig = yield* foldConfiguredSpec<
-      RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
+      RunResourceLayerConfig<
+        RunPayloadDecoded<I>,
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>,
+        R
+      >
     >(tag.key, { ...config, name: tag.key });
     const handle = yield* internal.makeRunResourceHandleEffect({
       name: effectiveConfig.name ?? tag.key,
       scopeKey: tag.key,
       tag,
-      effect: (input: Schema.Schema.Type<I>) =>
+      effect: (input: RunPayloadDecoded<I>) =>
         provideR(toRunFn(effectiveConfig.effect)(input)),
       concurrency: effectiveConfig.concurrency,
+      unit,
     });
 
     const statusSub = {
@@ -510,10 +609,13 @@ const buildRunImpl = <
       completed: handle.completed,
       failed: handle.failed,
       interrupted: handle.interrupted,
-      run: (input?: Schema.Schema.Type<I>) =>
-        input === undefined
-          ? (handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)()
-          : handle.run(input as Schema.Schema.Type<I>),
+      run: unit
+        ? handle.run
+        : (input: Schema.Schema.Type<I>) =>
+            (handle.run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
+              Schema.Schema.Type<A>,
+              Schema.Schema.Type<E>
+            >)(input),
     };
     return Resource.builtResource(
       tag,
@@ -538,10 +640,20 @@ export const make = internal.makeRunGateHandleEffect;
  *
  * @public
  */
-export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
+export const configure = <
+  Self,
+  I extends Schema.Top | undefined,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   patch: ConfigPatch<
-    RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, never>
+    RunResourceLayerConfig<
+      RunPayloadDecoded<I>,
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      never
+    >
   >,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
@@ -552,13 +664,18 @@ export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E ex
  */
 export const layer = <
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+  config: RunResourceLayerConfig<
+    RunPayloadDecoded<I>,
+    Schema.Schema.Type<A>,
+    Schema.Schema.Type<E>,
+    R
+  >,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   withDefaultStoreBridge(
     Layer.unwrap(
@@ -575,13 +692,18 @@ export const layer = <
  */
 export function serveRemote<
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+  config: RunResourceLayerConfig<
+    RunPayloadDecoded<I>,
+    Schema.Schema.Type<A>,
+    Schema.Schema.Type<E>,
+    R
+  >,
 ): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemote(
   tag: ResourceTag<any, any>,
@@ -605,13 +727,18 @@ export function serveRemote(
  */
 export function serve<
   Self,
-  I extends Schema.Top,
+  I extends Schema.Top | undefined,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+  config: RunResourceLayerConfig<
+    RunPayloadDecoded<I>,
+    Schema.Schema.Type<A>,
+    Schema.Schema.Type<E>,
+    R
+  >,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
   never,
@@ -639,7 +766,7 @@ export function serve(
 export const Service = <Self>() => {
   function build<
     const Name extends string,
-    I extends Schema.Top = typeof Schema.Void,
+    I extends Schema.Top | undefined = undefined,
     A extends Schema.Top = typeof Schema.Void,
     E extends Schema.Top = typeof Schema.Never,
     R = never,
@@ -648,17 +775,17 @@ export const Service = <Self>() => {
     config: RunResourceServiceConfig<I, A, E, R>,
   ) {
     const wire = resolveRunWireSchemas(config);
-    const tag = runTag<Self>()(name, config);
+    const tag = runTag<Self>()(name, config as RunResourceTagSchemas<I, A, E>);
     const error = wire.error;
     const defaultSpec = { name, ...config, ...wire, error };
     const layerConfig: RunResourceLayerConfig<
-      Schema.Schema.Type<I>,
+      RunPayloadDecoded<I>,
       Schema.Schema.Type<A>,
       Schema.Schema.Type<E>,
       R
     > = {
-      effect: config.effect as RunResourceLayerEffect<
-        Schema.Schema.Type<I>,
+      effect: config.effect as RunResourceLayerEffectDecoded<
+        RunPayloadDecoded<I>,
         Schema.Schema.Type<A>,
         Schema.Schema.Type<E>,
         R
@@ -671,7 +798,7 @@ export const Service = <Self>() => {
       configure: (
         patch: ConfigPatch<
           RunResourceLayerConfig<
-            Schema.Schema.Type<I>,
+            RunPayloadDecoded<I>,
             Schema.Schema.Type<A>,
             Schema.Schema.Type<E>,
             R
@@ -681,13 +808,13 @@ export const Service = <Self>() => {
       wrapGate: (
         fn: (
           previous: RunResourceLayerConfig<
-            Schema.Schema.Type<I>,
+            RunPayloadDecoded<I>,
             Schema.Schema.Type<A>,
             Schema.Schema.Type<E>,
             R
           >["effect"],
         ) => RunResourceLayerConfig<
-          Schema.Schema.Type<I>,
+          RunPayloadDecoded<I>,
           Schema.Schema.Type<A>,
           Schema.Schema.Type<E>,
           R
