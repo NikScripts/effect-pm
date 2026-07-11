@@ -17,19 +17,19 @@ Remote Process clients must get **typed `error`** (and **`success`** when stampe
 | Rejected | Chosen |
 |----------|--------|
 | Session 3 deferral of RPC `error` | Per-tag RPC spec rebuild (RunResource pattern) |
-| `runImmediately` — void RPC, `Effect<void, never>`, failures swallowed to store | Replace with **`run`** or **`effect`** — proper `Resource.effectFn` on `processSpec` |
+| `runImmediately` — void RPC, `Effect<void, never>`, failures swallowed to store | Replace with **`run`** or **`effect`** — proper **`Resource.effect`** on `processSpec` (not `effectFn`) |
 | Internal `() => Effect.…` handle API | Toolkit **service member** — `yield* Tag.run(…)` / `yield* Tag.effect(…)` |
 
 **Naming (confirm with owner in Slice 0 — one message):** default recommendation **`run`** (parity with `RunResource.run`); **`effect`** if owner wants the verb to match layer config `effect`.
 
-**Input (owner 2026-07-11):** Manual run is **not** a zero-argument fire-and-forget. RPC must accept **payload when the tag defines one** (mirror RunResource). If tag has no payload slot, use **`Schema.Void`** payload — but the wire shape is still `Resource.effectFn(success, { payload, error })`, not a parameterless mutate.
+**Input (owner 2026-07-11):** Manual run is **not** a zero-argument fire-and-forget. RPC must accept **payload when the tag defines one** (mirror RunResource). If tag has no payload slot, use **`Schema.Void`** payload — but the wire shape is still **`Resource.effect(success, { payload, error })`** (`query` kind, lazy re-runnable — **not** `effectFn` / `mutate`).
 
 ---
 
 ## Problem today (`src/Process.ts`)
 
 1. **Shared `processSpec`** — all tags use one constant; tag `success`/`error` stamps never reach RPC ([`buildProcessTag` ~1931](src/Process.ts)).
-2. **`runImmediately`** — `Resource.effectFn(Schema.Void)` + impl `Effect<void, never>`; [`trackedProgram` ~659–687](src/Process.ts) records `Failed` to store and **returns** without failing RPC.
+2. **`runImmediately`** — `Resource.effectFn(Schema.Void)` today; impl `Effect<void, never>`; [`trackedProgram` ~659–687](src/Process.ts) records `Failed` to store and **returns** without failing RPC. **Owner:** manual run must be **`Resource.effect`**, not `effectFn`.
 3. **Handle shape** — engine exposes `runImmediately: () => Effect<…>` instead of a spec-backed RPC method.
 
 `start` / `stop` stay void lifecycle commands unless owner expands scope (fork/interrupt errors only).
@@ -48,7 +48,8 @@ buildProcessSpec({
   error: E,
 }) => ({
   ...processControlSpec,       // status, logs, start, stop, …
-  run: Resource.effectFn(success, { payload, error }).annotate({
+  // Member name: `run` or `effect` (owner Slice 0) — built with Resource.effect, not effectFn
+  run: Resource.effect(success, { payload, error }).annotate({
     description: "Run the process worker effect once, tracked — returns success; failures typed on error.",
   }),
 })
@@ -125,7 +126,7 @@ You are Agent 2. Branch cursor/process-run-rpc-a009 from integration/storage.
 
 Slice 0: ask owner — verb `run` vs `effect`; whether Process tag gets optional `payload` for manual RPC input.
 
-Then implement per handoff: per-tag buildProcessSpec, replace runImmediately with run/effect (Resource.effectFn + typed error/success), engine propagates failure to RPC, tests, docs, web rename. Revoke Session 3 RPC defer text.
+Then implement per handoff: per-tag buildProcessSpec, replace runImmediately with run/effect using **Resource.effect** (not effectFn), typed error/success on RPC, engine propagates failure, tests, docs, web rename. Revoke Session 3 RPC defer text.
 
 Before/After/Verify each slice. Update owner-decisions.md on same push as code.
 ```
