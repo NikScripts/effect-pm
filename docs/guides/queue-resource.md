@@ -121,7 +121,7 @@ the whole stack: worker return → `success: exit.value` → `completed(entry, s
 and `Completed.success` is `void`. Typed **error** capture (`Failed.cause: Cause<E>`) is live the same way —
 declare `error` on the tag; the live **`events` stream** and RPC wire use the same schemas from
 {@link queueSpec} (aligned with {@link CustomQueueResource}). Store tier-1 `record` / `events` types
-remain erased at the schema level — see {@link QueueStoreCompleted} for typed analytics reads (Phase 2).
+remain erased at the schema level — see {@link QueueStoreCompleted} for typed analytics reads (**Phase 2 — open**).
 
 ## Tier 1 — lean base (`record` / `events`)
 

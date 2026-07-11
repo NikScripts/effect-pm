@@ -61,7 +61,7 @@ class Health extends Process.Tag<Health>()("app/Health") {}
 // value-returning — gains `result.get` / `result.changes` (Option until first success)
 class Prices extends Process.Tag<Prices>()("app/Prices", { success: Price }) {}
 
-// value + typed fail channel on store rows
+// value + typed fail on live events stream + store rows
 class PricesE extends Process.Tag<PricesE>()("app/Prices", {
   success: Price,
   error: FetchErr,
@@ -86,9 +86,22 @@ class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule(
 ## Handle surface (`yield* Tag`)
 
 - **Lifecycle:** `start`, `stop`, `runImmediately`.
-- **Observe:** `status` (`status.get` / `status.changes`), `logs.live`, `logs.history` (needs `captureLogs` + `HistoryStore`).
+- **Observe:** `status` (`status.get` / `status.changes`), **`events`** (live execution lifecycle stream), `logs.live`, `logs.history` (needs `captureLogs` + `HistoryStore`).
 - **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
 - **Result** (when `success` on tag): `result.get` / `result.changes` — `Option` until first success.
+
+### Live `events` stream
+
+Same union as the store journal — tag `success` / `error` wire slots type the stream (PR #20):
+
+```ts
+const proc = yield* PricesE;
+yield* Stream.runForEach(proc.events, (e) =>
+  e._tag === "Failed" ? logTypedError(e.error) : Effect.void,
+);
+```
+
+Failures are **not** on void lifecycle RPCs (`start` / `stop` / `runImmediately`). Use **`events`** for live observation or **`Process.store`** for durable history.
 
 ---
 

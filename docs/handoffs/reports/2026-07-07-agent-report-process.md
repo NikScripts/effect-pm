@@ -39,7 +39,18 @@ Authoritative cutover notes: [`../store-cutover-process.md`](../store-cutover-pr
 
 ## Open items (owner decision)
 
-### RPC error wire blocker
+### ~~RPC error wire blocker~~ → Resolved by `events` stream (Session 4)
+
+**Decision:** Do **not** graft typed `error` onto void lifecycle RPCs (`start` / `stop` / `runImmediately`).
+Process failures are visible on the live **`events`** stream and in **`Process.store`** — same model as Queue.
+
+| Surface | Typed `Failed` |
+|---------|----------------|
+| Live `yield* Tag` → `events` | ✅ PR #20 |
+| Store `record` / `events()` | ✅ Session 2 |
+| Void lifecycle RPC error channel | ❌ intentionally omitted |
+
+Historical investigation (Session 2) — kept for context:
 
 Tag `error` is **stamped** on the tag object but **not grafted** onto the RPC spec. Process failures today are background poll ticks recorded to the store — there is no request/response worker RPC like RunResource `run`.
 
@@ -68,7 +79,27 @@ pnpm test
 pnpm exec vitest run test/process-store-*.test.ts test/process-built-resource.test-d.ts test/process-toolkit.test.ts
 ```
 
-Session 2: **438 tests passed** (98 files).
+Session 2: **438 tests passed** (98 files).  
+Session 4 (PR #20): **440 tests passed** (99 files).
+
+---
+
+## Session 4 outcomes (`cursor/process-events-stream-a009` + `cursor/queue-spec-wire-a009`)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Queue Phase 1 — typed `events` RPC wire | ✅ **PR #19** | `queueSpec(success?, error?)`, tests `queue-success-value.*` |
+| Process live `events` stream | ✅ **PR #20** | `buildProcessSpec`, `test/process-events-stream.*` |
+| RPC void-lifecycle `error` graft | ✅ **Closed (deferred)** | Failures on `events` stream — see handoff [session-4](./agent-02-session-4-queue-process-events.md) |
+| Consumer docs (`PROCESS-API`, `guides/process`, `guides/queue-resource`) | ✅ | This push |
+| Manager handoff (`agent-status`, session-4 doc) | ✅ | Supervisor merge queue + remaining work table |
+
+### Remaining (not in PR #19/#20)
+
+- **Queue / Process store Phase 2** — tier-1 `record` / `events` schema erase at store facet
+- **Store naming/layout** — `facetStore`, `spine`, discoverability (design only so far)
+- **Changeset + release** — owner approval
+- **`STORAGE.md`** — Agent 1
 
 ---
 
