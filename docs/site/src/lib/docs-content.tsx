@@ -29,6 +29,7 @@ export interface Rule {
 export interface ChapterMeta {
   readonly id: string;
   readonly title: string;
+  readonly order?: number;
   readonly rules: ReadonlyArray<Rule>;
 }
 
@@ -43,14 +44,14 @@ const severities = new Set(["must", "should", "may"]);
 
 // Walk sections, pull the sparing `{…}` attribute blocks agents wrote.
 const collect = (doc: djot.Doc) => {
-  let page: { id: string; title: string } | undefined;
+  let page: { id: string; title: string; order?: string } | undefined;
   const raw: Array<{ id: string; severity: string; appliesTo: string }> = [];
   const walk = (n: any) => {
     if (n?.tag === "section") {
       const a = n.attributes ?? {};
       const sev = (a.class ?? "").split(/\s+/).find((c: string) => severities.has(c));
       if (a.id && sev) raw.push({ id: `${page?.id ?? "?"}.${a.id}`, severity: sev, appliesTo: a.appliesTo ?? "all" });
-      else if (a.id && a.title && !page) page = { id: a.id, title: a.title };
+      else if (a.id && a.title && !page) page = { id: a.id, title: a.title, order: a.order };
     }
     for (const c of n?.children ?? []) walk(c);
   };
@@ -74,7 +75,12 @@ const parseChapter = (raw: string) =>
       if (seen.has(r.id)) return yield* Effect.fail(new DuplicateRuleId({ id: r.id }));
       seen.add(r.id);
     }
-    const meta: ChapterMeta = { id: page.id, title: page.title, rules };
+    const meta: ChapterMeta = {
+      id: page.id,
+      title: page.title,
+      order: page.order === undefined ? undefined : Number(page.order),
+      rules,
+    };
     return { doc, meta };
   });
 
@@ -92,7 +98,7 @@ const toReact = (n: any): React.ReactNode => {
     case "heading": return h(`h${n.level ?? 2}`, { key: keySeq++ }, kids(n));
     case "para": return h("p", { key: keySeq++, className: n.attributes?.class }, kids(n));
     case "str": return n.text;
-    case "softbreak": return " ";
+    case "soft_break": case "softbreak": return " ";
     case "verbatim": return h("code", { key: keySeq++ }, n.text);
     case "strong": return h("strong", { key: keySeq++ }, kids(n));
     case "emph": return h("em", { key: keySeq++ }, kids(n));
@@ -130,6 +136,7 @@ export interface NavItem {
   readonly slug: string;
   readonly href: string;
   readonly title: string;
+  readonly order?: number;
 }
 
 const hrefFor = (slug: string, group: string): string =>
@@ -147,8 +154,14 @@ export const navItems = async (): Promise<ReadonlyArray<NavItem>> => {
         Effect.catch(() => Effect.succeed({ id: c.slug, title: c.slug, rules: [] } as ChapterMeta)),
       ),
     );
-    out.push({ slug: c.slug, href: hrefFor(c.slug, c.group), title: meta.title });
+    out.push({ slug: c.slug, href: hrefFor(c.slug, c.group), title: meta.title, order: meta.order });
   }
-  // Home first, then the rest alphabetically by title.
-  return out.sort((a, b) => (a.href === "/" ? -1 : b.href === "/" ? 1 : a.title.localeCompare(b.title)));
+  // Home first, then by declared chapter `order`, unordered (e.g. placeholders) last, ties by title.
+  return out.sort((a, b) => {
+    if (a.href === "/") return -1;
+    if (b.href === "/") return 1;
+    const ao = a.order ?? Infinity;
+    const bo = b.order ?? Infinity;
+    return ao !== bo ? ao - bo : a.title.localeCompare(b.title);
+  });
 };

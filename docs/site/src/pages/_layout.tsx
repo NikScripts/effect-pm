@@ -17,11 +17,18 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />
       <nav>
         <a className="brand" href="/">effect-pm</a>
-        {items.map((i) => (
-          <a key={i.href} href={i.href}>{i.title}</a>
-        ))}
       </nav>
-      <main>{children}</main>
+      <div className="layout">
+        <aside className="sidebar">
+          <details className="chapters">
+            <summary>Chapters</summary>
+            {items.map((i) => (
+              <a key={i.href} href={i.href}>{i.title}</a>
+            ))}
+          </details>
+        </aside>
+        <main>{children}</main>
+      </div>
     </>
   );
 }
