@@ -12,31 +12,29 @@ import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import * as Resource from "@pm/Resource";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
 
-// 1. the contract — this custom resource's methods
+// 1. the contract — `value` is a reactive ref (Subscribable: get + changes)
 class Counter extends Resource.Tag<Counter>()("docs/Counter", {
-  current: Resource.effect(Schema.Number),
-  changes: Resource.stream(Schema.Number),
+  value: Resource.ref(Schema.Number),
   increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
   reset: Resource.effectFn(Schema.Void),
 }) {}
 
-// 2. the local implementation — a SubscriptionRef holds the value
+// 2. the local implementation — a SubscriptionRef, surfaced as the ref via `subscribable`
 const counterLayer = Resource.layer(
   Counter,
   Effect.gen(function* () {
     const ref = yield* SubscriptionRef.make(0);
     return {
-      current: SubscriptionRef.get(ref),
-      changes: SubscriptionRef.changes(ref),
+      value: Resource.subscribable(ref),
       increment: ({ by }: { readonly by: number }) => SubscriptionRef.update(ref, (n) => n + by),
       reset: SubscriptionRef.set(ref, 0),
     };
   }) as never,
 );
 
-// 3. reactive wiring — live count off `changes`, controls off the handle
+// 3. reactive wiring — live count off the ref's `changes`, controls off the handle
 const runtime = Atom.runtime(counterLayer);
-const countAtom = runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.changes)));
+const countAtom = runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.value.changes)));
 const increment = runtime.fn((by: number) => Effect.flatMap(Counter, (c) => c.increment({ by })));
 const reset = runtime.fn(() => Effect.flatMap(Counter, (c) => c.reset));
 

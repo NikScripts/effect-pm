@@ -19,8 +19,7 @@ import * as Resource from "@nikscripts/effect-pm/Resource"
 import { Schema } from "effect"
 
 class Counter extends Resource.Tag<Counter>()("app/Counter", {
-  current: Resource.effect(Schema.Number),                                   // read
-  changes: Resource.stream(Schema.Number),                                   // live
+  value: Resource.ref(Schema.Number),                                        // reactive: .get + .changes
   increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }), // mutate
   reset: Resource.effectFn(Schema.Void),                                     // mutate
 }) {}
@@ -39,8 +38,7 @@ const counterLayer = Resource.layer(
   Effect.gen(function* () {
     const ref = yield* SubscriptionRef.make(0)
     return {
-      current: SubscriptionRef.get(ref),
-      changes: SubscriptionRef.changes(ref),
+      value: Resource.subscribable(ref),  // surface the SubscriptionRef as the ref
       increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
       reset: SubscriptionRef.set(ref, 0),
     }
@@ -56,7 +54,7 @@ const counterLayer = Resource.layer(
 const program = Effect.gen(function* () {
   const counter = yield* Counter
   yield* counter.increment({ by: 5 })
-  const now = yield* counter.current      // 5
+  const now = yield* counter.value.get    // 5 — read the ref
 })
 ```
 
@@ -70,7 +68,7 @@ import { Atom } from "effect/unstable/reactivity"
 import { Effect, Stream } from "effect"
 
 const runtime = Atom.runtime(counterLayer)
-const countAtom = runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.changes)))
+const countAtom = runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.value.changes)))
 const increment = runtime.fn((by: number) => Effect.flatMap(Counter, (c) => c.increment({ by })))
 const reset = runtime.fn(() => Effect.flatMap(Counter, (c) => c.reset))
 ```
