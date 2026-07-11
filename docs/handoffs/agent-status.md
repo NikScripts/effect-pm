@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | `0cc196f` | typecheck + 440 tests + lint green | **`pnpm run version`** when owner ready; `STORAGE.md` deep pass | 2026-07-11 |
-| **2** | `cursor/process-events-stream-a009` | [session-4 queue+process events](./agent-02-session-4-queue-process-events.md) | **PR #19 + #20 draft** | `ba427d8` | typecheck + 440 tests | Merge PRs; changeset; Queue/Process store Phase 2; store naming cleanup | 2026-07-11 |
+| **2** | `cursor/queue-spec-wire-a009` · `cursor/process-events-stream-a009` | [session-4 queue+process events](./agent-02-session-4-queue-process-events.md) | **PR #19 + #20 draft** | `71390de` / `c95f7c5` | typecheck + 440 tests | Merge PRs; changeset; Queue/Process store Phase 2; store naming cleanup | 2026-07-11 |
 | **B** | `action/html-doc-platform` | [html doc platform](./agent-b-html-doc-platform.md) | **planning** | `dac86513` (local) | Pull `9042ce4` first | Slice 0 conversation; Slice 1 kept as spike; stash Slice 2 WIP | 2026-07-09 |
 | **A** | — | [html standards](./agent-a-html-standards-corpus.md) | **blocked** | — | — | Blocked on Agent B | 2026-07-09 |
 | **C** | — | [standards audit](./agent-c-standards-audit.md) | **blocked** | — | — | Blocked on Agent A | 2026-07-09 |
