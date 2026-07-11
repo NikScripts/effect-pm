@@ -46,7 +46,7 @@ it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
     withPort((port) =>
       Effect.gen(function* () {
         const node = yield* NodeStatus.Tag;
-        const snap = yield* node.statusNow;
+        const snap = yield* node.status.get;
         expect(snap.status).toBe("degraded");
         expect(snap.resources.length).toBe(1);
         expect(snap.resources[0]?.ready).toBe(false);
