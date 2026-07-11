@@ -49,7 +49,7 @@ describe("CustomQueueResource.make", () => {
       yield* queue.add("c", "batch");
       const sizes = yield* queue.sizes;
       expect(sizes).toEqual({ urgent: 1, "1": 1, batch: 1 });
-      const status = yield* queue.statusNow;
+      const status = yield* queue.status.get;
       expect(status.sizes).toEqual(sizes);
       expect(status.phase).toBe("running");
     }).pipe(Effect.scoped),
@@ -96,7 +96,7 @@ describe("CustomQueueResource.make", () => {
         autoStart: false,
       });
       const collected = yield* Effect.forkChild(
-        Stream.runCollect(Stream.take(queue.status, 2)),
+        Stream.runCollect(Stream.take(queue.status.changes, 2)),
       );
       yield* Effect.sleep(Duration.millis(10));
       yield* queue.add(1, 2);

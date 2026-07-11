@@ -905,12 +905,7 @@ const buildQueueImpl = <
     });
     // Annotated so the method params get contextual typing from the spec (and the impl is
     // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
-    // one Subscribable source of truth (get = statusNow, changes = status stream); the scalars are
-    // mapped views of it (SSOT) — a ref field surfaces as Subscribable local + remote.
-    const statusSub = {
-      get: handle.statusNow,
-      changes: handle.status,
-    };
+    // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built UNWRAPPED (each still carrying the worker `R | RR` in its requirement);
     // `Resource.provideContext` below discharges `context` into every Effect method uniformly (a no-op
     // on the ones that carry no `R`, like pause/resume/shutdown) — a single subtractive
@@ -921,13 +916,13 @@ const buildQueueImpl = <
       ImplOf<QueueInstanceSpec<F>>,
       R | RR
     > = {
-      status: statusSub,
+      status: handle.status,
       size: Resource.mapSubscribable(
-        statusSub,
+        handle.status,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
       ),
       isEmpty: Resource.mapSubscribable(
-        statusSub,
+        handle.status,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
       ),
       start: handle.start,

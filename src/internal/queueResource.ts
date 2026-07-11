@@ -129,6 +129,7 @@ import type {
   DurableEntry,
   OfferResult,
 } from "../DurableQueueStore";
+import * as Resource from "../Resource";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -425,19 +426,13 @@ export interface QueueHandleApi<
   readonly events: Stream.Stream<QueueEvent<T, E, A>>;
 
   /**
-   * Live **current-state snapshot** stream — emits the current {@link QueueStatus} and every
-   * subsequent change (per-priority sizes, paused, in-flight, completed). Each snapshot is
-   * recomputed from authoritative sources, so it's accurate truth (not an event accumulation).
-   * Backed by a `SubscriptionRef`; a new subscriber gets the current value immediately.
+   * Live **current-state snapshot** — a reactive `ref` backed by a `SubscriptionRef`. Read once via
+   * {@link Resource.Subscribable.get `.get`} (recomputed from authoritative sources) or subscribe via
+   * {@link Resource.Subscribable.changes `.changes`} (dashboards / `--watch` / TUI). Each change
+   * snapshot is accurate truth (not an event accumulation); a new subscriber gets the current value
+   * immediately.
    */
-  readonly status: Stream.Stream<QueueStatus>;
-
-  /**
-   * **One-shot** current-state snapshot — the same {@link QueueStatus} the {@link status} stream
-   * emits, read once. For a non-`--watch` CLI `status` print, a widget's first paint before the
-   * stream warms up, or any single render. Recomputed from authoritative sources on each read.
-   */
-  readonly statusNow: Effect.Effect<QueueStatus>;
+  readonly status: Resource.Subscribable<QueueStatus>;
 
   /**
    * Live **windowed metrics** stream — one {@link QueueMetrics} per window. Windows are
@@ -2268,6 +2263,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const refreshStatus = Effect.flatMap(computeStatus, (s) =>
       SubscriptionRef.set(statusRef, s),
     );
+    const statusSub: Resource.Subscribable<QueueStatus> = {
+      get: computeStatus,
+      changes: SubscriptionRef.changes(statusRef),
+    };
     // Total outstanding (durable store when persisting, else lanes); used by shutdown finalization.
     const totalPendingEffect = totalPending;
     // Finalize shutdown once the queue has drained empty AND no item is in flight: flip
@@ -3275,11 +3274,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // Live lifecycle events — each consumer gets its own subscription
       events: Stream.fromPubSub(eventsHub),
 
-      // Current-state snapshot stream — current value + every change
-      status: SubscriptionRef.changes(statusRef),
-
-      // One-shot snapshot — recompute authoritative truth on read (span-traced for origin).
-      statusNow: computeStatus.pipe(Effect.withSpan("queue.statusNow")),
+      // Current-state snapshot — ref shape matching `Resource.ref(queueStatus)` on the contract.
+      status: statusSub,
 
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),

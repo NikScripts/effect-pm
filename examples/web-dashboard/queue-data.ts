@@ -174,7 +174,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
+  const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status.changes));
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
   const toPoint = (m: QueueMetrics): MetricPoint => ({
     t: Date.now(),
@@ -333,7 +333,7 @@ interface FleetEvent {
   readonly m: QueueMetrics | undefined;
 }
 const fleetEvents: ReadonlyArray<Stream.Stream<FleetEvent, never, AllQueues>> = queueLeaves(Fleet).flatMap((tag) => [
-  Stream.unwrap(Effect.map(tag, (q) => q.status)).pipe(Stream.map((s): FleetEvent => ({ tag, s, m: undefined }))),
+  Stream.unwrap(Effect.map(tag, (q) => q.status.changes)).pipe(Stream.map((s): FleetEvent => ({ tag, s, m: undefined }))),
   Stream.unwrap(Effect.map(tag, (q) => q.metrics)).pipe(Stream.map((m): FleetEvent => ({ tag, s: undefined, m }))),
 ]);
 

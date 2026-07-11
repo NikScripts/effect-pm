@@ -257,7 +257,7 @@ const daemonsFor = <Id extends AllQueues>(
       ),
     );
     yield* Effect.forkDetach(
-      Stream.runForEach(q.status, (s) =>
+      Stream.runForEach(q.status.changes, (s) =>
         Effect.gen(function* () {
           const pending = s.sizes.high + s.sizes.normal + s.sizes.low;
           yield* SubscriptionRef.set(refs.statusRef, s);

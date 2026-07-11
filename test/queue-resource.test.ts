@@ -75,6 +75,34 @@ const forkDrainCounter = <T, E, EE, R>(
     ),
   );
 
+describe("QueueHandle — status ref shape", () => {
+  it.live("make() handle: status is Subscribable (get + changes), no statusNow", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "probe-status-ref",
+        paused: true,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      expect("get" in queue.status).toBe(true);
+      expect("changes" in queue.status).toBe(true);
+      expect("statusNow" in queue).toBe(false);
+      const snap = yield* queue.status.get;
+      expect(snap.phase).toBe("running");
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.status.changes, (s) => s.sizes.normal === 1),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1]);
+      const snapshots = Array.from(yield* Fiber.join(collected));
+      const last = snapshots[snapshots.length - 1];
+      expect(last?.sizes.normal).toBe(1);
+    }).pipe(Effect.scoped),
+  );
+});
+
 describe("QueueResource.make — basic processing", () => {
   it.live("processes items added via add", () =>
     Effect.gen(function* () {
@@ -184,7 +212,7 @@ describe("QueueResource.make — basic processing", () => {
       });
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
-          Stream.takeUntil(queue.status, (s) => s.sizes.normal === 2),
+          Stream.takeUntil(queue.status.changes, (s) => s.sizes.normal === 2),
         ),
       );
       yield* Effect.sleep(Duration.millis(20));
@@ -793,7 +821,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* queue.add([1, 2, 3, 4]);
       yield* queue.shutdown;
       // drain finalizes in the background — wait until it reaches the terminal phase
-      while ((yield* queue.statusNow).phase !== "off") {
+      while ((yield* queue.status.get).phase !== "off") {
         yield* Effect.sleep(Duration.millis(5));
       }
       // drain mode processed every queued item before going off
@@ -832,7 +860,7 @@ describe("QueueResource.make — autoStart", () => {
       yield* queue.add([1, 2, 3]);
       expect(yield* queue.size).toBe(3);
       yield* queue.shutdown;
-      while ((yield* queue.statusNow).phase !== "off") {
+      while ((yield* queue.status.get).phase !== "off") {
         yield* Effect.sleep(Duration.millis(5));
       }
       // finishActive discarded the queued items (none processed) and emitted a Dropped event
@@ -856,11 +884,11 @@ describe("QueueResource.make — autoStart", () => {
       yield* queue.add([1]);
       yield* Effect.sleep(Duration.millis(20)); // let the worker pick it up (in-flight)
       yield* queue.shutdown;
-      expect((yield* queue.statusNow).phase).toBe("draining"); // in-flight not done yet
+      expect((yield* queue.status.get).phase).toBe("draining"); // in-flight not done yet
       yield* queue.shutdown; // second call is a no-op (no throw, phase unchanged)
-      expect((yield* queue.statusNow).phase).toBe("draining");
+      expect((yield* queue.status.get).phase).toBe("draining");
       yield* Deferred.succeed(gate, undefined); // release → item finishes → off
-      while ((yield* queue.statusNow).phase !== "off") {
+      while ((yield* queue.status.get).phase !== "off") {
         yield* Effect.sleep(Duration.millis(5));
       }
     }).pipe(Effect.scoped),

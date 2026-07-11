@@ -17,6 +17,7 @@ import {
   Stream,
   Types,
 } from "effect";
+import * as Resource from "../Resource";
 import type { LogEntry } from "../LogEntry";
 import { isJsonValue } from "./json";
 import { resolveCustomQueueLevel } from "./customQueueLevels";
@@ -97,8 +98,7 @@ export interface CustomQueueHandleApi<
   readonly isEmpty: Effect.Effect<boolean>;
   readonly completed: Effect.Effect<number>;
   readonly events: Stream.Stream<QueueEvent<T, E>>;
-  readonly status: Stream.Stream<CustomQueueStatus>;
-  readonly statusNow: Effect.Effect<CustomQueueStatus>;
+  readonly status: Resource.Subscribable<CustomQueueStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly logs: Stream.Stream<LogEntry>;
   readonly start: Effect.Effect<void, never, R>;
@@ -223,8 +223,7 @@ const wrapCustomQueueHandle = <T, E, EEnqueue, R>(
     isEmpty: engine.isEmpty,
     completed: engine.completed,
     events: engine.events,
-    status: engine.status as Stream.Stream<CustomQueueStatus>,
-    statusNow: engine.statusNow as Effect.Effect<CustomQueueStatus>,
+    status: engine.status,
     metrics: engine.metrics,
     logs: engine.logs,
     start: engine.start,
