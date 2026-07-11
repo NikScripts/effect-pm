@@ -33,7 +33,8 @@ Process — this release renames the slots, not the calling convention.
 - **`RunResource.Tag`** is a **`Resource.Tag`** with wire schemas; **`serve` / `serveRemote`**
   mirror Queue/Process.
 - Wire slots renamed: `inputSchema` → **`payload`**, `successSchema` → **`success`**,
-  `errorSchema` → **`error`** (positional or object).
+  `errorSchema` → **`error`** (all **optional** — default `Void` / `Void` / `Never`; positional or object).
+- **Unit gates** accept a **bare `Effect`** or `() => Effect` on `layer` / `Service` (not only thunk form).
 - **`RunResource.store(tag)`** registers built-in run fact + state-history shapes on an app
   **`Store.Service`**.
 - **`RunResource.layer` / `serve` / `Service.layer`** merge **`Store.layerDefaultMemory`**
@@ -51,13 +52,18 @@ Process — this release renames the slots, not the calling convention.
 yield* gate(input)        // before
 yield* gate.run(input)    // after
 
-// tag — positional (slot rename only)
-Tag()(key, inputSchema, successSchema, errorSchema?)   // before
-Tag()(key, payload, success, error?)                   // after
+// tag — positional (slot rename; success/error optional)
+Tag()(key, inputSchema, successSchema?, errorSchema?)   // before
+Tag()(key, payload, success?, error?)                   // after
 
-// tag — config object (slot rename only)
-Tag()(key, { inputSchema, successSchema, errorSchema? })   // before
-Tag()(key, { payload, success, error? })                   // after
+// tag — config object (slot rename; all wire slots optional)
+Tag()(key, { inputSchema, successSchema?, errorSchema? })   // before
+Tag()(key, { payload?, success?, error? })                  // after
+
+// unit gate — bare effect (Service / layer)
+class Tick extends RunResource.Service<Tick>()("@app/Tick", {
+  effect: Effect.sleep("1 second"),
+})
 ```
 
 ---
