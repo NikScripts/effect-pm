@@ -42,7 +42,8 @@ approval for one action does not carry to the next. Your own working branch is y
 {#changesets-and-releases .must appliesTo=process}
 ## Changesets and releases are deliberate
 
-A change to public API, behaviour, or package metadata ships **one** coherent changeset — and
-creating it needs approval, like any shared write. Beta releases are **manual**: never run
-`changeset version`; the release is assembled by hand (changeset entry, prerelease bump, changelog).
-Pushing is not publishing.
+A change to public API, behaviour, or package metadata gets **one** coherent changeset, **drafted
+proactively** whenever the change warrants it — don't wait to be asked to write it. But **commit the
+changeset only after confirmation**: the file is prepared eagerly, committed deliberately. Beta
+releases are **manual**: never run `changeset version`; the release is assembled by hand (changeset
+entry, prerelease bump, changelog). Pushing is not publishing.
