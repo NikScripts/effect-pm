@@ -2,39 +2,14 @@
 
 // A no-widget prototype: a real QueueResource running in the browser, with a hand-wired
 // control panel — live stats read straight off the current `status` stream, buttons that
-// call the handle. No dashboard widgets (those wait on the web-ui-refresh fix); this shows
-// the raw "create → use → control a resource" pattern. Tailwind scoped to .pm-dashboard.
+// call the handle. The resource itself lives in ./demo-queue (declared once); this file is
+// just the UI. No dashboard widgets (those wait on the web-ui-refresh fix). Scoped to .pm-dashboard.
 
 import * as React from "react";
 import "../styles/widgets.css";
-import { Effect, Stream } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import * as QueueResource from "@pm/QueueResource";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
-
-class DemoQueue extends QueueResource.Service<DemoQueue, string, never>()("docs/DemoQueue", {
-  concurrency: 1,
-  effect: (item: string) =>
-    Effect.gen(function* () {
-      yield* Effect.logInfo(`processing "${item}"`);
-      yield* Effect.sleep("1000 millis");
-    }),
-}) {}
-
-const runtime = Atom.runtime(DemoQueue.layer);
-
-// live stats: subscribe to the queue's `status` stream (a bare Stream on the service).
-const statusAtom = runtime.atom(Stream.unwrap(Effect.map(DemoQueue, (q) => q.status)));
-
-// controls: each is just a handle method run through the runtime.
-const enqueue = runtime.fn((p: { readonly text: string; readonly priority: "normal" | "high" | "low" }) =>
-  Effect.flatMap(DemoQueue, (q) =>
-    p.priority === "high" ? q.prioritize(p.text) : p.priority === "low" ? q.defer(p.text) : q.add(p.text),
-  ),
-);
-const pause = runtime.fn(() => Effect.flatMap(DemoQueue, (q) => q.pause));
-const resume = runtime.fn(() => Effect.flatMap(DemoQueue, (q) => q.resume));
-const clear = runtime.fn(() => Effect.flatMap(DemoQueue, (q) => q.clear));
+import { statusAtom, enqueue, pause, resume, clear } from "./demo-queue.js";
 
 const btn = "rounded-md px-2.5 py-1 text-xs font-medium bg-secondary text-secondary-foreground";
 const stat = (label: string, value: number | string) => (
@@ -43,9 +18,12 @@ const stat = (label: string, value: number | string) => (
   </span>
 );
 
+const toPriority = (v: string): "normal" | "high" | "low" =>
+  v === "high" ? "high" : v === "low" ? "low" : "normal";
+
 function Panel(): React.ReactElement {
   const r = useAtomValue(statusAtom);
-  const s = AsyncResult.isSuccess(r) ? (r.value as any) : undefined;
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
 
@@ -87,7 +65,7 @@ function Panel(): React.ReactElement {
         />
         <select
           value={priority}
-          onChange={(e) => setPriority(e.target.value as "normal" | "high" | "low")}
+          onChange={(e) => setPriority(toPriority(e.target.value))}
           className="bg-card border rounded-md px-1 py-1 text-xs"
         >
           <option value="high">high</option>

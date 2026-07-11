@@ -6,27 +6,9 @@
 
 import * as React from "react";
 import "../styles/widgets.css";
-import { Effect, Schema, Stream } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import * as RunResource from "@pm/RunResource";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
-
-class Double extends RunResource.Service<Double>()("docs/Double", {
-  payload: Schema.Number,
-  success: Schema.Number,
-  concurrency: 2, // only 2 run at once; extra calls queue behind the gate
-  effect: (n: number) =>
-    Effect.gen(function* () {
-      yield* Effect.sleep("900 millis"); // slow enough to watch in-flight
-      return n * 2;
-    }),
-}) {}
-
-const runtime = Atom.runtime(Double.layer);
-// the fn atom's value is the AsyncResult of the last run
-const runFn = runtime.fn((n: number) => Effect.flatMap(Double, (d) => d.run(n)));
-// live in-flight count off the Subscribable's `changes` stream
-const inFlightAtom = runtime.atom(Stream.unwrap(Effect.map(Double, (d) => d.inFlight.changes)));
+import { runFn, inFlightAtom } from "./double-resource.js";
 
 const stat = (label: string, value: React.ReactNode) => (
   <span key={label} className="text-muted-foreground">
@@ -42,7 +24,7 @@ function Panel(): React.ReactElement {
 
   const last = AsyncResult.isSuccess(runResult) ? String(runResult.value) : "—";
   const running = AsyncResult.isWaiting?.(runResult) ?? false;
-  const inFlight = AsyncResult.isSuccess(inFlightR) ? (inFlightR.value as number) : 0;
+  const inFlight = AsyncResult.isSuccess(inFlightR) ? inFlightR.value : 0;
 
   return (
     <div className="pm-dashboard grid gap-3 p-4 rounded-xl text-sm">
