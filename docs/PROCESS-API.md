@@ -11,7 +11,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | **`Process.make`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. **Does not** auto-append execution store rows. |
 | **Schedule primitive** (internal) | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. Surfaced publicly via `Process.scheduleInMemory` / `Process.scheduleDefine` and the `Process.Schedule` resource. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
-| **`Process.Tag` + toolkit layers** | Location-transparent `Resource` (lifecycle + observation + schedule). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**. |
+| **`Process.Tag` + toolkit layers** | Location-transparent `Resource` (lifecycle + observation + schedule + **live `events`**). **`Process.layer` / `serve` / `serveRemote`** publish terminal runs on **`events`** and auto-append the same rows to **`Process.store(tag)`**; merge default in-memory **`Store.Storage`**. |
 | **Legacy `ProcessStorage` facets** | Optional analytics rows (`RuntimeStorage`) — queue entries, lifecycle, logs. **Not** process execution history (that is **`Process.store`** on the EventJournal `Store`). |
 
 **`start` / `runImmediately`** drive the schedule. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
@@ -137,11 +137,37 @@ These exports remain for custom schedule implementations; the schedule-driven ru
 
 ---
 
+## Toolkit handle (`yield* Process.Tag`)
+
+On **`Process.layer` / `serve` / `serveRemote`** (not bare `Process.make`):
+
+| Member | Role |
+|--------|------|
+| `start` / `stop` / `runImmediately` | Lifecycle (void RPC — no typed failure channel) |
+| `status.get` / `status.changes` | Live supervising snapshot |
+| **`events`** | **Live** `Stream` of `Started` / `Completed` / `Failed` / `Interrupted` — same union as the store journal; tag `success` / `error` wire slots type `Completed.success` / `Failed.error` |
+| `logs.live` / `logs.history` | Captured logs (`captureLogs` + optional `HistoryStore`) |
+| `schedule.*` | Inline schedule only (when tag owns a schedule) |
+| `result.get` / `result.changes` | Latest success when tag stamps `success` |
+
+**Failure visibility:** subscribe to **`events`** (or read **`Process.store`** for history). Void lifecycle verbs do **not** carry typed RPC errors — aligned with Queue (`Failed` on the stream, not on `start`/`stop`).
+
+```typescript
+yield* Stream.runForEach(proc.events, (e) =>
+  e._tag === "Failed" ? handleFailure(e.error) : Effect.void,
+);
+```
+
+**Shipped:** PR #20 (`cursor/process-events-stream-a009`). Requires merge into `integration/storage`.
+
+---
+
 ## Storage: two planes
 
 | Plane | API | Backing | Process execution history? |
 |-------|-----|---------|----------------------------|
-| **Store (EventJournal)** | `Store.Service`, `Process.store(tag)` | `layerMemory` / SQLite `SqlEventJournal` | **Yes** — `Started` / `Completed` / `Failed` / `Interrupted` |
+| **Store (EventJournal)** | `Store.Service`, `Process.store(tag)` | `layerMemory` / SQLite `SqlEventJournal` | **Yes** — durable/historical `Started` / `Completed` / `Failed` / `Interrupted` |
+| **Live stream (toolkit)** | `yield* Tag` → **`events`** | In-process `PubSub` (layer path) | **Yes** — same row shape as store; not durable unless you also use `Process.store` |
 | **Legacy facets** | `ProcessStorage`, `src/store/*` facets | `RuntimeStorage` / `layerProcessStore` | **No** — queue entries, lifecycle, logs only |
 
 ### `Process.store` (built-in execution contract)
