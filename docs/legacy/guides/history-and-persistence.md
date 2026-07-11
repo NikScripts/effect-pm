@@ -181,27 +181,27 @@ Resource.httpServer([QueueResource.serve(RosterQueue, { effect, captureLogs: tru
 const queue = yield* RosterQueue; // resolved from Resource.client(RosterQueue)
 
 // 1) backfill once
-const recent = yield* queue.logHistory({ limit: 200 });
+const recent = yield* queue.logs.history({ limit: 200 });
 render(recent);
 
 // 2) then tail live (no gap, no store access)
-yield* queue.logs.pipe(Stream.runForEach(render), Effect.forkScoped);
+yield* queue.logs.live.pipe(Stream.runForEach(render), Effect.forkScoped);
 
-// live KPIs: poll statusNow, or follow the status/metrics streams
-const status = yield* queue.statusNow;             // { sizes, inFlight, completed, phase }
-yield* queue.metrics.pipe(Stream.runForEach(chart), Effect.forkScoped);
+// live KPIs: read once via status.get, or follow status.changes / metrics.live
+const status = yield* queue.status.get;             // { sizes, inFlight, completed, phase }
+yield* queue.metrics.live.pipe(Stream.runForEach(chart), Effect.forkScoped);
 ```
 
-`logHistory` / `metricsHistory` are plain `query` verbs and cross RPC like `statusNow`; `logs` /
-`metrics` / `status` are streams over the same transport. Runtime-wide logs use `HostLogs.byHost` /
+`logs.history` / `metrics.history` are plain `query` verbs and cross RPC like `status.get`; `logs.live` /
+`metrics.live` / `status.changes` are streams over the same transport. Runtime-wide logs use `HostLogs.byHost` /
 `HostLogs.byResource` + `HostLogs.stream` the same way.
 
 ## What exists / what's coming
 
 | Surface | Live | History | Notes |
 |---|---|---|---|
-| Queue | `logs`, `metrics` | `logHistory`, `metricsHistory` | **done** (needs `captureLogs` for logs) |
-| Process | `logs` | `logHistory` | **done** (needs `captureLogs`) |
+| Queue | `logs.live`, `metrics.live` | `logs.history`, `metrics.history` | **done** (needs `captureLogs` for logs) |
+| Process | `logs.live` | `logs.history` | **done** (needs `captureLogs`) |
 | Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.byHost` / `HostLogs.byResource` | **done** — captures *all* runtime logs (incl. untagged + processes); add `HostLogs.persistLayer(host)` for durable, host/resource-queryable storage |
 
 Backends: `layerMemory` (in-process) and `SQLiteHistoryStore.layer` (durable) ship today; Postgres

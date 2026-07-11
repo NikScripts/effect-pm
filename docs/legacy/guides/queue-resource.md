@@ -59,8 +59,8 @@ class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
   `deadLetter` / `drop`.
 - **State:** `size` / `sizes` / `isEmpty` / `completed`.
 - **Lifecycle:** `start` / `pause` / `resume` / `shutdown` / `clear`.
-- **Observe:** `status` / `statusNow`, `metrics`, `logs`, `events` (live streams) and
-  `logHistory` / `metricsHistory` (durable backfill).
+- **Observe:** `status` (`status.get` / `status.changes`), `metrics.live`, `logs.live`, `events` (live streams) and
+  `logs.history` / `metrics.history` (durable backfill).
 
 ## Self-refill
 

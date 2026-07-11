@@ -266,7 +266,7 @@ const processCache = new Map<string, ProcessBundle>();
 export const processBundle = (tag: ProcessTag): ProcessBundle => {
   const existing = processCache.get(tag.key);
   if (existing !== undefined) return existing;
-  const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status));
+  const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status.changes));
   bumpLogIdFrom(`${tag.key}/logs`);
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),

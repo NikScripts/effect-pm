@@ -7,10 +7,11 @@
  * fibers tracked by `FiberSet`; pause/resume is implemented via `Latch`; empty-queue
  * blocking uses a `Deferred` wake signal to avoid priority inversion.
  *
- * **Observability is via streams, not callbacks.** Every handle exposes
+ * **Observability is via streams and reactive refs, not callbacks.** Every handle exposes
  * {@link QueueHandleApi.events} (discrete {@link QueueEvent}s), {@link QueueHandleApi.status}
- * (current-state snapshots), and {@link QueueHandleApi.metrics} (windowed). Subscribe with
- * `Stream.runForEach` / `Resource.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
+ * (a `Subscribable` ref: `.get` for one-shot, `.changes` for live), and
+ * {@link QueueHandleApi.metrics} (windowed stream). Subscribe with `Stream.runForEach` /
+ * `Resource.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
  * events (`e.exit.pipe(Effect.catchTag(...))`). Retry is the `attempts` policy — for in-place
  * effect retry, put `Effect.retry` on your `effect`. For per-error disposition (retry vs
  * dead-letter vs drop), set the inline {@link QueueOnFailure | onFailure} control hook.
