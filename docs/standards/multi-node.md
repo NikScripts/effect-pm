@@ -66,18 +66,3 @@ Resource.peersLayer(Prices, self, {
 })
 ```
 
-{#no-eager-self-reference .must appliesTo=src}
-## Don't reference the class eagerly in its own base
-
-An expression evaluated **eagerly** in the `extends` base can't read the class — it isn't initialised
-yet (temporal dead zone). A **deferred callback** is fine: it runs later, once the class exists.
-
-``` ts
-// ❌ bad — readinessOf(Prices) is evaluated now, in the base, before Prices exists
-class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
-  .pipe(Resource.withReadiness(readinessOf(Prices))) {}
-
-// ✅ good — the callback is deferred; Prices is defined by the time it runs
-class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
-  .pipe(Resource.withReadiness((svc) => Effect.map(svc.status.get, isReady))) {}
-```
