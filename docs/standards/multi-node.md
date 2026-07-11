@@ -66,18 +66,18 @@ Resource.peersLayer(Prices, self, {
 })
 ```
 
-{#no-self-reference-in-base .must appliesTo=src}
-## A base-class combinator callback can't reference the class being defined
+{#no-eager-self-reference .must appliesTo=src}
+## Don't reference the class eagerly in its own base
 
-The callback runs while the class is still being defined — reference the status it's handed, not the
-class. Peer tags are fine; the class under construction is not.
+An expression evaluated **eagerly** in the `extends` base can't read the class — it isn't initialised
+yet (temporal dead zone). A **deferred callback** is fine: it runs later, once the class exists.
 
 ``` ts
-// ❌ Prices isn't defined yet inside its own base
+// ❌ bad — readinessOf(Prices) is evaluated now, in the base, before Prices exists
 class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
-  .pipe(Resource.withReadiness((svc) => check(Prices))) {}
+  .pipe(Resource.withReadiness(readinessOf(Prices))) {}
 
-// ✅ read the status the callback receives
+// ✅ good — the callback is deferred; Prices is defined by the time it runs
 class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
   .pipe(Resource.withReadiness((svc) => Effect.map(svc.status.get, isReady))) {}
 ```
