@@ -18,7 +18,7 @@ same-looking-but-different (see *Principles → Fail loudly*).
 Four verbs, one axis — how a resource is made available:
 
 - **`layer`** — local only.
-- **`serve`** — local **and** served over RPC (the default for a host).
+- **`serve`** — local **and** served over RPC (the default for a node).
 - **`serveRemote`** — served only, not runnable in-process.
 - **`client`** — a remote handle to a served resource.
 

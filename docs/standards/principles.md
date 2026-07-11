@@ -201,7 +201,7 @@ yield* Ref.update(count, (n) => n + 1)
 
 Anything that mirrors the shape of the system is generated from the contract, never hand-maintained
 beside it. Dashboard widgets come from `specOf` + `methodMeta`; the rule manifest is derived from
-the `{#id .severity}` blocks in these very docs; a host's readiness folds over its one registry of
+the `{#id .severity}` blocks in these very docs; a node's readiness folds over its one registry of
 served resources. A hand-kept parallel list is drift waiting to happen — this is single-source-of-
 truth applied to structure.
 
