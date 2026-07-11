@@ -59,6 +59,7 @@ import {
   errorOf,
   stampQueueWireSchemas,
 } from "./internal/queueTagSchemas";
+import { assertQueueInstanceSpec } from "./internal/queueSpecAssert";
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
@@ -519,19 +520,18 @@ export const queueControlSpec = {
  */
 export const queueSpec = <F extends Schema.Struct.Fields>(
   itemSchema: Schema.Struct<F>,
+  wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
 ) => {
   // `add`/`prioritize`/`defer` take the item **directly**, and also accept a **batch** (the
   // engine's `QueueEnqueue<T>` is `(item) | (items)`), so one call enqueues many — no N round
   // trips over RPC. The payload is `item | item[]` (a single-schema union payload); the layer
   // recovers the bare `itemSchema` from `add.payload.members[0]`.
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
-  // The `events` stream's `Completed.success` / `Failed.cause` ride the wire **erased** to
-  // `unknown` (a `Schema.Union` carrying a *generic* success field would defeat Effect's `.Type`
-  // reduction, and the spec must be invariant-uniform so the tag's `layer` overloads type-check).
-  // The typed success value `A` is carried on the tag via {@link QueueSuccessCarrier} and drives the
-  // worker `effect` return + the store analytics; the live `handle.events` (typed `A`) still fits
-  // this `unknown` slot (`A ⊆ unknown`).
-  const eventSchema = buildQueueEvent(itemSchema, Schema.Unknown, Schema.Unknown);
+  const eventSchema = buildQueueEvent(
+    itemSchema,
+    wire?.success ?? Schema.Void,
+    wire?.error ?? Schema.Unknown,
+  );
   return {
   ...queueControlSpec,
   add: Resource.effectFn(Schema.Void, {
@@ -678,7 +678,12 @@ const queueTag = <Self>() => {
     key: string,
     config: QueueTagConfig<F, Success>,
   ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success> {
-    const spec = queueSpec(config.payload);
+    const wire = { success: config.success, error: config.error };
+    const spec = assertQueueInstanceSpec(
+      queueSpec(config.payload, wire),
+      queueSpec(config.payload),
+      wire,
+    );
     const tagOptions = { description: config.description, kind };
     const base =
       config.node === undefined

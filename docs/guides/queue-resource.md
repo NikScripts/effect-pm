@@ -38,6 +38,11 @@ class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
 }) {}
 ```
 
+Tag build validates the wired `events` schema against the erased baseline (`assertQueueInstanceSpec`) so
+only the `events` stream element may differ — RPC encodes/decodes real `success`/`error` values on the
+wire. Compile-time `QueueInstanceSpec` stays invariant; worker `effect` return typing still comes from
+the tag's `success` carrier, not `StreamElement<events>` precision.
+
 ## Config
 
 | Field | Purpose |

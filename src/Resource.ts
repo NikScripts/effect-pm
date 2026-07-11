@@ -363,6 +363,13 @@ const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
   return flat;
 };
 
+/**
+ * Flatten a resource {@link Spec} for structural validation (queue wire assert, etc.).
+ *
+ * @internal
+ */
+export const flattenResourceSpec = flattenSpec;
+
 /** Flatten a nested impl to a flat path-keyed record, walking each path from the (flat) spec's keys —
  *  identity for a flat spec. @internal */
 const flattenImpl = (

@@ -92,10 +92,26 @@ Apply the same `assert*` pattern to `customQueueSpec` → `CustomQueueInstanceSp
 
 ## Done when
 
-- [ ] Phase 1a code + validation + tests green
-- [ ] `owner-decisions.md` + `agent-status.md` updated on branch
+- [x] Phase 1a code + validation + tests green
+- [x] `owner-decisions.md` + `agent-status.md` updated on branch
 - [ ] Draft PR → `integration/storage`
 - [ ] Owner chat: Before/After/Verify blocks per [`supervisor-protocol.md`](./supervisor-protocol.md)
+
+---
+
+### Session log — 2026-07-11 (Agent 2, Phase 1a)
+
+**Branch:** `cursor/queue-wire-phase-1a-a009` from `integration/storage` @ `0945f98`
+
+**Shipped:**
+- `queueSpec(item, wire?)` mirrors CQR — `buildQueueEvent` with tag `success`/`error` (defaults `Void`/`Unknown`), no inner casts
+- `assertQueueInstanceSpec` / `assertCustomQueueInstanceSpec` in `src/internal/queueSpecAssert.ts` — structural `flattenResourceSpec` match + Completed event wire smoke; single boundary cast for CQR
+- `queueTag` / `customQueueTag` call assert at build
+- `test/queue-spec-wire.test.ts` — structural validation + HTTP RPC `Completed.success` round-trip
+- `test/queue-http.test.ts` — stub aligned with `Resource.subscribable` after wire change
+- PR **#19** / **#20** closed (superseded)
+
+**Verify:** `pnpm run typecheck && pnpm test && pnpm run lint` — 441 tests green
 
 ---
 

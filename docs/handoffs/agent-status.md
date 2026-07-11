@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
-| **2** | `cursor/queue-wire-phase-1a-a009` (new) | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **ready-to-start** | — | — | **Do not merge PR #19/#20**; validation + CQR mirror | 2026-07-11 |
+| **2** | `cursor/queue-wire-phase-1a-a009` | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **draft-pr** | see branch tip | typecheck + test + lint green | PR #19/#20 closed; changeset on owner OK | 2026-07-11 |
 | **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) on branch | **owner** | — | — | Owner handles A–C pipeline | 2026-07-11 |
 
 ---
@@ -15,10 +15,9 @@
 ## Supervisor queue
 
 1. ~~Agent 1 Session 3~~ — merged on integration line
-2. **Hold PR #19 / #20** — superseded by Phase 1a ([`owner-decisions.md`](./owner-decisions.md))
-3. **Agent 2:** Queue wire Phase 1a — new branch per handoff
-4. **PR #17** (Session 3 consumer docs) — merge after Queue Phase 1a + supervisor verify
-5. **Agent B merge** — when owner says
+2. **Agent 2 Phase 1a** — draft PR → `integration/storage`; **#19/#20 closed**
+3. **PR #17** (Session 3 consumer docs) — merge after Queue Phase 1a + supervisor verify
+4. **Agent B merge** — when owner says
 
 ---
 
