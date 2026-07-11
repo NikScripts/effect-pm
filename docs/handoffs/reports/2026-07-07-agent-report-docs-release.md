@@ -32,17 +32,23 @@ SSOT: [`docs/AGENTS.md`](../../AGENTS.md#changeset-policy).
 
 ### Migration block (platform)
 
+Slot renames — **positional and config-object both stay valid** (CQR always uses a config object
+for lane options):
+
 ```ts
 // RunResource
 yield* gate.run(input)           // was: yield* gate(input)
-Tag()(key, { payload, success })   // was: inputSchema, successSchema
+Tag()(key, payload, success)     // was: Tag()(key, inputSchema, successSchema)
+Tag()(key, { payload, success }) // object form — same rename
 
 // Process
-Tag()(key, { success, error })     // was: resultSchema, errorSchema
+Tag()(key, success, error?)      // was: Tag()(key, resultSchema, errorSchema?)
+Tag()(key, { success, error? })
 // remove: .pipe(Process.result(schema))
 
-// Queue + CustomQueue (shipped)
-Tag()(key, { payload, success?, error?, … })  // was: itemSchema positional
+// Queue (both valid)
+Tag()(key, JobSchema)              // positional payload
+Tag()(key, { payload: JobSchema }) // object payload
 ```
 
 ---

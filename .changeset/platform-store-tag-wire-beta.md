@@ -11,7 +11,7 @@ shims — update callsites, imports, and symbol readers in one pass.
 
 ### Tag wire vocabulary (all toolkits)
 
-Public tag / service / wire-config fields now match **`Resource`** RPC names:
+Public tag / service / wire-config **slot names** now match **`Resource`** RPC names:
 
 | Role | New name | Retired |
 |------|----------|---------|
@@ -19,8 +19,11 @@ Public tag / service / wire-config fields now match **`Resource`** RPC names:
 | Success / return | **`success`** | `successSchema`, `resultSchema`, … |
 | Failure channel | **`error`** | `errorSchema` (name kept, meaning aligned) |
 
-**Config-object `Tag` only** for Queue, CustomQueue, RunResource, and Process (no positional
-schema arity).
+**Positional and config-object forms both remain valid** for QueueResource, RunResource, and
+Process — this release renames the slots, not the calling convention.
+
+**CustomQueueResource** always requires a **config object** for lane options (`levelCount`,
+`namedLevels`, …); wire schemas inside use the same renamed slots (`payload`, `success`, `error`).
 
 ---
 
@@ -29,7 +32,8 @@ schema arity).
 - Gates are **not callable** — use **`handle.run(input)`** or **`Tag.run` / `Service.run`**.
 - **`RunResource.Tag`** is a **`Resource.Tag`** with wire schemas; **`serve` / `serveRemote`**
   mirror Queue/Process.
-- Tag config: `{ payload, success, error? }` (was `inputSchema` / `successSchema` / `errorSchema`).
+- Wire slots renamed: `inputSchema` → **`payload`**, `successSchema` → **`success`**,
+  `errorSchema` → **`error`** (positional or object).
 - **`RunResource.store(tag)`** registers built-in run fact + state-history shapes on an app
   **`Store.Service`**.
 - **`RunResource.layer` / `serve` / `Service.layer`** merge **`Store.layerDefaultMemory`**
@@ -43,22 +47,27 @@ schema arity).
 - Removed deprecated **`RunGate`** type alias.
 
 ```ts
-// before
-yield* gate(input)
-Tag()(key, inputSchema, successSchema, errorSchema?)
+// handle — before / after
+yield* gate(input)        // before
+yield* gate.run(input)    // after
 
-// after
-yield* gate.run(input)
-Tag()(key, { payload, success, error? })
+// tag — positional (slot rename only)
+Tag()(key, inputSchema, successSchema, errorSchema?)   // before
+Tag()(key, payload, success, error?)                   // after
+
+// tag — config object (slot rename only)
+Tag()(key, { inputSchema, successSchema, errorSchema? })   // before
+Tag()(key, { payload, success, error? })                   // after
 ```
 
 ---
 
 ### Process
 
-- **`Process.Tag`** wire slots: **`success`** and **`error`** (config-object overload). **No
-  `payload`** — the tick body lives in layer config.
-- **Removed `Process.result(Schema)`** — stamp `success` on the tag instead.
+- Wire slots renamed: `resultSchema` → **`success`**, `errorSchema` → **`error`**. **No
+  `payload`** on Process tags — the tick body lives in layer config.
+- **Positional or config-object** for `success` / `error` on **`Process.Tag`**.
+- **Removed `Process.result(Schema)`** — declare `success` on the tag instead.
 - **Symbol rename:** `@nikscripts/effect-pm/Process/success` replaces `resultSchemaSym` /
   `@nikscripts/effect-pm/Process/resultSchema`. Update external symbol readers.
 - **Removed `ProcessExecutionStore`** facet, **`@nikscripts/effect-pm/store/ProcessExecution`**
@@ -74,33 +83,50 @@ Tag()(key, { payload, success, error? })
 | **`Process.make`** | **No** — supervisor only |
 
 ```ts
-// before
-class P extends Process.Tag<P>()("app/P", ResultSchema)
-  .pipe(Process.result(ResultSchema))
+// positional — still valid
+class P extends Process.Tag<P>()("app/P", ResultSchema)              // before (result slot)
+class P extends Process.Tag<P>()("app/P", SuccessSchema)             // after (success slot)
+class P extends Process.Tag<P>()("app/P", SuccessSchema, ErrSchema)  // after (+ error)
 
-// after
-class P extends Process.Tag<P>()("app/P", { success: ResultSchema, error?: ErrSchema })
+// config object — still valid
+class P extends Process.Tag<P>()("app/P", { success: SuccessSchema, error?: ErrSchema })
+
+// removed
+class P extends Process.Tag<P>()("app/P").pipe(Process.result(ResultSchema))
 ```
 
 ---
 
 ### QueueResource + CustomQueueResource
 
-- **Config-object `Tag` only:** `{ payload, success?, error?, … }` (was positional `itemSchema`).
-- **`CustomQueueResource.Tag`:** `{ payload, levelCount, namedLevels?, success?, error? }`.
+**QueueResource** — positional and config-object both valid; 2nd positional arg is **`payload`**
+(was `itemSchema`):
+
+```ts
+class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", JobSchema)                    // still valid
+class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema })        // still valid
+class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", JobSchema, Summary, WorkerErr) // positional success/error
+class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema, success: Summary, error: WorkerErr })
+```
+
+**CustomQueueResource** — **config object required** for `levelCount` / `namedLevels`; wire slots
+renamed inside:
+
+```ts
+class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/Jobs", {
+  payload: JobSchema,       // was itemSchema
+  levelCount: 4,
+  namedLevels: { batch: 3 },
+  success?: SummarySchema,
+  error?: WorkerErr,
+})
+```
+
 - Engine persists full **`QueueEvent<T>`** lifecycle via **`QueueResource.store(tag)`** /
   **`CustomQueueResource.store(tag)`** on the Store bridge — not facet rows.
 - **Removed `QueueResourceStore`** facet and **`@nikscripts/effect-pm/store/QueueResource`**
   subpath.
-- Persisted queue **`entry.item`** domain field unchanged; tag config uses **`payload`**.
-
-```ts
-// before
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", JobSchema)
-
-// after
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema })
-```
+- Persisted queue **`entry.item`** domain field unchanged; tag wire slot is **`payload`**.
 
 ---
 
@@ -117,7 +143,7 @@ class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema }
 import * as Store from "@nikscripts/effect-pm/Store";
 import * as Process from "@nikscripts/effect-pm/Process";
 
-class Prices extends Process.Tag<Prices>()("app/Prices", PriceSchema) {}
+class Prices extends Process.Tag<Prices>()("app/Prices", { success: PriceSchema }) {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(Prices),

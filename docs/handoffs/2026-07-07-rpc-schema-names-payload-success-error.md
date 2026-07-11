@@ -83,8 +83,8 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 
 | Was | Shipped |
 |-----|---------|
-| `itemSchema` (positional + tag stamp) | **`payload`** on config-object `Tag` only |
-| (planned) `resultSchema` / `errorSchema` | optional **`success`** / **`error`** on config object |
+| `itemSchema` (positional + tag stamp) | **`payload`** (positional 2nd arg or `{ payload }`) |
+| (planned) `resultSchema` / `errorSchema` | optional **`success`** / **`error`** (positional or object) |
 
 Files: `src/QueueResource.ts`, `src/CustomQueueResource.ts`, `src/internal/store/queueStoreSpec.ts`, `builtInQueueStoreContract`, tests, queue guides.
 
