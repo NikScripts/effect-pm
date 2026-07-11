@@ -112,12 +112,12 @@ Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStora
 
 | Doc | What |
 |---|---|
-| [docs/guides/toolkit-by-example.md](./docs/guides/toolkit-by-example.md) | Every resource / group / host / UI pattern |
-| [docs/guides/history-and-persistence.md](./docs/guides/history-and-persistence.md) | History, durable queue, the dashboard data layer |
-| [docs/PROCESS-API.md](./docs/PROCESS-API.md) | Spec tables for `Process`, `Polling`, and `Process.Schedule` |
-| [docs/STORAGE.md](./docs/STORAGE.md) | Persistence model (the SSOT) |
-| [docs/PACKAGE-GUIDE.md](./docs/PACKAGE-GUIDE.md) | Narrative architecture |
-| [docs/AGENTS.md](./docs/AGENTS.md) | Repo map for agents |
+| [docs/legacy/guides/toolkit-by-example.md](./docs/legacy/guides/toolkit-by-example.md) | Every resource / group / host / UI pattern |
+| [docs/legacy/guides/history-and-persistence.md](./docs/legacy/guides/history-and-persistence.md) | History, durable queue, the dashboard data layer |
+| [docs/legacy/PROCESS-API.md](./docs/legacy/PROCESS-API.md) | Spec tables for `Process`, `Polling`, and `Process.Schedule` |
+| [docs/legacy/STORAGE.md](./docs/legacy/STORAGE.md) | Persistence model (the SSOT) |
+| [docs/legacy/PACKAGE-GUIDE.md](./docs/legacy/PACKAGE-GUIDE.md) | Narrative architecture |
+| [docs/legacy/AGENTS.md](./docs/legacy/AGENTS.md) | Repo map for agents |
 
 ## License
 

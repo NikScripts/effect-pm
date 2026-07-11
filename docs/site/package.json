@@ -1,0 +1,34 @@
+{
+  "name": "@nikscripts/effect-pm-docs",
+  "private": true,
+  "type": "module",
+  "description": "Official docs/website for @nikscripts/effect-pm — bespoke Waku RSC app, Djot content, Effect pipeline.",
+  "scripts": {
+    "dev": "waku dev --host 0.0.0.0 --port 5190",
+    "build": "waku build",
+    "preview": "waku start --host 0.0.0.0 --port 5190"
+  },
+  "dependencies": {
+    "@djot/djot": "^0.3.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "effect": "4.0.0-beta.92",
+    "lucide-react": "^1.24.0",
+    "radix-ui": "^1.6.2",
+    "react": "~19.2.6",
+    "react-dom": "~19.2.6",
+    "react-server-dom-webpack": "~19.2.6",
+    "recharts": "^3.9.2",
+    "shiki": "^4.3.1",
+    "tailwind-merge": "^3.6.0",
+    "waku": "1.0.0-beta.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^5.9.0"
+  }
+}

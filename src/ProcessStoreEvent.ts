@@ -42,7 +42,7 @@ export type JsonValue =
  * applied in TypeScript after decoding) must strip `limit` from the
  * storage query (`windowOpts(opts)`) and re-apply it via
  * `applyQueryOpts(rows, opts, ...)` after decoding — see
- * `src/store/processGroup.ts` for worked examples and `docs/STORAGE.md` for the rationale.
+ * `src/store/processGroup.ts` for worked examples and `docs/legacy/STORAGE.md` for the rationale.
  *
  * @public
  */

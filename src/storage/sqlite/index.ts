@@ -20,7 +20,7 @@
  * - `upsert` fails with {@link RuntimeStorageReadonlyRecordError} when the stored
  *   row is marked readonly.
  * - `update` / `delete` follow the same readonly counting and skip rules documented
- *   in `docs/STORAGE.md`.
+ *   in `docs/legacy/STORAGE.md`.
  *
  * The implementation achieves parity by loading the full table and delegating
  * to {@link selectRuntimeRecords} and {@link applyRuntimeRecordPatch} from

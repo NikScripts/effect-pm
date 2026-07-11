@@ -3,7 +3,7 @@
  * (dashboards, TUIs, fleet pages, a `pm metrics` command). The thin counterpart to OTEL export: same
  * source (the per-node `Metric` registry), different sink. OTEL is the professional path — wire
  * `@effect/opentelemetry` and point OTLP at Sentry / Grafana / anything; Telemetry is for building
- * something custom without external infra. See `docs/guides/telemetry.md`.
+ * something custom without external infra. See `docs/legacy/guides/telemetry.md`.
  *
  * @module Telemetry
  */

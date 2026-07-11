@@ -8,7 +8,8 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
 | **2** | `cursor/queue-wire-phase-1a-a009` (new) | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **ready-to-start** | — | — | **Do not merge PR #19/#20**; validation + CQR mirror | 2026-07-11 |
-| **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) on branch | **owner** | — | — | Owner handles A–C pipeline | 2026-07-11 |
+| **B** | `action/html-doc-platform` → merged to `integration/storage` | [plan](./agent-b-plan.md) on branch | **merged** | (this merge) | islands live (Counter/Queue/RunResource), HMR-safe module split, no casts; docs render on merged tree | QueueResource handle not a proper `ref` → real widgets show no data → handoff prepped | 2026-07-11 |
+| **A** | `integration/rules-and-documentation` → merged to `integration/storage` | [html standards](./agent-a-html-standards-corpus.md) | **merged** | (this merge) | standards corpus chapters 1–7 + prioritized inventory | — | 2026-07-11 |
 
 ---
 

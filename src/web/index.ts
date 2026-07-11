@@ -19,7 +19,7 @@
  * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`.
  *
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
- * tokens — see `docs/guides/setup.md` §2a/§2b for the `@source` + token wiring.
+ * tokens — see `docs/legacy/guides/setup.md` §2a/§2b for the `@source` + token wiring.
  *
  * @since 1.0.0
  */
