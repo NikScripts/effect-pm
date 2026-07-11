@@ -24,3 +24,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected:** PR **#19** (generic `queueSpec` + inner casts), PR **#20** merge until Phase 1a lands; claiming `StreamElement<events>` typing in Phase 1a.
 - **Deferred:** Process live `events` — separate session after Queue Phase 1a; owner still picks failure surface (`events` vs store-only vs RPC rebuild).
 - **Supervisor impact:** Do **not** merge #19/#20. Agent 2 → [`agent-02-queue-wire-phase-1a.md`](./agent-02-queue-wire-phase-1a.md). #17 rebase after Queue wire settled.
+
+---
+
+## 2026-07-11 — Process manual run RPC (owner)
+
+- **Owner said:** Remote Process RPC must use tag **`error`** schema (not store-only). Replace **`runImmediately`** with **`run`** or **`effect`** — a real toolkit RPC method (`Resource.effectFn`), not a void parameterless function; failures must return typed errors on the wire. Manual run should support **payload** when the tag defines one (RunResource-shaped).
+- **Rejected:** Session 3 documentation that “defers” RPC `error` indefinitely; `runImmediately` as `Effect<void, never>` with failures only in store; PR #20 `events` stream as substitute for typed RPC failure.
+- **Chose:** New workstream [`agent-02-process-run-rpc.md`](./agent-02-process-run-rpc.md) — per-tag `buildProcessSpec`, propagate failures on manual run RPC, remove `runImmediately`.
+- **Open (Agent 2 Slice 0):** Verb **`run`** vs **`effect`**; whether Process tag gains optional **`payload`** slot.
+- **Supervisor impact:** Do not treat #17 defer language as policy; Agent 2 branch `cursor/process-run-rpc-a009` after owner confirms naming/payload.
