@@ -16,16 +16,12 @@ Storage facets are **public** under **`src/store/`** with **`@nikscripts/effect-
 
 | File (either naming style) | Subpath | Service tag |
 |----------------------------|---------|-------------|
-| `src/store/queueResource.ts` | `store/QueueResource` | `QueueResourceStore` |
 | `src/store/log.ts` | `store/Log` | `LogStore` |
 | `src/store/processLifecycle.ts` | `store/ProcessLifecycle` | `ProcessLifecycleStore` |
-| `src/store/processGroup.ts` | `store/ProcessGroup` | `ProcessGroupStore` |
 
-**File naming:** full service name (`QueueResourceStore.ts`) **or** camelCase domain (`queueResource.ts`) — pick one style per facet, do not invent other names.
+**Removed:** `store/QueueResource` facet — queue execution history uses `QueueResource.store(tag)` on the Store bridge.
 
-**Subpath ≠ filename:** import path is `store/QueueResource`; file may be `queueResource.ts`.
-
-**Not the worker module:** `@nikscripts/effect-pm/QueueResource` is the queue worker; `@nikscripts/effect-pm/store/QueueResource` is the storage facet.
+**Not the worker module:** `@nikscripts/effect-pm/QueueResource` is the queue worker; `@nikscripts/effect-pm/QueueResource` + `*.store(tag)` is queue store registration.
 
 **`internal/store/`** — `spine.ts`, `service.ts`, `helpers.ts`. Type-agnostic plumbing only. No per-facet codecs, no facet tags.
 

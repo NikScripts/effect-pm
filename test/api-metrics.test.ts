@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
+import { Duration, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import {
   FetchHttpClient,
@@ -65,13 +65,13 @@ describe("ApiMetrics.Tag", () => {
 });
 
 describe("ApiMetrics.layer", () => {
-  it.effect("usageNow reflects HttpApiResource endpoint calls", () =>
+  it.effect("usage.get reflects HttpApiResource endpoint calls", () =>
     Effect.gen(function* () {
       const client = yield* DemoClient;
       const metrics = yield* DemoMetrics;
       yield* client.g.ping();
       yield* client.g.ping();
-      const snap = yield* metrics.usageNow;
+      const snap = yield* metrics.usage.get;
       expect(snap.clientId).toBe(ClientId);
       expect(snap.requestsTotal).toBe(2);
       expect(snap.errorsTotal).toBe(0);
@@ -93,6 +93,25 @@ describe("ApiMetrics.layer", () => {
       expect(yield* Ref.get(samples)).toBeGreaterThanOrEqual(1);
     }).pipe(Effect.provide(liveLayers), Effect.scoped),
   );
+
+  it.effect("usage.changes emits when endpoint usage is recorded", () =>
+    Effect.gen(function* () {
+      const client = yield* DemoClient;
+      const metrics = yield* DemoMetrics;
+      const collected = yield* Effect.forkChild(
+        Stream.runHead(
+          Stream.filter(metrics.usage.changes, (s) => s.requestsTotal >= 1),
+        ),
+      );
+      yield* Effect.yieldNow;
+      yield* client.g.ping();
+      const head = yield* Fiber.join(collected);
+      expect(head._tag).toBe("Some");
+      if (head._tag === "Some") {
+        expect(head.value.requestsTotal).toBeGreaterThanOrEqual(1);
+      }
+    }).pipe(Effect.provide(liveLayers), Effect.scoped),
+  );
 });
 
 describe("ApiMetrics per-instance groups + httpServer", () => {
@@ -106,24 +125,32 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
 
   // Two metrics tags served on one node via `httpServer`; each reached over http with its own
   // per-instance group — `Resource.client` routes to the right one (no shared key header).
+  const alphaSnap = {
+    clientId: ClientId,
+    inFlight: 0,
+    requestsTotal: 1,
+    errorsTotal: 0,
+    topEndpoints: [{ group: "g", endpoint: "alpha", requests: 1, errors: 0 }],
+  };
+  const betaSnap = {
+    clientId: OtherClientId,
+    inFlight: 0,
+    requestsTotal: 2,
+    errorsTotal: 0,
+    topEndpoints: [{ group: "g", endpoint: "beta", requests: 2, errors: 0 }],
+  };
   const alphaImpl = {
-    usageNow: Effect.succeed({
-      clientId: ClientId,
-      inFlight: 0,
-      requestsTotal: 1,
-      errorsTotal: 0,
-      topEndpoints: [{ group: "g", endpoint: "alpha", requests: 1, errors: 0 }],
-    }),
+    usage: {
+      get: Effect.succeed(alphaSnap),
+      changes: Stream.fromIterable([alphaSnap]),
+    },
     metrics: Stream.empty,
   };
   const betaImpl = {
-    usageNow: Effect.succeed({
-      clientId: OtherClientId,
-      inFlight: 0,
-      requestsTotal: 2,
-      errorsTotal: 0,
-      topEndpoints: [{ group: "g", endpoint: "beta", requests: 2, errors: 0 }],
-    }),
+    usage: {
+      get: Effect.succeed(betaSnap),
+      changes: Stream.fromIterable([betaSnap]),
+    },
     metrics: Stream.empty,
   };
   const Server = Resource.httpServer([
@@ -145,8 +172,8 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
         yield* Effect.gen(function* () {
           const demo = yield* DemoMetrics;
           const other = yield* OtherMetrics;
-          const alpha = yield* demo.usageNow;
-          const beta = yield* other.usageNow;
+          const alpha = yield* demo.usage.get;
+          const beta = yield* other.usage.get;
           expect(alpha.topEndpoints[0]?.endpoint).toBe("alpha");
           expect(beta.topEndpoints[0]?.endpoint).toBe("beta");
         }).pipe(

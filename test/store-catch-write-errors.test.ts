@@ -55,6 +55,7 @@ describe("Store.catchWriteErrors", () => {
 // FAILURE is caught+swallowed; a defect and any other failure are NOT.
 // ============================================================================
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- empty payload for discrimination test
 class OtherError extends Data.TaggedError("OtherError")<{}> {}
 
 /** A branded effects object whose methods deterministically fail in each category. */

@@ -55,7 +55,7 @@ pnpm test
 
 Close the **store cutover consumption path** on `integration/storage`: golden parity where cheap, handoffs match code, branch is merge-ready toward `main`.
 
-**Not in scope:** logs platform (`Resource.logs`, kill `captureLogs` / `HistoryStore` forks), QR write-path buffer off hot path, changeset without owner approval.
+**Not in scope:** logs platform (`Resource.logs`, kill `captureLogs` / `HistoryStore` forks), QR write-path buffer off hot path, running `pnpm run version` / publish without owner approval.
 
 ---
 

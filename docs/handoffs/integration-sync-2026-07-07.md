@@ -55,7 +55,7 @@ Two report sets exist — use **both**, for different layers:
 | Shipped | Open |
 |---------|------|
 | `layerDefaultMemory`, precise `bridge.at`, typed `Tag.store` | Optional write-path buffer (queue engine — **future**) |
-| Effect Msgpack journal (no direct `msgpackr`) | `package.json` stale `store/QueueResource` export (no src file) |
+| Effect Msgpack journal (no direct `msgpackr`) | |
 | Cast-free queue + run-resource + process contracts | |
 | Process / RunResource / Queue / CQR default store baked into toolkit layers | |
 | All four toolkit engines on Store bridge (`materializeEngineQueueStore*`, `Store.effects`) | |

@@ -1,4 +1,4 @@
-{#index title="Getting started" appliesTo=all}
+{#index title="Introduction" appliesTo=all}
 # effect-pm
 
 {.note}

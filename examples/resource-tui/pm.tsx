@@ -6,7 +6,7 @@
  *
  *   pnpm run example:pm                       # no subcommand → the styled TUI dashboard
  *   pnpm run example:pm ls                     # list resources (command name → id)
- *   pnpm run example:pm Mail statusNow         # one-shot read, run & exit
+ *   pnpm run example:pm Mail status.get         # one-shot read, run & exit
  *   pnpm run example:pm Mail pause             # control, run & exit
  *   pnpm run example:pm KeyRotation start
  *   pnpm run example:pm --help

@@ -91,10 +91,10 @@ const AppLayer = Producer.pipe(Layer.provideMerge(QueueLayer));
 const runtime = Atom.runtime(AppLayer);
 
 // ── live atoms off the real streams ──────────────────────────────────────────
-const statusAtom = runtime.atom(Stream.unwrap(Effect.map(MailQueue, (q) => q.status)));
+const statusAtom = runtime.atom(Stream.unwrap(Effect.map(MailQueue, (q) => q.status.changes)));
 const metricsAtom = runtime.atom(Stream.unwrap(Effect.map(MailQueue, (q) => q.metrics)));
 const trendAtom = runtime.atom(
-  Stream.unwrap(Effect.map(MailQueue, (q) => q.status)).pipe(
+  Stream.unwrap(Effect.map(MailQueue, (q) => q.status.changes)).pipe(
     Stream.scan([] as ReadonlyArray<number>, (acc, s) =>
       [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-40),
     ),

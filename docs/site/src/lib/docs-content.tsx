@@ -9,8 +9,12 @@ import { Data, Effect, Schema } from "effect";
 import * as djot from "@djot/djot";
 import * as React from "react";
 import { runServer } from "./runtime.js";
-import { chapters } from "./content.js";
+import { chapters, chapterBySlug } from "./content.js";
+import { nav } from "../../../nav.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
+import { QueueIsland } from "../islands/QueueIsland.js";
+import { RunResourceIsland } from "../islands/RunResourceIsland.js";
+import { CounterIsland } from "../islands/CounterIsland.js";
 
 // --- rule metadata schema (machine layer) ---------------------------------
 const Severity = Schema.Literals(["must", "should", "may"]);
@@ -107,8 +111,10 @@ const toReact = (n: any): React.ReactNode => {
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
     case "list_item": return h("li", { key: keySeq++ }, kids(n));
     case "code_block":
-      // island seam: a ```queue block becomes a live client component
-      if (n.lang === "queue") return h("div", { key: keySeq++, "data-island": "queue-widget" }, "‹live queue widget›");
+      // island seam: a ```queue block becomes a live client component (RSC boundary)
+      if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
+      if (n.lang === "run-resource") return h(RunResourceIsland, { key: keySeq++ });
+      if (n.lang === "resource") return h(CounterIsland, { key: keySeq++ });
       // everything else is Shiki-highlighted server-side (real React nodes)
       return highlightToReact(n.text, n.lang);
     default: return kids(n);
@@ -142,26 +148,64 @@ export interface NavItem {
 const hrefFor = (slug: string, group: string): string =>
   group === "" && slug === "index" ? "/" : `/docs/${slug}`;
 
-// Nav is derived from the content manifest. A file with a parse error falls back to
-// its slug here (so one bad file doesn't blank the whole nav) — its own page still
-// fails loudly when rendered.
-export const navItems = async (): Promise<ReadonlyArray<NavItem>> => {
-  const out: Array<NavItem> = [];
-  for (const c of chapters) {
-    const meta = await runServer(
-      parseChapter(c.raw).pipe(
-        Effect.map(({ meta }) => meta),
-        Effect.catch(() => Effect.succeed({ id: c.slug, title: c.slug, rules: [] } as ChapterMeta)),
-      ),
-    );
-    out.push({ slug: c.slug, href: hrefFor(c.slug, c.group), title: meta.title, order: meta.order });
+// Resolve one slug to a nav item; the title comes from the page's own block (SSOT).
+// A parse error falls back to the slug so one bad file can't blank the nav.
+const itemForSlug = (slug: string): Promise<NavItem | undefined> => {
+  const c = chapterBySlug(slug);
+  if (c === undefined) return Promise.resolve(undefined);
+  return runServer(
+    parseChapter(c.raw).pipe(
+      Effect.map(({ meta }) => meta),
+      Effect.catch(() => Effect.succeed({ id: slug, title: slug, rules: [] } as ChapterMeta)),
+    ),
+  ).then((meta) => ({ slug, href: hrefFor(slug, c.group), title: meta.title }));
+};
+
+export interface NavGroup {
+  readonly label: string;
+  readonly items: ReadonlyArray<NavItem>;
+}
+
+// The grouped, ordered nav — structure from docs/nav.ts, titles from each page. Any
+// content file not listed in the manifest lands under "More" so nothing silently vanishes.
+export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
+  const listed = new Set<string>();
+  const groups: Array<NavGroup> = [];
+  for (const g of nav) {
+    const items: Array<NavItem> = [];
+    for (const slug of g.slugs) {
+      const it = await itemForSlug(slug);
+      if (it !== undefined) {
+        items.push(it);
+        listed.add(slug);
+      }
+    }
+    if (items.length > 0) groups.push({ label: g.label, items });
   }
-  // Home first, then by declared chapter `order`, unordered (e.g. placeholders) last, ties by title.
-  return out.sort((a, b) => {
-    if (a.href === "/") return -1;
-    if (b.href === "/") return 1;
-    const ao = a.order ?? Infinity;
-    const bo = b.order ?? Infinity;
-    return ao !== bo ? ao - bo : a.title.localeCompare(b.title);
-  });
+  const extras: Array<NavItem> = [];
+  for (const c of chapters) {
+    if (listed.has(c.slug)) continue;
+    const it = await itemForSlug(c.slug);
+    if (it !== undefined) extras.push(it);
+  }
+  if (extras.length > 0) groups.push({ label: "More", items: extras });
+  return groups;
+};
+
+// The flat book order (groups concatenated) — the sequence prev/next walks.
+export const navItems = async (): Promise<ReadonlyArray<NavItem>> =>
+  (await navGroups()).flatMap((g) => g.items);
+
+export interface AdjacentPages {
+  readonly prev?: NavItem;
+  readonly next?: NavItem;
+}
+
+// Prev/next by position in the flattened book — crosses group boundaries so the docs
+// read like one continuous book.
+export const prevNext = async (slug: string): Promise<AdjacentPages> => {
+  const items = await navItems();
+  const i = items.findIndex((it) => it.slug === slug);
+  if (i < 0) return {};
+  return { prev: items[i - 1], next: items[i + 1] };
 };

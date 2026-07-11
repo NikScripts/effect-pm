@@ -50,6 +50,7 @@ export interface StoreShapeDef<
 export type StoreShapeInputLeaf = Schema.Schema<unknown> | StoreShapeDef;
 
 /** A nested sub-tree of shape inputs — the recursive case. @internal */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- recursive tree; empty interface preserves circular alias
 export interface StoreShapeTree extends Readonly<Record<string, StoreShapeInput>> {}
 
 /** Part 1 shape value — a leaf (row schema or {@link StoreShapeDef}) or a nested sub-tree. @internal */
@@ -115,6 +116,8 @@ export type SchemaDecoded<S extends Schema.Schema<unknown>> = S extends Schema.S
   : Simplify<Schema.Schema.Type<S>>;
 
 /** True when every key in `P` is optional (or `P` is empty). @internal */
+/** True when every key in `P` is optional (or `P` is empty). @internal */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- `{}` is the standard optional-key probe
 type AllKeysOptional<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? true : false }[keyof P];
 
 /** Optional read payload for empty structs or structs whose fields are all optional. @internal */

@@ -33,7 +33,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
 | `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
-| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); merge target `cursor/integration-result-schema-a3ad`. |
+| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); integration branch **`integration/storage`**. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
@@ -71,9 +71,7 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 - For non-trivial changes, validate with `pnpm run typecheck`, `pnpm test`,
   `pnpm run build`, and `pnpm run lint` unless the task is docs-only or the
   user explicitly narrows testing.
-- Recommend a changeset whenever public API, behavior, package metadata, or
-  release notes are affected. Creating or editing a changeset requires user
-  approval.
+- **Changesets** — see [Changeset policy](#changeset-policy) below.
 - Recommend commits, PRs, or merges when appropriate.
 - Commits, pushes, PR creation/update, and merges on major or user-owned
   branches (`main`, `develop`, release branches, or branches created by the
@@ -102,6 +100,49 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
   sensible slice, call out blockers or uncertainty, and ask for clarification
   when a decision is needed. Avoid passive endings that only summarize completed
   work; leave the user with the concrete next plan or next question.
+
+---
+
+## Changeset policy
+
+**When to add a changeset:** public API, behavior, package metadata, or release-note
+impact — same bar as before.
+
+| Action | Owner approval? | Agent duty |
+|--------|-----------------|------------|
+| **Create / edit** `.changeset/*.md` | **No** — land on agent branches with the PR | **Mandatory:** paste the **full file contents** in owner chat after creating (use supervisor Before/After: Before = `(none — new file)` or prior full file; After = full new file). Do not summarize or link only. |
+| **`pnpm run version`** (`changeset version` — bumps `package.json` + `CHANGELOG.md`) | **Yes** | Propose when ready; do not run without owner OK |
+| **Publish** (`pnpm publish`, `npm run release`) | **Yes** | Owner only |
+
+**Content:** no `@deprecated` shims in migration notes — snippets only. Consolidate related
+breaking notes into one coherent changeset when possible (see
+[`handoffs/reports/2026-07-07-agent-report-docs-release.md`](./handoffs/reports/2026-07-07-agent-report-docs-release.md)).
+
+---
+
+## Branch policy
+
+**Format:** `<type>/<description>` — slash-separated, **kebab-case** description.
+
+| Type | Purpose | Typical merge target |
+|------|---------|---------------------|
+| **`integration/<stream>`** | Long-lived integration line for a major workstream | `main` (or umbrella `integration` first — see below) |
+| **`feature/<description>`** | Short-lived agent or developer work | Matching `integration/<stream>` per handoff |
+| **`fix/<description>`** | Focused fixes | Same as `feature/*` |
+
+**Active integration lines:**
+
+- **`integration/storage`** — store cutover, Store bridge, tag wire renames (current storage platform work).
+- **More `integration/*` lines** — owner will add parallel streams (e.g. docs platform, process wire).
+- **`integration`** (umbrella, **future**) — when multiple integration lines must collide before `main`.
+
+**Rules:**
+
+- Branch agent work from the relevant **`integration/*` tip**, not `main`, for platform migrations.
+- Open PRs → the matching **`integration/<stream>`** unless the handoff says otherwise.
+- **Push to `integration/*`** when typecheck, tests, and lint are green and the owner directs — do not block on unrelated agents.
+- Do **not** push to `main`, `develop`, release branches, or owner-owned branches without explicit approval.
+- Legacy `cursor/*` names may still exist on open PRs; **prefer `<type>/<description>` for new branches.**
 
 ---
 
@@ -143,6 +184,8 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 ---
 
 ## Cursor Cloud specific instructions
+
+**Integration branch:** `integration/storage` — land store/tag migrations here; see [`handoffs/reports/README.md`](./handoffs/reports/README.md) for per-module agent reports.
 
 **Environment:** Node >= 20.19.0 and pnpm 10.33.4 are declared by
 `package.json`. A `pnpm-lock.yaml` is committed; use `pnpm install` when

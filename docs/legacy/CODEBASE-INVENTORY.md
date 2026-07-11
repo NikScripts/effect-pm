@@ -487,7 +487,7 @@ Read toolkit handle **`Subscribable`** views on Tag/Service/layer gates (`status
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/QueueResource`, `/store/Log`, `/store/ProcessLifecycle`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`. (No `/store/ProcessExecution` or `/store/RunResource` — execution history uses `Process.store`; run facts use `RunResource.store` on the Store bridge.)
+- **Subpaths** — `/Process`, `/QueueResource`, `/CustomQueueResource`, `/Resource`, `/MultiNode`, `/Group`, `/ApiMetrics`, `/Telemetry`, `/ApiUsageSchema`, `/HttpApiResource`, `/Query`, `/ResourceConfigure`, `/RuntimeStorage`, `/Logs`, `/NodeLogs`, `/NodeStatus`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/store/Log`, `/store/ProcessLifecycle`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`. (No `/store/QueueResource`, `/store/ProcessExecution`, or `/store/RunResource` — queue/process/run execution history uses `*.store(tag)` on the Store bridge.)
 
 ---
 

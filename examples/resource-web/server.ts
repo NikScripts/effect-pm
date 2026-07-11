@@ -78,7 +78,7 @@ const pollerWindows = wnbaGames.map((g) => ({
 // ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
 // A real consumer instruments its outbound client (`HttpApiResource.instrumentEndpoints`) and serves
 // `ApiMetrics.serve(tag)` (fed from the Metric registry). For the fixture there's no real
-// client, so we hand the served tag a mock `{ metrics, usageNow }` with synthetic windows — a
+// client, so we hand the served tag a mock `{ metrics, usage }` with synthetic windows — a
 // realistic-ish WNBA stats surface (HttpApi groups × endpoints), accumulated for `topEndpoints`.
 interface EndpointSpec {
   readonly group: string;
@@ -145,22 +145,44 @@ const fakeWindow: Effect.Effect<ApiUsageMetrics> = Effect.gen(function* () {
 });
 const scoresApiMock = {
   metrics: Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => fakeWindow)),
-  usageNow: Effect.map(
-    Random.nextIntBetween(0, 6),
-    (inFlight): ApiUsageSnapshot => ({
-      clientId: "@wnba/ScoresApi",
-      inFlight,
-      requestsTotal: apiTotal,
-      errorsTotal: apiErrors,
-      topEndpoints: apiCatalog
-        .map((spec) => {
-          const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
-          return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
-        })
-        .sort((a, b) => b.requests - a.requests)
-        .slice(0, 5),
-    }),
-  ),
+  usage: {
+    get: Effect.map(
+      Random.nextIntBetween(0, 6),
+      (inFlight): ApiUsageSnapshot => ({
+        clientId: "@wnba/ScoresApi",
+        inFlight,
+        requestsTotal: apiTotal,
+        errorsTotal: apiErrors,
+        topEndpoints: apiCatalog
+          .map((spec) => {
+            const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+            return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
+          })
+          .sort((a, b) => b.requests - a.requests)
+          .slice(0, 5),
+      }),
+    ),
+    changes: Stream.tick(Duration.seconds(2)).pipe(
+      Stream.mapEffect(() =>
+        Effect.map(
+          Random.nextIntBetween(0, 6),
+          (inFlight): ApiUsageSnapshot => ({
+            clientId: "@wnba/ScoresApi",
+            inFlight,
+            requestsTotal: apiTotal,
+            errorsTotal: apiErrors,
+            topEndpoints: apiCatalog
+              .map((spec) => {
+                const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+                return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
+              })
+              .sort((a, b) => b.requests - a.requests)
+              .slice(0, 5),
+          }),
+        ),
+      ),
+    ),
+  },
 };
 
 // Simulated physical connection for the scores DB: a brief ~10s drop every 3 minutes (epoch-aligned)

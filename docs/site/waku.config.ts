@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "waku/config";
 
@@ -19,13 +20,28 @@ const watchDocsContent = {
 // condition wiring (500 on every route). Revisit the pin when a later beta fixes it.
 export default defineConfig({
   vite: {
-    plugins: [react(), watchDocsContent],
+    plugins: [tailwindcss(), react(), watchDocsContent],
     // Content `.md` is Djot source, not JS. Declaring it an asset stops Vite from running
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.
     assetsInclude: ["**/*.md"],
-    // Content lives at docs/ (the parent of this app's root, docs/site). Allow the dev
-    // server to read it, and the standards/guides content dirs to hot-reload.
-    server: { fs: { allow: [".."] } },
+    // `@pm` -> the effect-pm package SOURCE, so island widgets bundle with THIS app's
+    // single `effect`/`react` instance (a dual instance would break atom reactivity).
+    resolve: {
+      // Source-imported package widgets pull react/lucide/recharts from the repo's
+      // node_modules; dedupe forces ONE react instance (else "Invalid hook call").
+      dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
+      alias: {
+        "@pm": fileURLToPath(new URL("../../src", import.meta.url)),
+        // Node-only deps the package pulls transitively (SQLite storage, CI check).
+        // A demo queue is in-memory, so stub them out of the browser bundle.
+        "@effect/sql-sqlite-node/SqliteClient": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),
+        "@effect/sql-sqlite-node": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),
+        "is-in-ci": fileURLToPath(new URL("./shims/is-in-ci.js", import.meta.url)),
+      },
+    },
+    // Content is at docs/ and the package source is at repo/src — both above this app's
+    // root (docs/site). Allow the dev server to read up to the repo root.
+    server: { fs: { allow: ["../.."] } },
   },
 });

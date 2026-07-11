@@ -40,7 +40,8 @@ Match it. When unsure, open the analogous Effect module and copy its shape.
 ## Exceptions (already ruled — do not "fix")
 
 - **Storage facets** keep their own convention (see `public-vs-internal.mdc`): a camelCase file
-  (`src/store/queueResource.ts`) under a PascalCase subpath (`store/QueueResource`).
+  (`src/store/log.ts`) under a PascalCase subpath (`store/Log`). Queue/process/run execution history
+  uses `*.store(tag)` on the Store bridge — not a `store/*` facet subpath.
 
 ## Concrete
 

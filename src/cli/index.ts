@@ -5,7 +5,7 @@
  * `web` widgets. Each resource becomes a subcommand namespace; each contract method
  * (query / mutate) becomes a verb, its flags derived from the payload schema and its help
  * text from the contract metadata (`specOf` / `methodMeta`). Streams are skipped — they
- * have no run-and-exit form (use their one-shot peers, e.g. `statusNow` / `logHistory`).
+ * have no run-and-exit form (use their one-shot peers, e.g. `status.get` / `logs.history`).
  *
  * Location-transparent: provide a local layer (the resource runs in-process) or a
  * `Resource.client` + transport (drives a running server) when you run it — the command
@@ -16,7 +16,7 @@
  * import { Command } from "effect/unstable/cli";
  *
  * const cli = makeResourceCli(resourcesByName([Mail, Jobs, KeyRotation]), "pm");
- * // pm Mail statusNow · pm Mail pause · pm KeyRotation start · pm ls
+ * // pm Mail status.get · pm Mail pause · pm KeyRotation start · pm ls
  * Command.runWith(cli, { version })(process.argv.slice(2)).pipe(Effect.provide(appLayer));
  * ```
  *

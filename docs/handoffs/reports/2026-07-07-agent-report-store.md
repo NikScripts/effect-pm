@@ -50,8 +50,8 @@ Execution history is **Store bridge only**.
 | Item | Owner | Notes |
 |------|-------|-------|
 | Write-path buffer (queue) | Queue | Scoped daemon off hot path — **future**; see `store-cutover-queue.md` |
-| `package.json` `store/QueueResource` subpath | release | Export may linger; no `src/store/queueResource.ts` — document exception until removed |
-| Platform changeset | owner approval | Breaking store/tag wire — needs approval |
+| ~~`package.json` `store/QueueResource` subpath~~ | ✅ removed | Session 3 (`cursor/store-release-hygiene-a009`) — use `QueueResource.store(tag)` |
+| Platform changeset | create + notify owner | Breaking store/tag wire — **version** needs approval |
 | Hybrid RuntimeStorage / Postgres | roadmap | `docs/plans/` |
 
 ---

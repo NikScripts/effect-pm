@@ -145,7 +145,11 @@ describe("RunResource.Service", () => {
 });
 
 describe("RunResource.Tag + layer", () => {
-  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()("@test/TestGate", { payload: Schema.Number, success: Schema.Number });
+  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()(
+    "@test/TestGate",
+    Schema.Number,
+    Schema.Number,
+  );
 
   const testLayer = RunResource.layer(TestGate, {
     effect: (n: number) => Effect.succeed(n + 100),
@@ -396,6 +400,17 @@ describe("RunResource — unit gates and interrupts", () => {
     concurrency: 1,
   }) {}
 
+  class BareEffectGate extends RunResource.Service<BareEffectGate>()("@test/BareEffectGate", {
+    effect: Effect.void,
+    concurrency: 1,
+  }) {}
+
+  class BareThunkGate extends RunResource.Service<BareThunkGate>()("@test/BareThunkGate", {
+    success: Schema.Number,
+    effect: Effect.succeed(99),
+    concurrency: 1,
+  }) {}
+
   const unitLayer = UnitGate.layer;
 
   it.live("Service.run() accepts no input for Schema.Void payload", () =>
@@ -406,6 +421,22 @@ describe("RunResource — unit gates and interrupts", () => {
       expect(fromHandle).toBe(42);
       expect(fromStatic).toBe(42);
     }).pipe(Effect.provide(unitLayer)),
+  );
+
+  it.live("Service accepts a bare Effect for unit gates", () =>
+    Effect.gen(function* () {
+      const gate = yield* BareEffectGate;
+      yield* gate.run();
+      yield* BareEffectGate.run();
+    }).pipe(Effect.provide(BareEffectGate.layer)),
+  );
+
+  it.live("Service accepts bare Effect when success schema is declared", () =>
+    Effect.gen(function* () {
+      const gate = yield* BareThunkGate;
+      expect(yield* gate.run()).toBe(99);
+      expect(yield* BareThunkGate.run()).toBe(99);
+    }).pipe(Effect.provide(BareThunkGate.layer)),
   );
 
   const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {

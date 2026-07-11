@@ -203,7 +203,7 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { makeResourceCli, resourcesByName } from "@nikscripts/effect-pm/cli";
 
 const cli = makeResourceCli(resourcesByName([RosterQueue, SeasonMatches]), "hub");
-// hub RosterQueue statusNow · hub RosterQueue pause · hub SeasonMatches start · hub ls
+// hub RosterQueue status.get · hub RosterQueue pause · hub SeasonMatches start · hub ls
 NodeRuntime.runMain(
   Command.runWith(cli, { version: "0.0.0" })(process.argv.slice(2)).pipe(
     Effect.provide(clients),
@@ -213,7 +213,7 @@ NodeRuntime.runMain(
 ```
 
 Each contract query/mutate becomes a verb (flags from the payload schema); streams are
-skipped — use their one-shot peers (`statusNow`, `logHistory`).
+skipped — use their one-shot peers (`status.get`, `logs.history`).
 
 ### Web (`…/web`) and TUI (`…/tui`)
 

@@ -71,23 +71,26 @@ export type NodeStatus = typeof nodeStatus.Type;
 export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
   HOST_STATUS_KEY,
   {
-  status: Resource.stream(nodeStatus).annotate({
-    description: "Live node status (up / uptime / resource count), re-emitted periodically.",
-  }),
-  statusNow: Resource.effect(nodeStatus).annotate({
-    description: "One-shot node status snapshot.",
+  status: Resource.ref(nodeStatus).annotate({
+    description:
+      "Live node status (up / uptime / resource count / per-resource readiness) — " +
+      "`status.get` for one-shot, `status.changes` re-emitted periodically.",
   }),
   ping: Resource.effect(Schema.Number).annotate({
     description: "Server epoch milliseconds — a round-trip liveness probe.",
   }),
-  logs: Resource.stream(LogEntrySchema).annotate({
-    description: "Runtime-wide node log stream (recent tail, then live). Empty unless NodeLogs.layer is provided.",
-  }),
-  logHistory: Resource.effect(Schema.Array(LogEntrySchema), {
-    payload: { limit: Schema.Number },
-  }).annotate({
-    description: "Replay persisted node logs (newest `limit`). Empty unless a HistoryStore is provided.",
-  }),
+  logs: {
+    live: Resource.stream(LogEntrySchema).annotate({
+      description:
+        "Runtime-wide node log stream (recent tail, then live). Empty unless NodeLogs.layer is provided.",
+    }),
+    history: Resource.effect(Schema.Array(LogEntrySchema), {
+      payload: { limit: Schema.Number },
+    }).annotate({
+      description:
+        "Replay persisted node logs (newest `limit`). Empty unless a LogStore is provided.",
+    }),
+  },
 }) {}
 
 /** Build the node status service implementation for a node that started at `startedAt` and serves
@@ -100,7 +103,7 @@ export const buildNodeStatusImpl = (options: {
   readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
 }) => {
   const readiness = options.readiness ?? Effect.succeed([]);
-  const statusNow: Effect.Effect<NodeStatus> = Effect.gen(function* () {
+  const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const resources = yield* readiness;
     const ok = resources.every((r) => r.ready);
@@ -114,32 +117,38 @@ export const buildNodeStatusImpl = (options: {
       resources,
     };
   });
+  const statusSub: Resource.Subscribable<NodeStatus> = {
+    get: computeStatus,
+    changes: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => computeStatus)),
+  };
+  const logsLive = Stream.unwrap(
+    Effect.gen(function* () {
+      const relay = yield* Effect.serviceOption(LogRelay);
+      if (Option.isNone(relay)) return Stream.empty;
+      const tail = yield* relay.value.snapshot;
+      return Stream.concat(Stream.fromIterable(tail), relay.value.stream);
+    }),
+  );
   return {
-    statusNow,
-    status: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => statusNow)),
+    status: statusSub,
     ping: Clock.currentTimeMillis,
-    logs: Stream.unwrap(
-      Effect.gen(function* () {
-        const relay = yield* Effect.serviceOption(LogRelay);
-        if (Option.isNone(relay)) return Stream.empty;
-        const tail = yield* relay.value.snapshot;
-        return Stream.concat(Stream.fromIterable(tail), relay.value.stream);
-      }),
-    ),
-    // this node's durable logs (its own LogStore holds only its lines). Optional — `[]` when no
-    // LogStore is composed. Newest first.
-    logHistory: (payload: { readonly limit: number }) =>
-      Effect.serviceOption(LogStore).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
-            onSome: (store) =>
-              store
-                .load({ limit: payload.limit, sort: "desc" })
-                .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([]))),
-          }),
+    logs: {
+      live: logsLive,
+      // this node's durable logs (its own LogStore holds only its lines). Optional — `[]` when no
+      // LogStore is composed. Newest first.
+      history: (payload: { readonly limit: number }) =>
+        Effect.serviceOption(LogStore).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
+              onSome: (store) =>
+                store
+                  .load({ limit: payload.limit, sort: "desc" })
+                  .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([]))),
+            }),
+          ),
         ),
-      ),
+    },
   };
 };
 

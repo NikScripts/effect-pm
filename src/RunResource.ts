@@ -37,6 +37,11 @@
  *   success: PriceSchema,
  *   error: FetchErrSchema,
  * }) {}
+ *
+ * // unit gate — bare effect, wire slots default to Void / Never
+ * class Tick extends RunResource.Service<Tick>()("@app/Tick", {
+ *   effect: Effect.sleep("1 second"),
+ * }) {}
  * ```
  *
  * ## Observable handles (Tag / Service / layer)
@@ -214,12 +219,15 @@ export type RunResourceTagDefinition<
  * @public
  */
 export interface RunResourceWireSchemas<
-  I extends Schema.Top = Schema.Top,
-  A extends Schema.Top = Schema.Top,
+  I extends Schema.Top = typeof Schema.Void,
+  A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > {
-  readonly payload: I;
-  readonly success: A;
+  /** Wire input schema; defaults to {@link Schema.Void} (unit gate). */
+  readonly payload?: I;
+  /** Wire success schema; defaults to {@link Schema.Void}. Omitted slots are not store-stamped. */
+  readonly success?: A;
+  /** Wire error schema; defaults to {@link Schema.Never}. Omitted slots are not store-stamped. */
   readonly error?: E;
 }
 
@@ -237,20 +245,47 @@ export interface RunResourceTagSchemas<
 }
 
 /**
+ * Gated effect for {@link layer} / {@link serve} — unit gates (`void` input) accept a bare
+ * {@link Effect.Effect} or `() => Effect`; parameterized gates use `(input) => Effect`.
+ *
+ * @public
+ */
+export type RunResourceLayerEffect<I, A, E, R> = [I] extends [void]
+  ? Effect.Effect<A, E, R> | (() => Effect.Effect<A, E, R>)
+  : (input: I) => Effect.Effect<A, E, R>;
+
+/**
+ * Gated effect for {@link Service} — same rules as {@link RunResourceLayerEffect} at the decoded type.
+ *
+ * @public
+ */
+export type RunResourceServiceEffect<
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+  R,
+> = [Schema.Schema.Type<I>] extends [void]
+  ? Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>
+    | (() => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>)
+  : (input: Schema.Schema.Type<I>) => Effect.Effect<
+      Schema.Schema.Type<A>,
+      Schema.Schema.Type<E>,
+      R
+    >;
+
+/**
  * Full {@link Service} config — wire schemas and the gated effect in one object.
  *
  * @public
  */
 export interface RunResourceServiceConfig<
-  I extends Schema.Top,
-  A extends Schema.Top,
+  I extends Schema.Top = typeof Schema.Void,
+  A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 > extends RunResourceWireSchemas<I, A, E> {
-  /** The effect to gate. For unit gates (`Schema.Void` input), use `() => myEffect`. */
-  readonly effect: (
-    input: Schema.Schema.Type<I>,
-  ) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>;
+  /** Unit gates may pass a bare effect; parameterized gates use `(input) => Effect`. */
+  readonly effect: RunResourceServiceEffect<I, A, E, R>;
   /**
    * Max concurrent executions through this gate.
    * @default 1
@@ -266,8 +301,8 @@ export interface RunResourceServiceConfig<
 export interface RunResourceLayerConfig<I, A, E, R> {
   /** Override telemetry / status `resourceId`; defaults to the tag key. */
   readonly name?: string;
-  /** The effect to gate. For unit gates (`Schema.Void` input), use `() => myEffect`. */
-  readonly effect: (input: I) => Effect.Effect<A, E, R>;
+  /** Unit gates may pass a bare effect; parameterized gates use `(input) => Effect`. */
+  readonly effect: RunResourceLayerEffect<I, A, E, R>;
   /**
    * Max concurrent executions through this gate.
    * @default 1
@@ -307,6 +342,53 @@ export type RunResourceRunner = internal.RunResourceRunner;
 // Internal helpers
 // ============================================================================
 
+/** Resolved wire schemas with RPC defaults applied. @internal */
+const resolveRunWireSchemas = <
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  config: RunResourceWireSchemas<I, A, E>,
+): { readonly payload: I; readonly success: A; readonly error: E } => ({
+  payload: (config.payload ?? Schema.Void) as I,
+  success: (config.success ?? Schema.Void) as A,
+  error: (config.error ?? Schema.Never) as E,
+});
+
+/** Normalize bare unit-gate effects and thunk forms into `(input) => Effect`. @internal */
+const toRunFn = <I, A, E, R>(
+  effect: RunResourceLayerEffect<I, A, E, R>,
+): ((input: I) => Effect.Effect<A, E, R>) => {
+  if (Effect.isEffect(effect)) {
+    return (() => effect) as (input: I) => Effect.Effect<A, E, R>;
+  }
+  return effect as (input: I) => Effect.Effect<A, E, R>;
+};
+
+const stampRunWireSchemas = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceWireSchemas<I, A, E>,
+  resolved: { readonly payload: I; readonly success: A; readonly error: E },
+): ResourceTag<Self, RunInstanceSpec<I, A, E>> => {
+  const stamp: Partial<Record<typeof successSym | typeof errorSym, Schema.Top>> = {};
+  if (config.success !== undefined) {
+    stamp[successSym] = resolved.success;
+  }
+  if (config.error !== undefined && (resolved.error as Schema.Top) !== Schema.Never) {
+    stamp[errorSym] = resolved.error;
+  }
+  const hasStamp = config.success !== undefined
+    || (config.error !== undefined && (resolved.error as Schema.Top) !== Schema.Never);
+  return hasStamp
+    ? (Object.assign(tag, stamp) as ResourceTag<Self, RunInstanceSpec<I, A, E>>)
+    : tag;
+};
+
 const makeStaticRun = <
   Self,
   I extends Schema.Top,
@@ -331,6 +413,9 @@ const makeStaticRun = <
       >)(input);
     })) as RunResourceStaticRun<I, A, E, Self>;
 
+const isRunTagSchemaConfig = (value: unknown): value is RunResourceTagSchemas =>
+  typeof value === "object" && value !== null && !Schema.isSchema(value);
+
 const materializeRunTag = <
   Self,
   I extends Schema.Top,
@@ -338,26 +423,19 @@ const materializeRunTag = <
   E extends Schema.Top,
 >(
   key: string,
-  payload: I,
-  success: A,
-  error: E,
-  options?: { readonly description?: string },
+  config: RunResourceTagSchemas<I, A, E>,
 ): RunTagWithStaticRun<Self, I, A, E> => {
-  const spec = runSpec(payload, success, error);
+  const resolved = resolveRunWireSchemas(config);
+  const spec = runSpec(resolved.payload, resolved.success, resolved.error);
   const tag = Resource.Tag<Self>()(key, spec, {
-    description: options?.description,
+    description: config.description,
     kind,
   });
   const ready = Resource.withReadiness(tag, (svc) =>
     Effect.map(svc.status.get, () => ({ ready: true })),
-  );
-  const stamp: Partial<Record<typeof successSym | typeof errorSym, Schema.Top>> = {
-    [successSym]: success,
-  };
-  if ((error as Schema.Top) !== Schema.Never) {
-    stamp[errorSym] = error;
-  }
-  return Object.assign(ready, stamp, { run: makeStaticRun(ready) }) as RunTagWithStaticRun<
+  ) as ResourceTag<Self, RunInstanceSpec<I, A, E>>;
+  const stamped = stampRunWireSchemas<Self, I, A, E>(ready, config, resolved);
+  return Object.assign(stamped, { run: makeStaticRun(stamped) }) as RunTagWithStaticRun<
     Self,
     I,
     A,
@@ -366,6 +444,7 @@ const materializeRunTag = <
 };
 
 const runTag = <Self>() => {
+  function build(key: string): RunTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
   function build<
     I extends Schema.Top,
     A extends Schema.Top,
@@ -373,15 +452,53 @@ const runTag = <Self>() => {
   >(
     key: string,
     config: RunResourceTagSchemas<I, A, E>,
-  ): RunTagWithStaticRun<Self, I, A, E> {
-    const error = (config.error ?? Schema.Never) as E;
-    return materializeRunTag(
-      key,
-      config.payload,
-      config.success,
+  ): RunTagWithStaticRun<Self, I, A, E>;
+  function build<I extends Schema.Top, A extends Schema.Top>(
+    key: string,
+    payload: I,
+    success: A,
+    options?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    error: E,
+    options?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, I, A, E>;
+  function build(
+    key: string,
+    inputOrSchemas?: Schema.Top | RunResourceTagSchemas,
+    success?: Schema.Top,
+    errorOrOptions?: Schema.Top | { readonly description?: string },
+    maybeOptions?: { readonly description?: string },
+  ): RunTagWithStaticRun<Self, any, any, any> {
+    if (inputOrSchemas === undefined) {
+      return materializeRunTag<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>(
+        key,
+        {},
+      );
+    }
+    if (isRunTagSchemaConfig(inputOrSchemas)) {
+      return materializeRunTag<Self, any, any, any>(key, inputOrSchemas);
+    }
+    const payload = inputOrSchemas;
+    const hasError =
+      errorOrOptions !== undefined && Schema.isSchema(errorOrOptions);
+    const error = hasError ? errorOrOptions : undefined;
+    const options = hasError
+      ? maybeOptions
+      : errorOrOptions as { readonly description?: string } | undefined;
+    return materializeRunTag<Self, any, any, any>(key, {
+      payload,
+      success,
       error,
-      { description: config.description },
-    );
+      description: options?.description,
+    });
   }
   return build;
 };
@@ -420,7 +537,8 @@ const buildRunImpl = <
       name: effectiveConfig.name ?? tag.key,
       scopeKey: tag.key,
       tag,
-      effect: (input: Schema.Schema.Type<I>) => provideR(effectiveConfig.effect(input)),
+      effect: (input: Schema.Schema.Type<I>) =>
+        provideR(toRunFn(effectiveConfig.effect)(input)),
       concurrency: effectiveConfig.concurrency,
     });
 
@@ -564,28 +682,30 @@ export function serve(
 export const Service = <Self>() => {
   function build<
     const Name extends string,
-    I extends Schema.Top,
-    A extends Schema.Top,
+    I extends Schema.Top = typeof Schema.Void,
+    A extends Schema.Top = typeof Schema.Void,
     E extends Schema.Top = typeof Schema.Never,
     R = never,
   >(
     name: Name,
     config: RunResourceServiceConfig<I, A, E, R>,
   ) {
-    const error = (config.error ?? Schema.Never) as E;
-    const tag = runTag<Self>()(name, {
-      payload: config.payload,
-      success: config.success,
-      error,
-    });
-    const defaultSpec = { name, ...config, error };
+    const wire = resolveRunWireSchemas(config);
+    const tag = runTag<Self>()(name, config);
+    const error = wire.error;
+    const defaultSpec = { name, ...config, ...wire, error };
     const layerConfig: RunResourceLayerConfig<
       Schema.Schema.Type<I>,
       Schema.Schema.Type<A>,
       Schema.Schema.Type<E>,
       R
     > = {
-      effect: config.effect,
+      effect: config.effect as RunResourceLayerEffect<
+        Schema.Schema.Type<I>,
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>,
+        R
+      >,
       concurrency: config.concurrency,
       name,
     };

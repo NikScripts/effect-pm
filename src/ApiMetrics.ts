@@ -39,11 +39,12 @@ import {
   layer as resourceLayer,
   serve as resourceServe,
   serveRemote as resourceServeRemote,
-  effect,
+  ref,
   stream,
   type NodeBoundTag,
   type NodeKey,
   type ResourceTag,
+  type Subscribable,
 } from "./Resource";
 
 // ============================================================================
@@ -109,7 +110,7 @@ export type ApiMetricsNodeTag<Self, HSelf> = NodeBoundTag<
 /** @internal */
 export type ApiMetricsSpec = {
   readonly metrics: ReturnType<typeof stream<typeof apiUsageMetrics>>;
-  readonly usageNow: ReturnType<typeof effect<typeof apiUsageSnapshot>>;
+  readonly usage: ReturnType<typeof ref<typeof apiUsageSnapshot>>;
 };
 
 const apiMetricsSpec = {
@@ -117,9 +118,9 @@ const apiMetricsSpec = {
     description:
       "Windowed API usage (requests, errors, throughput, per-endpoint breakdown) emitted once per window.",
   }),
-  usageNow: effect(apiUsageSnapshot).annotate({
+  usage: ref(apiUsageSnapshot).annotate({
     description:
-      "Point-in-time usage snapshot — cumulative totals and top endpoints.",
+      "Cumulative usage snapshot — totals and top endpoints (`usage.get` one-shot, `usage.changes` on each update).",
   }),
 };
 
@@ -147,7 +148,7 @@ const buildImpl = (
 ): Effect.Effect<
   {
     readonly metrics: import("effect").Stream.Stream<ApiUsageMetrics>;
-    readonly usageNow: Effect.Effect<ApiUsageSnapshot>;
+    readonly usage: Subscribable<ApiUsageSnapshot>;
   },
   never,
   Scope.Scope
@@ -156,7 +157,7 @@ const buildImpl = (
     const sink = yield* ensureClientUsage(clientId, options);
     return {
       metrics: sink.metrics,
-      usageNow: sink.snapshot,
+      usage: sink.usage,
     };
   });
 

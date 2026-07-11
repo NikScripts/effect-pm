@@ -24,6 +24,7 @@ import {
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
 import { errorOf, stampQueueWireSchemas, successOf } from "./internal/queueTagSchemas";
+import { assertCustomQueueInstanceSpec } from "./internal/queueSpecAssert";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   HandlerContextOf,
@@ -367,10 +368,12 @@ export const customQueueTag = <Self>() => {
       levelCount: config.levelCount,
       namedLevels: config.namedLevels ?? {},
     };
-    const spec = customQueueSpec(config.payload, levelConfig, {
-      success: config.success,
-      error: config.error,
-    }) as CustomQueueInstanceSpec<F>;
+    const wire = { success: config.success, error: config.error };
+    const spec = assertCustomQueueInstanceSpec<F>(
+      customQueueSpec(config.payload, levelConfig, wire),
+      customQueueSpec(config.payload, levelConfig),
+      wire,
+    );
     const base =
       config.node === undefined
         ? Resource.Tag<Self>()(key, spec, { description: config.description, kind })
@@ -484,20 +487,16 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
         }),
     });
 
-    // one Subscribable source of truth (get = statusNow, changes = status stream); scalars are views of it.
-    const statusSub = {
-      get: handle.statusNow,
-      changes: handle.status,
-    };
+    // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as QueueResource.
     const impl: Resource.WithRequirement<
       ImplOf<CustomQueueInstanceSpec<F>>,
       R | RR
     > = {
-      status: statusSub,
-      size: Resource.mapSubscribable(statusSub, (s) => sumLaneSizes(s.sizes)),
-      isEmpty: Resource.mapSubscribable(statusSub, (s) => sumLaneSizes(s.sizes) === 0),
+      status: handle.status,
+      size: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
+      isEmpty: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
       start: handle.start,
       pause: handle.pause,

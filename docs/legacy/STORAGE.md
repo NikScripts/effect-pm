@@ -109,9 +109,9 @@ Aliases: `ProcessStorage.Log`, `ProcessStorage.ProcessLifecycle`.
 - `ProcessExecutionStore` — deleted; process engine uses `Process.store(tag)`
 - `RunResourceStore` facet — deleted; run engine uses `RunResource.store(tag)`
 
-`package.json` may still list a `store/QueueResource` subpath from an earlier release — there is no
-`src/store/queueResource.ts` on `integration/storage`. Import queue history via
-`QueueResource.store(tag)` / `builtInQueueStoreContract`, not a facet class.
+The `@nikscripts/effect-pm/store/QueueResource` subpath was **removed** — there is no
+`src/store/queueResource.ts`. Import queue history via `QueueResource.store(tag)` on the Store bridge,
+not a RuntimeStorage facet class.
 
 Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeBridge,memoryScope}.ts`.
 

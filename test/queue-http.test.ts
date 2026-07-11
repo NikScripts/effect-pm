@@ -1,4 +1,4 @@
-import { DateTime, Effect, Layer, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream, SubscriptionRef } from "effect";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
@@ -21,24 +21,32 @@ class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", { payload
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
 const received: Array<QueueEntry<NumberItem>> = [];
 
-// ref-field impls are Subscribables (a static one for this stub: current + a single-emit changes).
-const sub = <A>(v: A) => ({ get: Effect.succeed(v), changes: Stream.make(v) });
+// ref-field impls are Subscribables backed by a SubscriptionRef (matches Resource.subscribable).
+const initialStatus = {
+  sizes: { high: 0, normal: 0, low: 0 },
+  paused: false,
+  inFlight: 0,
+  completed: 0,
+  phase: "running" as const,
+};
+const statusRef = Effect.runSync(SubscriptionRef.make(initialStatus));
+const statusSub = Resource.subscribable(statusRef);
 
 const stub = {
-  size: sub(0),
-  isEmpty: sub(true),
+  size: Resource.mapSubscribable(
+    statusSub,
+    (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
+  ),
+  isEmpty: Resource.mapSubscribable(
+    statusSub,
+    (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
+  ),
   start: Effect.void,
   pause: Effect.void,
   resume: Effect.void,
   shutdown: Effect.void,
   clear: Effect.succeed(0),
-  status: sub({
-    sizes: { high: 0, normal: 0, low: 0 },
-    paused: false,
-    inFlight: 0,
-    completed: 0,
-    phase: "running" as const,
-  }),
+  status: statusSub,
   metrics: {
     live: Stream.empty,
     history: () => Effect.succeed([]),
@@ -112,5 +120,5 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
       Effect.scoped,
     );
   }).pipe(Effect.provide(HttpQueueServer), Effect.scoped);
-  return Effect.runPromise(program);
+  return Effect.runPromise(program as Effect.Effect<void, unknown, never>);
 });

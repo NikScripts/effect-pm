@@ -167,7 +167,8 @@ single-infra mode for teams that want no SQL.
 
 - Not automatic on every app — **opt-in layer**.
 - Not “SQL + app-wired Effect RateLimiter Redis”.
-- Not replacing facet class names or subpaths (`store/QueueResource` stays).
+- Not replacing remaining facet subpaths (`store/Log`, `store/ProcessLifecycle`) — engine execution
+  history uses `*.store(tag)` on the Store bridge (`store/QueueResource` removed).
 
 ---
 

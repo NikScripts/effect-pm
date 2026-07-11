@@ -4,13 +4,20 @@ Start with [`docs/legacy/AGENTS.md`](./docs/legacy/AGENTS.md) for this package's
 
 **Persistence:** [`docs/legacy/STORAGE.md`](./docs/legacy/STORAGE.md) only.
 
+**Integration branch:** `integration/storage` — store cutover + tag wire renames land here before `main`. Active handoffs index: [`docs/handoffs/reports/README.md`](./docs/handoffs/reports/README.md).
+
+**Branches:** `<type>/<description>` (e.g. `integration/storage`, `feature/store-release-hygiene`). Policy: [`docs/AGENTS.md`](./docs/AGENTS.md#branch-policy).
+
+**Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat. Policy: [`docs/AGENTS.md`](./docs/AGENTS.md#changeset-policy).
+
 ## Git commit policy
 
 - Do not commit or push directly on major or user-owned branches such as `main`,
   `develop`, release branches, or a branch the user created unless the user
   approves that operation.
-- Agent-created `cursor/*` branches are the exception: agents may commit and push
-  work there as part of normal task progress.
+- Agent work branches (`feature/*`, `fix/*`, legacy `cursor/*`) may commit and push
+  freely; merge into the handoff's **`integration/<stream>`** when green and directed.
+- **`integration/*`** pushes require owner direction (or explicit handoff/supervisor OK).
 
 ## Effect platform policy
 

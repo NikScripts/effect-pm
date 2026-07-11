@@ -293,8 +293,8 @@ export type RunResourceStoreAnalyticsContract<Tag extends StoreScopeTag> = Retur
 export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ) => {
-  const tagFactSchema = runFactSchemaForTag(tag);
-  type TagFactRow = Schema.Schema.Type<typeof tagFactSchema>;
+  const _tagFactSchema = runFactSchemaForTag(tag);
+  type TagFactRow = Schema.Schema.Type<typeof _tagFactSchema>;
   type TagCompleted = Extract<TagFactRow, { readonly _tag: "Completed" }>;
   type TagFailed = Extract<TagFactRow, { readonly _tag: "Failed" }>;
   type TagStarted = Extract<TagFactRow, { readonly _tag: "Started" }>;

@@ -1,10 +1,10 @@
 # Handoff: unify tag schema config names → RPC names (`payload`, `success`, `error`)
 
-**Status:** Locked (2026-07-07). **RunResource + Process rename landed** on `cursor/run-resource-handle-observable-a009` (`2c8a95e`). **Queue/CQR rename open.**  
+**Status:** Locked (2026-07-07). **RunResource + Process + Queue/CQR rename landed** on `integration/storage`.  
 **Per-module agent reports:** [`reports/README.md`](./reports/README.md)  
 **Companion design doc:** [`result-schema-and-rpc-validation.md`](./result-schema-and-rpc-validation.md) (RPC fingerprint / buildId — deferred)
 
-**Integration branch:** merge `cursor/integration-result-schema-a3ad` before module work (Store typing `4597ee1`, AGENTS pointer `25aba6d`).
+**Integration branch:** `integration/storage` (2026-07-10).
 
 ---
 
@@ -30,7 +30,7 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 
 - [RunResource](./reports/2026-07-07-agent-report-run-resource.md) — finish + verify (mostly done)
 - [Process](./reports/2026-07-07-agent-report-process.md) — `error` wiring, engine store tap, remove `Process.result`
-- [QueueResource + CQR](./reports/2026-07-07-agent-report-queue-resource.md) — `itemSchema` → `payload` triplet
+- [QueueResource + CQR](./reports/2026-07-07-agent-report-queue-resource.md) — ✅ config-object `{ payload, success?, error? }` shipped
 - [Store](./reports/2026-07-07-agent-report-store.md) — bridge typing, default store, engine gaps
 - [Docs + release](./reports/2026-07-07-agent-report-docs-release.md) — changesets, stale doc sweep
 
@@ -79,21 +79,20 @@ Work is split for **parallel agents** — see [`reports/README.md`](./reports/RE
 
 **Engine → `Process.store`:** **done** — `Process.layer` writes **`Process.store(tag)`** only; **`ProcessExecutionStore` facet deleted**.
 
-### QueueResource — **not renamed yet; do in same sync PR**
+### QueueResource — **done on `integration/storage`**
 
-| Today (current code) | Target |
-|----------------------|--------|
-| `itemSchema` (positional + tag stamp) | **`payload`** |
-| Planned `resultSchema` (handoff only) | **`success`** |
-| Planned `errorSchema` (handoff only) | **`error`** |
+| Was | Shipped |
+|-----|---------|
+| `itemSchema` (positional + tag stamp) | **`payload`** (positional 2nd arg or `{ payload }`) |
+| (planned) `resultSchema` / `errorSchema` | optional **`success`** / **`error`** (positional or object) |
 
-Files: `src/QueueResource.ts`, `src/internal/queueResource.ts`, `src/internal/store/queueStoreSpec.ts`, `builtInQueueStoreContract`, tests, queue guides.
+Files: `src/QueueResource.ts`, `src/CustomQueueResource.ts`, `src/internal/store/queueStoreSpec.ts`, `builtInQueueStoreContract`, tests, queue guides.
 
-**Queue store `entry.item`:** domain field for serialized queue item — likely stays `item` in persisted rows; tag config becomes `payload`.
+**Queue store `entry.item`:** domain field on persisted rows — stays `item`; tag config uses `payload`.
 
-### CustomQueueResource — same as QueueResource
+### CustomQueueResource — **done** (same as QueueResource)
 
-Coordinate lane arity + `{ payload, success, error }` options bag (see old handoff CQR sketch). One agent owns CQR + QR together.
+Config object `{ payload, levelCount, namedLevels?, success?, error? }`. One agent owns CQR + QR together — **shipped**.
 
 ---
 
@@ -229,6 +228,6 @@ Coordinate with existing `.changeset/run-resource-handle-rpc-store.md` — conso
 - RunResource wire factory: `src/internal/runResourceSchema.ts`
 - Process tag stamps: `src/internal/processTagSchemas.ts`
 - Process store contract: `src/internal/store/processStoreSpec.ts`
-- Queue tag/spec: `src/QueueResource.ts` (`queueSpec`, `itemSchema`)
+- Queue tag/spec: `src/QueueResource.ts` (`queueSpec`, tag config `payload`)
 - RunResource engine store tap: `src/internal/runResourceStoreTap.ts`
 - Prior design (partially stale): `docs/handoffs/result-schema-and-rpc-validation.md`
