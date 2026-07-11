@@ -19,17 +19,16 @@ Public tag / service / wire-config **slot names** now match **`Resource`** RPC n
 | Success / return | **`success`** | `successSchema`, `resultSchema`, … |
 | Failure channel | **`error`** | `errorSchema` (name kept, meaning aligned) |
 
-**Positional and config-object forms both remain valid** for QueueResource, RunResource, and
-Process — this release renames the slots, not the calling convention.
-
-**CustomQueueResource** always requires a **config object** for lane options (`levelCount`,
-`namedLevels`, …); wire schemas inside use the same renamed slots (`payload`, `success`, `error`).
+**RunResource** supports **positional and config-object** wire schemas (slot rename only).
+**QueueResource**, **Process**, and **CustomQueueResource** use **config-object** wire schemas
+(`CustomQueueResource` also requires lane fields in that object).
 
 ---
 
 ### RunResource
 
-- Gates are **not callable** — use **`handle.run(input)`** or **`Tag.run` / `Service.run`**.
+- Gates are **not callable** — unit: **`yield* handle.run`**; parameterized: **`yield* handle.run(x)`**
+  or static **`Tag.run` / `Service.run`** (same contract).
 - **`RunResource.Tag`** is a **`Resource.Tag`** with wire schemas; **`serve` / `serveRemote`**
   mirror Queue/Process.
 - Wire slots renamed: `inputSchema` → **`payload`**, `successSchema` → **`success`**,
@@ -55,22 +54,15 @@ Process — this release renames the slots, not the calling convention.
 - Removed deprecated **`RunGate`** type alias.
 
 ```ts
-// handle — before / after
-yield* gate(input)        // before
-yield* gate.run(input)    // after
-
-// tag — positional (slot rename; success/error optional)
-Tag()(key, inputSchema, successSchema?, errorSchema?)   // before
-Tag()(key, payload, success?, error?)                   // after
-
-// tag — config object (slot rename; all wire slots optional)
-Tag()(key, { inputSchema, successSchema?, errorSchema? })   // before
-Tag()(key, { payload?, success?, error? })                  // after
-
-// unit gate — bare effect (Service / layer)
+// unit gate — omit payload; run is Effect
 class Tick extends RunResource.Service<Tick>()("@app/Tick", {
   effect: Effect.sleep("1 second"),
 })
+const tick = yield* Tick
+yield* tick.run
+
+// parameterized gate — declare payload; run is a function
+const prices = yield* refresh.run(request)
 ```
 
 ---
@@ -79,7 +71,7 @@ class Tick extends RunResource.Service<Tick>()("@app/Tick", {
 
 - Wire slots renamed: `resultSchema` → **`success`**, `errorSchema` → **`error`**. **No
   `payload`** on Process tags — the tick body lives in layer config.
-- **Positional or config-object** for `success` / `error` on **`Process.Tag`**.
+- **Config object** for `success` / `error` on **`Process.Tag`** (no `payload` on process tags).
 - **Removed `Process.result(Schema)`** — declare `success` on the tag instead.
 - **Symbol rename:** `@nikscripts/effect-pm/Process/success` replaces `resultSchemaSym` /
   `@nikscripts/effect-pm/Process/resultSchema`. Update external symbol readers.
@@ -96,13 +88,8 @@ class Tick extends RunResource.Service<Tick>()("@app/Tick", {
 | **`Process.make`** | **No** — supervisor only |
 
 ```ts
-// positional — still valid
-class P extends Process.Tag<P>()("app/P", ResultSchema)              // before (result slot)
-class P extends Process.Tag<P>()("app/P", SuccessSchema)             // after (success slot)
-class P extends Process.Tag<P>()("app/P", SuccessSchema, ErrSchema)  // after (+ error)
-
-// config object — still valid
-class P extends Process.Tag<P>()("app/P", { success: SuccessSchema, error?: ErrSchema })
+class P extends Process.Tag<P>()("app/P", { success: SuccessSchema })
+class P extends Process.Tag<P>()("app/P", { success: SuccessSchema, error: ErrSchema })
 
 // removed
 class P extends Process.Tag<P>()("app/P").pipe(Process.result(ResultSchema))
@@ -112,14 +99,15 @@ class P extends Process.Tag<P>()("app/P").pipe(Process.result(ResultSchema))
 
 ### QueueResource + CustomQueueResource
 
-**QueueResource** — positional and config-object both valid; 2nd positional arg is **`payload`**
-(was `itemSchema`):
+**QueueResource** — **config object** for wire schemas (`payload` required); slot rename only:
 
 ```ts
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", JobSchema)                    // still valid
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema })        // still valid
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", JobSchema, Summary, WorkerErr) // positional success/error
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema, success: Summary, error: WorkerErr })
+class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", { payload: JobSchema })
+class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", {
+  payload: JobSchema,
+  success: SummarySchema,
+  error: WorkerErr,
+})
 ```
 
 **CustomQueueResource** — **config object required** for `levelCount` / `namedLevels`; wire slots

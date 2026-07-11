@@ -287,22 +287,26 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Construction forms
 
-- **`RunResource.make({ name?, effect, concurrency? })`** — scoped handle with `.run` only (persistence when storage composed; no Subscribables exposed).
-- **`RunResource.Service<Self>()(name, { payload, success, errorSchema?, effect, concurrency? })`** — tag + baked-in `.layer` + `.configure` + static `.run`.
-- **`RunResource.Tag<Self>()(key, schemas…)`** — identity tag + wire schemas; pair with **`RunResource.layer`** / **`serve`** / **`serveRemote`**.
+- **`RunResource.make({ name?, effect, concurrency?, unit? })`** — scoped handle with `.run` only
+  (pass `unit: true` for Effect-shaped `.run` on void gates).
+- **`RunResource.Service<Self>()(name, { payload?, success?, error?, effect, concurrency? })`** —
+  tag + baked-in `.layer` + `.configure` + static `.run`.
+- **`RunResource.Tag<Self>()(key, …)`** — identity tag + wire schemas (positional or object); pair
+  with **`RunResource.layer`** / **`serve`** / **`serveRemote`**.
 - **`RunResource.store(tag)`** — built-in fact/state registration on an app **`Store.Service`**.
 - **`RunResource.makeRunner({ name, concurrency? })`** — tag + layer; **`yield* runner(anyEffect)`** wraps any `Effect`.
 
 ### Config
 
-- **`effect(input)`** — worker for parameterized gates.
+- **`effect`** — bare `Effect` or `() => Effect` on unit gates; `(input) => Effect` when `payload`
+  is declared on the tag / service.
 - **`concurrency?`** — default 1.
 - **`name?`** — resource id for observer (`@app/...`).
 
 ### Unit vs parameterized gates
 
-- **Parameterized** — `T` input, call `gate.run(input)`.
-- **Unit** — `void` input, call `gate.run()`.
+- **Unit** — omit `payload`; `run: Effect` → `yield* gate.run` (static `.run` is also an `Effect`).
+- **Parameterized** — declare `payload`; `run: (input) => Effect` → `yield* gate.run(input)`.
 
 ### `RunResourceState` (observer snapshot)
 
@@ -324,7 +328,8 @@ failures do not fail gated work.
 ### Remote
 
 - **`RunResource.serve` / `serveRemote`** — RPC handlers (same config as **`layer`**).
-- Tag wire schemas: **`runGateStatus`**, **`runSpec(input, success, error?)`**.
+- Tag wire schemas: **`runGateStatus`**, **`runSpec`** (unit: `success`/`error` only; parameterized:
+  `payload` + optional `success` / `error`).
 
 ---
 

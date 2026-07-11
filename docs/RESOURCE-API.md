@@ -382,11 +382,12 @@ const result = yield* send.run("+1234567890")
 // or: yield* SendSms.run("+1234567890")
 ```
 
-#### Class declaration (unit gate — no input)
+#### Class declaration (unit gate — omit `payload`)
+
+Unit gates **omit `payload`** — no wire input slot. `run` is an **`Effect`** property:
 
 ```typescript
 class RefreshPrices extends RunResource.Service<RefreshPrices>()("@app/RefreshPrices", {
-  payload: Schema.Void,
   success: PriceDataSchema,
   error: FetchErrorSchema,
   effect: () => fetchLatestPrices(),
@@ -394,8 +395,11 @@ class RefreshPrices extends RunResource.Service<RefreshPrices>()("@app/RefreshPr
 }) {}
 
 const refresh = yield* RefreshPrices
-const prices = yield* refresh.run()
+const prices = yield* refresh.run
+// or: yield* RefreshPrices.run
 ```
+
+Bare `Effect` or `() => Effect` both work for the gated body on unit gates.
 
 #### Generic runner (wraps any effect)
 
@@ -411,6 +415,16 @@ const orders = yield* runner(db.query("SELECT * FROM orders"))
 ```
 
 #### Tag + layer (dependency inversion)
+
+**Tag arity** — positional schemas or config object; `success` / `error` optional (defaults
+`Void` / `Never`; omitted slots are not store-stamped):
+
+| Form | Meaning |
+|------|---------|
+| `Tag(key)` | unit gate |
+| `Tag(key, success)` | unit + success schema |
+| `Tag(key, payload, success[, error])` | parameterized gate |
+| `Tag(key, { payload?, success?, error? })` | object form (unit `(success, error)` pairs use this) |
 
 ```typescript
 const ApiGate = RunResource.Tag<ApiGate>()(
@@ -468,7 +482,8 @@ yield* Stream.runForEach(gate.completed.changes, (n) =>
 )
 ```
 
-Static shortcuts: `yield* ApiGate.run(request)` (requires the tag in `R`).
+Static shortcuts: parameterized gates use `yield* ApiGate.run(request)`; unit gates use
+`yield* Tick.run` (requires the tag in `R`).
 
 ### Remote (RPC)
 
@@ -483,7 +498,8 @@ const remoteHandlers = RunResource.serveRemote(ApiGate, {
 const localAndRemote = RunResource.serve(ApiGate, { effect: (req) => httpFetch(req) })
 ```
 
-Wire schemas on the tag: `runGateStatus`, `runSpec(payload, success, error?)`.
+Wire schemas on the tag: `runGateStatus`, `runSpec(success, error?)` for unit gates;
+`runSpec(payload, success, error?)` for parameterized gates.
 
 ### Store registration (`RunResource.store`)
 
