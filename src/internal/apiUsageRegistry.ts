@@ -3,8 +3,9 @@
  *
  * @internal
  */
-import { Clock, DateTime, Duration, Effect, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
+import { Clock, DateTime, Duration, Effect, Option, PubSub, Ref, Schedule, Scope, Stream, SubscriptionRef } from "effect";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
+import type * as Resource from "../Resource";
 
 /** @internal */
 export interface EndpointUsageEvent {
@@ -36,7 +37,7 @@ interface UsageSink {
   readonly exit: Effect.Effect<void>;
   readonly record: (event: EndpointUsageEvent) => Effect.Effect<void>;
   readonly metrics: Stream.Stream<ApiUsageMetrics>;
-  readonly snapshot: Effect.Effect<ApiUsageSnapshot>;
+  readonly usage: Resource.Subscribable<ApiUsageSnapshot>;
 }
 
 const endpointKey = (group: string, endpoint: string): string => `${group}\0${endpoint}`;
@@ -129,11 +130,17 @@ const makeUsageSink = (
         topEndpoints,
       };
     });
+    const snapshotRef = yield* SubscriptionRef.make(yield* snapshot);
+    const refreshSnapshot = Effect.flatMap(snapshot, (s) => SubscriptionRef.set(snapshotRef, s));
+    const usage: Resource.Subscribable<ApiUsageSnapshot> = {
+      get: snapshot,
+      changes: SubscriptionRef.changes(snapshotRef),
+    };
 
     return {
       clientId,
-      enter: Ref.update(inFlightRef, (n) => n + 1),
-      exit: Ref.update(inFlightRef, (n) => Math.max(0, n - 1)),
+      enter: Ref.update(inFlightRef, (n) => n + 1).pipe(Effect.andThen(refreshSnapshot)),
+      exit: Ref.update(inFlightRef, (n) => Math.max(0, n - 1)).pipe(Effect.andThen(refreshSnapshot)),
       record: (event) =>
         Effect.gen(function* () {
           yield* Ref.update(requestsTotal, (n) => n + 1);
@@ -155,9 +162,10 @@ const makeUsageSink = (
             return next;
           });
           yield* emitWindow;
+          yield* refreshSnapshot;
         }),
       metrics: Stream.fromPubSub(metricsHub),
-      snapshot,
+      usage,
     };
   });
 

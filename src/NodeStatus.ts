@@ -3,17 +3,16 @@
  *
  * **Node status** — the reserved resource every node serves automatically (via
  * {@link Resource.httpServer}): is it up, when did it start, how long has it been up, how many
- * resources does it serve, plus its runtime-wide {@link NodeLogs} (`logs` stream + `logHistory`)
- * and a `ping`. The node author wires nothing; clients just point a transport at the node.
- *
- * The tag is **nodeless** — query a specific node by pointing the ambient `RpcClient.Protocol` at
+ * resources does it serve, plus its runtime-wide {@link NodeLogs} (`logs.live` stream +
+ * `logs.history` query) and a `ping`. The node author wires nothing; clients just point a transport
+ * at the node. — query a specific node by pointing the ambient `RpcClient.Protocol` at
  * that node's `/rpc`. {@link NodeStatus.clientHttp} is the batteries-included http client; for any
  * other transport, provide your own `RpcClient.Protocol` to `Resource.client(NodeStatus.Tag)`.
  *
  * ```ts
  * yield* Effect.gen(function* () {
  *   const node = yield* NodeStatus.Tag;
- *   const snap = yield* node.statusNow; // { up, startedAt, uptimeMillis, resourceCount }
+ *   const snap = yield* node.status.get; // { up, startedAt, uptimeMillis, resourceCount }
  * }).pipe(Effect.provide(NodeStatus.clientHttp("http://10.0.0.2:7777/rpc")), Effect.scoped);
  * ```
  *

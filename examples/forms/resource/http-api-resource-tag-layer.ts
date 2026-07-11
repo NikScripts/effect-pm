@@ -46,7 +46,7 @@ const program = Effect.gen(function* () {
   const client = yield* DemoApiClient;
   const post = yield* client.posts.getPost({ params: { id: "1" } });
   const metrics = yield* DemoApiMetrics;
-  const snap = yield* metrics.usageNow;
+  const snap = yield* metrics.usage.get;
   yield* Effect.log(`post ${post.id}: ${post.title}`);
   yield* Effect.log(`usage requests=${snap.requestsTotal} inFlight=${snap.inFlight}`);
 });
