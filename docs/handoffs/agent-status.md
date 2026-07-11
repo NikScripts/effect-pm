@@ -2,28 +2,26 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration tip:** `766c62d` on **`integration/storage`** — platform changeset added (2026-07-10)
+**Integration tip:** `integration/storage` — see git tip after doc push
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | `0cc196f` | typecheck + 438 tests + lint green | **`pnpm run version`** when owner ready | 2026-07-10 |
-| **2** | — | [session-2 process](./agent-02-session-2-process-platform.md) | **merged** | `0802947` | typecheck + 438 tests | Idle — RPC error wire owner decision | 2026-07-09 |
-| **B** | `action/html-doc-platform` | [html doc platform](./agent-b-html-doc-platform.md) | **planning** | `dac86513` (local) | Pull `9042ce4` first | Slice 0 conversation; Slice 1 kept as spike; stash Slice 2 WIP | 2026-07-09 |
-| **A** | — | [html standards](./agent-a-html-standards-corpus.md) | **blocked** | — | — | Blocked on Agent B | 2026-07-09 |
-| **C** | — | [standards audit](./agent-c-standards-audit.md) | **blocked** | — | — | Blocked on Agent A | 2026-07-09 |
+| **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
+| **2** | `cursor/queue-wire-phase-1a-a009` (new) | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **ready-to-start** | — | — | **Do not merge PR #19/#20**; validation + CQR mirror | 2026-07-11 |
+| **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) on branch | **owner** | — | — | Owner handles A–C pipeline | 2026-07-11 |
 
 ---
 
 ## Supervisor queue
 
-1. ~~Rebase + merge Agent 1 Session 3 → `integration/storage`~~ ✅ `7a3f7fa`
-2. ~~Rebase + merge Agent 2 → `integration/storage`~~ ✅ `3ffa635`
-3. **Agent B:** Slice 0 planning conversation → `agent-b-plan.md` → then `action/html-doc-platform`
-4. Agent A: after B merges
-5. Delete merged `cursor/store-release-hygiene-a009` remote after owner OK
+1. ~~Agent 1 Session 3~~ — merged on integration line
+2. **Hold PR #19 / #20** — superseded by Phase 1a ([`owner-decisions.md`](./owner-decisions.md))
+3. **Agent 2:** Queue wire Phase 1a — new branch per handoff
+4. **PR #17** (Session 3 consumer docs) — merge after Queue Phase 1a + supervisor verify
+5. **Agent B merge** — when owner says
 
 ---
 
 ## Session log index
 
-Detailed logs live in each handoff file under `### Session log …`. Agents append there; this board stays one row per agent.
+Detailed logs live in each handoff file under `### Session log …`.
