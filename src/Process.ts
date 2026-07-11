@@ -1595,8 +1595,8 @@ export type ProcessSpec = typeof processSpec;
 // ============================================================================
 
 /**
- * Options for {@link Tag} — the sole optional 2nd argument (config object). Wire schemas
- * (`success`, `error`) live here; there are no positional schema overloads.
+ * Options for {@link Tag} — use as the sole 2nd argument (config-object overload) or merge with
+ * positional `success` / `error` args.
  *
  * @public
  */
@@ -1862,6 +1862,16 @@ const scheduleModeSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Process/scheduleMode",
 );
 
+/** @internal */
+const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
+  typeof value === "object" &&
+  value !== null &&
+  !Schema.isSchema(value) &&
+  ("description" in value ||
+    "node" in value ||
+    "success" in value ||
+    "error" in value);
+
 /** Graft `result` ref + stamp wire schemas on a process tag. @internal */
 const applyProcessTagSchemas = (
   tag: ResourceTag<any, any>,
@@ -1909,6 +1919,10 @@ const withProcessReadiness = (
 const buildProcessTag = <Self>(
   key: string,
   options: ProcessTagOptions | undefined,
+  positional: {
+    readonly success?: Schema.Top;
+    readonly error?: Schema.Top;
+  } = {},
 ): ResourceTag<any, any> | NodeBoundTag<any, any, unknown> => {
   const node = options?.node;
   const tagOptions = { description: options?.description, kind };
@@ -1916,8 +1930,8 @@ const buildProcessTag = <Self>(
     node === undefined
       ? Resource.Tag<Self>()(key, processSpec, tagOptions)
       : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
-  const success = options?.success;
-  const error = options?.error;
+  const success = positional.success ?? options?.success;
+  const error = positional.error ?? options?.error;
   const stamped: ResourceTag<any, any> =
     success === undefined && error === undefined
       ? base
@@ -2016,9 +2030,18 @@ export function schedule(
 // Tag factories
 // ============================================================================
 
-/** Callable shape for {@link Tag} — config object only (no positional schemas). @public */
+/** Callable shape for {@link Tag} — overloads for positional schemas + config object. @public */
 export type ProcessTagBuild<Self> = {
   (key: string): ResourceTag<Self, ProcessSpec>;
+  <A extends Schema.Top>(
+    key: string,
+    success: A,
+  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  <A extends Schema.Top, E extends Schema.Top>(
+    key: string,
+    success: A,
+    error: E,
+  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
   <A extends Schema.Top>(
     key: string,
     options: ProcessTagOptions & { readonly success: A },
@@ -2041,14 +2064,16 @@ export type ProcessTagBuild<Self> = {
 /**
  * Define a managed process as a toolkit resource. `Self` is given explicitly (Effect's `()`
  * two-stage form). The base tag carries observation + lifecycle; add a schedule with
- * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag config object:
+ * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
  * ```ts
  * class Health extends Process.Tag<Health>()("app/Health") {}
  *
- * class Prices extends Process.Tag<Prices>()("app/Prices", { success: PriceSchema }) {}
+ * class Prices extends Process.Tag<Prices>()("app/Prices", PriceSchema) {}
  *
- * class PricesE extends Process.Tag<PricesE>()("app/Prices", {
+ * class PricesE extends Process.Tag<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
+ *
+ * class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
  *   success: PriceSchema,
  *   error: FetchErr,
  * }) {}
@@ -2061,9 +2086,22 @@ export type ProcessTagBuild<Self> = {
 export const Tag = <Self>() => {
   function build(
     key: string,
-    options?: ProcessTagOptions,
+    second?: Schema.Top | ProcessTagOptions,
+    third?: Schema.Top,
   ): ResourceTag<Self, ProcessSpec> | NodeBoundTag<Self, ProcessSpec, unknown> {
-    return buildProcessTag<Self>(key, options);
+    if (second === undefined) {
+      return buildProcessTag<Self>(key, undefined);
+    }
+    if (Schema.isSchema(second)) {
+      return buildProcessTag<Self>(key, undefined, {
+        success: second,
+        error: third,
+      });
+    }
+    if (isProcessTagOptions(second)) {
+      return buildProcessTag<Self>(key, second);
+    }
+    return buildProcessTag<Self>(key, undefined);
   }
   return build as ProcessTagBuild<Self>;
 };

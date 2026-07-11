@@ -624,7 +624,8 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  * type and `itemSchema` baked in:
  *
  * ```ts
- * class MyQueue extends QueueResource.Tag<MyQueue>()("@app/MyQueue", { payload: JobSchema }) {}
+ * class MyQueue extends QueueResource.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
+ * // or: Tag()(key, { payload: JobSchema, success?, error? })
  * const q = yield* MyQueue;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
  * ```
@@ -641,9 +642,9 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
 export const kind = "@nikscripts/effect-pm/QueueResource";
 
 /**
- * Config-object form of {@link Tag}. `payload` is the item schema (required); `success` (worker
+ * Config-object overload of {@link Tag}. `payload` is the item schema (required); `success` (worker
  * return) and `error` (worker failure channel) are the optional wire slots, stamped for the engine
- * + store to read as the tag SSOT.
+ * + store to read as the tag SSOT. Positional `Tag()(key, payload, success?, error?)` is also valid.
  *
  * @public
  */
@@ -658,44 +659,102 @@ export interface QueueTagConfig<
   readonly node?: NodeKey<unknown>;
 }
 
+/** The legacy positional 3rd arg — `{ description?, node? }` — kept for the non-wire form. @internal */
+interface QueueTagPositionalOptions {
+  readonly description?: string;
+  readonly node?: NodeKey<unknown>;
+}
+
+/** The 2nd arg is the config-object form (not a payload schema). @internal */
+const isQueueTagConfig = <F extends Schema.Struct.Fields>(
+  value: Schema.Struct<F> | QueueTagConfig<F>,
+): value is QueueTagConfig<F> => !Schema.isSchema(value);
+
+const materializeQueueTag = <Self, F extends Schema.Struct.Fields>(
+  key: string,
+  resolved: {
+    readonly payload: Schema.Struct<F>;
+    readonly success?: Schema.Top;
+    readonly error?: Schema.Top;
+    readonly description?: string;
+    readonly node?: NodeKey<unknown>;
+  },
+): ResourceTag<Self, QueueInstanceSpec<F>> => {
+  const spec = queueSpec(resolved.payload);
+  const tagOptions = { description: resolved.description, kind };
+  const base =
+    resolved.node === undefined
+      ? Resource.Tag<Self>()(key, spec, tagOptions)
+      : Resource.Tag<Self>()(key, spec, { ...tagOptions, node: resolved.node });
+  const ready = Resource.withReadiness(base, (svc) =>
+    Effect.map(svc.status.get, (status) => ({
+      ready: status.phase === "running",
+      ...(status.phase === "running"
+        ? {}
+        : { detail: `phase: ${status.phase}` }),
+    })),
+  );
+  return stampQueueWireSchemas(ready, {
+    success: resolved.success,
+    error: resolved.error,
+  });
+};
+
 const queueTag = <Self>() => {
-  function build<
-    F extends Schema.Struct.Fields,
-    Success extends Schema.Top,
-    HSelf,
-  >(
+  function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
-    config: QueueTagConfig<F, Success> & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf> & QueueSuccessCarrier<Success>;
-  function build<
-    F extends Schema.Struct.Fields,
-    Success extends Schema.Top = typeof Schema.Void,
-  >(
+    payload: Schema.Struct<F>,
+    options: { readonly description?: string; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
+  function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
+    key: string,
+    payload: Schema.Struct<F>,
+    success: Success,
+    error?: Schema.Top,
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
+  function build<F extends Schema.Struct.Fields>(
+    key: string,
+    payload: Schema.Struct<F>,
+    options?: { readonly description?: string },
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<typeof Schema.Void>;
+  function build<F extends Schema.Struct.Fields, HSelf>(
+    key: string,
+    config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
+  function build<F extends Schema.Struct.Fields, Success extends Schema.Top = typeof Schema.Void>(
     key: string,
     config: QueueTagConfig<F, Success>,
   ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
-  function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
+  function build<F extends Schema.Struct.Fields>(
     key: string,
-    config: QueueTagConfig<F, Success>,
-  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success> {
-    const spec = queueSpec(config.payload);
-    const tagOptions = { description: config.description, kind };
-    const base =
-      config.node === undefined
-        ? Resource.Tag<Self>()(key, spec, tagOptions)
-        : Resource.Tag<Self>()(key, spec, { ...tagOptions, node: config.node });
-    const ready = Resource.withReadiness(base, (svc) =>
-      Effect.map(svc.status.get, (status) => ({
-        ready: status.phase === "running",
-        ...(status.phase === "running"
-          ? {}
-          : { detail: `phase: ${status.phase}` }),
-      })),
-    );
-    return stampQueueWireSchemas(ready, {
-      success: config.success,
-      error: config.error,
-    });
+    second: Schema.Struct<F> | QueueTagConfig<F>,
+    third?: Schema.Top | QueueTagPositionalOptions,
+    fourth?: Schema.Top,
+  ): ResourceTag<Self, QueueInstanceSpec<F>> {
+    const resolved = isQueueTagConfig(second)
+      ? {
+          payload: second.payload,
+          success: second.success,
+          error: second.error,
+          description: second.description,
+          node: second.node,
+        }
+      : Schema.isSchema(third)
+        ? {
+            payload: second,
+            success: third,
+            error: fourth,
+            description: undefined,
+            node: undefined,
+          }
+        : {
+            payload: second,
+            success: undefined,
+            error: undefined,
+            description: third?.description,
+            node: third?.node,
+          };
+    return materializeQueueTag<Self, F>(key, resolved);
   }
   return build;
 };
