@@ -35,7 +35,7 @@ export const apiUsageMetrics = Schema.Struct({
 });
 
 /**
- * Point-in-time API usage snapshot — result of the `usageNow` query.
+ * Point-in-time API usage snapshot — element of the {@link ApiMetrics} `usage` ref (`usage.get`).
  *
  * @public
  */

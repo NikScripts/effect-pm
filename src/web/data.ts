@@ -100,7 +100,7 @@ interface ProcessService {
 /** The structural shape of an API-metrics resource's live service (read-only). */
 interface ApiService {
   readonly metrics: Stream.Stream<ApiUsageMetrics>;
-  readonly usageNow: Effect.Effect<ApiUsageSnapshot>;
+  readonly usage: Subscribable<ApiUsageSnapshot>;
 }
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. @since 1.0.0 */
@@ -163,7 +163,7 @@ export interface NodeBundle {
 }
 /** The atoms one API-metrics card needs — read-only (no commands). @since 1.0.0 */
 export interface ApiBundle {
-  /** Cumulative usage snapshot (totals + top endpoints), polled. @since 1.0.0 */
+  /** Cumulative usage snapshot (totals + top endpoints), via `usage.changes`. @since 1.0.0 */
   readonly status: ValueAtom<ApiUsageSnapshot | undefined>;
   /** The latest usage window. @since 1.0.0 */
   readonly metrics: ValueAtom<ApiUsageMetrics | undefined>;
@@ -456,10 +456,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     ),
   );
   const bundle: ApiBundle = {
-    // usageNow is a query (not a stream), so poll it for a live-ish snapshot.
-    status: runtime.atom(
-      Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => Effect.flatMap(tag, (a) => a.usageNow))),
-    ),
+    status: runtime.atom(Stream.unwrap(Effect.map(tag, (a) => a.usage.changes))),
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
   };
