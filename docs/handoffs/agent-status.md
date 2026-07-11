@@ -2,7 +2,7 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration tip:** `integration/storage` — see git tip after doc push
+**Integration tip:** `03737b6` — Phase 1a merged; pending merge with other integration branch
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
