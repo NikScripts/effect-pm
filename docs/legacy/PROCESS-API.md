@@ -166,7 +166,9 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 **`Store.layerDefaultMemory`** so the engine always has **`Store.Storage`**. Override at the app root:
 
 ```typescript
-Layer.provideMerge(AppStore.layerMemory, Process.layer(MyProcess, { effect, polling }));
+Process.layer(MyProcess, { effect, polling }).pipe(
+  Layer.provideMerge(AppStore.layerMemory),
+);
 ```
 
 **Wire rows** (PascalCase `_tag`):
@@ -179,6 +181,20 @@ Layer.provideMerge(AppStore.layerMemory, Process.layer(MyProcess, { effect, poll
 | `Interrupted` | Tick interrupted | Base timing fields only |
 
 Shared base fields: `processId`, `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, `isStartupRun`.
+
+**`Failed.error` encoding (store path):** On terminal failure the engine calls `recordStoreFailed`
+(`src/Process.ts`). When the tag stamps an `error` schema (`Process.Tag(…, { error })`), the persisted
+value is the **typed** failure from the tick `Effect` (same schema). When the tag omits `error`, the
+engine writes `String(cause)` per store-core §5. Journal codecs round-trip stamped schemas on append —
+see `test/process-store-engine.test.ts` and `test/process-store-sqlite.test.ts`.
+
+**RPC `error` slot (limitation):** Tag `error` is stamped on the tag object (`errorOf(tag)`) for store
+wire and contract typing, but it is **not** grafted onto `processSpec` RPC methods today. Lifecycle
+verbs (`start`, `stop`, `runImmediately`) are void commands with `Schema.Never` on the RPC error
+channel — unlike `RunResource`, which bakes `error` into per-tag `runSpec`. Process failures are
+background poll ticks recorded to the store, not RPC failure responses. **Owner decision (2026-07-10):**
+defer RPC wiring (recommended) or fund per-tag `processSpec` rebuild — see
+[agent report § RPC error wire blocker](../handoffs/reports/2026-07-07-agent-report-process.md#rpc-error-wire-blocker).
 
 **Removed:** `ProcessExecutionStore` facet, `@nikscripts/effect-pm/store/ProcessExecution`,
 `process.execution.completed` runtime facet. Do not import execution history from `ProcessStorage`.
