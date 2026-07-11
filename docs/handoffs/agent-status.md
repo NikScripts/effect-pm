@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
-| **2** | `cursor/queue-wire-phase-1a-a009` | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **draft-pr** | `9443bf7` | typecheck + test + lint green | PR #19/#20 closed; changeset on owner OK | 2026-07-11 |
+| **2** | `cursor/queue-wire-phase-1a-a009` | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **draft-pr** [#21](https://github.com/NikScripts/effect-pm/pull/21) | `f1d0e79` | typecheck + test + lint green | changeset on owner OK | 2026-07-11 |
 | **B** | `action/html-doc-platform` | [plan](./agent-b-plan.md) on branch | **owner** | — | — | Owner handles A–C pipeline | 2026-07-11 |
 
 ---

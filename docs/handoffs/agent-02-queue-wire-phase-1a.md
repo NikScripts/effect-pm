@@ -94,7 +94,7 @@ Apply the same `assert*` pattern to `customQueueSpec` → `CustomQueueInstanceSp
 
 - [x] Phase 1a code + validation + tests green
 - [x] `owner-decisions.md` + `agent-status.md` updated on branch
-- [ ] Draft PR → `integration/storage`
+- [x] Draft PR → `integration/storage` ([#21](https://github.com/NikScripts/effect-pm/pull/21))
 - [ ] Owner chat: Before/After/Verify blocks per [`supervisor-protocol.md`](./supervisor-protocol.md)
 
 ---
