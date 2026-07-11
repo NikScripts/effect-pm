@@ -65,10 +65,12 @@ export function GroupedNav({
               aria-expanded={open}
               onClick={() => toggle(g.label)}
             >
-              <span className={`nav-caret${open ? " open" : ""}`} aria-hidden="true">
-                ▸
-              </span>
               {g.label}
+              <span className={`nav-caret${open ? " open" : ""}`} aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
             </button>
             {open ? (
               <div className="nav-group-items">

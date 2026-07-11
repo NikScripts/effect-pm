@@ -124,11 +124,14 @@ body {
   cursor: pointer;
 }
 .nav-caret {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
   color: var(--muted-fg);
-  font-size: 0.7em;
+  transform: rotate(-90deg); /* collapsed → chevron points right */
   transition: transform 0.15s ease;
 }
-.nav-caret.open { transform: rotate(90deg); }
+.nav-caret.open { transform: rotate(0deg); } /* expanded → chevron points down */
 .nav-group-items { display: flex; flex-direction: column; }
 .nav-group-items a { text-decoration: none; color: var(--muted-fg); }
 .nav-group-items a:hover,
