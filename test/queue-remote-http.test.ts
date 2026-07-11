@@ -10,7 +10,7 @@ import * as Resource from "../src/Resource";
 // The full remote path: a REAL toolkit QueueResource engine served over http via
 // `httpServer([QueueResource.serve(...)])`, driven by `Resource.client` over the wire. The same `yield* Tag`
 // surface a local consumer uses — only the provided layer differs. This proves "remote queue
-// usage, all pieces together": control (add/pause), reads (completed/statusNow), the rich-entry
+// usage, all pieces together": control (add/pause), reads (completed/status.get), the rich-entry
 // handoff (release), and a live stream (status) all crossing real RPC.
 const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
@@ -53,7 +53,7 @@ const withServer = <A, E>(
   }).pipe(Effect.provide(server), Effect.scoped);
 };
 
-it("add (single + batch) over http → real engine processes → completed/statusNow round-trip", () =>
+it("add (single + batch) over http → real engine processes → completed/status.get round-trip", () =>
   Effect.runPromise(
     withServer({ effect: (_item) => Effect.void, concurrency: 2 }, (_port) =>
       Effect.gen(function* () {

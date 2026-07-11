@@ -17,8 +17,8 @@ class DemoQueue extends QueueResource.Service<DemoQueue, string, never>()("docs/
 
 const runtime = Atom.runtime(DemoQueue.layer);
 
-// live stats: subscribe to the queue's `status` stream (per-priority sizes, in-flight, …).
-export const statusAtom = runtime.atom(Stream.unwrap(Effect.map(DemoQueue, (q) => q.status)));
+// live stats: subscribe to the queue's `status.changes` stream (per-priority sizes, in-flight, …).
+export const statusAtom = runtime.atom(Stream.unwrap(Effect.map(DemoQueue, (q) => q.status.changes)));
 
 // controls: each is a handle method run through the runtime.
 export const enqueue = runtime.fn((p: { readonly text: string; readonly priority: "normal" | "high" | "low" }) =>
