@@ -31,6 +31,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "build-and-browser-safety",
       "verification-and-testing",
       "git-workflow",
+      "design-and-approval",
       "meta",
     ],
   },
