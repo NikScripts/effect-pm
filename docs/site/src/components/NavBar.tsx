@@ -7,7 +7,8 @@
 // (rendered by the layout) does the job. Server passes the nav items as props.
 
 import * as React from "react";
-import type { NavItem } from "../lib/docs-content.js";
+import type { NavGroup } from "../lib/docs-content.js";
+import { GroupedNav } from "./GroupedNav.js";
 
 const Icon = {
   search: (
@@ -28,7 +29,7 @@ const Icon = {
   ),
 };
 
-export function NavBar({ items }: { items: ReadonlyArray<NavItem> }): React.ReactElement {
+export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -52,9 +53,6 @@ export function NavBar({ items }: { items: ReadonlyArray<NavItem> }): React.Reac
     setOpen(true);
     if (focusSearch) requestAnimationFrame(() => inputRef.current?.focus());
   };
-
-  const q = query.trim().toLowerCase();
-  const shown = q === "" ? items : items.filter((i) => i.title.toLowerCase().includes(q));
 
   return (
     <>
@@ -88,14 +86,7 @@ export function NavBar({ items }: { items: ReadonlyArray<NavItem> }): React.Reac
               placeholder="Filter chapters…"
               aria-label="Filter chapters"
             />
-            <nav className="menu-nav">
-              {shown.map((i) => (
-                <a key={i.href} href={i.href} onClick={() => setOpen(false)}>
-                  {i.title}
-                </a>
-              ))}
-              {shown.length === 0 ? <p className="menu-empty">No matching chapters</p> : null}
-            </nav>
+            <GroupedNav groups={groups} query={query} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       ) : null}

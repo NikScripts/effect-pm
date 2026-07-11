@@ -1,5 +1,6 @@
 import { chapters, chapterBySlug } from "../../lib/content.js";
 import { renderChapter } from "../../lib/docs-content.js";
+import { PrevNext } from "../../components/PrevNext.js";
 
 // One route for every standards chapter. Server component: parse + render through
 // the Effect pipeline, SSG'd at build.
@@ -11,6 +12,7 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
     <>
       <title>{`${meta.title} — effect-pm`}</title>
       {element}
+      <PrevNext slug={chapter} />
     </>
   );
 }

@@ -108,31 +108,74 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.menu-nav { display: flex; flex-direction: column; }
-.menu-nav a {
-  padding: 0.7rem 0.35rem;
+/* collapsible chapter groups — shared by the mobile overlay and the desktop sidebar */
+.nav-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.35rem;
+  background: none;
+  border: none;
   color: var(--fg);
-  text-decoration: none;
-  font-size: 1.05rem;
-  border-bottom: 1px solid var(--border);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
-.menu-nav a:hover,
-.menu-nav a[aria-current="page"] { color: var(--primary); }
-.menu-empty { color: var(--muted-fg); padding: 0.7rem 0.35rem; }
-
-/* chapter list — persistent left sidebar on wide screens; hidden on phones (the
-   top-bar menu overlay replaces it there). */
-.sidebar { display: none; }
-.chapter-list a {
-  display: block;
-  padding: 0.3rem 1.25rem;
+.nav-caret {
   color: var(--muted-fg);
-  text-decoration: none;
+  font-size: 0.7em;
+  transition: transform 0.15s ease;
+}
+.nav-caret.open { transform: rotate(90deg); }
+.nav-group-items { display: flex; flex-direction: column; }
+.nav-group-items a { text-decoration: none; color: var(--muted-fg); }
+.nav-group-items a:hover,
+.nav-group-items a[aria-current="page"] { color: var(--primary); }
+
+/* overlay context: large tap targets */
+.menu-overlay .nav-group { border-bottom: 1px solid var(--border); }
+.menu-overlay .nav-group-head { font-size: 1.02rem; padding: 0.7rem 0.35rem; }
+.menu-overlay .nav-group-items a {
+  padding: 0.55rem 0.35rem 0.55rem 1.4rem;
+  font-size: 1rem;
+  color: var(--fg);
+}
+
+/* sidebar context: compact mono; hidden on phones (the overlay replaces it) */
+.sidebar { display: none; }
+.sidebar .nav-group-head { font-family: var(--font-mono); font-size: 0.82rem; padding: 0.35rem 1.25rem; }
+.sidebar .nav-group-items a {
+  display: block;
+  padding: 0.28rem 1.25rem 0.28rem 1.85rem;
   font-family: var(--font-mono);
   font-size: 0.82rem;
 }
-.chapter-list a:hover { color: var(--fg); }
-.chapter-list a[aria-current="page"] { color: var(--primary); }
+
+/* pagination — previous / next chapter, by real title (reads like one book) */
+.prevnext {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 3rem 0 0.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.prevnext-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: 48%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+.prevnext-link:hover { border-color: var(--primary); }
+.prevnext-next { text-align: right; }
+.prevnext-dir { font-size: 0.78rem; color: var(--muted-fg); }
+.prevnext-title { font-weight: 600; color: var(--fg); }
 
 main {
   max-width: 46rem;

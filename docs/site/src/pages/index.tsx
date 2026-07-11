@@ -1,5 +1,6 @@
 import { chapterBySlug } from "../lib/content.js";
 import { renderChapter } from "../lib/docs-content.js";
+import { PrevNext } from "../components/PrevNext.js";
 
 // Home = the "Getting started" overview chapter, rendered through the Effect pipeline.
 export default async function HomePage() {
@@ -10,6 +11,7 @@ export default async function HomePage() {
     <>
       <title>{`${meta.title} — effect-pm`}</title>
       {element}
+      <PrevNext slug="index" />
     </>
   );
 }
