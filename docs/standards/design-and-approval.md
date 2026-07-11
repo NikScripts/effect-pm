@@ -7,18 +7,18 @@ the owner's time and keep settled decisions settled.
 {#no-code-without-a-go .must appliesTo=process}
 ## No code until an explicit go
 
-During design, deliberate — don't implement. A passing "sounds good," an external opinion, or your
-own confidence is **not** approval. "Let's discuss first" is a hard stop on implementation. And never
-build a design that's been blocked or rejected on the chance it lands — that just earns a revert.
-
-> Approval is a clear, direct go from the owner on *this* change. Nothing else counts as one.
+While a design is being discussed, discuss it — do not write the implementation. Only a clear, direct
+"go" from the owner on *this* change is approval. A "sounds good," someone else's opinion, or your own
+certainty is not. "Let's discuss first" means stop. And never build a design that hasn't been approved
+— or one that was already rejected — hoping it lands; it only earns a revert.
 
 {#decisions-doc-is-ssot .must appliesTo=process}
 ## The decisions doc is the source of truth
 
-A design bake writes each decision into a decisions doc **as it's made** — you don't wait to be asked.
-Build from that doc; never regenerate a locked API shape from memory or chat, and never re-propose a
-shape the doc already records as rejected. Keep a "do not resurrect" section so dead ideas stay dead.
+As each decision is made during a design discussion, record it in a decisions doc right away — don't
+wait to be asked. From then on, build from the doc, not from memory or chat: never re-derive a
+decision that's already written, and never re-propose a shape the doc lists as rejected. A "do not
+resurrect" section keeps dead ideas dead.
 
 ``` md
 ## Decisions
