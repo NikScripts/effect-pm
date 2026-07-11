@@ -27,23 +27,19 @@ class Counter extends Resource.Tag<Counter>()("app/Counter", {
 
 ## 2. Implement it with a layer
 
-`Resource.layer` provides the implementation. Use the `Effect` form when you need
-state — here a `SubscriptionRef` holds the value, so `changes` is just its stream:
+`Resource.layer` provides the implementation — one entry per contract member. A
+`SubscriptionRef` holds the value; `Resource.subscribable(ref)` surfaces it as the
+`value` ref (its `get` + `changes`), and the mutations update it:
 
 ``` ts
 import { Effect, SubscriptionRef } from "effect"
 
-const counterLayer = Resource.layer(
-  Counter,
-  Effect.gen(function* () {
-    const ref = yield* SubscriptionRef.make(0)
-    return {
-      value: Resource.subscribable(ref),  // surface the SubscriptionRef as the ref
-      increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
-      reset: SubscriptionRef.set(ref, 0),
-    }
-  }),
-)
+const ref = Effect.runSync(SubscriptionRef.make(0))
+const counterLayer = Resource.layer(Counter, {
+  value: Resource.subscribable(ref),
+  increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
+  reset: SubscriptionRef.set(ref, 0),
+})
 ```
 
 ## 3. Use it

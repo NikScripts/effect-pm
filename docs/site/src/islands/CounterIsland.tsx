@@ -1,46 +1,54 @@
 "use client";
 
 // The base building block: a custom resource via `Resource.Tag`. Define a contract
-// (current / changes / increment / reset), implement it with `Resource.layer` over a
-// SubscriptionRef, and drive it from buttons. Live count reads off the `changes` stream.
-// Verified in Node before building this UI. Tailwind scoped to .pm-dashboard.
+// (a reactive `value` ref + `increment`/`reset` mutations), implement it with the plain
+// `Resource.layer` object form over a SubscriptionRef, and drive it from buttons. The
+// live count reads off the ref's `changes` stream. Tailwind scoped to .pm-dashboard.
 
 import * as React from "react";
 import "../styles/widgets.css";
 import { Effect, Schema, Stream, SubscriptionRef } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as Resource from "@pm/Resource";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
 
-// 1. the contract — `value` is a reactive ref (Subscribable: get + changes)
-class Counter extends Resource.Tag<Counter>()("docs/Counter", {
-  value: Resource.ref(Schema.Number),
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
-  reset: Resource.effectFn(Schema.Void),
-}) {}
+// Build the resource + its atoms. Wrapped so it runs exactly once (see the singleton
+// below): the resource registry rejects a duplicate group id, and Waku re-imports this
+// client module on a content hot-edit — without the guard that trips DuplicateGroupId.
+const buildCounter = () => {
+  // 1. the contract — `value` is a reactive ref (Subscribable: get + changes)
+  class Counter extends Resource.Tag<Counter>()("docs/Counter", {
+    value: Resource.ref(Schema.Number),
+    increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+    reset: Resource.effectFn(Schema.Void),
+  }) {}
 
-// 2. the local implementation — a SubscriptionRef, surfaced as the ref via `subscribable`
-const counterLayer = Resource.layer(
-  Counter,
-  Effect.gen(function* () {
-    const ref = yield* SubscriptionRef.make(0);
-    return {
-      value: Resource.subscribable(ref),
-      increment: ({ by }: { readonly by: number }) => SubscriptionRef.update(ref, (n) => n + by),
-      reset: SubscriptionRef.set(ref, 0),
-    };
-  }) as never,
-);
+  // 2. the local implementation — a SubscriptionRef surfaced as the ref via `subscribable`
+  const ref = Effect.runSync(SubscriptionRef.make(0));
+  const counterLayer = Resource.layer(Counter, {
+    value: Resource.subscribable(ref),
+    increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
+    reset: SubscriptionRef.set(ref, 0),
+  });
 
-// 3. reactive wiring — live count off the ref's `changes`, controls off the handle
-const runtime = Atom.runtime(counterLayer);
-const countAtom = runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.value.changes)));
-const increment = runtime.fn((by: number) => Effect.flatMap(Counter, (c) => c.increment({ by })));
-const reset = runtime.fn(() => Effect.flatMap(Counter, (c) => c.reset));
+  // 3. reactive wiring — live count off the ref's `changes`, mutations off the handle
+  const runtime = Atom.runtime(counterLayer);
+  return {
+    countAtom: runtime.atom(Stream.unwrap(Effect.map(Counter, (c) => c.value.changes))),
+    increment: runtime.fn((by: number) => Effect.flatMap(Counter, (c) => c.increment({ by }))),
+    reset: runtime.fn(() => Effect.flatMap(Counter, (c) => c.reset)),
+  };
+};
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __docsCounter: ReturnType<typeof buildCounter> | undefined;
+}
+const { countAtom, increment, reset } = (globalThis.__docsCounter ??= buildCounter());
 
 function Panel(): React.ReactElement {
   const r = useAtomValue(countAtom);
-  const count = AsyncResult.isSuccess(r) ? (r.value as number) : 0;
+  const count = AsyncResult.isSuccess(r) ? r.value : 0;
   const inc = useAtomSet(increment);
   const doReset = useAtomSet(reset);
   const [by, setBy] = React.useState(1);
