@@ -29,15 +29,15 @@ Run it in this process — provide the worker that drains the queue:
 Effect.provide(program, QueueResource.layer(Emails, { effect: sendEmail }))
 ```
 
-…or split it across runtimes. **`program` doesn't change** — only the layer does:
+…or split it across runtimes. **`program` doesn't change** — the server provides the worker, the
+caller a client layer reaching it over HTTP:
 
 ``` ts
-// on the mail server — serve the queue over RPC
+// server — serve the queue over RPC
 Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
 
-// on the caller — reach it with a client layer over an HTTP + RPC transport
-const transport = RpcClient.layerProtocolHttp({ url: "https://mail.internal/rpc" })
-Effect.provide(program, Resource.client(Emails).pipe(Layer.provide(transport)))
+// caller — the same program, now reached across the network
+Effect.provide(program, Resource.client(Emails).pipe(Layer.provide(httpTransport)))
 ```
 
 ## Build your own
