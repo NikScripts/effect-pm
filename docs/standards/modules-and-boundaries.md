@@ -1,5 +1,5 @@
-{#modules-and-boundaries title="Modules & boundaries" order=20 appliesTo=src}
-# Modules & boundaries
+{#modules-and-boundaries title="Modules & Boundaries" order=20 appliesTo=src}
+# Modules & Boundaries
 
 How the code is split into modules, what each one exposes, and how the public and browser-safe boundary is kept. Covers module layout, the public/internal line, and build & tree-shaking.
 

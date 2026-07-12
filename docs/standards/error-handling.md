@@ -1,5 +1,5 @@
-{#error-handling title="Error handling & correctness" order=120 appliesTo=src}
-# Error handling & correctness
+{#error-handling title="Error Handling & Correctness" order=120 appliesTo=src}
+# Error Handling & Correctness
 
 Errors are first-class values here — modelled, named, carried, and handled with the same care as any
 other data. *Principles → Errors are values* is the stance; this chapter is how you do it well, plus

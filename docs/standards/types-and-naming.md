@@ -1,5 +1,5 @@
-{#types-and-naming title="Types & naming" order=30 appliesTo=src}
-# Types & naming
+{#types-and-naming title="Types & Naming" order=30 appliesTo=src}
+# Types & Naming
 
 The type-level rules: making types true instead of asserting them, how everything is named, and how public shapes are declared.
 

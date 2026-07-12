@@ -1,5 +1,5 @@
-{#meta title="Authoring a standards chapter" appliesTo=standards}
-# Authoring a standards chapter
+{#meta title="Authoring A Standards Chapter" appliesTo=standards}
+# Authoring A Standards Chapter
 
 {.note}
 **Draft template.** The authoring format may still change — treat as a working draft, not a locked spec.

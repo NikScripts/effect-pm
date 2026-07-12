@@ -1,5 +1,5 @@
-{#storage title="Storage & persistence" order=80 appliesTo=src}
-# Storage & persistence
+{#storage title="Storage & Persistence" order=80 appliesTo=src}
+# Storage & Persistence
 
 Persistence comes in exactly two approved shapes. Pick one; anything that fits neither is legacy and
 gets redesigned onto one of them.

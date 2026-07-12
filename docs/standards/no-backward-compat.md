@@ -1,5 +1,5 @@
-{#no-backward-compat title="Breaking changes & stability" order=135 appliesTo=src}
-# Breaking changes & stability
+{#no-backward-compat title="Breaking Changes & Stability" order=135 appliesTo=src}
+# Breaking Changes & Stability
 
 The package's only consumers are the owner's own — this repo and a private organization sister repo,
 both maintained by the owner. There are no external users, so a breaking change is propagated

@@ -1,5 +1,5 @@
-{#working-agreement title="Agent rules" order=90 appliesTo=process}
-# Agent rules
+{#working-agreement title="Agent Rules" order=90 appliesTo=process}
+# Agent Rules
 
 Additional rules for agents working on the package — how work moves through branches, how designs
 reach approval, and the bar every change clears before it lands.
