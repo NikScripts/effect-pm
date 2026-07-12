@@ -249,6 +249,13 @@ export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };
 
+/** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */
+export const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
+/** @public */
+export const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+/** @public */
+export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
+
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
 
@@ -527,12 +534,12 @@ export const nodeStatusBundle = <R, ER>(
 
 /** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
-  Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m as GroupNode) : [m]));
+  Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 
 /** Only the queue leaves of a tree. */
 export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<QueueTag>;
+  leafTags(node).filter(isQueueTag);
 
 /** Only the process leaves of a tree. */
 export const processLeaves = (node: GroupNode): ReadonlyArray<ProcessTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<ProcessTag>;
+  leafTags(node).filter(isProcessTag);
