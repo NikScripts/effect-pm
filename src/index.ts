@@ -137,6 +137,7 @@ export {
   DuplicateGroupId,
   DuplicateInstance,
   DuplicateResourceKey,
+  EffectFnMissingPayload,
   InstanceRoutingError,
   LocalOnlyMethod,
   MissingContractMethod,

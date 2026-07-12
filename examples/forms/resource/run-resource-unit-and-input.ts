@@ -44,7 +44,7 @@ const program = Effect.gen(function* () {
 
   const timed = yield* TimedWorkGate;
   const startTimes = yield* Effect.all(
-    Array.from({ length: 15 }, () => timed.run()),
+    Array.from({ length: 15 }, () => timed.run),
     { concurrency: "unbounded" },
   );
 

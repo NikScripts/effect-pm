@@ -142,6 +142,15 @@ export class MissingNodeUrl extends Data.TaggedError("MissingNodeUrl")<{
 }> {}
 
 /**
+ * {@link effectFn} was called without a payload — inputless members belong on {@link effect}.
+ *
+ * @public
+ */
+export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPayload")<{
+  readonly reason?: "missing" | "void" | "empty-fields";
+}> {}
+
+/**
  * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
  * encoded by the constructor used ({@link effect} vs {@link effectFn}):
  * - **`query`** — an idempotent read (CLI prints it, dashboard reads it as an Atom);
@@ -562,10 +571,19 @@ type EffectWireConfig = {
 
 /** Config-object wire slots for {@link effectFn}. @internal */
 type EffectFnWireConfig = {
-  readonly payload: Schema.Struct.Fields | Schema.Top;
+  readonly payload: EffectFnPayload;
   readonly success?: Schema.Top;
   readonly error?: Schema.Top;
 };
+
+/** Non-void schema payload for {@link effectFn}. @internal */
+type RequiredPayloadSchema<P extends Schema.Top> = [P] extends [typeof Schema.Void] ? never : P;
+
+/** Non-empty struct fields payload for {@link effectFn}. @internal */
+type RequiredPayloadFields<F extends Schema.Struct.Fields> = [keyof F] extends [never] ? never : F;
+
+/** Runtime payload input after {@link assertEffectFnPayload}. @internal */
+type EffectFnPayload = Exclude<Schema.Top, typeof Schema.Void> | Schema.Struct.Fields;
 
 const isPlainConfigObject = (u: unknown): u is Record<string, unknown> =>
   typeof u === "object" && u !== null && !Schema.isSchema(u);
@@ -582,7 +600,26 @@ const isEffectFnWireConfig = (u: unknown): u is EffectFnWireConfig => {
   if (!isPlainConfigObject(u)) {
     return false;
   }
-  return "payload" in u;
+  const keys = Object.keys(u);
+  return (
+    keys.includes("payload") &&
+    keys.every((key) => key === "payload" || key === "success" || key === "error")
+  );
+};
+
+const assertEffectFnPayload = (
+  payload: EffectFnPayload | undefined,
+): EffectFnPayload => {
+  if (payload === undefined) {
+    throw new EffectFnMissingPayload({ reason: "missing" });
+  }
+  if (payload === Schema.Void) {
+    throw new EffectFnMissingPayload({ reason: "void" });
+  }
+  if (isPlainConfigObject(payload) && Object.keys(payload).length === 0) {
+    throw new EffectFnMissingPayload({ reason: "empty-fields" });
+  }
+  return payload;
 };
 
 /**
@@ -938,37 +975,15 @@ export const grantLocal = <Self, S extends Spec, R>(
  *
  * ```ts
  * pause: Resource.effect(Schema.Void).annotate({ description: "Pause." }),
- * clear: Resource.effectFn(Schema.Void, Schema.Number).annotate({ destructive: true }),
- * enqueue: Resource.effectFn({ item: Item }, Schema.Void, Full),
+ * clear: Resource.effect(Schema.Number).annotate({ destructive: true }),
+ * enqueue: Resource.effectFn({ item: Item }),
  * enqueue: Resource.effectFn({ payload: { item: Item }, success: Schema.Void, error: Full }),
  * ```
  *
+ * `payload` is **required** — inputless members belong on {@link effect}, not `effectFn`.
+ *
  * @public
  */
-export function effectFn<P extends Schema.Top>(
-  payload: P,
-): Method<"mutate", P, typeof Schema.Void, typeof Schema.Never>;
-export function effectFn<P extends Schema.Top, Su extends Schema.Top>(
-  payload: P,
-  success: Su,
-): Method<"mutate", P, Su, Schema.Never>;
-export function effectFn<P extends Schema.Top, Su extends Schema.Top, E extends Schema.Top>(
-  payload: P,
-  success: Su,
-  error: E,
-): Method<"mutate", P, Su, E>;
-export function effectFn<const F extends Schema.Struct.Fields>(
-  payload: F,
-): Method<"mutate", F, typeof Schema.Void, typeof Schema.Never>;
-export function effectFn<const F extends Schema.Struct.Fields, Su extends Schema.Top>(
-  payload: F,
-  success: Su,
-): Method<"mutate", F, Su, Schema.Never>;
-export function effectFn<const F extends Schema.Struct.Fields, Su extends Schema.Top, E extends Schema.Top>(
-  payload: F,
-  success: Su,
-  error: E,
-): Method<"mutate", F, Su, E>;
 export function effectFn<const C extends EffectFnWireConfig>(
   config: C,
 ): Method<
@@ -981,20 +996,48 @@ export function effectFn<const C extends EffectFnWireConfig>(
   C["success"] extends Schema.Top ? C["success"] : typeof Schema.Void,
   C["error"] extends Schema.Top ? C["error"] : typeof Schema.Never
 >;
+export function effectFn<P extends Schema.Top>(
+  payload: RequiredPayloadSchema<P>,
+): Method<"mutate", P, typeof Schema.Void, typeof Schema.Never>;
+export function effectFn<P extends Schema.Top, Su extends Schema.Top>(
+  payload: RequiredPayloadSchema<P>,
+  success: Su,
+): Method<"mutate", P, Su, Schema.Never>;
+export function effectFn<P extends Schema.Top, Su extends Schema.Top, E extends Schema.Top>(
+  payload: RequiredPayloadSchema<P>,
+  success: Su,
+  error: E,
+): Method<"mutate", P, Su, E>;
+export function effectFn<const F extends Schema.Struct.Fields>(
+  payload: RequiredPayloadFields<F>,
+): Method<"mutate", F, typeof Schema.Void, typeof Schema.Never>;
+export function effectFn<const F extends Schema.Struct.Fields, Su extends Schema.Top>(
+  payload: RequiredPayloadFields<F>,
+  success: Su,
+): Method<"mutate", F, Su, Schema.Never>;
+export function effectFn<
+  const F extends Schema.Struct.Fields,
+  Su extends Schema.Top,
+  E extends Schema.Top,
+>(
+  payload: RequiredPayloadFields<F>,
+  success: Su,
+  error: E,
+): Method<"mutate", F, Su, E>;
 export function effectFn(
-  payloadOrConfig: Schema.Struct.Fields | Schema.Top | EffectFnWireConfig,
+  payloadOrConfig: EffectFnPayload | EffectFnWireConfig,
   success?: Schema.Top,
   error?: Schema.Top,
 ): AnyMethod {
-  let payload: Schema.Struct.Fields | Schema.Top;
+  let payload: EffectFnPayload;
   let successSchema: Schema.Top = Schema.Void;
   let errorSchema: Schema.Top = Schema.Never;
   if (isEffectFnWireConfig(payloadOrConfig)) {
-    payload = payloadOrConfig.payload;
+    payload = assertEffectFnPayload(payloadOrConfig.payload);
     successSchema = payloadOrConfig.success ?? Schema.Void;
     errorSchema = payloadOrConfig.error ?? Schema.Never;
   } else {
-    payload = payloadOrConfig;
+    payload = assertEffectFnPayload(payloadOrConfig);
     successSchema = success ?? Schema.Void;
     errorSchema = error ?? Schema.Never;
   }
