@@ -509,6 +509,15 @@ export const isVoidCommand = (m: AnyMethod): boolean => {
 };
 
 /**
+ * True when a wire member is an inputless {@link effect} (no payload schema) — including
+ * unit run gates and value reads. Contrast {@link isVoidCommand}, which is only void commands.
+ *
+ * @public
+ */
+export const isInputlessEffect = (m: AnyMethod): boolean =>
+  m.kind === "query" && m.payload === undefined;
+
+/**
  * The single {@link Method} constructor — {@link effect}, {@link effectFn}, {@link constant},
  * {@link value}, and {@link stream} all go through it.
  */

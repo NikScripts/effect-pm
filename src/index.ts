@@ -145,6 +145,7 @@ export {
   // per method from its kind/description/destructive/streaming). See examples/resource-tui.
   methodMeta,
   isVoidCommand,
+  isInputlessEffect,
   specOf,
 } from "./Resource";
 // `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Node`

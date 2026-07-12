@@ -34,7 +34,7 @@ type RunCountRef = RefField<
 >;
 
 /** `run` wire member — inputless {@link Resource.effect} for unit gates, {@link Resource.effectFn} otherwise. @internal */
-type RunWireMember<
+export type RunWireMember<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top,
@@ -44,55 +44,10 @@ type RunWireMember<
     : Method<"query", undefined, A, E>
   : Method<"mutate", I, A, E>;
 
-const isVoidPayload = (payload: Schema.Top): payload is Void => payload === Schema.Void;
+const RUN_DESCRIPTION =
+  "Acquire a permit, run the gated effect, release the permit — returns the effect result.";
 
-const runWire = <
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top,
->(
-  payload: I,
-  success: A,
-  error: E,
-): RunWireMember<I, A, E> => {
-  if (isVoidPayload(payload)) {
-    if ((error as Schema.Top) === Schema.Never) {
-      return Resource.effect(success) as RunWireMember<I, A, E>;
-    }
-    return Resource.effect(success, error) as RunWireMember<I, A, E>;
-  }
-  return Resource.effectFn({ payload, success, error }) as unknown as RunWireMember<I, A, E>;
-};
-
-/** Instance spec for a run gate typed by its wire schemas. @internal */
-export type RunInstanceSpec<
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top = typeof Schema.Never,
-> = {
-  readonly status: RunStatusRef;
-  readonly waiting: RunCountRef;
-  readonly inFlight: RunCountRef;
-  readonly completed: RunCountRef;
-  readonly failed: RunCountRef;
-  readonly interrupted: RunCountRef;
-  readonly run: RunWireMember<I, A, E>;
-};
-
-/**
- * Build a run-gate **instance** spec: observation refs plus the gated `run` mutation.
- *
- * @internal
- */
-export const runSpec = <
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top = typeof Schema.Never,
->(
-  payload: I,
-  success: A,
-  error: E = Schema.Never as unknown as E,
-): RunInstanceSpec<I, A, E> => ({
+const runObservationRefs = () => ({
   status: Resource.ref(runGateStatus).annotate({
     description:
       "Live current-state snapshot: waiting, in-flight, completed, failed, interrupted, total duration.",
@@ -112,8 +67,97 @@ export const runSpec = <
   interrupted: Resource.ref(Schema.Number).annotate({
     description: "Count of runs interrupted while waiting or executing.",
   }),
-  run: runWire(payload, success, error).annotate({
-    description:
-      "Acquire a permit, run the gated effect, release the permit — returns the effect result.",
-  }) as RunWireMember<I, A, E>,
 });
+
+/** Instance spec for a run gate typed by its wire schemas. @internal */
+export type RunInstanceSpec<
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+> = {
+  readonly status: RunStatusRef;
+  readonly waiting: RunCountRef;
+  readonly inFlight: RunCountRef;
+  readonly completed: RunCountRef;
+  readonly failed: RunCountRef;
+  readonly interrupted: RunCountRef;
+  readonly run: RunWireMember<I, A, E>;
+};
+
+const runSpecVoid = <A extends Schema.Top>(
+  success: A,
+): RunInstanceSpec<Void, A, typeof Schema.Never> => ({
+  ...runObservationRefs(),
+  run: Resource.effect(success).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
+    Void,
+    A,
+    typeof Schema.Never
+  >,
+});
+
+const runSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
+  success: A,
+  error: E,
+): RunInstanceSpec<Void, A, E> => ({
+  ...runObservationRefs(),
+  run: Resource.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
+    Void,
+    A,
+    E
+  >,
+});
+
+const runSpecWithPayload = <
+  I extends Exclude<Schema.Top, Void>,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  payload: I,
+  success: A,
+  error: E,
+): RunInstanceSpec<I, A, E> => ({
+  ...runObservationRefs(),
+  run: Resource.effectFn({ payload, success, error }).annotate({
+    description: RUN_DESCRIPTION,
+  }) as unknown as RunWireMember<I, A, E>,
+});
+
+/**
+ * Build a run-gate **instance** spec: observation refs plus the gated `run` mutation.
+ *
+ * @internal
+ */
+export function runSpec<A extends Schema.Top>(
+  payload: Void,
+  success: A,
+): RunInstanceSpec<Void, A, typeof Schema.Never>;
+export function runSpec<A extends Schema.Top, E extends Schema.Top>(
+  payload: Void,
+  success: A,
+  error: E,
+): RunInstanceSpec<Void, A, E>;
+export function runSpec<I extends Exclude<Schema.Top, Void>, A extends Schema.Top>(
+  payload: I,
+  success: A,
+): RunInstanceSpec<I, A, typeof Schema.Never>;
+export function runSpec<
+  I extends Exclude<Schema.Top, Void>,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  payload: I,
+  success: A,
+  error: E,
+): RunInstanceSpec<I, A, E>;
+export function runSpec(
+  payload: Schema.Top,
+  success: Schema.Top,
+  error: Schema.Top = Schema.Never,
+): RunInstanceSpec<Schema.Top, Schema.Top, Schema.Top> {
+  if (payload === Schema.Void) {
+    return (error as Schema.Top) === Schema.Never
+      ? runSpecVoid(success)
+      : runSpecVoidWithError(success, error);
+  }
+  return runSpecWithPayload(payload, success, error);
+}
