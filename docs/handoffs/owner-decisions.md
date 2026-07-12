@@ -27,12 +27,21 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-12 — Integration fold complete (`integration/storage` @ `4c543c8`)
+
+- **Owner said:** Integration line is consolidated — merge docs group (A corpus, B intro, C manifest), Process run RPC (#26), queue ref fixes (#23–#25).
+- **Chose:** `integration/storage` is the single go-forward branch; **`run`** verb locked for Process manual RPC; effect/effectFn vocabulary shipped.
+- **Rejected:** Further integration branch sprawl; `integration/web-ui-refresh` (brief retracted).
+- **Supervisor impact:** Next = `main` merge + release; store migration (Logs / CustomQueue / substrate retirement).
+
+---
+
 ## 2026-07-12 — Process manual run RPC vocabulary (owner correction)
 
 - **Owner said:** Toolkit member stays **`run`**. `Resource.effect` is **inputless** (`yield* proc.run`); `Resource.effectFn` takes per-invocation input (`logs.query`, schedule `get`/`has`, …). No `payload` on `Resource.effect`.
-- **Chose:** Revert mistaken `run` → `effect` rename; `run: Resource.effect(success, error)` with **no payload**; migrate all payload members to `effectFn` (Process + Queue/CQR/nodeStatus history); remove `payload` from `Resource.effect` API.
+- **Chose:** `run: Resource.effect(success, error)` with **no payload**; migrate all payload members to `effectFn`; remove `payload` from `Resource.effect` API.
 - **Rejected:** `payload` on `Resource.effect`; renaming toolkit verb to `effect`; `yield* proc.run()` on stamped tags.
-- **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; tests/docs/web use `yield* proc.run`.
+- **Supersedes:** conflicting 2026-07-11 entry below that chose `effect` as verb name.
 
 ---
 
@@ -45,9 +54,11 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
-## 2026-07-11 — Process manual run RPC (owner)
+## 2026-07-11 — Process manual run RPC vocabulary (superseded)
+
+*Superseded by 2026-07-12 entries — verb is **`run`**, not `effect`.*
 
 - **Owner said:** Remote Process RPC must use tag **`error`** / **`success`** on the manual run path. Replace **`runImmediately`** with spec member **`effect`** = **`Resource.effect(success, { error })`** — **no input** (`Effect`, not `effectFn`). Failures must fail the RPC, not store-only.
 - **Rejected:** Equating **`effect`** with **`query`**; putting **payload** on `Resource.effect` (input → **`effectFn`** only). Session 3 RPC defer. `runImmediately` as void `effectFn`.
 - **Toolkit rule (owner):** `Resource.effect` → `Effect<S,E>` no args; `Resource.effectFn` → `(In) => Effect<S,E>`; `query`/`mutate` = `MethodKind` for tools only — see [`agent-a-phase1-inventory.md`](./agent-a-phase1-inventory.md) C5.
-- **Chose:** [`agent-02-process-run-rpc.md`](./agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (RunResource `run` is `effectFn`+payload).
+- **Chose (withdrawn):** [`agent-02-process-run-rpc.md`](./agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (RunResource `run` is `effectFn`+payload).

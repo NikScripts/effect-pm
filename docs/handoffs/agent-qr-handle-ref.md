@@ -1,5 +1,9 @@
 # Agent — QueueResource handle: materialize `status` as a proper `ref` (match its own contract)
 
+**Status:** **MERGED** — [#23](https://github.com/NikScripts/effect-pm/pull/23) (`cursor/qr-handle-ref-5f30`). Handle now exposes `Subscribable` for `status`; observability nested groups are `stream`/`query`.
+
+**Follow-on (open):** `src/web/data.ts` should derive `QueueService` from `QueueHandle` instead of hand-writing the interface — see end of brief.
+
 **Scope:** `src/internal/queueResource.ts` (and its mirror `src/CustomQueueResource.ts` — coordinate with the Queue wire Phase 1a agent, who is touching CQR). **Not** `docs/site/` (Agent B), **not** `src/web/*` (that's a downstream follow-on — see the end).
 **Owner protocol (required):** get familiar first, then **post your plan in the owner chat and wait for approval** before building. Show all work in chat — real code + **before/after** for every change.
 

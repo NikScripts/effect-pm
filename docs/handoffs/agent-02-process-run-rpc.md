@@ -1,6 +1,6 @@
 # Agent 2 — Process manual run RPC (`run`)
 
-**Status:** **MERGED** — [#26](https://github.com/NikScripts/effect-pm/pull/26) → `integration/storage` (`e7fcd9e`).
+**Status:** **MERGED** — [#26](https://github.com/NikScripts/effect-pm/pull/26) → `integration/storage`; folded in docs group merge **`4c543c8`**.
 
 **Prerequisite:** Queue Phase 1a merged ([#21](https://github.com/NikScripts/effect-pm/pull/21)).
 
@@ -58,4 +58,4 @@ buildProcessSpec({ success: S, error: E }) => ({
 
 **Verify:** `pnpm run typecheck && pnpm test && pnpm run lint` — green (456 tests).
 
-**Merge:** rebase/merge onto `integration/storage` (`b693cc9`), then PR [#26](https://github.com/NikScripts/effect-pm/pull/26) → `integration/storage`.
+**Merge:** PR [#26](https://github.com/NikScripts/effect-pm/pull/26) + integration fold `4c543c8` (standards/docs group).

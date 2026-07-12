@@ -51,10 +51,7 @@ The queue is the finished reference. The patterns every module adopts:
 - [ ] doc nit: dangling `{@link withDefault}` in `Store.ts` header.
 
 ### Cursor lane — cloud clones (mechanical, copy the queue)
-- [ ] **Process** (`Process.ts`, `internal/processStoreTap.ts`, `internal/store/processStoreSpec.ts`) —
-      already on the new `Store.Storage` bridge + a `Store.contract` spec; convert the hand-rolled
-      `catchCause` tap → `Store.effects` + `Store.catchWriteErrors`; add tier-2/tier-3 (spec is base-only);
-      discharge impl via `Resource.provideContext`. Handoff: `store-cutover-process.md`.
+- [x] **Process** — `Store.effects` + `catchWriteErrors` + `builtInProcessStoreContract`; handoff `store-cutover-process.md` **done**.
 - [ ] **Run** (`RunResource.ts`, `internal/runResource.ts`, `internal/runResourceStoreTap.ts`,
       `internal/store/runResourceStoreSpec.ts`) — convert the `recordWrite`/`catchErrorAndLog` tap →
       `Store.catchWriteErrors`; two write shapes (`fact` + `state`) become tier-2. Handoff:
