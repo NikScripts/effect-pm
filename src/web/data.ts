@@ -267,6 +267,9 @@ const HISTORY_CACHE = 120;
 const TREND = 60;
 let logId = 0;
 
+/** A typed `undefined` seed for stream-scan accumulators (avoids `undefined as A | undefined`). */
+const seed = <A>(): A | undefined => undefined;
+
 const toLogLine = (l: { readonly level: string; readonly message: string }): LogLine => ({
   id: (logId += 1),
   t: now(),
@@ -343,7 +346,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     statusStream.pipe(
       Stream.scan(
         {
-          latest: undefined as QueueStatus | undefined,
+          latest: seed<QueueStatus>(),
           trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
         },
         (acc, s) => ({ latest: s, trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
@@ -362,7 +365,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     ).pipe(
       Stream.scan(
         {
-          latest: undefined as QueueMetrics | undefined,
+          latest: seed<QueueMetrics>(),
           history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
         },
         (acc, item) =>
@@ -455,7 +458,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     Stream.unwrap(Effect.map(tag, (a) => a.metrics)).pipe(
       Stream.scan(
         {
-          latest: undefined as ApiUsageMetrics | undefined,
+          latest: seed<ApiUsageMetrics>(),
           history: readCache<ApiPoint>(`${tag.key}/api-history`)?.items ?? [],
         },
         (acc, m) => ({ latest: m, history: [...acc.history, toApiPoint(m)].slice(-HISTORY) }),
