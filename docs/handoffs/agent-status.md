@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
-| **2** | `cursor/process-run-rpc-a009` | [process run RPC](./agent-02-process-run-rpc.md) | **ready-for-merge** | `e0e438d` | typecheck + 456 tests + lint green | PR [#26](https://github.com/NikScripts/effect-pm/pull/26); merged `b693cc9` | 2026-07-12 |
+| **2** | `cursor/process-run-rpc-a009` | [process run RPC](./agent-02-process-run-rpc.md) | **ready-for-merge** | `7745453` | typecheck + 456 tests + lint green | PR [#26](https://github.com/NikScripts/effect-pm/pull/26); merged `b693cc9` | 2026-07-12 |
 | **B** | `action/html-doc-platform` → merged | [plan](./agent-b-plan.md) | **merged** | on integration line | islands live; docs site on merged tree | Queue handle ref follow-up | 2026-07-11 |
 | **A** | `docs/standards-corpus` → `integration/rules-and-documentation` | [brief](./agent-a-rules-and-documentation.md) | **corpus complete** | 9 pages / 104 rules + `docs/standards/manifest.json` | renders on docs:serve; manifest derived | ready for Agent C — corpus must reach `integration/storage` | 2026-07-11 |
 | **C** | `chore/standards-audit` from `integration/storage` | [brief](./agent-c-standards-audit.md) | **step 0 done** | manifest now generator-derived; `appliesTo` multi-scope (58 rules gain `examples`); appliesTo chip | docs build ✓; `docs:manifest --check` ✓; 104 rules intact | audit catalog next (owner-gated) | 2026-07-12 |
