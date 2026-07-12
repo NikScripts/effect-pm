@@ -5,9 +5,9 @@ Additional rules for agents working on the package — how work moves through br
 reach approval, and the bar every change clears before it lands.
 
 {#branch-naming .must appliesTo=process}
-## Branches are named `<action>/<description>`
+## Branches are named `<type>/<description>`
 
-Every branch is `<action>/<description>`. The **action** is the change type — `feat`, `fix`, `docs`,
+Every branch is `<type>/<description>`. The **type** is the change kind — `feat`, `fix`, `docs`,
 `refactor`, `chore`, `integration` — and the **description** is a short kebab-case summary of the
 work. Nothing else: no bare names, no personal prefixes.
 
@@ -26,7 +26,7 @@ never wait to be asked. Each finished unit (a chapter, a fix, a passing step) is
 {#work-on-a-branch .must appliesTo=process}
 ## Work on a working branch; integration advances by merge
 
-Cut a `<action>/<description>` working branch from your integration branch, do your regular commits
+Cut a `<type>/<description>` working branch from your integration branch, do your regular commits
 there, and **merge** into the integration branch at checkpoints. An integration branch is advanced
 by merges, never by direct commits — committing straight onto it skips the working-branch step and
 the review it affords.
