@@ -4,41 +4,36 @@
 **Build cross-runtime services on Effect.**
 
 An Effect service lives inside one runtime. A *cross-runtime service* doesn't: define it once, run it
-on one process or node, and call it from another over RPC — the same typed handle whether it's local
-or across the network.
+on one runtime, and call it from another over RPC — with the same typed handle.
 
-Normally, moving a queue or a background job to another process means rewriting the call site — an
-HTTP client, serialization, its own error handling. A cross-runtime service erases that: you build it
-in-process, then serve it, and **the call site never changes.** Local and remote are the same code —
-only the layer you provide differs.
+A real app already runs as more than one runtime — a web server here, a background worker there.
+Sharing a queue between them normally means one side owns it and the other reaches it through a
+hand-rolled HTTP client. A cross-runtime service drops that: one runtime owns the queue, the other
+calls it **as if it were in-process.**
 
 ``` ts
-// define once — a queue whose items are validated by a schema
+// define once — the queue both runtimes share
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
 
-// the program that uses it — unchanged whether Emails runs here or elsewhere
-const program = Effect.gen(function* () {
+// the enqueue code — identical to using an in-process queue
+const enqueue = Effect.gen(function* () {
   const emails = yield* Emails
   yield* emails.add(job)
 })
 ```
 
-Run it in this process — provide the worker that drains the queue:
+Two runtimes on your machine — the worker owns the queue, the web process enqueues to it:
 
 ``` ts
-Effect.provide(program, QueueResource.layer(Emails, { effect: sendEmail }))
-```
-
-…or split it across runtimes. **`program` doesn't change** — the server provides the worker, the
-caller a client layer reaching it over HTTP:
-
-``` ts
-// server — serve the queue over RPC
+// worker runtime — drains the queue, served on localhost
 Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
 
-// caller — the same program, now reached across the network
-Effect.provide(program, Resource.clientHttp(Emails, { url: "https://mail.internal/rpc" }))
+// web runtime — enqueues over localhost, with no client code of its own
+Effect.provide(enqueue, Resource.clientHttp(Emails, { url: "http://localhost:3001/rpc" }))
 ```
+
+Move the worker to another machine and only the url changes — two runtimes here, two runtimes
+anywhere, the same code.
 
 ## Build your own
 
