@@ -27,6 +27,7 @@
 
 ### Deferred (owner)
 - **`main` merge + `pnpm run version`** — wait until Logs lands
+- **Agent B:** dashboard type-safety remediation — [`agent-b-dashboard-typesafety.md`](./agent-b-dashboard-typesafety.md) (kill `data.ts` discrimination `as` casts via `kind`-guards; contain the one runtime-`R` boundary; `@since`/`@public`/suppression hygiene in `src/web`+`src/ui`). Ready to start.
 - Agent C standards audit (plan-first)
 - Process live `events` stream (#20)
 - `Store.layerQuery` (not approved)
