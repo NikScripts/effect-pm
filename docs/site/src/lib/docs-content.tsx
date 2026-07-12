@@ -1,12 +1,12 @@
-// The docs content pipeline as an Effect service:
-//   Djot source -> parse -> Schema-validate rule metadata -> derive manifest
-//   -> reject duplicate ids (typed failure) -> render AST to React.
+// The docs RENDER pipeline: parsed chapter (from ./standards-manifest) -> React elements,
+// plus the nav derived from each page's own block. Parsing + rule-metadata + the derived
+// manifest live in ./standards-manifest.ts — the single parser shared with the manifest
+// generator, so nothing hand-copies rule data (Principles → Derive from the contract).
 //
 // Effect packages only (incl. unstable where relevant). No node:fs — content arrives
 // as strings from ./content.ts (Vite module graph).
 
-import { Data, Effect, Schema } from "effect";
-import * as djot from "@djot/djot";
+import { Effect } from "effect";
 import * as React from "react";
 import { runServer } from "./runtime.js";
 import { chapters, chapterBySlug } from "./content.js";
@@ -15,78 +15,7 @@ import { highlightToReact, loadHighlighter } from "./highlight.js";
 import { QueueIsland } from "../islands/QueueIsland.js";
 import { RunResourceIsland } from "../islands/RunResourceIsland.js";
 import { CounterIsland } from "../islands/CounterIsland.js";
-
-// --- rule metadata schema (machine layer) ---------------------------------
-const Severity = Schema.Literals(["must", "should", "may"]);
-const Rule = Schema.Struct({
-  id: Schema.String,
-  severity: Severity,
-  appliesTo: Schema.String,
-});
-const decodeRule = Schema.decodeUnknownEffect(Rule);
-
-export interface Rule {
-  readonly id: string;
-  readonly severity: "must" | "should" | "may";
-  readonly appliesTo: string;
-}
-export interface ChapterMeta {
-  readonly id: string;
-  readonly title: string;
-  readonly order?: number;
-  readonly rules: ReadonlyArray<Rule>;
-}
-
-export class DuplicateRuleId extends Data.TaggedError("DuplicateRuleId")<{
-  readonly id: string;
-}> {}
-export class MissingPageBlock extends Data.TaggedError("MissingPageBlock")<{
-  readonly detail: string;
-}> {}
-
-const severities = new Set(["must", "should", "may"]);
-
-// Walk sections, pull the sparing `{…}` attribute blocks agents wrote.
-const collect = (doc: djot.Doc) => {
-  let page: { id: string; title: string; order?: string } | undefined;
-  const raw: Array<{ id: string; severity: string; appliesTo: string }> = [];
-  const walk = (n: any) => {
-    if (n?.tag === "section") {
-      const a = n.attributes ?? {};
-      const sev = (a.class ?? "").split(/\s+/).find((c: string) => severities.has(c));
-      if (a.id && sev) raw.push({ id: `${page?.id ?? "?"}.${a.id}`, severity: sev, appliesTo: a.appliesTo ?? "all" });
-      else if (a.id && a.title && !page) page = { id: a.id, title: a.title, order: a.order };
-    }
-    for (const c of n?.children ?? []) walk(c);
-  };
-  walk(doc);
-  return { page, raw };
-};
-
-// Effect: parse + validate + build the manifest. Typed failures on bad content.
-const parseChapter = (raw: string) =>
-  Effect.gen(function* () {
-    const doc = yield* Effect.try(() => djot.parse(raw));
-    const { page, raw: rawRules } = collect(doc);
-    if (!page) {
-      return yield* Effect.fail(
-        new MissingPageBlock({ detail: "no `{#id title=… }` page block above the H1" }),
-      );
-    }
-    const rules = yield* Effect.forEach(rawRules, decodeRule);
-    const seen = new Set<string>();
-    for (const r of rules) {
-      if (seen.has(r.id)) return yield* Effect.fail(new DuplicateRuleId({ id: r.id }));
-      seen.add(r.id);
-    }
-    const meta: ChapterMeta = {
-      id: page.id,
-      title: page.title,
-      order: page.order === undefined ? undefined : Number(page.order),
-      rules,
-    };
-    return { doc, meta };
-  });
+import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 
 // --- render layer: Djot AST -> React elements (no dangerouslySetInnerHTML) ---
 let keySeq = 0;
@@ -97,7 +26,30 @@ const toReact = (n: any): React.ReactNode => {
     case "doc": return h(React.Fragment, { key: keySeq++ }, kids(n));
     case "section": {
       const a = n.attributes ?? {};
-      return h("section", { key: keySeq++, id: a.id, className: a.class }, kids(n));
+      const sev = (a.class ?? "")
+        .split(/\s+/)
+        .find((c: string) => c === "must" || c === "should" || c === "may");
+      const scopes = sev && a.appliesTo ? expandScopes(a.appliesTo) : [];
+      // A rule section gets an appliesTo chip row right under its heading, so the page
+      // SHOWS where the rule applies (src / examples / test / docs / process) beside
+      // the severity chip — not just the manifest.
+      if (scopes.length === 0) {
+        return h("section", { key: keySeq++, id: a.id, className: a.class }, kids(n));
+      }
+      const children: Array<React.ReactNode> = [];
+      for (const c of n.children ?? []) {
+        children.push(toReact(c));
+        if (c.tag === "heading") {
+          children.push(
+            h(
+              "p",
+              { key: keySeq++, className: "applies-to" },
+              scopes.map((s) => h("span", { key: keySeq++, className: "scope-chip" }, s)),
+            ),
+          );
+        }
+      }
+      return h("section", { key: keySeq++, id: a.id, className: a.class }, children);
     }
     case "heading": return h(`h${n.level ?? 2}`, { key: keySeq++ }, kids(n));
     case "para": return h("p", { key: keySeq++, className: n.attributes?.class }, kids(n));
@@ -156,7 +108,13 @@ const itemForSlug = (slug: string): Promise<NavItem | undefined> => {
   return runServer(
     parseChapter(c.raw).pipe(
       Effect.map(({ meta }) => meta),
-      Effect.catch(() => Effect.succeed({ id: slug, title: slug, rules: [] } as ChapterMeta)),
+      Effect.catch(() =>
+        Effect.succeed<ChapterMeta>({
+          id: slug,
+          title: slug,
+          rules: [],
+        }),
+      ),
     ),
   ).then((meta) => ({ slug, href: hrefFor(slug, c.group), title: meta.title }));
 };

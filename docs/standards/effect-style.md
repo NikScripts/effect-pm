@@ -3,7 +3,7 @@
 
 How Effect code reads day to day — the platform surface and idioms, plus formatting and comments.
 
-{#native-effect-subpaths .must appliesTo=src}
+{#native-effect-subpaths .must appliesTo="src examples"}
 ## Reach for native Effect subpaths, not external packages
 
 Reactivity, RPC, SQL, HTTP, event logs, persistence — all ship inside Effect under
@@ -20,7 +20,7 @@ import { SqlClient } from "effect/unstable/sql/SqlClient"
 import { Atom } from "@effect-atom/atom"
 ```
 
-{#know-the-surface .should appliesTo=src}
+{#know-the-surface .should appliesTo="src examples"}
 ## Know the surface before reaching outside it
 
 Effect is large — most of what you'd pull a dependency for already ships. Scan here before adding
@@ -71,7 +71,7 @@ payload: { id: Schema.String }                   // loose-fields shorthand — f
 declareQueue(fields: Record<string, Schema.Top>)
 ```
 
-{#wire-errors-are-schema-errors .must appliesTo=src}
+{#wire-errors-are-schema-errors .must appliesTo="src examples"}
 ## Errors that cross the wire are schema errors
 
 An in-process failure is a `Data.TaggedError` (see *Principles → Errors are values*). An error that
@@ -87,7 +87,7 @@ class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingIt
 ) {}
 ```
 
-{#platform-services-not-node .must appliesTo=src}
+{#platform-services-not-node .must appliesTo="src examples"}
 ## Use Effect platform services, not raw `node:*`
 
 Filesystem, path, process, and HTTP work goes through the Effect service — `FileSystem`, `Path`,
@@ -114,7 +114,7 @@ vendored `repos/effect/packages/effect/src`) and copy the real shape — don't g
 code import from the declared `effect` dependency.
 
 
-{#one-field-per-line .must appliesTo=src}
+{#one-field-per-line .must appliesTo="src examples test"}
 ## One field per line
 
 Never collapse a multi-field object or parameter list onto one line. One field per line, always — a
@@ -132,7 +132,7 @@ const config = {
 }
 ```
 
-{#comment-non-obvious-plumbing .should appliesTo=src}
+{#comment-non-obvious-plumbing .should appliesTo="src examples"}
 ## Comment the non-obvious plumbing, not the obvious
 
 Comment where the code relies on something it doesn't show — a type-level trick, an Effect

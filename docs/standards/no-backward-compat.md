@@ -53,7 +53,7 @@ export const draft = /* … */
 "since 1.0.0") comment already in the code is a lock nobody approved — it is illegal and must be
 removed.
 
-{#no-suppression-comments .must appliesTo=src}
+{#no-suppression-comments .must appliesTo="src examples"}
 ## No error-suppression comments in the library
 
 Fix the diagnostic, don't silence it. No `@effect-diagnostics-next-line`, no `eslint-disable` in
