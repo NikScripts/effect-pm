@@ -25,15 +25,15 @@ const enqueue = Effect.gen(function* () {
 Two runtimes on your machine — the worker owns the queue, the web process enqueues to it:
 
 ``` ts
-// worker runtime — drains the queue, served on localhost
-Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
+// worker runtime — the queue's worker, served on port 3001
+const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
 
-// web runtime — enqueues over localhost, with no client code of its own
-Effect.provide(enqueue, Resource.clientHttp(Emails, { url: "http://localhost:3001/rpc" }))
+// web runtime — enqueue against port 3001, with no client code of its own
+Effect.provide(enqueue, Resource.clientHttp(Emails, 3001))
 ```
 
-Move the worker to another machine and only the url changes — two runtimes here, two runtimes
-anywhere, the same code.
+Move the worker to another machine — swap the port for a url (`clientHttp(Emails, "https://…/rpc")`).
+Nothing else changes: two runtimes here, two runtimes anywhere, the same code.
 
 ## Build your own
 
