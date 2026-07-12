@@ -1,7 +1,8 @@
-{#working-agreement title="Working agreement" order=90 appliesTo=process}
-# Working agreement
+{#working-agreement title="Agent rules" order=90 appliesTo=process}
+# Agent rules
 
-How we work — branches and commits, how designs reach approval, and the bar every change clears before it lands.
+Additional rules for agents working on the package — how work moves through branches, how designs
+reach approval, and the bar every change clears before it lands.
 
 {#branch-naming .must appliesTo=process}
 ## Branches are named `<action>/<description>`

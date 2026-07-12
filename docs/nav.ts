@@ -24,11 +24,8 @@ export const nav: ReadonlyArray<NavGroup> = [
       "resources",
       "storage",
       "no-backward-compat",
+      "working-agreement",
     ],
-  },
-  {
-    label: "Working agreement",
-    slugs: ["working-agreement"],
   },
   {
     label: "Guides",
