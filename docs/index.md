@@ -13,18 +13,31 @@ in-process, then serve it, and **the call site never changes.** Local and remote
 only the layer you provide differs.
 
 ``` ts
-// define once
+// define once — a queue whose items are validated by a schema
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
 
-// the call site never changes — local or remote
-const emails = yield* Emails
-yield* emails.add(job)
+// the program that uses it — unchanged whether Emails runs here or elsewhere
+const program = Effect.gen(function* () {
+  const emails = yield* Emails
+  yield* emails.add(job)
+})
 ```
 
+Run it in this process — provide the worker that drains the queue:
+
 ``` ts
-// only the layer you provide differs:
-QueueResource.layer(Emails, { effect: send })          // ▸ runs here, in this process
-Resource.client(Emails).pipe(Layer.provide(transport)) // ▸ reaches it on another runtime
+Effect.provide(program, QueueResource.layer(Emails, { effect: sendEmail }))
+```
+
+…or split it across runtimes. **`program` doesn't change** — only the layer does:
+
+``` ts
+// on the mail server — serve the queue over RPC
+Resource.httpServer([QueueResource.serve(Emails, { effect: sendEmail })])
+
+// on the caller — reach it with a client layer over an HTTP + RPC transport
+const transport = RpcClient.layerProtocolHttp({ url: "https://mail.internal/rpc" })
+Effect.provide(program, Resource.client(Emails).pipe(Layer.provide(transport)))
 ```
 
 ## Build your own
