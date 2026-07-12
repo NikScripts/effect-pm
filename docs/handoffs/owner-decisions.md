@@ -32,7 +32,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** Integration line is consolidated — merge docs group (A corpus, B intro, C manifest), Process run RPC (#26), queue ref fixes (#23–#25).
 - **Chose:** `integration/storage` is the single go-forward branch; **`run`** verb locked for Process manual RPC; effect/effectFn vocabulary shipped.
 - **Rejected:** Further integration branch sprawl; `integration/web-ui-refresh` (brief retracted).
-- **Supervisor impact:** Next = `main` merge + release; store migration (Logs / CustomQueue / substrate retirement).
+- **Supervisor impact:** Next = Cursor Logs cutover; **`main` release deferred** until Logs lands.
+
+---
+
+## 2026-07-12 — Logs before release (owner)
+
+- **Owner said:** Wait on `main` merge / version bump. Finish **Logs** store migration first. Use **Cursor** (3 Claude agents busy).
+- **Chose:** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md) on `cursor/logs-store-cutover-a009`.
+- **Rejected:** `main` release before Logs; full platform-logs redesign in the same session.
+- **Supervisor impact:** Agent 3 (Cursor) active.
 
 ---
 

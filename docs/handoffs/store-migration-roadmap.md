@@ -35,10 +35,7 @@ The queue is the finished reference. The patterns every module adopts:
 ## Module inventory (tick as landed)
 
 ### Claude lane — local (critical / shared / design)
-- [ ] **Logs** (`src/store/log.ts` `LogStore`) — still on the old `ProcessStore` facet
-      (`extends ProcessStore.Service`); migrate to `Store.Service`/`Store.contract`/`Store.effects`. Pull
-      `internal/manager/logQuery.ts`, `NodeLogs.persistLayer`, `nodeStatusResource` logHistory along. This
-      is the ONLY live consumer of the facet substrate → unblocks the big deletion.
+- [ ] **Logs** (`src/store/log.ts` `LogStore`) — **Cursor** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md). Migrate off `ProcessStore.Service` → `Store.contract`/`Store.effects`; wire `NodeLogs`, `nodeStatusResource`, sqlite/redis. **Blocks substrate retirement.**
 - [ ] **Delete `ProcessLifecycleStore`** (`src/store/processLifecycle.ts`) — dead code, zero live emitters.
 - [ ] **Retire the facet substrate** (after Logs + the delete): `RuntimeStorage.ts`, `ProcessStore.ts`,
       `ProcessStorage.ts`, `ProcessStoreEvent.ts`, `Query.ts`, `internal/store/spine.ts`,
@@ -78,10 +75,7 @@ sqlite RuntimeStorage backends are runtime-dead (only doc/test references). Only
 delete `ProcessLifecycleStore`, and the whole substrate falls.
 
 ## Ordering
-Claude does **Logs → delete lifecycle → retire substrate** (coordinating the substrate deletion with
-Cursor's Process work, which shares the old `ProcessStore` history). Cursor can start **Process / Run /
-CustomQueue** in parallel now against `integration/storage` (machinery + handoffs are landed). `layerQuery`
-only after owner approval.
+**Logs (Cursor)** → delete `ProcessLifecycleStore` → retire facet substrate (owner-gated Slice 3). Cursor can continue **Run / CustomQueue** in parallel after Logs or in separate sessions. `layerQuery` only after owner approval.
 
 ## Surprises worth remembering
 - `ProcessLifecycleStore` is dead code (delete, don't migrate).
