@@ -1,5 +1,5 @@
-{#resources title="Resources" order=60 appliesTo=src}
-# Resources
+{#resources title="Resource Factories" order=60 appliesTo=src}
+# Resource Factories
 
 How a resource is defined, served, and meshed across nodes. Covers the tag/layer split, the serve vocabulary, and multi-node meshing.
 
