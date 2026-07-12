@@ -17,13 +17,12 @@
  * Renderer-agnostic (no per-app nav state) — wire the dashboards' grid/detail off
  * `route.group` / `route.selected`, and their open/back handlers to `route.open` / `back`.
  *
- * @since 1.0.0
  */
 import * as React from "react";
 import * as Group from "../Group";
 import type { GroupNode } from "./data";
 
-/** Nav state derived from the URL. @since 1.0.0 */
+/** Nav state derived from the URL. */
 export interface GroupRoute {
   /** `[root, …descended groups]` — the breadcrumb. */
   readonly trail: ReadonlyArray<GroupNode>;
@@ -104,7 +103,6 @@ const toPath = (keys: ReadonlyArray<string>): string =>
  * Two-way bind the browser URL to a position in a `Group` tree. Returns the resolved nav
  * state plus `open` / `back` / `toRoot` actions that push history entries.
  *
- * @since 1.0.0
  */
 export const useGroupRoute = (root: GroupNode): GroupRoute => {
   const [keys, setKeys] = React.useState<ReadonlyArray<string>>(() => resolve(root, pathSegments()).keys);

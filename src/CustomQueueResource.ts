@@ -319,7 +319,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  * @public
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. */
 export const kind = "@nikscripts/effect-pm/CustomQueueResource";
 
 /**

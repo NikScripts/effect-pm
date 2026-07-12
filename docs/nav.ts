@@ -14,20 +14,21 @@ export const nav: ReadonlyArray<NavGroup> = [
     slugs: ["index"],
   },
   {
+    label: "Guides",
+    slugs: ["resource", "queues", "run-resources", "processes"],
+  },
+  {
     label: "Standards",
     slugs: [
       "principles",
-      "module-layout",
-      "public-vs-internal",
-      "no-casts",
-      "naming",
-      "public-types",
-      "effect-idioms",
-      "meta",
+      "modules-and-boundaries",
+      "types-and-naming",
+      "effect-style",
+      "error-handling",
+      "resources",
+      "storage",
+      "no-backward-compat",
+      "working-agreement",
     ],
-  },
-  {
-    label: "Guides",
-    slugs: ["resource", "queues", "run-resources", "processes"],
   },
 ];

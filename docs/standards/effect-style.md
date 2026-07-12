@@ -1,11 +1,9 @@
-{#effect-idioms title="Effect idioms & platform services" order=70 appliesTo=src}
-# Effect idioms & platform services
+{#effect-style title="Effect Style" order=40 appliesTo=src}
+# Effect Style
 
-The mechanical rules for writing against Effect v4. The *why* — pipe over wrap, errors as values,
-effects as descriptions — lives in *Principles*; this chapter is the concrete surface: which imports,
-which schema shapes, which services.
+How Effect code reads day to day — the platform surface and idioms, plus formatting and comments.
 
-{#native-effect-subpaths .must appliesTo=src}
+{#native-effect-subpaths .must appliesTo="src examples"}
 ## Reach for native Effect subpaths, not external packages
 
 Reactivity, RPC, SQL, HTTP, event logs, persistence — all ship inside Effect under
@@ -22,7 +20,7 @@ import { SqlClient } from "effect/unstable/sql/SqlClient"
 import { Atom } from "@effect-atom/atom"
 ```
 
-{#know-the-surface .should appliesTo=src}
+{#know-the-surface .should appliesTo="src examples"}
 ## Know the surface before reaching outside it
 
 Effect is large — most of what you'd pull a dependency for already ships. Scan here before adding
@@ -73,7 +71,7 @@ payload: { id: Schema.String }                   // loose-fields shorthand — f
 declareQueue(fields: Record<string, Schema.Top>)
 ```
 
-{#wire-errors-are-schema-errors .must appliesTo=src}
+{#wire-errors-are-schema-errors .must appliesTo="src examples"}
 ## Errors that cross the wire are schema errors
 
 An in-process failure is a `Data.TaggedError` (see *Principles → Errors are values*). An error that
@@ -89,7 +87,7 @@ class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingIt
 ) {}
 ```
 
-{#platform-services-not-node .must appliesTo=src}
+{#platform-services-not-node .must appliesTo="src examples"}
 ## Use Effect platform services, not raw `node:*`
 
 Filesystem, path, process, and HTTP work goes through the Effect service — `FileSystem`, `Path`,
@@ -114,3 +112,57 @@ When you're unsure of an Effect API, open the resolved package (`node_modules/ef
 vendored `repos/effect/packages/effect/src`) and copy the real shape — don't guess from memory.
 `repos/` is read-only reference: **never import from it, never edit it.** Application and package
 code import from the declared `effect` dependency.
+
+
+{#one-field-per-line .must appliesTo="src examples test"}
+## One field per line
+
+Never collapse a multi-field object or parameter list onto one line. One field per line, always — a
+collapsed literal is unreadable on a narrow screen and buries a bad diff.
+
+``` ts
+// ❌ bad — collapsed onto one line
+const config = { levelCount: 4, namedLevels: { interactive: 0, batch: 3 }, takeAlgorithm: "weighted" }
+
+// ✅ good — one field per line
+const config = {
+  levelCount: 4,
+  namedLevels: { interactive: 0, batch: 3 },
+  takeAlgorithm: "weighted",
+}
+```
+
+{#comment-non-obvious-plumbing .should appliesTo="src examples"}
+## Comment the non-obvious plumbing, not the obvious
+
+Comment where the code relies on something it doesn't show — a type-level trick, an Effect
+layer-ordering constraint, runtime ownership, a timing subtlety. Don't narrate what the code already
+says.
+
+``` ts
+// ✅ good — explains a constraint you can't see in the call
+// provideMerge, not provide: a bare provide prunes the serve layers off httpServer
+const node = Resource.httpServer([Counter.serve]).pipe(Layer.provideMerge(deps))
+
+// ❌ bad — restates the obvious
+const total = a + b // add a and b
+```
+
+{#mark-the-surface .should appliesTo=src}
+## Mark the surface with `@public` / `@internal` / `@module`
+
+An app-facing symbol carries `@public`; a package-only one carries `@internal`; a large module opens
+with a `@module` overview so a reader lands with context.
+
+``` ts
+/**
+ * The queue worker namespace — Tag, make, layer, serve.
+ * @module QueueResource
+ */
+
+/** @public */
+export const layer = /* … */
+
+/** @internal */
+export const makeQueueEffect = /* … */
+```

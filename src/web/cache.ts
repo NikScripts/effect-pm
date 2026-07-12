@@ -7,23 +7,22 @@
  * query** (less load). Browser-only — a no-op in Node. JSON-serialized, so it works for
  * any plain-data resource, including custom ones.
  *
- * @since 1.0.0
  */
 import { now } from "./now";
 
 const available = typeof localStorage !== "undefined";
 const NS = "wow-dash/";
 
-/** A cached accumulator snapshot. @since 1.0.0 */
+/** A cached accumulator snapshot. */
 export interface CacheEntry<A> {
   readonly at: number;
   readonly items: ReadonlyArray<A>;
 }
 
-/** How long a snapshot counts as "fresh" (skip the server query within this window). @since 1.0.0 */
+/** How long a snapshot counts as "fresh" (skip the server query within this window). */
 export const FRESH_MS = 30_000;
 
-/** Read a cached snapshot (or undefined). @since 1.0.0 */
+/** Read a cached snapshot (or undefined). */
 export const readCache = <A>(key: string): CacheEntry<A> | undefined => {
   if (!available) return undefined;
   try {
@@ -36,7 +35,7 @@ export const readCache = <A>(key: string): CacheEntry<A> | undefined => {
 
 const lastWrite = new Map<string, number>();
 
-/** Persist a snapshot, throttled per key (~2s) so frequent updates don't thrash storage. @since 1.0.0 */
+/** Persist a snapshot, throttled per key (~2s) so frequent updates don't thrash storage. */
 export const writeCache = <A>(key: string, items: ReadonlyArray<A>): void => {
   if (!available) return;
   const ts = now();

@@ -35,7 +35,6 @@ const STATUS_INTERVAL = Duration.seconds(2);
 /**
  * One served resource's readiness, as the node reports it — its wire key, {@link Resource.kindOf}
  * kind, whether it's ready, and (when not) why. The element of {@link nodeStatus}'s `resources`.
- * @since 1.0.0
  */
 export const nodeResourceReadiness = Schema.Struct({
   key: Schema.String,
@@ -44,13 +43,13 @@ export const nodeResourceReadiness = Schema.Struct({
   detail: Schema.optionalKey(Schema.String),
 });
 
-/** A served resource's readiness as reported by its node. @since 1.0.0 */
+/** A served resource's readiness as reported by its node. */
 export type NodeResourceReadiness = typeof nodeResourceReadiness.Type;
 
 /**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
  * it's been up, how many resources it serves, and each resource's readiness. `status` is `degraded`
- * (and `/health` returns 503) when any served resource is not ready. @since 1.0.0
+ * (and `/health` returns 503) when any served resource is not ready.
  */
 export const nodeStatus = Schema.Struct({
   up: Schema.Boolean,
@@ -61,12 +60,12 @@ export const nodeStatus = Schema.Struct({
   resources: Schema.Array(nodeResourceReadiness),
 });
 
-/** Live node status. @since 1.0.0 */
+/** Live node status. */
 export type NodeStatus = typeof nodeStatus.Type;
 
 /**
  * The reserved node status resource tag — nodeless, so a client queries it over whichever node
- * transport it points the ambient `RpcClient.Protocol` at. @since 1.0.0
+ * transport it points the ambient `RpcClient.Protocol` at.
  */
 export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
   HOST_STATUS_KEY,
@@ -93,7 +92,7 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
 
 /** Build the node status service implementation for a node that started at `startedAt` and serves
  *  `resourceCount` resources. Logs/history are optional (read via `serviceOption`), so this adds no
- *  requirement to the server layer. @since 1.0.0 */
+ *  requirement to the server layer. */
 export const buildNodeStatusImpl = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
@@ -153,7 +152,7 @@ export const buildNodeStatusImpl = (options: {
 /**
  * The reserved node-status resource paired with its built impl — the `{ tag, impl }` that
  * {@link Resource.httpServer} folds onto every node's `RpcServer` automatically, so every node
- * exposes its status + logs without the author wiring it. @since 1.0.0
+ * exposes its status + logs without the author wiring it.
  */
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;

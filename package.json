@@ -177,6 +177,8 @@
     "docs:serve": "pnpm -C docs/site dev",
     "docs:build": "pnpm -C docs/site build",
     "docs:preview": "pnpm -C docs/site preview",
+    "docs:manifest": "pnpm -C docs/site docs:manifest",
+    "docs:manifest:check": "pnpm -C docs/site docs:manifest:check",
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",
     "example:resource-cli-manager": "tsx examples/resource-cli/manager-cli.ts",
     "example:resource-tui": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/counter-tui.tsx",

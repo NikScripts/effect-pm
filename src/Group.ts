@@ -32,7 +32,7 @@
 
 import { Context } from "effect";
 
-/** Create a group tag holding the given named member tags. @since 1.0.0 */
+/** Create a group tag holding the given named member tags. */
 export const Tag =
   <Self>(key: string) =>
   <const Members extends Record<string, unknown>>(members: Members) => {
@@ -40,7 +40,7 @@ export const Tag =
     return Object.assign(base, { members }, members);
   };
 
-/** Get the member tags back out (the record). @since 1.0.0 */
+/** Get the member tags back out (the record). */
 export const members = <Members extends Record<string, unknown>>(group: {
   readonly members: Members;
 }): Members => group.members;
@@ -55,7 +55,6 @@ export const members = <Members extends Record<string, unknown>>(group: {
  *   Group.isGroup(member) ? walk(member) : renderLeaf(name, member);
  * ```
  *
- * @since 1.0.0
  */
 export const isGroup = (
   x: unknown,

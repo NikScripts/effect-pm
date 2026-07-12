@@ -1766,7 +1766,7 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf>
 
 /** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
  *  `undefined` for a bare {@link Resource.Tag} or any non-tag. The robust replacement for sniffing
- *  a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. @since 1.0.0 */
+ *  a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
   // A resource tag is a class (so `typeof` is "function"), with the kind stamped as a static.
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && kindSym in tag) {
@@ -1778,7 +1778,7 @@ export const kindOf = (tag: unknown): string | undefined => {
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
- *  collect the distinct nodes to know which nodes back its resources. @since 1.0.0 */
+ *  collect the distinct nodes to know which nodes back its resources. */
 export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && nodeSym in tag) {
     const value = tag[nodeSym];
@@ -1845,7 +1845,7 @@ export const withReadiness: {
 /**
  * Run a tag's readiness derivation against its built service. A tag that declares none is **ready by
  * default**, so an unaware or bare resource never falsely fails a node's readiness gate. Accepts
- * `unknown` so a served entry's tag + impl pass straight in. @since 1.0.0
+ * `unknown` so a served entry's tag + impl pass straight in.
  */
 export const readinessCheck = (
   tag: unknown,
@@ -1898,7 +1898,7 @@ const readinessCheckServed = (
  * another resource's {@link withReadiness} to make readiness *depend on* a resource it depends on:
  * `yield* Resource.readinessOf(Database)`. The dependency lands in the readiness Effect's
  * requirements, so it's **compile-time checked**, and it works local *or* remote (it re-derives from
- * the dependency's served status). @since 1.0.0
+ * the dependency's served status).
  */
 export const readinessOf = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
@@ -1909,7 +1909,6 @@ export const readinessOf = <Self, S extends Spec>(
  * Combine readiness checks with **AND**: ready iff all are ready, else the first not-ready one (with
  * its detail). Sugar for extending a base with dependency checks:
  * `withReadiness((svc, base) => Resource.allReady([base, Resource.readinessOf(Database)]))`.
- * @since 1.0.0
  */
 export const allReady = <R>(
   checks: ReadonlyArray<Effect.Effect<Readiness, never, R>>,
