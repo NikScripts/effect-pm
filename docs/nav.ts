@@ -14,6 +14,10 @@ export const nav: ReadonlyArray<NavGroup> = [
     slugs: ["index"],
   },
   {
+    label: "Guides",
+    slugs: ["resource", "queues", "run-resources", "processes"],
+  },
+  {
     label: "Standards",
     slugs: [
       "principles",
@@ -26,9 +30,5 @@ export const nav: ReadonlyArray<NavGroup> = [
       "no-backward-compat",
       "working-agreement",
     ],
-  },
-  {
-    label: "Guides",
-    slugs: ["resource", "queues", "run-resources", "processes"],
   },
 ];
