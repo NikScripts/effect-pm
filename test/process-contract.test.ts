@@ -41,7 +41,7 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
         expect(before.armed).toBe(false);
         expect(before.activeInstances).toBe(0);
 
-        yield* proc.effect;
+        yield* proc.run;
         expect(yield* Ref.get(ran)).toBe(1);
 
         // run metrics increment at the single run boundary

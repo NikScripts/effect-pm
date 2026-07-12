@@ -155,7 +155,7 @@ const tick = Effect.gen(function* () {
 ```ts
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
-  yield* proc.effect;                 // out-of-band manual run (inputless Resource.effect)
+  yield* proc.run;                    // out-of-band manual run (inputless Resource.effect)
   const status = yield* proc.status.get;      // { supervising, armed, activeInstances, nextTriggerRun,
                                               //   runsStarted, runsSucceeded, runsFailed, lastRunDurationMillis, ... }
   yield* proc.stop;                           // pause supervision

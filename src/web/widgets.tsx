@@ -663,7 +663,7 @@ export const ProcessControls = (props: {
       ) : (
         <ActionButton atom={props.bundle.start} label="start" icon={<Play className="size-4" />} disabled={locked} />
       )}
-      <ActionButton atom={props.bundle.effect} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
+      <ActionButton atom={props.bundle.run} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
       <LockToggle locked={locked} onToggle={props.onToggleLock} />
     </div>
   );

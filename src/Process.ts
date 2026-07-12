@@ -142,7 +142,7 @@ export interface ProcessSnapshot {
   readonly nextScheduleTransition: Option.Option<Date>;
   /** The in-instance repeat cadence, when polling is configured (none otherwise). */
   readonly nextPollCadence: Option.Option<Duration.Duration>;
-  /** Total effect runs started (scheduled + polling + manual {@link effect}) since the layer built. */
+  /** Total effect runs started (scheduled + polling + manual {@link run}) since the layer built. */
   readonly runsStarted: number;
   /** Of those, how many completed successfully. */
   readonly runsSucceeded: number;
@@ -274,7 +274,7 @@ class ProcessScheduleControlsTag extends Context.Service<
  *
  * @remarks
  * - For scheduled runs: value from `ProcessScheduleEntry.id`
- * - For manual {@link Process.effect}: `Option.none()`
+ * - For manual toolkit {@link run}: `Option.none()`
  *
  * @public
  */
@@ -350,7 +350,7 @@ interface ProcessMirror {
   readonly activeInstances: MutableRef.MutableRef<number>;
   readonly nextTriggerRun: MutableRef.MutableRef<Option.Option<Date>>;
   // Run metrics — counted once at the single run boundary ({@link trackedProgram}), so they cover
-  // scheduled ticks, polling ticks, and manual {@link Process.effect} alike.
+  // scheduled ticks, polling ticks, and manual toolkit {@link run} alike.
   readonly runsStarted: MutableRef.MutableRef<number>;
   readonly runsSucceeded: MutableRef.MutableRef<number>;
   readonly runsFailed: MutableRef.MutableRef<number>;
@@ -1077,8 +1077,8 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 // ============================================================================
 
 /**
- * Services still required at the fork site for {@link Process.effect} /
- * {@link Process.effect} for a given {@link ProcessMakeConfig}.
+ * Services still required at the fork site for {@link Process.effect} for a given
+ * {@link ProcessMakeConfig}.
  *
  * @public
  */
@@ -1584,7 +1584,7 @@ export const processControlSpec = {
 };
 
 /**
- * Build a process **instance** spec — control surface plus a typed manual {@link effect} RPC.
+ * Build a process **instance** spec — control surface plus a typed manual {@link run} RPC.
  *
  * @public
  */
@@ -1596,7 +1596,7 @@ export const buildProcessSpec = <
   readonly error?: E;
 }) => ({
   ...processControlSpec,
-  effect: (wire?.error !== undefined
+  run: (wire?.error !== undefined
     ? Resource.effect(wire?.success ?? Schema.Void, { error: wire.error })
     : Resource.effect(wire?.success ?? Schema.Void)
   ).annotate({
@@ -1734,7 +1734,7 @@ type ResultField<A extends Schema.Top> = RefField<
 type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> };
 
 /**
- * Per-tag process spec — control surface plus stamped `effect` success/error on the wire.
+ * Per-tag process spec — control surface plus stamped `run` success/error on the wire.
  *
  * @public
  */
@@ -1742,7 +1742,7 @@ export type ProcessInstanceSpec<
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > = typeof processControlSpec & {
-  readonly effect: Resource.Method<"query", undefined, A, E>;
+  readonly run: Resource.Method<"query", undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
 // ============================================================================
@@ -2479,7 +2479,7 @@ const buildProcessImpl = <A, E, R>(
       status: { get: readStatus, changes: statusChanges },
       start,
       stop,
-      effect: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["effect"],
+      run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       logs: {
         live: logsStream,
         history: ({ limit, since, until }: HistoryQuery) =>

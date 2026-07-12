@@ -112,7 +112,7 @@ it("effect crosses the wire and runs the server-side worker once", () =>
       yield* withServer({ effect: Effect.sync(() => { ran += 1; }) }, (_port) =>
         Effect.gen(function* () {
           const proc = yield* RemoteProc;
-          yield* proc.effect;
+          yield* proc.run;
         }));
       expect(ran).toBe(1);
     }),

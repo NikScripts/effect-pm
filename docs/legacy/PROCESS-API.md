@@ -188,8 +188,8 @@ value is the **typed** failure from the tick `Effect` (same schema). When the ta
 engine writes `String(cause)` per store-core §5. Journal codecs round-trip stamped schemas on append —
 see `test/process-store-engine.test.ts` and `test/process-store-sqlite.test.ts`.
 
-**RPC `effect` slot:** Per-tag `buildProcessSpec` wires tag `success` / `error` onto the manual **`effect`**
-verb (`Resource.effect` — inputless `Effect`, not `effectFn`). Remote `yield* Tag.effect` returns typed
+**RPC `run` slot:** Per-tag `buildProcessSpec` wires tag `success` / `error` onto the manual **`run`**
+verb (`Resource.effect` — inputless `Effect`, not `effectFn`). Remote `yield* Tag.run` returns typed
 success and fails with typed `E` when the worker fails — store rows are still written on failure.
 Lifecycle verbs (`start`, `stop`) are `effectFn` void commands; schedule mutations use `effectFn` with
 payload. Per-invocation input on manual run is a future separate `effectFn` member, not payload on

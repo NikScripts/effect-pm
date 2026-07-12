@@ -13,7 +13,7 @@ it("process logs.history reads back captured logs (captureLogs + HistoryStore)",
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      yield* proc.effect;
+      yield* proc.run;
       // capture + append are async — wait until history is populated
       yield* Effect.gen(function* () {
         while ((yield* proc.logs.history({})).length === 0) {
@@ -41,7 +41,7 @@ it("process logs.history is empty without a HistoryStore (graceful, opt-in)", ()
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      yield* proc.effect;
+      yield* proc.run;
       yield* Effect.sleep(Duration.millis(50));
       expect(yield* proc.logs.history({})).toEqual([]);
     }).pipe(
