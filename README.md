@@ -27,7 +27,7 @@ yield* queue.status.get;
 - **`QueueResource`** — three-level **priority** queues with concurrency, optional `rateLimit`,
   `attempts` retry, `captureLogs`, **`refill`** (self-feeding from a source), and **`persist`**
   (durable, at-least-once).
-- **`Process`** — a managed process: lifecycle (`start`/`stop`/`runImmediately`), observability
+- **`Process`** — a managed process: lifecycle (`start`/`stop`/`run`), observability
   (reactive `status` + `logs.stream` / `logs.query`), inline or referenced **schedule** control, and
   an optional reactive `result`. One module carrying the `Process.Tag` toolkit, the `Process.make`
   engine, and `Polling` (in-instance cadence); **`Process.Schedule`** is a reusable schedule resource
@@ -78,7 +78,7 @@ const layer = Process.layer(LiveScores, {
   effect: pollLiveScores,
   // `polling` sets the cadence; add a schedule at definition with `.pipe(Process.schedule([…]))`
 });
-// elsewhere: yield* (yield* LiveScores).runImmediately
+// elsewhere: yield* (yield* LiveScores).run
 ```
 
 ### Remote (the dashboard path)

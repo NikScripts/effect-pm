@@ -55,7 +55,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | `type` | `"managed"` | |
 | `effect` | `Effect<void, never, R \| storage facets>` | Schedule-driven runtime. If `polling` / schedule layers are passed on `Process.make`, those layers are merged into `process.effect`. |
 | `getStatus(range?)` | `Effect<ProcessDetails, never, storage facets>` | Execution stats + mirror of last gate/cadence hints. |
-| `effect` | `Effect<A, E, R \| storage facets>` | One tracked tick **even when disarmed** (typed `success`/`error` on RPC when stamped on tag). |
+| `run()` | `Effect<A, E, R \| storage facets>` | One tracked tick **even when disarmed** (typed `success`/`error` when stamped on tag). Toolkit: `yield* Tag.run`. |
 
 ### `ProcessDetails`
 
