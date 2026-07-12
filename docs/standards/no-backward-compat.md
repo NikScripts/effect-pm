@@ -3,10 +3,10 @@
 
 The package has no external users yet — one internal repo, the owner's. So the surface is **fluid**:
 break it freely, no compatibility layers. That holds until a symbol is deliberately **locked** with
-`@since` — after which it's a commitment.
+`@locked` — after which it's a commitment.
 
 {#break-freely-while-fluid .must appliesTo=src}
-## While fluid, break freely — no BC shims
+## While fluid, break freely — no compatibility shims
 
 Because there are no users, an unlocked symbol has no compatibility to preserve. Rename or remove it
 outright: no alias, no re-export under the old name, no `@deprecated` shim. The old name lives on only
@@ -28,25 +28,27 @@ Move everything together in a single change: the symbol, every call site, the te
 the docs. A rename spread across releases or split over several PRs is a half-ship that leaves the tree
 inconsistent. Migration guidance goes in the changeset and docs, not in surviving code.
 
-{#since-is-the-lock .must appliesTo=src}
-## `@since <version>` locks a symbol
+{#locked-marks-frozen .must appliesTo=src}
+## `@locked` marks a frozen symbol
 
-`@since` is the one sanctioned version annotation, and it means **committed**: a symbol tagged
-`@since <version>` is part of the stable surface as of that version, so changing it from then on
-requires a deliberate breaking-change or legacy plan — no longer free. Untagged symbols stay fluid.
-
-Apply it **deliberately**, as an explicit locking decision — never sprinkle it, never copy Effect's
-habit of tagging everything. A stray `@since` (or a "since 1.0.0") is a lock nobody approved, and is
-illegal until the owner locks that surface.
+A symbol tagged `@locked` is frozen: changing it requires a deliberate backward-compatibility or
+legacy plan — it is no longer free to break. Untagged symbols stay fluid. `@locked` is applied **only**
+as an explicit locking decision by the owner; never sprinkle it.
 
 ``` ts
-// ✅ locked — committed as of 1.0.0; changing `resolve` now needs a BC plan
-/** @since 1.0.0 */
+// frozen — changing `resolve` now requires a backward-compatibility plan
+/** @locked */
 export const resolve = /* … */
 
 // fluid — no annotation, break it freely
 export const draft = /* … */
 ```
+
+{.note}
+**Right now nothing is locked** — the whole surface is fluid. At the 1.0 release, `@locked` converts to
+`@since 1.0.0`, and `@since` becomes the ongoing stability annotation. Until then, any `@since` (or
+"since 1.0.0") comment already in the code is a lock nobody approved — it is illegal and must be
+removed.
 
 {#no-suppression-comments .must appliesTo=src}
 ## No error-suppression comments in the library
