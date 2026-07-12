@@ -475,7 +475,7 @@ export const queueControlSpec = {
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    history: Resource.effect(Schema.Array(queueMetrics), {
+    history: Resource.effectFn(Schema.Array(queueMetrics), {
       payload: historyQuery,
     }).annotate({
       description:
@@ -489,7 +489,7 @@ export const queueControlSpec = {
         "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
         "unless the queue was configured with captureLogs.",
     }),
-    history: Resource.effect(Schema.Array(queueLogEntry), {
+    history: Resource.effectFn(Schema.Array(queueLogEntry), {
       payload: historyQuery,
     }).annotate({
       description:

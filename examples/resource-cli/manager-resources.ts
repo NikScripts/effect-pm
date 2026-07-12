@@ -22,7 +22,7 @@ export class Counter extends Resource.Tag<Counter>()("Counter", {
 
 export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
   list: Resource.effect(Schema.Array(Schema.String)),
-  status: Resource.effect(
+  status: Resource.effectFn(
     Schema.Struct({
       id: Schema.String,
       pending: Schema.Number,

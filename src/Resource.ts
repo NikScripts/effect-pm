@@ -533,17 +533,16 @@ const marked = <M extends AnyMethod, Mark extends object>(
   }) as Marked<M, Mark>;
 
 /**
- * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read),
- * named for what it resolves to. Add a `payload` (a parameterized read becomes a function) and/or `error`
- * via options; attach help/metadata with `.annotate({ description, ... })`. The other shapes are
- * {@link value} / {@link constant} / {@link effectFn} / {@link stream}.
- *
- * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. Prefer a schema
- * (`Schema.Struct({ … })`, or any schema such as a union) so the input's shape is explicit.
+ * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (inputless, lazy,
+ * re-runnable read), named for what it resolves to. Add typed `error` via options when needed.
+ * Members with per-invocation input use {@link effectFn} instead. Attach help/metadata with
+ * `.annotate({ description, ... })`. The other shapes are {@link value} / {@link constant} /
+ * {@link effectFn} / {@link stream}.
  *
  * ```ts
  * size: Resource.effect(Schema.Number).annotate({ description: "Total pending." }),
- * get: Resource.effect(Schema.User, { payload: Schema.Struct({ id: Schema.String }) }),
+ * run: Resource.effect(success, { error }).annotate({ description: "Tracked manual run." }),
+ * get: Resource.effectFn(Schema.User, { payload: Schema.Struct({ id: Schema.String }) }),
  * ```
  *
  * @public
@@ -551,45 +550,19 @@ const marked = <M extends AnyMethod, Mark extends object>(
 export function effect<Su extends Schema.Top>(
   success: Su,
 ): Method<"query", undefined, Su, Schema.Never>;
-export function effect<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
-  success: Su,
-  options: { readonly payload: F },
-): Method<"query", F, Su, Schema.Never>;
-// whole-schema payload — the value is passed/decoded directly (mirrors `Rpc.make`'s schema form).
-export function effect<Su extends Schema.Top, P extends Schema.Top>(
-  success: Su,
-  options: { readonly payload: P },
-): Method<"query", P, Su, Schema.Never>;
 export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
 ): Method<"query", undefined, Su, E>;
-export function effect<
-  Su extends Schema.Top,
-  const F extends Schema.Struct.Fields,
-  E extends Schema.Top,
->(
-  success: Su,
-  options: { readonly payload: F; readonly error: E },
-): Method<"query", F, Su, E>;
-export function effect<
-  Su extends Schema.Top,
-  P extends Schema.Top,
-  E extends Schema.Top,
->(
-  success: Su,
-  options: { readonly payload: P; readonly error: E },
-): Method<"query", P, Su, E>;
 export function effect(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
   return makeMethod(
     "query",
-    options?.payload,
+    undefined,
     success,
     options?.error ?? Schema.Never,
     false,

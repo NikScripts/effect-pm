@@ -2,23 +2,18 @@ import { Effect, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
-// `effect` and `stream` now accept a **single schema** payload — a `Struct` value or a bare (non-struct)
-// schema — exactly like `effectFn` and Effect's `Rpc.make`, not only the loose-fields shorthand. (A union
-// payload, the queue `add(item | item[])` case, is likewise a single schema — exercised by the queue tests.)
+// Parameterized reads use `effectFn` (or `stream` for push sources) — `effect` is inputless only.
 class Svc extends Resource.Tag<Svc>()("payload-test/Svc", {
-  // effect + a single Struct schema payload (parameterized query → a function)
-  find: Resource.effect(Schema.String, {
+  find: Resource.effectFn(Schema.String, {
     payload: Schema.Struct({ id: Schema.String }),
   }),
-  // effect + a bare, non-struct schema payload
-  len: Resource.effect(Schema.Number, { payload: Schema.String }),
-  // stream + a single Struct schema payload
+  len: Resource.effectFn(Schema.Number, { payload: Schema.String }),
   since: Resource.stream(Schema.Number, {
     payload: Schema.Struct({ from: Schema.Number }),
   }),
 }) {}
 
-it("effect/stream accept single-schema payloads (Struct + bare)", () =>
+it("effectFn/stream accept single-schema payloads (Struct + bare)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const p = yield* Svc;

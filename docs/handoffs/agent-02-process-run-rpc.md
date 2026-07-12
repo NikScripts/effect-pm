@@ -20,7 +20,7 @@ Remote Process clients must get **typed `error`** (and **`success`** when stampe
 
 **Naming (Slice 0 locked):** verb **`run`** (parity with `RunResource.run`). Layer `config.effect` and supervisor `process.effect` stay as-is — different concepts.
 
-**Input (owner 2026-07-11):** Manual run is **not** a zero-argument fire-and-forget. RPC must accept **payload when the tag defines one** (mirror RunResource). If tag has no payload slot, use **`Schema.Void`** payload — but the wire shape is still **`Resource.effect(success, { payload, error })`** (`query` kind, lazy re-runnable — **not** `effectFn` / `mutate`).
+**Input (Slice 0 locked):** Process has **no tag `payload`**. Manual `run` is inputless `Resource.effect(success, { error })` — worker stays nullary in layer config. Members that take per-invocation input (`logs.history`, schedule `get`/`has`, …) use **`Resource.effectFn`**.
 
 ---
 
@@ -41,7 +41,6 @@ Remote Process clients must get **typed `error`** (and **`success`** when stampe
 ```ts
 // internal — mirror runSpec in internal/runResourceSchema.ts
 buildProcessSpec({
-  payload: Schema.Void | P,   // from tag when stamped
   success: S,
   error: E,
 }) => ({
@@ -62,14 +61,9 @@ Wire in `buildProcessTag` instead of bare `processSpec`. Rebuild RPC group per t
 - On success: return `success` on RPC when stamped; `recordStoreCompleted` as today.
 - **Remove** `runImmediately` from public spec, impl, docs, `src/web/`, examples. Migration: `runImmediately` → `run`.
 
-### Process tag wire (if payload required)
+### Process tag wire
 
-Today Process tag is `{ success?, error? }` only. If manual run needs caller input:
-
-- Add optional **`payload`** on `ProcessTagOptions` (config-object + positional overloads — follow PR #25 toolkit pattern).
-- Layer `config.effect` becomes `(payload) => Effect<A, E, R>` when payload stamped, else nullary `Effect<A, E, R>`.
-
-**Slice 0:** Ask owner: payload schema on tag vs always-void manual run with only success/error typing.
+Process tag is `{ success?, error? }` only — **no `payload`**. The worker program lives in layer `config.effect` (nullary `Effect<A, E, R>`).
 
 ---
 
@@ -138,6 +132,8 @@ Before/After/Verify each slice. Update owner-decisions.md on same push as code.
 **Shipped:**
 - `buildProcessSpec` / `ProcessInstanceSpec` — `run: Resource.effect(success, { error })` (no payload)
 - `logs.history`, schedule `get`/`has` migrated from payload-on-`Resource.effect` to `Resource.effectFn`
+- Queue/CQR/nodeStatus `metrics.history` / `logs.history` migrated to `Resource.effectFn`
+- `Resource.effect` API — **no `payload`** (inputless only); parameterized reads use `effectFn`
 - Engine propagates typed failures; toolkit `yield* proc.run` (not `proc.run()`); engine handle keeps `proc.run()`
 - Tests/docs/web/dashboard use `run`; Session 3 RPC defer revoked
 
