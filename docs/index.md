@@ -6,34 +6,41 @@
 An Effect service lives inside one runtime. A *cross-runtime service* doesn't: define it once, run it
 on one runtime, and call it from another over RPC — with the same typed handle.
 
-A real app already runs as more than one runtime — a web server here, a background worker there.
-Sharing a queue between them normally means one side owns it and the other reaches it through a
-hand-rolled HTTP client. A cross-runtime service drops that: one runtime owns the queue, the other
-calls it **as if it were in-process.**
+A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
+there. Wiring those together normally means one side owns a resource and the others reach it through
+a hand-rolled HTTP client. Cross-runtime services drop that: every resource is reached with the same
+typed handle, wherever it runs.
+
+Here are two resources — a queue and a scheduled process — on two runtimes, working together.
 
 ``` ts
-// define once — the queue both runtimes share
+// two resources, defined once
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
-
-// the enqueue code — identical to using an in-process queue
-const enqueue = Effect.gen(function* () {
-  const emails = yield* Emails
-  yield* emails.add(job)
-})
+class Digest extends Process.Tag<Digest>()("app/Digest") {}
 ```
 
-Two runtimes on your machine — the worker owns the queue, the web process enqueues to it:
+The **worker runtime** owns the queue — it drains `Emails` and serves it on port 3001:
 
 ``` ts
-// worker runtime — the queue's worker, served on port 3001
 const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
-
-// web runtime — enqueue against port 3001, with no client code of its own
-Effect.provide(enqueue, Resource.clientHttp(Emails, 3001))
 ```
 
-Move the worker to another machine — swap the port for a url (`clientHttp(Emails, "https://…/rpc")`).
-Nothing else changes: two runtimes here, two runtimes anywhere, the same code.
+The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
+that lives on the *other* runtime, reached by port:
+
+``` ts
+const scheduler = Process.layer(Digest, {
+  effect: Effect.gen(function* () {
+    const emails = yield* Emails            // the queue on the worker runtime
+    yield* emails.add(yield* nextEmail)
+  }),
+  polling: Polling.spaced(Duration.hours(1)),
+}).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
+```
+
+`Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
+`emails.add(…)` read exactly as if the two shared one process. **Two resources, two runtimes, one
+program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
 
 ## Build your own
 
