@@ -49,10 +49,10 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
       const proc = yield* BaseProc;
       expect((yield* proc.status.get).supervising).toBe(true);
 
-      yield* proc.stop();
+      yield* proc.stop;
       expect((yield* proc.status.get).supervising).toBe(false);
 
-      yield* proc.start();
+      yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
     }).pipe(Effect.provide(Process.layer(BaseProc, { effect: Effect.void }))),
   ));
@@ -74,7 +74,7 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
         "e2",
       ]);
 
-      yield* proc.schedule.clear();
+      yield* proc.schedule.clear;
       expect(yield* proc.schedule.entries.get).toEqual([]);
     }).pipe(Effect.provide(Process.layer(SchedProc, { effect: Effect.void }))),
   ));
@@ -121,7 +121,7 @@ it("standalone Schedule resource supports full CRUD", () =>
       expect(yield* s.remove({ id: "b" })).toBe(true);
       expect((yield* s.entries.get).map((e) => e.id)).toEqual(["c"]);
 
-      yield* s.clear();
+      yield* s.clear;
       expect(yield* s.entries.get).toEqual([]);
     }).pipe(Effect.provide(Process.scheduleLayer(Windows))),
   ));

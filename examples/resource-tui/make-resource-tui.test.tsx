@@ -8,7 +8,7 @@ import { makeResourceTui } from "./make-resource-tui";
 class Counter extends Resource.Tag<Counter>()("TuiCounter", {
   current: Resource.effect(Schema.Number),
   increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
+  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 let v = 0;
@@ -18,8 +18,7 @@ const layer = Resource.layer(Counter, {
     Effect.sync(() => {
       v += by;
     }),
-  reset: () =>
-    Effect.sync(() => {
+  reset: Effect.sync(() => {
       v = 0;
     }),
 });

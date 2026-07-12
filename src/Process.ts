@@ -1560,10 +1560,10 @@ export const processControlSpec = {
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effectFn(Schema.Void).annotate({
+  start: Resource.effect(Schema.Void).annotate({
     description: "Begin supervising — fork the trigger driver (idempotent).",
   }),
-  stop: Resource.effectFn(Schema.Void).annotate({
+  stop: Resource.effect(Schema.Void).annotate({
     description: "Stop supervising — interrupt the driver and any active run instances.",
     destructive: true,
   }),
@@ -1654,7 +1654,7 @@ export const scheduleGroupSpec = {
   add: Resource.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  clear: Resource.effectFn(Schema.Void).annotate({
+  clear: Resource.effect(Schema.Void).annotate({
     description: "Remove all schedule entries (disarms until new entries are added).",
     destructive: true,
   }),
@@ -1702,7 +1702,7 @@ export const scheduleResourceSpec = {
     description: "Remove every entry whose id is listed; returns the count removed.",
     destructive: true,
   }),
-  clear: Resource.effectFn(Schema.Void).annotate({
+  clear: Resource.effect(Schema.Void).annotate({
     description: "Remove all schedule entries.",
     destructive: true,
   }),
@@ -2459,7 +2459,7 @@ const buildProcessImpl = <A, E, R>(
               set: (entries: ReadonlyArray<WireEntry>) =>
                 scheduleSvc.set(entries.map(fromWireEntry)),
               add: (entry: WireEntry) => scheduleSvc.add(fromWireEntry(entry)),
-              clear: () => scheduleSvc.clear,
+              clear: scheduleSvc.clear,
             },
           }
         : {};
@@ -2469,8 +2469,8 @@ const buildProcessImpl = <A, E, R>(
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
     const impl: WithRequirement<ImplOf<ProcessSpec>, R> = {
       status: { get: readStatus, changes: statusChanges },
-      start: () => start,
-      stop: () => stop,
+      start,
+      stop,
       run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       logs: {
         live: logsStream,
@@ -2664,7 +2664,7 @@ const buildScheduleImpl = (
       upsert: (entry: WireEntry) => scheduleSvc.upsert(fromWireEntry(entry)),
       remove: ({ id }: { readonly id: string }) => scheduleSvc.remove(id),
       removeMany: (ids: ReadonlyArray<string>) => scheduleSvc.removeMany(ids),
-      clear: () => scheduleSvc.clear,
+      clear: scheduleSvc.clear,
     };
     return impl;
   });

@@ -12,7 +12,7 @@ import * as Resource from "@pm/Resource";
 class Counter extends Resource.Tag<Counter>()("docs/Counter", {
   value: Resource.ref(Schema.Number),
   increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effectFn(Schema.Void),
+  reset: Resource.effect(Schema.Void),
 }) {}
 
 // 2. the local implementation — a SubscriptionRef surfaced as the ref via `subscribable`

@@ -15,7 +15,7 @@
  * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
  *   current: Resource.effect(Schema.Number).annotate({ description: "Current value." }),
  *   add: Resource.effectFn({ by: Schema.Number }).annotate({ description: "Increment." }),
- *   reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
+ *   reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
  * }) {}
  *
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
@@ -478,6 +478,28 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
 });
 
 /**
+ * True when a spec member is an inputless void command (`Resource.effect(Schema.Void)`),
+ * as opposed to an inputless value read (`Resource.effect` with a non-void success).
+ *
+ * @public
+ */
+export const isVoidCommand = (m: AnyMethod): boolean => {
+  if (m.kind !== "query" || m.payload !== undefined) {
+    return false;
+  }
+  return (
+    m.success === Schema.Void ||
+    (typeof m.success === "object" &&
+      m.success !== null &&
+      "ast" in m.success &&
+      typeof m.success.ast === "object" &&
+      m.success.ast !== null &&
+      "_tag" in m.success.ast &&
+      m.success.ast._tag === "Void")
+  );
+};
+
+/**
  * The single {@link Method} constructor — {@link effect}, {@link effectFn}, {@link constant},
  * {@link value}, and {@link stream} all go through it.
  */
@@ -915,7 +937,7 @@ export const grantLocal = <Self, S extends Spec, R>(
  * (a union, an item, `Schema.Struct({ … })`) is the input directly — e.g. `add(item | item[])`.
  *
  * ```ts
- * pause: Resource.effectFn(Schema.Void).annotate({ description: "Pause." }),
+ * pause: Resource.effect(Schema.Void).annotate({ description: "Pause." }),
  * clear: Resource.effectFn(Schema.Void, Schema.Number).annotate({ destructive: true }),
  * enqueue: Resource.effectFn({ item: Item }, Schema.Void, Full),
  * enqueue: Resource.effectFn({ payload: { item: Item }, success: Schema.Void, error: Full }),
@@ -2010,7 +2032,7 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  * node-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Resource.effectFn(Schema.Void) });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.effect(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
  * ```
@@ -2656,7 +2678,7 @@ const instance = <Self, S extends Spec>(
  * every instance is wired, and a duplicate key **throws at assembly**.
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Resource.effectFn(Schema.Void) });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.effect(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *

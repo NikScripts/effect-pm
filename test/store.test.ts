@@ -35,7 +35,7 @@ class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer
 }).pipe(Resource.store(thermometerContract)) {}
 
 class Mail extends Resource.Tag<Mail>()("@app/Mail", {
-  send: Resource.effectFn(Schema.Void),
+  send: Resource.effect(Schema.Void),
 }) {}
 
 const jobSchema = Schema.Struct({ id: Schema.String });

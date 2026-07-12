@@ -141,7 +141,7 @@ describe("Process.layer — Process.store auto-write", () => {
         const proc = yield* InterruptExec;
         yield* TestClock.adjust(Duration.millis(100));
         yield* Deferred.await(entered);
-        yield* proc.stop();
+        yield* proc.stop;
         yield* Effect.yieldNow;
         yield* Effect.yieldNow;
         const store = yield* EngineStore.at(InterruptExec);

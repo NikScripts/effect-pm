@@ -17,7 +17,7 @@ import * as Resource from "../../src/Resource";
 export class Counter extends Resource.Tag<Counter>()("Counter", {
   current: Resource.effect(Schema.Number),
   increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
+  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
@@ -42,8 +42,7 @@ export const counterLayer = Resource.layer(Counter, {
     Effect.sync(() => {
       count += by;
     }),
-  reset: () =>
-    Effect.sync(() => {
+  reset: Effect.sync(() => {
       count = 0;
     }),
 });

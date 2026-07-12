@@ -19,15 +19,14 @@ import { makeResourceCli } from "../../src/cli";
 
 class Counter extends Resource.Tag<Counter>()("Counter", {
   current: Resource.effect(Schema.Number),
-  reset: Resource.effectFn(Schema.Void),
+  reset: Resource.effect(Schema.Void),
   increment: Resource.effectFn({ by: Schema.Number }),
 }) {}
 
 let value = 0;
 const counterLayer = Resource.layer(Counter, {
   current: Effect.sync(() => value),
-  reset: () =>
-    Effect.sync(() => {
+  reset: Effect.sync(() => {
       value = 0;
     }),
   increment: ({ by }) =>

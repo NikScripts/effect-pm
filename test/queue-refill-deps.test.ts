@@ -42,7 +42,7 @@ it("refill loader gets its own service dependency", () =>
           ),
         ),
       );
-      yield* q.start(); // fires the onStart refill, which pulls from Source and enqueues 1,2,3
+      yield* q.start; // fires the onStart refill, which pulls from Source and enqueues 1,2,3
       const done = yield* Fiber.join(completed);
       expect(done._tag === "Some" && done.value.completed >= 3).toBe(true);
     }).pipe(

@@ -161,23 +161,23 @@ export const customQueueControlSpec = {
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effectFn(Schema.Void).annotate({
+  start: Resource.effect(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
   }),
-  pause: Resource.effectFn(Schema.Void).annotate({
+  pause: Resource.effect(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
   }),
-  resume: Resource.effectFn(Schema.Void).annotate({
+  resume: Resource.effect(Schema.Void).annotate({
     description: "Resume processing after a pause.",
   }),
-  shutdown: Resource.effectFn(Schema.Void).annotate({
+  shutdown: Resource.effect(Schema.Void).annotate({
     description:
       "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.effectFn(Schema.Void, Schema.Number).annotate({
+  clear: Resource.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
@@ -496,11 +496,11 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       size: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
-      start: () => handle.start,
-      pause: () => handle.pause,
-      resume: () => handle.resume,
-      shutdown: () => handle.shutdown,
-      clear: () => handle.clear,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      shutdown: handle.shutdown,
+      clear: handle.clear,
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>

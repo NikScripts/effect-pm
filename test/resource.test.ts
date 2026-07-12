@@ -146,7 +146,7 @@ class Described extends Resource.Tag<Described>()("described", {
 }) {}
 const DescribedFamily = Resource.tagFor(
   "describedFamily",
-  { tick: Resource.effectFn(Schema.Void) },
+  { tick: Resource.effect(Schema.Void) },
   { description: "A described family." },
 );
 class FamA extends DescribedFamily<FamA>("describedFamily/A") {}

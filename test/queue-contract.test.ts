@@ -19,7 +19,7 @@ import { queueControlSpec } from "../src/QueueResource";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
-import { forwardClient, groupOf, methodMeta, specOf } from "../src/Resource";
+import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Resource";
 
 // A queue family built from the control contract: many instances share the "queue" group.
 const Queue = Resource.tagFor("queue", queueControlSpec);
@@ -53,13 +53,13 @@ const makeImpl = () => {
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
-    start: () => Effect.void,
-    pause: () => Effect.sync(() => patch((s) => ({ ...s, paused: true }))),
-    resume: () => Effect.sync(() => patch((s) => ({ ...s, paused: false }))),
-    shutdown: () => Effect.sync(() =>
+    start: Effect.void,
+    pause: Effect.sync(() => patch((s) => ({ ...s, paused: true }))),
+    resume: Effect.sync(() => patch((s) => ({ ...s, paused: false }))),
+    shutdown: Effect.sync(() =>
       patch((s) => ({ ...s, sizes: { high: 0, normal: 0, low: 0 } })),
     ),
-    clear: () => Effect.sync(() => {
+    clear: Effect.sync(() => {
       const s = Effect.runSync(SubscriptionRef.get(statusRef));
       const cleared = s.sizes.high + s.sizes.normal + s.sizes.low;
       patch((cur) => ({
@@ -114,9 +114,9 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     });
 
     // control verbs route to the right instance
-    yield* jobs.pause();
-    yield* jobs.resume();
-    expect(yield* jobs.clear()).toBe(3); // Jobs drained
+    yield* jobs.pause;
+    yield* jobs.resume;
+    expect(yield* jobs.clear).toBe(3); // Jobs drained
     expect(yield* head(jobs.size)).toBe(0);
     expect(yield* head(mail.size)).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(
@@ -169,13 +169,15 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(meta("size").kind).toBe("query");
   expect(meta("isEmpty").kind).toBe("query");
 
-  // mutations are mutates
-  expect(meta("pause").kind).toBe("mutate");
-  expect(meta("start").kind).toBe("mutate");
+  // void lifecycle commands are inputless `effect` (wire kind `query`, void success)
+  expect(meta("pause").kind).toBe("query");
+  expect(meta("start").kind).toBe("query");
+  expect(isVoidCommand(queueControlSpec.pause)).toBe(true);
+  expect(isVoidCommand(queueControlSpec.start)).toBe(true);
 
-  // state-losing mutations are flagged destructive
-  expect(meta("shutdown")).toMatchObject({ kind: "mutate", destructive: true });
-  expect(meta("clear")).toMatchObject({ kind: "mutate", destructive: true });
+  // state-losing commands are flagged destructive
+  expect(meta("shutdown")).toMatchObject({ kind: "query", destructive: true });
+  expect(meta("clear")).toMatchObject({ kind: "query", destructive: true });
   expect(meta("pause").destructive).toBe(false);
 
   // descriptions are present for help text

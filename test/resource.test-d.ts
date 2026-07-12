@@ -8,7 +8,7 @@ import type { ServiceOf } from "../src/Resource";
 // `ServiceOf<typeof _spec>` already enforces `_spec extends Spec` without widening.)
 const _spec = {
   current: Resource.effect(Schema.Number), // no payload → property, success = number
-  reset: Resource.effectFn(Schema.Void), // no payload → property, success = void
+  reset: Resource.effect(Schema.Void), // void command → Effect property
   add: Resource.effectFn({ id: Schema.String }, Schema.Void, Schema.String), // payload → method, error channel
 };
 
@@ -17,10 +17,10 @@ declare const s: S;
 
 const _current: Effect.Effect<number, never> = s.current;
 void _current;
-const _reset: (payload: void) => Effect.Effect<void, never> = s.reset;
+const _reset: Effect.Effect<void, never> = s.reset;
 void _reset;
-const _add: Effect.Effect<void, string> = s.add({ id: "x" });
-void _add;
+const _add: (payload: { readonly id: string }) => Effect.Effect<void, string> = s.add;
+void _add({ id: "x" });
 
 // @ts-expect-error a no-payload method is a property, not callable
 void s.current();
@@ -44,13 +44,13 @@ void _notEffect;
 // ── Resource.Resource — `yield* Tag` like Effect.Effect ──
 class CounterForResourceType extends Resource.Tag<CounterForResourceType>()("Counter", {
   increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effectFn(Schema.Void),
+  reset: Resource.effect(Schema.Void),
   current: Resource.effect(Schema.Number),
 }) {}
 
 const counterSpec = {
   increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effectFn(Schema.Void),
+  reset: Resource.effect(Schema.Void),
   current: Resource.effect(Schema.Number),
 } as const;
 
@@ -79,7 +79,7 @@ void _tagIsResource;
 // ── Slice 2: Tag + `yield*` + local layer ──
 class Counter extends Resource.Tag<Counter>()("Counter", {
   increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effectFn(Schema.Void),
+  reset: Resource.effect(Schema.Void),
   current: Resource.effect(Schema.Number),
 }) {}
 
@@ -87,22 +87,22 @@ class Counter extends Resource.Tag<Counter>()("Counter", {
 const _use: Effect.Effect<number, never, Counter> = Effect.gen(function* () {
   const c = yield* Counter;
   yield* c.increment({ by: 1 });
-  yield* c.reset();
+  yield* c.reset;
   return yield* c.current;
 });
 void _use;
 
 // the local layer accepts a typed implementation of the inferred service
 const _layer: Layer.Layer<Counter> = Resource.layer(Counter, {
-  increment: () => Effect.void,
-  reset: () => Effect.void,
+  increment: ({ by: _by }) => Effect.void,
+  reset: Effect.void,
   current: Effect.succeed(0),
 });
 void _layer;
 
 // ── factory: tagFor bakes a shared spec; instances pass only an id ──
 const Counter2 = Resource.tagFor("test/counter", {
-  tick: Resource.effectFn(Schema.Void),
+  tick: Resource.effect(Schema.Void),
   count: Resource.effect(Schema.Number),
 });
 class TickA extends Counter2<TickA>("test/TickA") {}
@@ -111,13 +111,13 @@ class TickB extends Counter2<TickB>("test/TickB") {}
 // both instances share the same inferred service (spec baked into the factory)
 const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
   const a = yield* TickA;
-  yield* a.tick();
+  yield* a.tick;
   return yield* a.count;
 });
 void _factoryA;
 const _factoryB: Effect.Effect<void, never, TickB> = Effect.flatMap(
   TickB,
-  (b) => b.tick(),
+  (b) => b.tick,
 );
 void _factoryB;
 
@@ -193,8 +193,8 @@ void _wireViaClient;
 // ── clientInstances: one shared client serves many instances of one control shape ──
 // (100 processes that can only start/drop cost ONE client, not one each.)
 const Proc = Resource.tagFor("proc", {
-  start: Resource.effectFn(Schema.Void),
-  drop: Resource.effectFn(Schema.Void),
+  start: Resource.effect(Schema.Void),
+  drop: Resource.effect(Schema.Void),
 });
 class P1 extends Proc<P1>("@app/p1") {}
 class P2 extends Proc<P2>("@app/p2") {}
@@ -243,7 +243,7 @@ void _nodelessClient;
 // One node baked into the factory → every instance is a node-bearing tag.
 const NodeProc = Resource.tagFor(
   "nodeedProc",
-  { start: Resource.effectFn(Schema.Void) },
+  { start: Resource.effect(Schema.Void) },
   { node: EdgeNode },
 );
 class HP1 extends NodeProc<HP1>("@app/hp1") {}

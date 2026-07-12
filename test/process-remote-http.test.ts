@@ -61,10 +61,10 @@ it("status + start/stop round-trip over http against the real driver", () =>
         expect(initial.supervising).toBe(true);
         expect(initial.armed).toBe(false);
 
-        yield* proc.stop();
+        yield* proc.stop;
         expect((yield* awaitSupervising(false)).supervising).toBe(false);
 
-        yield* proc.start();
+        yield* proc.start;
         expect((yield* awaitSupervising(true)).supervising).toBe(true);
       }),
     )));
@@ -88,7 +88,7 @@ it("schedule set/add/clear + read round-trip over http (entries cross the wire)"
         const both = yield* awaitEntries((es) => es.length === 2);
         expect(both.map((e) => e.id).sort()).toEqual(["a", "b"]);
 
-        yield* proc.schedule.clear();
+        yield* proc.schedule.clear;
         expect(yield* awaitEntries((es) => es.length === 0)).toEqual([]);
       }),
     )));
