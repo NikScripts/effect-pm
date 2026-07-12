@@ -1,6 +1,6 @@
 # Agent 2 — Process manual run RPC (`run`)
 
-**Status:** **IMPLEMENTED** — owner locked verb **`run`** (inputless `Resource.effect`). Branch `cursor/process-run-rpc-a009`.
+**Status:** **MERGED** — [#26](https://github.com/NikScripts/effect-pm/pull/26) → `integration/storage` (`e7fcd9e`).
 
 **Prerequisite:** Queue Phase 1a merged ([#21](https://github.com/NikScripts/effect-pm/pull/21)).
 
