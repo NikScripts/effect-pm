@@ -1,16 +1,19 @@
 {#no-backward-compat title="Breaking changes & stability" order=135 appliesTo=src}
 # Breaking changes & stability
 
-The package has no external users yet — one internal repo, the owner's. So the surface is **fluid**:
-break it freely, no compatibility layers. That holds until a symbol is deliberately **locked** with
-`@locked` — after which it's a commitment.
+The package's only consumers are the owner's own — this repo and a private organization sister repo,
+both maintained by the owner. There are no external users, so a breaking change is propagated
+everywhere by the same hand, in the same motion. The surface is therefore **fluid**: break it freely,
+no compatibility layers — until a symbol is deliberately **locked** with `@locked`, after which it's a
+commitment.
 
 {#break-freely-while-fluid .must appliesTo=src}
 ## While fluid, break freely — no compatibility shims
 
-Because there are no users, an unlocked symbol has no compatibility to preserve. Rename or remove it
-outright: no alias, no re-export under the old name, no `@deprecated` shim. The old name lives on only
-in a migration note in the docs — never in surviving code.
+Because every consumer is the owner's own, an unlocked symbol has no external compatibility to
+preserve — a break is fixed at every call site by the same hand. Rename or remove it outright: no
+alias, no re-export under the old name, no `@deprecated` shim. The old name lives on only in a
+migration note in the docs — never in surviving code.
 
 ``` ts
 // ❌ bad — old name kept alive as an alias
