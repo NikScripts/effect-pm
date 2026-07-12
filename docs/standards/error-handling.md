@@ -5,7 +5,7 @@ Errors are first-class values here — modelled, named, carried, and handled wit
 other data. *Principles → Errors are values* is the stance; this chapter is how you do it well, plus
 the concurrency traps that corrupt state when you don't.
 
-{#one-error-per-mode .must appliesTo=src}
+{#one-error-per-mode .must appliesTo="src examples"}
 ## One named error per failure mode, carrying its data
 
 Every distinct way something can fail is its own `Data.TaggedError`, carrying the fields a handler
@@ -24,7 +24,7 @@ class QueueFull extends Data.TaggedError("QueueFull")<{
 return yield* new QueueFull({ queueId: id, capacity })
 ```
 
-{#failure-vs-defect .must appliesTo=src}
+{#failure-vs-defect .must appliesTo="src examples"}
 ## Failure vs defect is a deliberate choice
 
 An **expected, recoverable** condition is a failure in the `E` channel. An **impossible state or a
@@ -40,7 +40,7 @@ if (full) return yield* new QueueFull({ queueId, capacity })
 if (rank < 0) return yield* Effect.die(new Error("unreachable: negative priority rank"))
 ```
 
-{#catch-by-tag .must appliesTo=src}
+{#catch-by-tag .must appliesTo="src examples"}
 ## Catch by tag; the error union is your checklist
 
 Handle failures by their tag with `catchTag` / `catchTags`. The `E` union is the exhaustive list of
@@ -56,7 +56,7 @@ work.pipe(
 )
 ```
 
-{#preserve-the-cause .must appliesTo=src}
+{#preserve-the-cause .must appliesTo="src examples"}
 ## Wrap and preserve the cause; never blind-swallow
 
 When you translate an error, carry the original as `cause` so the chain survives. A
@@ -73,7 +73,7 @@ fetchQuote(url).pipe(
 )
 ```
 
-{#recover-with-schedule .must appliesTo=src}
+{#recover-with-schedule .must appliesTo="src examples"}
 ## Recover with a `Schedule`, not a hand-rolled loop
 
 Retry and repeat are declarative policies, not manual counters and `sleep`s. Compose a `Schedule` so
@@ -86,7 +86,7 @@ fetchQuote(url).pipe(
 )
 ```
 
-{#atomic-check-then-act .must appliesTo=src}
+{#atomic-check-then-act .must appliesTo="src examples"}
 ## Decide and commit in one atomic step
 
 A check-then-act split across a `yield*` is a race: another fiber slips between the read and the
@@ -106,7 +106,7 @@ const isNew = yield* Ref.modify(dedup, (s) => (s.has(key) ? [false, s] : [true, 
 if (isNew) yield* enqueue(item)
 ```
 
-{#codecs-through-error-channel .must appliesTo=src}
+{#codecs-through-error-channel .must appliesTo="src examples"}
 ## Codecs go through the error channel, never a thrown defect
 
 A `*Sync` codec throws, and a throw inside an Effect becomes an unrecoverable **defect**. Prefer the
@@ -127,7 +127,7 @@ const item = yield* Effect.try({
 })
 ```
 
-{#multi-row-one-transaction .must appliesTo=src}
+{#multi-row-one-transaction .must appliesTo="src examples"}
 ## Multi-row writes are one transaction
 
 Two writes that must both land are a single `sql.withTransaction` — otherwise a crash between them
