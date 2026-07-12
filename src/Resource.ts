@@ -2633,6 +2633,14 @@ const mergeLayers = (
  *
  * @public
  */
+export function httpServer<Serve extends Layer.Layer<any, any, any>>(
+  serve: Serve,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serve>,
+  never,
+  Layer.Services<Serve> | HttpServer.HttpServer
+>;
 export function httpServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
@@ -2651,15 +2659,22 @@ export function httpServer<
 >;
 export function httpServer(
   servesOrOptions?:
+    | Layer.Layer<any, any, any>
     | ReadonlyArray<Layer.Layer<any, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, never, unknown> {
   // the serves form bundles the boilerplate: provideMerge the serve layers (kept, not pruned) + the
   // shared registry, so the caller lists resources and provides only the platform (+ any shared dep).
-  if (Array.isArray(servesOrOptions)) {
+  // one serve layer or many — a single `Layer` is treated as a one-element list.
+  const serves = Array.isArray(servesOrOptions)
+    ? servesOrOptions
+    : Layer.isLayer(servesOrOptions)
+      ? [servesOrOptions]
+      : undefined;
+  if (serves !== undefined) {
     return httpServerBase(maybeOptions).pipe(
-      Layer.provideMerge(mergeLayers(servesOrOptions)),
+      Layer.provideMerge(mergeLayers(serves)),
       Layer.provide(servedResourcesLayer),
     ) as unknown as Layer.Layer<never, never, unknown>;
   }

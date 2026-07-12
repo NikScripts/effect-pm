@@ -1,51 +1,58 @@
 {#index title="Introduction" appliesTo=all}
 # effect-pm
 
-{.note}
-**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
+**Build cross-runtime services on Effect.**
 
-effect-pm is a toolkit for **durable, observable background work** built on
-[Effect](https://effect.website). You declare a _resource_ — a queue, a run
-gate, a scheduled process — as a service tag, and get a typed handle plus live
-dashboards (web, TUI, CLI) over the same tag.
+An Effect service lives inside one runtime. A *cross-runtime service* doesn't: define it once, run it
+on one process or node, and call it from another over RPC — the same typed handle whether it's local
+or across the network.
 
-## Install
-
-``` sh
-pnpm add @nikscripts/effect-pm effect
-```
-
-## The shape of everything
-
-Every resource is a class that extends a `*.Service` factory. You name it,
-describe its behaviour, and then use the class as an ordinary Effect service —
-`yield*` the tag to get its handle.
+Normally, moving a queue or a background job to another process means rewriting the call site — an
+HTTP client, serialization, its own error handling. A cross-runtime service erases that: you build it
+in-process, then serve it, and **the call site never changes.** Local and remote are the same code —
+only the layer you provide differs.
 
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
-import { Effect } from "effect"
+// define once — a queue whose items are validated by a schema
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
 
-class Emails extends QueueResource.Service<Emails, string>()("app/Emails", {
-  concurrency: 4,
-  effect: (address) => Effect.log(`sending to ${address}`),
-}) {}
-
+// the program that uses it — unchanged whether Emails runs here or elsewhere
 const program = Effect.gen(function* () {
-  const emails = yield* Emails            // the handle
-  yield* emails.add(["a@example.com"])    // enqueue
-  yield* emails.start                     // fork workers
+  const emails = yield* Emails
+  yield* emails.add(job)
 })
 ```
 
-{.note}
-A resource is just an Effect service tag: provide its layer, `yield*` the tag,
-call methods on the handle. That same tag is what the dashboards render — you
-never wire the UI to the implementation.
+Run it in this process — provide the worker that drains the queue:
 
-## Core features
+``` ts
+Effect.provide(program, QueueResource.layer(Emails, { effect: sendEmail }))
+```
 
-- [Queues](/docs/queues) — priority, dedup, retry, and workers over a stream of items.
-- [Run resources](/docs/run-resources) — concurrency-gated effects with typed input and output.
-- [Processes](/docs/processes) — long-running and scheduled work with execution history.
+…or split it across runtimes. **`program` doesn't change** — the server provides the worker, the
+caller a client layer reaching it over HTTP:
 
-Each page below is a short, runnable tour of one feature.
+``` ts
+// server — serve the queue over RPC
+Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
+
+// caller — the same program, now reached across the network
+Effect.provide(program, Resource.client(Emails).pipe(Layer.provide(httpTransport)))
+```
+
+## Build your own
+
+Building your own cross-runtime service is a first-class part of effect-pm, not an escape hatch.
+Describe a contract — its methods and their schemas — give it an implementation, and effect-pm turns
+it into a service you run in-process or serve over RPC: one typed handle, plus the runtime control and
+dashboards every cross-runtime service gets.
+
+## The included types
+
+You don't start from scratch, either — the types you reach for most ship ready-made, each a
+cross-runtime service you use like an Effect primitive:
+
+- **Long-running processes** (`Process`) — continuous or recurring work: a polling cadence, arm/disarm
+  schedule windows, execution history, and more.
+- **Queue** (`QueueResource`) — a priority work queue: enqueue items, workers drain them with dedup,
+  retry, and concurrency control; durable when you provide a store.
