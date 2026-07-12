@@ -9,7 +9,7 @@
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
 | **2** | `integration/storage` | [queue wire Phase 1a](./agent-02-queue-wire-phase-1a.md) | **merged** [#21](https://github.com/NikScripts/effect-pm/pull/21) | `5dbf812` | typecheck + test + lint green | #17 rebase next; changeset on owner OK | 2026-07-11 |
 | **B** | `action/html-doc-platform` → merged | [plan](./agent-b-plan.md) | **merged** | on integration line | islands live; docs site on merged tree | Queue handle ref follow-up | 2026-07-11 |
-| **A** | `integration/rules-and-documentation` → merged | [html standards](./agent-a-html-standards-corpus.md) | **merged** | on integration line | standards corpus ch. 1–7 | — | 2026-07-11 |
+| **A** | `docs/standards-corpus` → `integration/rules-and-documentation` | [brief](./agent-a-rules-and-documentation.md) | **corpus complete** | 9 pages / 104 rules + `docs/standards/manifest.json` | renders on docs:serve; manifest derived | ready for Agent C — corpus must reach `integration/storage` | 2026-07-11 |
 
 ---
 
