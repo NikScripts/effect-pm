@@ -17,12 +17,12 @@ const scopeExpansions: Record<string, ReadonlyArray<string>> = {
 // Split a raw `appliesTo` string into its concrete scopes, expanding `all` and
 // de-duplicating while preserving declared order. `"all docs"` -> src, examples, test, docs.
 export const expandScopes = (raw: string): ReadonlyArray<string> => {
-  const out: Array<string> = [];
-  for (const tok of raw.trim().split(/\s+/)) {
-    if (tok === "") continue;
-    for (const s of scopeExpansions[tok] ?? [tok]) if (!out.includes(s)) out.push(s);
-  }
-  return out;
+  const scopes = raw
+    .trim()
+    .split(/\s+/)
+    .filter((tok) => tok !== "")
+    .flatMap((tok) => scopeExpansions[tok] ?? [tok]);
+  return Array.from(new Set(scopes)); // dedupe, insertion order preserved
 };
 
 // --- rule metadata schema (machine layer) ----------------------------------
@@ -101,7 +101,11 @@ export const collect = (doc: djot.Doc) => {
           title: heading ? headingText(heading).trim() : a.id,
         });
       } else if (a.id && a.title && !page) {
-        page = { id: a.id, title: a.title, order: a.order };
+        page = {
+          id: a.id,
+          title: a.title,
+          order: a.order,
+        };
       }
     }
     for (const c of n?.children ?? []) walk(c);

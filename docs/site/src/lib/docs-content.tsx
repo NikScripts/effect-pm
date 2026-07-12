@@ -108,7 +108,13 @@ const itemForSlug = (slug: string): Promise<NavItem | undefined> => {
   return runServer(
     parseChapter(c.raw).pipe(
       Effect.map(({ meta }) => meta),
-      Effect.catch(() => Effect.succeed({ id: slug, title: slug, rules: [] } as ChapterMeta)),
+      Effect.catch(() =>
+        Effect.succeed<ChapterMeta>({
+          id: slug,
+          title: slug,
+          rules: [],
+        }),
+      ),
     ),
   ).then((meta) => ({ slug, href: hrefFor(slug, c.group), title: meta.title }));
 };
