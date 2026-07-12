@@ -2,7 +2,7 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration tip:** `4c543c8` — full integration fold (storage + Process run RPC + standards/docs group)
+**Integration tip:** `f2353c5` — handoffs closed; integration fold at `4c543c8`
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
