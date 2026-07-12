@@ -2961,6 +2961,34 @@ const httpClient = <Self>(
   );
 };
 
+/**
+ * The single-resource client mirror of {@link httpServer}. Wire a served resource `tag` to a remote
+ * over **http** and get a ready client `Layer` in one call — {@link client}`(tag)` plus the
+ * batteries-included transport (Fetch + ndjson serialization), bundled. Reach a resource you served
+ * with `httpServer(serve)` from another runtime, with no manual transport wiring.
+ *
+ * ```ts
+ * Effect.provide(program, Resource.clientHttp(Emails, { url: "https://mail.internal/rpc" }));
+ * ```
+ *
+ * @public
+ */
+export const clientHttp = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  options: {
+    readonly url: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self> =>
+  clientLayer(tag).pipe(
+    Layer.provide(
+      RpcClient.layerProtocolHttp({ url: options.url }).pipe(
+        Layer.provide(options.serialization ?? defaultSerialization),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+    ),
+  );
+
 // ── multi-node: the fleet + peer clients ──
 
 /**

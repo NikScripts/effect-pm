@@ -37,7 +37,7 @@ caller a client layer reaching it over HTTP:
 Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
 
 // caller — the same program, now reached across the network
-Effect.provide(program, Resource.client(Emails).pipe(Layer.provide(httpTransport)))
+Effect.provide(program, Resource.clientHttp(Emails, { url: "https://mail.internal/rpc" }))
 ```
 
 ## Build your own
