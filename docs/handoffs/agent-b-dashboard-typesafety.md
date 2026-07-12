@@ -7,6 +7,28 @@
 
 ---
 
+## Start here — PLAN FIRST, nothing without approval
+
+**Your first reply is your plan, and only that. Then you stop and wait for the owner's explicit go.**
+
+Everything is run by the owner before you do it — do **not** cut the branch to write code, implement
+a fix, add a guard, or open a PR until they approve. Present, wait for a clear "go", act one step at
+a time. A "sounds good" or your own certainty is not approval.
+
+Your opening plan covers:
+1. **Approach per work item (1–6 below)** — how you'll fix each: the guard shapes, the `specOf`
+   signature change, exactly where the one runtime-`R` boundary cast lands and its proof, how you'll
+   type the seeds. Say where you'd do it differently.
+2. **Order & ripple** — what you touch first; what leaves `src/web`/`src/ui` (e.g. `specOf` lives in
+   `../Resource` — changing its signature touches the engine, which is **not** your scope; flag it
+   and propose, don't just edit).
+3. **Open questions** — anything ambiguous before you rely on it.
+
+Then stop. Show every subsequent change as full Before/After per
+[`supervisor-protocol.md`](./supervisor-protocol.md) — one step, each approved first.
+
+---
+
 ## Why this exists
 
 The dashboard is a **runtime-discriminated subsystem**: the group tree is erased to `unknown`
