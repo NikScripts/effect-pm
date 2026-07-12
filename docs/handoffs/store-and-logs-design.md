@@ -370,7 +370,7 @@ Example (Thermometer metrics — domain, not logs):
 ```ts
 readings: {
   stream: Resource.stream(reading),           // discrete events / windows
-  query:  Resource.effect(Schema.Array(reading), { payload: readingQuery }),
+  query:  Resource.effectFn(readingQuery, Schema.Array(reading)),
 }
 ```
 

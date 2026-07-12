@@ -48,12 +48,12 @@ type, so the contract is correct by construction and shareable. Use them; never 
 ``` ts
 // ❌ bad — a literal pinned with satisfies, divorced from any API
 const spec = {
-  add: Resource.effectFn(Schema.Void, { payload: item }),
+  add: Resource.effectFn(item),
 } satisfies Resource.Spec
 
 // ✅ good — the helper checks and preserves it; correct by construction, shareable
 const spec = Resource.contract({
-  add: Resource.effectFn(Schema.Void, { payload: item }),
+  add: Resource.effectFn(item),
 })
 ```
 

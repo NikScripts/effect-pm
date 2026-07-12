@@ -177,7 +177,7 @@ export const customQueueControlSpec = {
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.effectFn(Schema.Number).annotate({
+  clear: Resource.effectFn(Schema.Void, Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
@@ -189,9 +189,7 @@ export const customQueueControlSpec = {
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    history: Resource.effectFn(Schema.Array(queueMetrics), {
-      payload: historyQuery,
-    }).annotate({
+    history: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
     }),
@@ -201,9 +199,7 @@ export const customQueueControlSpec = {
       description:
         "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
     }),
-    history: Resource.effectFn(Schema.Array(queueLogEntry), {
-      payload: historyQuery,
-    }).annotate({
+    history: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
     }),
@@ -238,41 +234,43 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description:
         "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
     }),
-    enqueue: Resource.effectFn(Schema.Void, {
-      payload: Schema.Array(entry),
-    }).annotate({
+    enqueue: Resource.effectFn(Schema.Array(entry)).annotate({
       description:
         "Re-inject existing entries — each re-enters at its own level with attempts preserved.",
     }),
-    release: Resource.effectFn(Schema.Array(entry), {
-      payload: { options: Schema.optionalKey(queueReleaseOptions) },
-    }).annotate({
+    release: Resource.effectFn(
+      { options: Schema.optionalKey(queueReleaseOptions) },
+      Schema.Array(entry),
+    ).annotate({
       description:
         "Export pending entries for handoff and remove them from this queue.",
       destructive: true,
     }),
-    releaseEncoded: Resource.effectFn(Schema.Array(queueEncodedEntry), {
-      payload: { options: Schema.optionalKey(queueReleaseOptions) },
-      error: queueReleaseEncodingError,
-    }).annotate({
+    releaseEncoded: Resource.effectFn(
+      { options: Schema.optionalKey(queueReleaseOptions) },
+      Schema.Array(queueEncodedEntry),
+      queueReleaseEncodingError,
+    ).annotate({
       description: "Export pending entries in encoded/wire form for remote handoff.",
       destructive: true,
     }),
-    deadLetter: Resource.effectFn(Schema.Array(entry), {
-      payload: {
+    deadLetter: Resource.effectFn(
+      {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
       },
-    }).annotate({
+      Schema.Array(entry),
+    ).annotate({
       description: "Remove pending entries matching the selector and route to dead letter.",
       destructive: true,
     }),
-    drop: Resource.effectFn(Schema.Array(entry), {
-      payload: {
+    drop: Resource.effectFn(
+      {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
       },
-    }).annotate({
+      Schema.Array(entry),
+    ).annotate({
       description: "Remove pending entries matching the selector without preserving them.",
       destructive: true,
     }),
@@ -498,11 +496,11 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       size: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
-      start: handle.start,
-      pause: handle.pause,
-      resume: handle.resume,
-      shutdown: handle.shutdown,
-      clear: handle.clear,
+      start: () => handle.start,
+      pause: () => handle.pause,
+      resume: () => handle.resume,
+      shutdown: () => handle.shutdown,
+      clear: () => handle.clear,
       metrics: {
         live: handle.metrics,
         history: ({ limit, since, until }) =>

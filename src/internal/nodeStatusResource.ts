@@ -84,9 +84,7 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
       description:
         "Runtime-wide node log stream (recent tail, then live). Empty unless NodeLogs.layer is provided.",
     }),
-    history: Resource.effectFn(Schema.Array(LogEntrySchema), {
-      payload: { limit: Schema.Number },
-    }).annotate({
+    history: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
         "Replay persisted node logs (newest `limit`). Empty unless a LogStore is provided.",
     }),

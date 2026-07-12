@@ -6,9 +6,7 @@ import * as Resource from "../src/Resource";
 // are already typed by layer/serve, but an extracted const loses that; make infers the tag's spec.
 class Svc extends Resource.Tag<Svc>()("make-test/Svc", {
   name: Resource.effect(Schema.String),
-  greet: Resource.effectFn(Schema.String, {
-    payload: Schema.Struct({ who: Schema.String }),
-  }),
+  greet: Resource.effectFn(Schema.Struct({ who: Schema.String }), Schema.String),
 }) {}
 
 const svcImpl = Resource.make(Svc, {

@@ -45,7 +45,7 @@ const _proof = Effect.gen(function* () {
   const h = yield* Health;
   // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
-  yield* h.start; // no-payload verb → Effect property
+  yield* h.start(); // void lifecycle command
   yield* h.run;
   // observability is paired by nesting (like the queue): `logs.live` stream + `logs.history` effectFn.
   const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.history(
@@ -59,14 +59,14 @@ const _proof = Effect.gen(function* () {
   const entries: ReadonlyArray<typeof Process.processScheduleEntry.Type> =
     yield* m.schedule.entries.get;
   yield* m.schedule.add(entries[0]!);
-  yield* m.schedule.clear;
+  yield* m.schedule.clear();
 
   const s = yield* SeasonSchedule;
   yield* s.add(entries[0]!);
   const one: Option.Option<typeof Process.processScheduleEntry.Type> = yield* s.get({ id: "x" });
 
   const i = yield* Ingest;
-  yield* i.start;
+  yield* i.start();
   // @ts-expect-error a process gated by an external schedule gains NO schedule verbs
   yield* i.schedule.entries.get;
 

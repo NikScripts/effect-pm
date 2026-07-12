@@ -11,7 +11,7 @@ class Alpha extends Resource.Tag<Alpha>()("serveAll/Alpha",
   { node: LeagueNode },
 ) {}
 class Beta extends Resource.Tag<Beta>()("serveAll/Beta", 
-  { where: Resource.effect(Schema.String), shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }) },
+  { where: Resource.effect(Schema.String), shout: Resource.effectFn({ msg: Schema.String }, Schema.String) },
   { node: LeagueNode },
 ) {}
 

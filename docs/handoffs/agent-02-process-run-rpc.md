@@ -20,7 +20,7 @@ Remote Process clients must get **typed `error`** (and **`success`** when stampe
 
 **Naming (Slice 0 locked):** verb **`run`** (parity with `RunResource.run`). Layer `config.effect` and supervisor `process.effect` stay as-is — different concepts.
 
-**Input (Slice 0 locked):** Process has **no tag `payload`**. Manual `run` is inputless `Resource.effect(success, { error })` — worker stays nullary in layer config. Members that take per-invocation input (`logs.history`, schedule `get`/`has`, …) use **`Resource.effectFn`**.
+**Input (Slice 0 locked):** Process has **no tag `payload`**. Manual `run` is inputless `Resource.effect(success, error)` — worker stays nullary in layer config. Members that take per-invocation input (`logs.history`, schedule `get`/`has`, …) use **`Resource.effectFn`**.
 
 ---
 
@@ -46,7 +46,7 @@ buildProcessSpec({
 }) => ({
   ...processControlSpec,       // status, logs, start, stop, …
   // Member name: `run` — built with Resource.effect, not effectFn
-  run: Resource.effect(success, { error }).annotate({
+  run: Resource.effect(success, error).annotate({
     description: "Run the process worker effect once, tracked — returns success; failures typed on error.",
   }),
 })
@@ -130,7 +130,7 @@ Before/After/Verify each slice. Update owner-decisions.md on same push as code.
 **Slice 0 (owner):** verb **`run`**; no tag `payload` — wire via `Resource.effect` (inputless); `effectFn` for members with input.
 
 **Shipped:**
-- `buildProcessSpec` / `ProcessInstanceSpec` — `run: Resource.effect(success, { error })` (no payload)
+- `buildProcessSpec` / `ProcessInstanceSpec` — `run: Resource.effect(success, error)` (no payload)
 - `logs.history`, schedule `get`/`has` migrated from payload-on-`Resource.effect` to `Resource.effectFn`
 - Queue/CQR/nodeStatus `metrics.history` / `logs.history` migrated to `Resource.effectFn`
 - `Resource.effect` API — **no `payload`** (inputless only); parameterized reads use `effectFn`

@@ -8,16 +8,17 @@ import { makeResourceAtoms } from "../examples/resource-atoms/resource-atoms";
 class Counter extends Resource.Tag<Counter>()("ratoms/Counter", {
   current: Resource.effect(Schema.Number), // no-payload query → READ atom
   reset: Resource.effectFn(Schema.Void), // void mutate → command fn
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }), // payload → fn
+  increment: Resource.effectFn({ by: Schema.Number }), // payload → fn
 }) {}
 
 it("derives read + command atoms from a Resource spec, and they react", () => {
   let value = 0;
   const layer = Resource.layer(Counter, {
     current: Effect.sync(() => value),
-    reset: Effect.sync(() => {
-      value = 0;
-    }),
+    reset: () =>
+      Effect.sync(() => {
+        value = 0;
+      }),
     increment: ({ by }) =>
       Effect.sync(() => {
         value += by;

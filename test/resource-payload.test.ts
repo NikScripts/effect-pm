@@ -4,10 +4,8 @@ import * as Resource from "../src/Resource";
 
 // Parameterized reads use `effectFn` (or `stream` for push sources) — `effect` is inputless only.
 class Svc extends Resource.Tag<Svc>()("payload-test/Svc", {
-  find: Resource.effectFn(Schema.String, {
-    payload: Schema.Struct({ id: Schema.String }),
-  }),
-  len: Resource.effectFn(Schema.Number, { payload: Schema.String }),
+  find: Resource.effectFn(Schema.Struct({ id: Schema.String }), Schema.String),
+  len: Resource.effectFn(Schema.String, Schema.Number),
   since: Resource.stream(Schema.Number, {
     payload: Schema.Struct({ from: Schema.Number }),
   }),

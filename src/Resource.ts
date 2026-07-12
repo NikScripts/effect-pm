@@ -14,7 +14,7 @@
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
  *   current: Resource.effect(Schema.Number).annotate({ description: "Current value." }),
- *   add: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
+ *   add: Resource.effectFn({ by: Schema.Number }).annotate({ description: "Increment." }),
  *   reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
  * }) {}
  *
@@ -532,42 +532,82 @@ const marked = <M extends AnyMethod, Mark extends object>(
     annotate: <A extends MethodAnnotations>(a: A) => marked(method.annotate(a), mark),
   }) as Marked<M, Mark>;
 
+/** Config-object wire slots for {@link effect}. @internal */
+type EffectWireConfig = {
+  readonly success?: Schema.Top;
+  readonly error?: Schema.Top;
+};
+
+/** Config-object wire slots for {@link effectFn}. @internal */
+type EffectFnWireConfig = {
+  readonly payload: Schema.Struct.Fields | Schema.Top;
+  readonly success?: Schema.Top;
+  readonly error?: Schema.Top;
+};
+
+const isPlainConfigObject = (u: unknown): u is Record<string, unknown> =>
+  typeof u === "object" && u !== null && !Schema.isSchema(u);
+
+const isEffectWireConfig = (u: unknown): u is EffectWireConfig => {
+  if (!isPlainConfigObject(u)) {
+    return false;
+  }
+  const keys = Object.keys(u);
+  return keys.length > 0 && keys.every((key) => key === "success" || key === "error");
+};
+
+const isEffectFnWireConfig = (u: unknown): u is EffectFnWireConfig => {
+  if (!isPlainConfigObject(u)) {
+    return false;
+  }
+  return "payload" in u;
+};
+
 /**
  * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (inputless, lazy,
- * re-runnable read), named for what it resolves to. Add typed `error` via options when needed.
- * Members with per-invocation input use {@link effectFn} instead. Attach help/metadata with
- * `.annotate({ description, ... })`. The other shapes are {@link value} / {@link constant} /
- * {@link effectFn} / {@link stream}.
+ * re-runnable read), named for what it resolves to. Members with per-invocation input use
+ * {@link effectFn} instead. Attach help/metadata with `.annotate({ description, ... })`.
+ * The other shapes are {@link value} / {@link constant} / {@link effectFn} / {@link stream}.
  *
  * ```ts
  * size: Resource.effect(Schema.Number).annotate({ description: "Total pending." }),
- * run: Resource.effect(success, { error }).annotate({ description: "Tracked manual run." }),
- * get: Resource.effectFn(Schema.User, { payload: Schema.Struct({ id: Schema.String }) }),
+ * run: Resource.effect(success, error).annotate({ description: "Tracked manual run." }),
+ * run: Resource.effect({ success, error }).annotate({ description: "Tracked manual run." }),
+ * get: Resource.effectFn({ id: Schema.String }, Schema.User),
  * ```
  *
  * @public
  */
-export function effect<Su extends Schema.Top>(
-  success: Su,
-): Method<"query", undefined, Su, Schema.Never>;
+export function effect(): Method<"query", undefined, typeof Schema.Void, typeof Schema.Never>;
+export function effect<Su extends Schema.Top>(success: Su): Method<"query", undefined, Su, Schema.Never>;
 export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
-  options: { readonly error: E },
+  error: E,
 ): Method<"query", undefined, Su, E>;
+export function effect<const C extends EffectWireConfig>(
+  config: C,
+): Method<
+  "query",
+  undefined,
+  C["success"] extends Schema.Top ? C["success"] : typeof Schema.Void,
+  C["error"] extends Schema.Top ? C["error"] : typeof Schema.Never
+>;
 export function effect(
-  success: Schema.Top,
-  options?: {
-    readonly error?: Schema.Top;
-  },
+  successOrConfig?: Schema.Top | EffectWireConfig,
+  error?: Schema.Top,
 ): AnyMethod {
-  return makeMethod(
-    "query",
-    undefined,
-    success,
-    options?.error ?? Schema.Never,
-    false,
-    {},
-  );
+  let success: Schema.Top = Schema.Void;
+  let errorSchema: Schema.Top = Schema.Never;
+  if (successOrConfig === undefined) {
+    // defaults
+  } else if (isEffectWireConfig(successOrConfig)) {
+    success = successOrConfig.success ?? Schema.Void;
+    errorSchema = successOrConfig.error ?? Schema.Never;
+  } else {
+    success = successOrConfig;
+    errorSchema = error ?? Schema.Never;
+  }
+  return makeMethod("query", undefined, success, errorSchema, false, {});
 }
 
 /** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
@@ -867,68 +907,76 @@ export const grantLocal = <Self, S extends Spec, R>(
   provideContext(built.impl, tag[specSym], built.workerContext) as ImplOf<S>;
 
 /**
- * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
- * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`
- * and/or `error` via options; attach help/metadata with `.annotate({ description, destructive })`.
+ * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with
+ * input), named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing.
+ * Attach help/metadata with `.annotate({ description, destructive })`.
  *
- * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. A bare schema (a
- * union, an item, `Schema.Struct({ … })`) is the input directly — e.g. `add(item | item[])`.
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. A bare schema
+ * (a union, an item, `Schema.Struct({ … })`) is the input directly — e.g. `add(item | item[])`.
  *
  * ```ts
  * pause: Resource.effectFn(Schema.Void).annotate({ description: "Pause." }),
- * clear: Resource.effectFn(Schema.Number).annotate({ destructive: true }),
- * enqueue: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ item: Item }), error: Full }),
+ * clear: Resource.effectFn(Schema.Void, Schema.Number).annotate({ destructive: true }),
+ * enqueue: Resource.effectFn({ item: Item }, Schema.Void, Full),
+ * enqueue: Resource.effectFn({ payload: { item: Item }, success: Schema.Void, error: Full }),
  * ```
  *
  * @public
  */
-export function effectFn<Su extends Schema.Top>(
+export function effectFn<P extends Schema.Top>(
+  payload: P,
+): Method<"mutate", P, typeof Schema.Void, typeof Schema.Never>;
+export function effectFn<P extends Schema.Top, Su extends Schema.Top>(
+  payload: P,
   success: Su,
-): Method<"mutate", undefined, Su, Schema.Never>;
-export function effectFn<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
-  success: Su,
-  options: { readonly payload: F },
-): Method<"mutate", F, Su, Schema.Never>;
-// whole-schema payload — the value is passed/decoded directly (e.g. `add(item)`).
-export function effectFn<Su extends Schema.Top, P extends Schema.Top>(
-  success: Su,
-  options: { readonly payload: P },
 ): Method<"mutate", P, Su, Schema.Never>;
-export function effectFn<Su extends Schema.Top, E extends Schema.Top>(
+export function effectFn<P extends Schema.Top, Su extends Schema.Top, E extends Schema.Top>(
+  payload: P,
   success: Su,
-  options: { readonly error: E },
-): Method<"mutate", undefined, Su, E>;
-export function effectFn<
-  Su extends Schema.Top,
-  const F extends Schema.Struct.Fields,
-  E extends Schema.Top,
->(
-  success: Su,
-  options: { readonly payload: F; readonly error: E },
-): Method<"mutate", F, Su, E>;
-export function effectFn<
-  Su extends Schema.Top,
-  P extends Schema.Top,
-  E extends Schema.Top,
->(
-  success: Su,
-  options: { readonly payload: P; readonly error: E },
+  error: E,
 ): Method<"mutate", P, Su, E>;
+export function effectFn<const F extends Schema.Struct.Fields>(
+  payload: F,
+): Method<"mutate", F, typeof Schema.Void, typeof Schema.Never>;
+export function effectFn<const F extends Schema.Struct.Fields, Su extends Schema.Top>(
+  payload: F,
+  success: Su,
+): Method<"mutate", F, Su, Schema.Never>;
+export function effectFn<const F extends Schema.Struct.Fields, Su extends Schema.Top, E extends Schema.Top>(
+  payload: F,
+  success: Su,
+  error: E,
+): Method<"mutate", F, Su, E>;
+export function effectFn<const C extends EffectFnWireConfig>(
+  config: C,
+): Method<
+  "mutate",
+  C["payload"] extends Schema.Struct.Fields
+    ? C["payload"]
+    : C["payload"] extends Schema.Top
+      ? C["payload"]
+      : never,
+  C["success"] extends Schema.Top ? C["success"] : typeof Schema.Void,
+  C["error"] extends Schema.Top ? C["error"] : typeof Schema.Never
+>;
 export function effectFn(
-  success: Schema.Top,
-  options?: {
-    readonly payload?: Schema.Struct.Fields | Schema.Top;
-    readonly error?: Schema.Top;
-  },
+  payloadOrConfig: Schema.Struct.Fields | Schema.Top | EffectFnWireConfig,
+  success?: Schema.Top,
+  error?: Schema.Top,
 ): AnyMethod {
-  return makeMethod(
-    "mutate",
-    options?.payload,
-    success,
-    options?.error ?? Schema.Never,
-    false,
-    {},
-  );
+  let payload: Schema.Struct.Fields | Schema.Top;
+  let successSchema: Schema.Top = Schema.Void;
+  let errorSchema: Schema.Top = Schema.Never;
+  if (isEffectFnWireConfig(payloadOrConfig)) {
+    payload = payloadOrConfig.payload;
+    successSchema = payloadOrConfig.success ?? Schema.Void;
+    errorSchema = payloadOrConfig.error ?? Schema.Never;
+  } else {
+    payload = payloadOrConfig;
+    successSchema = success ?? Schema.Void;
+    errorSchema = error ?? Schema.Never;
+  }
+  return makeMethod("mutate", payload, successSchema, errorSchema, false, {});
 }
 
 type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
@@ -1861,7 +1909,7 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("Counter", {
- *   increment: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
+ *   increment: Resource.effectFn({ by: Schema.Number }),
  *   current: Resource.effect(Schema.Number),
  * }) {}
  *

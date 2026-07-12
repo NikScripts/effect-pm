@@ -55,7 +55,7 @@ export const runSpec = <
   interrupted: Resource.ref(Schema.Number).annotate({
     description: "Count of runs interrupted while waiting or executing.",
   }),
-  run: Resource.effectFn(success, { payload, error }).annotate({
+  run: Resource.effectFn(payload, success, error).annotate({
     description:
       "Acquire a permit, run the gated effect, release the permit — returns the effect result.",
   }),

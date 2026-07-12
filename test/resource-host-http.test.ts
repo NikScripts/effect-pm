@@ -13,7 +13,7 @@ class EdgeNode extends Resource.Node<EdgeNode>("nodeHttp/edge") {}
 class Echo extends Resource.Tag<Echo>()("nodeHttp/Echo", 
   {
     ping: Resource.effect(Schema.String),
-    shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
+    shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
   },
   { node: EdgeNode },
 ) {}

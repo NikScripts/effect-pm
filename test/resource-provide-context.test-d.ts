@@ -12,7 +12,7 @@ class T extends Resource.Tag<T>()("provide-context-d/T", {
   value: Resource.ref(Schema.Number),
   feed: Resource.stream(Schema.Number),
   scaled: Resource.effect(Schema.Number),
-  add: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
+  add: Resource.effectFn(Schema.Struct({ by: Schema.Number })),
   group: {
     live: Resource.stream(Schema.Number),
     history: Resource.effect(Schema.Array(Schema.Number)),

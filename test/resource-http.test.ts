@@ -11,7 +11,7 @@ import { groupOf } from "../src/Resource";
 // `Resource.client` forwarding over `RpcClient`'s http protocol.
 class Echo extends Resource.Tag<Echo>()("http/Echo", {
   ping: Resource.effect(Schema.String),
-  shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
+  shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
 
 const ServerLive = HttpRouter.serve(

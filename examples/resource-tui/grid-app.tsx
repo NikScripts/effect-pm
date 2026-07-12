@@ -38,15 +38,18 @@ const impl = (start: number) => {
   let v = start;
   return {
     value: Effect.sync(() => v),
-    inc: Effect.sync(() => {
-      v += 1;
-    }),
-    dec: Effect.sync(() => {
-      v -= 1;
-    }),
-    reset: Effect.sync(() => {
-      v = start;
-    }),
+    inc: () =>
+      Effect.sync(() => {
+        v += 1;
+      }),
+    dec: () =>
+      Effect.sync(() => {
+        v -= 1;
+      }),
+    reset: () =>
+      Effect.sync(() => {
+        v = start;
+      }),
   };
 };
 

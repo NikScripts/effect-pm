@@ -73,7 +73,7 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
       entries = yield* proc.schedule.entries.get;
       expect(entries.map((e) => e.id).sort()).toEqual(["e1", "e2"]);
 
-      yield* proc.schedule.clear;
+      yield* proc.schedule.clear();
       entries = yield* proc.schedule.entries.get;
       expect(entries).toEqual([]);
     }).pipe(Effect.provide(Process.layer(ScheduledProc, { effect: Effect.void }))),
@@ -85,10 +85,10 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
       const proc = yield* ArmedProc;
       expect((yield* proc.status.get).supervising).toBe(true);
 
-      yield* proc.stop;
+      yield* proc.stop();
       expect((yield* proc.status.get).supervising).toBe(false);
 
-      yield* proc.start;
+      yield* proc.start();
       expect((yield* proc.status.get).supervising).toBe(true);
     }).pipe(Effect.provide(Process.layer(ArmedProc, { effect: Effect.void }))),
   ));

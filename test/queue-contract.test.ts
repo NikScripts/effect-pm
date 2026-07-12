@@ -53,13 +53,13 @@ const makeImpl = () => {
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
-    start: Effect.void,
-    pause: Effect.sync(() => patch((s) => ({ ...s, paused: true }))),
-    resume: Effect.sync(() => patch((s) => ({ ...s, paused: false }))),
-    shutdown: Effect.sync(() =>
+    start: () => Effect.void,
+    pause: () => Effect.sync(() => patch((s) => ({ ...s, paused: true }))),
+    resume: () => Effect.sync(() => patch((s) => ({ ...s, paused: false }))),
+    shutdown: () => Effect.sync(() =>
       patch((s) => ({ ...s, sizes: { high: 0, normal: 0, low: 0 } })),
     ),
-    clear: Effect.sync(() => {
+    clear: () => Effect.sync(() => {
       const s = Effect.runSync(SubscriptionRef.get(statusRef));
       const cleared = s.sizes.high + s.sizes.normal + s.sizes.low;
       patch((cur) => ({
@@ -114,9 +114,9 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     });
 
     // control verbs route to the right instance
-    yield* jobs.pause;
-    yield* jobs.resume;
-    expect(yield* jobs.clear).toBe(3); // Jobs drained
+    yield* jobs.pause();
+    yield* jobs.resume();
+    expect(yield* jobs.clear()).toBe(3); // Jobs drained
     expect(yield* head(jobs.size)).toBe(0);
     expect(yield* head(mail.size)).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(

@@ -9,10 +9,7 @@ import type { ServiceOf } from "../src/Resource";
 const _spec = {
   current: Resource.effect(Schema.Number), // no payload → property, success = number
   reset: Resource.effectFn(Schema.Void), // no payload → property, success = void
-  add: Resource.effectFn(Schema.Void, {
-    payload: { id: Schema.String },
-    error: Schema.String,
-  }), // payload → method, error channel
+  add: Resource.effectFn({ id: Schema.String }, Schema.Void, Schema.String), // payload → method, error channel
 };
 
 type S = ServiceOf<typeof _spec>;
@@ -20,7 +17,7 @@ declare const s: S;
 
 const _current: Effect.Effect<number, never> = s.current;
 void _current;
-const _reset: Effect.Effect<void, never> = s.reset;
+const _reset: (payload: void) => Effect.Effect<void, never> = s.reset;
 void _reset;
 const _add: Effect.Effect<void, string> = s.add({ id: "x" });
 void _add;
@@ -46,13 +43,13 @@ void _notEffect;
 
 // ── Resource.Resource — `yield* Tag` like Effect.Effect ──
 class CounterForResourceType extends Resource.Tag<CounterForResourceType>()("Counter", {
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  increment: Resource.effectFn({ by: Schema.Number }),
   reset: Resource.effectFn(Schema.Void),
   current: Resource.effect(Schema.Number),
 }) {}
 
 const counterSpec = {
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  increment: Resource.effectFn({ by: Schema.Number }),
   reset: Resource.effectFn(Schema.Void),
   current: Resource.effect(Schema.Number),
 } as const;
@@ -81,7 +78,7 @@ void _tagIsResource;
 
 // ── Slice 2: Tag + `yield*` + local layer ──
 class Counter extends Resource.Tag<Counter>()("Counter", {
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  increment: Resource.effectFn({ by: Schema.Number }),
   reset: Resource.effectFn(Schema.Void),
   current: Resource.effect(Schema.Number),
 }) {}
@@ -90,7 +87,7 @@ class Counter extends Resource.Tag<Counter>()("Counter", {
 const _use: Effect.Effect<number, never, Counter> = Effect.gen(function* () {
   const c = yield* Counter;
   yield* c.increment({ by: 1 });
-  yield* c.reset;
+  yield* c.reset();
   return yield* c.current;
 });
 void _use;
@@ -98,7 +95,7 @@ void _use;
 // the local layer accepts a typed implementation of the inferred service
 const _layer: Layer.Layer<Counter> = Resource.layer(Counter, {
   increment: () => Effect.void,
-  reset: Effect.void,
+  reset: () => Effect.void,
   current: Effect.succeed(0),
 });
 void _layer;
@@ -114,13 +111,13 @@ class TickB extends Counter2<TickB>("test/TickB") {}
 // both instances share the same inferred service (spec baked into the factory)
 const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
   const a = yield* TickA;
-  yield* a.tick;
+  yield* a.tick();
   return yield* a.count;
 });
 void _factoryA;
 const _factoryB: Effect.Effect<void, never, TickB> = Effect.flatMap(
   TickB,
-  (b) => b.tick,
+  (b) => b.tick(),
 );
 void _factoryB;
 
@@ -129,7 +126,7 @@ void _factoryB;
 // make this program's `R` non-`never` and fail to satisfy `runPromise`.)
 class Remote extends Resource.Tag<Remote>()("test/Remote", {
   ping: Resource.effect(Schema.String),
-  shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
+  shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
 
 declare const protocolLayer: Layer.Layer<RpcClient.Protocol>;

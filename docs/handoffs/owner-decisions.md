@@ -30,7 +30,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-12 — Process manual run RPC vocabulary (owner correction)
 
 - **Owner said:** Toolkit member stays **`run`**. `Resource.effect` is **inputless** (`yield* proc.run`); `Resource.effectFn` takes per-invocation input (`logs.history`, schedule `get`/`has`, …). No `payload` on `Resource.effect`.
-- **Chose:** Revert mistaken `run` → `effect` rename; `run: Resource.effect(success, { error })` with **no payload**; migrate all payload members to `effectFn` (Process + Queue/CQR/nodeStatus history); remove `payload` from `Resource.effect` API.
+- **Chose:** Revert mistaken `run` → `effect` rename; `run: Resource.effect(success, error)` with **no payload**; migrate all payload members to `effectFn` (Process + Queue/CQR/nodeStatus history); remove `payload` from `Resource.effect` API.
 - **Rejected:** `payload` on `Resource.effect`; renaming toolkit verb to `effect`; `yield* proc.run()` on stamped tags.
 - **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; tests/docs/web use `yield* proc.run`.
 
@@ -39,7 +39,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-11 — Process manual run RPC (owner Slice 0 locked)
 
 - **Owner said:** Remote Process clients need typed `error` (and `success` when stamped) on manual run — not store-only.
-- **Chose:** Verb **`run`** (RunResource parity); **no `payload`** on Process tag — worker stays nullary; manual RPC via inputless `Resource.effect(success, { error })` (not `effectFn`). Per-tag `buildProcessSpec`; engine propagates failure on manual `run` RPC while still writing store rows.
+- **Chose:** Verb **`run`** (RunResource parity); **no `payload`** on Process tag — worker stays nullary; manual RPC via inputless `Resource.effect(success, error)` (not `effectFn`). Per-tag `buildProcessSpec`; engine propagates failure on manual `run` RPC while still writing store rows.
 - **Rejected:** `effect` verb name; optional tag `payload`; Session 3 RPC defer language; `runImmediately` void RPC.
 - **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; revoke defer text in legacy PROCESS-API / STORAGE docs.
 

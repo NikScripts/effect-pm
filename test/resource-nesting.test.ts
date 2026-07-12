@@ -17,9 +17,7 @@ class Server extends Resource.Tag<Server>()("nest-test/Server", {
     changes: Resource.stream(Schema.Number),
   },
   admin: {
-    ban: Resource.effectFn(Schema.Boolean, {
-      payload: Schema.Struct({ user: Schema.String }),
-    }),
+    ban: Resource.effectFn(Schema.Struct({ user: Schema.String }), Schema.Boolean),
   },
 }) {}
 

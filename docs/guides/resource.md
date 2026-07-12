@@ -20,7 +20,7 @@ import { Schema } from "effect"
 
 class Counter extends Resource.Tag<Counter>()("app/Counter", {
   value: Resource.ref(Schema.Number),                                        // reactive: .get + .changes
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }), // mutate
+  increment: Resource.effectFn({ by: Schema.Number }), // mutate
   reset: Resource.effectFn(Schema.Void),                                     // mutate
 }) {}
 ```

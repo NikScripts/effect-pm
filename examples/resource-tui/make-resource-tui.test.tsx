@@ -7,7 +7,7 @@ import { makeResourceTui } from "./make-resource-tui";
 
 class Counter extends Resource.Tag<Counter>()("TuiCounter", {
   current: Resource.effect(Schema.Number),
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  increment: Resource.effectFn({ by: Schema.Number }),
   reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
 }) {}
 
@@ -18,9 +18,10 @@ const layer = Resource.layer(Counter, {
     Effect.sync(() => {
       v += by;
     }),
-  reset: Effect.sync(() => {
-    v = 0;
-  }),
+  reset: () =>
+    Effect.sync(() => {
+      v = 0;
+    }),
 });
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 80));

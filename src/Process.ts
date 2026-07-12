@@ -1575,7 +1575,7 @@ export const processControlSpec = {
         "Captured log lines (engine + instance effect) with level/annotations/spans — empty unless " +
         "the process was configured to capture logs.",
     }),
-    history: Resource.effectFn(Schema.Array(processLogEntry), { payload: historyQuery }).annotate({
+    history: Resource.effectFn(historyQuery, Schema.Array(processLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless captureLogs + a HistoryStore layer are provided.",
@@ -1597,7 +1597,7 @@ export const buildProcessSpec = <
 }) => ({
   ...processControlSpec,
   run: (wire?.error !== undefined
-    ? Resource.effect(wire?.success ?? Schema.Void, { error: wire.error })
+    ? Resource.effect(wire?.success ?? Schema.Void, wire.error)
     : Resource.effect(wire?.success ?? Schema.Void)
   ).annotate({
     description:
@@ -1648,12 +1648,10 @@ export const scheduleGroupSpec = {
   entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "The process's current schedule entries (run windows), reactive.",
   }),
-  set: Resource.effectFn(Schema.Void, {
-    payload: Schema.Array(processScheduleEntry),
-  }).annotate({
+  set: Resource.effectFn(Schema.Array(processScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+  add: Resource.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
   clear: Resource.effectFn(Schema.Void).annotate({
@@ -1681,32 +1679,26 @@ export const scheduleResourceSpec = {
   entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "All schedule entries (run windows), reactive.",
   }),
-  get: Resource.effectFn(Schema.Option(processScheduleEntry), {
-    payload: { id: Schema.String },
-  }).annotate({
+  get: Resource.effectFn({ id: Schema.String }, Schema.Option(processScheduleEntry)).annotate({
     description: "Look up a single entry by id (absent if none matches).",
   }),
-  has: Resource.effectFn(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+  has: Resource.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Whether an entry with the given id exists.",
   }),
-  set: Resource.effectFn(Schema.Void, {
-    payload: Schema.Array(processScheduleEntry),
-  }).annotate({
+  set: Resource.effectFn(Schema.Array(processScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+  add: Resource.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  upsert: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+  upsert: Resource.effectFn(processScheduleEntry).annotate({
     description: "Insert or replace an entry, keyed by its id.",
   }),
-  remove: Resource.effectFn(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+  remove: Resource.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Remove the entry with the given id; returns whether one was removed.",
     destructive: true,
   }),
-  removeMany: Resource.effectFn(Schema.Number, {
-    payload: Schema.Array(Schema.String),
-  }).annotate({
+  removeMany: Resource.effectFn(Schema.Array(Schema.String), Schema.Number).annotate({
     description: "Remove every entry whose id is listed; returns the count removed.",
     destructive: true,
   }),
@@ -2467,7 +2459,7 @@ const buildProcessImpl = <A, E, R>(
               set: (entries: ReadonlyArray<WireEntry>) =>
                 scheduleSvc.set(entries.map(fromWireEntry)),
               add: (entry: WireEntry) => scheduleSvc.add(fromWireEntry(entry)),
-              clear: scheduleSvc.clear,
+              clear: () => scheduleSvc.clear,
             },
           }
         : {};
@@ -2477,8 +2469,8 @@ const buildProcessImpl = <A, E, R>(
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
     const impl: WithRequirement<ImplOf<ProcessSpec>, R> = {
       status: { get: readStatus, changes: statusChanges },
-      start,
-      stop,
+      start: () => start,
+      stop: () => stop,
       run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       logs: {
         live: logsStream,
@@ -2672,7 +2664,7 @@ const buildScheduleImpl = (
       upsert: (entry: WireEntry) => scheduleSvc.upsert(fromWireEntry(entry)),
       remove: ({ id }: { readonly id: string }) => scheduleSvc.remove(id),
       removeMany: (ids: ReadonlyArray<string>) => scheduleSvc.removeMany(ids),
-      clear: scheduleSvc.clear,
+      clear: () => scheduleSvc.clear,
     };
     return impl;
   });
