@@ -12,7 +12,7 @@ import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, specSym, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
@@ -233,6 +233,10 @@ export const leafByKey = (group: unknown, key: string): unknown => {
   return walk(group);
 };
 
+/** A tag carries its flattened contract spec under `specSym` — narrow to it before reading. */
+const hasSpec = (m: unknown): m is { readonly [specSym]: FlatSpec } =>
+  typeof m === "object" && m !== null && specSym in m;
+
 /** Which kind of leaf a tag is — by the contract's stamped kind. */
 export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
@@ -241,7 +245,7 @@ export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   if (stamped === queueKind) return "queue";
   if (stamped === processKind) return "process";
   if (stamped === apiKind) return "api";
-  const spec = specOf(member as Parameters<typeof specOf>[0]) as unknown as FlatSpec;
+  const spec: FlatSpec = hasSpec(member) ? member[specSym] : {};
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };
 
