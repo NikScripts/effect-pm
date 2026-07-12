@@ -29,8 +29,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ## 2026-07-11 — Process manual run RPC (owner)
 
-- **Owner said:** Remote Process RPC must use tag **`error`** schema (not store-only). Replace **`runImmediately`** with **`run`** or **`effect`** — built with **`Resource.effect`** (query kind), **not** `Resource.effectFn`. Failures must return typed errors on the wire. Manual run should support **payload** when the tag defines one.
-- **Rejected:** Session 3 documentation that “defers” RPC `error` indefinitely; `runImmediately` as `Effect<void, never>` with failures only in store; PR #20 `events` stream as substitute for typed RPC failure.
-- **Chose:** New workstream [`agent-02-process-run-rpc.md`](./agent-02-process-run-rpc.md) — per-tag `buildProcessSpec`, propagate failures on manual run RPC, remove `runImmediately`.
-- **Open (Agent 2 Slice 0):** Verb **`run`** vs **`effect`**; whether Process tag gains optional **`payload`** slot.
-- **Supervisor impact:** Do not treat #17 defer language as policy; Agent 2 branch `cursor/process-run-rpc-a009` after owner confirms naming/payload.
+- **Owner said:** Remote Process RPC must use tag **`error`** / **`success`** on the manual run path. Replace **`runImmediately`** with spec member **`effect`** = **`Resource.effect(success, { error })`** — **no input** (`Effect`, not `effectFn`). Failures must fail the RPC, not store-only.
+- **Rejected:** Equating **`effect`** with **`query`**; putting **payload** on `Resource.effect` (input → **`effectFn`** only). Session 3 RPC defer. `runImmediately` as void `effectFn`.
+- **Toolkit rule (owner):** `Resource.effect` → `Effect<S,E>` no args; `Resource.effectFn` → `(In) => Effect<S,E>`; `query`/`mutate` = `MethodKind` for tools only — see [`agent-a-phase1-inventory.md`](./agent-a-phase1-inventory.md) C5.
+- **Chose:** [`agent-02-process-run-rpc.md`](./agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (RunResource `run` is `effectFn`+payload).
