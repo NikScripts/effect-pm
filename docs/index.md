@@ -43,6 +43,23 @@ const scheduler = Process.layer(Digest, {
 `emails.add(…)` read exactly as if the two shared one process. **Two resources, two runtimes, one
 program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
 
+## Operate them live
+
+A cross-runtime service isn't just callable across runtimes — it's **operable** across them. The same
+handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
+anywhere it's reached:
+
+``` ts
+const emails = yield* Emails            // local, or a client to another runtime — same handle
+
+yield* emails.pause                     // stop draining, at runtime
+const depth = yield* emails.size.get    // how many are waiting, right now
+yield* emails.events.pipe(Stream.runForEach(onChange)) // watch every state change, live
+```
+
+And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
+each reading the resource without ever touching its implementation.
+
 ## Build your own
 
 Building your own cross-runtime service is a first-class part of effect-pm, not an escape hatch.
