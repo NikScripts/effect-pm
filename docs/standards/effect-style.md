@@ -114,6 +114,22 @@ vendored `repos/effect/packages/effect/src`) and copy the real shape — don't g
 code import from the declared `effect` dependency.
 
 
+{#no-nested-yield .must appliesTo="src examples test"}
+## Never nest a `yield*` inside another expression
+
+A `yield*` stands on its own — bind its result to a `const`, then use it. Never tuck a `yield*` into
+another call's arguments or an expression; that's what a `const` (or a pipe) is for — see
+*Principles → Pipe, don't wrap*.
+
+``` ts
+// ❌ bad — a yield* wrapped inside another call
+yield* emails.add(yield* nextEmail)
+
+// ✅ good — bind, then use
+const email = yield* nextEmail
+yield* emails.add(email)
+```
+
 {#one-field-per-line .must appliesTo="src examples test"}
 ## One field per line
 
