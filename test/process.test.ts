@@ -258,7 +258,7 @@ describe("Process runtime with schedule windows", () => {
     ),
 );
 
-  it.effect("runImmediately does not carry a schedule id", () =>
+  it.effect("run does not carry a schedule id", () =>
     Effect.gen(function* () {
         const seen = yield* Ref.make<ReadonlyArray<Option.Option<string>>>([]);
         const proc = Process.make("test/run-immediately-no-schedule-id", {
@@ -272,7 +272,7 @@ describe("Process runtime with schedule windows", () => {
           }),
         });
 
-        yield* proc.runImmediately();
+        yield* proc.run();
         const values = yield* Ref.get(seen);
         expect(values.length).toBe(1);
         expect(Option.isNone(values[0] ?? Option.none())).toBe(true);

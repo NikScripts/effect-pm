@@ -135,8 +135,9 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 - **Engine:** `Store.effects` + contract in `buildProcessImpl` (`src/Process.ts`).
 - **Registration:** `Process.store(tag)`.
 - **Typed errors:** When the tag stamps an **`error`** schema, `Failed.error` is the typed value;
-  otherwise the engine stringifies the cause (store-core §5). RPC `error` wire remains blocked —
-  store-only until per-tag `processSpec` rebuild (see integration-sync Process §).
+  otherwise the engine stringifies the cause (store-core §5). Manual **`run`** RPC uses the same
+  schemas when stamped (`buildProcessSpec`); scheduled/polling ticks still record failures to the store
+  without failing the supervisor loop.
 - **Handoff:** [`handoffs/store-cutover-process.md`](./handoffs/store-cutover-process.md).
 
 ### RunResource

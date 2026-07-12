@@ -27,6 +27,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-11 — Process manual run RPC (owner Slice 0 locked)
+
+- **Owner said:** Remote Process clients need typed `error` (and `success` when stamped) on manual run — not store-only.
+- **Chose:** Verb **`run`** (RunResource parity); **no `payload`** on Process tag — worker stays nullary; RPC wire uses `Schema.Void` payload via `Resource.effect` (not `effectFn`). Per-tag `buildProcessSpec`; engine propagates failure on manual `run` RPC while still writing store rows.
+- **Rejected:** `effect` verb name; optional tag `payload`; Session 3 RPC defer language; `runImmediately` void RPC.
+- **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; revoke defer text in legacy PROCESS-API / STORAGE docs.
+
+---
+
 ## 2026-07-11 — Process manual run RPC (owner)
 
 - **Owner said:** Remote Process RPC must use tag **`error`** schema (not store-only). Replace **`runImmediately`** with **`run`** or **`effect`** — built with **`Resource.effect`** (query kind), **not** `Resource.effectFn`. Failures must return typed errors on the wire. Manual run should support **payload** when the tag defines one.

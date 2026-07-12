@@ -5,7 +5,7 @@ import * as Process from "../src/Process";
 // A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
 // remote consumer uses (only the provided layer differs). A base `Process.Tag` is armed and runs
 // immediately (default always-armed); a `.pipe(Process.schedule([]))` tag owns an empty inline
-// schedule (disarmed, and gains the `schedule` verb group) so `runImmediately` / schedule CRUD can
+// schedule (disarmed, and gains the `schedule` verb group) so `run` / schedule CRUD can
 // be observed in isolation.
 class ArmedProc extends Process.Tag<ArmedProc>()("test/process-contract/Armed") {}
 class ScheduledProc extends Process.Tag<ScheduledProc>()(
@@ -30,7 +30,7 @@ it("with the default schedule a process arms and runs its effect immediately", (
     }),
   ));
 
-it("runImmediately runs the effect once (disarmed via an empty inline schedule)", () =>
+it("run runs the effect once (disarmed via an empty inline schedule)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
@@ -41,7 +41,7 @@ it("runImmediately runs the effect once (disarmed via an empty inline schedule)"
         expect(before.armed).toBe(false);
         expect(before.activeInstances).toBe(0);
 
-        yield* proc.runImmediately;
+        yield* proc.run();
         expect(yield* Ref.get(ran)).toBe(1);
 
         // run metrics increment at the single run boundary

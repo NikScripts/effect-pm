@@ -155,7 +155,7 @@ const tick = Effect.gen(function* () {
 ```ts
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
-  yield* proc.runImmediately;                 // out-of-band run
+  yield* proc.run();                 // out-of-band run
   const status = yield* proc.status.get;      // { supervising, armed, activeInstances, nextTriggerRun,
                                               //   runsStarted, runsSucceeded, runsFailed, lastRunDurationMillis, ... }
   yield* proc.stop;                           // pause supervision
@@ -483,7 +483,7 @@ Droplet**; **one or two processes** (most likely a live-score poller) are peeled
 4. **Queue throughput** — the three NWSL import queues: render `sizes` (depth) + `completed` +
    `metrics` (windowed throughput/latency) as progress/rate widgets.
 5. **Logs drill-in** — per-resource `logs` stream for debugging a misbehaving poller/queue.
-6. **Controls** — actuate from the UI: process `start`/`stop`/`runImmediately`/`schedule.set`;
+6. **Controls** — actuate from the UI: process `start`/`stop`/`run`/`schedule.set`;
    queue `pause`/`resume`/`add`/`clear`. Use `methodMeta` (`destructive`) to gate confirm dialogs.
 
 Don't render from a hand-maintained list — derive everything from the contract via `specOf` +

@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { HistoryStore } from "../src";
 import * as Process from "../src/Process";
 
-// A process started disarmed (an empty inline schedule) so it only runs on runImmediately; with
+// A process started disarmed (an empty inline schedule) so it only runs on run; with
 // captureLogs + a HistoryStore, its logged line is captured, persisted, and read via logs.history.
 class LogProc extends Process.Tag<LogProc>()(
   "test/process-log-history/Proc",
@@ -13,7 +13,7 @@ it("process logs.history reads back captured logs (captureLogs + HistoryStore)",
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      yield* proc.runImmediately;
+      yield* proc.run();
       // capture + append are async — wait until history is populated
       yield* Effect.gen(function* () {
         while ((yield* proc.logs.history({})).length === 0) {
@@ -41,7 +41,7 @@ it("process logs.history is empty without a HistoryStore (graceful, opt-in)", ()
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      yield* proc.runImmediately;
+      yield* proc.run();
       yield* Effect.sleep(Duration.millis(50));
       expect(yield* proc.logs.history({})).toEqual([]);
     }).pipe(

@@ -1,8 +1,6 @@
 # Agent 2 — Process manual run RPC (`run` / `effect`)
 
-**Status:** **LOCKED** — owner 2026-07-11. Supersedes Session 3 “defer RPC error” docs.  
-**Base:** `integration/storage`  
-**Branch:** `cursor/process-run-rpc-a009` (new)
+**Status:** **IMPLEMENTED** — owner Slice 0 locked (`run`, void payload). Branch `cursor/process-run-rpc-a009`.
 
 **Prerequisite:** Queue Phase 1a merged ([#21](https://github.com/NikScripts/effect-pm/pull/21)).
 
@@ -130,3 +128,18 @@ Then implement per handoff: per-tag buildProcessSpec, replace runImmediately wit
 
 Before/After/Verify each slice. Update owner-decisions.md on same push as code.
 ```
+
+---
+
+## Session log (2026-07-12)
+
+**Slice 0 (owner):** verb **`run`**, no tag `payload` — void manual run; worker stays nullary; RPC `Schema.Void` payload.
+
+**Shipped:**
+- `buildProcessSpec` / `ProcessInstanceSpec` — per-tag `run: Resource.effect(success, { payload: Void, error })`
+- Engine `trackedProgram` — `return yield*` propagates success; failures fail RPC with typed `E`
+- `runImmediately` → `run` across engine, tests, `src/web/`, examples, legacy docs
+- `test/process-run-rpc.test.ts` — local typed error/success + RpcTest void run + typed failure
+- `process-contract-shape.test-d.ts` — `run` success/error channels on stamped tag
+
+**Verify:** `pnpm run typecheck && pnpm test` — green (455 tests).

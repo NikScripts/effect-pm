@@ -8,7 +8,7 @@ import * as Resource from "../src/Resource";
 // The full remote path: a REAL toolkit Process driver served over http via
 // `httpServer([Process.serve(...)])`, driven by `Resource.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
-// (start/stop), observation (`status`), the out-of-band run (runImmediately), and the schedule
+// (start/stop), observation (`status`), the out-of-band run (run), and the schedule
 // CRUD all cross real RPC. An empty inline schedule keeps the process disarmed (so `armed` is
 // observably false) and grants the `schedule` verb group.
 class RemoteProc extends Process.Tag<RemoteProc>()("proc-remote/P").pipe(
@@ -104,7 +104,7 @@ it("the status stream flows over http from the real driver", () =>
       }),
     )));
 
-it("runImmediately crosses the wire and runs the server-side effect once", () =>
+it("run crosses the wire and runs the server-side effect once", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       // a server-side side effect we can observe after the run
@@ -112,7 +112,7 @@ it("runImmediately crosses the wire and runs the server-side effect once", () =>
       yield* withServer({ effect: Effect.sync(() => { ran += 1; }) }, (_port) =>
         Effect.gen(function* () {
           const proc = yield* RemoteProc;
-          yield* proc.runImmediately;
+          yield* proc.run();
         }));
       expect(ran).toBe(1);
     }),

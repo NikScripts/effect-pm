@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | Session 3 in line | typecheck + lint green | `pnpm run version` when owner ready | 2026-07-11 |
-| **2** | `cursor/process-run-rpc-a009` (next) | [process run RPC](./agent-02-process-run-rpc.md) | **ready-to-start** | — | Phase 1a + #17 merged | Replace `runImmediately` with `run`/`effect` + typed RPC error; owner Slice 0: naming + payload | 2026-07-11 |
+| **2** | `cursor/process-run-rpc-a009` | [process run RPC](./agent-02-process-run-rpc.md) | **ready-for-merge** | pending push | typecheck + 455 tests green | No changeset (owner OK); Slice 0: **`run`**, void payload | 2026-07-12 |
 | **B** | `action/html-doc-platform` → merged | [plan](./agent-b-plan.md) | **merged** | on integration line | islands live; docs site on merged tree | Queue handle ref follow-up | 2026-07-11 |
 | **A** | `integration/rules-and-documentation` → merged | [html standards](./agent-a-html-standards-corpus.md) | **merged** | on integration line | standards corpus ch. 1–7 | — | 2026-07-11 |
 
