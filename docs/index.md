@@ -33,7 +33,7 @@ Effect.provide(program, QueueResource.layer(Emails, { effect: sendEmail }))
 
 ``` ts
 // on the mail server — serve the queue over RPC
-Resource.httpServer([QueueResource.serve(Emails, { effect: sendEmail })])
+Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
 
 // on the caller — reach it with a client layer over an HTTP + RPC transport
 const transport = RpcClient.layerProtocolHttp({ url: "https://mail.internal/rpc" })
