@@ -267,6 +267,26 @@ section[class~="must"] > h2::after { content: "MUST"; color: var(--must); }
 section[class~="should"] > h2::after { content: "SHOULD"; color: var(--should); }
 section[class~="may"] > h2::after { content: "MAY"; color: var(--may); }
 
+/* appliesTo — the scopes a rule governs, shown as muted pills under the heading. */
+.applies-to {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: -0.4rem 0 1rem;
+}
+.applies-to .scope-chip {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted-fg);
+  opacity: 0.9;
+}
+
 /* the one callout class */
 .note {
   margin: 1.2rem 0;

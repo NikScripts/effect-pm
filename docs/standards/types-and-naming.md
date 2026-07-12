@@ -3,7 +3,7 @@
 
 The type-level rules: making types true instead of asserting them, how everything is named, and how public shapes are declared.
 
-{#fix-root-cause .must appliesTo=src}
+{#fix-root-cause .must appliesTo="src examples"}
 ## No casts — fix the root cause structurally
 
 No `as`, `as any`, `as unknown`, or `!` non-null assertions. When a type doesn't fit, change the
@@ -18,7 +18,7 @@ const cfg = input as QueueConfig
 const cfg = makeQueueConfig(payload, options)
 ```
 
-{#narrow-with-validation .must appliesTo=src}
+{#narrow-with-validation .must appliesTo="src examples"}
 ## Narrow with runtime validation, never an assertion
 
 When a value arrives as `unknown` (wire input, config, JSON), narrow it by *checking* it — a
@@ -33,7 +33,7 @@ const item = raw as WorkItem
 const item = yield* Schema.decodeUnknown(WorkItem)(raw)
 ```
 
-{#correct-by-construction .must appliesTo=src}
+{#correct-by-construction .must appliesTo="src examples"}
 ## Correct by construction — no `as`, no `satisfies`
 
 A value's type comes from a typed constructor, decoder, or contract helper — never from an
@@ -57,7 +57,7 @@ const spec = Resource.contract({
 
 `as const` is unaffected — it's literal narrowing, not validation, and is always fine.
 
-{#boundary-cast-last-resort .must appliesTo=src}
+{#boundary-cast-last-resort .must appliesTo="src examples"}
 ## A boundary cast is a last resort — provably safe and justified
 
 A cast is permitted **only** at the type-level boundary where TS genuinely cannot express a relation
@@ -73,7 +73,7 @@ does not apply; you validate instead of assert.
 return acc as Built<Self>
 ```
 
-{#honest-error-types .must appliesTo=src}
+{#honest-error-types .must appliesTo="src examples"}
 ## Type writes and failures honestly — never cast to `never`
 
 An error channel is part of the type. Never widen a real failure away with `as never` or a `never`
@@ -111,14 +111,14 @@ if (node.kind === "group") { /* … */ }
 ```
 
 
-{#pascalcase-types-only .must appliesTo=src}
+{#pascalcase-types-only .must appliesTo="src examples"}
 ## PascalCase only for types, classes, and namespaces
 
 PascalCase names a class, a type, a namespace, or a namespace-member factory (`Tag`, `Service`,
 `Schedule`). Nothing else. If it's a value you can pass around, it is not PascalCase — the sole
 exception is a factory that stands in for a namespace member.
 
-{#values-are-camelcase .must appliesTo=src}
+{#values-are-camelcase .must appliesTo="src examples"}
 ## Values are camelCase; UPPER_SNAKE only for magic constants
 
 Every value is camelCase: layers, schemas, symbol consts, and ordinary module constants and
@@ -137,7 +137,7 @@ const PARSE_ERROR_CODE = -32700
 const STRING_PATTERN = /^[a-z]+$/
 ```
 
-{#schema-value-vs-class .must appliesTo=src}
+{#schema-value-vs-class .must appliesTo="src examples"}
 ## A schema value is camelCase; a schema class is PascalCase
 
 A schema comes in two forms, and both honor the type/value split:
@@ -161,7 +161,7 @@ export class WorkItem extends Schema.Class<WorkItem>("WorkItem")({
 Both drop into any config that takes a schema — `payload` / `success` / `error` accept any
 `Schema.Top`.
 
-{#prefer-schema-class .should appliesTo=src}
+{#prefer-schema-class .should appliesTo="src examples"}
 ## Prefer a class schema when it earns its keep
 
 Reach for a `Schema.Class` when a schema is **named, reused, carries behaviour, or wants a nominal
@@ -169,21 +169,21 @@ identity** — a payload, a response, a domain entity, an error. You get one nam
 the type, a validating constructor (`new WorkItem({…})`), `instanceof`, and room for methods. Keep a
 plain struct value for **inline or anonymous** shapes, where a class is just ceremony.
 
-{#layers-read-as-layers .should appliesTo=src}
+{#layers-read-as-layers .should appliesTo="src examples"}
 ## Layers read as layers
 
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
 `layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`persistLayer`, `peersLayer`).
 Either way the name says "layer."
 
-{#discriminant-tags-pascalcase .must appliesTo=src}
+{#discriminant-tags-pascalcase .must appliesTo="src examples"}
 ## Discriminant tags are PascalCase
 
 A tagged-union `_tag` value is PascalCase: `Started`, `Completed`, `Failed`, `Interrupted` — never
 kebab (`run-started`) or a `Run*`-style prefix. The tag names the case; it reads like the variant it
 is.
 
-{#canonical-ids-slash-scoped .must appliesTo=src}
+{#canonical-ids-slash-scoped .must appliesTo="src examples"}
 ## Canonical ids are slash-scoped
 
 A service or contract id is a slash-separated, package-scoped string with PascalCase segments:
@@ -191,7 +191,7 @@ A service or contract id is a slash-separated, package-scoped string with Pascal
 surfaces additionally accept normalized kebab suffix aliases; an ambiguous suffix errors with the
 candidate list.)
 
-{#name-for-what-it-is .must appliesTo=src}
+{#name-for-what-it-is .must appliesTo="src examples"}
 ## Name for what a thing is, not who uses it
 
 A name describes the thing's own role, never a consumer's vocabulary. The package surface names
@@ -244,7 +244,7 @@ This holds right up to the framework's own primitives: Effect's `Layer`, `Queue`
 each `export interface`, and `Option` is an `export type` union of `Some` and `None` — never derived
 types.
 
-{#schema-data-derives .must appliesTo=src}
+{#schema-data-derives .must appliesTo="src examples"}
 ## Schema-backed data derives its type from the schema
 
 The counterpart — and the one place `typeof …Type` is *correct*. **Data** whose single source of
@@ -271,7 +271,7 @@ Keep such aliases rare: Effect exposes a schema's type through its `.Type` membe
 rather than proliferating standalone aliases — derive where you need it, don't mint a name for every
 shape.
 
-{#services-use-class-extends .must appliesTo=src}
+{#services-use-class-extends .must appliesTo="src examples"}
 ## Services, tags, and facets use the class-extends form
 
 A service, resource tag, or storage facet is declared by extending the framework factory *in a

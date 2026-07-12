@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "waku dev --host 0.0.0.0 --port 5190",
     "build": "waku build",
-    "preview": "waku start --host 0.0.0.0 --port 5190"
+    "preview": "waku start --host 0.0.0.0 --port 5190",
+    "docs:manifest": "tsx scripts/gen-manifest.ts",
+    "docs:manifest:check": "tsx scripts/gen-manifest.ts --check"
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",
@@ -27,8 +29,10 @@
     "@tailwindcss/vite": "^4.3.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/node": "^22.10.0",
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.0"
   }
 }
