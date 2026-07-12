@@ -16,7 +16,7 @@ class OkProc extends Process.Tag<OkProc>()("@test/process-run-rpc/Ok", {
 
 class VoidProc extends Process.Tag<VoidProc>()("@test/process-run-rpc/Void") {}
 
-describe("Process manual run RPC", () => {
+describe("Process manual effect RPC", () => {
   it.effect("Process.make run returns captured success via resultRef", () =>
     Effect.gen(function* () {
       const resultRef = yield* SubscriptionRef.make<Option.Option<unknown>>(Option.none());
@@ -32,11 +32,11 @@ describe("Process manual run RPC", () => {
     }),
   );
 
-  it.effect("local run fails with typed error when worker fails", () =>
+  it.effect("local effect fails with typed error when worker fails", () =>
     Effect.gen(function* () {
       const exit = yield* Effect.gen(function* () {
         const proc = yield* FailingProc;
-        return yield* proc.run().pipe(Effect.exit);
+        return yield* proc.effect.pipe(Effect.exit);
       }).pipe(
         Effect.provide(
           Process.layer(FailingProc, {
@@ -53,12 +53,14 @@ describe("Process manual run RPC", () => {
     }),
   );
 
-  it("RpcTest round-trip propagates typed failure on run", () =>
+  it("RpcTest round-trip propagates typed failure on effect", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const rpc = yield* RpcTest.makeClient(groupOf(FailingProc));
-        const svc = forwardClient(rpc, specOf(FailingProc), FailingProc.groupId, FailingProc.key);
-        const exit = yield* svc.run().pipe(Effect.exit);
+        const svc = forwardClient(rpc, specOf(FailingProc), FailingProc.groupId, FailingProc.key) as {
+          readonly effect: Effect.Effect<unknown, { readonly _tag: "FetchError"; readonly status: number }>;
+        };
+        const exit = yield* svc.effect.pipe(Effect.exit);
         expect(Exit.isFailure(exit)).toBe(true);
       }).pipe(
         Effect.provide(
@@ -67,14 +69,14 @@ describe("Process manual run RPC", () => {
           }),
         ),
         Effect.scoped,
-      ),
+      ) as Effect.Effect<void, never, never>,
     ),
   );
 
-  it.effect("local run returns stamped success value", () =>
+  it.effect("local effect returns stamped success value", () =>
     Effect.gen(function* () {
       const proc = yield* OkProc;
-      const result = yield* proc.run();
+      const result = yield* proc.effect;
       expect(result).toBe(42);
     }).pipe(
       Effect.provide(Process.layer(OkProc, { effect: Effect.succeed(42) })),
@@ -82,16 +84,18 @@ describe("Process manual run RPC", () => {
     ),
   );
 
-  it("RpcTest round-trip completes void manual run", () =>
+  it("RpcTest round-trip completes void manual effect", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const rpc = yield* RpcTest.makeClient(groupOf(VoidProc));
-        const svc = forwardClient(rpc, specOf(VoidProc), VoidProc.groupId, VoidProc.key);
-        yield* svc.run();
+        const svc = forwardClient(rpc, specOf(VoidProc), VoidProc.groupId, VoidProc.key) as {
+          readonly effect: Effect.Effect<void, never>;
+        };
+        yield* svc.effect;
       }).pipe(
         Effect.provide(Process.serveRemote(VoidProc, { effect: Effect.void })),
         Effect.scoped,
-      ),
+      ) as Effect.Effect<void, never, never>,
     ),
   );
 });

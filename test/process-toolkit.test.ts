@@ -86,7 +86,7 @@ it("result captures the latest success (absent before the first run)", () =>
       // disarmed inline schedule ⇒ nothing has run yet ⇒ result is absent
       expect(Option.isNone(yield* proc.result.get)).toBe(true);
 
-      yield* proc.run();
+      yield* proc.effect;
 
       const latest = yield* proc.result.get;
       expect(Option.isSome(latest)).toBe(true);

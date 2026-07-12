@@ -27,7 +27,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
-## 2026-07-11 — Process manual run RPC (owner Slice 0 locked)
+## 2026-07-12 — Process manual effect RPC (owner vocabulary override)
+
+- **Owner said:** `Resource.effect` = inputless `Effect<S,E>` (`yield* proc.effect`); `Resource.effectFn` = `(In) => Effect<S,E>` for members with input (`logs.history`, schedule `get`/`has`, `start`/`stop`, schedule mutations). `query`/`mutate` are MethodKind for tools only — not equivalent to effect vs effectFn.
+- **Chose:** Manual run verb **`effect`** (not `run`); `buildProcessSpec` wires `effect: Resource.effect(success, { error })` with **no payload**; failures fail RPC `Effect` with typed `E` when stamped; migrate payload-on-`Resource.effect` in Process spec (`logs.history`, schedule `get`/`has`) to `effectFn`.
+- **Rejected:** Putting payload on `Resource.effect` for Process; equating `effect`↔query or `effectFn`↔mutation in API docs.
+- **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; revoke Session 3 RPC defer text; tests/docs/web use `yield* proc.effect`.
+
+---
+
+## 2026-07-11 — Process manual run RPC (owner Slice 0 locked — superseded by 2026-07-12)
 
 - **Owner said:** Remote Process clients need typed `error` (and `success` when stamped) on manual run — not store-only.
 - **Chose:** Verb **`run`** (RunResource parity); **no `payload`** on Process tag — worker stays nullary; RPC wire uses `Schema.Void` payload via `Resource.effect` (not `effectFn`). Per-tag `buildProcessSpec`; engine propagates failure on manual `run` RPC while still writing store rows.

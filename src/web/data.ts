@@ -89,7 +89,7 @@ interface ProcessService {
   };
   readonly start: Effect.Effect<void>;
   readonly stop: Effect.Effect<void>;
-  readonly run: () => Effect.Effect<void>;
+  readonly effect: Effect.Effect<void>;
   readonly schedule?: {
     readonly entries: RefLike<ReadonlyArray<ScheduleEntry>>;
     readonly set: (entries: ReadonlyArray<ScheduleEntry>) => Effect.Effect<void>;
@@ -144,7 +144,7 @@ export interface ProcessBundle {
   readonly schedule: ValueAtom<ReadonlyArray<ScheduleEntry>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
-  readonly run: CommandAtom;
+  readonly effect: CommandAtom;
   /** Replace all schedule entries. @since 1.0.0 */
   readonly setSchedule: Atom.AtomResultFn<ReadonlyArray<ScheduleEntry>, void, unknown>;
   /** Remove all schedule entries. @since 1.0.0 */
@@ -418,7 +418,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
     ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
-    run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run())),
+    effect: runtime.fn(() => Effect.flatMap(tag, (p) => p.effect)),
     setSchedule: runtime.fn((entries: ReadonlyArray<ScheduleEntry>) =>
       Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.set(entries))),
     ),

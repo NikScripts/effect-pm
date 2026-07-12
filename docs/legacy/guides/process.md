@@ -92,7 +92,7 @@ class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule(
 
 ## Handle surface (`yield* Tag`)
 
-- **Lifecycle:** `start`, `stop`, `run` (typed success/error on RPC when stamped).
+- **Lifecycle:** `start`, `stop`, `effect` (typed success/error on RPC when stamped).
 - **Observe:** `status` (`status.get` / `status.changes`), `logs.live`, `logs.history` (needs `captureLogs` + `HistoryStore`).
 - **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
 - **Result** (when `success` on tag): `result.get` / `result.changes` — `Option` until first success.

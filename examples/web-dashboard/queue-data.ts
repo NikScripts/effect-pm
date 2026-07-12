@@ -260,7 +260,7 @@ export interface ProcessBundle {
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
-  readonly run: CommandAtom;
+  readonly effect: CommandAtom;
 }
 const processCache = new Map<string, ProcessBundle>();
 
@@ -285,7 +285,7 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
     ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
-    run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run())),
+    effect: runtime.fn(() => Effect.flatMap(tag, (p) => p.effect)),
   };
   processCache.set(tag.key, bundle);
   return bundle;

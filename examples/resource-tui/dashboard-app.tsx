@@ -452,7 +452,7 @@ const FocusedProcess = (props: {
 
   const start = useAtomSet(bundle.start);
   const stop = useAtomSet(bundle.stop);
-  const runNow = useAtomSet(bundle.run);
+  const runNow = useAtomSet(bundle.effect);
   useInput(
     (input) => {
       if (input === "s") start();
@@ -477,7 +477,7 @@ const FocusedProcess = (props: {
         <>
           <ControlKey k="s" label="start" atom={bundle.start} />
           <ControlKey k="x" label="stop" atom={bundle.stop} />
-          <ControlKey k="n" label="run now" atom={bundle.run} />
+          <ControlKey k="n" label="run now" atom={bundle.effect} />
         </>
       ) : (
         <Text dimColor>Ctrl+E edit</Text>

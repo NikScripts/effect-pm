@@ -258,8 +258,9 @@ describe("Process runtime with schedule windows", () => {
     ),
 );
 
-  it.effect("run does not carry a schedule id", () =>
-    Effect.gen(function* () {
+  it("run (engine handle) does not carry a schedule id", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
         const seen = yield* Ref.make<ReadonlyArray<Option.Option<string>>>([]);
         const proc = Process.make("test/run-immediately-no-schedule-id", {
           polling: Polling.spaced(Duration.millis(100)),
@@ -277,6 +278,7 @@ describe("Process runtime with schedule windows", () => {
         expect(values.length).toBe(1);
         expect(Option.isNone(values[0] ?? Option.none())).toBe(true);
       }).pipe(Effect.provide(ProcessStorage.layer)),
+    ),
   );
 
   it.effect("schedule mutation cancels stale pending starts", () =>

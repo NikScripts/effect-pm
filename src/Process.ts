@@ -142,7 +142,7 @@ export interface ProcessSnapshot {
   readonly nextScheduleTransition: Option.Option<Date>;
   /** The in-instance repeat cadence, when polling is configured (none otherwise). */
   readonly nextPollCadence: Option.Option<Duration.Duration>;
-  /** Total effect runs started (scheduled + polling + manual {@link run}) since the layer built. */
+  /** Total effect runs started (scheduled + polling + manual {@link effect}) since the layer built. */
   readonly runsStarted: number;
   /** Of those, how many completed successfully. */
   readonly runsSucceeded: number;
@@ -274,7 +274,7 @@ class ProcessScheduleControlsTag extends Context.Service<
  *
  * @remarks
  * - For scheduled runs: value from `ProcessScheduleEntry.id`
- * - For {@link Process.run}: `Option.none()`
+ * - For manual {@link Process.effect}: `Option.none()`
  *
  * @public
  */
@@ -350,7 +350,7 @@ interface ProcessMirror {
   readonly activeInstances: MutableRef.MutableRef<number>;
   readonly nextTriggerRun: MutableRef.MutableRef<Option.Option<Date>>;
   // Run metrics — counted once at the single run boundary ({@link trackedProgram}), so they cover
-  // scheduled ticks, polling ticks, and manual {@link Process.run} alike.
+  // scheduled ticks, polling ticks, and manual {@link Process.effect} alike.
   readonly runsStarted: MutableRef.MutableRef<number>;
   readonly runsSucceeded: MutableRef.MutableRef<number>;
   readonly runsFailed: MutableRef.MutableRef<number>;
@@ -1078,7 +1078,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
 /**
  * Services still required at the fork site for {@link Process.effect} /
- * {@link Process.run} for a given {@link ProcessMakeConfig}.
+ * {@link Process.effect} for a given {@link ProcessMakeConfig}.
  *
  * @public
  */
@@ -1575,9 +1575,7 @@ export const processControlSpec = {
         "Captured log lines (engine + instance effect) with level/annotations/spans — empty unless " +
         "the process was configured to capture logs.",
     }),
-    history: Resource.effect(Schema.Array(processLogEntry), {
-      payload: historyQuery,
-    }).annotate({
+    history: Resource.effectFn(Schema.Array(processLogEntry), { payload: historyQuery }).annotate({
       description:
         "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless captureLogs + a HistoryStore layer are provided.",
@@ -1586,7 +1584,7 @@ export const processControlSpec = {
 };
 
 /**
- * Build a process **instance** spec — control surface plus a typed manual {@link run} RPC.
+ * Build a process **instance** spec — control surface plus a typed manual {@link effect} RPC.
  *
  * @public
  */
@@ -1598,10 +1596,10 @@ export const buildProcessSpec = <
   readonly error?: E;
 }) => ({
   ...processControlSpec,
-  run: Resource.effect(wire?.success ?? Schema.Void, {
-    payload: Schema.Void,
-    error: wire?.error ?? Schema.Never,
-  }).annotate({
+  effect: (wire?.error !== undefined
+    ? Resource.effect(wire?.success ?? Schema.Void, { error: wire.error })
+    : Resource.effect(wire?.success ?? Schema.Void)
+  ).annotate({
     description:
       "Run the process worker effect once, tracked — returns success; failures typed on error.",
   }),
@@ -1683,12 +1681,12 @@ export const scheduleResourceSpec = {
   entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "All schedule entries (run windows), reactive.",
   }),
-  get: Resource.effect(Schema.Option(processScheduleEntry), {
+  get: Resource.effectFn(Schema.Option(processScheduleEntry), {
     payload: { id: Schema.String },
   }).annotate({
     description: "Look up a single entry by id (absent if none matches).",
   }),
-  has: Resource.effect(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+  has: Resource.effectFn(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
     description: "Whether an entry with the given id exists.",
   }),
   set: Resource.effectFn(Schema.Void, {
@@ -1736,7 +1734,7 @@ type ResultField<A extends Schema.Top> = RefField<
 type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> };
 
 /**
- * Per-tag process spec — control surface plus stamped `run` success/error on the wire.
+ * Per-tag process spec — control surface plus stamped `effect` success/error on the wire.
  *
  * @public
  */
@@ -1744,7 +1742,7 @@ export type ProcessInstanceSpec<
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > = typeof processControlSpec & {
-  readonly run: Resource.Method<"query", typeof Schema.Void, A, E>;
+  readonly effect: Resource.Method<"query", undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
 // ============================================================================
@@ -2481,7 +2479,7 @@ const buildProcessImpl = <A, E, R>(
       status: { get: readStatus, changes: statusChanges },
       start,
       stop,
-      run: ((_payload?: void) => handle.run().pipe(tapLogs)) as ImplOf<ProcessSpec>["run"],
+      effect: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["effect"],
       logs: {
         live: logsStream,
         history: ({ limit, since, until }: HistoryQuery) =>

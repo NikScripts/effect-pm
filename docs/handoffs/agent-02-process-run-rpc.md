@@ -133,13 +133,12 @@ Before/After/Verify each slice. Update owner-decisions.md on same push as code.
 
 ## Session log (2026-07-12)
 
-**Slice 0 (owner):** verb **`run`**, no tag `payload` — void manual run; worker stays nullary; RPC `Schema.Void` payload.
+**Slice 0 (owner):** verb **`effect`** (2026-07-12 override); no tag `payload` — `Resource.effect` inputless; `effectFn` for members with input.
 
 **Shipped:**
-- `buildProcessSpec` / `ProcessInstanceSpec` — per-tag `run: Resource.effect(success, { payload: Void, error })`
-- Engine `trackedProgram` — `return yield*` propagates success; failures fail RPC with typed `E`
-- `runImmediately` → `run` across engine, tests, `src/web/`, examples, legacy docs
-- `test/process-run-rpc.test.ts` — local typed error/success + RpcTest void run + typed failure
-- `process-contract-shape.test-d.ts` — `run` success/error channels on stamped tag
+- `buildProcessSpec` / `ProcessInstanceSpec` — `effect: Resource.effect(success, { error })` (no payload)
+- `logs.history`, schedule `get`/`has` migrated from payload-on-`Resource.effect` to `Resource.effectFn`
+- Engine propagates typed failures; `yield* proc.effect` (not `proc.run()`)
+- Tests/docs/web/dashboard use `effect`; Session 3 RPC defer revoked
 
 **Verify:** `pnpm run typecheck && pnpm test` — green (455 tests).

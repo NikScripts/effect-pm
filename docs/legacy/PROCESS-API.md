@@ -55,7 +55,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | `type` | `"managed"` | |
 | `effect` | `Effect<void, never, R \| storage facets>` | Schedule-driven runtime. If `polling` / schedule layers are passed on `Process.make`, those layers are merged into `process.effect`. |
 | `getStatus(range?)` | `Effect<ProcessDetails, never, storage facets>` | Execution stats + mirror of last gate/cadence hints. |
-| `run()` | `Effect<A, E, R \| storage facets>` | One tracked tick **even when disarmed** (typed `success`/`error` on RPC when stamped on tag). |
+| `effect` | `Effect<A, E, R \| storage facets>` | One tracked tick **even when disarmed** (typed `success`/`error` on RPC when stamped on tag). |
 
 ### `ProcessDetails`
 
@@ -188,10 +188,12 @@ value is the **typed** failure from the tick `Effect` (same schema). When the ta
 engine writes `String(cause)` per store-core §5. Journal codecs round-trip stamped schemas on append —
 see `test/process-store-engine.test.ts` and `test/process-store-sqlite.test.ts`.
 
-**RPC `run` slot:** Per-tag `buildProcessSpec` wires tag `success` / `error` onto the manual **`run`**
-verb (`Resource.effect`, void payload). Remote `yield* Tag.run` returns typed success and fails with
-typed `E` when the worker fails — store rows are still written on failure. Lifecycle verbs (`start`,
-`stop`) remain void commands with `Schema.Never` on the RPC error channel.
+**RPC `effect` slot:** Per-tag `buildProcessSpec` wires tag `success` / `error` onto the manual **`effect`**
+verb (`Resource.effect` — inputless `Effect`, not `effectFn`). Remote `yield* Tag.effect` returns typed
+success and fails with typed `E` when the worker fails — store rows are still written on failure.
+Lifecycle verbs (`start`, `stop`) are `effectFn` void commands; schedule mutations use `effectFn` with
+payload. Per-invocation input on manual run is a future separate `effectFn` member, not payload on
+`Resource.effect`.
 
 **Removed:** `ProcessExecutionStore` facet, `@nikscripts/effect-pm/store/ProcessExecution`,
 `process.execution.completed` runtime facet. Do not import execution history from `ProcessStorage`.

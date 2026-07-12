@@ -104,7 +104,7 @@ it("the status stream flows over http from the real driver", () =>
       }),
     )));
 
-it("run crosses the wire and runs the server-side effect once", () =>
+it("effect crosses the wire and runs the server-side worker once", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       // a server-side side effect we can observe after the run
@@ -112,7 +112,7 @@ it("run crosses the wire and runs the server-side effect once", () =>
       yield* withServer({ effect: Effect.sync(() => { ran += 1; }) }, (_port) =>
         Effect.gen(function* () {
           const proc = yield* RemoteProc;
-          yield* proc.run();
+          yield* proc.effect;
         }));
       expect(ran).toBe(1);
     }),

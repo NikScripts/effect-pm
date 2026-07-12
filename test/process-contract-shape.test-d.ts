@@ -46,7 +46,7 @@ const _proof = Effect.gen(function* () {
   // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
   yield* h.start; // no-payload verb → Effect property
-  yield* h.run();
+  yield* h.effect;
   // observability is paired by nesting (like the queue): `logs.live` stream + `logs.history` query.
   const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.history(
     {},
@@ -74,7 +74,7 @@ const _proof = Effect.gen(function* () {
   const _pricedRun: Effect.Effect<
     typeof Price.Type,
     { readonly _tag: "FetchError"; readonly status: number }
-  > = pe.run();
+  > = pe.effect;
 
   return { _status, _logHistory, latest, one, _pricedRun };
 });

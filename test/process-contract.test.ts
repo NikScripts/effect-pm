@@ -30,7 +30,7 @@ it("with the default schedule a process arms and runs its effect immediately", (
     }),
   ));
 
-it("run runs the effect once (disarmed via an empty inline schedule)", () =>
+it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
@@ -41,7 +41,7 @@ it("run runs the effect once (disarmed via an empty inline schedule)", () =>
         expect(before.armed).toBe(false);
         expect(before.activeInstances).toBe(0);
 
-        yield* proc.run();
+        yield* proc.effect;
         expect(yield* Ref.get(ran)).toBe(1);
 
         // run metrics increment at the single run boundary
