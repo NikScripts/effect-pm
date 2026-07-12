@@ -21,7 +21,6 @@
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
  * tokens — see `docs/legacy/guides/setup.md` §2a/§2b for the `@source` + token wiring.
  *
- * @since 1.0.0
  */
 export * from "../ui/atom-react";
 export * from "./useViewTransition";

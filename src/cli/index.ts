@@ -20,7 +20,6 @@
  * Command.runWith(cli, { version })(process.argv.slice(2)).pipe(Effect.provide(appLayer));
  * ```
  *
- * @since 1.0.0
  */
 import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
@@ -32,7 +31,6 @@ import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Resource";
  * `key` / `description` and the stowed contract spec. A `Resource.Tag` / `QueueResource.Tag`
  * / `Process.Tag` class satisfies this — pass the classes directly.
  *
- * @since 1.0.0
  */
 export type CliResourceTag = Effect.Effect<unknown, never, unknown> & {
   readonly key: string;
@@ -95,7 +93,6 @@ const renderInline = (value: unknown): string =>
  * The default output formatter: scalars plain, arrays as one item per line, structs as
  * aligned `key  value` rows. Exported so you can reuse or wrap it.
  *
- * @since 1.0.0
  */
 export const render = (value: unknown): string => {
   if (value === undefined || value === null) {
@@ -138,7 +135,6 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliResourceTag) => 
  * resources. `rootName` is the top command name. Returns an `effect/unstable/cli`
  * `Command` — drive it with `Command.runWith` and provide the resources' layer.
  *
- * @since 1.0.0
  */
 export const makeResourceCli = (resources: Record<string, CliResourceTag>, rootName = "cli") => {
   const namespaces = Object.entries(resources).map(([name, tag]) =>
@@ -171,7 +167,6 @@ export const makeResourceCli = (resources: Record<string, CliResourceTag>, rootN
  * the `{ commandName: tag }` record {@link makeResourceCli} takes. Adding a resource never
  * renames an existing command unless it actually collides.
  *
- * @since 1.0.0
  */
 export const resourcesByName = <T extends CliResourceTag>(tags: ReadonlyArray<T>): Record<string, T> => {
   const segments = (id: string): ReadonlyArray<string> => id.split("/").filter((s) => s.length > 0);

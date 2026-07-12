@@ -22,7 +22,6 @@
  * Degrades to an instant update where the API is unavailable, and honors
  * `prefers-reduced-motion` via the consumer's `::view-transition-*` CSS.
  *
- * @since 1.0.0
  */
 import * as React from "react";
 import { flushSync } from "react-dom";
@@ -40,7 +39,6 @@ const ActiveNameContext = React.createContext<ActiveName>({
  * Holds the currently-transitioning name so {@link useViewTransitionStyle} can name only
  * the active element. Wrap the part of the tree that navigates.
  *
- * @since 1.0.0
  */
 export const ViewTransitionProvider = (props: {
   readonly children: React.ReactNode;
@@ -60,7 +58,6 @@ interface ViewTransitionDocument {
  * synchronously), then clears the active name when the transition finishes. Falls back to
  * an instant `update()` where the View Transitions API is unsupported.
  *
- * @since 1.0.0
  */
 export const useViewTransition = (): ((name: string, update: () => void) => void) => {
   const { setActive } = React.useContext(ActiveNameContext);
@@ -94,7 +91,6 @@ const toIdent = (name: string): string => {
  * sanitized to a valid CSS `<custom-ident>` (ids contain `@`/`/`, illegal in idents — an
  * invalid name is dropped and silently falls back to a crossfade).
  *
- * @since 1.0.0
  */
 export const useViewTransitionStyle = (name: string): React.CSSProperties => {
   const { active } = React.useContext(ActiveNameContext);
@@ -105,7 +101,6 @@ export const useViewTransitionStyle = (name: string): React.CSSProperties => {
  * Unconditional variant of {@link useViewTransitionStyle} — always names the element. Use
  * only where exactly one element ever carries the name at a time.
  *
- * @since 1.0.0
  */
 export const viewTransitionStyle = (name: string): React.CSSProperties => ({
   viewTransitionName: toIdent(name),

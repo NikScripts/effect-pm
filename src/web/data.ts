@@ -7,7 +7,6 @@
  * consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides the tags — local
  * engine or `Resource.client` over http; the widgets don't care which).
  *
- * @since 1.0.0
  */
 import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
@@ -22,29 +21,29 @@ import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import { now } from "./now";
 
-/** Live queue status (from the contract schema). @since 1.0.0 */
+/** Live queue status (from the contract schema). */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
-/** Live queue metrics (from the contract schema). @since 1.0.0 */
+/** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
-/** Live process status (from the contract schema). @since 1.0.0 */
+/** Live process status (from the contract schema). */
 export type ProcessStatus = Schema.Schema.Type<typeof processStatus>;
-/** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. @since 1.0.0 */
+/** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
 export type ScheduleEntry = Schema.Schema.Type<typeof processScheduleEntry>;
 
-/** A captured log line for the log pane. @since 1.0.0 */
+/** A captured log line for the log pane. */
 export interface LogLine {
   readonly id: number;
   readonly t: number;
   readonly level: string;
   readonly message: string;
 }
-/** A windowed metrics sample for the chart. @since 1.0.0 */
+/** A windowed metrics sample for the chart. */
 export interface MetricPoint {
   readonly t: number;
   readonly throughput: number;
   readonly latency: number;
 }
-/** A windowed API-usage sample for the API chart. @since 1.0.0 */
+/** A windowed API-usage sample for the API chart. */
 export interface ApiPoint {
   readonly t: number;
   readonly throughput: number;
@@ -103,28 +102,28 @@ interface ApiService {
   readonly usage: Subscribable<ApiUsageSnapshot>;
 }
 
-/** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. @since 1.0.0 */
+/** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. */
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
-/** A process tag — yieldable for its live service. @since 1.0.0 */
+/** A process tag — yieldable for its live service. */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
-/** An API-metrics tag — yieldable for its live service. @since 1.0.0 */
+/** An API-metrics tag — yieldable for its live service. */
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
 
-/** A node in a `Group.Tag` tree. @since 1.0.0 */
+/** A node in a `Group.Tag` tree. */
 export interface GroupNode {
   readonly key: string;
   readonly members: Record<string, unknown>;
 }
 
-/** A read/stream value atom (error channel erased — widgets only read success). @since 1.0.0 */
+/** A read/stream value atom (error channel erased — widgets only read success). */
 export type ValueAtom<A> = Atom.Atom<AsyncResult.AsyncResult<A, unknown>>;
-/** A no-arg command trigger. @since 1.0.0 */
+/** A no-arg command trigger. */
 export type CommandAtom = Atom.AtomResultFn<void, unknown, unknown>;
 
-/** Any reactive runtime that provides the dashboard's tags. @since 1.0.0 */
+/** Any reactive runtime that provides the dashboard's tags. */
 export type DashboardRuntime<R = never, ER = never> = Atom.AtomRuntime<R, ER>;
 
-/** The atoms + controls one queue card needs — all derived from the tag. @since 1.0.0 */
+/** The atoms + controls one queue card needs — all derived from the tag. */
 export interface QueueBundle {
   readonly status: ValueAtom<QueueStatus | undefined>;
   readonly metrics: ValueAtom<QueueMetrics | undefined>;
@@ -136,51 +135,51 @@ export interface QueueBundle {
   readonly clear: CommandAtom;
   readonly shutdown: CommandAtom;
 }
-/** The atoms + controls one process card needs — derived from the tag. @since 1.0.0 */
+/** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
   readonly status: ValueAtom<ProcessStatus | undefined>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
-  /** The current schedule entries (run windows), read once on open. @since 1.0.0 */
+  /** The current schedule entries (run windows), read once on open. */
   readonly schedule: ValueAtom<ReadonlyArray<ScheduleEntry>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
   readonly runImmediately: CommandAtom;
-  /** Replace all schedule entries. @since 1.0.0 */
+  /** Replace all schedule entries. */
   readonly setSchedule: Atom.AtomResultFn<ReadonlyArray<ScheduleEntry>, void, unknown>;
-  /** Remove all schedule entries. @since 1.0.0 */
+  /** Remove all schedule entries. */
   readonly clearSchedule: CommandAtom;
 }
 /** The atoms one node dot/detail needs — its live status (up, readiness rollup, per-resource).
- *  Read-only. @since 1.0.0 */
+ *  Read-only. */
 export interface NodeBundle {
   readonly id: string;
   readonly status: ValueAtom<NodeStatus.Status | undefined>;
-  /** The node's runtime-wide log stream (recent tail, then live). @since 1.0.0 */
+  /** The node's runtime-wide log stream (recent tail, then live). */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
-   *  when a resource (or its dependency) degrades. @since 1.0.0 */
+   *  when a resource (or its dependency) degrades. */
   readonly health: ValueAtom<ReadonlyArray<number>>;
 }
-/** The atoms one API-metrics card needs — read-only (no commands). @since 1.0.0 */
+/** The atoms one API-metrics card needs — read-only (no commands). */
 export interface ApiBundle {
-  /** Cumulative usage snapshot (totals + top endpoints), via `usage.changes`. @since 1.0.0 */
+  /** Cumulative usage snapshot (totals + top endpoints), via `usage.changes`. */
   readonly status: ValueAtom<ApiUsageSnapshot | undefined>;
-  /** The latest usage window. @since 1.0.0 */
+  /** The latest usage window. */
   readonly metrics: ValueAtom<ApiUsageMetrics | undefined>;
-  /** Accumulated chart points (throughput / errors / in-flight per window). @since 1.0.0 */
+  /** Accumulated chart points (throughput / errors / in-flight per window). */
   readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
 }
 
 /** A node that backs one or more of a group's resources — its id (the `Resource.Node` key) plus the
  *  transport key itself. Read straight off the tags (`nodeOf`), so the dashboard's node list is the
- *  distinct nodes its resources are bound to — no separate registry. @since 1.0.0 */
+ *  distinct nodes its resources are bound to — no separate registry. */
 export interface NodeRef {
   readonly id: string;
   readonly node: NodeKey<unknown>;
 }
 
 /** Walk a group tree and collect the distinct nodes its resources are bound to. A nodeless
- *  (local/in-process) group yields `[]` — node dots appear only when resources name a node. @since 1.0.0 */
+ *  (local/in-process) group yields `[]` — node dots appear only when resources name a node. */
 export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
   const seen = new Map<string, NodeRef>();
   const walk = (member: unknown): void => {
@@ -198,7 +197,7 @@ export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
 };
 
 /** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's `NodeStatus`
- *  reports for each served resource. @since 1.0.0 */
+ *  reports for each served resource. */
 export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
     return undefined;
@@ -209,7 +208,7 @@ export const tagWireKey = (member: unknown): string | undefined => {
 };
 
 /** The {@link NodeRef} a resource tag is bound to (its `Resource.Node`), or `undefined` for a nodeless
- *  tag — lets a resource page read its own readiness from its node's `NodeStatus`. @since 1.0.0 */
+ *  tag — lets a resource page read its own readiness from its node's `NodeStatus`. */
 export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);
   return node === undefined ? undefined : { id: node.key, node };
@@ -217,7 +216,7 @@ export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
 
 /** The leaf resource tag in a group tree whose wire key is `key` (as reported by a node's
  *  `NodeStatus.resources[].key`), or `undefined` if not found. Lets the node page open a served
- *  resource's detail directly (without round-tripping through the group route). @since 1.0.0 */
+ *  resource's detail directly (without round-tripping through the group route). */
 export const leafByKey = (group: unknown, key: string): unknown => {
   const walk = (node: unknown): unknown => {
     if (!Group.isGroup(node)) return undefined;
@@ -234,7 +233,7 @@ export const leafByKey = (group: unknown, key: string): unknown => {
   return walk(group);
 };
 
-/** Which kind of leaf a tag is — by the contract's stamped kind. @since 1.0.0 */
+/** Which kind of leaf a tag is — by the contract's stamped kind. */
 export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
   // for a bare `Resource.Tag` (or an older tag without a stamped kind).
@@ -305,7 +304,7 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
   return m;
 };
 
-/** Build (once per runtime+tag) the atom bundle for a queue tag. @since 1.0.0 */
+/** Build (once per runtime+tag) the atom bundle for a queue tag. */
 export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueTag<R>): QueueBundle => {
   const cache = cacheFor(bundleCache, runtime);
   const existing = cache.get(tag.key);
@@ -388,7 +387,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   return bundle;
 };
 
-/** Build (once per runtime+tag) the atom bundle for a process tag. @since 1.0.0 */
+/** Build (once per runtime+tag) the atom bundle for a process tag. */
 export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ProcessTag<R>): ProcessBundle => {
   const cache = cacheFor(processBundleCache, runtime);
   const existing = cache.get(tag.key);
@@ -428,7 +427,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
   return bundle;
 };
 
-/** Build (once per runtime+tag) the atom bundle for an API-metrics tag — read-only. @since 1.0.0 */
+/** Build (once per runtime+tag) the atom bundle for an API-metrics tag — read-only. */
 export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R>): ApiBundle => {
   const cache = cacheFor(apiBundleCache, runtime);
   const existing = cache.get(tag.key);
@@ -474,7 +473,7 @@ const nodeStatusClient = (node: NodeKey<unknown>) =>
   );
 
 /** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
- *  reserved `NodeStatus` resource over that node's transport. @since 1.0.0 */
+ *  reserved `NodeStatus` resource over that node's transport. */
 export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   ref: NodeRef,
@@ -522,14 +521,14 @@ export const nodeStatusBundle = <R, ER>(
   return bundle;
 };
 
-/** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. @since 1.0.0 */
+/** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m as GroupNode) : [m]));
 
-/** Only the queue leaves of a tree. @since 1.0.0 */
+/** Only the queue leaves of a tree. */
 export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
   leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<QueueTag>;
 
-/** Only the process leaves of a tree. @since 1.0.0 */
+/** Only the process leaves of a tree. */
 export const processLeaves = (node: GroupNode): ReadonlyArray<ProcessTag> =>
   leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<ProcessTag>;

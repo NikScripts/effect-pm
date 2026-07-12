@@ -16,7 +16,6 @@
  * }).pipe(Effect.provide(NodeStatus.clientHttp("http://10.0.0.2:7777/rpc")), Effect.scoped);
  * ```
  *
- * @since 1.0.0
  */
 import { Layer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
@@ -32,29 +31,27 @@ import {
 
 /** Live node status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
  *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.
- *  @since 1.0.0 */
-export const status = nodeStatus;
+ */export const status = nodeStatus;
 
-/** Live node status. @since 1.0.0 */
+/** Live node status. */
 export type Status = NodeStatusType;
 
 /** One served resource's readiness as reported by its node — the element of `status.resources`.
- *  @since 1.0.0 */
-export const resourceReadiness = nodeResourceReadiness;
+ */export const resourceReadiness = nodeResourceReadiness;
 
-/** A served resource's readiness as reported by its node. @since 1.0.0 */
+/** A served resource's readiness as reported by its node. */
 export type ResourceReadiness = NodeResourceReadinessType;
 
 /**
  * The reserved node status resource tag — nodeless. Drive it with {@link NodeStatus.clientHttp}
- * (or any `RpcClient.Protocol` layer) pointed at a node's `/rpc`. @since 1.0.0
+ * (or any `RpcClient.Protocol` layer) pointed at a node's `/rpc`.
  */
 export const Tag = NodeStatusResource;
 
 /**
  * A client layer for the node status resource pointed at a node's `/rpc` `url` (ndjson over http,
  * matching `Resource.httpServer`'s default). Provide it to a program that reads
- * {@link NodeStatus.Tag}. @since 1.0.0
+ * {@link NodeStatus.Tag}.
  */
 export const clientHttp = (url: string): Layer.Layer<NodeStatusResource> =>
   Resource.client(NodeStatusResource).pipe(

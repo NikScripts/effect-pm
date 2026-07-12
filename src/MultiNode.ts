@@ -10,17 +10,16 @@
  * This is slice 1 of the multi-node design (see `docs/handoffs/multi-node-instances-decisions.md`): the
  * contract field-kinds (`multiQuery` / `multiStream`) and the serve/peer wiring build on these.
  *
- * @since 1.0.0
  */
 import { Cause, Effect, Exit, Stream } from "effect";
 
-/** One node's outcome for a gathered query field — node-attributed success/failure. @since 1.0.0 */
+/** One node's outcome for a gathered query field — node-attributed success/failure. */
 export interface NodeResult<A, E = never> {
   readonly node: string;
   readonly exit: Exit.Exit<A, E>;
 }
 
-/** One node's stream for a gathered stream field. @since 1.0.0 */
+/** One node's stream for a gathered stream field. */
 export interface NodeStream<A, E = never> {
   readonly node: string;
   readonly stream: Stream.Stream<A, E>;
@@ -29,7 +28,7 @@ export interface NodeStream<A, E = never> {
 /**
  * Gather a query field from every instance in `peers` (keyed by node), each call captured as a
  * {@link NodeResult} — a down node becomes a failed `exit`, never a thrown gather — then `combine`.
- * The combine sees **every** node's outcome, so it owns the down-node policy. @since 1.0.0
+ * The combine sees **every** node's outcome, so it owns the down-node policy.
  */
 export const combineQuery = <Svc, A, E, B>(
   peers: Record<string, Svc>,
@@ -49,7 +48,7 @@ export const combineQuery = <Svc, A, E, B>(
 /**
  * Combine a stream field across every instance in `peers`: `transform` receives each node's stream
  * (node-attributed) and produces the combined stream — e.g. {@link Combine.mergeStreams} to interleave
- * them all, or a latest-per-node fold. Pure; the live subscription lifecycle is the caller's. @since 1.0.0
+ * them all, or a latest-per-node fold. Pure; the live subscription lifecycle is the caller's.
  */
 export const combineStream = <Svc, A, E, B, EE>(
   peers: Record<string, Svc>,
@@ -60,13 +59,13 @@ export const combineStream = <Svc, A, E, B, EE>(
     Object.entries(peers).map(([node, service]) => ({ node, stream: pick(service) })),
   );
 
-/** Successful per-node values, dropping the nodes that failed. @since 1.0.0 */
+/** Successful per-node values, dropping the nodes that failed. */
 const successes = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): ReadonlyArray<{ readonly node: string; readonly value: A }> =>
   results.flatMap((r) => (Exit.isSuccess(r.exit) ? [{ node: r.node, value: r.exit.value }] : []));
 
-/** The nodes whose gather failed, with their cause. @since 1.0.0 */
+/** The nodes whose gather failed, with their cause. */
 const failures = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): ReadonlyArray<{ readonly node: string; readonly cause: Cause.Cause<E> }> =>
@@ -75,7 +74,7 @@ const failures = <A, E>(
 /**
  * Ready-made combines for {@link combineQuery} / {@link combineStream}. They operate on the
  * **successful** nodes (a down node is skipped); a custom fold can read the full `NodeResult[]`
- * (failures included) and decide otherwise. @since 1.0.0
+ * (failures included) and decide otherwise.
  */
 export const Combine = {
   /** Successful per-node values (`{ node, value }[]`), failures dropped. */
