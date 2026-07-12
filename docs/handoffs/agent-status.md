@@ -29,6 +29,7 @@
 - `src/web/data.ts` — derive `QueueService` from `QueueHandle` (post #23 handle ref fix)
 
 ### 4 — Owner-gated / deferred
+- **Agent B:** dashboard type-safety remediation — [`agent-b-dashboard-typesafety.md`](./agent-b-dashboard-typesafety.md) (kill `data.ts` discrimination `as` casts via `kind`-guards; contain the one runtime-`R` boundary; `@since`/`@public`/suppression hygiene in `src/web`+`src/ui`). Ready to start.
 - Agent C standards audit (plan → catalog → top-5 fixes)
 - Process live `events` stream (#20)
 - `Store.layerQuery` (not approved)
