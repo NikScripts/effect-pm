@@ -213,7 +213,7 @@ NodeRuntime.runMain(
 ```
 
 Each contract query/mutate becomes a verb (flags from the payload schema); streams are
-skipped — use their one-shot peers (`status.get`, `logs.history`).
+skipped — use their one-shot peers (`status.get`, `logs.query`).
 
 ### Web (`…/web`) and TUI (`…/tui`)
 

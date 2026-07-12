@@ -1511,7 +1511,7 @@ export type ProcessExecutionEvent = typeof processExecutionEventVoid.Type;
 export const processExecutionEventFor = makeProcessExecutionEvent;
 
 /**
- * Payload fields for `logs.history` — newest `limit` entries within an optional `[since, until]`
+ * Payload fields for `logs.query` — newest `limit` entries within an optional `[since, until]`
  * window.
  *
  * @public
@@ -1568,14 +1568,14 @@ export const processControlSpec = {
     destructive: true,
   }),
 
-  // ── observability — live stream + history query, paired by nesting ──
+  // ── observability — stream + query, paired by nesting ──
   logs: {
-    live: Resource.stream(processLogEntry).annotate({
+    stream: Resource.stream(processLogEntry).annotate({
       description:
         "Captured log lines (engine + instance effect) with level/annotations/spans — empty unless " +
         "the process was configured to capture logs.",
     }),
-    history: Resource.effectFn(historyQuery, Schema.Array(processLogEntry)).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(processLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless captureLogs + a HistoryStore layer are provided.",
@@ -2189,8 +2189,8 @@ export interface ProcessLayerConfig<A, E, R> {
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: Layer.Layer<PollingTag, never, never>;
   /**
-   * Capture this process's logs (engine + instance effect) into the `logs.live` stream — and, with
-   * a `HistoryStore` layer, into `logs.history`. `true` = all levels; `{ level }` = at or above it.
+   * Capture this process's logs (engine + instance effect) into the `logs.stream` stream — and, with
+   * a `HistoryStore` layer, into `logs.query`. `true` = all levels; `{ level }` = at or above it.
    */
   readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
 }
@@ -2295,7 +2295,7 @@ const makeProcessCaptureLogger = (
 
 const statusPollInterval = Duration.millis(500);
 
-/** The decoded `logs.history` payload — mirrors {@link HistoryStore}'s read options. */
+/** The decoded `logs.query` payload — mirrors {@link HistoryStore}'s read options. */
 interface HistoryQuery {
   readonly limit?: number;
   readonly since?: DateTime.Utc;
@@ -2473,8 +2473,8 @@ const buildProcessImpl = <A, E, R>(
       stop,
       run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       logs: {
-        live: logsStream,
-        history: ({ limit, since, until }: HistoryQuery) =>
+        stream: logsStream,
+        query: ({ limit, since, until }: HistoryQuery) =>
           Option.match(history, {
             onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
             onSome: (store) =>

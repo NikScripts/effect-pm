@@ -469,25 +469,25 @@ export const queueControlSpec = {
     destructive: true,
   }),
 
-  // ── observability — live stream + history query, paired by nesting ──
+  // ── observability — stream + query, paired by nesting ──
   metrics: {
-    live: Resource.stream(queueMetrics).annotate({
+    stream: Resource.stream(queueMetrics).annotate({
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    history: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless a HistoryStore layer is provided.",
     }),
   },
   logs: {
-    live: Resource.stream(queueLogEntry).annotate({
+    stream: Resource.stream(queueLogEntry).annotate({
       description:
         "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
         "unless the queue was configured with captureLogs.",
     }),
-    history: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless a HistoryStore layer is provided.",
@@ -967,7 +967,7 @@ const buildQueueImpl = <
     // on the ones that carry no `R`, like pause/resume/shutdown) — a single subtractive
     // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
     // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
-    // (`status`/`size`/`isEmpty`/`*.live`/`events`) pass through untouched.
+    // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
     const impl: Resource.WithRequirement<
       ImplOf<QueueInstanceSpec<F>>,
       R | RR
@@ -987,13 +987,13 @@ const buildQueueImpl = <
       shutdown: handle.shutdown,
       clear: handle.clear,
       metrics: {
-        live: handle.metrics,
-        history: ({ limit, since, until }) =>
+        stream: handle.metrics,
+        query: ({ limit, since, until }) =>
           readHistory(metricsStreamId, decodeMetric, { limit, since, until }),
       },
       logs: {
-        live: handle.logs,
-        history: ({ limit, since, until }) =>
+        stream: handle.logs,
+        query: ({ limit, since, until }) =>
           readHistory(logsStreamId, decodeLog, { limit, since, until }),
       },
       // The item (or batch) IS the payload — `add`/`prioritize`/`defer` forward it straight to the

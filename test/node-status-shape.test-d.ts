@@ -25,8 +25,8 @@ type StatusNowAbsent = "statusNow" extends keyof Service ? false : true;
 true satisfies StatusNowAbsent;
 
 type LogsNested = Service["logs"] extends {
-  readonly live: Stream.Stream<unknown>;
-  readonly history: (payload: { readonly limit: number }) => Effect.Effect<ReadonlyArray<unknown>>;
+  readonly stream: Stream.Stream<unknown>;
+  readonly query: (payload: { readonly limit: number }) => Effect.Effect<ReadonlyArray<unknown>>;
 }
   ? true
   : false;

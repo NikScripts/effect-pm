@@ -28,7 +28,7 @@ yield* queue.status.get;
   `attempts` retry, `captureLogs`, **`refill`** (self-feeding from a source), and **`persist`**
   (durable, at-least-once).
 - **`Process`** — a managed process: lifecycle (`start`/`stop`/`runImmediately`), observability
-  (reactive `status` + `logs.live` / `logs.history`), inline or referenced **schedule** control, and
+  (reactive `status` + `logs.stream` / `logs.query`), inline or referenced **schedule** control, and
   an optional reactive `result`. One module carrying the `Process.Tag` toolkit, the `Process.make`
   engine, and `Polling` (in-instance cadence); **`Process.Schedule`** is a reusable schedule resource
   (full CRUD + a reactive `entries` ref) that can gate one or more processes.

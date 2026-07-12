@@ -48,12 +48,12 @@ const stub = {
   clear: Effect.succeed(0),
   status: statusSub,
   metrics: {
-    live: Stream.empty,
-    history: () => Effect.succeed([]),
+    stream: Stream.empty,
+    query: () => Effect.succeed([]),
   },
   logs: {
-    live: Stream.empty,
-    history: () => Effect.succeed([]),
+    stream: Stream.empty,
+    query: () => Effect.succeed([]),
   },
   add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   prioritize: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,

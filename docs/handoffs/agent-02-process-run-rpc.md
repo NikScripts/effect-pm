@@ -20,7 +20,7 @@ Remote Process clients must get **typed `error`** (and **`success`** when stampe
 
 **Naming (Slice 0 locked):** verb **`run`** (parity with `RunResource.run`). Layer `config.effect` and supervisor `process.effect` stay as-is — different concepts.
 
-**Input (Slice 0 locked):** Process has **no tag `payload`**. Manual `run` is inputless `Resource.effect(success, error)` — worker stays nullary in layer config. Members that take per-invocation input (`logs.history`, schedule `get`/`has`, …) use **`Resource.effectFn`**.
+**Input (Slice 0 locked):** Process has **no tag `payload`**. Manual `run` is inputless `Resource.effect(success, error)` — worker stays nullary in layer config. Members that take per-invocation input (`logs.query`, schedule `get`/`has`, …) use **`Resource.effectFn`**.
 
 ---
 
@@ -131,8 +131,8 @@ Before/After/Verify each slice. Update owner-decisions.md on same push as code.
 
 **Shipped:**
 - `buildProcessSpec` / `ProcessInstanceSpec` — `run: Resource.effect(success, error)` (no payload)
-- `logs.history`, schedule `get`/`has` migrated from payload-on-`Resource.effect` to `Resource.effectFn`
-- Queue/CQR/nodeStatus `metrics.history` / `logs.history` migrated to `Resource.effectFn`
+- `logs.query`, schedule `get`/`has` migrated from payload-on-`Resource.effect` to `Resource.effectFn`
+- Queue/CQR/nodeStatus `metrics.query` / `logs.query` migrated to `Resource.effectFn`
 - `Resource.effect` API — **no `payload`** (inputless only); parameterized reads use `effectFn`
 - Engine propagates typed failures; toolkit `yield* proc.run` (not `proc.run()`); engine handle keeps `proc.run()`
 - Tests/docs/web/dashboard use `run`; Session 3 RPC defer revoked

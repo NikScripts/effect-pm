@@ -47,8 +47,8 @@ const _proof = Effect.gen(function* () {
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
   yield* h.start; // void lifecycle command
   yield* h.run;
-  // observability is paired by nesting (like the queue): `logs.live` stream + `logs.history` effectFn.
-  const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.history(
+  // observability is paired by nesting (like the queue): `logs.stream` stream + `logs.query` effectFn.
+  const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.query(
     {},
   );
 

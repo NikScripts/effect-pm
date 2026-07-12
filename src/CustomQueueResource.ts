@@ -183,23 +183,23 @@ export const customQueueControlSpec = {
     destructive: true,
   }),
 
-  // ── observability — live stream + history query, paired by nesting ──
+  // ── observability — stream + query, paired by nesting ──
   metrics: {
-    live: Resource.stream(queueMetrics).annotate({
+    stream: Resource.stream(queueMetrics).annotate({
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    history: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
     }),
   },
   logs: {
-    live: Resource.stream(queueLogEntry).annotate({
+    stream: Resource.stream(queueLogEntry).annotate({
       description:
         "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
     }),
-    history: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
     }),
@@ -502,8 +502,8 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       shutdown: handle.shutdown,
       clear: handle.clear,
       metrics: {
-        live: handle.metrics,
-        history: ({ limit, since, until }) =>
+        stream: handle.metrics,
+        query: ({ limit, since, until }) =>
           Option.match(history, {
             onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
             onSome: (store) =>
@@ -515,8 +515,8 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
           }),
       },
       logs: {
-        live: handle.logs,
-        history: ({ limit, since, until }) =>
+        stream: handle.logs,
+        query: ({ limit, since, until }) =>
           Option.match(history, {
             onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
             onSome: (store) =>

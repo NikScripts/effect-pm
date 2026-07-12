@@ -26,11 +26,11 @@ q.logs / q.metrics → bare Streams; .live undefined
 
 **Proof this is the outlier, not the intended shape:** a plain `Resource.Tag` with `Resource.ref(Schema.Number)` materializes on its handle as `{ get, changes }` — verified (`c.value.get` / `c.value.changes` both work). The queue handle simply wasn't updated to match when the contract moved to `Resource.ref`; it still splits into a stream + `statusNow`.
 
-**Consequence (reproduced):** `src/web/data.ts` reads `q.status.changes` / `q.logs.live` / `q.metrics.live` — all `undefined` on the queue handle → the dashboard widgets subscribe to nothing → **show no live data.** Mounted the shipped `QueueStats`/`QueueControls`/`LogStream` against a local queue: mounts clean, all zeros after enqueue.
+**Consequence (reproduced):** `src/web/data.ts` reads `q.status.changes` / `q.logs.stream` / `q.metrics.stream` — all `undefined` on the queue handle → the dashboard widgets subscribe to nothing → **show no live data.** Mounted the shipped `QueueStats`/`QueueControls`/`LogStream` against a local queue: mounts clean, all zeros after enqueue.
 
 ## Your task
 
-Make the queue handle expose `status` as a proper **subscribable** (`{ get, changes }`) matching `Resource.ref(queueStatus)`, instead of a bare stream + a separate `statusNow`. The backing `SubscriptionRef` (`statusRef`) is already there — surface it (e.g. `Resource.subscribable(statusRef)` / the same mechanism plain resources use) rather than splitting it. Do the same for `logs`/`metrics` if the contract intends the nested `{ live, history }` shape.
+Make the queue handle expose `status` as a proper **subscribable** (`{ get, changes }`) matching `Resource.ref(queueStatus)`, instead of a bare stream + a separate `statusNow`. The backing `SubscriptionRef` (`statusRef`) is already there — surface it (e.g. `Resource.subscribable(statusRef)` / the same mechanism plain resources use) rather than splitting it. Do the same for `logs`/`metrics` if the contract intends the nested `{ stream, query }` shape.
 
 The owner's read (agreed): this is **small** — the ref backing exists; the impl just surfaces the wrong thing. It is **not** a rewrite.
 

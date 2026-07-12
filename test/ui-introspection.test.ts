@@ -45,7 +45,7 @@ it("a UI can introspect each resource's contract to render widgets", () => {
     }));
     // live panel, read panel, and a confirm-before button all fall out of the metadata
     expect(methods.some((m) => m.name === "status" && m.streaming)).toBe(true);
-    expect(methods.some((m) => m.name === "logs.history" && m.kind === "mutate")).toBe(true);
+    expect(methods.some((m) => m.name === "logs.query" && m.kind === "mutate")).toBe(true);
     expect(methods.some((m) => m.name === "stop" && m.destructive)).toBe(true);
     // every method carries a human-readable description for the UI
     expect(methods.every((m) => typeof m.description === "string")).toBe(true);

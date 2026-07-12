@@ -64,8 +64,8 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
   `deadLetter` / `drop`.
 - **State:** `size` / `sizes` / `isEmpty` / `completed`.
 - **Lifecycle:** `start` / `pause` / `resume` / `shutdown` / `clear`.
-- **Observe:** `status` (`status.get` / `status.changes`), `metrics.live`, `logs.live`, `events` (live streams) and
-  `logs.history` / `metrics.history` (durable backfill).
+- **Observe:** `status` (`status.get` / `status.changes`), `metrics.stream`, `logs.stream`, `events` (live streams) and
+  `logs.query` / `metrics.query` (durable backfill).
 
 ## Self-refill
 

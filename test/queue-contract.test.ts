@@ -73,12 +73,12 @@ const makeImpl = () => {
     // is verified over real http in resource-stream-http.test.ts); empty streams satisfy the
     // contract. `events` (item-typed) is supplied per-instance where the item schema is known.
     metrics: {
-      live: Stream.empty,
-      history: () => Effect.succeed([]),
+      stream: Stream.empty,
+      query: () => Effect.succeed([]),
     },
     logs: {
-      live: Stream.empty,
-      history: () => Effect.succeed([]),
+      stream: Stream.empty,
+      query: () => Effect.succeed([]),
     },
   };
 };
@@ -148,14 +148,14 @@ it("exposes the expected control verbs", () => {
       "status",
     ].sort(),
   );
-  // observability is nested: live stream + history query per group
+  // observability is nested: stream + query per group
   expect(Object.keys(queueControlSpec.metrics).sort()).toEqual([
-    "history",
-    "live",
+    "query",
+    "stream",
   ]);
   expect(Object.keys(queueControlSpec.logs).sort()).toEqual([
-    "history",
-    "live",
+    "query",
+    "stream",
   ]);
 });
 
@@ -400,7 +400,7 @@ it("QueueResource.layer surfaces captured logs via queue.logs", () => {
     const collected = yield* Effect.forkChild(
       Stream.runCollect(
         Stream.take(
-          Stream.filter(q.logs.live, (e) => e.message.includes("handling")),
+          Stream.filter(q.logs.stream, (e) => e.message.includes("handling")),
           1,
         ),
       ),

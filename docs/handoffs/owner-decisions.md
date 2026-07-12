@@ -29,7 +29,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ## 2026-07-12 — Process manual run RPC vocabulary (owner correction)
 
-- **Owner said:** Toolkit member stays **`run`**. `Resource.effect` is **inputless** (`yield* proc.run`); `Resource.effectFn` takes per-invocation input (`logs.history`, schedule `get`/`has`, …). No `payload` on `Resource.effect`.
+- **Owner said:** Toolkit member stays **`run`**. `Resource.effect` is **inputless** (`yield* proc.run`); `Resource.effectFn` takes per-invocation input (`logs.query`, schedule `get`/`has`, …). No `payload` on `Resource.effect`.
 - **Chose:** Revert mistaken `run` → `effect` rename; `run: Resource.effect(success, error)` with **no payload**; migrate all payload members to `effectFn` (Process + Queue/CQR/nodeStatus history); remove `payload` from `Resource.effect` API.
 - **Rejected:** `payload` on `Resource.effect`; renaming toolkit verb to `effect`; `yield* proc.run()` on stamped tags.
 - **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; tests/docs/web use `yield* proc.run`.
