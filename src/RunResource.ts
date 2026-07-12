@@ -428,7 +428,7 @@ const makeStaticRun = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
 ): RunResourceStaticRun<I, A, E, Self> =>
-  (Resource.isInputlessEffect(tag[Resource.specSym].run as Resource.AnyMethod)
+  (Resource.isEffect(tag[Resource.specSym].run as Resource.AnyMethod)
     ? makeStaticRunInputless(tag as unknown as ResourceTag<Self, RunInstanceSpec<typeof Schema.Void, A, E>>)
     : makeStaticRunParameterized(
         tag as unknown as ResourceTag<Self, RunInstanceSpec<Exclude<I, typeof Schema.Void>, A, E>>,
@@ -573,7 +573,7 @@ const buildRunImpl = <
       changes: handle.status.changes,
     };
     const runImpl = (
-      Resource.isInputlessEffect(tag[Resource.specSym].run as Resource.AnyMethod)
+      Resource.isEffect(tag[Resource.specSym].run as Resource.AnyMethod)
         ? Effect.suspend(
             handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>,
           )
