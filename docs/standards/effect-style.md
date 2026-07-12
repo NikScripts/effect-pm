@@ -125,7 +125,10 @@ another call's arguments or an expression; that's what a `const` (or a pipe) is 
 // ❌ bad — a yield* wrapped inside another call
 yield* emails.add(yield* nextEmail)
 
-// ✅ good — bind, then use
+// ✅ good — pipe it, no throwaway const
+yield* nextEmail.pipe(Effect.andThen(emails.add))
+
+// ✅ also fine — bind to a const, then use
 const email = yield* nextEmail
 yield* emails.add(email)
 ```

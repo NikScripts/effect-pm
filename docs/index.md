@@ -32,8 +32,7 @@ that lives on the *other* runtime, reached by port:
 const scheduler = Process.layer(Digest, {
   effect: Effect.gen(function* () {
     const emails = yield* Emails            // the queue on the worker runtime
-    const email = yield* nextEmail
-    yield* emails.add(email)
+    yield* nextEmail.pipe(Effect.andThen(emails.add))
   }),
   polling: Polling.spaced(Duration.hours(1)),
 }).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
