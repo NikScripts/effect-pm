@@ -4,11 +4,11 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import { makeResourceAtoms } from "../examples/resource-atoms/resource-atoms";
 
-// A resource with one query (read atom), one void mutate, one payload mutate.
+// A resource with one query (read atom), one void command, one payload mutate.
 class Counter extends Resource.Tag<Counter>()("ratoms/Counter", {
-  current: Resource.effect(Schema.Number), // no-payload query → READ atom
-  reset: Resource.effectFn(Schema.Void), // void mutate → command fn
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }), // payload → fn
+  current: Resource.effect(Schema.Number), // value read → READ atom
+  reset: Resource.effect(Schema.Void), // void command → action fn
+  increment: Resource.effectFn({ by: Schema.Number }), // payload → fn
 }) {}
 
 it("derives read + command atoms from a Resource spec, and they react", () => {
@@ -16,8 +16,8 @@ it("derives read + command atoms from a Resource spec, and they react", () => {
   const layer = Resource.layer(Counter, {
     current: Effect.sync(() => value),
     reset: Effect.sync(() => {
-      value = 0;
-    }),
+        value = 0;
+      }),
     increment: ({ by }) =>
       Effect.sync(() => {
         value += by;

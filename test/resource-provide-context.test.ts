@@ -19,10 +19,10 @@ class T extends Resource.Tag<T>()("provide-context/T", {
   scaled: Resource.effect(Schema.Number),
   // Effect method requiring nothing — providing a context is a harmless no-op
   plain: Resource.effect(Schema.Number),
-  // nested group: a Stream `live` (untouched) + an Effect `history` (mapped)
+  // nested group: a Stream `stream` (untouched) + an Effect `query` (mapped)
   group: {
-    live: Resource.stream(Schema.Number),
-    history: Resource.effect(Schema.Array(Schema.Number)),
+    stream: Resource.stream(Schema.Number),
+    query: Resource.effect(Schema.Array(Schema.Number)),
   },
 }) {}
 
@@ -40,8 +40,8 @@ it("provideContext maps Effect methods and leaves Stream / Subscribable members 
     scaled: Effect.map(Dep, (n) => n * 10), // requires Dep
     plain: Effect.succeed(7), // requires nothing
     group: {
-      live: liveStream,
-      history: Effect.succeed<ReadonlyArray<number>>([1, 2, 3]),
+      stream: liveStream,
+      query: Effect.succeed<ReadonlyArray<number>>([1, 2, 3]),
     },
   };
 
@@ -52,12 +52,12 @@ it("provideContext maps Effect methods and leaves Stream / Subscribable members 
   // The requirement-free method is unaffected.
   expect(Effect.runSync(provided.plain)).toBe(7);
   // A nested-group Effect method is mapped too and resolves.
-  expect(Effect.runSync(provided.group.history)).toEqual([1, 2, 3]);
+  expect(Effect.runSync(provided.group.query)).toEqual([1, 2, 3]);
 
   // Stream and Subscribable members pass through by reference — not wrapped.
   expect(provided.value).toBe(valueSub);
   expect(provided.feed).toBe(feedStream);
-  expect(provided.group.live).toBe(liveStream);
+  expect(provided.group.stream).toBe(liveStream);
 });
 
 it("mapEffects with a type-preserving transform maps every Effect method (streams untouched)", () => {
@@ -70,8 +70,8 @@ it("mapEffects with a type-preserving transform maps every Effect method (stream
     scaled: Effect.succeed(2).pipe(Effect.tap(() => Effect.sync(() => seen.push("scaled")))),
     plain: Effect.succeed(3),
     group: {
-      live: Stream.make(9),
-      history: Effect.succeed<ReadonlyArray<number>>([]),
+      stream: Stream.make(9),
+      query: Effect.succeed<ReadonlyArray<number>>([]),
     },
   };
 
@@ -81,7 +81,7 @@ it("mapEffects with a type-preserving transform maps every Effect method (stream
 
   Effect.runSync(traced.scaled);
   Effect.runSync(traced.plain);
-  Effect.runSync(traced.group.history);
+  Effect.runSync(traced.group.query);
   // three Effect methods ran, each with its own "mapped" tap (plus scaled's own "scaled" tap)
   expect(seen.filter((s) => s === "mapped")).toHaveLength(3);
   // the stream member is the same reference (never wrapped)

@@ -16,25 +16,23 @@ import * as Resource from "../../src/Resource";
 
 export class Counter extends Resource.Tag<Counter>()("Counter", {
   current: Resource.effect(Schema.Number),
-  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
-  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
+  increment: Resource.effectFn({ by: Schema.Number }),
+  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
   list: Resource.effect(Schema.Array(Schema.String)),
-  status: Resource.effect(
+  status: Resource.effectFn(
+    { id: Schema.String },
     Schema.Struct({
       id: Schema.String,
       pending: Schema.Number,
       paused: Schema.Boolean,
     }),
-    { payload: { id: Schema.String } },
   ),
-  pause: Resource.effectFn(Schema.Void, { payload: { id: Schema.String } }),
-  resume: Resource.effectFn(Schema.Void, { payload: { id: Schema.String } }),
-  enqueue: Resource.effectFn(Schema.Void, {
-    payload: { id: Schema.String, item: Schema.String },
-  }),
+  pause: Resource.effectFn({ id: Schema.String }),
+  resume: Resource.effectFn({ id: Schema.String }),
+  enqueue: Resource.effectFn({ id: Schema.String, item: Schema.String }),
 }) {}
 
 let count = 0;
@@ -45,8 +43,8 @@ export const counterLayer = Resource.layer(Counter, {
       count += by;
     }),
   reset: Effect.sync(() => {
-    count = 0;
-  }),
+      count = 0;
+    }),
 });
 
 const queues = new Map<string, { pending: number; paused: boolean }>([

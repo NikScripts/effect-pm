@@ -45,7 +45,11 @@ type PlainImplIsNotBuilt = Resource.BuiltResource<ProcessSpec, WorkerDep> extend
 true satisfies PlainImplIsNotBuilt;
 
 // Worker methods on the bundle still carry `R` before grant.
-type StartBeforeGrant = Built["impl"]["start"] extends Effect.Effect<unknown, unknown, WorkerDep>
+type StartBeforeGrant = Built["impl"]["start"] extends Effect.Effect<
+  unknown,
+  unknown,
+  WorkerDep
+>
   ? true
   : false;
 true satisfies StartBeforeGrant;

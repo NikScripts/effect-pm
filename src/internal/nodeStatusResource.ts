@@ -79,13 +79,11 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
     description: "Server epoch milliseconds — a round-trip liveness probe.",
   }),
   logs: {
-    live: Resource.stream(LogEntrySchema).annotate({
+    stream: Resource.stream(LogEntrySchema).annotate({
       description:
         "Runtime-wide node log stream (recent tail, then live). Empty unless NodeLogs.layer is provided.",
     }),
-    history: Resource.effect(Schema.Array(LogEntrySchema), {
-      payload: { limit: Schema.Number },
-    }).annotate({
+    query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
         "Replay persisted node logs (newest `limit`). Empty unless a LogStore is provided.",
     }),
@@ -132,10 +130,10 @@ export const buildNodeStatusImpl = (options: {
     status: statusSub,
     ping: Clock.currentTimeMillis,
     logs: {
-      live: logsLive,
+      stream: logsLive,
       // this node's durable logs (its own LogStore holds only its lines). Optional — `[]` when no
       // LogStore is composed. Newest first.
-      history: (payload: { readonly limit: number }) =>
+      query: (payload: { readonly limit: number }) =>
         Effect.serviceOption(LogStore).pipe(
           Effect.flatMap(
             Option.match({

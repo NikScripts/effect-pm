@@ -18,7 +18,7 @@ Replace all **public tag / service / wire-config** schema property names with th
 | Success / return / result | **`success`** | `successSchema`, `resultSchema`, … |
 | Failure channel | **`error`** | `errorSchema` (name stays, meaning aligned) |
 
-**SSOT:** `Resource.effectFn(success, { payload, error })`, `Resource.ref`, stream methods — see `src/Resource.ts` TSDoc (`payload` / `success` / `error`).
+**SSOT:** `Resource.effectFn(payload, success?, error?)` or `Resource.effectFn({ payload, success, error })`, `Resource.ref`, stream methods — see `src/Resource.ts` TSDoc (`payload` / `success` / `error`).
 
 **Policy:** No backward-compat shims (`@deprecated` aliases, re-exports under old names). One breaking changeset; update every in-repo callsite, test, example, and doc in the same change.
 

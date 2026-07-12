@@ -19,7 +19,7 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { methodMeta, specOf } from "../../src/Resource";
+import { methodMeta, specOf, isVoidCommand } from "../../src/Resource";
 import {
   RegistryProvider,
   useAtomSet,
@@ -78,7 +78,7 @@ const buildWidget = (
     }
     const meta = methodMeta(method);
     const hasPayload = method.payload !== undefined;
-    if (!hasPayload && meta.kind === "query") {
+    if (!hasPayload && meta.kind === "query" && !isVoidCommand(method)) {
       queries.push({
         name,
         atom: Atom.withReactivity(reactivityKey)(

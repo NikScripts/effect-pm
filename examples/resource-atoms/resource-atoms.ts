@@ -14,7 +14,7 @@
 
 import { Effect, Schema } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import { methodMeta, specOf } from "../../src/Resource";
+import { methodMeta, specOf, isVoidCommand } from "../../src/Resource";
 import type { AnyMethod, FlatSpec, ResourceTag, Spec } from "../../src/Resource";
 
 /** One spec method → its atom kind, by the contract. */
@@ -25,7 +25,9 @@ type AtomOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
       M["error"]["Type"]
     >
   : M["kind"] extends "query"
-    ? Atom.Atom<AsyncResult.AsyncResult<M["success"]["Type"], M["error"]["Type"]>>
+    ? M["success"] extends typeof Schema.Void
+      ? Atom.AtomResultFn<void, void, never>
+      : Atom.Atom<AsyncResult.AsyncResult<M["success"]["Type"], M["error"]["Type"]>>
     : Atom.AtomResultFn<void, M["success"]["Type"], M["error"]["Type"]>;
 
 /** The atom set inferred from a tag's spec — local methods (streams) have no atom. */
@@ -51,7 +53,7 @@ export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
       continue;
     }
     const hasPayload = method.payload !== undefined;
-    const isReadAtom = !hasPayload && methodMeta(method).kind === "query";
+    const isReadAtom = !hasPayload && methodMeta(method).kind === "query" && !isVoidCommand(method);
     if (isReadAtom) {
       atoms[key] = Atom.withReactivity(reactivityKey)(
         runtime.atom(

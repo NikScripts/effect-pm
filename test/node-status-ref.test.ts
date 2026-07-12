@@ -24,8 +24,8 @@ it("NodeStatus exposes status as Subscribable and nested logs over http", () =>
         expect("get" in node.status).toBe(true);
         expect("changes" in node.status).toBe(true);
         expect("statusNow" in node).toBe(false);
-        expect(node.logs.live).toBeDefined();
-        expect(node.logs.history).toBeDefined();
+        expect(node.logs.stream).toBeDefined();
+        expect(node.logs.query).toBeDefined();
         expect("logHistory" in node).toBe(false);
 
         const snap = yield* node.status.get;
@@ -34,7 +34,7 @@ it("NodeStatus exposes status as Subscribable and nested logs over http", () =>
 
         const head = yield* Stream.runHead(node.status.changes);
         expect(Option.isSome(head)).toBe(true);
-        expect(yield* node.logs.history({ limit: 10 })).toEqual([]);
+        expect(yield* node.logs.query({ limit: 10 })).toEqual([]);
       }).pipe(
         Effect.provide(NodeStatus.clientHttp(`http://127.0.0.1:${port}/rpc`)),
         Effect.scoped,

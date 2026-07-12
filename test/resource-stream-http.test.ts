@@ -78,7 +78,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
 // (local layer) with a `Deferred` ready-latch so the subscription is established before the
 // updates — deterministic, no cross-wire timing race.
 class Status extends Resource.Tag<Status>()("stream/Status", {
-  set: Resource.effectFn(Schema.Void, { payload: { value: Schema.String } }),
+  set: Resource.effectFn({ value: Schema.String }),
   changes: Resource.stream(Schema.String),
 }) {}
 

@@ -52,18 +52,18 @@ export interface ApiPoint {
 }
 
 /** The structural shape of a queue's live service the widgets consume. `status`/`size`/`isEmpty` are
- *  reactive `ref`s (`Subscribable`: `.get` / `.changes`); `metrics`/`logs` are `{ live, history }`. */
+ *  reactive `ref`s (`Subscribable`: `.get` / `.changes`); `metrics`/`logs` are `{ stream, query }`. */
 interface QueueService {
   readonly status: Subscribable<QueueStatus>;
   readonly size: Subscribable<number>;
   readonly isEmpty: Subscribable<boolean>;
   readonly metrics: {
-    readonly live: Stream.Stream<QueueMetrics>;
-    readonly history: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
+    readonly stream: Stream.Stream<QueueMetrics>;
+    readonly query: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
   };
   readonly logs: {
-    readonly live: Stream.Stream<{ readonly level: string; readonly message: string }>;
-    readonly history: (o: {
+    readonly stream: Stream.Stream<{ readonly level: string; readonly message: string }>;
+    readonly query: (o: {
       readonly limit: number;
     }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
   };
@@ -83,12 +83,12 @@ interface RefLike<A> {
 interface ProcessService {
   readonly status: RefLike<ProcessStatus>;
   readonly logs: {
-    readonly live: Stream.Stream<{ readonly level: string; readonly message: string }>;
-    readonly history: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
+    readonly stream: Stream.Stream<{ readonly level: string; readonly message: string }>;
+    readonly query: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
   };
   readonly start: Effect.Effect<void>;
   readonly stop: Effect.Effect<void>;
-  readonly runImmediately: Effect.Effect<void>;
+  readonly run: Effect.Effect<void>;
   readonly schedule?: {
     readonly entries: RefLike<ReadonlyArray<ScheduleEntry>>;
     readonly set: (entries: ReadonlyArray<ScheduleEntry>) => Effect.Effect<void>;
@@ -143,7 +143,7 @@ export interface ProcessBundle {
   readonly schedule: ValueAtom<ReadonlyArray<ScheduleEntry>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
-  readonly runImmediately: CommandAtom;
+  readonly run: CommandAtom;
   /** Replace all schedule entries. */
   readonly setSchedule: Atom.AtomResultFn<ReadonlyArray<ScheduleEntry>, void, unknown>;
   /** Remove all schedule entries. */
@@ -274,16 +274,16 @@ const bumpLogIdFrom = (key: string): void => {
 const cachedAccumulator = <A, R>(opts: {
   readonly key: string;
   readonly cap: number;
-  readonly live: Stream.Stream<A, never, R>;
-  readonly history?: Effect.Effect<ReadonlyArray<A>, never, R>;
+  readonly stream: Stream.Stream<A, never, R>;
+  readonly query?: Effect.Effect<ReadonlyArray<A>, never, R>;
 }): Stream.Stream<ReadonlyArray<A>, never, R> => {
   const entry = readCache<A>(opts.key);
   const fresh = entry !== undefined && now() - entry.at < FRESH_MS;
   const seed: ReadonlyArray<A> = fresh && entry !== undefined ? entry.items : [];
   const source =
-    fresh || opts.history === undefined
-      ? opts.live
-      : Stream.concat(Stream.unwrap(Effect.map(opts.history, Stream.fromIterable)), opts.live);
+    fresh || opts.query === undefined
+      ? opts.stream
+      : Stream.concat(Stream.unwrap(Effect.map(opts.query, Stream.fromIterable)), opts.stream);
   return source.pipe(
     Stream.scan(seed, (acc, x) => [...acc, x].slice(-opts.cap)),
     Stream.tap((acc) => Effect.sync(() => writeCache(opts.key, acc))),
@@ -310,11 +310,11 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  // `status` is a reactive `ref` — subscribe via `.changes`; `metrics` is nested `{ live, history }`.
+  // `status` is a reactive `ref` — subscribe via `.changes`; `metrics` is nested `{ stream, query }`.
   const statusStream = Stream.unwrap(
     Effect.map(tag, (q) => q.status.changes),
   );
-  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.live));
+  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream));
   // Stamp the point with the metric's own window-end (real server time), not the client's receive
   // time — so backfilled points land at their true position on the time axis (the window filter).
   const toPoint = (m: QueueMetrics): MetricPoint => ({
@@ -343,7 +343,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   const metricsHistory = runtime.atom(
     Stream.concat(
       Stream.unwrap(
-        Effect.flatMap(tag, (q) => q.metrics.history({ limit: HISTORY })).pipe(
+        Effect.flatMap(tag, (q) => q.metrics.query({ limit: HISTORY })).pipe(
           Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
         ),
       ),
@@ -374,8 +374,8 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
       cachedAccumulator({
         key: `${tag.key}/logs`,
         cap: 300,
-        live: Stream.unwrap(Effect.map(tag, (q) => q.logs.live)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(tag, (q) => q.logs.history({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
+        stream: Stream.unwrap(Effect.map(tag, (q) => q.logs.stream)).pipe(Stream.map(toLogLine)),
+        query: Effect.flatMap(tag, (q) => q.logs.query({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
       }),
     ),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
@@ -406,8 +406,8 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
       cachedAccumulator({
         key: `${tag.key}/logs`,
         cap: 300,
-        live: Stream.unwrap(Effect.map(tag, (p) => p.logs.live)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(tag, (p) => p.logs.history({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
+        stream: Stream.unwrap(Effect.map(tag, (p) => p.logs.stream)).pipe(Stream.map(toLogLine)),
+        query: Effect.flatMap(tag, (p) => p.logs.query({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
       }),
     ),
     // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
@@ -417,7 +417,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
     ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
-    runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
+    run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),
     setSchedule: runtime.fn((entries: ReadonlyArray<ScheduleEntry>) =>
       Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.set(entries))),
     ),
@@ -499,8 +499,8 @@ export const nodeStatusBundle = <R, ER>(
       cachedAccumulator({
         key: logsKey,
         cap: 300,
-        live: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.live)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.history({ limit: 300 })).pipe(
+        stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(Stream.map(toLogLine)),
+        query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
           Effect.map((entries) => entries.map(toLogLine)),
         ),
       }).pipe(Stream.provide(nodeStatusClient(ref.node))),
@@ -511,7 +511,7 @@ export const nodeStatusBundle = <R, ER>(
       cachedAccumulator({
         key: `${ref.id}/health`,
         cap: 120,
-        live: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status.changes)).pipe(
+        stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status.changes)).pipe(
           Stream.map((st) => st.resources.filter((x) => x.ready).length),
         ),
       }).pipe(Stream.provide(nodeStatusClient(ref.node))),

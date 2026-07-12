@@ -19,7 +19,7 @@ import { queueControlSpec } from "../src/QueueResource";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
-import { forwardClient, groupOf, methodMeta, specOf } from "../src/Resource";
+import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Resource";
 
 // A queue family built from the control contract: many instances share the "queue" group.
 const Queue = Resource.tagFor("queue", queueControlSpec);
@@ -73,12 +73,12 @@ const makeImpl = () => {
     // is verified over real http in resource-stream-http.test.ts); empty streams satisfy the
     // contract. `events` (item-typed) is supplied per-instance where the item schema is known.
     metrics: {
-      live: Stream.empty,
-      history: () => Effect.succeed([]),
+      stream: Stream.empty,
+      query: () => Effect.succeed([]),
     },
     logs: {
-      live: Stream.empty,
-      history: () => Effect.succeed([]),
+      stream: Stream.empty,
+      query: () => Effect.succeed([]),
     },
   };
 };
@@ -148,14 +148,14 @@ it("exposes the expected control verbs", () => {
       "status",
     ].sort(),
   );
-  // observability is nested: live stream + history query per group
+  // observability is nested: stream + query per group
   expect(Object.keys(queueControlSpec.metrics).sort()).toEqual([
-    "history",
-    "live",
+    "query",
+    "stream",
   ]);
   expect(Object.keys(queueControlSpec.logs).sort()).toEqual([
-    "history",
-    "live",
+    "query",
+    "stream",
   ]);
 });
 
@@ -169,13 +169,15 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(meta("size").kind).toBe("query");
   expect(meta("isEmpty").kind).toBe("query");
 
-  // mutations are mutates
-  expect(meta("pause").kind).toBe("mutate");
-  expect(meta("start").kind).toBe("mutate");
+  // void lifecycle commands are inputless `effect` (wire kind `query`, void success)
+  expect(meta("pause").kind).toBe("query");
+  expect(meta("start").kind).toBe("query");
+  expect(isVoidCommand(queueControlSpec.pause)).toBe(true);
+  expect(isVoidCommand(queueControlSpec.start)).toBe(true);
 
-  // state-losing mutations are flagged destructive
-  expect(meta("shutdown")).toMatchObject({ kind: "mutate", destructive: true });
-  expect(meta("clear")).toMatchObject({ kind: "mutate", destructive: true });
+  // state-losing commands are flagged destructive
+  expect(meta("shutdown")).toMatchObject({ kind: "query", destructive: true });
+  expect(meta("clear")).toMatchObject({ kind: "query", destructive: true });
   expect(meta("pause").destructive).toBe(false);
 
   // descriptions are present for help text
@@ -398,7 +400,7 @@ it("QueueResource.layer surfaces captured logs via queue.logs", () => {
     const collected = yield* Effect.forkChild(
       Stream.runCollect(
         Stream.take(
-          Stream.filter(q.logs.live, (e) => e.message.includes("handling")),
+          Stream.filter(q.logs.stream, (e) => e.message.includes("handling")),
           1,
         ),
       ),

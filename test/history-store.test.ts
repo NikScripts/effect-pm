@@ -34,12 +34,12 @@ it("queue logHistory reads back captured logs (HistoryStore provided to the laye
       );
       // the capture fiber appends asynchronously — wait until history is populated
       yield* Effect.gen(function* () {
-        while ((yield* queue.logs.history({})).length === 0) {
+        while ((yield* queue.logs.query({})).length === 0) {
           yield* Effect.sleep(Duration.millis(10));
         }
       }).pipe(Effect.timeout(Duration.seconds(2)));
 
-      const history = yield* queue.logs.history({ limit: 50 });
+      const history = yield* queue.logs.query({ limit: 50 });
       expect(history.length).toBeGreaterThan(0);
       // entries decode back to the wire log schema (level/message preserved)
       expect(typeof history[0]?.level).toBe("string");
@@ -59,8 +59,8 @@ it("logHistory is empty when no HistoryStore is provided (graceful, opt-in)", ()
     Effect.gen(function* () {
       const queue = yield* HQueue;
       yield* queue.add({ n: 1 });
-      expect(yield* queue.logs.history({})).toEqual([]);
-      expect(yield* queue.metrics.history({})).toEqual([]);
+      expect(yield* queue.logs.query({})).toEqual([]);
+      expect(yield* queue.metrics.query({})).toEqual([]);
     }).pipe(
       Effect.provide(
         QueueResource.layer(HQueue, {

@@ -122,7 +122,7 @@ export interface QueueBundle {
 }
 type QueueStatus = QueueSvc["status"] extends Resource.Subscribable<infer S> ? S : never;
 type QueueMetrics = QueueSvc["metrics"] extends {
-  readonly live: Stream.Stream<infer M, infer _E, infer _R>;
+  readonly stream: Stream.Stream<infer M, infer _E, infer _R>;
 } ? M : never;
 
 // one combined metrics stream carries both backfill points and live raw metrics
@@ -153,16 +153,16 @@ const bumpLogIdFrom = (key: string): void => {
 const cachedAccumulator = <A, R>(opts: {
   readonly key: string;
   readonly cap: number;
-  readonly live: Stream.Stream<A, never, R>;
-  readonly history?: Effect.Effect<ReadonlyArray<A>, never, R>;
+  readonly stream: Stream.Stream<A, never, R>;
+  readonly query?: Effect.Effect<ReadonlyArray<A>, never, R>;
 }): Stream.Stream<ReadonlyArray<A>, never, R> => {
   const entry = readCache<A>(opts.key);
   const fresh = entry !== undefined && Date.now() - entry.at < FRESH_MS;
   const seed: ReadonlyArray<A> = fresh && entry !== undefined ? entry.items : [];
   const source =
-    fresh || opts.history === undefined
-      ? opts.live
-      : Stream.concat(Stream.unwrap(Effect.map(opts.history, Stream.fromIterable)), opts.live);
+    fresh || opts.query === undefined
+      ? opts.stream
+      : Stream.concat(Stream.unwrap(Effect.map(opts.query, Stream.fromIterable)), opts.stream);
   return source.pipe(
     Stream.scan(seed, (acc, x) => [...acc, x].slice(-opts.cap)),
     Stream.tap((acc) => Effect.sync(() => writeCache(opts.key, acc))),
@@ -177,7 +177,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   if (existing !== undefined) return existing;
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status.changes));
-  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.live));
+  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream));
   const toPoint = (m: QueueMetrics): MetricPoint => ({
     t: Date.now(),
     throughput: m.throughputPerSec,
@@ -208,7 +208,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   const metricsHistory = runtime.atom(
     Stream.concat(
       Stream.unwrap(
-        Effect.flatMap(tag, (q) => q.metrics.history({ limit: HISTORY })).pipe(
+        Effect.flatMap(tag, (q) => q.metrics.query({ limit: HISTORY })).pipe(
           Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
         ),
       ),
@@ -237,8 +237,8 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
       cachedAccumulator({
         key: `${tag.key}/logs`,
         cap: 300,
-        live: Stream.unwrap(Effect.map(tag, (q) => q.logs.live)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(tag, (q) => q.logs.history({ limit: 300 })).pipe(
+        stream: Stream.unwrap(Effect.map(tag, (q) => q.logs.stream)).pipe(Stream.map(toLogLine)),
+        query: Effect.flatMap(tag, (q) => q.logs.query({ limit: 300 })).pipe(
           Effect.map((ls) => ls.map(toLogLine)),
         ),
       }),
@@ -260,7 +260,7 @@ export interface ProcessBundle {
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
-  readonly runImmediately: CommandAtom;
+  readonly run: CommandAtom;
 }
 const processCache = new Map<string, ProcessBundle>();
 
@@ -277,15 +277,15 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
       cachedAccumulator({
         key: `${tag.key}/logs`,
         cap: 300,
-        live: Stream.unwrap(Effect.map(tag, (p) => p.logs.live)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(tag, (p) => p.logs.history({ limit: 300 })).pipe(
+        stream: Stream.unwrap(Effect.map(tag, (p) => p.logs.stream)).pipe(Stream.map(toLogLine)),
+        query: Effect.flatMap(tag, (p) => p.logs.query({ limit: 300 })).pipe(
           Effect.map((ls) => ls.map(toLogLine)),
         ),
       }),
     ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
-    runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
+    run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),
   };
   processCache.set(tag.key, bundle);
   return bundle;
@@ -336,7 +336,7 @@ interface FleetEvent {
 }
 const fleetEvents: ReadonlyArray<Stream.Stream<FleetEvent, never, AllQueues>> = queueLeaves(Fleet).flatMap((tag) => [
   Stream.unwrap(Effect.map(tag, (q) => q.status.changes)).pipe(Stream.map((s): FleetEvent => ({ tag, s, m: undefined }))),
-  Stream.unwrap(Effect.map(tag, (q) => q.metrics.live)).pipe(Stream.map((m): FleetEvent => ({ tag, s: undefined, m }))),
+  Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream)).pipe(Stream.map((m): FleetEvent => ({ tag, s: undefined, m }))),
 ]);
 
 /** id → live {@link FleetRow} for every queue in the fleet. */

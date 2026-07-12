@@ -12,10 +12,10 @@ class T extends Resource.Tag<T>()("provide-context-d/T", {
   value: Resource.ref(Schema.Number),
   feed: Resource.stream(Schema.Number),
   scaled: Resource.effect(Schema.Number),
-  add: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
+  add: Resource.effectFn(Schema.Struct({ by: Schema.Number })),
   group: {
-    live: Resource.stream(Schema.Number),
-    history: Resource.effect(Schema.Array(Schema.Number)),
+    stream: Resource.stream(Schema.Number),
+    query: Resource.effect(Schema.Array(Schema.Number)),
   },
 }) {}
 
@@ -29,8 +29,8 @@ const impl: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep> = {
   scaled: Effect.map(Dep, (n) => n), // requires Dep
   add: ({ by }) => Effect.as(Dep, void by), // `by` typed from the spec; requires Dep
   group: {
-    live: Stream.make(1),
-    history: Effect.succeed<ReadonlyArray<number>>([]),
+    stream: Stream.make(1),
+    query: Effect.succeed<ReadonlyArray<number>>([]),
   },
 };
 
@@ -46,7 +46,7 @@ void ({} as typeof provided.add satisfies (
   payload: { readonly by: number },
 ) => Effect.Effect<void, never, never>);
 // … and a nested-group method is R-free too.
-void ({} as typeof provided.group.history satisfies Effect.Effect<
+void ({} as typeof provided.group.query satisfies Effect.Effect<
   ReadonlyArray<number>,
   never,
   never
@@ -55,7 +55,7 @@ void ({} as typeof provided.group.history satisfies Effect.Effect<
 // Stream and Subscribable members are untouched.
 void ({} as typeof provided.feed satisfies Stream.Stream<number>);
 void ({} as typeof provided.value satisfies Resource.Subscribable<number>);
-void ({} as typeof provided.group.live satisfies Stream.Stream<number>);
+void ({} as typeof provided.group.stream satisfies Stream.Stream<number>);
 
 // --- Soundness: `provideContext` is SUBTRACTIVE (`Exclude<R, Ctx>`), not an unconditional strip to
 // `never`. A method needing a service the provided context does NOT cover keeps a residual requirement,
@@ -70,8 +70,8 @@ const implPartial: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep | Dep2> =
   scaled: Effect.flatMap(Dep2, () => Effect.map(Dep, (n) => n)), // needs BOTH Dep and Dep2
   add: ({ by }) => Effect.as(Dep, void by),
   group: {
-    live: Stream.make(1),
-    history: Effect.succeed<ReadonlyArray<number>>([]),
+    stream: Stream.make(1),
+    query: Effect.succeed<ReadonlyArray<number>>([]),
   },
 };
 

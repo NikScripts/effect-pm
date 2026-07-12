@@ -142,7 +142,7 @@ export interface ProcessSnapshot {
   readonly nextScheduleTransition: Option.Option<Date>;
   /** The in-instance repeat cadence, when polling is configured (none otherwise). */
   readonly nextPollCadence: Option.Option<Duration.Duration>;
-  /** Total effect runs started (scheduled + polling + `runImmediately`) since the layer built. */
+  /** Total effect runs started (scheduled + polling + manual {@link run}) since the layer built. */
   readonly runsStarted: number;
   /** Of those, how many completed successfully. */
   readonly runsSucceeded: number;
@@ -173,9 +173,9 @@ export interface Process<out R> {
   readonly effect: Effect.Effect<void, never, R>;
   /**
    * Runs the user `effect` once with tracking, independent of trigger cadence.
-   * Same store-only persistence semantics as {@link Process.effect} on the layer path.
+   * Failures propagate with typed `E` when the tag stamps an `error` schema.
    */
-  readonly runImmediately: () => Effect.Effect<void, never, R>;
+  readonly run: () => Effect.Effect<unknown, never, R>;
   /**
    * One-shot read of the runtime mirror (armed / active instances / next trigger / next schedule
    * transition / poll cadence). Drives the toolkit contract's `status` ref (`status.get` /
@@ -274,7 +274,7 @@ class ProcessScheduleControlsTag extends Context.Service<
  *
  * @remarks
  * - For scheduled runs: value from `ProcessScheduleEntry.id`
- * - For `runImmediately()`: `Option.none()`
+ * - For manual toolkit {@link run}: `Option.none()`
  *
  * @public
  */
@@ -350,7 +350,7 @@ interface ProcessMirror {
   readonly activeInstances: MutableRef.MutableRef<number>;
   readonly nextTriggerRun: MutableRef.MutableRef<Option.Option<Date>>;
   // Run metrics — counted once at the single run boundary ({@link trackedProgram}), so they cover
-  // scheduled ticks, polling ticks, and `runImmediately` alike.
+  // scheduled ticks, polling ticks, and manual toolkit {@link run} alike.
   readonly runsStarted: MutableRef.MutableRef<number>;
   readonly runsSucceeded: MutableRef.MutableRef<number>;
   readonly runsFailed: MutableRef.MutableRef<number>;
@@ -612,7 +612,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
     controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser> =>
+  ): Effect.Effect<unknown, E, RUser> =>
     Effect.gen(function* () {
       const executedAt = yield* Clock.currentTimeMillis;
       MutableRef.update(mirror.runsStarted, (n) => n + 1);
@@ -658,12 +658,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
       const exit = yield* Effect.exit(runUserEffect);
 
-      yield* Effect.uninterruptible(
+      return yield* Effect.uninterruptible(
         Effect.gen(function* () {
           if (Exit.isFailure(exit)) {
             const cause = exit.cause;
             if (Cause.hasInterrupts(cause)) {
-              return;
+              return yield* Effect.failCause(cause);
             }
             const completedAt = yield* Clock.currentTimeMillis;
             MutableRef.update(mirror.runsFailed, (n) => n + 1);
@@ -684,7 +684,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             yield* Effect.logError(
               `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
             );
-            return;
+            return yield* Effect.fail(error as E);
           }
           const completedAt = yield* Clock.currentTimeMillis;
           MutableRef.update(mirror.runsSucceeded, (n) => n + 1);
@@ -693,23 +693,26 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             Option.some(completedAt - executedAt),
           );
           const successValue =
-            storeScopeTag !== undefined && successOf(storeScopeTag) !== undefined
-              ? resultRef !== undefined
-                ? Option.getOrUndefined(yield* SubscriptionRef.get(resultRef))
-                : Exit.isSuccess(exit)
-                  ? exit.value
-                  : undefined
-              : undefined;
+            resultRef !== undefined
+              ? Option.getOrUndefined(yield* SubscriptionRef.get(resultRef))
+              : Exit.isSuccess(exit)
+                ? exit.value
+                : undefined;
           yield* recordStoreCompleted({
             scheduleKey: Option.getOrNull(scheduleIdentifier),
             startedAt: executedAt,
             completedAt,
             isStartupRun,
-            ...(successValue !== undefined ? { success: successValue } : {}),
+            ...(storeScopeTag !== undefined &&
+            successOf(storeScopeTag) !== undefined &&
+            successValue !== undefined
+              ? { success: successValue }
+              : {}),
           });
           yield* Effect.logDebug(
             `✅ Process '${name}' run completed at ${String(executedAt)}`,
           );
+          return successValue;
         }),
       );
     });
@@ -830,7 +833,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
         if (Option.isNone(pollingOption)) {
           if (yield* canContinue) {
-            yield* trackedProgram(entry.id, controls);
+            yield* trackedProgram(entry.id, controls).pipe(Effect.catch(() => Effect.void));
           }
           return;
         }
@@ -858,7 +861,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           if (!(yield* canContinue)) {
             return;
           }
-          yield* trackedProgram(entry.id, controls);
+          yield* trackedProgram(entry.id, controls).pipe(Effect.catch(() => Effect.void));
           yield* polling.afterTick;
         }
       });
@@ -1008,13 +1011,14 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     }
   });
 
-  const runImmediately = (): Effect.Effect<void, never, RUser> =>
+  const run = (): Effect.Effect<unknown, E, RUser> =>
     Effect.gen(function* () {
       yield* Effect.logInfo(
         `🚀 Running '${name}' immediately (tracked; independent of trigger)...`,
       );
-      yield* trackedProgram(Option.none(), noScheduleControls);
+      const result = yield* trackedProgram(Option.none(), noScheduleControls);
       yield* Effect.logDebug(`✅ Completed immediate run of '${name}'`);
+      return result;
     });
 
   const snapshot: Effect.Effect<ProcessSnapshot> = Effect.sync(() => ({
@@ -1033,7 +1037,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const base = {
     name,
     type: "managed" as const,
-    runImmediately,
+    run,
     snapshot,
   };
 
@@ -1073,8 +1077,8 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 // ============================================================================
 
 /**
- * Services still required at the fork site for {@link Process.effect} /
- * {@link Process.runImmediately} for a given {@link ProcessMakeConfig}.
+ * Services still required at the fork site for {@link Process.effect} for a given
+ * {@link ProcessMakeConfig}.
  *
  * @public
  */
@@ -1507,7 +1511,7 @@ export type ProcessExecutionEvent = typeof processExecutionEventVoid.Type;
 export const processExecutionEventFor = makeProcessExecutionEvent;
 
 /**
- * Payload fields for `logs.history` — newest `limit` entries within an optional `[since, until]`
+ * Payload fields for `logs.query` — newest `limit` entries within an optional `[since, until]`
  * window.
  *
  * @public
@@ -1545,7 +1549,7 @@ export const scheduleKind = "@nikscripts/effect-pm/Process/Schedule";
  *
  * @public
  */
-export const processSpec = {
+export const processControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
   // change (uniform local + remote), mirroring the queue's `status` ref.
@@ -1556,34 +1560,53 @@ export const processSpec = {
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effectFn(Schema.Void).annotate({
+  start: Resource.effect(Schema.Void).annotate({
     description: "Begin supervising — fork the trigger driver (idempotent).",
   }),
-  stop: Resource.effectFn(Schema.Void).annotate({
+  stop: Resource.effect(Schema.Void).annotate({
     description: "Stop supervising — interrupt the driver and any active run instances.",
     destructive: true,
   }),
-  runImmediately: Resource.effectFn(Schema.Void).annotate({
-    description:
-      "Run the process effect once with tracking, out of band — independent of the trigger cadence.",
-  }),
 
-  // ── observability — live stream + history query, paired by nesting ──
+  // ── observability — stream + query, paired by nesting ──
   logs: {
-    live: Resource.stream(processLogEntry).annotate({
+    stream: Resource.stream(processLogEntry).annotate({
       description:
         "Captured log lines (engine + instance effect) with level/annotations/spans — empty unless " +
         "the process was configured to capture logs.",
     }),
-    history: Resource.effect(Schema.Array(processLogEntry), {
-      payload: historyQuery,
-    }).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(processLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless captureLogs + a HistoryStore layer are provided.",
     }),
   },
 };
+
+/**
+ * Build a process **instance** spec — control surface plus a typed manual {@link run} RPC.
+ *
+ * @public
+ */
+export const buildProcessSpec = <
+  A extends Schema.Top = typeof Schema.Void,
+  E extends Schema.Top = typeof Schema.Never,
+>(wire?: {
+  readonly success?: A;
+  readonly error?: E;
+}) => ({
+  ...processControlSpec,
+  run: (wire?.error !== undefined
+    ? Resource.effect(wire?.success ?? Schema.Void, wire.error)
+    : Resource.effect(wire?.success ?? Schema.Void)
+  ).annotate({
+    description:
+      "Run the process worker effect once, tracked — returns success; failures typed on error.",
+  }),
+});
+
+/** Erased baseline process spec (`Void` success, `Never` error). @public */
+export const processSpec = buildProcessSpec();
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
 // The spec is validated (without widening) at the `Resource.Tag` call site.
 
@@ -1625,15 +1648,13 @@ export const scheduleGroupSpec = {
   entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "The process's current schedule entries (run windows), reactive.",
   }),
-  set: Resource.effectFn(Schema.Void, {
-    payload: Schema.Array(processScheduleEntry),
-  }).annotate({
+  set: Resource.effectFn(Schema.Array(processScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+  add: Resource.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  clear: Resource.effectFn(Schema.Void).annotate({
+  clear: Resource.effect(Schema.Void).annotate({
     description: "Remove all schedule entries (disarms until new entries are added).",
     destructive: true,
   }),
@@ -1658,36 +1679,30 @@ export const scheduleResourceSpec = {
   entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "All schedule entries (run windows), reactive.",
   }),
-  get: Resource.effect(Schema.Option(processScheduleEntry), {
-    payload: { id: Schema.String },
-  }).annotate({
+  get: Resource.effectFn({ id: Schema.String }, Schema.Option(processScheduleEntry)).annotate({
     description: "Look up a single entry by id (absent if none matches).",
   }),
-  has: Resource.effect(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+  has: Resource.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Whether an entry with the given id exists.",
   }),
-  set: Resource.effectFn(Schema.Void, {
-    payload: Schema.Array(processScheduleEntry),
-  }).annotate({
+  set: Resource.effectFn(Schema.Array(processScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+  add: Resource.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  upsert: Resource.effectFn(Schema.Void, { payload: processScheduleEntry }).annotate({
+  upsert: Resource.effectFn(processScheduleEntry).annotate({
     description: "Insert or replace an entry, keyed by its id.",
   }),
-  remove: Resource.effectFn(Schema.Boolean, { payload: { id: Schema.String } }).annotate({
+  remove: Resource.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Remove the entry with the given id; returns whether one was removed.",
     destructive: true,
   }),
-  removeMany: Resource.effectFn(Schema.Number, {
-    payload: Schema.Array(Schema.String),
-  }).annotate({
+  removeMany: Resource.effectFn(Schema.Array(Schema.String), Schema.Number).annotate({
     description: "Remove every entry whose id is listed; returns the count removed.",
     destructive: true,
   }),
-  clear: Resource.effectFn(Schema.Void).annotate({
+  clear: Resource.effect(Schema.Void).annotate({
     description: "Remove all schedule entries.",
     destructive: true,
   }),
@@ -1709,6 +1724,18 @@ type ResultField<A extends Schema.Top> = RefField<
 
 /** The `result` field as a {@link Spec} fragment (what {@link result} grafts). */
 type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> };
+
+/**
+ * Per-tag process spec — control surface plus stamped `run` success/error on the wire.
+ *
+ * @public
+ */
+export type ProcessInstanceSpec<
+  A extends Schema.Top = typeof Schema.Void,
+  E extends Schema.Top = typeof Schema.Never,
+> = typeof processControlSpec & {
+  readonly run: Resource.Method<"query", undefined, A, E>;
+} & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
 // ============================================================================
 // Schedule windows (entry templates) — id optional
@@ -1926,12 +1953,13 @@ const buildProcessTag = <Self>(
 ): ResourceTag<any, any> | NodeBoundTag<any, any, unknown> => {
   const node = options?.node;
   const tagOptions = { description: options?.description, kind };
-  const base: ResourceTag<any, any> =
-    node === undefined
-      ? Resource.Tag<Self>()(key, processSpec, tagOptions)
-      : Resource.Tag<Self>()(key, processSpec, { ...tagOptions, node });
   const success = positional.success ?? options?.success;
   const error = positional.error ?? options?.error;
+  const spec = buildProcessSpec({ success, error });
+  const base: ResourceTag<any, any> =
+    node === undefined
+      ? Resource.Tag<Self>()(key, spec, tagOptions)
+      : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
   const stamped: ResourceTag<any, any> =
     success === undefined && error === undefined
       ? base
@@ -2032,33 +2060,37 @@ export function schedule(
 
 /** Callable shape for {@link Tag} — overloads for positional schemas + config object. @public */
 export type ProcessTagBuild<Self> = {
-  (key: string): ResourceTag<Self, ProcessSpec>;
+  (key: string): ResourceTag<Self, ProcessInstanceSpec>;
   <A extends Schema.Top>(
     key: string,
     success: A,
-  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  ): ResourceTag<Self, ProcessInstanceSpec<A>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
     success: A,
     error: E,
-  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  ): ResourceTag<Self, ProcessInstanceSpec<A, E>>;
   <A extends Schema.Top>(
     key: string,
     options: ProcessTagOptions & { readonly success: A },
-  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  ): ResourceTag<Self, ProcessInstanceSpec<A>>;
+  <E extends Schema.Top>(
+    key: string,
+    options: ProcessTagOptions & { readonly error: E },
+  ): ResourceTag<Self, ProcessInstanceSpec<typeof Schema.Void, E>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
     options: ProcessTagOptions & { readonly success: A; readonly error: E },
-  ): ResourceTag<Self, ProcessSpec & ResultGroupSpec<A>>;
+  ): ResourceTag<Self, ProcessInstanceSpec<A, E>>;
   <HSelf>(
     key: string,
     options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, ProcessSpec, HSelf>;
+  ): NodeBoundTag<Self, ProcessInstanceSpec, HSelf>;
   <A extends Schema.Top, HSelf>(
     key: string,
     options: ProcessTagOptions & { readonly success: A; readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, ProcessSpec & ResultGroupSpec<A>, HSelf>;
-  (key: string, options?: ProcessTagOptions): ResourceTag<Self, ProcessSpec>;
+  ): NodeBoundTag<Self, ProcessInstanceSpec<A>, HSelf>;
+  (key: string, options?: ProcessTagOptions): ResourceTag<Self, ProcessInstanceSpec>;
 };
 
 /**
@@ -2157,8 +2189,8 @@ export interface ProcessLayerConfig<A, E, R> {
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: Layer.Layer<PollingTag, never, never>;
   /**
-   * Capture this process's logs (engine + instance effect) into the `logs.live` stream — and, with
-   * a `HistoryStore` layer, into `logs.history`. `true` = all levels; `{ level }` = at or above it.
+   * Capture this process's logs (engine + instance effect) into the `logs.stream` stream — and, with
+   * a `HistoryStore` layer, into `logs.query`. `true` = all levels; `{ level }` = at or above it.
    */
   readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
 }
@@ -2263,7 +2295,7 @@ const makeProcessCaptureLogger = (
 
 const statusPollInterval = Duration.millis(500);
 
-/** The decoded `logs.history` payload — mirrors {@link HistoryStore}'s read options. */
+/** The decoded `logs.query` payload — mirrors {@link HistoryStore}'s read options. */
 interface HistoryQuery {
   readonly limit?: number;
   readonly since?: DateTime.Utc;
@@ -2439,10 +2471,10 @@ const buildProcessImpl = <A, E, R>(
       status: { get: readStatus, changes: statusChanges },
       start,
       stop,
-      runImmediately: handle.runImmediately().pipe(tapLogs),
+      run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       logs: {
-        live: logsStream,
-        history: ({ limit, since, until }: HistoryQuery) =>
+        stream: logsStream,
+        query: ({ limit, since, until }: HistoryQuery) =>
           Option.match(history, {
             onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
             onSome: (store) =>

@@ -161,49 +161,45 @@ export const customQueueControlSpec = {
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effectFn(Schema.Void).annotate({
+  start: Resource.effect(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
   }),
-  pause: Resource.effectFn(Schema.Void).annotate({
+  pause: Resource.effect(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
   }),
-  resume: Resource.effectFn(Schema.Void).annotate({
+  resume: Resource.effect(Schema.Void).annotate({
     description: "Resume processing after a pause.",
   }),
-  shutdown: Resource.effectFn(Schema.Void).annotate({
+  shutdown: Resource.effect(Schema.Void).annotate({
     description:
       "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.effectFn(Schema.Number).annotate({
+  clear: Resource.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
   }),
 
-  // ── observability — live stream + history query, paired by nesting ──
+  // ── observability — stream + query, paired by nesting ──
   metrics: {
-    live: Resource.stream(queueMetrics).annotate({
+    stream: Resource.stream(queueMetrics).annotate({
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    history: Resource.effect(Schema.Array(queueMetrics), {
-      payload: historyQuery,
-    }).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
     }),
   },
   logs: {
-    live: Resource.stream(queueLogEntry).annotate({
+    stream: Resource.stream(queueLogEntry).annotate({
       description:
         "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
     }),
-    history: Resource.effect(Schema.Array(queueLogEntry), {
-      payload: historyQuery,
-    }).annotate({
+    query: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
       description:
         "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
     }),
@@ -238,41 +234,43 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description:
         "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
     }),
-    enqueue: Resource.effectFn(Schema.Void, {
-      payload: Schema.Array(entry),
-    }).annotate({
+    enqueue: Resource.effectFn(Schema.Array(entry)).annotate({
       description:
         "Re-inject existing entries — each re-enters at its own level with attempts preserved.",
     }),
-    release: Resource.effectFn(Schema.Array(entry), {
-      payload: { options: Schema.optionalKey(queueReleaseOptions) },
-    }).annotate({
+    release: Resource.effectFn(
+      { options: Schema.optionalKey(queueReleaseOptions) },
+      Schema.Array(entry),
+    ).annotate({
       description:
         "Export pending entries for handoff and remove them from this queue.",
       destructive: true,
     }),
-    releaseEncoded: Resource.effectFn(Schema.Array(queueEncodedEntry), {
-      payload: { options: Schema.optionalKey(queueReleaseOptions) },
-      error: queueReleaseEncodingError,
-    }).annotate({
+    releaseEncoded: Resource.effectFn(
+      { options: Schema.optionalKey(queueReleaseOptions) },
+      Schema.Array(queueEncodedEntry),
+      queueReleaseEncodingError,
+    ).annotate({
       description: "Export pending entries in encoded/wire form for remote handoff.",
       destructive: true,
     }),
-    deadLetter: Resource.effectFn(Schema.Array(entry), {
-      payload: {
+    deadLetter: Resource.effectFn(
+      {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
       },
-    }).annotate({
+      Schema.Array(entry),
+    ).annotate({
       description: "Remove pending entries matching the selector and route to dead letter.",
       destructive: true,
     }),
-    drop: Resource.effectFn(Schema.Array(entry), {
-      payload: {
+    drop: Resource.effectFn(
+      {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
       },
-    }).annotate({
+      Schema.Array(entry),
+    ).annotate({
       description: "Remove pending entries matching the selector without preserving them.",
       destructive: true,
     }),
@@ -504,8 +502,8 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       shutdown: handle.shutdown,
       clear: handle.clear,
       metrics: {
-        live: handle.metrics,
-        history: ({ limit, since, until }) =>
+        stream: handle.metrics,
+        query: ({ limit, since, until }) =>
           Option.match(history, {
             onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
             onSome: (store) =>
@@ -517,8 +515,8 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
           }),
       },
       logs: {
-        live: handle.logs,
-        history: ({ limit, since, until }) =>
+        stream: handle.logs,
+        query: ({ limit, since, until }) =>
           Option.match(history, {
             onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
             onSome: (store) =>

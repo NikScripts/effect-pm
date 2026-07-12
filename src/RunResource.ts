@@ -145,8 +145,8 @@ export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
  *
  * @public
  */
-export type RunResourceStaticRun<I, A, E, Self> = Schema.Schema.Type<I> extends void
-  ? () => Effect.Effect<A, E, Self>
+export type RunResourceStaticRun<I, A, E, Self> = [Schema.Schema.Type<I>] extends [void]
+  ? Effect.Effect<A, E, Self>
   : (input: Schema.Schema.Type<I>) => Effect.Effect<A, E, Self>;
 
 /**
@@ -389,6 +389,37 @@ const stampRunWireSchemas = <
     : tag;
 };
 
+const makeStaticRunInputless = <
+  Self,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<typeof Schema.Void, A, E>>,
+): Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self> =>
+  Effect.gen(function* () {
+    const svc = yield* tag;
+    return yield* (svc.run as Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>);
+  });
+
+const makeStaticRunParameterized = <
+  Self,
+  I extends Exclude<Schema.Top, typeof Schema.Void>,
+  A extends Schema.Top,
+  E extends Schema.Top,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+): ((
+  input: Schema.Schema.Type<I>,
+) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>) =>
+  (input) =>
+    Effect.gen(function* () {
+      const svc = yield* tag;
+      return yield* (svc.run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
+        Schema.Schema.Type<A>,
+        Schema.Schema.Type<E>
+      >)(input);
+    });
+
 const makeStaticRun = <
   Self,
   I extends Schema.Top,
@@ -397,35 +428,38 @@ const makeStaticRun = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
 ): RunResourceStaticRun<I, A, E, Self> =>
-  ((input?: Schema.Schema.Type<I>) =>
-    Effect.gen(function* () {
-      const svc = yield* tag;
-      const run = svc.run;
-      if (input === undefined) {
-        if (typeof run === "function") {
-          return yield* (run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)();
-        }
-        return yield* (run as Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>);
-      }
-      return yield* (run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
-        Schema.Schema.Type<A>,
-        Schema.Schema.Type<E>
-      >)(input);
-    })) as RunResourceStaticRun<I, A, E, Self>;
+  (Resource.isEffect(tag[Resource.specSym].run as Resource.AnyMethod)
+    ? makeStaticRunInputless(tag as unknown as ResourceTag<Self, RunInstanceSpec<typeof Schema.Void, A, E>>)
+    : makeStaticRunParameterized(
+        tag as unknown as ResourceTag<Self, RunInstanceSpec<Exclude<I, typeof Schema.Void>, A, E>>,
+      )) as unknown as RunResourceStaticRun<I, A, E, Self>;
 
 const isRunTagSchemaConfig = (value: unknown): value is RunResourceTagSchemas =>
   typeof value === "object" && value !== null && !Schema.isSchema(value);
 
+/** Infer wire schemas from a tag config object (defaults match {@link resolveRunWireSchemas}). @internal */
+type RunSchemasOf<C extends RunResourceTagSchemas> = {
+  readonly payload: C extends { readonly payload: infer I extends Schema.Top } ? I : typeof Schema.Void;
+  readonly success: C extends { readonly success: infer A extends Schema.Top } ? A : typeof Schema.Void;
+  readonly error: C extends { readonly error: infer E extends Schema.Top } ? E : typeof Schema.Never;
+};
+
 const materializeRunTag = <
   Self,
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top,
+  const C extends RunResourceTagSchemas,
 >(
   key: string,
-  config: RunResourceTagSchemas<I, A, E>,
-): RunTagWithStaticRun<Self, I, A, E> => {
-  const resolved = resolveRunWireSchemas(config);
+  config: C,
+): RunTagWithStaticRun<
+  Self,
+  RunSchemasOf<C>["payload"],
+  RunSchemasOf<C>["success"],
+  RunSchemasOf<C>["error"]
+> => {
+  type I = RunSchemasOf<C>["payload"];
+  type A = RunSchemasOf<C>["success"];
+  type E = RunSchemasOf<C>["error"];
+  const resolved = resolveRunWireSchemas(config as RunResourceWireSchemas<I, A, E>);
   const spec = runSpec(resolved.payload, resolved.success, resolved.error);
   const tag = Resource.Tag<Self>()(key, spec, {
     description: config.description,
@@ -433,14 +467,9 @@ const materializeRunTag = <
   });
   const ready = Resource.withReadiness(tag, (svc) =>
     Effect.map(svc.status.get, () => ({ ready: true })),
-  ) as ResourceTag<Self, RunInstanceSpec<I, A, E>>;
-  const stamped = stampRunWireSchemas<Self, I, A, E>(ready, config, resolved);
-  return Object.assign(stamped, { run: makeStaticRun(stamped) }) as RunTagWithStaticRun<
-    Self,
-    I,
-    A,
-    E
-  >;
+  );
+  const stamped = stampRunWireSchemas<Self, I, A, E>(ready, config as RunResourceWireSchemas<I, A, E>, resolved);
+  return Object.assign(stamped, { run: makeStaticRun(stamped) });
 };
 
 const runTag = <Self>() => {
@@ -476,15 +505,12 @@ const runTag = <Self>() => {
     success?: Schema.Top,
     errorOrOptions?: Schema.Top | { readonly description?: string },
     maybeOptions?: { readonly description?: string },
-  ): RunTagWithStaticRun<Self, any, any, any> {
+  ): any {
     if (inputOrSchemas === undefined) {
-      return materializeRunTag<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>(
-        key,
-        {},
-      );
+      return materializeRunTag(key, {});
     }
     if (isRunTagSchemaConfig(inputOrSchemas)) {
-      return materializeRunTag<Self, any, any, any>(key, inputOrSchemas);
+      return materializeRunTag(key, inputOrSchemas);
     }
     const payload = inputOrSchemas;
     const hasError =
@@ -493,12 +519,12 @@ const runTag = <Self>() => {
     const options = hasError
       ? maybeOptions
       : errorOrOptions as { readonly description?: string } | undefined;
-    return materializeRunTag<Self, any, any, any>(key, {
+    return materializeRunTag(key, {
       payload,
-      success,
-      error,
+      success: success!,
+      ...(error !== undefined ? { error } : {}),
       description: options?.description,
-    });
+    } as RunResourceTagSchemas);
   }
   return build;
 };
@@ -546,6 +572,14 @@ const buildRunImpl = <
       get: handle.status.get,
       changes: handle.status.changes,
     };
+    const runImpl = (
+      Resource.isEffect(tag[Resource.specSym].run as Resource.AnyMethod)
+        ? Effect.suspend(
+            handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>,
+          )
+        : handle.run
+    ) as ImplOf<RunInstanceSpec<I, A, E>>["run"];
+
     const impl = {
       status: statusSub,
       waiting: handle.waiting,
@@ -553,10 +587,7 @@ const buildRunImpl = <
       completed: handle.completed,
       failed: handle.failed,
       interrupted: handle.interrupted,
-      run: (input?: Schema.Schema.Type<I>) =>
-        input === undefined
-          ? (handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>)()
-          : handle.run(input as Schema.Schema.Type<I>),
+      run: runImpl,
     };
     return Resource.builtResource(
       tag,

@@ -137,12 +137,15 @@ export {
   DuplicateGroupId,
   DuplicateInstance,
   DuplicateResourceKey,
+  EffectFnMissingPayload,
   InstanceRoutingError,
   LocalOnlyMethod,
   MissingContractMethod,
   // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
   // per method from its kind/description/destructive/streaming). See examples/resource-tui.
   methodMeta,
+  isVoidCommand,
+  isEffect,
   specOf,
 } from "./Resource";
 // `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Node`

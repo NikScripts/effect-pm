@@ -370,11 +370,11 @@ Example (Thermometer metrics — domain, not logs):
 ```ts
 readings: {
   stream: Resource.stream(reading),           // discrete events / windows
-  query:  Resource.effect(Schema.Array(reading), { payload: readingQuery }),
+  query:  Resource.effectFn(readingQuery, Schema.Array(reading)),
 }
 ```
 
-**Open:** migrate queue/process from `live`/`history` → `stream`/`query` in one breaking pass, or
+**Open:** migrate queue/process from `stream`/`query` → `stream`/`query` in one breaking pass, or
 keep legacy names until store migration lands. See §Open questions.
 
 ### Refs vs streams vs store (domain state) — see §Observability contract standard
@@ -449,7 +449,7 @@ Dashboard prefers `Resource.changes(tag, refField)` or domain `*.stream` / `Logs
 
 - Public `RuntimeStorage`, `Query`, `ProcessStorage`
 - Public `src/store/*` facet tags + static emitters
-- `logs: { live, history }` on resource specs
+- `logs: { stream, query }` on resource specs
 - `captureLogs` on queue/process layer config
 - Ad-hoc `HistoryStore` log stream ids (metrics may follow separately)
 
@@ -465,7 +465,7 @@ Dashboard prefers `Resource.changes(tag, refField)` or domain `*.stream` / `Logs
 
 ## Open questions
 
-1. **Domain naming migration:** `live`/`history` → `stream`/`query` on queue/process metrics/logs
+1. **Domain naming migration:** `stream`/`query` → `stream`/`query` on queue/process metrics/logs
    groups in same changeset as store, or logs-only first?
 2. **Node log store levels:** mirror tag pipe API on `Resource.Node` vs node-only config on
    `Node.logs` registration?

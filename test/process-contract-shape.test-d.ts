@@ -23,7 +23,7 @@ class PricedErr extends Process.Tag<PricedErr>()("shape/PricedErr", {
   error: Schema.TaggedStruct("FetchError", { status: Schema.Number }),
 }) {}
 
-// error stamp is store-only today — processSpec RPC methods keep Schema.Never (see agent report § RPC blocker)
+// error stamp surfaces on manual `run` RPC when stamped (see process-run-rpc.test.ts)
 void Process.errorOf(PricedErr);
 
 // owns an inline schedule — gains the `schedule` verb group (id optional on windows)
@@ -45,10 +45,10 @@ const _proof = Effect.gen(function* () {
   const h = yield* Health;
   // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
-  yield* h.start; // no-payload verb → Effect property
-  yield* h.runImmediately;
-  // observability is paired by nesting (like the queue): `logs.live` stream + `logs.history` query.
-  const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.history(
+  yield* h.start; // void lifecycle command
+  yield* h.run;
+  // observability is paired by nesting (like the queue): `logs.stream` stream + `logs.query` effectFn.
+  const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.query(
     {},
   );
 
@@ -70,7 +70,13 @@ const _proof = Effect.gen(function* () {
   // @ts-expect-error a process gated by an external schedule gains NO schedule verbs
   yield* i.schedule.entries.get;
 
-  return { _status, _logHistory, latest, one };
+  const pe = yield* PricedErr;
+  const _pricedRun: Effect.Effect<
+    typeof Price.Type,
+    { readonly _tag: "FetchError"; readonly status: number }
+  > = pe.run;
+
+  return { _status, _logHistory, latest, one, _pricedRun };
 });
 
 void _proof;

@@ -61,10 +61,17 @@ it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)"
   return Effect.runPromise(program);
 });
 
+it("effectFn rejects void or empty payloads at build time", () => {
+  const effectFnAny = Resource.effectFn as unknown as (payload: unknown) => unknown;
+  expect(() => effectFnAny(Schema.Void)).toThrow(Resource.EffectFnMissingPayload);
+  expect(() => effectFnAny({})).toThrow(Resource.EffectFnMissingPayload);
+  expect(() => effectFnAny({ payload: Schema.Void })).toThrow(Resource.EffectFnMissingPayload);
+});
+
 // A resource with both a no-payload method (property) and a payload method.
 class Echo extends Resource.Tag<Echo>()("test/Echo", {
   ping: Resource.effect(Schema.String),
-  shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
+  shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
 
 // True two-sided round-trip in-process: the real `Resource.server` handlers are wired to
@@ -93,7 +100,7 @@ it("client ↔ server round-trips in-memory", () => {
 
 // ── multi-instance: many instances of one factory, one server, routed by id ──
 const Counter = Resource.tagFor("counter", {
-  bump: Resource.effectFn(Schema.Number, { payload: { by: Schema.Number } }),
+  bump: Resource.effectFn({ by: Schema.Number }, Schema.Number),
   label: Resource.effect(Schema.String),
 });
 class Alpha extends Counter<Alpha>("test/Alpha") {}
@@ -146,7 +153,7 @@ class Described extends Resource.Tag<Described>()("described", {
 }) {}
 const DescribedFamily = Resource.tagFor(
   "describedFamily",
-  { tick: Resource.effectFn(Schema.Void) },
+  { tick: Resource.effect(Schema.Void) },
   { description: "A described family." },
 );
 class FamA extends DescribedFamily<FamA>("describedFamily/A") {}

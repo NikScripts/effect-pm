@@ -14,7 +14,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | **`Process.Tag` + toolkit layers** | Location-transparent `Resource` (lifecycle + observation + schedule). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**. |
 | **Legacy `ProcessStorage` facets** | Optional analytics rows (`RuntimeStorage`) — queue entries, lifecycle, logs. **Not** process execution history (that is **`Process.store`** on the EventJournal `Store`). |
 
-**`start` / `runImmediately`** drive the schedule. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
+**`start` / `run`** drive supervision and manual execution. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
 ---
 
@@ -55,7 +55,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | `type` | `"managed"` | |
 | `effect` | `Effect<void, never, R \| storage facets>` | Schedule-driven runtime. If `polling` / schedule layers are passed on `Process.make`, those layers are merged into `process.effect`. |
 | `getStatus(range?)` | `Effect<ProcessDetails, never, storage facets>` | Execution stats + mirror of last gate/cadence hints. |
-| `runImmediately()` | `Effect<void, never, R \| storage facets>` | One tracked tick **even when disarmed** (separate from supervisor loop). |
+| `run()` | `Effect<A, E, R \| storage facets>` | One tracked tick **even when disarmed** (typed `success`/`error` when stamped on tag). Toolkit: `yield* Tag.run`. |
 
 ### `ProcessDetails`
 
@@ -188,13 +188,12 @@ value is the **typed** failure from the tick `Effect` (same schema). When the ta
 engine writes `String(cause)` per store-core §5. Journal codecs round-trip stamped schemas on append —
 see `test/process-store-engine.test.ts` and `test/process-store-sqlite.test.ts`.
 
-**RPC `error` slot (limitation):** Tag `error` is stamped on the tag object (`errorOf(tag)`) for store
-wire and contract typing, but it is **not** grafted onto `processSpec` RPC methods today. Lifecycle
-verbs (`start`, `stop`, `runImmediately`) are void commands with `Schema.Never` on the RPC error
-channel — unlike `RunResource`, which bakes `error` into per-tag `runSpec`. Process failures are
-background poll ticks recorded to the store, not RPC failure responses. **Owner decision (2026-07-10):**
-defer RPC wiring (recommended) or fund per-tag `processSpec` rebuild — see
-[agent report § RPC error wire blocker](../handoffs/reports/2026-07-07-agent-report-process.md#rpc-error-wire-blocker).
+**RPC `run` slot:** Per-tag `buildProcessSpec` wires tag `success` / `error` onto the manual **`run`**
+verb (`Resource.effect` — inputless `Effect`, not `effectFn`). Remote `yield* Tag.run` returns typed
+success and fails with typed `E` when the worker fails — store rows are still written on failure.
+Lifecycle verbs (`start`, `stop`) are `effectFn` void commands; schedule mutations use `effectFn` with
+payload. Per-invocation input on manual run is a future separate `effectFn` member, not payload on
+`Resource.effect`.
 
 **Removed:** `ProcessExecutionStore` facet, `@nikscripts/effect-pm/store/ProcessExecution`,
 `process.execution.completed` runtime facet. Do not import execution history from `ProcessStorage`.

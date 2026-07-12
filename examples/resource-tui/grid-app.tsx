@@ -29,9 +29,9 @@ import {
 
 const Counter = Resource.tagFor("grid-counter", {
   value: Resource.effect(Schema.Number),
-  inc: Resource.effectFn(Schema.Void),
-  dec: Resource.effectFn(Schema.Void),
-  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
+  inc: Resource.effect(Schema.Void),
+  dec: Resource.effect(Schema.Void),
+  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
 });
 
 const impl = (start: number) => {
@@ -39,14 +39,14 @@ const impl = (start: number) => {
   return {
     value: Effect.sync(() => v),
     inc: Effect.sync(() => {
-      v += 1;
-    }),
+        v += 1;
+      }),
     dec: Effect.sync(() => {
-      v -= 1;
-    }),
+        v -= 1;
+      }),
     reset: Effect.sync(() => {
-      v = start;
-    }),
+        v = start;
+      }),
   };
 };
 

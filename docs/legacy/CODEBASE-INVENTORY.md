@@ -172,10 +172,10 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Handle members
 
-- **`name`**, **`type`**, **`effect`**, **`getStatus(dateRange?)`**, **`runImmediately()`**.
+- **`name`**, **`type`**, **`effect`**, **`getStatus(dateRange?)`**, **`run()`** (engine handle only).
 - **`effect` requirements** — `R` after inline layer merge, plus optional storage facets (analytics when present).
 - **`getStatus`** — returns **`ProcessDetails`**; uses store for execution history when available.
-- **`runImmediately`** — one tracked tick **without** requiring armed schedule; separate from supervisor loop.
+- **`run`** — one tracked tick **without** requiring armed schedule; separate from supervisor loop.
 
 ### `ProcessDetails` (status shape)
 

@@ -413,11 +413,11 @@ describe("RunResource — unit gates and interrupts", () => {
 
   const unitLayer = UnitGate.layer;
 
-  it.live("Service.run() accepts no input for Schema.Void payload", () =>
+  it.live("Service.run accepts no input for Schema.Void payload", () =>
     Effect.gen(function* () {
       const gate = yield* UnitGate;
-      const fromHandle = yield* gate.run();
-      const fromStatic = yield* UnitGate.run();
+      const fromHandle = yield* gate.run;
+      const fromStatic = yield* UnitGate.run;
       expect(fromHandle).toBe(42);
       expect(fromStatic).toBe(42);
     }).pipe(Effect.provide(unitLayer)),
@@ -426,16 +426,16 @@ describe("RunResource — unit gates and interrupts", () => {
   it.live("Service accepts a bare Effect for unit gates", () =>
     Effect.gen(function* () {
       const gate = yield* BareEffectGate;
-      yield* gate.run();
-      yield* BareEffectGate.run();
+      yield* gate.run;
+      yield* BareEffectGate.run;
     }).pipe(Effect.provide(BareEffectGate.layer)),
   );
 
   it.live("Service accepts bare Effect when success schema is declared", () =>
     Effect.gen(function* () {
       const gate = yield* BareThunkGate;
-      expect(yield* gate.run()).toBe(99);
-      expect(yield* BareThunkGate.run()).toBe(99);
+      expect(yield* gate.run).toBe(99);
+      expect(yield* BareThunkGate.run).toBe(99);
     }).pipe(Effect.provide(BareThunkGate.layer)),
   );
 
@@ -463,7 +463,7 @@ describe("RunResource — unit gates and interrupts", () => {
 
       yield* Effect.gen(function* () {
         const gate = yield* HoldGate;
-        const inFlight = yield* Effect.forkChild(gate.run());
+        const inFlight = yield* Effect.forkChild(gate.run);
         yield* Effect.yieldNow;
         expect(yield* gate.inFlight.get).toBe(1);
         yield* Fiber.interrupt(inFlight);
