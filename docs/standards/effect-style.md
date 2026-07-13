@@ -151,37 +151,6 @@ const config = {
 }
 ```
 
-{#comment-non-obvious-plumbing .should appliesTo="src examples"}
-## Comment the non-obvious plumbing, not the obvious
-
-Comment where the code relies on something it doesn't show — a type-level trick, an Effect
-layer-ordering constraint, runtime ownership, a timing subtlety. Don't narrate what the code already
-says.
-
-``` ts
-// ✅ good — explains a constraint you can't see in the call
-// provideMerge, not provide: a bare provide prunes the serve layers off httpServer
-const node = Resource.httpServer([Counter.serve]).pipe(Layer.provideMerge(deps))
-
-// ❌ bad — restates the obvious
-const total = a + b // add a and b
-```
-
-{#mark-the-surface .should appliesTo=src}
-## Mark the surface with `@public` / `@internal` / `@module`
-
-An app-facing symbol carries `@public`; a package-only one carries `@internal`; a large module opens
-with a `@module` overview so a reader lands with context.
-
-``` ts
-/**
- * The queue worker namespace — Tag, make, layer, serve.
- * @module QueueResource
- */
-
-/** @public */
-export const layer = /* … */
-
-/** @internal */
-export const makeQueueEffect = /* … */
-```
+{.note}
+**Doc comments live in their own chapter** — how a doc comment is shaped, the `@public` / `@internal` /
+`@module` markers, `{@link}` cross-refs, and `@example` rules are all in *Documentation*.

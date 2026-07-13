@@ -11,11 +11,20 @@ export interface NavGroup {
 export const nav: ReadonlyArray<NavGroup> = [
   {
     label: "Getting started",
-    slugs: ["index"],
+    slugs: ["index", "install", "core-concepts", "creating-a-resource"],
+  },
+  {
+    label: "Resources",
+    slugs: ["contracts", "fleets-and-peers", "readiness", "configuration"],
   },
   {
     label: "Guides",
-    slugs: ["resource", "queues", "run-resources", "processes"],
+    slugs: ["queues", "run-resources", "processes", "stores", "metrics"],
+  },
+  {
+    // Tentative group name — "Observe and Control" per the outline, may change.
+    label: "Observe and Control",
+    slugs: ["observation-and-control", "dashboard", "react-components", "tui-cli"],
   },
   {
     label: "Standards",
@@ -24,6 +33,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "modules-and-boundaries",
       "types-and-naming",
       "effect-style",
+      "documentation",
       "error-handling",
       "resources",
       "storage",

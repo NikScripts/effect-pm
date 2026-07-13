@@ -211,11 +211,40 @@ main {
 h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0.6rem 0 1rem; text-wrap: balance; }
 h2 { font-size: 1.28rem; letter-spacing: -0.01em; margin: 2.4rem 0 0.6rem; }
 h3 { font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
+
+/* Section headers vs rule titles. The page renders as `<section id=slug>` (no class); its direct
+   `> h2` children are grouping headers / guide section breaks. Rule titles live one level down, inside
+   a severity-classed `<section class="must|should|may">`. Target the former: a size up + a divider
+   rule so a section header never reads as just another rule title. */
+section:not([class]) > h2 {
+  font-size: 1.6rem;
+  margin-top: 3.2rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+/* the first rule right after a grouping header shouldn't stack its own big top gap */
+section:not([class]) > h2 + section > h2 { margin-top: 1.1rem; }
 p { margin: 0.85rem 0; }
 strong { font-weight: 650; }
 ul, ol { margin: 0.85rem 0; padding-left: 1.4rem; }
 li { margin: 0.3rem 0; }
 a { color: var(--primary); text-underline-offset: 2px; }
+
+/* A link that wraps inline code (a module/symbol reference) reads as code, not a blue link — but
+   still needs a link cue that survives touch (no hover). A dotted underline in the text color:
+   subtle, always visible, not blue. It goes solid + accent on hover. */
+a:has(> code) {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;                                          /* thin → smaller dots */
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); /* lighter */
+  text-underline-offset: 4px;
+}
+a:has(> code):hover {
+  text-decoration-style: solid;
+  text-decoration-color: currentColor;
+}
 
 code {
   font-family: var(--font-mono);

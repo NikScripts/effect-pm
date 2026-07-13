@@ -9,7 +9,14 @@
 // up out of the Vite root (docs/site). `legacy/` and `handoffs/` are never globbed, so
 // they're ignored. Requires `server.fs.allow` to include the parent (see waku.config.ts).
 const modules = import.meta.glob(
-  ["../../../index.md", "../../../standards/**/*.md", "../../../guides/**/*.md"],
+  [
+    "../../../index.md",
+    "../../../getting-started/**/*.md",
+    "../../../resources/**/*.md",
+    "../../../guides/**/*.md",
+    "../../../observe/**/*.md",
+    "../../../standards/**/*.md",
+  ],
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;
 
