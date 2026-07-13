@@ -26,9 +26,10 @@
  */
 
 import { Effect, Layer } from "effect";
-import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
+import { LogStore as LogStoreTag } from "../../store/log";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
+import { ProcessLifecycleStore as ProcessLifecycleStoreTag } from "../../store/processLifecycle";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type { RuntimeStorageService } from "../../RuntimeStorage";
 import type { RedisRuntimeStorageConfig } from "./public-types";
@@ -71,11 +72,14 @@ export const layerRuntimeStorage = (
  */
 export const layerProcessStore = (
   config: RedisRuntimeStorageConfig,
-): Layer.Layer<
-  | LogStore
-  | ProcessLifecycleStore
-> =>
-  Layer.provide(ProcessStorage.layerRuntimeStorage, layerRuntimeStorage(config));
+): Layer.Layer<LogStore | ProcessLifecycleStore> =>
+  Layer.mergeAll(
+    LogStoreTag.layerMemory,
+    Layer.provide(
+      ProcessLifecycleStoreTag.layerRuntimeStorage,
+      layerRuntimeStorage(config),
+    ),
+  );
 
 /**
  * Same as {@link layerProcessStore} with acquisition errors as defects.

@@ -1,6 +1,8 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
-import { LogStore } from "../../store/log";
+import { LogStore, type LogStoreApi } from "../../store/log";
+
+const asStore = (store: LogStore.Type): LogStoreApi => store as unknown as LogStoreApi;
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
@@ -32,6 +34,8 @@ export interface LogQuery {
   readonly processId?: string;
   /** When set, restrict to logs annotated with this queue id. */
   readonly queueId?: string;
+  /** When set, restrict to logs whose lineage contains this `tag.key`. */
+  readonly lineageContains?: string;
   readonly from?: Date;
   readonly to?: Date;
   /** Exclusive lower bound (`entryId` or ISO date per storage adapter). */
@@ -172,7 +176,7 @@ export const queryGroupLogs = (
                 "LogStore layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
             }),
           ),
-        onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),
+        onSome: (log) => asStore(log).query(query).pipe(Effect.mapError(storageLogQueryError)),
       }),
     ),
   );

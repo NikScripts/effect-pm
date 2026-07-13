@@ -1,47 +1,9 @@
 /**
- * **ProcessStorage** — combined layer for every built-in
- * {@link ProcessStore} facet.
+ * **ProcessStorage** — combined layer for legacy {@link ProcessLifecycleStore} facet.
  *
  * @remarks
- * One-stop shop for apps that want all built-in facets at once. Compose
- * either:
- *
- * - {@link ProcessStorage.layerRuntimeStorage} — facets only; expects
- *   the app to provide a {@link RuntimeStorage} adapter (e.g.
- *   `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`).
- * - {@link ProcessStorage.layer} — facets + the in-memory
- *   {@link RuntimeStorage} adapter; suitable for tests, examples, and
- *   short-lived dev programs.
- *
- * Run and process execution history use the app **Store bridge** (`RunResource.store`,
- * `Process.store`) — not ProcessStorage facets.
- *
- * @example Durable composition
- * ```ts
- * import { ProcessStorage } from "@nikscripts/effect-pm";
- * import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
- *
- * const program = Effect.scoped(...);
- *
- * Effect.runPromise(program.pipe(
- *   Effect.provide(Layer.provide(
- *     ProcessStorage.layerRuntimeStorage,
- *     layerProcessStore({ filename: ".effect-pm/data.sqlite" }),
- *   )),
- * ));
- * ```
- *
- * @example In-memory composition (tests / dev)
- * ```ts
- * Effect.provide(program, ProcessStorage.layer);
- * ```
- *
- * ### Facet classes (aliases)
- *
- * Each property is a **facet store class** (`LogStore`, …) under a
- * shorter import path: **`ProcessStorage.Log`** === **`LogStore`**.
- * Layers and **`Effect.serviceOption`** work the same from here or
- * **`@nikscripts/effect-pm/store/*`**.
+ * {@link LogStore} now uses the {@link Store} bridge directly (`LogStore.layer` /
+ * `LogStore.layerMemory`) — not `RuntimeStorage` facets.
  *
  * @module ProcessStorage
  */
@@ -53,18 +15,10 @@ import { ProcessLifecycleStore } from "./store/processLifecycle";
 
 const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 
-const facetLayers = Layer.mergeAll(
-  LogStore.layerRuntimeStorage,
-  processLifecycleLayer,
-);
-
-// Combined storage layers plus facet class aliases. The module is the namespace
-// (`import * as ProcessStorage`): the layers are flat exports and the facet aliases
-// re-export the public `*Store` facet tags under shorter names.
+const facetLayers = Layer.mergeAll(LogStore.layerMemory, processLifecycleLayer);
 
 /**
- * Combined facet layer; requires the caller to provide {@link RuntimeStorage}. Use
- * this for durable backends.
+ * Combined facet layer; requires the caller to provide {@link RuntimeStorage} for lifecycle only.
  *
  * @public
  */
@@ -72,15 +26,13 @@ export const layerRuntimeStorage = facetLayers;
 
 /**
  * In-memory combined storage layer for tests, examples, and short-lived dev programs.
- * Wraps {@link layerRuntimeStorage} with {@link RuntimeStorage.layer}.
  *
  * @public
  */
 export const layer = Layer.provide(facetLayers, RuntimeStorage.layer);
 
 /**
- * Facet class aliases (same tags as the public `*Store` facet services) under shorter
- * names: `ProcessStorage.Log` === {@link LogStore}, etc.
+ * Facet class aliases under shorter names.
  *
  * @public
  */
@@ -90,6 +42,4 @@ export {
 };
 
 /** Union of every service composed by {@link layerRuntimeStorage}. @public */
-export type Services =
-  | LogStore
-  | ProcessLifecycleStore;
+export type Services = LogStore | ProcessLifecycleStore;

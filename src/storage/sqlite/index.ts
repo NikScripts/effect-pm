@@ -52,9 +52,11 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
-import * as ProcessStorage from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
+import { LogStore as LogStoreTag } from "../../store/log";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
+import { ProcessLifecycleStore as ProcessLifecycleStoreTag } from "../../store/processLifecycle";
+import type { StoreSqliteConnectionError } from "../../internal/store/errors";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import {
   RuntimeStorageConnectionError,
@@ -161,10 +163,16 @@ export const layerProcessStore = (
 ): Layer.Layer<
   | LogStore
   | ProcessLifecycleStore,
-  RuntimeStorageConnectionError | RuntimeStorageSchemaError,
+  RuntimeStorageConnectionError | RuntimeStorageSchemaError | StoreSqliteConnectionError,
   Scope.Scope
 > =>
-  Layer.provide(ProcessStorage.layerRuntimeStorage, layerRuntimeStorage(config));
+  Layer.mergeAll(
+    LogStoreTag.layer({ filename: config.filename }),
+    Layer.provide(
+      ProcessLifecycleStoreTag.layerRuntimeStorage,
+      layerRuntimeStorage(config),
+    ),
+  );
 
 /**
  * Convenience facade for apps that prefer acquisition failures as defects.

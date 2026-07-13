@@ -21,6 +21,7 @@ export const LogAnnotationKeys = {
   node: "node",
   processId: "processId",
   queueId: "queueId",
+  lineage: "@nikscripts/effect-pm/lineage",
 } as const;
 
 /**

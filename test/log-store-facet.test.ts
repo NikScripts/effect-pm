@@ -1,18 +1,11 @@
-import * as ProcessStorage from "../src/ProcessStorage";
-/**
- * Conformance suite for the {@link LogStore} facet.
- *
- * Verifies optional static emits and service-only reads (facet tag in context).
- */
-
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Layer, Logger, Option } from "effect";
 import { LogAnnotationKeys } from "../src/LogContext";
 import type { LogEntry } from "../src/LogEntry";
-import { ProcessStore } from "../src/ProcessStore";
 import { LogQueryError } from "../src/internal/manager/logQuery";
-import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
-import { LogStore } from "../src/store/log";
+import { StoreWriteError } from "../src/internal/store/errors";
+import * as ProcessStorage from "../src/ProcessStorage";
+import { LogStore, catchErrorAndLog } from "../src/store/log";
 
 const entry = (message: string): LogEntry => ({
   date: "2026-05-22T20:00:00.000Z",
@@ -84,11 +77,11 @@ describe("LogStore — static optional emitters", () => {
     const failingFacet: LogStore.Type = {
       record: () =>
         Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-log" }),
+          new StoreWriteError({ cause: "blocked", detail: "blocked-log" }),
         ),
       recordBatch: () =>
         Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-log-batch" }),
+          new StoreWriteError({ cause: "blocked-batch", detail: "blocked-log-batch" }),
         ),
       load: () =>
         Effect.fail(
@@ -103,9 +96,9 @@ describe("LogStore — static optional emitters", () => {
     const write = LogStore.record("workshop-group", "1", entry("blocked"));
     return Effect.gen(function* () {
       const error = yield* Effect.flip(write);
-      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
+      expect(error).toBeInstanceOf(StoreWriteError);
       yield* write.pipe(
-        ProcessStore.catchErrorAndLog({
+        catchErrorAndLog({
           message: "test log write failed",
           annotations: { test: "log-static" },
         }),
@@ -114,7 +107,7 @@ describe("LogStore — static optional emitters", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(LogStore, failingFacet),
+          Layer.succeed(LogStore, failingFacet as never),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),

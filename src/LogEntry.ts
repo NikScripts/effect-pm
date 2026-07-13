@@ -1,5 +1,7 @@
 import { Cause, Effect, Schema } from "effect";
+import type { Predicate } from "effect";
 import type { LogLevel } from "effect/LogLevel";
+import { LogAnnotationKeys } from "./LogContext";
 
 const logLevelSchema = Schema.Literals([
   "All",
@@ -111,6 +113,61 @@ export const logEntryFromLoggerOptions = (options: {
   ),
   spans: options.spans.map(([label]) => label),
 });
+
+const parseLineageJson = (raw: string | undefined): ReadonlyArray<string> => {
+  if (raw === undefined) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
+      return parsed;
+    }
+  } catch {
+    // ignore malformed lineage
+  }
+  return [];
+};
+
+/**
+ * Decode resource lineage segments from a captured entry's annotations.
+ *
+ * @public
+ */
+export const lineage = (entry: LogEntry): ReadonlyArray<string> => {
+  const fromLineage = parseLineageJson(entry.annotations[LogAnnotationKeys.lineage]);
+  if (fromLineage.length > 0) return fromLineage;
+  const legacy: string[] = [];
+  const processId = entry.annotations[LogAnnotationKeys.processId];
+  const queueId = entry.annotations[LogAnnotationKeys.queueId];
+  if (processId !== undefined) legacy.push(processId);
+  if (queueId !== undefined) legacy.push(queueId);
+  return legacy;
+};
+
+/**
+ * `true` when `key` appears anywhere in {@link lineage}.
+ *
+ * @public
+ */
+export const hasKey = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
+  lineage(entry).includes(key);
+
+/**
+ * `true` when `lineage[0] === key`.
+ *
+ * @public
+ */
+export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
+  lineage(entry)[0] === key;
+
+/**
+ * `true` when the last lineage segment equals `key`.
+ *
+ * @public
+ */
+export const atLeaf = (key: string): Predicate.Predicate<LogEntry> => (entry) => {
+  const segments = lineage(entry);
+  return segments[segments.length - 1] === key;
+};
 
 /**
  * NDJSON log entry wire format for process-manager capture — the `LogEntry.Schema` /

@@ -1,6 +1,6 @@
 # Agent 2 — Logs platform (one system)
 
-**Status:** **PLAN ONLY** — owner decisions locked in chat; no implementation branch yet.
+**Status:** **IN PROGRESS** — Phase 1–4 landed on `cursor/logs-platform-a3ad`; Phase 5 (remove legacy `captureLogs` / spec `logs`) deferred pending owner approval.
 
 **Prerequisite:** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md) (or equivalent) — migrate `LogStore` off `ProcessStore` facet to `Store.contract` + implicit `appendLog` / `logQuery` shapes **before** platform wiring lands.
 

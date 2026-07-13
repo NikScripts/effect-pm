@@ -24,7 +24,9 @@ import * as Resource from "../Resource";
 import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
-import { LogStore } from "../store/log";
+import { LogStore, type LogStoreApi } from "../store/log";
+
+const asStore = (store: LogStore.Type): LogStoreApi => store as unknown as LogStoreApi;
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
@@ -139,7 +141,7 @@ export const buildNodeStatusImpl = (options: {
             Option.match({
               onNone: () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
               onSome: (store) =>
-                store
+                asStore(store)
                   .load({ limit: payload.limit, sort: "desc" })
                   .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([]))),
             }),
