@@ -15,7 +15,7 @@ export const nav: ReadonlyArray<NavGroup> = [
   },
   {
     label: "Resources",
-    slugs: ["contracts", "fleets", "peers", "readiness", "configuration"],
+    slugs: ["contracts", "fleets-and-peers", "readiness", "configuration"],
   },
   {
     label: "Guides",

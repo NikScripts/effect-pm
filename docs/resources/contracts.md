@@ -1,5 +1,5 @@
-{#contracts title="Contracts" appliesTo=all}
-# Contracts
+{#contracts title="Service Contracts" appliesTo=all}
+# Service Contracts
 
 {.note}
 **Placeholder — outline only.** Full content to come; this page exists now so other pages can link to it.
