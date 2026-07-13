@@ -40,12 +40,12 @@
           "title": "Mark the surface with `@public` / `@internal` / `@module`"
         },
         {
-          "id": "documentation.since-targets-the-release",
+          "id": "documentation.no-since-until-1-0",
           "severity": "must",
           "appliesTo": [
             "src"
           ],
-          "title": "`@since` targets the first public release"
+          "title": "No `@since` until 1.0"
         },
         {
           "id": "documentation.comment-for-the-junior-dev",

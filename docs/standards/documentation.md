@@ -28,7 +28,6 @@ codebase does not use `@param` / `@returns`; they duplicate the types and rot as
  * Effect.provide(program, Resource.clientHttp(Emails, 3001))
  *
  * @public
- * @since 1.0.0
  */
 export const clientHttp = /* … */
 ```
@@ -80,19 +79,18 @@ export const layer = /* … */
 export const makeQueueEffect = /* … */
 ```
 
-{#since-targets-the-release .must appliesTo=src}
-## `@since` targets the first public release
+{#no-since-until-1-0 .must appliesTo=src}
+## No `@since` until 1.0
 
-Every `@public` symbol carries `@since 1.0.0` — the release the whole surface is being built toward.
-One value, everywhere, until 1.0 ships; only then do real per-symbol versions begin. `@since` records
-*when a symbol appeared*; **freezing its shape is a separate concern** — see
-*Breaking Changes & Stability → `@locked` marks a frozen symbol*. Never use both to mean the same thing.
+The surface is **fluid** (see *Breaking Changes & Stability*) — nothing has a stable version yet, so a
+pre-1.0 `@since` claims a release that doesn't exist and reads as a lock the owner never made. **Never
+add `@since` while pre-1.0.** At the 1.0 release, every `@public` symbol gains `@since <release>` in one
+motion, alongside `@locked`. Until then, a doc comment ends at its visibility marker.
 
 ``` ts
 /**
  * …summary…
  * @public
- * @since 1.0.0
  */
 ```
 
