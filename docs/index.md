@@ -118,10 +118,43 @@ reaching others, through the same tag.**
 
 ## Build your own
 
-Building your own cross-runtime service is a first-class part of effect-pm, not an escape hatch.
-Describe a contract — its methods and their schemas — give it an implementation, and effect-pm turns
-it into a service you run in-process or serve over RPC: one typed handle, plus the runtime control and
-dashboards every cross-runtime service gets.
+Everything so far — `Emails`, `Digest`, `Sessions` — is built on one primitive you use directly. A
+resource is a **contract** plus an **implementation**, and it's first-class, not an escape hatch.
+
+Describe the contract — methods and their schemas:
+
+``` ts
+class Counter extends Resource.Tag<Counter>()("app/Counter", {
+  value: Resource.ref(Schema.Number),          // an observable value — get + live changes
+  increment: Resource.effectFn({ by: Schema.Number }),
+  reset: Resource.effect(Schema.Void),
+}) {}
+```
+
+Give it an implementation:
+
+``` ts
+const counterImpl = Effect.gen(function* () {
+  const ref = yield* SubscriptionRef.make(0)
+  return {
+    value: Resource.subscribable(ref),                    // surface the ref as the observable field
+    increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
+    reset: SubscriptionRef.set(ref, 0),
+  }
+})
+```
+
+That's it — it's now a cross-runtime service like any built-in. The **same tag**, provided the same
+three ways:
+
+``` ts
+Resource.layer(Counter, counterImpl)                        // in-process
+Resource.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
+Resource.clientHttp(Counter, 4000)                          // reached from another runtime
+```
+
+And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,
+and web dashboards — because it's the same kind of thing `Emails` is.
 
 ## The included types
 
