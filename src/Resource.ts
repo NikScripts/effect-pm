@@ -1014,6 +1014,24 @@ export const grantLocal = <Self, S extends Spec, R>(
  *
  * @public
  */
+// The schema-derived client shape of a void mutation — the two-stage `effectFn<Client>()` constrains
+// `Client` to **narrow** this (add overloads / refine), never widen it. A `Client` that would accept a
+// payload the wire rejects makes {@link NarrowedPayload} resolve to `never`, so the call fails to compile.
+type MutateDerived<P extends Schema.Top> = (payload: PrettifyPayload<P["Type"]>) => Effect.Effect<void>;
+type NarrowedPayload<P extends Schema.Top, Client> = [Client] extends [Derive]
+  ? RequiredPayloadSchema<P>
+  : [Client] extends [MutateDerived<P>]
+    ? RequiredPayloadSchema<P>
+    : never;
+/**
+ * Two-stage {@link effectFn} — override the **client-facing** type with a `Client` that must **narrow**
+ * the schema-derived shape: `effectFn<Client>()(payload)`. Reshape freely (e.g. add overloads), but a
+ * `Client` that would accept payloads the wire rejects fails to compile (payload resolves to `never`).
+ * For an override that can't be a narrowing (a generic library), use {@link unsafeEffectFn}. @public
+ */
+export function effectFn<Client = Derive>(): <P extends Schema.Top>(
+  payload: NarrowedPayload<P, Client>,
+) => Method<"mutate", P, typeof Schema.Void, typeof Schema.Never, false, MethodAnnotations, Client>;
 export function effectFn<const C extends EffectFnWireConfig>(
   config: C,
 ): Method<
@@ -1055,10 +1073,16 @@ export function effectFn<
   error: E,
 ): Method<"mutate", F, Su, E>;
 export function effectFn(
-  payloadOrConfig: EffectFnPayload | EffectFnWireConfig,
+  payloadOrConfig?: EffectFnPayload | EffectFnWireConfig,
   success?: Schema.Top,
   error?: Schema.Top,
-): AnyMethod {
+): AnyMethod | (<P extends Schema.Top>(payload: RequiredPayloadSchema<P>) => AnyMethod) {
+  // two-stage form `effectFn<Client>()(payload)` — 0 args on the first call; the client override is
+  // type-only (phantom), so the returned builder is identical to the single-stage void/never path.
+  if (payloadOrConfig === undefined) {
+    return <P extends Schema.Top>(payload: RequiredPayloadSchema<P>): AnyMethod =>
+      makeMethod("mutate", assertEffectFnPayload(payload), Schema.Void, Schema.Never, false, {});
+  }
   let payload: EffectFnPayload;
   let successSchema: Schema.Top = Schema.Void;
   let errorSchema: Schema.Top = Schema.Never;
