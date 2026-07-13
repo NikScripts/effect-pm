@@ -54,7 +54,7 @@ const demoProgram = (sqlitePath: string) =>
     const lifecycle = yield* ProcessLifecycleStore;
     const processEvents = yield* lifecycle.lifecycle("examples/ManualProcess");
 
-    const runStore = yield* SqliteRunStore.at(SqliteDemoGate);
+    const runStore = yield* SqliteRunStore;
     const facts = yield* runStore.facts();
     const stateHistory = yield* runStore.stateHistory();
 

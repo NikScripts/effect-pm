@@ -105,3 +105,21 @@ void _engine.completed;
 void _engine.retryExhausted;
 // @ts-expect-error the engine write-extension does not carry the analytics reads
 void _engine.failures;
+
+// ── bare single Store.Service: service type is the handle (no at) ─────────────
+const jobsStoreRegistration = QueueResource.store(Jobs);
+
+class JobsStore extends Store.Service<JobsStore>("@test/SingleJobsStore")(
+  jobsStoreRegistration,
+) {}
+
+type SingleHandle = StoreHandleAtKey<
+  RegsOfStoreInput<ReturnType<typeof QueueResource.store<typeof Jobs>>>,
+  typeof Jobs
+>;
+
+declare const _singleYield: Effect.Effect<SingleHandle, never, JobsStore>;
+void _singleYield;
+
+// @ts-expect-error single-registration Store.Service has no at
+void JobsStore.at;

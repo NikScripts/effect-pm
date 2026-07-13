@@ -320,7 +320,7 @@ describe("RunResource.layer — RunResource.store records", () => {
     Effect.gen(function* () {
       const gate = yield* StoreGate;
       yield* gate.run(21);
-      const store = yield* TestRunStore.at(StoreGate);
+      const store = yield* TestRunStore;
       const facts = yield* store.facts();
       expect(facts.map((row) => row._tag).sort()).toEqual([
         "Completed",
@@ -359,7 +359,7 @@ describe("RunResource.store — persistence fidelity", () => {
       yield* gate.run(7);
       yield* gate.run(-2).pipe(Effect.flip);
 
-      const store = yield* FidelityStore.at(FidelityGate);
+      const store = yield* FidelityStore;
       const facts = yield* store.facts();
       const completed = facts.find((row) => row._tag === "Completed");
       const failed = facts.find((row) => row._tag === "Failed");

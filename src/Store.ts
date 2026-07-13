@@ -88,12 +88,19 @@ import {
   buildStandaloneRegistration,
   defineStandaloneStore,
   defineStoreTag,
+  isSingleStoreTagClass,
   storeDefaultLogLevelSym,
   storeRegsSym,
+  type SingleStoreTagClass,
   type StandaloneStoreClass,
   type StoreBundle,
   type StoreTagClass,
 } from "./internal/store/defineStore";
+import type {
+  ContractForSingleInput,
+  IsSingleStoreInput,
+  RegsOfStoreInput,
+} from "./internal/store/registrationTypes";
 import type { StorageApi } from "./internal/store/bridge";
 import { buildDefaultScopeBridge, buildScopeBridge } from "./internal/store/scopeBridge";
 import { buildScopeStateMap, type ScopeState } from "./internal/store/memoryScope";
@@ -196,6 +203,13 @@ export type StoreServiceClass<
   Id extends string = string,
   Regs = ReadonlyArray<NormalizedStoreRegistration>,
 > = StoreTagClass<Self, Id, Regs> & StoreLayers<Self>;
+
+/** Single-registration store class with attached {@link Storage} layers. @internal */
+export type SingleStoreServiceClass<
+  Self = unknown,
+  Id extends string = string,
+  C extends StoreContractValue = StoreContractValue,
+> = SingleStoreTagClass<Self, Id, C> & StoreLayers<Self>;
 
 /** Standalone single-scope store class with attached {@link Storage} layers. @internal */
 export type StandaloneStore<
@@ -393,22 +407,42 @@ const buildLayerForAggregate = <
         Scope.Scope
       >);
 
-/** Attach `layerMemory` / `layer` to a registration-only aggregate class. @internal */
-const attachAggregateLayers = <
+/** Attach `layerMemory` / `layer` to a registration-only store class. @internal */
+const attachStoreLayers = <
   Self,
   Id extends string,
-  Regs,
+  Result,
 >(
-  aggregate: StoreTagClass<Self, Id, Regs>,
-): StoreServiceClass<Self, Id, Regs> => {
+  storeClass: Result,
+): Result & StoreLayers<Self> => {
+  if (isSingleStoreTagClass(storeClass)) {
+    const registrations = storeClass[storeRegsSym];
+    const registration = registrations[0]!;
+    const layerMemory = buildStandaloneMemoryLayer(storeClass, registration);
+    const layer = (options?: StoreLayerOptions) =>
+      buildStandaloneLayer(storeClass, registration, options);
+    return Object.assign(storeClass, {
+      layerMemory,
+      layer,
+    }) as Result & StoreLayers<Self>;
+  }
+
+  const aggregate = storeClass as StoreTagClass<Self, Id, unknown>;
   const registrations = aggregate[storeRegsSym] as ReadonlyArray<NormalizedStoreRegistration>;
-  const layerMemory = buildMemoryLayerForAggregate(aggregate, registrations);
+  const layerMemory = buildMemoryLayerForAggregate(
+    aggregate as Context.ServiceClass<Self, Id, StoreBundle<unknown>>,
+    registrations,
+  );
   const layer = (options?: StoreLayerOptions) =>
-    buildLayerForAggregate(aggregate, registrations, options);
-  return Object.assign(aggregate, {
+    buildLayerForAggregate(
+      aggregate as Context.ServiceClass<Self, Id, StoreBundle<unknown>>,
+      registrations,
+      options,
+    );
+  return Object.assign(storeClass as object, {
     layerMemory,
     layer,
-  }) as StoreServiceClass<Self, Id, Regs>;
+  }) as Result & StoreLayers<Self>;
 };
 
 /** @internal */
@@ -1236,11 +1270,27 @@ export type TagClass<
 > = StoreTagClass<Self, Id>;
 
 /**
- * Declare an aggregate store bundle — **class extends** with {@link layerMemory} / {@link layer}.
+ * Declare an app store — **class extends** with {@link layerMemory} / {@link layer}.
+ *
+ * Three input shapes:
+ *
+ * - **Single store** — bare registration: `QueueResource.store(Mail)` → `yield* MailStore`
+ * - **Tag-keyed multi** — array: `[QueueResource.store(Mail), …]` → `yield* AppStore.at(Mail)`
+ * - **Custom-keyed** — object: `{ mail: QueueResource.store(Mail), … }` → `yield* AppStore.at("mail")`
  *
  * `layerMemory` uses in-memory refs. `layer({ filename })` persists to SQLite; omit `filename` for memory.
  *
- * @example
+ * @example Single store
+ * ```ts
+ * class MailStore extends Store.Service<MailStore>("@app/MailStore")(
+ *   QueueResource.store(Mail),
+ * ) {}
+ *
+ * const handle = yield* MailStore;
+ * Effect.provide(program, MailStore.layer({ filename: "data.sqlite" }));
+ * ```
+ *
+ * @example Multi store
  * ```ts
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
  *   Store.register("metrics", contract),
@@ -1253,8 +1303,14 @@ export type TagClass<
  */
 export const Service = <Self>(id: string) => {
   const define = defineStoreTag<Self, typeof id extends string ? typeof id : never>(id);
-  return <const Args extends ReadonlyArray<unknown>>(...args: Args) =>
-    attachAggregateLayers(define(...args));
+  return <const Args extends ReadonlyArray<unknown>>(...args: Args) => {
+    type Input = Args extends readonly [infer Only] ? Only : Args;
+    const input = (args.length === 1 ? args[0]! : args) as Input;
+    const storeClass = define(input);
+    return attachStoreLayers<Self, string, typeof storeClass>(storeClass) as IsSingleStoreInput<Input> extends true
+      ? SingleStoreServiceClass<Self, string, ContractForSingleInput<Input>>
+      : StoreServiceClass<Self, string, RegsOfStoreInput<Input>>;
+  };
 };
 
 /**

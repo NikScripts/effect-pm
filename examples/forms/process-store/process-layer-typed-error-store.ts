@@ -40,7 +40,7 @@ const program = Effect.gen(function* () {
     yield* FailingPrices;
     yield* TestClock.adjust(Duration.millis(200));
 
-    const store = yield* DemoStore.at(FailingPrices);
+    const store = yield* DemoStore;
     const events = yield* store.events();
     const failed = events.find((row) => row._tag === "Failed");
     yield* Effect.log(

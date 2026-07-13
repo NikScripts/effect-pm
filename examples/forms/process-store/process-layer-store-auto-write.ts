@@ -34,7 +34,7 @@ const program = Effect.gen(function* () {
     yield* PricesProcess;
     yield* TestClock.adjust(Duration.millis(200));
 
-    const store = yield* DemoStore.at(PricesProcess);
+    const store = yield* DemoStore;
     const events = yield* store.events();
     const completed = events.find((row) => row._tag === "Completed");
     yield* Effect.log(`built-in store: ${String(events.length)} event(s)`);

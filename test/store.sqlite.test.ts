@@ -36,14 +36,14 @@ describe("Store SQLite layer", () => {
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const handle = yield* ThermoStore.at("thermo");
+          const handle = yield* ThermoStore;
           yield* handle.readings.append({ value: 72 });
         }).pipe(Effect.provide(ThermoStore.layer({ filename }))),
       );
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const handle = yield* ThermoStore.at("thermo");
+          const handle = yield* ThermoStore;
           const rows = yield* handle.readings.read();
           expect(rows).toEqual([{ value: 72 }]);
         }).pipe(Effect.provide(ThermoStore.layer({ filename }))),
@@ -80,7 +80,7 @@ describe("Store SQLite layer", () => {
 
   it.effect("Store.changes emits append events", () =>
     Effect.gen(function* () {
-      const handle = yield* ThermoStore.at("thermo");
+      const handle = yield* ThermoStore;
       const events = yield* Store.changes("thermo");
       const fiber = yield* Effect.forkChild(
         events.pipe(Stream.take(2), Stream.runCollect),
@@ -98,7 +98,7 @@ describe("Store SQLite layer", () => {
 
   it.effect("retention trims oldest rows", () =>
     Effect.gen(function* () {
-      const handle = yield* RetentionStore.at("thermo");
+      const handle = yield* RetentionStore;
       yield* handle.readings.append({ value: 1 });
       yield* handle.readings.append({ value: 2 });
       yield* handle.readings.append({ value: 3 });

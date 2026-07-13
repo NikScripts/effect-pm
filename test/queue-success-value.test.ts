@@ -84,7 +84,7 @@ describe("QueueResource — success-value channel", () => {
     "the store's Completed record + slowest() round-trip the typed success value",
     () =>
       Effect.gen(function* () {
-        const store = yield* DoublerStore.at(Doubler);
+        const store = yield* DoublerStore;
         // Seed two Completed events carrying the success value; the analytics `slowest` hands back
         // `Completed` events whose `success` is the tag's typed success value (`number`).
         yield* store.record({

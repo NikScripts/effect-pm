@@ -38,7 +38,7 @@ const program = Effect.gen(function* () {
   yield* gate.run(3);
   yield* gate.run(-1).pipe(Effect.flip);
 
-  const store = yield* DemoStore.at(PriceGate);
+  const store = yield* DemoStore;
   const facts = yield* store.facts();
   const stateHistory = yield* store.stateHistory({ limit: 20 });
 
