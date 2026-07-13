@@ -2,10 +2,11 @@
 
 **Status:** **PLAN-FIRST / RESEARCH ONLY** — owner 2026-07-13.  
 **Agent:** Agent 1 (free).  
-**Base:** `integration/storage`  
-**Branch:** none for research — post findings in owner chat; implementation branch only after owner picks a direction.
+**Branch from (required):** Agent 2’s Logs branch — `cursor/phase5-logs-migration-a3ad` (PR [#30](https://github.com/NikScripts/effect-pm/pull/30)), **not** bare `integration/storage`.  
+**Why:** Logs Phase 5 + `Resource.logs` / platform module land there; research and any later impl should sit on that tip so fleet work does not fork pre-Logs.  
+**Research branch:** after pull, create `cursor/<short-name>-a009` off Agent 2’s tip **only if** you need to commit findings docs — prefer posting research in owner chat first. **No implementation** until owner picks a direction.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`multi-host-instances-decisions.md`](./multi-host-instances-decisions.md) · [`docs/standards/resources.md`](../standards/resources.md)
+**Docs bus:** [`agent-status.md`](./agent-status.md) · [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) · [`multi-host-instances-decisions.md`](./multi-host-instances-decisions.md) · [`docs/standards/resources.md`](../standards/resources.md)
 
 ---
 
@@ -126,9 +127,14 @@ Supervisor (or Agent 1 under a new brief) writes an **implementation handoff** w
 ## Short prompt (paste to Agent 1)
 
 ```
-Read docs/handoffs/agent-01-next-headlining-resource.md and its Inputs table.
+Checkout / pull Agent 2’s branch first:
+  git fetch origin cursor/phase5-logs-migration-a3ad
+  git checkout cursor/phase5-logs-migration-a3ad
+  git pull
 
-You are Agent 1. RESEARCH / PLAN ONLY — no code, no impl branch.
+Read docs/handoffs/agent-01-next-headlining-resource.md (and Inputs). Branch any research commits FROM that tip — do not base on bare integration/storage.
+
+You are Agent 1. RESEARCH / PLAN ONLY — no implementation.
 
 Deliver the five sections: (1) Run vs Queue/Process evidence, (2) fleet/peers today, (3) candidate options A–E with pros/cons, (4) numbered owner decision checklist, (5) risks & non-goals.
 
