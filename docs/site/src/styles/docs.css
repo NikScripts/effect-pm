@@ -237,6 +237,8 @@ a:has(> code) {
   color: inherit;
   text-decoration: underline;
   text-decoration-style: dotted;
+  text-decoration-thickness: 1px;                                          /* thin → smaller dots */
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); /* lighter */
   text-underline-offset: 4px;
 }
 a:has(> code):hover {
