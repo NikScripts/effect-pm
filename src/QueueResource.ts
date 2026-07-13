@@ -80,10 +80,7 @@ import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
 import type { ConfigPatch } from "./ResourceConfigure";
 
 /**
- * A captured log line on the wire — the element of the queue's `logs` stream. Reuses the
- * package's structured log schema ({@link LogEntrySchema}: `date`, `level`,
- * `message`, `cause?`, `annotations`, `spans`), so every datapoint and the level are preserved
- * across RPC. (Re-exported under a queue-neutral name.)
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Resource.logs}.
  *
  * @public
  */
@@ -478,18 +475,6 @@ export const queueControlSpec = {
     query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
-        "empty unless a HistoryStore layer is provided.",
-    }),
-  },
-  logs: {
-    stream: Resource.stream(queueLogEntry).annotate({
-      description:
-        "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
-        "unless the queue was configured with captureLogs.",
-    }),
-    query: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
-      description:
-        "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless a HistoryStore layer is provided.",
     }),
   },
@@ -914,11 +899,8 @@ const buildQueueImpl = <
     // Hoist both codecs once (encoders parallel to decoders): the encoder is reused per stream element
     // in the append forks below rather than reconstructed on every element.
     const encodeMetric = Schema.encodeEffect(queueMetrics);
-    const encodeLog = Schema.encodeEffect(queueLogEntry);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
-    const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
     const metricsStreamId = `${tag.key}/metrics`;
-    const logsStreamId = `${tag.key}/logs`;
     // WRITE-fork helper: encode each stream element and append it to the history store under `streamId`,
     // forked into the scope. Shared by the metrics + logs forks (byte-identical modulo stream/encoder).
     const forkAppend = <A>(
@@ -953,11 +935,7 @@ const buildQueueImpl = <
       });
     yield* Option.match(history, {
       onNone: () => Effect.void,
-      onSome: (hist) =>
-        Effect.gen(function* () {
-          yield* forkAppend(hist, handle.metrics, metricsStreamId, encodeMetric);
-          yield* forkAppend(hist, handle.logs, logsStreamId, encodeLog);
-        }),
+      onSome: (hist) => forkAppend(hist, handle.metrics, metricsStreamId, encodeMetric),
     });
     // Annotated so the method params get contextual typing from the spec (and the impl is
     // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
@@ -990,11 +968,6 @@ const buildQueueImpl = <
         stream: handle.metrics,
         query: ({ limit, since, until }) =>
           readHistory(metricsStreamId, decodeMetric, { limit, since, until }),
-      },
-      logs: {
-        stream: handle.logs,
-        query: ({ limit, since, until }) =>
-          readHistory(logsStreamId, decodeLog, { limit, since, until }),
       },
       // The item (or batch) IS the payload — `add`/`prioritize`/`defer` forward it straight to the
       // engine, whose `QueueEnqueue` union overload resolves `T | ReadonlyArray<T>` directly (no
@@ -1038,7 +1011,7 @@ export const layer = <
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
- * Serve this queue **remotely (served-only)** — run the worker / refill / `persist` / `captureLogs`
+ * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
  * engine behind the tag, mount its RPC handlers, and register into {@link Resource.servedResourcesLayer},
  * **without** granting the local instance (no `yield* Tag` in the serving process). The engine's worker
  * requirement `R` is **preserved**, so a per-resource `Layer.provide` discharges it in isolation — the
@@ -1075,7 +1048,7 @@ export const serveRemote = <
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
- * refill / `persist` / `captureLogs` engine behind the tag, mount its RPC handlers, register into
+ * refill / `persist` engine behind the tag, mount its RPC handlers, register into
  * {@link Resource.servedResourcesLayer}, **and** grant `Self | Local<Self>` so co-located code
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
  * worker requirement `R` is preserved for per-resource `Layer.provide`. This is the queue's counterpart

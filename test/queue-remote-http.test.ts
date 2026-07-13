@@ -35,7 +35,7 @@ const withServer = <A, E>(
   const server = Resource.httpServer([
     QueueResource.serve(RemoteQueue, config),
   ]).pipe(
-    // server-side history backend (only used when the config enables captureLogs)
+    // server-side history backend for metrics backfill
     Layer.provide(HistoryStore.layerMemory()),
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
@@ -75,12 +75,11 @@ it("add (single + batch) over http → real engine processes → completed/statu
       }),
     )));
 
-it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () =>
+it("metricsHistory crosses http (the dashboard's backfill path)", () =>
   Effect.runPromise(
     withServer(
       {
         effect: (item) => Effect.logInfo(`processed ${item.n}`),
-        captureLogs: true,
         concurrency: 1,
       },
       (_port) =>
@@ -93,18 +92,6 @@ it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () 
               (s) => s.completed >= 2,
             ),
           );
-          // history is captured server-side, then read back over RPC
-          yield* Effect.gen(function* () {
-            while ((yield* queue.logs.query({})).length === 0) {
-              yield* Effect.sleep(Duration.millis(10));
-            }
-          }).pipe(Effect.timeout(Duration.seconds(2)));
-
-          const logs = yield* queue.logs.query({ limit: 50 });
-          expect(logs.length).toBeGreaterThan(0);
-          // decoded log entries survive the wire (level preserved)
-          expect(typeof logs[0]?.level).toBe("string");
-          // metricsHistory also serializes over RPC (array, possibly empty between windows)
           const metrics = yield* queue.metrics.query({});
           expect(Array.isArray(metrics)).toBe(true);
         }),

@@ -26,7 +26,6 @@ it("Resource.layer handle: status.changes emits live counts on enqueue", () =>
       expect(last?.sizes.normal).toBe(1);
       expect((yield* q.status.get).sizes.normal).toBe(1);
       expect(q.metrics.stream).toBeDefined();
-      expect(q.logs.stream).toBeDefined();
     }).pipe(
       Effect.provide(
         QueueResource.layer(LiveQueue, {

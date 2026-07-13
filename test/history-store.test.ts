@@ -1,4 +1,4 @@
-import { Duration, Effect, Layer, Schema, Stream } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
 
@@ -21,51 +21,16 @@ it("HistoryStore.layerMemory: append + read (newest-first limit, per stream)", (
     }).pipe(Effect.provide(HistoryStore.layerMemory())),
   ));
 
-it("queue logHistory reads back captured logs (HistoryStore provided to the layer)", () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const queue = yield* HQueue;
-      yield* queue.add([{ n: 1 }, { n: 2 }, { n: 3 }]);
-      yield* Stream.runDrain(
-        Stream.takeUntil(
-          queue.status.changes,
-          (s) => s.completed >= 3,
-        ),
-      );
-      // the capture fiber appends asynchronously — wait until history is populated
-      yield* Effect.gen(function* () {
-        while ((yield* queue.logs.query({})).length === 0) {
-          yield* Effect.sleep(Duration.millis(10));
-        }
-      }).pipe(Effect.timeout(Duration.seconds(2)));
-
-      const history = yield* queue.logs.query({ limit: 50 });
-      expect(history.length).toBeGreaterThan(0);
-      // entries decode back to the wire log schema (level/message preserved)
-      expect(typeof history[0]?.level).toBe("string");
-    }).pipe(
-      Effect.provide(
-        QueueResource.layer(HQueue, {
-          effect: (item) => Effect.logInfo(`processed ${item.n}`),
-          captureLogs: true,
-        }).pipe(Layer.provide(HistoryStore.layerMemory())),
-      ),
-      Effect.scoped,
-    ),
-  ));
-
-it("logHistory is empty when no HistoryStore is provided (graceful, opt-in)", () =>
+it("metricsHistory is empty when no HistoryStore is provided (graceful, opt-in)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const queue = yield* HQueue;
       yield* queue.add({ n: 1 });
-      expect(yield* queue.logs.query({})).toEqual([]);
       expect(yield* queue.metrics.query({})).toEqual([]);
     }).pipe(
       Effect.provide(
         QueueResource.layer(HQueue, {
           effect: (_item) => Effect.void,
-          captureLogs: true,
         }),
       ),
       Effect.scoped,

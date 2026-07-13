@@ -12,6 +12,8 @@ import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Resource from "../../src/Resource";
 import { specOf } from "../../src/Resource";
 import * as Group from "../../src/Group";
+import * as LogEntry from "../../src/LogEntry";
+import * as NodeStatus from "../../src/NodeStatus";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import {
   Billing,
@@ -81,6 +83,12 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 // One transport per HOST — each node serves its whole group on one /rpc (httpServer),
 // so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini.
 const dropletTransport = Resource.httpClient(Droplet, { url: dropletRpc });
+const miniTransport = Resource.httpClient(MiniNode, { url: miniUrl });
+
+const nodeStatusLayer = (resourceKey: string) =>
+  Resource.client(NodeStatus.Tag).pipe(
+    Layer.provide(nodeOf(resourceKey) === "mini" ? miniTransport : dropletTransport),
+  );
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
@@ -171,6 +179,21 @@ const cachedAccumulator = <A, R>(opts: {
 
 const cache = new Map<string, QueueBundle>();
 
+const resourceLogsAccumulator = (resourceKey: string) =>
+  runtime.atom(
+    cachedAccumulator({
+      key: `${resourceKey}/logs`,
+      cap: 300,
+      stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(
+        Stream.filter(LogEntry.hasKey(resourceKey)),
+        Stream.map(toLogLine),
+      ),
+      query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+        Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+      ),
+    }).pipe(Stream.provide(nodeStatusLayer(resourceKey))),
+  );
+
 /** Build (once per tag) the atom bundle for a queue tag. */
 export const queueBundle = (tag: LeafTag): QueueBundle => {
   const existing = cache.get(tag.key);
@@ -233,16 +256,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: runtime.atom(
-      cachedAccumulator({
-        key: `${tag.key}/logs`,
-        cap: 300,
-        stream: Stream.unwrap(Effect.map(tag, (q) => q.logs.stream)).pipe(Stream.map(toLogLine)),
-        query: Effect.flatMap(tag, (q) => q.logs.query({ limit: 300 })).pipe(
-          Effect.map((ls) => ls.map(toLogLine)),
-        ),
-      }),
-    ),
+    logs: resourceLogsAccumulator(tag.key),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
@@ -273,16 +287,7 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),
     // cached + query-then-tail, same generic mechanism as the queue.
-    logs: runtime.atom(
-      cachedAccumulator({
-        key: `${tag.key}/logs`,
-        cap: 300,
-        stream: Stream.unwrap(Effect.map(tag, (p) => p.logs.stream)).pipe(Stream.map(toLogLine)),
-        query: Effect.flatMap(tag, (p) => p.logs.query({ limit: 300 })).pipe(
-          Effect.map((ls) => ls.map(toLogLine)),
-        ),
-      }),
-    ),
+    logs: resourceLogsAccumulator(tag.key),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),

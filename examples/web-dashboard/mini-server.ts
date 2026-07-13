@@ -12,10 +12,12 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as processEntry } from "../../src/Process";
+import * as Logs from "../../src/Logs";
 import * as Resource from "../../src/Resource";
 import { HistoryStore } from "../../src/HistoryStore";
+import * as ProcessStorage from "../../src/ProcessStorage";
 import { Polling } from "../../src/Polling";
-import { KeyRotation } from "./fleet";
+import { KeyRotation, MiniNode } from "./fleet";
 
 const PORT = 7778;
 
@@ -23,10 +25,12 @@ const serveLayer = Resource.httpServer([
   processEntry(KeyRotation, {
     effect: Effect.logInfo("wnba: key-rotation check"),
     polling: Polling.spaced(Duration.seconds(5)),
-    captureLogs: true,
   }),
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(MiniNode)),
+  Layer.provide(ProcessStorage.layer),
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })),
 );

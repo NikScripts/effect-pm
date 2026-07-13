@@ -6,6 +6,7 @@
  */
 import { Effect, Option, Schema } from "effect";
 import * as Process from "../src/Process";
+import * as Resource from "../src/Resource";
 
 declare const startAt: Date;
 declare const stopAt: Date;
@@ -47,10 +48,8 @@ const _proof = Effect.gen(function* () {
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
   yield* h.start; // void lifecycle command
   yield* h.run;
-  // observability is paired by nesting (like the queue): `logs.stream` stream + `logs.query` effectFn.
-  const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* h.logs.query(
-    {},
-  );
+  const _logExport = yield* Resource.logs(Health);
+  const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* _logExport.query({});
 
   const p = yield* Prices;
   const latest: Option.Option<typeof Price.Type> = yield* p.result.get;

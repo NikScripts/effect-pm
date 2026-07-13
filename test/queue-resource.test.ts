@@ -37,6 +37,7 @@ const QueueResource = {
   Service: engineQueueService,
 };
 import * as Resource from "../src/Resource";
+import { testLogsEnv } from "./fixtures/logsEnv";
 
 const fastConfig = { concurrency: 2 };
 
@@ -1443,19 +1444,22 @@ describe("QueueResource.make — OTEL metrics", () => {
   );
 });
 
-describe("QueueResource.make — log capture (.logs)", () => {
-  it.live("captures worker-effect logs with level + queueId/entryId annotations", () =>
+describe("QueueResource.make — Resource.logs", () => {
+  const scopeTag = (name: string) => ({ key: name });
+
+  it.live("scopes worker-effect logs readable via Resource.logs", () =>
     Effect.gen(function* () {
+      const name = "test-logs-worker";
       const queue = yield* QueueResource.make({
-        name: "test-logs-worker",
+        name,
         effect: (n: number) => Effect.logInfo(`processing ${String(n)}`),
         concurrency: 1,
-        captureLogs: true,
       });
+      const { stream } = yield* Resource.logs(scopeTag(name));
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.take(
-            Stream.filter(queue.logs, (e) => e.message.includes("processing")),
+            Stream.filter(stream, (e) => e.message.includes("processing")),
             1,
           ),
         ),
@@ -1464,24 +1468,23 @@ describe("QueueResource.make — log capture (.logs)", () => {
       yield* queue.add(7);
       const entry = Array.from(yield* Fiber.join(collected))[0];
       expect(entry?.message).toContain("processing 7");
-      expect(entry?.level).toBe("Info"); // level preserved
-      expect(entry?.annotations.queueId).toBe("test-logs-worker");
-      expect(entry?.annotations["queue.entryId"]).toBeDefined(); // attributed to the job
-    }).pipe(Effect.scoped),
+      expect(entry?.level).toBe("Info");
+    }).pipe(Effect.provide(testLogsEnv()), Effect.scoped),
   );
 
-  it.live("captures the engine layer's own logs (shutdown)", () =>
+  it.live("scopes engine shutdown logs readable via Resource.logs", () =>
     Effect.gen(function* () {
+      const name = "test-logs-engine";
       const queue = yield* QueueResource.make({
-        name: "test-logs-engine",
+        name,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        captureLogs: { level: "Info" },
       });
+      const { stream } = yield* Resource.logs(scopeTag(name));
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.take(
-            Stream.filter(queue.logs, (e) => e.message.includes("shutting down")),
+            Stream.filter(stream, (e) => e.message.includes("shutting down")),
             1,
           ),
         ),
@@ -1491,66 +1494,6 @@ describe("QueueResource.make — log capture (.logs)", () => {
       const entry = Array.from(yield* Fiber.join(collected))[0];
       expect(entry?.message).toContain("shutting down");
       expect(entry?.level).toBe("Info");
-      expect(entry?.annotations.queueId).toBe("test-logs-engine");
-    }).pipe(Effect.scoped),
-  );
-
-  it.live("the level threshold filters out lower levels", () =>
-    Effect.gen(function* () {
-      const queue = yield* QueueResource.make({
-        name: "test-logs-level",
-        effect: (n: number) =>
-          Effect.gen(function* () {
-            yield* Effect.logDebug(`dbg ${String(n)}`); // below threshold → dropped
-            yield* Effect.logWarning(`warn ${String(n)}`); // captured
-          }),
-        concurrency: 1,
-        captureLogs: { level: "Warn" },
-      });
-      const collected = yield* Effect.forkChild(
-        Stream.runCollect(Stream.take(queue.logs, 1)),
-      );
-      yield* Effect.sleep(Duration.millis(20));
-      yield* queue.add(1);
-      const entry = Array.from(yield* Fiber.join(collected))[0];
-      expect(entry?.level).toBe("Warn");
-      expect(entry?.message).toContain("warn 1");
-    }).pipe(Effect.scoped),
-  );
-
-  it.live("logs is an empty stream when capture is off (default)", () =>
-    Effect.gen(function* () {
-      const queue = yield* QueueResource.make({
-        name: "test-logs-off",
-        effect: (n: number) => Effect.logInfo(`x ${String(n)}`),
-        concurrency: 1,
-      });
-      const head = yield* Effect.forkChild(Stream.runHead(queue.logs));
-      yield* Effect.sleep(Duration.millis(20));
-      yield* queue.add(1);
-      yield* waitUntilCompleted(queue, 1);
-      // Stream.empty completes immediately with no element
-      expect(Option.isNone(yield* Fiber.join(head))).toBe(true);
-    }).pipe(Effect.scoped),
-  );
-
-  it.live("a late subscriber replays the recent log tail, then goes live", () =>
-    Effect.gen(function* () {
-      const queue = yield* QueueResource.make({
-        name: "test-logs-replay",
-        effect: (n: number) => Effect.logInfo(`done ${String(n)}`),
-        concurrency: 1,
-        captureLogs: true,
-      });
-      // emit a line BEFORE anyone subscribes
-      yield* queue.add(1);
-      yield* waitUntilCompleted(queue, 1);
-      yield* Effect.sleep(Duration.millis(20)); // let the scheduled publish land in the ring
-      // subscribe only now — the replay ring must surface the already-emitted line
-      const replayed = yield* Stream.runHead(
-        Stream.filter(queue.logs, (e) => e.message.includes("done 1")),
-      );
-      expect(Option.isSome(replayed)).toBe(true);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(testLogsEnv()), Effect.scoped),
   );
 });

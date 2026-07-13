@@ -21,6 +21,9 @@ import {
 } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
+import * as Logs from "../../src/Logs";
+import * as ProcessStorage from "../../src/ProcessStorage";
+import * as Resource from "../../src/Resource";
 
 const Job = Schema.Struct({ id: Schema.String });
 
@@ -83,8 +86,10 @@ const cfg = {
     }),
   concurrency: 3,
   attempts: 2,
-  captureLogs: true,
 } as const;
+
+/** Node log key for the local TUI fleet — pairs with `Logs.persistLayer`. */
+const TuiNode = "acme/tui" as const;
 
 export interface LogLine {
   readonly id: number;
@@ -122,8 +127,10 @@ const AppLayer = Layer.mergeAll(
   QueueResource.layer(Daily, cfg),
   QueueResource.layer(Weekly, cfg),
 ).pipe(
-  // silence the default console logger so captured worker logs don't bleed onto the
-  // Ink alt-screen — captureLogs still routes them to each queue's `logs` stream.
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(TuiNode)),
+  Layer.provide(ProcessStorage.layer),
+  // silence the default console logger so worker logs don't bleed onto the Ink alt-screen
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
 );
 
@@ -228,6 +235,7 @@ const daemonsFor = <Id extends AllQueues>(
 ): Effect.Effect<void, never, Id> =>
   Effect.gen(function* () {
     const q = yield* tag;
+    const { stream } = yield* Resource.logs(tag);
     yield* Effect.forkDetach(
       Effect.forever(
         Effect.gen(function* () {
@@ -239,7 +247,7 @@ const daemonsFor = <Id extends AllQueues>(
       ),
     );
     yield* Effect.forkDetach(
-      Stream.runForEach(q.logs, (l) =>
+      Stream.runForEach(stream, (l) =>
         SubscriptionRef.update(refs.logsRef, (acc) =>
           [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
         ),

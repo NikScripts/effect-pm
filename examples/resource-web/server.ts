@@ -221,7 +221,6 @@ const wnbaNode = Resource.httpServer([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
     concurrency: 3,
-    captureLogs: true,
   }),
   // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Resource.serve`
   // (spec-checked against the tag) — a real app would use `ApiMetrics.serve(ScoresApi)`, fed from
@@ -254,7 +253,6 @@ const liveNode = Resource.httpServer([
   processEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
-    captureLogs: true,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
 ]).pipe(
@@ -274,7 +272,6 @@ const statsNode = Resource.httpServer([
   queueEntry(PlayByPlayQueue, {
     effect: importWorker,
     concurrency: 3,
-    captureLogs: true,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
 ]).pipe(

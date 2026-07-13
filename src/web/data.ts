@@ -13,6 +13,7 @@ import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
 import { client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
+import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
@@ -304,11 +305,35 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
   return m;
 };
 
+const resourceLogsAtom = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  resourceKey: string,
+  node: NodeKey<unknown>,
+) =>
+  runtime.atom(
+    cachedAccumulator({
+      key: `${resourceKey}/logs`,
+      cap: 300,
+      stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(
+        Stream.filter(LogEntry.hasKey(resourceKey)),
+        Stream.map(toLogLine),
+      ),
+      query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+        Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+      ),
+    }).pipe(Stream.provide(nodeStatusClient(node))),
+  );
+
 /** Build (once per runtime+tag) the atom bundle for a queue tag. */
 export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueTag<R>): QueueBundle => {
   const cache = cacheFor(bundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
+
+  const node = nodeOf(tag);
+  if (node === undefined) {
+    throw new Error(`queue tag ${tag.key} is missing a node`);
+  }
 
   // `status` is a reactive `ref` — subscribe via `.changes`; `metrics` is nested `{ stream, query }`.
   const statusStream = Stream.unwrap(
@@ -370,14 +395,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: runtime.atom(
-      cachedAccumulator({
-        key: `${tag.key}/logs`,
-        cap: 300,
-        stream: Stream.unwrap(Effect.map(tag, (q) => q.logs.stream)).pipe(Stream.map(toLogLine)),
-        query: Effect.flatMap(tag, (q) => q.logs.query({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
-      }),
-    ),
+    logs: resourceLogsAtom(runtime, tag.key, node),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
@@ -392,6 +410,10 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
   const cache = cacheFor(processBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
+  const node = nodeOf(tag);
+  if (node === undefined) {
+    throw new Error(`process tag ${tag.key} is missing a node`);
+  }
   bumpLogIdFrom(`${tag.key}/logs`);
   // The inline `schedule` group is optional (only processes that own an inline schedule have it),
   // so the schedule read/mutations degrade to empty / no-op when a process is schedule-less.
@@ -402,14 +424,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
   );
   const bundle: ProcessBundle = {
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status.changes))),
-    logs: runtime.atom(
-      cachedAccumulator({
-        key: `${tag.key}/logs`,
-        cap: 300,
-        stream: Stream.unwrap(Effect.map(tag, (p) => p.logs.stream)).pipe(Stream.map(toLogLine)),
-        query: Effect.flatMap(tag, (p) => p.logs.query({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
-      }),
-    ),
+    logs: resourceLogsAtom(runtime, tag.key, node),
     // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
     // any external changes) — the contract exposes `schedule.entries` as a reactive ref, read here.
     schedule: runtime.atom(
