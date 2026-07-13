@@ -247,6 +247,43 @@ pre.shiki { background: transparent; }
   }
 }
 
+/* twoslash hover types — `{.twoslash}` blocks. The popup code keeps shiki's dual-theme token
+   colours; we theme only the popup container (with `!important` to beat the `.shiki span` dark
+   rule above). Popups are pure CSS (no client JS). */
+.twoslash-hover { position: relative; border-bottom: 1px dotted color-mix(in oklab, var(--fg) 40%, transparent); }
+.twoslash-popup-container {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 30;
+  display: none;
+  width: max-content;
+  max-width: min(88vw, 42rem);
+  padding: 0.5rem 0.7rem;
+  background: var(--panel) !important;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.4);
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.twoslash-hover:hover > .twoslash-popup-container { display: block; }
+.twoslash-popup-code { display: block; font-family: var(--font-mono); background: transparent !important; }
+.twoslash-popup-docs {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-fg);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+}
+.twoslash-popup-docs-tag-name { color: var(--primary); }
+/* twoslash blocks must not clip the escaping popup (intro snippets are short; revisit horizontal
+   scroll when rolling out to long Standards blocks). */
+.twoslash { overflow: visible; }
+
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */
 section[class~="must"] > h2::after,
