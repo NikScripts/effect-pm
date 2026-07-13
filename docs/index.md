@@ -106,8 +106,14 @@ get: (id) => Effect.gen(function* () {
 })
 ```
 
-The caller only ever sees `get` — the routing and the cross-node hop stay inside the resource, and an
-unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
+From any node, a caller just asks — the routing and the cross-node hop stay inside the resource:
+
+``` ts
+const sessions = yield* Sessions
+const session = yield* sessions.get(id) // Option<Session> — from whatever node owns it
+```
+
+An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
 reaching others, through the same tag.**
 
 ## Build your own
