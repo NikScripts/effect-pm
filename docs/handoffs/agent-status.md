@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | from `integration` | [next headlining resource](./agent-01-next-headlining-resource.md) | **plan-first** | — | — | Research fleet/peers headline — owner picks; **no code until then** | 2026-07-14 |
-| **2** | `cursor/logs-closeout-a3ad` | [logs plan](./agent-02-logs-platform-plan.md) · [PR #30 review](./phase5-logs-migration-review.md) · [PR #33](https://github.com/NikScripts/effect-pm/pull/33) | **closeout — ready** | `d7927960` | `typecheck` + `test` + `lint` green | Phase 5 merged (#30); substrate retired; `NodeLogs` removed; **P1 still owner-gated** | 2026-07-14 |
+| **2** | `cursor/logs-closeout-a3ad` | [logs plan](./agent-02-logs-platform-plan.md) · [PR #30 review](./phase5-logs-migration-review.md) · [PR #33](https://github.com/NikScripts/effect-pm/pull/33) | **closeout — ready** | `133f0e50` | `typecheck` + `test` + `lint` green | Phase 5 merged (#30); substrate retired; `NodeLogs` removed; **P1 still owner-gated** | 2026-07-14 |
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
