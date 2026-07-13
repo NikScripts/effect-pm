@@ -52,10 +52,6 @@
       "types": "./dist/MultiNode.d.ts",
       "default": "./dist/MultiNode.js"
     },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
-    },
     "./ProcessStore": {
       "types": "./dist/ProcessStore.d.ts",
       "default": "./dist/ProcessStore.js"

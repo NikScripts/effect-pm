@@ -20,11 +20,12 @@ class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a
 ```
 
 The **worker runtime** owns the queue. `QueueResource.serve` gives `Emails` its worker — the `effect`
-that drains each job — and `localServer` (from `@nikscripts/effect-pm/node`) serves that over HTTP on a
-port:
+that drains each job — and `Resource.httpServer` serves it; provide a Node HTTP server to bind a port:
 
 ``` ts
-const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
+const worker = Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail })).pipe(
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
+)
 // worker: Layer — provide it to a runtime to run the queue and its HTTP server on :3001
 ```
 
