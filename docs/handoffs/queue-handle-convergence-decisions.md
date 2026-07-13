@@ -28,30 +28,26 @@ QueueHandle<Payload, Error, Success, Requirements>
 ```
 
 - **4 params**, all after `Payload` defaulted so trailing ones elide in hovers.
-- Defaults: `Error = never`, `Success = void`, `Requirements = never`.
+- Defaults: `Success = void`, `Error = never`, `Requirements = never`.
 
-### Param order — rationale
-TS elides a trailing type-arg only when it equals its default; a `never` *between* two specified
-args cannot be dropped. So least-often-non-default goes last. Frequency on the canonical (Tag) path:
+### Param order — LOCKED (owner, 2026-07-13)
+**Mirror Effect's `<Success, Error, Requirements>` (`Effect<A, E, R>`) with `Payload` prepended.** So
+`QueueHandle<Payload, Success, Error, Requirements>`. Owner chose Effect-convention familiarity over
+elidable-trailing-`never` optimization (my `<Payload, Error, Success, …>` rec was declined).
 
-| pos | param | typically | why here |
-|----|-------|-----------|----------|
-| 1 | `Payload` | always present | the item |
-| 2 | `Error` | often a real `SendError` | more often non-default than a `void` Success |
-| 3 | `Success` | usually `void` | worker return |
-| 4 | `Requirements` | **`never` on Tag always**; real only on a dep-carrying Service | rarest → last |
-
-Chosen **`<Payload, Error, Success, Requirements>`** over the Effect-mirroring
-`<Payload, Success, Error, Requirements>`: the money case reads clean —
+| pos | param | typically | default |
+|----|-------|-----------|---------|
+| 1 | `Payload` | always present | — |
+| 2 | `Success` | usually `void` | `void` |
+| 3 | `Error` | often a real `SendError` | `never` |
+| 4 | `Requirements` | `never` on Tag always; real only on a dep-carrying Service | `never` |
 
 | worker | hover |
 |--------|-------|
 | log-only | `QueueHandle<EmailJob>` |
-| fails, returns void, no deps | `QueueHandle<EmailJob, SendError>` ← money case |
-| returns a value | `QueueHandle<EmailJob, SendError, Receipt>` |
-| Service w/ deps (inferred) | `QueueHandle<EmailJob, SendError, void, DbService>` |
-
-Effect-order would give `QueueHandle<EmailJob, void, SendError>` (interior `void`) in the money case.
+| fails, returns void, no deps | `QueueHandle<EmailJob, void, SendError>` (interior `void` — accepted tradeoff) |
+| returns a value, no fail | `QueueHandle<EmailJob, Receipt>` |
+| Service w/ deps (inferred) | `QueueHandle<EmailJob, void, SendError, DbService>` |
 
 ### The dropped 5th param — `EEnqueue`
 The old engine handle is `QueueHandle<T, E, EEnqueue, R, A>`. `EEnqueue`
@@ -88,7 +84,8 @@ members). `Service` (`QueueHandleApi`, `src/internal/queueResource.ts:377`) must
 | `isEmpty` | `Subscribable<boolean>` | `Effect<boolean>` | **change** ref-shape |
 | `sizes` | — (folded into `status`) | `Effect<{high,normal,low}>` | **drop** |
 | `completed` | — (folded into `status`) | `Effect<number>` | **drop** |
-| `metrics` | `{ stream: Stream<QueueMetrics>; query: (q) => Effect<QueueMetrics[]> }` | `Stream<QueueMetrics>` | **change** to nested |
+| `metrics` | `Stream<QueueMetrics>` (flat — see below) | `Stream<QueueMetrics>` | ✓ matches |
+| `metricsHistory` | `(q) => Effect<QueueMetrics[]>` (flat — see below) | **absent** | **add** |
 | `events` | `Stream<QueueEvent<Payload, Error, Success>>` | same | ✓ matches |
 | `start` / `clear` | `Effect<…, never, R>` | same | ✓ (channels) |
 | `pause` / `resume` / `shutdown` | `Effect<void>` | same | ✓ matches |
@@ -100,8 +97,12 @@ members). `Service` (`QueueHandleApi`, `src/internal/queueResource.ts:377`) must
 `status` already carries per-priority sizes + `completed` + phase — that is why standalone `sizes` /
 `completed` are dropped rather than duplicated (SSOT).
 
-**Open sub-decision (flag before locking impl):** `metrics` nesting `{ stream, query }` — confirm the
-engine can back `.query` (needs a `HistoryStore`; empty otherwise, matching the Tag contract today).
+**No nesting (owner, 2026-07-13).** The only nested member in the current Tag spec is
+`metrics: { stream, query }` (`QueueResource.ts:470`) — everything else is already flat. Flatten it to
+top-level **`metrics: Stream<QueueMetrics>`** (the live stream — `.Service` already exposes exactly
+this) **+ `metricsHistory: (q) => Effect<QueueMetrics[]>`** (the historical query; needs a
+`HistoryStore`, empty otherwise, as today). This is a **spec change** to `queueControlSpec` → ripples
+to the RPC group shape. `metricsHistory` name pending final confirm (`queryMetrics` the alternative).
 
 ---
 
@@ -175,8 +176,9 @@ Any drift fails the build.
 
 ---
 
-## Open items for owner sign-off before impl locks
+## Open items
 
-1. Param order **`<Payload, Error, Success, Requirements>`** (Error before Success) — confirmed? (rec)
-2. `metrics` as nested `{ stream, query }` on the canonical handle — confirmed?
-3. `CustomQueueResource` converges now or later?
+1. ~~Param order~~ — **LOCKED**: `<Payload, Success, Error, Requirements>` (Effect order + Payload).
+2. ~~`metrics` nesting~~ — **LOCKED**: flatten to `metrics: Stream` + `metricsHistory: (q) => …`.
+   Remaining: confirm the name `metricsHistory` vs `queryMetrics`.
+3. ~~`CustomQueueResource`~~ — **LATER**, out of Phase 1.
