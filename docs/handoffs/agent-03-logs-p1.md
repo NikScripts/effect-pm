@@ -1,9 +1,9 @@
 # Agent 3 — Logs P1 (platform completion)
 
-**Status:** **PLAN-FIRST** — owner 2026-07-13. Expand the unfinished half of the logs platform (Agent 2 shipped Phases 1–5 consumer break + closeout; **P1 never started**).  
+**Status:** **PLAN POSTED** — see [`agent-03-logs-p1-plan.md`](./agent-03-logs-p1-plan.md). Awaiting owner checklist; no impl until named slice unlock.  
 **Agent:** **3** (new — Agent 2 retired).  
 **Branch from:** **`integration`** (tip includes #30 Phase 5 + #33 `NodeLogs` removal + substrate retirement).  
-**Working branch (after owner unlocks a slice):** `cursor/logs-p1-<slice>-a009`
+**Plan branch:** `cursor/logs-p1-plan-906e`. **Working branch (after owner unlocks a slice):** `cursor/logs-p1-<slice>-a009`
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) §P1 · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) · [`docs/LOGS.md`](../LOGS.md) · [`whats-changed-2026-07-13.md`](./whats-changed-2026-07-13.md)
 
