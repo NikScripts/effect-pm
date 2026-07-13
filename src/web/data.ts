@@ -8,11 +8,11 @@
  * engine or `Resource.client` over http; the widgets don't care which).
  *
  */
-import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, specSym, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
@@ -125,8 +125,8 @@ export type DashboardRuntime<R = never, ER = never> = Atom.AtomRuntime<R, ER>;
 
 /** The atoms + controls one queue card needs — all derived from the tag. */
 export interface QueueBundle {
-  readonly status: ValueAtom<QueueStatus | undefined>;
-  readonly metrics: ValueAtom<QueueMetrics | undefined>;
+  readonly status: ValueAtom<Option.Option<QueueStatus>>;
+  readonly metrics: ValueAtom<Option.Option<QueueMetrics>>;
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
@@ -137,7 +137,7 @@ export interface QueueBundle {
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
-  readonly status: ValueAtom<ProcessStatus | undefined>;
+  readonly status: ValueAtom<ProcessStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** The current schedule entries (run windows), read once on open. */
   readonly schedule: ValueAtom<ReadonlyArray<ScheduleEntry>>;
@@ -153,7 +153,7 @@ export interface ProcessBundle {
  *  Read-only. */
 export interface NodeBundle {
   readonly id: string;
-  readonly status: ValueAtom<NodeStatus.Status | undefined>;
+  readonly status: ValueAtom<NodeStatus.Status>;
   /** The node's runtime-wide log stream (recent tail, then live). */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
@@ -163,9 +163,9 @@ export interface NodeBundle {
 /** The atoms one API-metrics card needs — read-only (no commands). */
 export interface ApiBundle {
   /** Cumulative usage snapshot (totals + top endpoints), via `usage.changes`. */
-  readonly status: ValueAtom<ApiUsageSnapshot | undefined>;
+  readonly status: ValueAtom<ApiUsageSnapshot>;
   /** The latest usage window. */
-  readonly metrics: ValueAtom<ApiUsageMetrics | undefined>;
+  readonly metrics: ValueAtom<Option.Option<ApiUsageMetrics>>;
   /** Accumulated chart points (throughput / errors / in-flight per window). */
   readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
 }
@@ -233,6 +233,10 @@ export const leafByKey = (group: unknown, key: string): unknown => {
   return walk(group);
 };
 
+/** A tag carries its flattened contract spec under `specSym` — narrow to it before reading. */
+const hasSpec = (m: unknown): m is { readonly [specSym]: FlatSpec } =>
+  typeof m === "object" && m !== null && specSym in m;
+
 /** Which kind of leaf a tag is — by the contract's stamped kind. */
 export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
@@ -241,9 +245,16 @@ export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   if (stamped === queueKind) return "queue";
   if (stamped === processKind) return "process";
   if (stamped === apiKind) return "api";
-  const spec = specOf(member as Parameters<typeof specOf>[0]) as unknown as FlatSpec;
+  const spec: FlatSpec = hasSpec(member) ? member[specSym] : {};
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };
+
+/** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */
+export const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
+/** @public */
+export const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+/** @public */
+export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -332,10 +343,10 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     statusStream.pipe(
       Stream.scan(
         {
-          latest: undefined as QueueStatus | undefined,
+          latest: Option.none<QueueStatus>(),
           trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
         },
-        (acc, s) => ({ latest: s, trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
+        (acc, s) => ({ latest: Option.some(s), trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
       ),
       Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/trend`, acc.trend))),
     ),
@@ -351,12 +362,12 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     ).pipe(
       Stream.scan(
         {
-          latest: undefined as QueueMetrics | undefined,
+          latest: Option.none<QueueMetrics>(),
           history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
         },
         (acc, item) =>
           "metric" in item
-            ? { latest: item.metric, history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
+            ? { latest: Option.some(item.metric), history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
             : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
       ),
       Stream.tap((acc) =>
@@ -444,10 +455,10 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     Stream.unwrap(Effect.map(tag, (a) => a.metrics)).pipe(
       Stream.scan(
         {
-          latest: undefined as ApiUsageMetrics | undefined,
+          latest: Option.none<ApiUsageMetrics>(),
           history: readCache<ApiPoint>(`${tag.key}/api-history`)?.items ?? [],
         },
-        (acc, m) => ({ latest: m, history: [...acc.history, toApiPoint(m)].slice(-HISTORY) }),
+        (acc, m) => ({ latest: Option.some(m), history: [...acc.history, toApiPoint(m)].slice(-HISTORY) }),
       ),
       Stream.tap((acc) =>
         Effect.sync(() => writeCache(`${tag.key}/api-history`, acc.history.slice(-HISTORY_CACHE))),
@@ -523,12 +534,12 @@ export const nodeStatusBundle = <R, ER>(
 
 /** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
-  Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m as GroupNode) : [m]));
+  Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 
 /** Only the queue leaves of a tree. */
 export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<QueueTag>;
+  leafTags(node).filter(isQueueTag);
 
 /** Only the process leaves of a tree. */
 export const processLeaves = (node: GroupNode): ReadonlyArray<ProcessTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<ProcessTag>;
+  leafTags(node).filter(isProcessTag);

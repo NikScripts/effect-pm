@@ -14,6 +14,7 @@
  * @since 1.0.0
  */
 import * as React from "react";
+import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Plus, Trash2 } from "lucide-react";
 import {
@@ -169,7 +170,7 @@ const QueueDetail = (props: {
 }): React.ReactElement => {
   const bundle = useQueueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
