@@ -60,6 +60,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
+import type { Simplify } from "effect/Types";
 import {
   Rpc,
   RpcClient,
@@ -1171,10 +1172,27 @@ type ErrorOf<M extends AnyMethod> = M["error"]["Type"];
 // **fields record** (decoded as a struct), or `undefined` (no payload). The schema branch is
 // checked first; a concrete-shaped schema type (`Schema.Struct<F>`, `Schema.Array<…>`) resolves
 // `extends Schema.Top` even when its inner field/element params are abstract.
+// The schema's decoded `.Type` prints as an unresolved alias — `Schema.Struct.ReadonlySide<{ readonly
+// to: Schema.String }, "Type">` instead of `{ to: string }`. A mapped type forces it to its plain object
+// shape AND strips the schema-imposed `readonly` (the payload is a value you pass in, not a handle you
+// mutate — `{ to: string }` reads cleaner and stays assignment-compatible with the readonly original).
+// Applied per-union-member (the enqueue verbs take `item | item[]`): a genuine array keeps its element
+// prettified; a **tuple** (pair call-style payload) is fixed-length (`length` is a literal, not `number`)
+// and is left untouched so pair detection still matches; non-objects (e.g. a bare-`string` payload) pass
+// through. Structural identity is assignment-preserving, so callers are unaffected — this cleans the hover.
+type PrettyObject<T> = T extends object ? { -readonly [K in keyof T]: T[K] } : T;
+type PrettifyPayload<P> = P extends readonly unknown[]
+  ? number extends P["length"]
+    ? P extends readonly (infer E)[]
+      ? readonly PrettyObject<E>[]
+      : P
+    : P
+  : PrettyObject<P>;
+
 type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
-  ? M["payload"]["Type"]
+  ? PrettifyPayload<M["payload"]["Type"]>
   : M["payload"] extends infer F extends Schema.Struct.Fields
-    ? Schema.Struct<F>["Type"]
+    ? PrettifyPayload<Schema.Struct<F>["Type"]>
     : never;
 
 /**
@@ -1216,6 +1234,26 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
     ? Effect.Effect<SuccessOf<M>, ErrorOf<M>>
     : MutateMethodFn<M>;
 
+// The CLIENT projection of a method — identical to {@link ServiceMethod}, except a payload that
+// resolves to `X | ReadonlyArray<X>` (the enqueue verbs' `item | item[]`) surfaces as call
+// **overloads**: `(item)`, `(items[])`, and the union catch-all. `ImplOf` / wire / peer keep
+// `ServiceMethod` (the single union signature), so this only shapes what `yield* Tag` reads — the impl
+// still provides one function over the union. `T` is inferred from the payload schema; the overload
+// object type is **inlined** here (not a named alias) so TS expands it to a clean overload list.
+type ArrayMemberElem<P> = P extends ReadonlyArray<infer E> ? E : never;
+type NonArrayMember<P> = P extends ReadonlyArray<unknown> ? never : P;
+type ClientMethod<M extends AnyMethod> = [NonArrayMember<PayloadOf<M>>] extends [never]
+  ? ServiceMethod<M>
+  : [ArrayMemberElem<PayloadOf<M>>] extends [never]
+    ? ServiceMethod<M>
+    : [NonArrayMember<PayloadOf<M>>] extends [ArrayMemberElem<PayloadOf<M>>]
+      ? {
+          (item: NonArrayMember<PayloadOf<M>>): Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+          (items: ReadonlyArray<NonArrayMember<PayloadOf<M>>>): Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+          (itemOrItems: PayloadOf<M>): Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+        }
+      : ServiceMethod<M>;
+
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
  * `Effect`/function members; off-wire {@link LocalMethod}s surface as
@@ -1233,7 +1271,7 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 // the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
 // keeps the result identical for every concrete spec while letting it reduce under a generic
 // spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
-export type ServiceOf<S extends Spec, Self = unknown> = {
+export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
     : S[K] extends { readonly _tag: "constant" }
@@ -1241,11 +1279,11 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
       : S[K] extends { readonly _tag: "ref" }
         ? Subscribable<SuccessOf<AsMethod<S[K]>>>
         : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
-          ? ServiceMethod<AsMethod<S[K]>>
+          ? ClientMethod<AsMethod<S[K]>> // client handle → overloads for `overload` methods
           : S[K] extends Spec
             ? ServiceOf<S[K], Self> // nested group → nested service
             : never;
-};
+}>;
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). @internal */
 type WireServiceOf<S extends Spec> = {

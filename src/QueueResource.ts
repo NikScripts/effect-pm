@@ -520,8 +520,10 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
 ) => {
   // `add`/`prioritize`/`defer` take the item **directly**, and also accept a **batch** (the
   // engine's `QueueEnqueue<T>` is `(item) | (items)`), so one call enqueues many — no N round
-  // trips over RPC. The payload is `item | item[]` (a single-schema union payload); the layer
-  // recovers the bare `itemSchema` from `add.payload.members[0]`.
+  // trips over RPC. The payload is a single `item | item[]` union (the layer recovers the bare
+  // `itemSchema` from `add.payload.members[0]`); the toolkit auto-surfaces it on the CLIENT handle as
+  // real `(item)` / `(items[])` overloads — matching the engine's `QueueEnqueue` — while impl/wire keep
+  // the union. No opt-in needed: any `X | ReadonlyArray<X>` payload gets the overloads.
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
   const eventSchema = buildQueueEvent(
     itemSchema,
