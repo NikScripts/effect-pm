@@ -66,29 +66,51 @@ each reading the resource without ever touching its implementation.
 
 One runtime is rarely the whole story — run the same `Emails` queue on several worker runtimes, a
 **fleet**, and reach them as one. Here's a standalone example. Each runtime is a **node**, and a node
-carries **its own address**, so the fleet is just a list of nodes:
+carries **the port it's served on**, so the fleet is just a list of nodes:
 
 ``` ts
-class WorkerA extends Resource.Node<WorkerA>("app/WorkerA", { url: "http://10.0.0.1:3001" }) {}
-class WorkerB extends Resource.Node<WorkerB>("app/WorkerB", { url: "http://10.0.0.2:3001" }) {}
+class WorkerA extends Resource.Node<WorkerA>("app/WorkerA", 3001) {} // → http://localhost:3001/rpc
+class WorkerB extends Resource.Node<WorkerB>("app/WorkerB", 3002) {} // → http://localhost:3002/rpc
 
-// on each runtime — mesh Emails with the fleet; transport comes from each node's own url
+// on each runtime — mesh Emails with the fleet; transport comes from each node's port
 const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
 // fleet: Layer — provide it to join the mesh
 ```
 
-Because each node carries its `url`, `peersLayer` wires every peer's transport for you — no client to
-hand-configure. With the mesh in place, `peers` hands you a handle to **every** instance, and
-`combineQuery` folds a field across all of them — one call for a fleet-wide answer:
+A node's address takes the same forms as `clientHttp`: a **port** (`3001` → `localhost:3001/rpc`), a
+`":port"`, or a full **url** for another machine. Because the node carries it, `peersLayer` wires
+every peer's transport for you — no client to hand-configure.
+
+### Ask the whole fleet one question
+
+`peers` hands you a handle to **every** instance. `combineQuery` reads a field from each and folds the
+results — sum them for a fleet-wide total, or keep them **per node**:
 
 ``` ts
 const peers = yield* Resource.peers(Emails)          // peers: one Emails handle per instance
-const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // totalBacklog: number
+
+const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum)    // number — 512
+const perNode      = yield* combineQuery(peers, (p) => p.size, Combine.byNode) // { "app/WorkerA": 300, … }
 ```
 
-`size` is a field on every instance; `combineQuery` reads it from each peer and `Combine.sum` folds
-the results into one number. **From one queue, to two runtimes, to a whole fleet — all through the
-same tag.**
+A **down peer is skipped, never thrown** — you get a partial answer, not a crash. And because `peers`
+is keyed by node, you can also reach a single instance directly to steer just it (`peers["app/WorkerB"]`).
+
+### Follow the whole fleet, live
+
+The same fold works on **streams**. `combineStream` merges every instance's live `events` into one —
+tag each with its node, and you're watching the entire fleet from a single subscription:
+
+``` ts
+const allEvents = combineStream(peers, (p) => p.events, Combine.mergeByNode)
+// allEvents: Stream<{ node: string; value: QueueEvent }> — every instance, interleaved
+yield* allEvents.pipe(Stream.runForEach(render))
+```
+
+And a resource can expose a field that's **already folded across the fleet** — mark it with
+`Resource.fleet` and its layer computes it from `peers`, so a caller just reads `emails.fleetBacklog`
+like any other field and never sees the fan-out. **From one queue, to two runtimes, to a whole fleet —
+all through the same tag.**
 
 ## Build your own
 

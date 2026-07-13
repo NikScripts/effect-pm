@@ -2886,18 +2886,32 @@ export const forwardClient = <S extends Spec>(
  * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service:
  *
  * ```ts
- * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}
+ * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
+ * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc
+ * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is
  * ```
  *
- * Attach it to a tag (`Resource.Tag<Self>(key)(spec, EdgeNode)`) to make the tag carry its own
- * transport — then ship only the tag: {@link Resource.client} reads the node to resolve where
- * to connect, and a consumer wires the transport once with {@link Resource.connect}.
+ * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
+ * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url }` for an explicit endpoint.
+ * The node carries it so {@link peersLayer} / {@link httpClient} reach the node with no separate url —
+ * ship only the tag: {@link Resource.client} reads the node to resolve where to connect, and a
+ * consumer wires the transport once with {@link Resource.connect}.
  *
  * @public
  */
-const makeNode = <Self>(name: string, options?: { readonly url?: string }) =>
+const makeNode = <Self>(
+  name: string,
+  target?: number | string | { readonly url?: string },
+) =>
   Object.assign(Context.Service<Self, NodeProtocol>()(name), {
-    url: options?.url,
+    // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
+    // bad string); an explicit `{ url }` is used verbatim.
+    url:
+      target === undefined
+        ? undefined
+        : typeof target === "object"
+          ? target.url
+          : resolveHttpTarget(target),
   });
 
 /**
