@@ -24,18 +24,18 @@ provide is where you pick your runtime. Define it **once** as a small helper; sw
 for Bun, Deno, or an edge runtime is the only line that changes:
 
 ``` ts
-// your app, once — the single place that names a platform
-const nodeServer = <A, E, R>(resource: Layer.Layer<A, E, R>, port: number) =>
+// your app, once — the single place that names a platform (data-last, so it pipes)
+const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Resource.httpServer(resource).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 ```
 
-Now the **worker runtime** is one line — `QueueResource.serve` gives `Emails` its worker (the `effect`
-that drains each job), served on port 3001:
+Now the **worker runtime** is one pipe — `QueueResource.serve` gives `Emails` its worker (the `effect`
+that drains each job), piped onto port 3001:
 
 ``` ts
-const worker = nodeServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
+const worker = QueueResource.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
 // worker: Layer — provide it to a runtime to run the queue on :3001
 ```
 
