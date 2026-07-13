@@ -27,6 +27,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-13 — Next headlining resource research (Agent 1)
+
+- **Owner said:** Agent 1 is free. Process + QueueResource are the top two; RunResource is lackluster as a product headline. Explore leaning into **fleet / peer** features — ideally first resource with mesh from day one.
+- **Chose:** Plan-first research only — [`agent-01-next-headlining-resource.md`](./agent-01-next-headlining-resource.md). Options: upgrade Run, productize WorkerPool, FleetStatus, Telemetry, or new work router. Owner picks direction before any implementation.
+- **Rejected:** Immediate RunResource polish without research; treating Run store cutover as “headlining done.”
+- **Supervisor impact:** Agent 1 research session; Agent 2 continues Logs PR #30.
+
+---
+
 ## 2026-07-12 — Integration fold complete (`integration/storage` @ `4c543c8`)
 
 - **Owner said:** Integration line is consolidated — merge docs group (A corpus, B intro, C manifest), Process run RPC (#26), queue ref fixes (#23–#25).
