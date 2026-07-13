@@ -1,268 +1,234 @@
-# Telemetry fleet glass + ShardMap — usage & description (2026-07-13)
+# Telemetry & ShardMap — compelling pitches (2026-07-13)
 
-**Branch:** `cursor/telemetry-prototype-and-new-idea-ce05` off `integration`.  
-**Agent:** 1 · prototype / research · not an approved implementation handoff.
+**Branch:** `cursor/telemetry-prototype-and-new-idea-ce05` · off `integration`  
+**Status:** prototype + pitch · not an implementation brief until you pick
 
 ---
 
-## 1. Elevating Telemetry — what it is
+## Pitch A — Telemetry: “The pack already instruments itself. Show the fleet.”
 
-**Today:** `Telemetry.Tag` is a small resource factory that serves **this node's** Effect `Metric`
-registry over Resource RPC:
+### The feeling
+
+You bring up three droplets for a weekend league. Mail is chewing, the live poller is ticking,
+HTTP clients are hitting Scores. Effect’s Metric registry on each box is already full of
+`queue_in_flight`, completes, latency histograms, rate-limit spikes.
+
+**Nothing is wrong with the engines.** What’s missing is the *glass that admits there are three of you.*
+
+Today Telemetry is honest but lonely: one node’s registry, one RPC. To put East / West / Central on
+a homepage you either open Grafana or write WorkerPool-style peer folds yourself and teach every
+dashboard to invent node stamps.
+
+**Elevated Telemetry is the glass that already knows about peers.** One factory tag. Leaf snapshots
+for this droplet. Fleet fields for the pack. The same Resource that feeds CLI and web — metrics are
+first-class citizens of the toolkit, not a side quest into OTEL.
+
+### Why it’s a headliner (not “finish Run”)
+
+- **It sells everything else.** Queue and Process stop being “engines that happen to emit counters”
+  and become *visible* across the fleet — which is what a homepage has to prove in ten seconds.
+- **It reuses blood already spilled.** Emitters exist. Tag / layer / serve / `./Telemetry` exist.
+  Mesh primitives exist. Elevation is product composition, not a science project.
+- **OTEL stays the grown-up sink.** Telemetry is the built-in Resource path: demos, TUIs, and apps
+  that refuse a sidecar for week one.
+
+### Usage that earns the pitch
+
+**Declare the pack (Context service keys — machines, not nicknames)**
 
 ```ts
-class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
-// leaf only:
-yield* (yield* FleetTelemetry).snapshot   // MetricsSnapshot
-yield* Stream.runForEach((yield* FleetTelemetry).live, …)
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast", {
+  url: "https://east.example/rpc",
+}) {}
+class DropletWest extends Resource.Node<DropletWest>("app/DropletWest", {
+  url: "https://west.example/rpc",
+}) {}
+class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral", {
+  url: "https://central.example/rpc",
+}) {}
+
+class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+) {}
+
+class Mail extends QueueResource.Tag<Mail>()("app/Mail", Job) {}
+class LiveScores extends Process.Tag<LiveScores>()("app/LiveScores", { success: Score }) {}
 ```
 
-Queues / HttpApiResource already **emit** into that registry (`queue_in_flight`,
-`httpapi_endpoint_requests_total`, …). Telemetry is the **glass** — it does not invent counters.
+**Wire a droplet (engines + glass + mesh in one breathe)**
 
-**Pain:** to show a **fleet** view you must invent mesh yourself (WorkerPool-style), or fan out
-`Resource.client(Telemetry, eachNode)` in the dashboard and stamp node ids in UI code.
+```ts
+Layer.mergeAll(
+  QueueResource.serve(Mail, { effect: deliver, autoStart: true }),
+  Process.serve(LiveScores, { effect: pollScoreboard }),
+  Telemetry.serve(FleetMetrics, { interval: "1 second" }),
+).pipe(Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)))
+```
 
-**Elevation:** the Telemetry **factory** ships mesh from day one — leaf snapshot/live **plus**
-`fleet`-marked folds built with `peers` / `selfNode` / MultiNode — so a homepage (or ops page) reads
-one tag and gets overall + per-node panels without hand-rolling the fold.
+Mail and LiveScores keep doing their jobs. Telemetry samples **this** registry. Peers bring the
+other droplets’ leaves. Fleet fields fold them.
 
-### Prototype (runnable)
+**Homepage — one yield, the whole pack**
+
+```ts
+const glass = yield* FleetMetrics // client pinned to any live droplet
+
+const mine = yield* glass.snapshot
+const columns = yield* glass.inFlightByNode
+// → { "app/DropletEast": 5, "app/DropletWest": 3, "app/DropletCentral": 4 }
+
+const total = yield* glass.fleetInFlight
+// → 12
+
+// Live: Stream from glass.live — sparkline that moves while the talk track runs
+```
+
+**What the visitor feels in the first viewport**
+
+1. Three columns breathe — real `app/Droplet*` service keys, not fake “host-1”.
+2. One fat fleet total syncs with the sum.
+3. A rate-limit spike on West shows up as *West*, then in the fleet number — without opening another product.
+4. Caption: *Queues and processes already instrument. Telemetry shows the fleet.*
+
+### Runnable proof (prototype today)
 
 ```bash
 pnpm run example:telemetry-fleet-glass
 ```
 
-Source: `examples/forms/resource/telemetry-fleet-glass.ts`  
-Test: `test/telemetry-fleet-glass-prototype.test.ts`
+Hand-shaped `FleetMetrics` tag demonstrates the elevated contract. Shipping elevation = bake those
+fleet fields + peers recipe into the Telemetry factory so nobody reimplements WorkerPool for gauges.
 
-The prototype uses a **hand-shaped** tag (`FleetMetrics`) that *shows* the elevated contract. Shipping
-elevation means baking that into `Telemetry.Tag` + `Telemetry.serve` / `peersLayer` recipe — apps would
-not redefine the folds.
+### Undercard (not the poster)
 
-### Usage — declare nodes + meshed Telemetry
-
-```ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
-
-// Machines — Context service keys (same family as app/Emails), not "east" nicknames
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast", {
-  url: "https://east.example/rpc",
-}) {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest", {
-  url: "https://west.example/rpc",
-}) {}
-class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral", {
-  url: "https://central.example/rpc",
-}) {}
-
-// Elevated factory target (prototype today = custom Tag; tomorrow = Telemetry.Tag + mesh helpers)
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
-) {}
-
-// App work still invents its own queues — separate service keys
-class Mail extends QueueResource.Tag<Mail>()("app/Mail", Job) {}
-```
-
-### Usage — serve on each droplet
-
-```ts
-// east process
-const east = Layer.mergeAll(
-  QueueResource.serve(Mail, { effect: handleMail, autoStart: true }),
-  Telemetry.serve(FleetMetrics, { interval: "1 second" }),
-).pipe(
-  Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)),
-)
-```
-
-Same pattern on West / Central with their `Node`. Queues emit metrics on that process; Telemetry
-samples the **local** registry; peer folds read **other** nodes' leaf `snapshot`.
-
-### Usage — homepage / dashboard operator
-
-```ts
-const glass = yield* FleetMetrics          // via Resource.client(FleetMetrics, DropletEast)
-
-const leaf = yield* glass.snapshot         // this droplet's registry
-const byNode = yield* glass.inFlightByNode // Record<nodeKey, number>  — fleet-marked
-const fleet = yield* glass.fleetInFlight   // number — sum across mesh
-
-// Prototype logs today:
-//   inFlightByNode: app/DropletWest=3, app/DropletCentral=4, app/DropletEast=5
-//   fleetInFlight: 12
-```
-
-**Homepage panels that fall out of this:**
-
-| Panel | Call | Meaning |
-|-------|------|---------|
-| Per-droplet in-flight | `inFlightByNode` | Three columns keyed by `app/Droplet*` |
-| Fleet in-flight | `fleetInFlight` | One big number |
-| Live sparkline | `live` (leaf) or stream fold | Motion without Grafana |
-| Drill | pick gauges/counters from `snapshot.metrics` by `id` / labels | API RPS, rate-limit spikes |
-
-**What elevation would remove from apps:** writing `combineQuery` / `Combine.sum` / `selfNode` for
-metrics. Factory owns that; apps declare the Tag, serve + `peersLayer`, read fleet fields.
-
-### What this is / is not
-
-| Is | Is not |
-|----|--------|
-| Resource **factory** story (glass over existing emitters) | A new work engine |
-| Mesh with `distributed` / `peers` / `fleet` | Multi-client “stamp host in UI” |
-| Complements Queue / Process / RR | Replacement for OTEL export |
+Fleet-aware RunResource + fleet rate-limits become a *supporting* reel under this glass
+(“gates honor fleet budget”) — they don’t carry the homepage alone.
 
 ---
 
-## 2. ShardMap — what it is
+## Pitch B — ShardMap: “One map. The key finds its droplet.”
 
-**A new toolkit resource factory** (like `QueueResource` / `Process`) for a **keyed partition map**:
-one logical map across the fleet, each node owns a shard, routed ops go through **peers**.
+### The feeling
 
-It productizes the intro **“Working with peers”** Sessions example — today that is a hand-rolled
-`Resource.Tag` + manual `ownerOf` + `peer.getLocal`. ShardMap would be the factory so apps only
-declare **key/value schemas**.
+Your intro already sells the magic beat: a session lives on *someone’s* node; `get` forwards to the
+owner via `Resource.peers`. Every multi-droplet app reinvents that pattern — sticky sessions, score
+caches, per-region feature flags, “which machine holds this user’s inbox cursor.”
 
-### Why it is a headliner (vs Telemetry / Queue / Process)
+**They shouldn’t.** That pattern is a **resource factory**, the same way “drain jobs” is
+`QueueResource` and “tick on a schedule” is `Process`.
 
-| Factory | Job |
-|---------|-----|
-| QueueResource | Drain a backlog of work |
-| Process | Tick / schedule long-running work |
-| Telemetry | Observe Metric glass |
-| RunResource | Local concurrency gate |
-| **ShardMap** | **Own partitioned state across droplets** |
+**ShardMap** is the factory where **partitioned state** is the product: declare key + value, distribute
+across `app/Droplet*` nodes, and every `get` / `put` routes through peers to the owner. Leaf ops stay
+for the shard itself. Fleet folds tell you how big each shard is. Kill a droplet — miss, not a
+cascading `/health` failure.
 
-Mesh is the *default* story — not bolted on. Homepage claim: *“One map. Three droplets. Lookups
-route to the owner.”*
+### Why it’s a headliner (and not “Telemetry but for data”)
 
-### Usage — declare
+- **Different verb.** Telemetry *observes*. Queue *drains*. Process *ticks*. ShardMap **owns**.
+- **The intro already wrote the demo.** Elevating that hand-roll into `@nikscripts/effect-pm/ShardMap`
+  turns a docs parable into a toolkit noun.
+- **Mesh by nature.** A single-node ShardMap is just a Map. The interesting product *requires* peers —
+  so day-one fleet isn’t marketing; it’s load-bearing.
+
+### Usage that earns the pitch
+
+**Declare the empire’s sessions (schemas only on the Tag)**
 
 ```ts
-import { Schema } from "effect"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap" // proposed
-
 const SessionId = Schema.String
 const Session = Schema.Struct({
   id: SessionId,
   userId: Schema.String,
   lastSeen: Schema.Number,
+  seat: Schema.optional(Schema.String), // "section-12-row-A" for the sports story
 })
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast", {
-  url: "https://east.example/rpc",
-}) {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest", {
-  url: "https://west.example/rpc",
-}) {}
-class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral", {
-  url: "https://central.example/rpc",
-}) {}
-
-// Factory: Tag = wire contract only (key + value schemas)
 class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
-  // error?: SessionErr   — optional failure channel
 }).pipe(
   Resource.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
-### Usage — layer / serve (runtime, not schemas)
+**Bring a droplet online**
 
 ```ts
-const partition = ShardMap.consistentHash // or app-supplied ownerOf
-
-// each droplet process:
-const east = ShardMap.serve(Sessions, {
-  partition,           // how keys map to node keys — NOT wire schemas
-  // optional: capacity, ttl, store journal via ShardMap.store(Sessions)
-}).pipe(
-  Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
-)
+ShardMap.serve(Sessions, {
+  partition: ShardMap.consistentHash, // or your sticky ownerOf
+}).pipe(Layer.provide(Resource.peersLayer(Sessions, DropletEast)))
 ```
 
-Internally (what the factory owns — apps do not write this):
+No payloads in the layer. Partition strategy is runtime. Wire schemas stay on the Tag.
 
-```ts
-get: (id) => Effect.gen(function* () {
-  const self = yield* Resource.selfNode(Sessions)
-  const peers = yield* Resource.peers(Sessions)
-  const owner = partition(id, [self, ...Object.keys(peers)])
-  if (owner === self) return yield* getLocal(id)
-  const peer = peers[owner]
-  if (peer === undefined) return Option.none() // degrade: miss, not /health hop
-  return yield* peer.getLocal(id)
-})
-```
-
-### Usage — call sites
+**Talk to the map from anywhere in the pack**
 
 ```ts
 const sessions = yield* Sessions
 
-// Routed — anywhere in the fleet; factory forwards to the owning droplet
-const s = yield* sessions.get("user-42")
-yield* sessions.put({ id: "user-42", userId: "u1", lastSeen: Date.now() })
-yield* sessions.delete("user-42")
+// Fan walks in at the edge — East takes the HTTP hit
+yield* sessions.put({
+  id: "fan-90210",
+  userId: "u_nik",
+  lastSeen: Date.now(),
+  seat: "124-A",
+})
 
-// Leaf — this droplet's shard only (peers may call these; fleet fields exclude them from fan-out)
-const local = yield* sessions.getLocal("user-42")
-const n = yield* sessions.sizeLocal
+// West answers a live-update poll for the same fan —
+// factory forwards to whoever owns "fan-90210"
+const seat = yield* sessions.get("fan-90210")
 
-// Fleet — mesh folds (Resource.fleet)
-const sizes = yield* sessions.sizeByNode   // Record<nodeKey, number>
-const total = yield* sessions.size         // sum
+// Ops: who is holding what?
+const shards = yield* sessions.sizeByNode
+// → { "app/DropletEast": 14_202, "app/DropletWest": 13_880, "app/DropletCentral": 12_104 }
+
+const fleet = yield* sessions.size // → 40_186
 ```
 
-### Usage — homepage sketch
+**What the visitor feels in the first viewport**
 
-| Panel | Call | Story |
-|-------|------|-------|
-| “Sessions in flight” | `size` | One fleet number |
-| Per droplet shard size | `sizeByNode` | Columns `app/DropletEast=…` |
-| Live lookup | `get(id)` against any client | Shows peer forward |
-| Partial mesh | kill West, `get` owned by West | Returns miss — readiness stays local |
+1. Type a session id → **owner droplet lights up** (peer forward, visible).
+2. Shard size histogram across `app/Droplet*` updates as traffic lands.
+3. Flip West offline → that shard’s keys return miss; East and Central keep answering; local
+   readiness dots stay green (fleet health ≠ `/health`).
+4. Caption: *One map. The key finds its droplet.*
 
-### What apps invent vs what the factory invents
+### Distinction that keeps it honest
 
-| App | Factory |
-|-----|---------|
-| Key/value schemas + tag key (`app/Sessions`) | Routed verbs + `*Local` leaves |
-| Node set + urls | `peers` ownership + degrade policy |
-| Optional store registration | Journal shapes for put/delete audit |
-| Which droplet runs which process | `serve` + `peersLayer` recipe |
+| Temptation | How we refuse it |
+|------------|------------------|
+| “It’s Redis” | In-fleet typed Resource — schemas, RPC, CLI/TUI/web over the **same tag** |
+| “It’s Dynamo” | No claim of cross-region consensus product; v1 = ownership + peer forward + loud miss |
+| “Use a Queue” | Queue holds *work*; ShardMap holds *state the pack must find again* |
 
-### Risks (stated loudly)
+### Risks we put on the poster (trust)
 
-- Reads as “mini Dynamo/Redis” if scoped poorly — keep **in-fleet typed map**, not a database product
-- Membership change / rebalance and hot keys need an explicit v1 policy
-- Degradation (miss vs stall) must be part of the API docs, not folklore
-- Do not drag in the deferred **coordinator** unless owner opens that checklist item
+- Rebalance / membership change needs an explicit v1 answer or “fixed node set” lock
+- Hot keys need a story (steal? sticky? scream in docs?)
+- Split-brain: miss beats silent wrong answer — document that as the product ethic
 
 ---
 
-## Comparison (decision aid)
+## Homepage shootout (same three droplets)
 
-| | Telemetry elevation | ShardMap (new) |
-|--|---------------------|----------------|
-| Noun | Factory glass over Metrics | Factory for partitioned state |
-| Exists today | Leaf `Telemetry.Tag` + emitters | Hand-rolled intro Sessions only |
-| Mesh role | Fold observations | Route ownership |
-| Homepage emotion | Live ops numbers | “Lookup finds its droplet” |
-| Depends on | Peers recipe + optional fleet fields on Tag | New module + design brief |
-| RR fleet rate-limits | Undercard later | Unrelated |
+| Beat | Telemetry elevation | ShardMap |
+|------|---------------------|----------|
+| One-liner | The pack already instruments — show the fleet | One map — the key finds its droplet |
+| First second | Columns + fleet total breathe | Typed id → owning droplet lights |
+| Hero object | Live ops glass | Partitioned live state |
+| Feeds | Existing Metric emitters | App puts/gets |
+| Mesh role | Fold leaves | Route ownership |
+| Undercard | RR fleet rate-limits | Persistence via `ShardMap.store` |
+
+**Emotional test:** if you mute the code and leave only motion on screen, Telemetry feels like
+*watching the stadium*; ShardMap feels like *finding your seat*.
 
 ---
 
-## Owner picks
+## Owner call
 
-1. Elevate Telemetry (bake prototype into factory) first?  
-2. Open ShardMap implementation brief first?  
-3. Both — Telemetry product polish + ShardMap design in parallel?
+1. **Telemetry first** — elevate the factory; homepage glass shipping now-ish.  
+2. **ShardMap first** — design brief + factory; intro peers beat becomes a noun.  
+3. **Both** — Telemetry as glass undercard while ShardMap takes the headline engine slot.
+
+Full runnable Telemetry prototype: `pnpm run example:telemetry-fleet-glass`.

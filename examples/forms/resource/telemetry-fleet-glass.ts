@@ -1,14 +1,13 @@
 /**
  * @module examples/forms/resource/telemetry-fleet-glass
  *
- * **Prototype — elevated Telemetry as mesh glass** (not production Telemetry.Tag yet).
+ * **Prototype — “The pack already instruments itself. Show the fleet.”**
  *
- * Shows the homepage shape: one factory-shaped tag, leaf registry snapshot +
- * `fleet`-marked folds via `Resource.peers` / `selfNode` / MultiNode — Node ids are
- * Context **service keys** (`app/Droplet…`), never app resource nicknames.
+ * Queues / processes emit Effect Metrics. Elevated Telemetry is the glass that admits there are
+ * three droplets: leaf snapshot for this node, fleet folds via peers / selfNode / MultiNode.
+ * Node ids are Context service keys (`app/Droplet…`).
  *
- * Today's `Telemetry.Tag` is leaf-only (`snapshot` / `live`). Elevation would bake this
- * mesh recipe into the factory so apps stop hand-rolling WorkerPool-style folds for metrics.
+ * Today's shipped `Telemetry.Tag` is leaf-only. This file sketches the elevated factory shape.
  *
  * Run: `pnpm run example:telemetry-fleet-glass`
  */
@@ -122,30 +121,21 @@ const formatByNode = (byNode: Readonly<Record<string, number>>): string =>
 const program = Effect.gen(function* () {
   const glass = yield* FleetMetrics;
 
-  // ── Leaf: this droplet's registry (Telemetry's existing job) ──────────────
   const leaf = yield* glass.snapshot;
   const localInFlight = gaugeValue(leaf, IN_FLIGHT);
-
-  // ── Fleet: peers + self via MultiNode (elevation's job — not the dashboard) ─
   const byNode = yield* glass.inFlightByNode;
   const fleet = yield* glass.fleetInFlight;
 
   yield* Effect.log("");
-  yield* Effect.log("=== Telemetry fleet glass (prototype) ===");
+  yield* Effect.log('=== "The pack already instruments itself. Show the fleet." ===');
   yield* Effect.log("");
-  yield* Effect.log("1) Leaf — this node's Metric snapshot (Telemetry today)");
-  yield* Effect.log(`   connected as: ${DropletEast.key}`);
-  yield* Effect.log(`   local ${IN_FLIGHT}: ${String(localInFlight)}`);
-  yield* Effect.log(`   snapshot rows: ${String(leaf.metrics.length)}`);
+  yield* Effect.log("Stadium board — three droplets, one glass");
+  yield* Effect.log(`  you are:           ${DropletEast.key}`);
+  yield* Effect.log(`  local in-flight:   ${String(localInFlight)}`);
+  yield* Effect.log(`  columns:           ${formatByNode(byNode)}`);
+  yield* Effect.log(`  fleet total:       ${String(fleet)}`);
   yield* Effect.log("");
-  yield* Effect.log("2) Fleet — Resource.peers + selfNode folds (elevation target)");
-  yield* Effect.log(`   inFlightByNode: ${formatByNode(byNode)}`);
-  yield* Effect.log(`   fleetInFlight:  ${String(fleet)}   (5+3+4 → homepage total)`);
-  yield* Effect.log("");
-  yield* Effect.log("3) Homepage panels this unlocks");
-  yield* Effect.log("   • per-droplet columns keyed by app/Droplet*");
-  yield* Effect.log("   • one fleet total — no UI fan-out / no host stamps");
-  yield* Effect.log("   • queues keep emitting; Telemetry remains the glass");
+  yield* Effect.log("Caption: queues emit · Telemetry shows · peers fold the pack");
   yield* Effect.log("");
 });
 
