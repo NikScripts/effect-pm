@@ -48,13 +48,37 @@
           "title": "`@since` targets the first public release"
         },
         {
-          "id": "documentation.comment-non-obvious-plumbing",
+          "id": "documentation.comment-for-the-junior-dev",
           "severity": "should",
           "appliesTo": [
             "src",
             "examples"
           ],
-          "title": "Comment the non-obvious plumbing, not the obvious"
+          "title": "Comment what a junior dev couldn't infer"
+        },
+        {
+          "id": "documentation.show-dont-tell",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Show, don't tell"
+        },
+        {
+          "id": "documentation.narrative-code-is-verified",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Code in prose is verified, like any example"
+        },
+        {
+          "id": "documentation.handoff-is-self-contained",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "A handoff is self-contained requirements for its reader"
         }
       ]
     },
@@ -1010,5 +1034,5 @@
       ]
     }
   ],
-  "ruleCount": 109
+  "ruleCount": 112
 }

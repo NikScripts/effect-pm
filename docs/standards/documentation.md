@@ -1,9 +1,14 @@
 {#documentation title="Documentation" order=50 appliesTo=src}
 # Documentation
 
-How the code documents itself: the doc comment on every public symbol, the tags that mark and version
-the surface, and where an inline comment earns its place. The shape is fixed so the whole surface reads
-the same way — a reader who has read one doc comment knows how to read them all.
+Three kinds of documentation, three different jobs — and each has a shape worth holding to:
+
+- **Doc comments** on the public surface — what a symbol is, for a reader on hover or in the API docs.
+- **Inline comments** — the *why* behind a line that a competent junior dev couldn't infer from the code.
+- **Narrative docs** — the guides and reference (pages like this one) and the handoffs that teach the
+  whole picture.
+
+## Doc comments
 
 {#doc-comment-anatomy .must appliesTo=src}
 ## A doc comment has a fixed shape
@@ -91,18 +96,59 @@ One value, everywhere, until 1.0 ships; only then do real per-symbol versions be
  */
 ```
 
-{#comment-non-obvious-plumbing .should appliesTo="src examples"}
-## Comment the non-obvious plumbing, not the obvious
+## Inline comments
 
-Inline comments carry what a doc comment can't: where the code relies on something it doesn't show — a
-type-level trick, an Effect layer-ordering constraint, runtime ownership, a timing subtlety. Never
-narrate what the code already says.
+{#comment-for-the-junior-dev .should appliesTo="src examples"}
+## Comment what a junior dev couldn't infer
+
+An inline comment carries what the code can't show a competent-but-junior reader: *why* this line, not
+what it does. A type-level trick, an Effect layer-ordering constraint, runtime ownership, a timing
+subtlety, a non-obvious workaround. If a reader who knows the language would ask "wait, why?", answer
+it. If they wouldn't, stay silent — never narrate what the code already says.
 
 ``` ts
-// ✅ good — explains a constraint you can't see in the call
+// ✅ good — answers the "why?" a junior would have
 // provideMerge, not provide: a bare provide prunes the serve layers off httpServer
 const node = Resource.httpServer([Counter.serve]).pipe(Layer.provideMerge(deps))
 
 // ❌ bad — restates the obvious
 const total = a + b // add a and b
 ```
+
+## Narrative docs
+
+{#show-dont-tell .should appliesTo=docs}
+## Show, don't tell
+
+A guide earns trust with real, working code a reader can run — not adjectives about how clean or
+powerful the thing is. Lead with the code doing the job and let it carry the claim; cut "effortless",
+"elegant", "simply". If a sentence would survive being replaced by a code block, replace it.
+
+``` ts
+// ✅ good — the feature, shown
+const worker = QueueResource.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
+
+// ❌ bad — telling, not showing
+// "effect-pm makes serving a queue across runtimes effortless and elegant."
+```
+
+{#narrative-code-is-verified .must appliesTo=docs}
+## Code in prose is verified, like any example
+
+A snippet in a guide is held to the same bar as an `@example`: it compiles against the real API before
+it ships. A reader will copy it verbatim — a snippet that doesn't type-check teaches the wrong shape
+and burns the trust the guide is built on. (How we standardize examples end to end is still being
+settled — see the note below.)
+
+{#handoff-is-self-contained .must appliesTo=docs}
+## A handoff is self-contained requirements for its reader
+
+A handoff is written for the person who will do the work, not as a first-person letter about what you
+did. State what they must build and know — paths, constraints, the real gotchas, the acceptance bar —
+so they never have to reconstruct your session to act. If it only makes sense to someone who was there,
+it isn't a handoff.
+
+{.note}
+**Examples are an open question.** How examples are sourced, verified, and kept in sync across doc
+comments *and* narrative docs — one policy or two — is still being decided; this chapter will firm up
+once that's settled.
