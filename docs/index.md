@@ -19,8 +19,8 @@ class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-`Resource.httpServer(serve)` is platform-agnostic — it just needs an HTTP server provided, and that
-provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
+[`Resource.httpServer(serve)`](/docs/resource) is platform-agnostic — it just needs an HTTP server
+provided, and that provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
 for Bun, Deno, or an edge runtime is the only line that changes:
 
 ``` ts
@@ -31,7 +31,7 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
   )
 ```
 
-Now the **worker runtime** is one pipe — `QueueResource.serve` gives `Emails` its worker (the `effect`
+Now the **worker runtime** is one pipe — [`QueueResource.serve`](/docs/queues) gives `Emails` its worker (the `effect`
 that drains each job), piped onto port 3001:
 
 ``` ts
@@ -161,7 +161,9 @@ and web dashboards — because it's the same kind of thing `Emails` is.
 You don't start from scratch, either — the types you reach for most ship ready-made, each a
 cross-runtime service you use like an Effect primitive:
 
-- **Long-running processes** (`Process`) — continuous or recurring work: a polling cadence, arm/disarm
-  schedule windows, execution history, and more.
-- **Queue** (`QueueResource`) — a priority work queue: enqueue items, workers drain them with dedup,
-  retry, and concurrency control; durable when you provide a store.
+- **Long-running processes** ([`Process`](/docs/processes)) — continuous or recurring work: a polling
+  cadence, arm/disarm schedule windows, execution history, and more.
+- **Queue** ([`QueueResource`](/docs/queues)) — a priority work queue: enqueue items, workers drain them
+  with dedup, retry, and concurrency control; durable when you provide a store.
+- **Run resources** ([`RunResource`](/docs/run-resources)) — an on-demand effect behind a concurrency
+  gate: callers get a typed result, but only so many run at once.
