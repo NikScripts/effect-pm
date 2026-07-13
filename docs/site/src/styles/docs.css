@@ -243,7 +243,7 @@ a:has(> code) {
 }
 a:has(> code):hover {
   text-decoration-style: solid;
-  text-decoration-color: var(--primary);
+  text-decoration-color: currentColor;
 }
 
 code {
