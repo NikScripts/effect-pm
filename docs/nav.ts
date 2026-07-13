@@ -24,6 +24,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "modules-and-boundaries",
       "types-and-naming",
       "effect-style",
+      "documentation",
       "error-handling",
       "resources",
       "storage",
