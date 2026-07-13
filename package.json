@@ -179,6 +179,7 @@
     "example:schedule-control-basics": "tsx examples/forms/schedule/schedule-at.ts && tsx examples/forms/schedule/schedule-window.ts && tsx examples/forms/schedule/schedule-define.ts",
     "example:schedule-control-db-sync": "tsx examples/scenarios/schedule-sync-from-external-db.ts",
     "example:run-resource": "tsx examples/forms/resource/run-resource-unit-and-input.ts",
+    "example:telemetry-fleet-glass": "tsx examples/forms/resource/telemetry-fleet-glass.ts",
     "example:run-resource-store-readback": "tsx examples/forms/resource/run-resource-store-readback.ts",
     "example:http-client-run-gate": "tsx examples/forms/resource/http-client-run-gate.ts",
     "example:http-api-resource": "tsx examples/forms/resource/http-api-resource-tag-layer.ts",
