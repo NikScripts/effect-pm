@@ -38,9 +38,11 @@ class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 const layer = Process.layer(LiveScores, {
   effect: pollLiveScores,
   // polling: Polling.spaced(Duration.seconds(30)),
-  // captureLogs: true,
 });
 ```
+
+Provide `Logs.layer` + `Logs.persistLayer(node)` on the node stack for durable logs; read with
+`Resource.logs(LiveScores)` — see [`docs/LOGS.md`](../../LOGS.md).
 
 - **`Process.layer(Tag, config)`** — local driver (auto-starts).
 - **`Process.serve(Tag, config)`** / **`serveRemote`** — host over RPC.
@@ -92,8 +94,9 @@ class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule(
 
 ## Handle surface (`yield* Tag`)
 
-- **Lifecycle:** `start`, `stop`, `effect` (typed success/error on RPC when stamped).
-- **Observe:** `status` (`status.get` / `status.changes`), `logs.stream`, `logs.query` (needs `captureLogs` + `HistoryStore`).
+- **Lifecycle:** `start`, `stop`, `run` (typed success/error on RPC when stamped).
+- **Observe:** `status` (`status.get` / `status.changes`). Logs via `Resource.logs(Tag)` /
+  `NodeStatus.logs` + `LogEntry.hasKey` — not on the process handle.
 - **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
 - **Result** (when `success` on tag): `result.get` / `result.changes` — `Option` until first success.
 

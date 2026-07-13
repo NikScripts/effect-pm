@@ -54,9 +54,11 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
 | `attempts` | Auto re-enqueue failed items up to N. |
 | `onFailure: (entry, cause) => Effect<disposition>` | Per-error disposition (`retry`/`deadLetter`/`drop`/`default`). |
 | `key: (item) => string` | Dedup key (skips items already in flight). |
-| `captureLogs` | Capture engine + worker logs into the `logs` stream (`true` or `{ level }`). |
 | `autoStart` / `paused` / `shutdownMode` | Worker pool startup + shutdown behavior. |
 | `refill` | Self-feed from a source — see below. |
+
+> **Removed:** `captureLogs` — logs use the [`Logs`](../../LOGS.md) platform +
+> `Resource.logs(tag)` / `NodeStatus.logs` (see [history-and-persistence.md](./history-and-persistence.md)).
 
 ## Handle surface (`yield* Tag`)
 
@@ -64,8 +66,9 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
   `deadLetter` / `drop`.
 - **State:** `size` / `sizes` / `isEmpty` / `completed`.
 - **Lifecycle:** `start` / `pause` / `resume` / `shutdown` / `clear`.
-- **Observe:** `status` (`status.get` / `status.changes`), `metrics.stream`, `logs.stream`, `events` (live streams) and
-  `logs.query` / `metrics.query` (durable backfill).
+- **Observe:** `status` (`status.get` / `status.changes`), `metrics.stream` / `metrics.query`, `events`.
+  Per-resource logs are **not** on the handle — use `Resource.logs(Tag)` (local) or
+  `NodeStatus.logs` + `LogEntry.hasKey` (remote).
 
 ## Self-refill
 

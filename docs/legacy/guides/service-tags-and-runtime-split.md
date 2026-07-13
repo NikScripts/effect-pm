@@ -17,8 +17,13 @@ and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engi
 // tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
 import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
 import * as Process from "@nikscripts/effect-pm/Process";
+import * as Resource from "@nikscripts/effect-pm/Resource";
 
-export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
+export class Droplet extends Resource.Node<Droplet>("hub/droplet") {}
+export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
+  payload: Job,
+  node: Droplet,
+}) {}
 export class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 ```
 
@@ -27,21 +32,33 @@ export class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 import { Layer } from "effect";
 import { Resource } from "@nikscripts/effect-pm/Resource";
 import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
+import * as Logs from "@nikscripts/effect-pm/Logs";
+import * as ProcessStorage from "@nikscripts/effect-pm/ProcessStorage";
 import { SQLiteHistoryStore } from "@nikscripts/effect-pm/storage/sqlite";
-import { RosterQueue } from "./tags";
+import { Droplet, RosterQueue } from "./tags";
 
 export const RosterQueueLive = Resource.httpServer([
-  QueueResource.serve(RosterQueue, { effect, captureLogs: true }),
-]).pipe(Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })));
+  QueueResource.serve(RosterQueue, { effect }),
+]).pipe(
+  Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })), // metrics.query
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(Droplet)),
+  Layer.provide(ProcessStorage.layer),
+);
 ```
 
 ```ts
-// dashboard (browser) — only the tag + a client transport.
+// dashboard (browser) — only the tag + a client transport; logs via NodeStatus + lineage.
+import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as NodeStatus from "@nikscripts/effect-pm/NodeStatus";
 import { Resource } from "@nikscripts/effect-pm/Resource";
 import { RosterQueue } from "./tags";
 
-const queue = yield* RosterQueue;            // resolved from Resource.client(RosterQueue)
-yield* queue.logHistory({ limit: 200 });
+const queue = yield* RosterQueue; // resolved from Resource.client(RosterQueue)
+yield* queue.metrics.query({ limit: 200 });
+
+const rows = yield* NodeStatus.logs.query({ limit: 300 });
+const scoped = rows.filter(LogEntry.hasKey(RosterQueue.key));
 ```
 
 ## Rule of thumb
@@ -52,4 +69,5 @@ it belongs in **runtime**, not beside your client/widget imports. Import tag nam
 access tree-shakes.
 
 See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer
-(query-then-tail) and [toolkit-by-example.md](./toolkit-by-example.md) for full patterns.
+(query-then-tail), [`docs/LOGS.md`](../../LOGS.md) for the logs platform, and
+[toolkit-by-example.md](./toolkit-by-example.md) for full patterns.

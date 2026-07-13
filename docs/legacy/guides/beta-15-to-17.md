@@ -53,33 +53,36 @@ class Database extends Resource.Tag<Database>()("app/Database", {
 
 ## beta.17 — production-ready (the focus)
 
-### 1. Durable log storage — by host *or* by resource
+### 1. Durable log storage — by node *or* by resource
 
-Runtime logs are now durably stored and queryable two ways. Add `HostLogs.persistLayer(host)` (durable)
-next to `HostLogs.layer` (live stream); it's backed by `RuntimeStorage` (memory / sqlite / redis via
-`ProcessStorage`):
+> **Today:** use `@nikscripts/effect-pm/Logs` (`Logs.layer`, `Logs.persistLayer(node)`, `Logs.byNode` /
+> `byResource`, `Resource.logs`). `HostLogs` / `NodeLogs` are deprecated shims. Per-resource
+> `captureLogs` / handle `logs` were **removed** in Phase 5 — see [`docs/LOGS.md`](../../LOGS.md).
+
+Runtime logs are durably stored and queryable two ways. Add `Logs.persistLayer(node)` (durable)
+next to `Logs.layer` (live stream); it's backed by `LogStore` (memory / sqlite via `ProcessStorage`):
 
 ```ts
-const HostLive = myHost.pipe(
-  Effect.provide(HostLogs.layer),                    // live capture + relay (HostLogs.stream)
-  Layer.provideMerge(HostLogs.persistLayer("wnba")), // durable, bucketed by host
-  Effect.provide(ProcessStorage.layer),              // backs LogStore
+import * as Logs from "@nikscripts/effect-pm/Logs";
+import * as Resource from "@nikscripts/effect-pm/Resource";
+import * as ProcessStorage from "@nikscripts/effect-pm/ProcessStorage";
+
+class WnbaNode extends Resource.Node<WnbaNode>("wnba/scores") {}
+
+const logStack = Logs.persistLayer(WnbaNode).pipe(
+  Layer.provideMerge(Layer.mergeAll(Logs.layer, ProcessStorage.layer)),
 );
 
 // later, anywhere with LogStore in context — newest first, [] (not an error) when empty:
-yield* HostLogs.byHost("wnba", { limit: 200 })              // every line this host logged
-yield* HostLogs.byResource({ queueId: "wnba/BoxScoreQueue" }) // one resource, across hosts
+yield* Logs.byNode(WnbaNode, { limit: 200 })
+yield* Logs.byResource({ queueId: "wnba/BoxScoreQueue" })
 ```
 
-`persistLayer` installs a batched capture logger (built at layer-build, so it captures from the start —
-no subscription race) that stamps each line with its `host` while preserving the resource's
-`processId` / `queueId`, and batches writes via `Stream.groupedWithin`. A host with no `LogStore`
-serves the live stream only. **Use `provideMerge`** — `persistLayer` provides no service, so a bare
-`provide` would be pruned as unused.
+`persistLayer` installs a batched writer subscribed to the **single** relay (no second capture logger).
+**Use `provideMerge`** — `persistLayer` provides no service, so a bare `provide` would be pruned as unused.
 
-> **For just one resource's logs**, you don't need `HostLogs` at all — set `captureLogs: true` on that
-> queue/process + a `HistoryStore` layer, and read its own `logHistory`. `HostLogs` is the whole-host
-> firehose; the resource's `logHistory` is per-resource. See [history & persistence](./history-and-persistence.md).
+> **Per-resource logs:** `yield* Resource.logs(Tag)` (local) or `NodeStatus.logs` +
+> `LogEntry.hasKey(tag.key)` (remote dashboard). Do **not** set `captureLogs` — that API is gone.
 
 ### 2. Read a hostless multi-host tag: `Resource.client(tag, host)`
 
@@ -147,9 +150,11 @@ The log-storage work removed the stranded process-group log paths. If you touche
 
 | Removed | Replacement |
 |---------|-------------|
-| `ProcessGroupLogContext`, `layerProcessGroupLogContext` (never provided since process groups were removed) | `HostLogs.persistLayer(host)` |
-| `HostLogs.history()` (flat `HistoryStore` bucket) | `HostLogs.byHost(host, …)` / `HostLogs.byResource(…)` (LogStore) |
-| `LogAnnotationKeys.groupId` | `LogAnnotationKeys.host` (+ `withHostLogAnnotations`) |
+| `ProcessGroupLogContext`, `layerProcessGroupLogContext` (never provided since process groups were removed) | `Logs.persistLayer(node)` |
+| `HostLogs.history()` (flat `HistoryStore` bucket) | `Logs.byNode(node, …)` / `Logs.byResource(…)` (`LogStore`) |
+| `LogAnnotationKeys.groupId` | `LogAnnotationKeys.node` (+ `withNodeLogAnnotations`) |
+| `captureLogs` / handle `logs.{stream,query}` (Phase 5) | `Logs.layer` + `Resource.logs(tag)` / `NodeStatus.logs` + `LogEntry.hasKey` |
+| `HostLogs` / `NodeLogs` (shim) | `Logs` ([`docs/LOGS.md`](../../LOGS.md)) |
 
 `LogStore` itself is unchanged and still public (`record` / `recordBatch` / `load`). Nothing else in
 beta.17 is breaking — the multi-host additions (`client(tag, host)`, `selfHost`, the `peersLayer`

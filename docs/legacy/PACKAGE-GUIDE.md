@@ -64,14 +64,15 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/Process` — `Process.Tag` / `Process.Schedule` + `make` / `layer` / `serve`
 - `@nikscripts/effect-pm/QueueResource`
 - `@nikscripts/effect-pm/Group`
-- `@nikscripts/effect-pm/HostLogs`
+- `@nikscripts/effect-pm/Logs` — runtime capture, relay, `persistLayer`, `byNode` / `byResource`
 - `@nikscripts/effect-pm/HistoryStore`, `@nikscripts/effect-pm/DurableQueueStore`
 - `@nikscripts/effect-pm/ProcessStore`
 - `@nikscripts/effect-pm/storage/sqlite`
 - `@nikscripts/effect-pm/storage/redis`
 
-Structured logs use `LogStore` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
-at launch (`layerProcessStore` from `storage/sqlite`). Durable
+Structured logs use `LogStore` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore`;
+node capture uses `@nikscripts/effect-pm/Logs` (`layer`, `persistLayer`, `stream`) — see
+[`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` are deprecated shims.) Durable
 normalized runtime records use `@nikscripts/effect-pm/storage/sqlite`
 (`SQLiteRuntimeStorage`) with `ProcessStorage.layerRuntimeStorage`. Run
 `SQLiteRuntimeStorage.make` under `Effect.scoped` (or `it.live`) so the
@@ -90,7 +91,7 @@ For durable adapter work, start with
 | `QueueResource`, `Process` | Batteries-included resource kinds (queue / managed process). `Process.Schedule` is a standalone run-windows resource. |
 | `Group` | Organize member tags (nestable; same or different hosts). |
 | `Process`, `Polling` | The managed-process toolkit + engine (`Process.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
-| `HostLogs`, `HistoryStore`, `DurableQueueStore` | Runtime-wide logs; observability history; durable queue (in-memory or SQLite). |
+| `Logs`, `HistoryStore`, `DurableQueueStore` | Runtime-wide logs ([`docs/LOGS.md`](../LOGS.md)); metrics history; durable queue (in-memory or SQLite). |
 | `ProcessStore` / `ProcessStorage` | Facet builder and combined storage layers for runtime records and resource facts. |
 | `RunResource`, `HttpClientRunGate`, `HttpApiResource` | Concurrency/throttle gates and typed HttpApi client building blocks. |
 | `disarmedIdleSleep` exports | Helpers for custom schedule logic. |

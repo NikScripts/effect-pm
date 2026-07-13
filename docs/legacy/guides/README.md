@@ -15,7 +15,7 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 | --- | --- |
 | [setup.md](./setup.md) | **Consuming the package** — install + peer deps, the subpaths, wiring a server + CLI/TUI/web against your tags |
 | [toolkit-by-example.md](./toolkit-by-example.md) | Every resource / group / host / UI pattern, by example |
-| [history-and-persistence.md](./history-and-persistence.md) | History (`*History`), the durable queue (`persist`), the dashboard query-then-tail |
+| [history-and-persistence.md](./history-and-persistence.md) | Metrics history (`HistoryStore`), durable queue (`persist`), logs via [`docs/LOGS.md`](../../LOGS.md) |
 | [beta-15-to-17.md](./beta-15-to-17.md) | **Upgrade guide** — custom resources (15) → multi-host (16) → durable logs + fleet ergonomics (17), with migration notes |
 
 ## Resources (define workers)
