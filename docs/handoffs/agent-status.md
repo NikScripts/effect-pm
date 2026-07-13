@@ -2,7 +2,7 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration tip:** `d15b907` — Logs Phase 5 on Agent 2 (`cursor/phase5-logs-migration-a3ad` / PR #30); P0 review addressed
+**Integration branch:** now **`integration`** (renamed from `integration/storage` — storage work done, general line). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 all folded. See [`whats-changed-2026-07-13.md`](./whats-changed-2026-07-13.md).
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
@@ -11,6 +11,7 @@
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
+| **D** | `action/named-handles` from `integration` | [named handles](./agent-d-named-handles.md) | **plan-first** | — | — | Phase 1 (queue) first, then fan out one agent per resource; D3 dual-view = top doc-UI item | 2026-07-13 |
 
 ---
 
