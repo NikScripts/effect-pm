@@ -71,7 +71,7 @@ The heaviest recent engine work.
 ---
 
 ## Next up
-- **Agent D** — named resource handles (compact hover + expand-on-demand) → [`agent-d-named-handles.md`](./agent-d-named-handles.md).
-  Top-priority doc-UI item inside it: **D3** (dual-view popover port).
-- Payload-prettify backlog (nested entry `item`, other resources' overloads, verbose-type sweep) →
-  [`agent-a-type-display-cleanup.md`](./agent-a-type-display-cleanup.md).
+- **Agent D** (+ peers) — named resource handles → [`agent-d-named-handles.md`](./agent-d-named-handles.md).
+- **Agent 3** — Logs P1 (levels / store followers / remote) → [`agent-03-logs-p1.md`](./agent-03-logs-p1.md).
+  Plan-first; owner unlocks slices. Do **not** mix with named-handles.
+- Payload-prettify backlog → [`agent-a-type-display-cleanup.md`](./agent-a-type-display-cleanup.md).

@@ -27,6 +27,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Logs P1 → Agent 3 (Agent 2 retired)
+
+- **Owner said:** Handles are owned by other agents for now. Focus next engine work on **Logs P1** (former “option 2”): level pipes / store followers / remote per-resource logs. Expand and clarify that brief for a **new Agent 3**.
+- **Chose:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — plan-first; three workstreams (A levels, B write policy B1/B2/B3, C remote C1/C2/C3); owner unlocks slices. Branch from `integration`.
+- **Rejected:** Assigning named-handles work to Agent 3; treating Logs as closed without an explicit P1 park/unlock.
+- **Supervisor impact:** Agent 2 retired after #33; Agent 3 owns Logs P1.
+
+---
+
 ## 2026-07-13 — Next headlining resource research (Agent 1)
 
 - **Owner said:** Agent 1 is free. Process + QueueResource are the top two; RunResource is lackluster as a product headline. Explore leaning into **fleet / peer** features — ideally first resource with mesh from day one.
