@@ -25,13 +25,10 @@ yield* queue.status.get;
   with `httpServer`), `client` / `connect` (remote), `Host` / `serveInstances` (many instances behind
   one transport). Contracts are introspectable via `specOf` / `methodMeta` (build generic UIs).
 - **`QueueResource`** — three-level **priority** queues with concurrency, optional `rateLimit`,
-  `attempts` retry, `captureLogs`, **`refill`** (self-feeding from a source), and **`persist`**
-  (durable, at-least-once).
-- **`Process`** — a managed process: lifecycle (`start`/`stop`/`run`), observability
-  (reactive `status` + `logs.stream` / `logs.query`), inline or referenced **schedule** control, and
-  an optional reactive `result`. One module carrying the `Process.Tag` toolkit, the `Process.make`
-  engine, and `Polling` (in-instance cadence); **`Process.Schedule`** is a reusable schedule resource
-  (full CRUD + a reactive `entries` ref) that can gate one or more processes.
+  `attempts` retry, **`refill`** (self-feeding from a source), and **`persist`** (durable, at-least-once).
+  Per-resource logs use the **`Logs`** platform + **`Resource.logs`** (not built-in handle `logs`).
+- **`Process`** — a managed process: lifecycle (`start`/`stop`/`run`), reactive `status`, inline or
+  referenced **schedule** control, and an optional reactive `result`. Logs via **`Resource.logs`**.
 - **`Group`** — organize member tags (nestable; members may live on the same or different hosts).
 
 ## Quick start
@@ -84,14 +81,25 @@ const layer = Process.layer(LiveScores, {
 ### Remote (the dashboard path)
 
 ```ts
-// host (Droplet / Mini)
-Resource.httpServer([QueueResource.serve(RosterQueue, { effect, captureLogs: true })])
-  .pipe(Layer.provide(HistoryStore.layerMemory()));
+import * as Logs from "@nikscripts/effect-pm/Logs";
+import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as Resource from "@nikscripts/effect-pm/Resource";
+import { LogStore } from "@nikscripts/effect-pm/store/Log";
 
-// dashboard (browser) — same Tag, over the wire (from Resource.client(RosterQueue))
-const queue = yield* RosterQueue;
-const recent = yield* queue.logHistory({ limit: 200 });               // backfill
-yield* queue.logs.pipe(Stream.runForEach(render), Effect.forkScoped); // then tail
+class Droplet extends Resource.Node<Droplet>("hub/droplet") {}
+
+// host — node logs stack + serve resources
+Resource.httpServer([QueueResource.serve(RosterQueue, { effect })])
+  .pipe(
+    Layer.provide(Logs.layer),
+    Layer.provide(Logs.persistLayer(Droplet)),
+    Layer.provide(LogStore.layerMemory),
+    Layer.provide(HistoryStore.layerMemory()),
+  );
+
+// dashboard — same Tag over RPC; per-resource logs via NodeStatus + lineage filter
+// (see docs/LOGS.md — Remote dashboard)
+const { stream, query } = yield* Resource.logs(RosterQueue); // local only
 ```
 
 ## Persistence
@@ -100,10 +108,11 @@ Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
 
 - **Durability** — `DurableQueueStore` (priority-native, at-least-once + dedup). Enable with
   `persist` on the queue; a restart recovers in-flight work.
-- **Observability history** — `HistoryStore` backs `logHistory` / `metricsHistory`; runtime-wide logs
-  are durably stored by `HostLogs.persistLayer(host)` (into `LogStore`) and read back with
-  `HostLogs.byHost` / `HostLogs.byResource`. `SQLiteHistoryStore.layer` / `SQLiteDurableQueueStore.layer`
-  from `@nikscripts/effect-pm/storage/sqlite` make these durable across restarts.
+- **Observability history** — `HistoryStore` backs `metrics.query` window backfill; runtime-wide logs
+  are durably stored by `Logs.persistLayer(node)` (into `LogStore`) and read back with
+  `Logs.byNode` / `Logs.byResource` / `Resource.logs(tag)`. `SQLiteHistoryStore.layer` /
+  `SQLiteDurableQueueStore.layer` from `@nikscripts/effect-pm/storage/sqlite` make these durable
+  across restarts.
 
 Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStorage`
 (`@nikscripts/effect-pm/storage/{sqlite,redis}`).
@@ -112,6 +121,7 @@ Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStora
 
 | Doc | What |
 |---|---|
+| [docs/LOGS.md](./docs/LOGS.md) | **Logs platform SSOT** — keys, `Logs.layer`, `Resource.logs`, migration |
 | [docs/legacy/guides/toolkit-by-example.md](./docs/legacy/guides/toolkit-by-example.md) | Every resource / group / host / UI pattern |
 | [docs/legacy/guides/history-and-persistence.md](./docs/legacy/guides/history-and-persistence.md) | History, durable queue, the dashboard data layer |
 | [docs/legacy/PROCESS-API.md](./docs/legacy/PROCESS-API.md) | Spec tables for `Process`, `Polling`, and `Process.Schedule` |

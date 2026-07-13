@@ -1,4 +1,3 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/schedule-delayed-start
  *
@@ -12,7 +11,6 @@ import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
-  ProcessStorage.layer,
   Polling.spaced(Duration.millis(100)),
   Process.scheduleInMemory([
     // Disarmed until t=500 ms — supervisor runs but tick body never executes before this.

@@ -26,7 +26,7 @@ const sensorContract = Store.contract(
   }),
 );
 
-const SensorStore = Store.store("sensors", sensorContract);
+const SensorStore = Store.scoped("sensors", sensorContract);
 
 describe("nested store shapes", () => {
   it.effect("resolved handle exposes nested shapes: handle.sensors.temperature.append/read", () =>

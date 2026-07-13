@@ -1,4 +1,3 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-accelerating
  *
@@ -12,7 +11,6 @@ import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
-  ProcessStorage.layer,
   Polling.accelerating({
     fastest: "40 millis",
     slowest: "400 millis",

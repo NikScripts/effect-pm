@@ -18,7 +18,6 @@ import {
   Types,
 } from "effect";
 import * as Resource from "../Resource";
-import type { LogEntry } from "../LogEntry";
 import { isJsonValue } from "./json";
 import { resolveCustomQueueLevel } from "./customQueueLevels";
 import { levelToDefaultPriority } from "./priorityMapping";
@@ -100,7 +99,6 @@ export interface CustomQueueHandleApi<
   readonly events: Stream.Stream<QueueEvent<T, E>>;
   readonly status: Resource.Subscribable<CustomQueueStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
-  readonly logs: Stream.Stream<LogEntry>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
@@ -225,7 +223,6 @@ const wrapCustomQueueHandle = <T, E, EEnqueue, R>(
     events: engine.events,
     status: engine.status,
     metrics: engine.metrics,
-    logs: engine.logs,
     start: engine.start,
     pause: engine.pause,
     resume: engine.resume,

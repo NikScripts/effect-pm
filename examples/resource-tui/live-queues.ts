@@ -5,7 +5,7 @@
  * layer behind the dashboard. Each queue is a tag with a local layer (worker +
  * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Resource.client`
  * per tag for remote later). One bundle per queue exposes the live `status` /
- * `metrics` / `logs` / `trend` atoms and the control fns.
+ * `metrics` / `logs` atoms and the control fns.
  */
 
 import {
@@ -21,6 +21,13 @@ import {
 } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
+import * as LogEntry from "../../src/LogEntry";
+import * as Logs from "../../src/Logs";
+import { LogStore } from "../../src/store/log";
+import * as Resource from "../../src/Resource";
+
+/** Node log key for the local TUI fleet — pairs with `Logs.persistLayer`. */
+class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
@@ -83,7 +90,6 @@ const cfg = {
     }),
   concurrency: 3,
   attempts: 2,
-  captureLogs: true,
 } as const;
 
 export interface LogLine {
@@ -122,8 +128,10 @@ const AppLayer = Layer.mergeAll(
   QueueResource.layer(Daily, cfg),
   QueueResource.layer(Weekly, cfg),
 ).pipe(
-  // silence the default console logger so captured worker logs don't bleed onto the
-  // Ink alt-screen — captureLogs still routes them to each queue's `logs` stream.
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(TuiNode)),
+  Layer.provide(LogStore.layerMemory),
+  // silence the default console logger so worker logs don't bleed onto the Ink alt-screen
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
 );
 
@@ -228,6 +236,7 @@ const daemonsFor = <Id extends AllQueues>(
 ): Effect.Effect<void, never, Id> =>
   Effect.gen(function* () {
     const q = yield* tag;
+    const { stream } = yield* Resource.logs(tag);
     yield* Effect.forkDetach(
       Effect.forever(
         Effect.gen(function* () {
@@ -239,10 +248,12 @@ const daemonsFor = <Id extends AllQueues>(
       ),
     );
     yield* Effect.forkDetach(
-      Stream.runForEach(q.logs, (l) =>
-        SubscriptionRef.update(refs.logsRef, (acc) =>
-          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
-        ),
+      Stream.runForEach(
+        stream.pipe(Stream.filter(LogEntry.hasKey(tag.key))),
+        (l) =>
+          SubscriptionRef.update(refs.logsRef, (acc) =>
+            [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
+          ),
       ),
     );
     yield* Effect.forkDetach(

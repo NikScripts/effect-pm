@@ -18,7 +18,7 @@ class PriceStore extends Store.Service<PriceStore>("@test/AnalyticsPriceStore")(
 describe("RunResource.store — analytics read-extension", () => {
   it.effect("derivations compute over seeded run facts", () =>
     Effect.gen(function* () {
-      const store = yield* PriceStore.at(PriceGate);
+      const store = yield* PriceStore;
 
       yield* store.record({
         _tag: "Started",

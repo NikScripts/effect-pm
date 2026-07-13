@@ -3,8 +3,8 @@
  *
  * **Node status** — the reserved resource every node serves automatically (via
  * {@link Resource.httpServer}): is it up, when did it start, how long has it been up, how many
- * resources does it serve, plus its runtime-wide {@link NodeLogs} (`logs.stream` stream +
- * `logs.query` query) and a `ping`. The node author wires nothing; clients just point a transport
+ * resources does it serve, plus its runtime-wide **Logs** relay (`logs.stream` stream +
+ * `logs.query` query — empty unless `Logs.layer` is provided) and a `ping`. The node author wires nothing; clients just point a transport
  * at the node. — query a specific node by pointing the ambient `RpcClient.Protocol` at
  * that node's `/rpc`. {@link NodeStatus.clientHttp} is the batteries-included http client; for any
  * other transport, provide your own `RpcClient.Protocol` to `Resource.client(NodeStatus.Tag)`.

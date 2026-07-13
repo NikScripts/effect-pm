@@ -4,8 +4,6 @@ import { LogStore } from "../../store/log";
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
-import type { RuntimeStorageOperationalError } from "../../RuntimeStorage";
-
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
 
@@ -32,6 +30,8 @@ export interface LogQuery {
   readonly processId?: string;
   /** When set, restrict to logs annotated with this queue id. */
   readonly queueId?: string;
+  /** When set, restrict to logs whose lineage contains this `tag.key`. */
+  readonly lineageContains?: string;
   readonly from?: Date;
   readonly to?: Date;
   /** Exclusive lower bound (`entryId` or ISO date per storage adapter). */
@@ -51,9 +51,7 @@ export class LogQueryError extends Data.TaggedError(
   readonly reason: string;
 }> {}
 
-const storageLogQueryError = (
-  error: LogQueryError | RuntimeStorageOperationalError,
-): LogQueryError =>
+const storageLogQueryError = (error: unknown): LogQueryError =>
   error instanceof LogQueryError
     ? error
     : new LogQueryError({
@@ -169,7 +167,7 @@ export const queryGroupLogs = (
           Effect.fail(
             new LogQueryError({
               reason:
-                "LogStore layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
+                "LogStore layer is not provided; compose LogStore.layerMemory or LogStore.layer(...) before reading log history.",
             }),
           ),
         onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),

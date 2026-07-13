@@ -21,10 +21,10 @@ const contract = Store.contract(
 
 class LabSensor extends Resource.Tag<LabSensor>()("@examples/LabSensor", {
   temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.store(contract)) {}
+}).pipe(Resource.withStore(contract)) {}
 
 class AppStore extends Store.Service<AppStore>("@examples/Store")(
-  Resource.store(LabSensor, contract),
+  Store.scoped(LabSensor, contract),
   Store.register("bench", contract),
 ) {}
 

@@ -54,7 +54,7 @@ const entry = (
 describe("QueueResource.store — analytics read-extension", () => {
   it.effect("derivations compute over the seeded event log", () =>
     Effect.gen(function* () {
-      const store = yield* JobsStore.at(Jobs);
+      const store = yield* JobsStore;
       // Seed a mixed event log:
       // - j1: Enqueued → Started → Completed (elapsed 100ms)
       // - j2: Enqueued → Started → Failed (30ms) → RetryScheduled → RetryExhausted (dead-lettered)
@@ -158,7 +158,7 @@ describe("QueueResource.store — analytics read-extension", () => {
 
   it.effect("failureRate is 0 when there are no completions or failures", () =>
     Effect.gen(function* () {
-      const store = yield* JobsStore.at(Jobs);
+      const store = yield* JobsStore;
       const rate = yield* store.failureRate();
       expect(rate).toBe(0);
     }).pipe(Effect.provide(JobsStore.layerMemory), Effect.scoped),
@@ -166,7 +166,7 @@ describe("QueueResource.store — analytics read-extension", () => {
 
   it.live("changes() is a live decoded event stream", () =>
     Effect.gen(function* () {
-      const store = yield* JobsStore.at(Jobs);
+      const store = yield* JobsStore;
       // Collect the first two live events in a forked fiber, then record them.
       const collected = yield* Effect.forkChild(
         store.changes().pipe(Stream.take(2), Stream.runCollect),

@@ -1,15 +1,15 @@
 import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
-import { NodeLogs } from "../src";
+import * as Logs from "../src/Logs";
 import { LogAnnotationKeys } from "../src/LogContext";
-import * as ProcessStorage from "../src/ProcessStorage";
+import { LogStore } from "../src/store/log";
+import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
-// NodeLogs.layer (runtime-wide capture + relay) + persistLayer(node) → durable LogStore (memory
-// backend via ProcessStorage). Bare Effect.log* lines are captured, batched, persisted bucketed by
-// node, and readable **by node** or **by resource**.
-const HOST = "wnba";
-const storage = NodeLogs.persistLayer(HOST).pipe(
-  Layer.provideMerge(Layer.mergeAll(NodeLogs.layer, ProcessStorage.layer)),
+// Logs.layer (runtime-wide capture + relay) + persistLayer(node) → durable LogStore (memory).
+// Bare Effect.log* lines are captured, batched, persisted bucketed by node key, and readable
+// by node or by resource.
+const storage = Logs.persistLayer(testBillingNodeKey).pipe(
+  Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
 );
 
 it("persists runtime logs bucketed by node — readable by node and by resource", () =>
@@ -17,26 +17,28 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
     Effect.gen(function* () {
       yield* Effect.logInfo("node-wide line");
       yield* Effect.annotateLogs(Effect.logInfo("worker line"), {
-        [LogAnnotationKeys.processId]: "worker-1",
+        [LogAnnotationKeys.processId]: testSyncProcessKey,
       });
 
       // the persist writer batches on a ~250ms window — poll until both lines land
       yield* Effect.gen(function* () {
-        while ((yield* NodeLogs.byNode(HOST)).length < 2) {
+        while ((yield* Logs.byNode(testBillingNodeKey)).length < 2) {
           yield* Effect.sleep(Duration.millis(20));
         }
       }).pipe(Effect.timeout(Duration.seconds(3)));
 
-      const nodeRows = yield* NodeLogs.byNode(HOST, { limit: 50 });
+      const nodeRows = yield* Logs.byNode(testBillingNodeKey, { limit: 50 });
       expect(nodeRows.length).toBeGreaterThanOrEqual(2);
       // every stored line carries the node annotation (the bucket)
       expect(
-        nodeRows.every((row) => row.annotations[LogAnnotationKeys.node] === HOST),
+        nodeRows.every(
+          (row) => row.annotations[LogAnnotationKeys.node] === testBillingNodeKey,
+        ),
       ).toBe(true);
       expect(nodeRows.some((row) => row.message.includes("node-wide line"))).toBe(true);
 
       // by resource: only the line annotated with that processId
-      const workerRows = yield* NodeLogs.byResource({ processId: "worker-1" });
+      const workerRows = yield* Logs.byResource({ processId: testSyncProcessKey });
       expect(workerRows.length).toBe(1);
       expect(workerRows[0]?.message).toBe("worker line");
     }).pipe(Effect.provide(storage), Effect.scoped),
@@ -45,6 +47,6 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
 it("byResource is empty for a resource with no logs (graceful, not an error)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      expect(yield* NodeLogs.byResource({ queueId: "never" })).toEqual([]);
+      expect(yield* Logs.byResource({ queueId: "never" })).toEqual([]);
     }).pipe(Effect.provide(storage), Effect.scoped),
   ));

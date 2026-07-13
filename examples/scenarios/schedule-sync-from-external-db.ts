@@ -1,11 +1,10 @@
-import * as ProcessStorage from "../../src/ProcessStorage";
 /**
  * @module examples/scenarios/schedule-sync-from-external-db
  *
  * DB rows → Process schedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
  */
 
-import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
+import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process } from "../../src";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
@@ -63,6 +62,6 @@ const program = Effect.gen(function* () {
 
 runNodeProgramWithLayer(
   program,
-  Layer.mergeAll(TestClock.layer(), ProcessStorage.layer),
+  TestClock.layer(),
   "scenario:schedule-sync-from-external-db finished",
 );

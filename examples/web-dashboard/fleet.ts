@@ -98,5 +98,4 @@ export const cfg = {
     }),
   concurrency: 3,
   attempts: 2,
-  captureLogs: true,
 } as const;

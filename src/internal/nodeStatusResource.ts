@@ -81,7 +81,7 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
   logs: {
     stream: Resource.stream(LogEntrySchema).annotate({
       description:
-        "Runtime-wide node log stream (recent tail, then live). Empty unless NodeLogs.layer is provided.",
+        "Runtime-wide node log stream (recent tail, then live). Empty unless Logs.layer is provided.",
     }),
     query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:

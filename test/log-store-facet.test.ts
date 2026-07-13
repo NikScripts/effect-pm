@@ -1,26 +1,19 @@
-import * as ProcessStorage from "../src/ProcessStorage";
-/**
- * Conformance suite for the {@link LogStore} facet.
- *
- * Verifies optional static emits and service-only reads (facet tag in context).
- */
-
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Layer, Logger, Option } from "effect";
 import { LogAnnotationKeys } from "../src/LogContext";
 import type { LogEntry } from "../src/LogEntry";
-import { ProcessStore } from "../src/ProcessStore";
 import { LogQueryError } from "../src/internal/manager/logQuery";
-import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
-import { LogStore } from "../src/store/log";
+import { StoreWriteError } from "../src/internal/store/errors";
+import { LogStore, catchErrorAndLog } from "../src/store/log";
+import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
 const entry = (message: string): LogEntry => ({
   date: "2026-05-22T20:00:00.000Z",
   level: "Info",
   message,
   annotations: {
-    [LogAnnotationKeys.node]: "workshop-group",
-    [LogAnnotationKeys.processId]: "billing/sync",
+    [LogAnnotationKeys.node]: testBillingNodeKey,
+    [LogAnnotationKeys.processId]: testSyncProcessKey,
   },
   spans: [],
 });
@@ -28,8 +21,8 @@ const entry = (message: string): LogEntry => ({
 describe("LogStore — static optional emitters", () => {
   it.live("no-ops writes when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* LogStore.record("workshop-group", "1", entry("absent write"));
-      yield* LogStore.recordBatch("workshop-group", [
+      yield* LogStore.record(testBillingNodeKey, "1", entry("absent write"));
+      yield* LogStore.recordBatch(testBillingNodeKey, [
         { entryId: "2", entry: entry("absent batch write") },
       ]);
       expect(true).toBe(true);
@@ -45,7 +38,7 @@ describe("LogStore — static optional emitters", () => {
               onNone: () => Effect.die("LogStore not in context"),
               onSome: (log) =>
                 log.load({
-                  groupId: "workshop-group",
+                  groupId: testBillingNodeKey,
                   limit: 10,
                   sort: "desc",
                 }),
@@ -60,18 +53,18 @@ describe("LogStore — static optional emitters", () => {
 
   it.live("persists and loads through the spine when the facet is provided", () =>
     Effect.gen(function* () {
-      yield* LogStore.record("workshop-group", "1", entry("sync tick"));
+      yield* LogStore.record(testBillingNodeKey, "1", entry("sync tick"));
       const log = yield* LogStore;
       const loaded = yield* log.load({
-        groupId: "workshop-group",
-        processId: "billing/sync",
+        groupId: testBillingNodeKey,
+        processId: testSyncProcessKey,
         limit: 10,
         sort: "desc",
       });
 
       expect(loaded).toHaveLength(1);
       expect(loaded[0]?.message).toBe("sync tick");
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(LogStore.layerMemory)),
   );
 
   it.live("surfaces write failures unless explicitly caught and logged", () => {
@@ -84,11 +77,11 @@ describe("LogStore — static optional emitters", () => {
     const failingFacet: LogStore.Type = {
       record: () =>
         Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-log" }),
+          new StoreWriteError({ cause: "blocked", detail: "blocked-log" }),
         ),
       recordBatch: () =>
         Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-log-batch" }),
+          new StoreWriteError({ cause: "blocked-batch", detail: "blocked-log-batch" }),
         ),
       load: () =>
         Effect.fail(
@@ -100,12 +93,12 @@ describe("LogStore — static optional emitters", () => {
         ),
     };
 
-    const write = LogStore.record("workshop-group", "1", entry("blocked"));
+    const write = LogStore.record(testBillingNodeKey, "1", entry("blocked"));
     return Effect.gen(function* () {
       const error = yield* Effect.flip(write);
-      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
+      expect(error).toBeInstanceOf(StoreWriteError);
       yield* write.pipe(
-        ProcessStore.catchErrorAndLog({
+        catchErrorAndLog({
           message: "test log write failed",
           annotations: { test: "log-static" },
         }),
@@ -114,7 +107,7 @@ describe("LogStore — static optional emitters", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(LogStore, failingFacet),
+          Layer.succeed(LogStore, failingFacet as never),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),

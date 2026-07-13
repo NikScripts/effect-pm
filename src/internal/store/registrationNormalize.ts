@@ -19,6 +19,7 @@ import { isStoreSpec, type StoreSpec } from "./spec";
 import { StoreDuplicateScopeKey } from "./errors";
 
 export const storeStandaloneSym = Symbol.for("@nikscripts/effect-pm/Store/standalone");
+export const storeSingleSym = Symbol.for("@nikscripts/effect-pm/Store/single");
 
 /** @internal */
 export interface NormalizedStoreRegistration<
@@ -182,4 +183,15 @@ export const normalizeStoreRegistrations = (
   }
 
   return { registrations, named: false };
+};
+
+/** True when {@link Store.Service} input is a bare single registration (not `[]` or `{}`). @internal */
+export const isSingleStoreServiceInput = (input: unknown): boolean => {
+  if (Array.isArray(input)) {
+    return false;
+  }
+  if (isNamedRecord(input)) {
+    return false;
+  }
+  return isStoreRegistration(input) || isStandaloneStoreClass(input);
 };

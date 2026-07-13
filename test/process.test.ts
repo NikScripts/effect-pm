@@ -1,4 +1,3 @@
-import * as ProcessStorage from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
@@ -45,7 +44,7 @@ describe("Process.make", () => {
 });
 
 describe("Process runtime with schedule windows", () => {
-  const storeAndClock = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
+  const clock = TestClock.layer();
 
   it.effect("positional make runs driver with polling before schedule in args", () =>
     Effect.gen(function* () {
@@ -76,7 +75,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -96,7 +95,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBe(0);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -116,7 +115,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -143,7 +142,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(seenIds)).toContain("match-101");
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -181,7 +180,7 @@ describe("Process runtime with schedule windows", () => {
         expect(seen.length).toBeGreaterThan(0);
         expect(seen.every((id) => id === "first-window")).toBe(true);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -201,7 +200,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -230,7 +229,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBe(afterWindow);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -253,7 +252,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBeGreaterThanOrEqual(1);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );
@@ -277,7 +276,7 @@ describe("Process runtime with schedule windows", () => {
         const values = yield* Ref.get(seen);
         expect(values.length).toBe(1);
         expect(Option.isNone(values[0] ?? Option.none())).toBe(true);
-      }).pipe(Effect.provide(ProcessStorage.layer)),
+      }).pipe(Effect.provide(TestClock.layer())),
     ),
   );
 
@@ -318,7 +317,7 @@ describe("Process runtime with schedule windows", () => {
         expect(yield* Ref.get(ticks)).toBe(0);
         yield* Fiber.interrupt(fib);
       }).pipe(
-      Effect.provide(storeAndClock),
+      Effect.provide(clock),
       Effect.scoped,
     ),
 );

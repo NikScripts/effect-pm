@@ -154,12 +154,17 @@ import { Resource } from "@nikscripts/effect-pm/Resource";
 import { serve as queueServe } from "@nikscripts/effect-pm/QueueResource";
 import { serve as processServe } from "@nikscripts/effect-pm/Process";
 import { HistoryStore } from "@nikscripts/effect-pm/HistoryStore";
+import * as Logs from "@nikscripts/effect-pm/Logs";
+import * as ProcessStorage from "@nikscripts/effect-pm/ProcessStorage";
 
 const LeagueServer = Resource.httpServer([
-  queueServe(RosterQueue, { effect: (job) => loadRoster(job), captureLogs: true }),
+  queueServe(RosterQueue, { effect: (job) => loadRoster(job) }),
   processServe(SeasonMatches, { effect: pollSeason }),
 ]).pipe(
-  Layer.provide(HistoryStore.layerMemory()), // backfill for `*History` (or SQLiteHistoryStore)
+  Layer.provide(HistoryStore.layerMemory()), // metrics.query backfill (or SQLiteHistoryStore)
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(LeagueHost)),
+  Layer.provide(ProcessStorage.layer),       // LogStore backend for durable logs
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 );
 
@@ -213,7 +218,9 @@ NodeRuntime.runMain(
 ```
 
 Each contract query/mutate becomes a verb (flags from the payload schema); streams are
-skipped — use their one-shot peers (`status.get`, `logs.query`).
+skipped — use their one-shot peers (`status.get`, `metrics.query`). Per-resource logs are
+read via `Resource.logs` / `NodeStatus.logs` (see [`docs/LOGS.md`](../../LOGS.md)), not as
+CLI stream verbs on the resource contract.
 
 ### Web (`…/web`) and TUI (`…/tui`)
 

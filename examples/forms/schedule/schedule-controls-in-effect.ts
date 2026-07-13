@@ -1,17 +1,16 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-controls-in-effect
  *
  * Process.scheduleControls inside the tick body. Run: `pnpm run example:form:schedule-controls-in-effect`
  */
 
-import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
+import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
-const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
+const env = TestClock.layer();
 
 const program = Effect.gen(function* () {
   const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);

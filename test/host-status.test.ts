@@ -4,7 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as NodeStatus from "../src/NodeStatus";
-import * as NodeLogs from "../src/NodeLogs";
+import * as Logs from "../src/Logs";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
 
 // A node serving one ordinary resource over `httpServer` must ALSO auto-serve its node status
@@ -46,14 +46,14 @@ it("every served node auto-serves its node status over http", () =>
     }).pipe(Effect.provide(Server), Effect.scoped),
   ));
 
-it("node status logs stream reflects the NodeLogs relay when provided", () =>
+it("node status logs stream reflects the Logs relay when provided", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const impl = buildNodeStatusImpl({ startedAt: 0, resourceCount: 0 });
-      yield* Effect.logInfo("hello-node"); // captured by NodeLogs.layer's merged logger
+      yield* Effect.logInfo("hello-node"); // captured by Logs.layer's merged logger
       const head = yield* Stream.runHead(
         impl.logs.stream.pipe(Stream.filter((e) => e.message.includes("hello-node"))),
       );
       expect(Option.isSome(head)).toBe(true);
-    }).pipe(Effect.provide(NodeLogs.layer), Effect.scoped),
+    }).pipe(Effect.provide(Logs.layer), Effect.scoped),
   ));

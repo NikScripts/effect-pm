@@ -3,8 +3,7 @@
  *
  * The queue widget driven by a **real toolkit `QueueResource`** — no mock. A real
  * local queue (worker + producer) feeds the shared `PageXL` from its live `status`
- * and `metrics` streams; the log tail is the real `events` stream. Only the
- * dedicated `logs` stream is unimplemented, so logs are simply treated as off.
+ * and `metrics` streams; the log tail comes from {@link Resource.logs}.
  *
  * `Atom.runtime(layer)` is the seam: this is `QueueResource.layer` (local) today;
  * swapping in `Resource.client(tag)` (remote) changes nothing else.
@@ -20,6 +19,10 @@ import * as React from "react";
 import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
+import * as LogEntry from "../../src/LogEntry";
+import * as Logs from "../../src/Logs";
+import { LogStore } from "../../src/store/log";
+import * as Resource from "../../src/Resource";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
   BLANK_BORDER,
@@ -51,8 +54,9 @@ const hexKey = (): string =>
     .padStart(4, "0");
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
-// worker: variable execution, occasional failure, logging each step. captureLogs
-// surfaces those lines (engine + worker) on the real `logs` stream.
+// worker: variable execution, occasional failure, logging each step. Logs.layer +
+// Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
+class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
 const QueueLayer = QueueResource.layer(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {
@@ -67,8 +71,11 @@ const QueueLayer = QueueResource.layer(MailQueue, {
     }),
   concurrency: 3,
   attempts: 2,
-  captureLogs: true,
-});
+}).pipe(
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(TuiNode)),
+  Layer.provide(LogStore.layerMemory),
+);
 
 // producer daemon: items arrive on their own, mixed priority
 const Producer = Layer.effectDiscard(
@@ -116,9 +123,13 @@ const LEVEL_COLOR: Record<string, string> = {
   Fatal: "red",
 };
 
-// the real opt-in logs stream (worker + engine lines) — newest accumulated, capped
+// live log tail via Resource.logs — newest accumulated, capped
 const logsAtom = runtime.atom(
-  Stream.unwrap(Effect.map(MailQueue, (q) => q.logs)).pipe(
+  Stream.unwrap(
+    Effect.map(Resource.logs(MailQueue), (h) =>
+      h.stream.pipe(Stream.filter(LogEntry.hasKey(MailQueue.key))),
+    ),
+  ).pipe(
     Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
       [
         ...acc,

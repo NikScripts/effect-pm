@@ -54,7 +54,7 @@ describe("Process.layer — baked-in default store", () => {
       yield* Effect.gen(function* () {
         yield* OverrideExec;
         yield* TestClock.adjust(Duration.millis(200));
-        const store = yield* OverrideStore.at(OverrideExec);
+        const store = yield* OverrideStore;
         const events = yield* store.events();
         expect(events.length).toBeGreaterThanOrEqual(1);
         expect(events.find((row) => row._tag === "Completed")).toMatchObject({

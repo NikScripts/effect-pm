@@ -93,7 +93,7 @@ type ContextOf<T> = T extends Effect.Effect<infer _A, infer _E, infer R> ? R : n
 type StreamRowOf<S> = S extends Stream.Stream<infer A, infer _E, infer _R> ? A : never;
 type StreamErrorOf<S> = S extends Stream.Stream<infer _A, infer E, infer _R> ? E : never;
 
-const SensorStore = Store.store("sensor-scope", nestedContract);
+const SensorStore = Store.scoped("sensor-scope", nestedContract);
 
 // ============================================================================
 // 3a. Coarse form — `changes(scope)` stays the untouched firehose.

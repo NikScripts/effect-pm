@@ -16,6 +16,7 @@ import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import { queueControlSpec } from "../src/QueueResource";
+import { testLogsEnv } from "./fixtures/logsEnv";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
@@ -138,7 +139,6 @@ it("exposes the expected control verbs", () => {
     [
       "clear",
       "isEmpty",
-      "logs",
       "metrics",
       "pause",
       "resume",
@@ -150,10 +150,6 @@ it("exposes the expected control verbs", () => {
   );
   // observability is nested: stream + query per group
   expect(Object.keys(queueControlSpec.metrics).sort()).toEqual([
-    "query",
-    "stream",
-  ]);
-  expect(Object.keys(queueControlSpec.logs).sort()).toEqual([
     "query",
     "stream",
   ]);
@@ -389,18 +385,19 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
   return Effect.runPromise(program);
 });
 
-// ── QueueResource.layer surfaces captured logs through the toolkit tag ──
+// ── QueueResource.layer scopes worker logs readable via Resource.logs ──
 class LoggingQueue extends QueueResource.Tag<LoggingQueue>()("test/LoggingQueue", {
   payload: NumberItem,
 }) {}
 
-it("QueueResource.layer surfaces captured logs via queue.logs", () => {
+it("QueueResource.layer scopes worker logs via Resource.logs", () => {
   const program = Effect.gen(function* () {
     const q = yield* LoggingQueue;
+    const { stream } = yield* Resource.logs(LoggingQueue);
     const collected = yield* Effect.forkChild(
       Stream.runCollect(
         Stream.take(
-          Stream.filter(q.logs.stream, (e) => e.message.includes("handling")),
+          Stream.filter(stream, (e) => e.message.includes("handling")),
           1,
         ),
       ),
@@ -410,14 +407,12 @@ it("QueueResource.layer surfaces captured logs via queue.logs", () => {
     const entry = Array.from(yield* Fiber.join(collected))[0];
     expect(entry?.message).toContain("handling 42");
     expect(entry?.level).toBe("Info");
-    expect(entry?.annotations.queueId).toBe("test/LoggingQueue");
   }).pipe(
     Effect.provide(
       QueueResource.layer(LoggingQueue, {
         effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
         concurrency: 1,
-        captureLogs: true,
-      }),
+      }).pipe(Layer.provideMerge(testLogsEnv())),
     ),
     Effect.scoped,
   );

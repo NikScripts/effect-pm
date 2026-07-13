@@ -790,7 +790,8 @@ export const ref = <Su extends Schema.Top>(
  */
 export const contract = <const S extends Spec>(spec: S): S => spec;
 
-export { store } from "./Store";
+export { withStore } from "./Store";
+export { logs, withLogExport, type LogsExportHandle } from "./internal/logs/resourceLogs";
 
 /**
  * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream

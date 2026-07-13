@@ -15,7 +15,9 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as queueEntry } from "../../src/QueueResource";
 import { HistoryStore } from "../../src/HistoryStore";
+import * as Logs from "../../src/Logs";
 import * as Resource from "../../src/Resource";
+import { LogStore } from "../../src/store/log";
 import {
   Billing,
   Daily,
@@ -82,11 +84,13 @@ const serveLayer = Resource.httpServer([
   queueEntry(Daily, cfg),
   queueEntry(Weekly, cfg),
 ]).pipe(
-  // capture metrics + log history so the dashboard can backfill (query-then-tail).
+  // capture metrics history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),
-  // silence the served layer's console logging (per-request http access logs + the
-  // captured worker logs) — they still reach the dashboard via captureLogs. The server's
-  // own program logs (below) keep using the default logger so you can see them.
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(Droplet)),
+  Layer.provide(LogStore.layerMemory),
+  // silence the served layer's console logging (per-request http access logs) — node logs
+  // still reach the dashboard via NodeStatus.logs + lineage filter.
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
   Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );

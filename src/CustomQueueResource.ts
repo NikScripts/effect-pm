@@ -49,7 +49,6 @@ import {
   queueEntryAttributes,
   queueEntryTimestamps,
   buildQueueEvent,
-  queueLogEntry,
   queueMetrics,
   queuePriority,
   queueReleaseEncodingError,
@@ -192,16 +191,6 @@ export const customQueueControlSpec = {
     query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
-    }),
-  },
-  logs: {
-    stream: Resource.stream(queueLogEntry).annotate({
-      description:
-        "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
-    }),
-    query: Resource.effectFn(historyQuery, Schema.Array(queueLogEntry)).annotate({
-      description:
-        "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
     }),
   },
 };
@@ -458,30 +447,18 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
-    const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
     const metricsStreamId = `${tag.key}/metrics`;
-    const logsStreamId = `${tag.key}/logs`;
     yield* Option.match(history, {
       onNone: () => Effect.void,
       onSome: (store) =>
-        Effect.gen(function* () {
-          yield* Effect.forkScoped(
-            Stream.runForEach(handle.metrics, (m) =>
-              Schema.encodeEffect(queueMetrics)(m).pipe(
-                Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
-                Effect.orDie,
-              ),
+        Effect.forkScoped(
+          Stream.runForEach(handle.metrics, (m) =>
+            Schema.encodeEffect(queueMetrics)(m).pipe(
+              Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
+              Effect.orDie,
             ),
-          );
-          yield* Effect.forkScoped(
-            Stream.runForEach(handle.logs, (l) =>
-              Schema.encodeEffect(queueLogEntry)(l).pipe(
-                Effect.flatMap((enc) => store.append(logsStreamId, enc)),
-                Effect.orDie,
-              ),
-            ),
-          );
-        }),
+          ),
+        ),
     });
 
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
@@ -509,19 +486,6 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
               store.read(metricsStreamId, { limit, since, until }).pipe(
                 Effect.flatMap((arr) =>
                   Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
-                ),
-              ),
-          }),
-      },
-      logs: {
-        stream: handle.logs,
-        query: ({ limit, since, until }) =>
-          Option.match(history, {
-            onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
-            onSome: (store) =>
-              store.read(logsStreamId, { limit, since, until }).pipe(
-                Effect.flatMap((arr) =>
-                  Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
                 ),
               ),
           }),

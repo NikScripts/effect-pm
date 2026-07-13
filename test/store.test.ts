@@ -4,7 +4,6 @@ import * as QueueResource from "../src/QueueResource";
 import * as RunResource from "../src/RunResource";
 import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
-import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 
 const readingSchema = Schema.Struct({
   value: Schema.Number,
@@ -32,7 +31,7 @@ type ReadingOnlyHandle = Store.HandleOf<typeof readingOnlyContract>;
 
 class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
   temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.store(thermometerContract)) {}
+}).pipe(Resource.withStore(thermometerContract)) {}
 
 class Mail extends Resource.Tag<Mail>()("@app/Mail", {
   send: Resource.effect(Schema.Void),
@@ -48,25 +47,23 @@ const fetchGateRegistration = RunResource.store(FetchGate);
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 
-const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
-  Store.extend({ campaignAudit: campaignAuditSchema }),
-);
-
-const mailQueueRegistration = Store.register(MailQueue, mailQueueContract);
+const mailQueueRegistration = QueueResource.store(MailQueue, {
+  campaignAudit: campaignAuditSchema,
+});
 
 class DropletStoreArray extends Store.Service<DropletStoreArray>("@repo/app/Store")([
-  Resource.store(Mail, thermometerContract),
-  Resource.store("custom-store", thermometerContract),
+  Store.scoped(Mail, thermometerContract),
+  Store.scoped("custom-store", thermometerContract),
 ]) {}
 
 class DropletStoreRest extends Store.Service<DropletStoreRest>("@repo/app/StoreRest")(
-  Resource.store(Mail, thermometerContract),
-  Resource.store(LabThermometer, thermometerContract),
-  Resource.store("custom-store", thermometerContract),
+  Store.scoped(Mail, thermometerContract),
+  Store.scoped(LabThermometer, thermometerContract),
+  Store.scoped("custom-store", thermometerContract),
 ) {}
 
 class NamedDropletStore extends Store.Service<NamedDropletStore>("@repo/app/NamedStore")({
-  temp: Resource.store(LabThermometer, thermometerContract),
+  temp: Store.scoped(LabThermometer, thermometerContract),
   custom: readingOnlyContract,
 }) {}
 
@@ -82,13 +79,11 @@ const extendedThermometerContract = thermometerContract.pipe(
   }),
 );
 
-type ExtendedThermometerHandle = Store.HandleOf<typeof extendedThermometerContract>;
-
 class ExtendStore extends Store.Service<ExtendStore>("@repo/app/ExtendStore")(
-  Resource.store("extended", extendedThermometerContract),
+  Store.scoped("extended", extendedThermometerContract),
 ) {}
 
-const mailStore = Resource.store(Mail, thermometerContract);
+const mailStore = Store.scoped(Mail, thermometerContract);
 
 const customEffectContract = Store.contract(
   { readings: readingSchema, audit: Schema.Struct({ note: Schema.String }) },
@@ -106,10 +101,12 @@ const customEffectContract = Store.contract(
   }),
 );
 
-type CustomEffectHandle = Store.HandleOf<typeof customEffectContract>;
-
 class CustomEffectStore extends Store.Service<CustomEffectStore>("@repo/app/CustomEffectStore")(
-  Resource.store("custom", customEffectContract),
+  Store.scoped("custom", customEffectContract),
+) {}
+
+class ShapedDropletStore extends Store.Service<ShapedDropletStore>("@repo/app/StoreRest")(
+  Store.scoped("custom-store", shapedThermometerContract),
 ) {}
 
 describe("Store.Service", () => {
@@ -181,15 +178,29 @@ describe("Store.Service", () => {
   it("throws on duplicate tuple scope keys at definition time", () => {
     expect(() =>
       class DupStore extends Store.Service<DupStore>("@repo/app/Dup")(
-        Resource.store("same-key", thermometerContract),
-        Resource.store("same-key", thermometerContract),
+        Store.scoped("same-key", thermometerContract),
+        Store.scoped("same-key", thermometerContract),
       ) {},
     ).toThrow();
   });
 
+  it.effect("single Store.Service yields the store handle directly", () =>
+    Effect.gen(function* () {
+      const store = yield* RunGateStore;
+      expect(typeof store.record).toBe("function");
+    }).pipe(Effect.provide(RunGateStore.layerMemory), Effect.scoped),
+  );
+
+  it.effect("array Store.Service still resolves via at", () =>
+    Effect.gen(function* () {
+      const store = yield* DropletStoreArray.at(Mail);
+      yield* store.readings.append({ value: 1 });
+    }).pipe(Effect.provide(DropletStoreArray.layerMemory), Effect.scoped),
+  );
+
   it.effect("QueueResource.store exposes typed emit effects + extended shapes", () =>
     Effect.gen(function* () {
-      const store = yield* QueueStore.at(MailQueue);
+      const store = yield* QueueStore;
       // record persists the same QueueEvent the live stream carries; events reads them back.
       const keys = Object.keys(store);
       expect(keys).toContain("record");
@@ -208,7 +219,7 @@ describe("Store.Service", () => {
 
   it.effect("RunResource.store exposes typed fact + stateHistory methods", () =>
     Effect.gen(function* () {
-      const store = yield* RunGateStore.at(FetchGate);
+      const store = yield* RunGateStore;
       const keys = Object.keys(store);
       expect(keys).toContain("record");
       expect(keys).toContain("facts");
@@ -257,7 +268,7 @@ describe("Store.Service", () => {
 
   it.effect("Store.extend adds shapes and keeps pipe", () =>
     Effect.gen(function* () {
-      const store = (yield* ExtendStore.at("extended")) as unknown as ExtendedThermometerHandle;
+      const store = yield* ExtendStore;
       yield* store.readings.append({ value: 1 });
       yield* store.audit.append({ note: "ok" });
       const rows = yield* store.listReadings();
@@ -289,26 +300,17 @@ describe("Store.Service", () => {
 
   it.effect("shape read payload is on the namespace", () =>
     Effect.gen(function* () {
-      const store = (yield* DropletStoreRest.at("custom-store")) as unknown as Store.HandleOf<
-        typeof shapedThermometerContract
-      >;
+      const store = yield* ShapedDropletStore;
       yield* store.readings.append({ value: 10 });
       yield* store.readings.append({ value: 20 });
       const rows = yield* store.readings.read({ limit: 1 });
       expect(rows).toEqual([{ value: 10 }]);
-    }).pipe(
-      Effect.provide(
-        Store.Service<DropletStoreRest>("@repo/app/StoreRest")(
-          Resource.store("custom-store", shapedThermometerContract),
-        ).layerMemory,
-      ),
-      Effect.scoped,
-    ),
+    }).pipe(Effect.provide(ShapedDropletStore.layerMemory), Effect.scoped),
   );
 
   it.effect("custom bare Effect and effect functions run after materialization", () =>
     Effect.gen(function* () {
-      const store = (yield* CustomEffectStore.at("custom")) as unknown as CustomEffectHandle;
+      const store = yield* CustomEffectStore;
       yield* store.audit.append({ note: "a" });
       yield* store.audit.append({ note: "b" });
       expect(yield* store.allNotes).toEqual(["a", "b"]);

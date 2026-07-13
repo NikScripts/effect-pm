@@ -12,9 +12,15 @@ import type { ScopeKeyFromLookup, ScopeKeyOf, StoreScopeTag } from "./registrati
 import {
   normalizeStoreRegistrations,
   type NormalizedStoreRegistration,
+  storeSingleSym,
   storeStandaloneSym,
+  isSingleStoreServiceInput,
 } from "./registrationNormalize";
-import type { RegsOfStoreInput } from "./registrationTypes";
+import type {
+  ContractForSingleInput,
+  IsSingleStoreInput,
+  RegsOfStoreInput,
+} from "./registrationTypes";
 import {
   type FlatStoreHandleOf,
   type StoreHandleFromContract,
@@ -166,6 +172,22 @@ export type StoreTagClass<
 > = StoreAggregateBase<Self, Id, Regs>;
 
 /**
+ * Single-registration {@link Store.Service} — service type is the store handle (no `at`).
+ *
+ * @internal
+ */
+export type SingleStoreTagClass<
+  Self,
+  Id extends string,
+  C extends StoreContractValue,
+> = Context.ServiceClass<Self, Id, StoreHandleFromContract<C>> & {
+  readonly [storeRegsSym]: ReadonlyArray<NormalizedStoreRegistration>;
+  readonly [storeSingleSym]: true;
+  readonly [storeNamedSym]: false;
+  readonly [storeDefaultLogLevelSym]?: StoreLogLevel;
+};
+
+/**
  * Standalone single-scope store class — no layers. `src/Store.ts` attaches `layerMemory` /
  * `layer` via the co-located `Storage` layer builders.
  *
@@ -239,9 +261,28 @@ type InputOfArgs<Args extends ReadonlyArray<unknown>> = Args extends readonly [i
 const defineStoreAggregateInner =
   <Self, const Id extends string>(id: Id) =>
   <const Input>(input: Input) => {
-    type Regs = RegsOfStoreInput<Input>;
     const { registrations: normalized, named } = normalizeStoreRegistrations(input);
     const registrations = normalized as ReadonlyArray<NormalizedStoreRegistration>;
+
+    if (isSingleStoreServiceInput(input) && registrations.length === 1) {
+      const registration = registrations[0]!;
+      const contract = registration.contract;
+      if (contract === undefined) {
+        throw new Error(
+          "Store.Service single registration requires a Store.contract value",
+        );
+      }
+      type C = ContractForSingleInput<Input>;
+      const base = Context.Service<Self, StoreHandleFromContract<C>>()(id);
+      class StoreSingle extends base {}
+      return Object.assign(StoreSingle, {
+        [storeRegsSym]: registrations,
+        [storeSingleSym]: true as const,
+        [storeNamedSym]: false,
+      }) as SingleStoreTagClass<Self, Id, C>;
+    }
+
+    type Regs = RegsOfStoreInput<Input>;
     const base = Context.Service<Self, StoreBundle<Regs>>()(id);
     const at = makeAt(base, registrations);
 
@@ -259,14 +300,18 @@ export const defineStoreTag = <Self, const Id extends string>(id: Id) => {
   const define = <const Args extends ReadonlyArray<unknown>>(...args: Args) => {
     type Input = InputOfArgs<Args>;
     const input = (args.length === 1 ? args[0]! : args) as Input;
-    return defineStoreAggregateInner<Self, Id>(id)(input) as StoreTagClass<
-      Self,
-      Id,
-      RegsOfStoreInput<Input>
-    >;
+    return defineStoreAggregateInner<Self, Id>(id)(input) as IsSingleStoreInput<Input> extends true
+      ? SingleStoreTagClass<Self, Id, ContractForSingleInput<Input>>
+      : StoreTagClass<Self, Id, RegsOfStoreInput<Input>>;
   };
   return define;
 };
+
+/** @internal */
+export const isSingleStoreTagClass = (
+  value: unknown,
+): value is SingleStoreTagClass<unknown, string, StoreContractValue> =>
+  typeof value === "function" && storeSingleSym in value;
 
 /**
  * Normalized registration for a standalone store — shared by {@link defineStandaloneStore} and
