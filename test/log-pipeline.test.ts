@@ -4,7 +4,7 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Duration, Effect, FileSystem, Layer, Path } from "effect";
 import * as Logs from "../src/Logs";
 import { LogAnnotationKeys } from "../src/LogContext";
-import { layerProcessStore } from "../src/storage/sqlite/index";
+import { LogStore } from "../src/store/log";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -23,7 +23,7 @@ describe("node log pipeline → SQLite", () => {
           Layer.provideMerge(
             Layer.mergeAll(
               Logs.layer,
-              layerProcessStore({ filename: sqliteFilename }),
+              LogStore.layer({ filename: sqliteFilename }),
             ),
           ),
         );

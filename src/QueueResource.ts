@@ -74,7 +74,7 @@ import type {
   QueueHandle,
   QueueResourceConfigWithItemSchema,
 } from "./internal/queueResource";
-import type { JsonValue } from "./ProcessStoreEvent";
+import type { JsonValue } from "./internal/json";
 import { LogEntrySchema } from "./LogEntry";
 import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
 import type { ConfigPatch } from "./ResourceConfigure";

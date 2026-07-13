@@ -33,7 +33,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → legacy facet demos in [`process-store-memory.ts`](./forms/process-store/process-store-memory.ts) |
+| **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → [`process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) |
 
 ---
 
@@ -66,18 +66,10 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 Start here for execution history. **`Process.make`** does not auto-append.
 
-### ProcessStorage (legacy RuntimeStorage facets)
-
-| File | Teaches |
-|------|---------|
-| [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
-| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + facet reads + RunResource run facts on SQLite |
-
-Storage options (two planes):
+Storage:
 
 - **`Store.Service` + `Process.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Process.layer`** only.
-- **`ProcessStorage.layer`** / **`layerProcessStore`** — legacy facet rows (queue entries, lifecycle, logs) on `RuntimeStorage`.
-- `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
+- **`LogStore`** (`@nikscripts/effect-pm/store/Log`) — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay.
 
 ### Schedule
 

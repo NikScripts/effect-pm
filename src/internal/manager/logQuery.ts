@@ -4,8 +4,6 @@ import { LogStore } from "../../store/log";
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
-import type { RuntimeStorageOperationalError } from "../../RuntimeStorage";
-
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
 
@@ -53,9 +51,7 @@ export class LogQueryError extends Data.TaggedError(
   readonly reason: string;
 }> {}
 
-const storageLogQueryError = (
-  error: LogQueryError | RuntimeStorageOperationalError,
-): LogQueryError =>
+const storageLogQueryError = (error: unknown): LogQueryError =>
   error instanceof LogQueryError
     ? error
     : new LogQueryError({

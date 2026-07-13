@@ -52,33 +52,13 @@
       "types": "./dist/MultiNode.d.ts",
       "default": "./dist/MultiNode.js"
     },
-    "./ProcessStore": {
-      "types": "./dist/ProcessStore.d.ts",
-      "default": "./dist/ProcessStore.js"
-    },
-    "./ProcessStorage": {
-      "types": "./dist/ProcessStorage.d.ts",
-      "default": "./dist/ProcessStorage.js"
-    },
     "./store/Log": {
       "types": "./dist/store/Log.d.ts",
       "default": "./dist/store/Log.js"
     },
-    "./store/ProcessLifecycle": {
-      "types": "./dist/store/ProcessLifecycle.d.ts",
-      "default": "./dist/store/ProcessLifecycle.js"
-    },
-    "./Query": {
-      "types": "./dist/Query.d.ts",
-      "default": "./dist/Query.js"
-    },
     "./ResourceConfigure": {
       "types": "./dist/ResourceConfigure.d.ts",
       "default": "./dist/ResourceConfigure.js"
-    },
-    "./RuntimeStorage": {
-      "types": "./dist/RuntimeStorage.d.ts",
-      "default": "./dist/RuntimeStorage.js"
     },
     "./Logs": {
       "types": "./dist/Logs.d.ts",
@@ -139,10 +119,6 @@
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"
-    },
-    "./storage/redis": {
-      "types": "./dist/storage/redis.d.ts",
-      "default": "./dist/storage/redis.js"
     },
     "./package.json": "./package.json"
   },

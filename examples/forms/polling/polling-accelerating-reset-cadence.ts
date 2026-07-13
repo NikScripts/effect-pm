@@ -1,4 +1,3 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-accelerating-reset-cadence
  *
@@ -30,7 +29,6 @@ const scheduleLayer = Process.scheduleInMemory([
 
 const env = Layer.mergeAll(
   TestClock.layer(),
-  ProcessStorage.layer,
   pollLayer,
   scheduleLayer,
 );

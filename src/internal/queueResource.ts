@@ -100,7 +100,7 @@ import {
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import { withLogScope } from "./logs/scope";
 import { isJsonValue } from "./json";
-import type { JsonValue } from "../ProcessStoreEvent";
+import type { JsonValue } from "./json";
 import { DurableQueueStore } from "../DurableQueueStore";
 import type { LaneStore } from "./laneStore";
 import { laneStoreFactoryFromConfig } from "./laneStoreFactory";

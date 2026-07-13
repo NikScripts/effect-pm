@@ -51,7 +51,6 @@ const cases = [
     entry: "src/Process.ts",
     engine: [
       "src/internal/processSchedule.ts",
-      "src/ProcessStore.ts",
       "src/store/processExecution.ts",
       "src/Polling.ts",
     ],

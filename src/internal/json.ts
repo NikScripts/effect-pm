@@ -1,5 +1,17 @@
 import { DateTime, Option, Schema } from "effect";
-import type { JsonValue } from "../ProcessStoreEvent";
+
+/**
+ * Structural JSON value compatible with persisted payloads and queue attributes.
+ *
+ * @internal
+ */
+export type JsonValue =
+  | null
+  | string
+  | number
+  | boolean
+  | { readonly [key: string]: JsonValue }
+  | ReadonlyArray<JsonValue>;
 
 export const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
 export const unknownJsonString = Schema.UnknownFromJsonString;

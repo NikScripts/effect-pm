@@ -3,7 +3,6 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { LogStore } from "../src/store/log";
-import { layerProcessStore } from "../src/storage/sqlite/index";
 import { LogAnnotationKeys } from "../src/LogContext";
 import type { LogEntry } from "../src/LogEntry";
 
@@ -12,14 +11,14 @@ import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 describe("LogStore", () => {
-  it.effect("record, load, and query via namespace and layerProcessStore", () =>
+  it.effect("record, load, and query via namespace and LogStore.layer", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectory();
       const sqliteFilename = path.join(directory, "logs.sqlite");
       yield* fs.makeDirectory(path.dirname(sqliteFilename), { recursive: true });
-      const storeLayer = layerProcessStore({ filename: sqliteFilename });
+      const storeLayer = LogStore.layer({ filename: sqliteFilename });
 
       const entry: LogEntry = {
         date: "2026-05-22T20:00:00.000Z",

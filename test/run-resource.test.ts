@@ -3,7 +3,7 @@ import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";
-import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
+import { StoreWriteError } from "../src/internal/store/errors";
 import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
@@ -489,12 +489,12 @@ describe("RunResource.layer — store failure isolation", () => {
       Effect.succeed({
         fact: {
           append: () =>
-            Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-fact" })),
+            Effect.fail(new StoreWriteError({ cause: "blocked-fact", detail: "readonly" })),
           read: () => Effect.succeed([]),
         },
         state: {
           append: () =>
-            Effect.fail(new ProcessStoreReadonlyRecordError({ id: "blocked-state" })),
+            Effect.fail(new StoreWriteError({ cause: "blocked-state", detail: "readonly" })),
           read: () => Effect.succeed([]),
         },
       }),

@@ -1,4 +1,3 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-controls-external-fiber
  *
@@ -8,13 +7,13 @@ import * as ProcessStorage from "../../../src/ProcessStorage";
  * Run: `pnpm run example:form:schedule-controls-external-fiber`
  */
 
-import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
+import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
-const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
+const env = TestClock.layer();
 
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);

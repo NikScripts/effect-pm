@@ -1,11 +1,10 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-spaced-read
  *
  * Fixed-interval poll — read feed each tick. Run: `pnpm run example:form:polling-spaced-read`
  */
 
-import { DateTime, Duration, Effect, Layer } from "effect";
+import { DateTime, Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { Process, Polling } from "../../../src";
 import {
@@ -16,7 +15,7 @@ import { makeSportsScoreFeedTestDouble } from "../../shared/sports-score-feed";
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 
-const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
+const env = TestClock.layer();
 
 const program = Effect.gen(function* () {
   const feed = yield* makeSportsScoreFeedTestDouble();

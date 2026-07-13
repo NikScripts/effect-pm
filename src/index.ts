@@ -17,8 +17,8 @@
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
- * - **`ProcessStore`** — In-memory (or **SQLite**) **analytics**: execution rows + lifecycle
- *   events for processes.
+ * - **`Store`** — EventJournal-backed execution / queue / run / log history; process stores via
+ *   `Process.store(tag)` and `Store.Service`.
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
@@ -46,17 +46,15 @@
  *
  * ## Import style
  *
- * Every public API lives under a **namespace** in its source module (`Query`,
- * `ResourceConfigure`, …). The root barrel re-exports the same bindings under **short
- * names** (`And`, `Node`, …) so you can choose `import { And }` or `import { Query }`
- * with `Query.And` — they are identical.
+ * Every public API lives under a **namespace** in its source module
+ * (`ResourceConfigure`, `Store`, …). The root barrel re-exports the same bindings under
+ * short names where useful.
  *
  * ## Dedicated subpaths
  *
  * Service/resource subpaths mirror namespaces: **`@nikscripts/effect-pm/Process`**,
- * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/Query`**,
- * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessStore`**,
- * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
+ * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/ResourceConfigure`**,
+ * **`@nikscripts/effect-pm/Store`**, and **`@nikscripts/effect-pm/Logs`**.
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
  * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
@@ -64,15 +62,11 @@
  * **`@nikscripts/effect-pm/NodeLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
  *
- * Structured log persistence: `ProcessStore.Log` (also exported as the
- * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
- * pipeline: `@nikscripts/effect-pm/Logs`.
- * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStorage.layer`).
- * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
+ * Structured log persistence: **`@nikscripts/effect-pm/store/Log`** (`LogStore.layerMemory` /
+ * `LogStore.layer({ filename })`). Capture/relay pipeline: `@nikscripts/effect-pm/Logs`.
  *
- * Storage adapters use lower-case subpaths:
- * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/redis`**
- * for durable runtime records.
+ * Durable adapters: **`@nikscripts/effect-pm/storage/sqlite`**
+ * (`SQLiteDurableQueueStore`, `SQLiteHistoryStore`).
  *
  * ## Source-only helpers
  *
@@ -178,80 +172,6 @@ export type {
   WireOf,
   WireShape,
 } from "./Resource";
-export * as ProcessStorage from "./ProcessStorage";
-
-
-// Query / Runtime Storage
-export * as Query from "./Query";
-export {
-  And,
-  Attributes,
-  Created,
-  Delete,
-  Id,
-  IndexA,
-  IndexB,
-  IndexC,
-  IndexD,
-  IndexE,
-  IndexF,
-  IndexG,
-  IndexH,
-  Insert,
-  Key,
-  Limit,
-  Occurred,
-  Offset,
-  Or,
-  OrderBy,
-  Payload,
-  ProcessId,
-  ProcessType,
-  Readonly,
-  RunId,
-  Select,
-  SubjectId,
-  SubjectType,
-  Type,
-  Update,
-  Upsert,
-  Where,
-} from "./Query";
-export type {
-  RuntimeRecordAssignment,
-  RuntimeRecordComparison,
-  RuntimeRecordOrderBy,
-  RuntimeRecordOrderField,
-  RuntimeRecordPatch,
-  RuntimeRecordPredicate,
-  RuntimeRecordQuery,
-} from "./Query";
-export {
-  RuntimeStorage,
-  RuntimeStorageConnectionError,
-  RuntimeStorageDecodeError,
-  RuntimeStorageDuplicateRecordError,
-  RuntimeStorageEncodeError,
-  RuntimeStorageQueryError,
-  RuntimeStorageReadonlyRecordError,
-  RuntimeStorageSchemaError,
-  RuntimeStorageTransactionError,
-  RuntimeStorageUnavailableError,
-  selectRuntimeRecords,
-  applyRuntimeRecordPatch,
-} from "./RuntimeStorage";
-export type {
-  DeleteResult,
-  RuntimeRecord,
-  RuntimeStorageAdapter,
-  RuntimeStorageError,
-  RuntimeStorageLogicalError,
-  RuntimeStorageOperation,
-  RuntimeStorageOperationalFields,
-  RuntimeStorageOperationalError,
-  RuntimeStorageService,
-  UpdateResult,
-} from "./RuntimeStorage";
 
 /**
  * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},
@@ -319,25 +239,8 @@ export * as LogContext from "./LogContext";
 export type { LogEntryRecordedEvent } from "./store/log";
 export { isLogEntryRecorded } from "./store/log";
 
-// Process Store
-export {
-  ProcessStore,
-  ProcessStoreDuplicateRecordError,
-  ProcessStoreReadonlyRecordError,
-  ProcessStoreStorageError,
-  type AnalyticsEventBase,
-  type ProcessStoreWriteError,
-  type QueryOpts,
-} from "./ProcessStore";
-
 export { LogStore } from "./store/log";
 export type { LogStoreApi } from "./store/log";
-export { ProcessLifecycleStore } from "./store/processLifecycle";
-export type {
-  ProcessLifecycleChangedEvent,
-  ProcessLifecycleRecordInput,
-  ProcessLifecycleTag,
-} from "./store/processLifecycle";
 
 // Types - Process
 export type {

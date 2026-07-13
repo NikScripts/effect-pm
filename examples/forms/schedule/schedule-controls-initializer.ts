@@ -1,17 +1,16 @@
-import * as ProcessStorage from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-controls-initializer
  *
  * Schedule controls from the schedule initializer. Run: `pnpm run example:form:schedule-controls-initializer`
  */
 
-import { Duration, Effect, Fiber, Layer, Ref } from "effect";
+import { Duration, Effect, Fiber, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
-const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
+const env = TestClock.layer();
 
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
