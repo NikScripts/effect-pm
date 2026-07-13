@@ -64,53 +64,70 @@ each reading the resource without ever touching its implementation.
 
 ## Scale to a fleet
 
-One runtime is rarely the whole story — run the same `Emails` queue on several worker runtimes, a
-**fleet**, and reach them as one. Here's a standalone example. Each runtime is a **node**, and a node
-carries **the port it's served on**, so the fleet is just a list of nodes:
+One runtime is rarely the whole story — run the same resource on several runtimes, a **fleet**, and
+have it aggregate across all of them. Each runtime is a **node**, and a node carries **the port it's
+served on**, so the fleet is just a list of nodes:
 
 ``` ts
 class WorkerA extends Resource.Node<WorkerA>("app/WorkerA", 3001) {} // → http://localhost:3001/rpc
 class WorkerB extends Resource.Node<WorkerB>("app/WorkerB", 3002) {} // → http://localhost:3002/rpc
-
-// on each runtime — mesh Emails with the fleet; transport comes from each node's port
-const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
-// fleet: Layer — provide it to join the mesh
 ```
 
 A node's address takes the same forms as `clientHttp`: a **port** (`3001` → `localhost:3001/rpc`), a
-`":port"`, or a full **url** for another machine. Because the node carries it, `peersLayer` wires
-every peer's transport for you — no client to hand-configure.
+`":port"`, or a full **url** for another machine. The node carries it, so meshing needs nothing else.
 
-### Ask the whole fleet one question
+### A resource that knows its own fleet
 
-`peers` hands you a handle to **every** instance. `combineQuery` reads a field from each and folds the
-results — sum them for a fleet-wide total, or keep them **per node**:
-
-``` ts
-const peers = yield* Resource.peers(Emails)          // peers: one Emails handle per instance
-
-const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum)    // number — 512
-const perNode      = yield* combineQuery(peers, (p) => p.size, Combine.byNode) // { "app/WorkerA": 300, … }
-```
-
-A **down peer is skipped, never thrown** — you get a partial answer, not a crash. And because `peers`
-is keyed by node, you can also reach a single instance directly to steer just it (`peers["app/WorkerB"]`).
-
-### Follow the whole fleet, live
-
-The same fold works on **streams**. `combineStream` merges every instance's live `events` into one —
-tag each with its node, and you're watching the entire fleet from a single subscription:
+Fleet-awareness lives **inside the resource**, not at the call site. A field marked `Resource.fleet`
+is one the resource folds across every instance — here `active` is *this* node's own count, and
+`fleetActive` is the whole fleet's:
 
 ``` ts
-const allEvents = combineStream(peers, (p) => p.events, Combine.mergeByNode)
-// allEvents: Stream<{ node: string; value: QueueEvent }> — every instance, interleaved
-yield* allEvents.pipe(Stream.runForEach(render))
+class Workers extends Resource.Tag<Workers>()("app/Workers", {
+  active: Resource.effect(Schema.Number),                            // this instance's own count
+  fleetActive: Resource.effect(Schema.Number).pipe(Resource.fleet),  // folded across the fleet
+}) {}
 ```
 
-And a resource can expose a field that's **already folded across the fleet** — mark it with
-`Resource.fleet` and its layer computes it from `peers`, so a caller just reads `emails.fleetBacklog`
-like any other field and never sees the fan-out. **From one queue, to two runtimes, to a whole fleet —
-all through the same tag.**
+The resource computes that fold **in its own layer**, where `Resource.peers` hands it the *other*
+instances — every node **but itself**, keyed by node. It folds their `active` and adds its own value,
+because `peers` never includes you:
+
+``` ts
+// in the Workers layer — `own` is this node's live count
+const peers = yield* Resource.peers(Workers)   // the OTHER instances (not me), keyed by node
+return {
+  active: Effect.succeed(own),
+  fleetActive: combineQuery(peers, (p) => p.active, Combine.sum).pipe(
+    Effect.map((others) => own + others),       // my own + peers = the true fleet total
+  ),
+}
+```
+
+Mesh the fleet with one line per runtime — `peersLayer` gives the resource its peers, reaching each by
+the port on its node. Then a **caller just reads the field**; the fan-out stays hidden in the layer:
+
+``` ts
+const mesh = Resource.peersLayer(Workers, WorkerA, { nodes: [WorkerA, WorkerB] })
+
+const workers = yield* Workers
+const total = yield* workers.fleetActive       // total: number — the whole fleet, one call
+```
+
+### The rest of the fleet toolkit
+
+`peers` is the primitive; a few helpers cover the common shapes, all layer-internal like `peers`:
+
+- **`Resource.selfNode`** — the node key *this* instance runs as, to key its own row in a per-node
+  fold (`{ ...byNode, [self]: own }`) without hand-threading it.
+- **`Combine.byNode`** — keep a fold **per node** (`{ "app/WorkerA": 5, … }`) instead of summing.
+- **`combineStream`** — the same fold over **streams**: merge every peer's live stream into one,
+  optionally node-tagged.
+- **`Resource.fleetHealth`** — the canned per-node table: peers folded by node **plus** this node's
+  own value.
+
+A **down peer is skipped, never thrown** — a fleet fold degrades to a partial answer, never a crash.
+**From one resource, to two runtimes, to a whole fleet — all through the same tag.**
 
 ## Build your own
 
