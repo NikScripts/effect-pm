@@ -77,26 +77,38 @@ yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEv
 And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
 each reading the resource without ever touching its implementation.
 
-## Scale to a fleet
+## Working with peers
 
-The same tag scales out. Run a resource across several runtimes — a **fleet** — and it can aggregate
-over all of them. Mark a field `Resource.fleet` and the resource folds it across every instance:
+The same tag also lets a resource reach its **peers** — its own other instances — and coordinate with
+them. Take a session store sharded across nodes: each node holds the sessions for the users connected
+to it, and a lookup for someone else's session is **forwarded to the node that owns it**.
 
 ``` ts
-class Workers extends Resource.Tag<Workers>()("app/Workers", {
-  online: Resource.effect(Schema.Number).pipe(Resource.fleet), // folded across the fleet
+class Sessions extends Resource.Tag<Sessions>()("app/Sessions", {
+  get: Resource.effectFn(SessionId, Schema.Option(Session)),      // from whoever owns it
+  getLocal: Resource.effectFn(SessionId, Schema.Option(Session)), // this node's own shard
 }) {}
 ```
 
-The caller just reads that field and gets the fleet-wide value — the fan-out stays inside the layer:
+Inside the layer, `Resource.peers` is an addressable set of siblings and `Resource.selfNode` says which
+one you are — so `get` routes to **the one peer** that owns the key:
 
 ``` ts
-const workers = yield* Workers
-const total = yield* workers.online   // number — the whole fleet, in one call
+get: (id) => Effect.gen(function* () {
+  const self = yield* Resource.selfNode(Sessions)
+  const peers = yield* Resource.peers(Sessions)          // my other instances, keyed by node
+  const owner = ownerOf(id, [self, ...Object.keys(peers)])
+
+  if (owner === self) return yield* getLocal(id)         // mine — answer directly
+  const peer = peers[owner]
+  if (peer === undefined) return Option.none()           // owner unreachable → miss
+  return yield* peer.getLocal(id)                        // forward to THAT peer
+})
 ```
 
-Each runtime is a **node** carrying its own port, so forming the fleet is just a list of nodes — no
-client to wire. **From one resource, to two runtimes, to a whole fleet — all through the same tag.**
+The caller only ever sees `get` — the routing and the cross-node hop stay inside the resource, and an
+unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
+reaching others, through the same tag.**
 
 ## Build your own
 
