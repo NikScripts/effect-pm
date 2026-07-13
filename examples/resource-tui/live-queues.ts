@@ -5,7 +5,7 @@
  * layer behind the dashboard. Each queue is a tag with a local layer (worker +
  * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Resource.client`
  * per tag for remote later). One bundle per queue exposes the live `status` /
- * `metrics` / `logs` / `trend` atoms and the control fns.
+ * `metrics` / `logs` atoms and the control fns.
  */
 
 import {
@@ -21,9 +21,13 @@ import {
 } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
+import * as LogEntry from "../../src/LogEntry";
 import * as Logs from "../../src/Logs";
 import * as ProcessStorage from "../../src/ProcessStorage";
 import * as Resource from "../../src/Resource";
+
+/** Node log key for the local TUI fleet — pairs with `Logs.persistLayer`. */
+class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
@@ -87,9 +91,6 @@ const cfg = {
   concurrency: 3,
   attempts: 2,
 } as const;
-
-/** Node log key for the local TUI fleet — pairs with `Logs.persistLayer`. */
-const TuiNode = "acme/tui" as const;
 
 export interface LogLine {
   readonly id: number;
@@ -247,10 +248,12 @@ const daemonsFor = <Id extends AllQueues>(
       ),
     );
     yield* Effect.forkDetach(
-      Stream.runForEach(stream, (l) =>
-        SubscriptionRef.update(refs.logsRef, (acc) =>
-          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
-        ),
+      Stream.runForEach(
+        stream.pipe(Stream.filter(LogEntry.hasKey(tag.key))),
+        (l) =>
+          SubscriptionRef.update(refs.logsRef, (acc) =>
+            [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
+          ),
       ),
     );
     yield* Effect.forkDetach(

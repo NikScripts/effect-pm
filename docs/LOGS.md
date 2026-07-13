@@ -22,6 +22,8 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 | WNBA hub fixture | `resource-web/hub.ts` | Node + resource tag definitions |
 | WNBA servers | `resource-web/server.ts` | `persistLayer` wiring per node |
 | Test key constants | `test/fixtures/logKeys.ts` | Canonical keys for unit tests |
+| Logs env helper | `test/fixtures/logsEnv.ts` | `Logs.layer` + `persistLayer` + `LogStore` stack for tests |
+| Resource.logs integration | `test/logs-resource.test.ts` | Runtime `Resource.logs` stream + query |
 
 ## Key kinds (vocabulary)
 
@@ -49,6 +51,7 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 | `Logs.nodeLogKey(node)` | node log key (resolver) | `node.key` | `@nikscripts/effect-pm/Logs` | `src/Logs.ts` | — |
 | `testBillingNodeKey` | node log key (test) | `billing/scores` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/host-logs-history.test.ts` |
 | `testRelayNodeKey` | node log key (test) | `test/relay` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/logs-relay.test.ts` |
+| `testTuiNodeKey` | node log key (example) | `acme/tui` | — (example fixture) | `resource-tui/live-queues.ts` | `resource-tui/queue-live.tsx` |
 
 ### Resource keys (resource-web)
 
@@ -270,18 +273,42 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Legacy `processId`
 
 `resource-web/server.ts` calls `Logs.persistLayer(WnbaNode | LiveNode | StatsNode)` — each stack uses the matching **node log key**.
 
+## Remote dashboard (browser → node)
+
+When the dashboard reaches resources over RPC, per-resource logs are **not** on the queue/process spec. Read node-wide logs and filter by **resource key**:
+
+```ts
+import * as NodeStatus from "@nikscripts/effect-pm/NodeStatus";
+import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as Resource from "@nikscripts/effect-pm/Resource";
+
+const resourceKey = LiveScorePoller.key;
+
+// live tail + durable backfill — filter relay/store to one resource
+NodeStatus.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
+
+const rows = yield* NodeStatus.logs.query({ limit: 300 });
+const scoped = rows.filter(LogEntry.hasKey(resourceKey));
+```
+
+Example: `src/web/data.ts` (`resourceLogsAtom`), `examples/web-dashboard/queue-data.ts` (`resourceLogsAccumulator`).
+
+Server must provide `Logs.layer` + `Logs.persistLayer(node)` on the node stack (`examples/web-dashboard/queue-server.ts`).
+
 ## Migration
 
 | Old | New |
 |-----|-----|
 | `NodeLogs.*` | `Logs.*` (shim remains one release) |
 | `ProcessStore` log facet | `LogStore` + `Store.contract` |
-| `captureLogs` on engines | `Logs.layer` + `Resource.logs` (legacy paths still present) |
+| `captureLogs` on engines | **Removed** — `Logs.layer` + `Logs.withScope(tag)` at materialize |
+| `queue.logs` / `proc.logs` on handle | `Resource.logs(tag)` locally; `NodeStatus.logs` + `LogEntry.hasKey` remotely |
+| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via `LogStore` + lineage |
 | `HostLogs` (docs) | `Logs` |
 
 ## Verification
 
 ```bash
 pnpm typecheck
-pnpm test test/logs-relay.test.ts test/log-pipeline.test.ts test/host-logs-history.test.ts
+pnpm test test/logs-resource.test.ts test/logs-relay.test.ts test/log-pipeline.test.ts test/host-logs-history.test.ts test/process-log-history.test.ts
 ```

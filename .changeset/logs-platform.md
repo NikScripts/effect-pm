@@ -12,4 +12,4 @@
 - **`Resource.logs`** / **`Resource.withLogExport`** for per-resource export (`{ stream, query }`).
 - Duplicate relay (`logPersistRelay`) collapsed into `internal/logs/relay.ts`; `persistLayer` subscribes to relay (no second capture logger).
 
-Legacy per-resource `captureLogs` / spec `logs` groups remain for one release — use `Logs.layer` + `Resource.logs` for new code.
+Superseded by `.changeset/remove-resource-logs-capture.md` — legacy `captureLogs` / spec `logs` removed in Phase 5.

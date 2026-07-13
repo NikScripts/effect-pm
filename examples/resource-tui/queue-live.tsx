@@ -19,6 +19,7 @@ import * as React from "react";
 import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
+import * as LogEntry from "../../src/LogEntry";
 import * as Logs from "../../src/Logs";
 import * as ProcessStorage from "../../src/ProcessStorage";
 import * as Resource from "../../src/Resource";
@@ -54,8 +55,8 @@ const hexKey = (): string =>
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
-// Resource.logs surfaces those lines on the live log tail.
-const TuiNode = "acme/tui" as const;
+// Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
+class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
 const QueueLayer = QueueResource.layer(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {
@@ -125,7 +126,9 @@ const LEVEL_COLOR: Record<string, string> = {
 // live log tail via Resource.logs — newest accumulated, capped
 const logsAtom = runtime.atom(
   Stream.unwrap(
-    Effect.map(Resource.logs(MailQueue), (h) => h.stream),
+    Effect.map(Resource.logs(MailQueue), (h) =>
+      h.stream.pipe(Stream.filter(LogEntry.hasKey(MailQueue.key))),
+    ),
   ).pipe(
     Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
       [

@@ -410,8 +410,8 @@ export const queueReleaseEncodingError = Schema.Union([
 ]);
 
 /**
- * Payload fields for the `*History` queries — newest `limit` entries within an optional
- * `[since, until]` window. Shared by `metricsHistory` / `logHistory`.
+ * Payload fields for the `metrics.query` history read — newest `limit` entries within an optional
+ * `[since, until]` window.
  *
  * @public
  */
@@ -892,9 +892,9 @@ const buildQueueImpl = <
       R | RR,
       QueueSuccessValueOf<Success>
     >);
-    // History capture (optional): when a HistoryStore is provided, fork fibers that append each
-    // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
-    // it back. serviceOption → no store means append is skipped and history reads return empty.
+    // History capture (optional): when a HistoryStore is provided, fork a fiber that appends each
+    // metrics window (encoded, keyed by tag id) into the store; `metrics.query` reads it back.
+    // serviceOption → no store means append is skipped and history reads return empty.
     const history = yield* Effect.serviceOption(HistoryStore);
     // Hoist both codecs once (encoders parallel to decoders): the encoder is reused per stream element
     // in the append forks below rather than reconstructed on every element.
@@ -902,7 +902,7 @@ const buildQueueImpl = <
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
     const metricsStreamId = `${tag.key}/metrics`;
     // WRITE-fork helper: encode each stream element and append it to the history store under `streamId`,
-    // forked into the scope. Shared by the metrics + logs forks (byte-identical modulo stream/encoder).
+    // forked into the scope.
     const forkAppend = <A>(
       hist: HistoryStoreShape,
       stream: Stream.Stream<A>,
@@ -918,7 +918,7 @@ const buildQueueImpl = <
         ),
       );
     // READ helper: read `streamId` back from the history store (empty when none provided) and decode each
-    // entry. Shared by the metrics + logs `history` queries (identical modulo streamId/decoder).
+    // entry. Used by `metrics.query`.
     const readHistory = <A>(
       streamId: string,
       decode: (e: unknown) => Effect.Effect<A, Schema.SchemaError>,

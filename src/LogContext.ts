@@ -54,6 +54,7 @@ export const withNodeLogAnnotations = <A, E, R>(
  * Annotate logs with a process **resource key** under annotation key {@link LogAnnotationKeys.processId}.
  *
  * @param processId - **Resource key** value (`Process.Tag.key`).
+ * @deprecated Prefer {@link Logs.withScope} at resource materialize — stamps lineage instead of legacy `processId`.
  *
  * @public
  */
@@ -69,6 +70,7 @@ export const withProcessLogAnnotations = <A, E, R>(
  * Annotate logs with a queue **resource key** under annotation key {@link LogAnnotationKeys.queueId}.
  *
  * @param queueId - **Resource key** value (`QueueResource.Tag.key`).
+ * @deprecated Prefer {@link Logs.withScope} at resource materialize — stamps lineage instead of legacy `queueId`.
  *
  * @public
  */

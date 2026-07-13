@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
 
