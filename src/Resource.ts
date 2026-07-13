@@ -184,6 +184,16 @@ export interface MethodAnnotations {
  *  plain object; guarded with `Predicate.hasProperty`. */
 const MethodTypeId = "~nikscripts/effect-pm/Resource/Method" as const;
 
+/** Sentinel for a {@link Method}'s `Client` type meaning "no explicit client type — **derive** the shape
+ *  from the schema" (the default). Branded so nothing else structurally matches it. @public */
+declare const deriveSym: unique symbol;
+export interface Derive {
+  readonly [deriveSym]: true;
+}
+/** Phantom key carrying a method's optional client-type override (set by the `effect`/`effectFn` two-stage
+ *  forms). Type-only — runtime methods never hold it, so the property is optional. */
+declare const clientSym: unique symbol;
+
 /**
  * One method of a resource contract — built by {@link effect} /
  * {@link effectFn} / {@link Resource.stream}. Carries its `kind`, schemas
@@ -204,6 +214,7 @@ export interface Method<
   E extends Schema.Top,
   Str extends boolean = false,
   Ann extends MethodAnnotations = MethodAnnotations,
+  Client = Derive,
 > extends Pipeable.Pipeable {
   readonly [MethodTypeId]: typeof MethodTypeId;
   readonly kind: Kind;
@@ -213,9 +224,12 @@ export interface Method<
   /** A streaming read (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
   readonly stream: Str;
   readonly annotations: Ann;
+  /** Phantom: an explicit client-facing type (set via the `effect`/`effectFn` two-stage forms). `Derive`
+   *  ⇒ the client shape is derived from the schema. Optional + type-only. */
+  readonly [clientSym]?: (client: Client) => void;
   readonly annotate: <A extends MethodAnnotations>(
     annotations: A,
-  ) => Method<Kind, P, Su, E, Str, Ann & A>;
+  ) => Method<Kind, P, Su, E, Str, Ann & A, Client>;
 }
 
 /** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
@@ -225,7 +239,8 @@ export type AnyMethod = Method<
   Schema.Top,
   Schema.Top,
   boolean,
-  MethodAnnotations
+  MethodAnnotations,
+  never
 >;
 
 /** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the nodes (in the
@@ -530,6 +545,7 @@ const makeMethod = <
   E extends Schema.Top,
   Str extends boolean,
   Ann extends MethodAnnotations = MethodAnnotations,
+  Client = Derive,
 >(
   kind: Kind,
   payload: P,
@@ -537,7 +553,7 @@ const makeMethod = <
   error: E,
   stream: Str,
   annotations: Ann,
-): Method<Kind, P, Su, E, Str, Ann> =>
+): Method<Kind, P, Su, E, Str, Ann, Client> =>
   Object.assign(Object.create(Pipeable.Prototype), {
     [MethodTypeId]: MethodTypeId,
     kind,
@@ -546,8 +562,11 @@ const makeMethod = <
     error,
     stream,
     annotations,
-    annotate: <A extends MethodAnnotations>(a: A): Method<Kind, P, Su, E, Str, Ann & A> =>
-      makeMethod(kind, payload, success, error, stream, { ...annotations, ...a } as Ann & A),
+    annotate: <A extends MethodAnnotations>(a: A): Method<Kind, P, Su, E, Str, Ann & A, Client> =>
+      makeMethod<Kind, P, Su, E, Str, Ann & A, Client>(kind, payload, success, error, stream, {
+        ...annotations,
+        ...a,
+      } as Ann & A),
   });
 
 /**
@@ -1055,6 +1074,36 @@ export function effectFn(
   return makeMethod("mutate", payload, successSchema, errorSchema, false, {});
 }
 
+/**
+ * Two-stage `effectFn` that lets you **override the client-facing type** with an **unconstrained** `Client`:
+ * `unsafeEffectFn<Client>()(payload)`. The wire/impl still come from the schema; only what `yield* Tag`
+ * reads is replaced by `Client`. **Unsafe:** unlike the narrowing `effectFn<Client>()` form, `Client` is
+ * *not* checked against the schema — you assert it matches. Reach for it only when the derivation can't be
+ * expressed (e.g. a generic library like the queue, whose correct overloads are unprovable under `<F>`).
+ *
+ * ```ts
+ * add: Resource.unsafeEffectFn<{
+ *   (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>
+ *   (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>
+ * }>()(itemOrItems)
+ * ```
+ *
+ * @public
+ */
+export function unsafeEffectFn<Client = Derive>() {
+  return <P extends Schema.Top>(
+    payload: RequiredPayloadSchema<P>,
+  ): Method<"mutate", P, typeof Schema.Void, typeof Schema.Never, false, MethodAnnotations, Client> =>
+    makeMethod<"mutate", P, typeof Schema.Void, typeof Schema.Never, false, MethodAnnotations, Client>(
+      "mutate",
+      payload,
+      Schema.Void,
+      Schema.Never,
+      false,
+      {},
+    );
+}
+
 type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
 /**
@@ -1184,6 +1233,15 @@ type PrettifyPayload<P> = P extends readonly unknown[]
     : P
   : PrettyObject<P>;
 
+/**
+ * A schema's decoded value type (`.Type`), **prettified** — `{ to: string }`, not the
+ * `Schema.Struct.ReadonlySide<…>` alias, and with the schema's `readonly` dropped. Use it to spell out a
+ * client-type override for the `effect`/`effectFn` two-stage forms without re-deriving the alias by hand.
+ *
+ * @public
+ */
+export type Decoded<S extends Schema.Top> = PrettifyPayload<S["Type"]>;
+
 type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
   ? PrettifyPayload<M["payload"]["Type"]>
   : M["payload"] extends infer F extends Schema.Struct.Fields
@@ -1229,6 +1287,23 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
     ? Effect.Effect<SuccessOf<M>, ErrorOf<M>>
     : MutateMethodFn<M>;
 
+// Extract a method's explicit `Client` override (the 7th `Method` param), or `Derive` if it carries none.
+type ClientOverrideOf<T> = T extends Method<
+  MethodKind,
+  Schema.Struct.Fields | Schema.Top | undefined,
+  Schema.Top,
+  Schema.Top,
+  boolean,
+  MethodAnnotations,
+  infer Client
+>
+  ? Client
+  : Derive;
+// The CLIENT projection: an explicit override (set via the two-stage `effect`/`effectFn`) is used
+// verbatim; otherwise the shape is **derived** from the schema via {@link ServiceMethod}. `ImplOf` /
+// wire / peer always use `ServiceMethod`, so an override reshapes only what `yield* Tag` reads.
+type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? ServiceMethod<M> : Client;
+
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
  * `Effect`/function members; off-wire {@link LocalMethod}s surface as
@@ -1254,7 +1329,7 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
       : S[K] extends { readonly _tag: "ref" }
         ? Subscribable<SuccessOf<AsMethod<S[K]>>>
         : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
-          ? ServiceMethod<AsMethod<S[K]>>
+          ? ClientMethod<AsMethod<S[K]>, ClientOverrideOf<S[K]>> // client handle → override or derived
           : S[K] extends Spec
             ? ServiceOf<S[K], Self> // nested group → nested service
             : never;

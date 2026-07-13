@@ -530,14 +530,26 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
   );
   return {
   ...queueControlSpec,
-  add: Resource.effectFn(itemOrItems).annotate({
+  add: Resource.unsafeEffectFn<{
+    (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>;
+    (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+    (itemOrItems: Resource.Decoded<typeof itemSchema> | readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+  }>()(itemOrItems).annotate({
     description: "Enqueue an item (or a batch) at normal priority.",
   }),
-  prioritize: Resource.effectFn(itemOrItems).annotate({
+  prioritize: Resource.unsafeEffectFn<{
+    (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>;
+    (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+    (itemOrItems: Resource.Decoded<typeof itemSchema> | readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+  }>()(itemOrItems).annotate({
     description:
       "Enqueue an item (or a batch) at high priority (processed before normal and low).",
   }),
-  defer: Resource.effectFn(itemOrItems).annotate({
+  defer: Resource.unsafeEffectFn<{
+    (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>;
+    (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+    (itemOrItems: Resource.Decoded<typeof itemSchema> | readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+  }>()(itemOrItems).annotate({
     description: "Enqueue an item (or a batch) at low priority (processed after high and normal).",
   }),
   // `enqueue` takes the entry array directly (same shape `events`/`release` produce).
