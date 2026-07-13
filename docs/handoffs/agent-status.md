@@ -12,7 +12,7 @@
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
-| **D** | `action/named-handles` from `integration` | [named handles](./agent-d-named-handles.md) | **in progress / plan-first** | — | — | Handles owned elsewhere — Agent 3 must not touch | 2026-07-14 |
+| **D** | `feat/named-handles` from `integration` | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **design locked / pre-impl** | `34095ea1d` | — | Scope grew: `Tag ≡ Service` convergence (owner-set invariant), not additive-only. Decisions doc pushed; impl awaits owner go. Agent 3 must not touch handles | 2026-07-13 |
 
 ---
 
