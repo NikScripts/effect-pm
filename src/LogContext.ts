@@ -3,8 +3,8 @@
  *
  * Every captured {@link LogEntry} carries annotations identifying **where** it came from — the
  * **node** it ran on and the **resource** (a queue/process) that emitted it. Durable storage
- * (`NodeLogs.persistLayer` → {@link LogStore}) buckets by node and preserves the resource
- * annotations, so logs are queryable **by node** or **by resource**.
+ * (`Logs.persistLayer` → {@link LogStore}) buckets by **node log key** (`Resource.Node.key`) and
+ * preserves resource annotations, so logs are queryable **by node** or **by resource**.
  *
  * @module LogContext
  */
@@ -12,8 +12,9 @@
 import { Effect } from "effect";
 
 /**
- * Standard log annotation keys effect-pm captures into {@link LogEntry}. `node` identifies the node
- * (the durable log bucket); `processId` / `queueId` identify the resource that emitted the line.
+ * Standard log annotation keys effect-pm captures into {@link LogEntry}. `node` is the **node log
+ * key** (durable bucket — must equal {@link Resource.Node} `.key`); `processId` / `queueId` are
+ * resource {@link Resource.Tag} `.key` values.
  *
  * @public
  */
@@ -25,9 +26,9 @@ export const LogAnnotationKeys = {
 } as const;
 
 /**
- * Annotate every log line emitted under `effect` with its **node** — the durable log bucket. Applied
- * once at a node's runtime root (e.g. by `NodeLogs.persistLayer(node)`), so every line, from any
- * resource or bare `Effect.log*`, carries the node.
+ * Annotate every log line emitted under `effect` with its **node log key** — the durable bucket.
+ * Applied once at a node's runtime root (e.g. by `Logs.persistLayer(node)` where `node` is
+ * `Resource.Node.key`), so every line carries the same bucket id.
  *
  * @public
  */

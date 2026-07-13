@@ -3,6 +3,8 @@ import { Effect, Option } from "effect";
 import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/logScope";
 import type { LogEntry } from "../src/LogEntry";
 
+import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+
 const entry = (
   annotations: LogEntry["annotations"],
 ): LogEntry => ({
@@ -17,14 +19,14 @@ describe("logContext", () => {
   it("matches process scope by annotation", () => {
     const scope = {
       _tag: "process" as const,
-      groupId: "workshop-group",
-      processId: "billing/sync",
+      groupId: testBillingNodeKey,
+      processId: testSyncProcessKey,
     };
     assert.strictEqual(
       logEntryMatchesScope(
         entry({
-          groupId: "workshop-group",
-          processId: "billing/sync",
+          groupId: testBillingNodeKey,
+          processId: testSyncProcessKey,
         }),
         scope,
       ),
@@ -32,7 +34,7 @@ describe("logContext", () => {
     );
     assert.strictEqual(
       logEntryMatchesScope(
-        entry({ groupId: "workshop-group", processId: "other" }),
+        entry({ groupId: testBillingNodeKey, processId: "billing/OtherWorker" }),
         scope,
       ),
       false,
@@ -42,21 +44,21 @@ describe("logContext", () => {
   it("resolves a process target without a group flag", () =>
     Effect.gen(function* () {
       const scope = yield* resolveLogScope(
-        [{ key: "workshop-group" }],
-        Option.some("sync"),
+        [{ key: testBillingNodeKey }],
+        Option.some("SyncWorker"),
         [
           {
-            key: "billing/sync",
+            key: testSyncProcessKey,
             kind: "process",
-            groupId: "workshop-group",
+            groupId: testBillingNodeKey,
             controls: [],
           },
         ],
       );
       assert.strictEqual(scope._tag, "process");
       if (scope._tag === "process") {
-        assert.strictEqual(scope.groupId, "workshop-group");
-        assert.strictEqual(scope.processId, "billing/sync");
+        assert.strictEqual(scope.groupId, testBillingNodeKey);
+        assert.strictEqual(scope.processId, testSyncProcessKey);
       }
     }));
 });

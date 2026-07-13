@@ -1,6 +1,9 @@
 /**
  * **Structured log storage facet** — durable sink for the Logs pipeline.
  *
+ * `groupId` on {@link LogStoreApi.record} / `load` is the **node log key** (`Resource.Node.key`),
+ * not an RPC `groupId` or invented placeholder. See `docs/LOGS.md`.
+ *
  * @module store/Log
  */
 

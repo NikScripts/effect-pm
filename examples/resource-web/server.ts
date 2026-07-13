@@ -200,7 +200,7 @@ const logStorageDemo = Layer.effectDiscard(
   Effect.forkScoped(
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.seconds(8));
-      const onNode = yield* NodeLogs.byNode("live", { limit: 500 });
+      const onNode = yield* NodeLogs.byNode(LiveNode, { limit: 500 });
       const fromPoller = yield* NodeLogs.byResource({
         processId: "wnba/LiveScorePoller",
       });
@@ -241,11 +241,11 @@ const wnbaNode = Resource.httpServer([
   // the served entry above re-exposes this same service over RPC.
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
-  // live relay (dashboard log stream) + durable storage: persistLayer("wnba") batches every captured
-  // line into LogStore bucketed by node; ProcessStorage backs LogStore (memory here — swap for sqlite/
-  // redis for cross-restart history). Queryable via NodeLogs.byNode("wnba") / byResource({ queueId }).
+  // live relay (dashboard log stream) + durable storage: persistLayer(WnbaNode) batches every captured
+  // line into LogStore bucketed by node key (`wnba/scores`); ProcessStorage backs LogStore (memory here
+  // — swap for sqlite/redis for cross-restart history). Queryable via NodeLogs.byNode(WnbaNode).
   Layer.provide(NodeLogs.layer),
-  Layer.provide(NodeLogs.persistLayer("wnba")),
+  Layer.provide(NodeLogs.persistLayer(WnbaNode)),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
@@ -263,7 +263,7 @@ const liveNode = Resource.httpServer([
   Layer.provide(NodeLogs.layer),
   // provideMerge (not provide): these install a logger / fork a fiber and provide no service, so a
   // bare provide would be pruned as unused — merging forces the build.
-  Layer.provideMerge(NodeLogs.persistLayer("live")),
+  Layer.provideMerge(NodeLogs.persistLayer(LiveNode)),
   Layer.provideMerge(logStorageDemo),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(Store.layerDefaultMemory),
@@ -281,7 +281,7 @@ const statsNode = Resource.httpServer([
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(NodeLogs.layer),
-  Layer.provide(NodeLogs.persistLayer("stats")),
+  Layer.provide(NodeLogs.persistLayer(StatsNode)),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
 );

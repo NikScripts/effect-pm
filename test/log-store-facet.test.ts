@@ -6,14 +6,15 @@ import { LogQueryError } from "../src/internal/manager/logQuery";
 import { StoreWriteError } from "../src/internal/store/errors";
 import * as ProcessStorage from "../src/ProcessStorage";
 import { LogStore, catchErrorAndLog } from "../src/store/log";
+import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
 const entry = (message: string): LogEntry => ({
   date: "2026-05-22T20:00:00.000Z",
   level: "Info",
   message,
   annotations: {
-    [LogAnnotationKeys.node]: "workshop-group",
-    [LogAnnotationKeys.processId]: "billing/sync",
+    [LogAnnotationKeys.node]: testBillingNodeKey,
+    [LogAnnotationKeys.processId]: testSyncProcessKey,
   },
   spans: [],
 });
@@ -21,8 +22,8 @@ const entry = (message: string): LogEntry => ({
 describe("LogStore — static optional emitters", () => {
   it.live("no-ops writes when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* LogStore.record("workshop-group", "1", entry("absent write"));
-      yield* LogStore.recordBatch("workshop-group", [
+      yield* LogStore.record(testBillingNodeKey, "1", entry("absent write"));
+      yield* LogStore.recordBatch(testBillingNodeKey, [
         { entryId: "2", entry: entry("absent batch write") },
       ]);
       expect(true).toBe(true);
@@ -38,7 +39,7 @@ describe("LogStore — static optional emitters", () => {
               onNone: () => Effect.die("LogStore not in context"),
               onSome: (log) =>
                 log.load({
-                  groupId: "workshop-group",
+                  groupId: testBillingNodeKey,
                   limit: 10,
                   sort: "desc",
                 }),
@@ -53,11 +54,11 @@ describe("LogStore — static optional emitters", () => {
 
   it.live("persists and loads through the spine when the facet is provided", () =>
     Effect.gen(function* () {
-      yield* LogStore.record("workshop-group", "1", entry("sync tick"));
+      yield* LogStore.record(testBillingNodeKey, "1", entry("sync tick"));
       const log = yield* LogStore;
       const loaded = yield* log.load({
-        groupId: "workshop-group",
-        processId: "billing/sync",
+        groupId: testBillingNodeKey,
+        processId: testSyncProcessKey,
         limit: 10,
         sort: "desc",
       });
@@ -93,7 +94,7 @@ describe("LogStore — static optional emitters", () => {
         ),
     };
 
-    const write = LogStore.record("workshop-group", "1", entry("blocked"));
+    const write = LogStore.record(testBillingNodeKey, "1", entry("blocked"));
     return Effect.gen(function* () {
       const error = yield* Effect.flip(write);
       expect(error).toBeInstanceOf(StoreWriteError);

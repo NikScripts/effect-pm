@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Stream } from "effect";
 import * as Logs from "../src/Logs";
 import { LogStore } from "../src/store/log";
+import { testRelayNodeKey } from "./fixtures/logKeys";
 
 describe("Logs relay", () => {
   it.live("layer captures one relay entry per log line", () =>
@@ -37,7 +38,7 @@ describe("Logs relay", () => {
       expect(entry?.message).toBe("persist-subscriber");
     }).pipe(
       Effect.provide(
-        Logs.persistLayer("node-a").pipe(
+        Logs.persistLayer(testRelayNodeKey).pipe(
           Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
         ),
       ),

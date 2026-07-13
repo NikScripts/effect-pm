@@ -1,6 +1,8 @@
 /**
  * @deprecated Import {@link Logs} instead — `NodeLogs` is a compatibility shim.
  *
+ * Node log keys must equal {@link Resource.Node} `.key` — see `docs/LOGS.md`.
+ *
  * @module NodeLogs
  */
 

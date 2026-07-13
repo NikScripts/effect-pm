@@ -5,6 +5,7 @@ import { Duration, Effect, FileSystem, Layer, Path } from "effect";
 import { NodeLogs } from "../src";
 import { LogAnnotationKeys } from "../src/LogContext";
 import { layerProcessStore } from "../src/storage/sqlite/index";
+import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
@@ -17,7 +18,7 @@ describe("node log pipeline → SQLite", () => {
       return path.join(directory, "logs.sqlite");
     }).pipe(
       Effect.flatMap((sqliteFilename) => {
-        const node = "wnba";
+        const node = testBillingNodeKey;
         const env = NodeLogs.persistLayer(node).pipe(
           Layer.provideMerge(
             Layer.mergeAll(
@@ -29,7 +30,7 @@ describe("node log pipeline → SQLite", () => {
 
         return Effect.gen(function* () {
           yield* Effect.annotateLogs(Effect.logInfo("sqlite pipeline tick"), {
-            [LogAnnotationKeys.processId]: "billing/sync",
+            [LogAnnotationKeys.processId]: testSyncProcessKey,
           });
 
           // the batched writer flushes on a ~250ms window — poll SQLite until the line lands
@@ -43,7 +44,7 @@ describe("node log pipeline → SQLite", () => {
           assert.strictEqual(byNode.length, 1);
           assert.strictEqual(byNode[0]?.message, "sqlite pipeline tick");
 
-          const byResource = yield* NodeLogs.byResource({ processId: "billing/sync" });
+          const byResource = yield* NodeLogs.byResource({ processId: testSyncProcessKey });
           assert.strictEqual(byResource.length, 1);
           assert.strictEqual(byResource[0]?.message, "sqlite pipeline tick");
         }).pipe(Effect.provide(env), Effect.scoped);

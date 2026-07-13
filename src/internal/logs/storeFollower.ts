@@ -16,6 +16,9 @@ const asApi = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogSt
 /**
  * Fork a batched writer that appends every relay line to {@link LogStore}.
  *
+ * @param node - Node log key (`Resource.Node.key`) — stamped as `annotations.node` and used as
+ *   `LogStore` `groupId`.
+ *
  * @internal
  */
 export const persistLayer = (node: string): Layer.Layer<never, never, LogRelay | LogStore> =>

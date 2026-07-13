@@ -20,14 +20,14 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueResource`. |
 | `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
-| `src/HostLogs.ts` | Runtime-wide log capture + stream (`HostLogs`). |
+| `src/HostLogs.ts` | Deprecated — use `Logs` (`NodeLogs` shim). See [`docs/LOGS.md`](../LOGS.md). |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
 | `src/Store.ts` | Shape-first store contracts; `EventJournal`-backed `layerMemory` / `SqlEventJournal` `layer` — see `docs/guides/store-backing.md`. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
 | `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations (`LogAnnotationKeys`) + NDJSON log entries (`LogEntry` / `LogEntrySchema`) — the structured-logging core. |
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
 | `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
-| `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
+| `src/Logs.ts` | Logs platform (`layer`, `stream`, `persistLayer`, `byNode`, `Resource.logs`) — [`docs/LOGS.md`](../LOGS.md). |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |

@@ -6,6 +6,8 @@ import {
   queryGroupLogs,
 } from "../src/internal/manager/logQuery";
 
+import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+
 describe("logQuery", () => {
   it("builds an open query with defaults when no filters are set", () =>
     Effect.gen(function* () {
@@ -44,8 +46,8 @@ describe("logQuery", () => {
       const query = yield* buildLogQuery({
         scope: {
           _tag: "process",
-          groupId: "workshop-group",
-          processId: "billing/sync",
+          groupId: testBillingNodeKey,
+          processId: testSyncProcessKey,
         },
         from: Option.none(),
         to: Option.none(),
@@ -54,7 +56,7 @@ describe("logQuery", () => {
         limit: 10,
         sort: "desc",
       });
-      assert.strictEqual(query.processId, "billing/sync");
+      assert.strictEqual(query.processId, testSyncProcessKey);
       const error = yield* queryGroupLogs(query).pipe(Effect.flip);
       assert.instanceOf(error, LogQueryError);
       assert.match(error.reason, /LogStore layer is not provided/);

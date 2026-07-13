@@ -2,13 +2,39 @@
  * **Logs** — one module for node-wide log capture, relay, and durable query.
  *
  * @remarks
+ * ## Node log key (durable bucket)
+ *
+ * The first argument to {@link persistLayer} and {@link byNode} is the **node log key** — it
+ * **must** equal the {@link Resource.Node} `.key` for that OS process (the same string
+ * {@link Resource.selfNode} returns). It is stamped as `annotations.node` and stored as
+ * `LogStore` `groupId`. Use slash-separated paths (`billing/scores`), not invented placeholders.
+ *
+ * See `docs/LOGS.md` for the full key vocabulary.
+ *
+ * ## Surface
+ *
  * - **`layer`** — {@link Relay} bus + exactly one merged capture {@link Logger}.
  * - **`stream`** / **`snapshot`** — unfiltered live bus (+ bounded tail).
- * - **`persistLayer`** — batched durable writer (subscribes to relay; no second logger).
- * - **`withScope`** — lineage reducer at resource materialize.
+ * - **`persistLayer`** — batched durable writer (relay subscriber; no second logger).
+ * - **`withScope`** — lineage annotation at resource materialize.
+ * - **`byNode`** / **`byResource`** — durable reads from {@link LogStore}.
  *
- * Durable history uses {@link LogStore} (`Store.contract` bridge). Per-resource reads use
- * {@link Resource.logs} when export is piped on the tag.
+ * Per-resource live + durable export: {@link Resource.logs} / {@link Resource.withLogExport}.
+ *
+ * @example Node log key from `Resource.Node`
+ * ```ts
+ * import * as Resource from "@nikscripts/effect-pm/Resource";
+ * import * as Logs from "@nikscripts/effect-pm/Logs";
+ * import { LogStore } from "@nikscripts/effect-pm/store/Log";
+ *
+ * class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+ *
+ * const logStack = Logs.persistLayer(BillingNode).pipe(
+ *   Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
+ * );
+ *
+ * yield* Logs.byNode(BillingNode, { limit: 200 });
+ * ```
  *
  * @module Logs
  */
@@ -23,6 +49,26 @@ import { persistLayer as persistFollowerLayer } from "./internal/logs/storeFollo
 import { LogStore, type LogStoreApi } from "./store/log";
 
 const asStore = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogStoreApi;
+
+/**
+ * Durable log bucket id for one runtime host — **must** equal {@link Resource.Node} `.key`.
+ *
+ * @public
+ */
+export type NodeLogKey = string;
+
+/** Anything with a {@link Resource.Node}-shaped `key` (node class or `NodeKey`). @public */
+export type NodeLogKeySource = { readonly key: string };
+
+/**
+ * Resolve the node log key from a {@link Resource.Node} (or any `{ key }` source).
+ *
+ * @public
+ */
+export const nodeLogKey = (node: NodeLogKeySource): NodeLogKey => node.key;
+
+const resolveNodeLogKey = (node: NodeLogKey | NodeLogKeySource): NodeLogKey =>
+  typeof node === "string" ? node : node.key;
 
 /** In-process log bus tag. @public */
 export const Relay = relay.LogRelay;
@@ -46,11 +92,19 @@ export const replay = relay.replayLogEntry;
 export const withScope = withLogScope;
 
 /**
- * Batched durable writer for a node bucket — requires {@link layer} + {@link LogStore}.
+ * Batched durable writer for a node bucket.
+ *
+ * @param node - {@link NodeLogKey} or {@link Resource.Node} (uses `.key`). Must match
+ *   {@link byNode} / {@link Resource.selfNode} for the same process.
+ *
+ * @remarks
+ * Compose with {@link layer} and {@link LogStore} **inside** `provideMerge` — see `docs/LOGS.md`.
  *
  * @public
  */
-export const persistLayer = persistFollowerLayer;
+export const persistLayer = (
+  node: NodeLogKey | NodeLogKeySource,
+): ReturnType<typeof persistFollowerLayer> => persistFollowerLayer(resolveNodeLogKey(node));
 
 const queryLimitDefault = 200;
 
@@ -74,16 +128,19 @@ const runQuery = (
   );
 
 /**
- * Read durable logs for a whole node (every resource on it).
+ * Read durable logs for a **whole node** (every resource on that process).
+ *
+ * @param node - {@link NodeLogKey} or {@link Resource.Node} `.key` — same value passed to
+ *   {@link persistLayer}.
  *
  * @public
  */
 export const byNode = (
-  node: string,
+  node: NodeLogKey | NodeLogKeySource,
   options?: LogReadOptions,
 ): Effect.Effect<ReadonlyArray<LogEntry>, never, LogStore> =>
   runQuery({
-    groupId: node,
+    groupId: resolveNodeLogKey(node),
     limit: options?.limit ?? queryLimitDefault,
     sort: options?.sort ?? "desc",
     ...(options?.from === undefined ? {} : { from: options.from }),
@@ -91,7 +148,11 @@ export const byNode = (
   });
 
 /**
- * Read durable logs for a specific resource (legacy `processId` / `queueId` filters).
+ * Read durable logs for a **specific resource** (`processId` / `queueId` annotation filter).
+ *
+ * @remarks
+ * Prefer {@link Resource.logs} + {@link LogEntry.hasKey} for new code. `processId` / `queueId`
+ * should be the resource's `tag.key` (e.g. `wnba/LiveScorePoller`).
  *
  * @public
  */
