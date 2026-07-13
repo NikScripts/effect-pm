@@ -66,8 +66,8 @@ One runtime is rarely the whole story — run the same queue on several worker r
 and reach them as one. Each runtime is a **node**; you mesh them so every instance knows its **peers**:
 
 ``` ts
-class WorkerA extends Resource.Node<WorkerA>("worker-a") {}
-class WorkerB extends Resource.Node<WorkerB>("worker-b") {}
+class WorkerA extends Resource.Node<WorkerA>("app/WorkerA") {}
+class WorkerB extends Resource.Node<WorkerB>("app/WorkerB") {}
 
 // on each runtime — mesh Emails with the fleet (self + the others)
 const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
