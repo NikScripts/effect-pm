@@ -67,8 +67,12 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
       if (n.lang === "run-resource") return h(RunResourceIsland, { key: keySeq++ });
       if (n.lang === "resource") return h(CounterIsland, { key: keySeq++ });
-      // everything else is Shiki-highlighted server-side (real React nodes)
-      return highlightToReact(n.text, n.lang);
+      // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
+      // attribute above the fence opts the block into TS-language-service hover types.
+      {
+        const twoslash = (n.attributes?.class ?? "").split(/\s+/).includes("twoslash");
+        return highlightToReact(n.text, n.lang, { twoslash });
+      }
     default: return kids(n);
   }
 };

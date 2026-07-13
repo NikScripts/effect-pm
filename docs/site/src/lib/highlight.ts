@@ -6,8 +6,11 @@
 //
 // We render Shiki's HAST as real React elements (no dangerouslySetInnerHTML).
 
+import { fileURLToPath } from "node:url";
 import * as React from "react";
+import * as ts from "typescript";
 import { createHighlighter, type Highlighter } from "shiki";
+import { transformerTwoslash } from "@shikijs/twoslash";
 
 const THEMES = { light: "github-light", dark: "github-dark" } as const;
 const LOAD_LANGS = ["typescript", "tsx", "bash", "json"] as const;
@@ -21,6 +24,29 @@ const ALIAS: Record<string, string> = {
   json: "json",
 };
 
+// Twoslash type-checks each opted-in block against OUR types. Omitting `fsMap` makes it read the
+// real filesystem (rooted at the repo), so `effect` resolves from node_modules; `paths` maps the
+// package name to its source so `@nikscripts/effect-pm/*` → `src/*`.
+const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+const twoslash = transformerTwoslash({
+  twoslashOptions: {
+    vfsRoot: repoRoot,
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      strict: true,
+      skipLibCheck: true,
+      types: [],
+      baseUrl: repoRoot,
+      paths: {
+        "@nikscripts/effect-pm": ["src/index.ts"],
+        "@nikscripts/effect-pm/*": ["src/*"],
+      },
+    },
+  },
+});
+
 let hl: Highlighter | undefined;
 
 /** Load the shared highlighter once, before the (sync) render walk. */
@@ -32,6 +58,9 @@ export const loadHighlighter = async (): Promise<void> => {
     });
   }
 };
+
+// HTML attribute → React prop name for the few twoslash emits that React is strict about.
+const ATTR_RENAME: Record<string, string> = { tabindex: "tabIndex", for: "htmlFor", colspan: "colSpan", rowspan: "rowSpan" };
 
 let keySeq = 0;
 
@@ -54,20 +83,34 @@ const hastToReact = (node: any): React.ReactNode => {
   if (node.type === "text") return node.value;
   if (node.type === "root") return node.children.map(hastToReact);
   const p = node.properties ?? {};
+  // Carry through every property — twoslash emits `data-*` + nested popover nodes that must reach
+  // the DOM for hover to work; `class`/`style` need React name/format massaging, and a few HTML
+  // attributes need their React camelCase names (`data-*`/`aria-*` pass through verbatim).
   const props: Record<string, unknown> = { key: keySeq++ };
-  const cls = p.className ?? p.class;
-  if (cls) props.className = Array.isArray(cls) ? cls.join(" ") : cls;
-  if (p.style) props.style = toStyle(p.style);
+  for (const [k, v] of Object.entries(p)) {
+    if (k === "class" || k === "className") props.className = Array.isArray(v) ? v.join(" ") : v;
+    else if (k === "style") props.style = toStyle(v as string);
+    else props[ATTR_RENAME[k] ?? k] = Array.isArray(v) ? v.join(" ") : v;
+  }
   return React.createElement(node.tagName, props, (node.children ?? []).map(hastToReact));
 };
 
-/** Highlight a code block to React. Falls back to a plain <pre> for unknown languages. */
-export const highlightToReact = (code: string, lang?: string): React.ReactNode => {
+/** Highlight a code block to React. `twoslash` runs the TS language service for hover types.
+ *  Falls back to a plain <pre> for unknown languages. */
+export const highlightToReact = (
+  code: string,
+  lang?: string,
+  opts?: { readonly twoslash?: boolean },
+): React.ReactNode => {
   const text = code.replace(/\n$/, "");
   const resolved = lang ? ALIAS[lang.toLowerCase()] : undefined;
   if (!hl || !resolved) {
     return React.createElement("pre", { key: keySeq++ }, React.createElement("code", null, text));
   }
-  const hast = hl.codeToHast(text, { lang: resolved, themes: THEMES });
+  const hast = hl.codeToHast(text, {
+    lang: resolved,
+    themes: THEMES,
+    transformers: opts?.twoslash ? [twoslash] : [],
+  });
   return hastToReact(hast);
 };
