@@ -134,17 +134,16 @@ breaking notes into one coherent changeset when possible (see
 
 **Active integration lines:**
 
-- **`integration/storage`** — store cutover, Store bridge, tag wire renames (current storage platform work).
-- **More `integration/*` lines** — owner will add parallel streams (e.g. docs platform, process wire).
-- **`integration`** (umbrella, **future**) — when multiple integration lines must collide before `main`.
+- **`integration`** — current go-forward base (renamed from `integration/storage` after storage work closed).
+- Additional streams may appear as owner-named branches; prefer branching from **`integration`**.
 
 **Rules:**
 
-- Branch agent work from the relevant **`integration/*` tip**, not `main`, for platform migrations.
-- Open PRs → the matching **`integration/<stream>`** unless the handoff says otherwise.
-- **Push to `integration/*`** when typecheck, tests, and lint are green and the owner directs — do not block on unrelated agents.
+- Branch agent work from **`integration`**, not `main`, for platform work.
+- Open PRs → **`integration`** unless the handoff says otherwise.
+- **Push to `integration`** only when the owner directs — do not block on unrelated agents.
 - Do **not** push to `main`, `develop`, release branches, or owner-owned branches without explicit approval.
-- Legacy `cursor/*` names may still exist on open PRs; **prefer `<type>/<description>` for new branches.**
+- Cloud agent feature branches use `cursor/<desc>-a3ad`.
 
 ---
 
@@ -187,14 +186,14 @@ breaking notes into one coherent changeset when possible (see
 
 ## Cursor Cloud specific instructions
 
-**Integration branch:** `integration/storage` — land store/tag migrations here; see [`handoffs/reports/README.md`](./handoffs/reports/README.md) for per-module agent reports.
+**Integration branch:** `integration` — land platform work here; see handoffs under `docs/handoffs/`.
 
 **Environment:** Node >= 20.19.0 and pnpm 10.33.4 are declared by
 `package.json`. A `pnpm-lock.yaml` is committed; use `pnpm install` when
 dependencies are missing in a fresh cloud workspace.
 
 **No external services required for the standard checks.** The Vitest suites and
-examples run in-process. SQLite `RuntimeStorage` tests exercise
+examples run in-process. SQLite HistoryStore / DurableQueue tests exercise
 `@effect/sql-sqlite-node`.
 `package.json` lists `better-sqlite3` under `pnpm.onlyBuiltDependencies` so the
 transitive native dependency can compile when installs run with ignored scripts
