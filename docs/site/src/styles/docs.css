@@ -230,10 +230,19 @@ ul, ol { margin: 0.85rem 0; padding-left: 1.4rem; }
 li { margin: 0.3rem 0; }
 a { color: var(--primary); text-underline-offset: 2px; }
 
-/* A link that wraps inline code (a module/symbol reference) reads as code, not a blue link:
-   inherit the text color, underline only on hover. */
-a:has(> code) { color: inherit; text-decoration: none; }
-a:has(> code):hover { text-decoration: underline; text-underline-offset: 2px; }
+/* A link that wraps inline code (a module/symbol reference) reads as code, not a blue link — but
+   still needs a link cue that survives touch (no hover). A dotted underline in the text color:
+   subtle, always visible, not blue. It goes solid + accent on hover. */
+a:has(> code) {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+}
+a:has(> code):hover {
+  text-decoration-style: solid;
+  text-decoration-color: var(--primary);
+}
 
 code {
   font-family: var(--font-mono);
