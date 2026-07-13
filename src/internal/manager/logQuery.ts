@@ -1,8 +1,6 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
-import { LogStore, type LogStoreApi } from "../../store/log";
-
-const asStore = (store: LogStore.Type): LogStoreApi => store as unknown as LogStoreApi;
+import { LogStore } from "../../store/log";
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
@@ -173,10 +171,10 @@ export const queryGroupLogs = (
           Effect.fail(
             new LogQueryError({
               reason:
-                "LogStore layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
+                "LogStore layer is not provided; compose LogStore.layerMemory or LogStore.layer(...) before reading log history.",
             }),
           ),
-        onSome: (log) => asStore(log).query(query).pipe(Effect.mapError(storageLogQueryError)),
+        onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),
       }),
     ),
   );

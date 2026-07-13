@@ -17,9 +17,9 @@ import * as Resource from "../../src/Resource";
 import { serve as queueEntry } from "../../src/QueueResource";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
-import * as NodeLogs from "../../src/NodeLogs";
+import * as Logs from "../../src/Logs";
+import { LogStore } from "../../src/store/log";
 import { Polling } from "../../src/Polling";
-import * as ProcessStorage from "../../src/ProcessStorage";
 import * as Store from "../../src/Store";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
@@ -200,8 +200,8 @@ const logStorageDemo = Layer.effectDiscard(
   Effect.forkScoped(
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.seconds(8));
-      const onNode = yield* NodeLogs.byNode(LiveNode, { limit: 500 });
-      const fromPoller = yield* NodeLogs.byResource({
+      const onNode = yield* Logs.byNode(LiveNode, { limit: 500 });
+      const fromPoller = yield* Logs.byResource({
         processId: "wnba/LiveScorePoller",
       });
       // Console.log (direct stdout) so the demo is visible regardless of the serve's logger routing
@@ -241,11 +241,10 @@ const wnbaNode = Resource.httpServer([
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
   // live relay (dashboard log stream) + durable storage: persistLayer(WnbaNode) batches every captured
-  // line into LogStore bucketed by node key (`wnba/scores`); ProcessStorage backs LogStore (memory here
-  // — swap for sqlite/redis for cross-restart history). Queryable via NodeLogs.byNode(WnbaNode).
-  Layer.provide(NodeLogs.layer),
-  Layer.provide(NodeLogs.persistLayer(WnbaNode)),
-  Layer.provide(ProcessStorage.layer),
+  // line into LogStore bucketed by node key (`wnba/scores`). Queryable via Logs.byNode(WnbaNode).
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(WnbaNode)),
+  Layer.provide(LogStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
@@ -258,12 +257,12 @@ const liveNode = Resource.httpServer([
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(NodeLogs.layer),
+  Layer.provide(Logs.layer),
   // provideMerge (not provide): these install a logger / fork a fiber and provide no service, so a
   // bare provide would be pruned as unused — merging forces the build.
-  Layer.provideMerge(NodeLogs.persistLayer(LiveNode)),
+  Layer.provideMerge(Logs.persistLayer(LiveNode)),
   Layer.provideMerge(logStorageDemo),
-  Layer.provide(ProcessStorage.layer),
+  Layer.provide(LogStore.layerMemory),
   Layer.provide(Store.layerDefaultMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
@@ -277,9 +276,9 @@ const statsNode = Resource.httpServer([
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(NodeLogs.layer),
-  Layer.provide(NodeLogs.persistLayer(StatsNode)),
-  Layer.provide(ProcessStorage.layer),
+  Layer.provide(Logs.layer),
+  Layer.provide(Logs.persistLayer(StatsNode)),
+  Layer.provide(LogStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
 );
 

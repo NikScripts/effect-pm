@@ -4,7 +4,6 @@ import { LogAnnotationKeys } from "../src/LogContext";
 import type { LogEntry } from "../src/LogEntry";
 import { LogQueryError } from "../src/internal/manager/logQuery";
 import { StoreWriteError } from "../src/internal/store/errors";
-import * as ProcessStorage from "../src/ProcessStorage";
 import { LogStore, catchErrorAndLog } from "../src/store/log";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
@@ -65,7 +64,7 @@ describe("LogStore — static optional emitters", () => {
 
       expect(loaded).toHaveLength(1);
       expect(loaded[0]?.message).toBe("sync tick");
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(LogStore.layerMemory)),
   );
 
   it.live("surfaces write failures unless explicitly caught and logged", () => {

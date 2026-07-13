@@ -6,11 +6,11 @@
 
 import { Layer } from "effect";
 import * as Logs from "../../src/Logs";
-import * as ProcessStorage from "../../src/ProcessStorage";
+import { LogStore } from "../../src/store/log";
 import { testBillingNodeKey } from "./logKeys";
 
 /** `Logs.layer` + `persistLayer(node)` + in-memory `LogStore`. */
 export const testLogsEnv = (nodeKey: string = testBillingNodeKey) =>
   Logs.persistLayer(nodeKey).pipe(
-    Layer.provideMerge(Layer.mergeAll(Logs.layer, ProcessStorage.layer)),
+    Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
   );

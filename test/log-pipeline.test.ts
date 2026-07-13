@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Duration, Effect, FileSystem, Layer, Path } from "effect";
-import { NodeLogs } from "../src";
+import * as Logs from "../src/Logs";
 import { LogAnnotationKeys } from "../src/LogContext";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
@@ -19,10 +19,10 @@ describe("node log pipeline → SQLite", () => {
     }).pipe(
       Effect.flatMap((sqliteFilename) => {
         const node = testBillingNodeKey;
-        const env = NodeLogs.persistLayer(node).pipe(
+        const env = Logs.persistLayer(node).pipe(
           Layer.provideMerge(
             Layer.mergeAll(
-              NodeLogs.layer,
+              Logs.layer,
               layerProcessStore({ filename: sqliteFilename }),
             ),
           ),
@@ -35,16 +35,16 @@ describe("node log pipeline → SQLite", () => {
 
           // the batched writer flushes on a ~250ms window — poll SQLite until the line lands
           yield* Effect.gen(function* () {
-            while ((yield* NodeLogs.byNode(node)).length === 0) {
+            while ((yield* Logs.byNode(node)).length === 0) {
               yield* Effect.sleep(Duration.millis(20));
             }
           }).pipe(Effect.timeout(Duration.seconds(3)));
 
-          const byNode = yield* NodeLogs.byNode(node, { limit: 10 });
+          const byNode = yield* Logs.byNode(node, { limit: 10 });
           assert.strictEqual(byNode.length, 1);
           assert.strictEqual(byNode[0]?.message, "sqlite pipeline tick");
 
-          const byResource = yield* NodeLogs.byResource({ processId: testSyncProcessKey });
+          const byResource = yield* Logs.byResource({ processId: testSyncProcessKey });
           assert.strictEqual(byResource.length, 1);
           assert.strictEqual(byResource[0]?.message, "sqlite pipeline tick");
         }).pipe(Effect.provide(env), Effect.scoped);

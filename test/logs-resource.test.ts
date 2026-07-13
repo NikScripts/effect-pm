@@ -4,7 +4,7 @@ import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
 import * as QueueResource from "../src/QueueResource";
 import * as Resource from "../src/Resource";
-import * as ProcessStorage from "../src/ProcessStorage";
+import { LogStore } from "../src/store/log";
 import { Schema } from "effect";
 import { testLogsEnv } from "./fixtures/logsEnv";
 
@@ -91,7 +91,7 @@ it("Resource.logs query is empty without persistLayer (live relay only)", () =>
       Effect.provide(
         Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-        }).pipe(Layer.provideMerge(Layer.mergeAll(Logs.layer, ProcessStorage.layer))),
+        }).pipe(Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory))),
       ),
       Effect.scoped,
     ),

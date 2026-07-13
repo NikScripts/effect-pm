@@ -46,9 +46,7 @@ import { LogQueryError } from "./internal/manager/logQuery";
 import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
 import { persistLayer as persistFollowerLayer } from "./internal/logs/storeFollower";
-import { LogStore, type LogStoreApi } from "./store/log";
-
-const asStore = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogStoreApi;
+import { LogStore } from "./store/log";
 
 /**
  * **Node log key** — durable bucket id for one runtime host. Must equal {@link Resource.Node} `.key`
@@ -135,7 +133,7 @@ export interface LogReadOptions {
 const runQuery = (
   query: LogQuery,
 ): Effect.Effect<ReadonlyArray<LogEntry>, never, LogStore> =>
-  Effect.flatMap(LogStore, (store) => asStore(store).load(query)).pipe(
+  Effect.flatMap(LogStore, (store) => store.load(query)).pipe(
     Effect.catchIf(
       (error): error is LogQueryError => error instanceof LogQueryError,
       () => Effect.succeed<ReadonlyArray<LogEntry>>([]),

@@ -10,10 +10,8 @@ import type { LogEntry } from "../../LogEntry";
 import * as Logs from "../../Logs";
 import { LogQueryError } from "../manager/logQuery";
 import type { StoreScopeTag } from "../store/registration";
-import { LogStore, type LogStoreApi } from "../../store/log";
+import { LogStore } from "../../store/log";
 import type { LogRelay } from "./relay";
-
-const asStore = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogStoreApi;
 
 /** Live + durable log export for one resource tag. @internal */
 export interface LogsExportHandle {
@@ -35,7 +33,7 @@ export const logs = <Tag extends StoreScopeTag>(
     stream: Logs.stream,
     query: (options) =>
       Effect.flatMap(LogStore, (store) =>
-        asStore(store).load({
+        store.load({
           lineageContains: tag.key,
           limit: options?.limit ?? 200,
           sort: "desc",

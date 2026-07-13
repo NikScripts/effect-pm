@@ -35,7 +35,7 @@ The queue is the finished reference. The patterns every module adopts:
 ## Module inventory (tick as landed)
 
 ### Claude lane — local (critical / shared / design)
-- [ ] **Logs** (`src/store/log.ts` `LogStore`) — **Cursor** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md). Migrate off `ProcessStore.Service` → `Store.contract`/`Store.effects`; wire `NodeLogs`, `nodeStatusResource`, sqlite/redis. **Blocks substrate retirement.**
+- [x] **Logs** (`src/store/log.ts` `LogStore`) — on PR [#30](https://github.com/NikScripts/effect-pm/pull/30) (`cursor/phase5-logs-migration-a3ad`). Migrated off `ProcessStore.Service` → `Store.contract`/`Store.Service`; `Logs.persistLayer` is a relay subscriber; Phase 5 broke `captureLogs` / handle `logs`. **P1 remain** (level pipes, per-registration followers, remote `Resource.logs`) — see [review](./phase5-logs-migration-review.md). Blocks substrate retirement until lifecycle delete.
 - [ ] **Delete `ProcessLifecycleStore`** (`src/store/processLifecycle.ts`) — dead code, zero live emitters.
 - [ ] **Retire the facet substrate** (after Logs + the delete): `RuntimeStorage.ts`, `ProcessStore.ts`,
       `ProcessStorage.ts`, `ProcessStoreEvent.ts`, `Query.ts`, `internal/store/spine.ts`,
@@ -67,15 +67,15 @@ The queue is the finished reference. The patterns every module adopts:
       MultiNode, Polling, Resource, ResourceConfigure, Telemetry, disarmedIdleSleep, cli/tui/ui/web.
 
 ## Retire-vs-migrate verdict (facet substrate)
-**RETIRE, not migrate** — gated on the single Logs migration. Evidence: Process/Run already left the
-substrate (their specs are `Store.contract`, resolved via `Store.Storage`); the only two facets left on it
-are `LogStore` (live, via `NodeLogs.persistLayer` only) and `ProcessLifecycleStore` (dead); the redis +
-sqlite RuntimeStorage backends are runtime-dead (only doc/test references). Only 3 files import
-`RuntimeStorage` (`spine`, `service`, half of `helpers`) → bounded blast radius. Migrate `LogStore`,
-delete `ProcessLifecycleStore`, and the whole substrate falls.
+**RETIRE, not migrate** — gated on lifecycle delete after Logs. Evidence: Process/Run already left the
+substrate (their specs are `Store.contract`, resolved via `Store.Storage`); `LogStore` now uses
+`Store.Service` + `Logs.persistLayer` (relay subscriber); the only facet left on the substrate is
+`ProcessLifecycleStore` (dead). The redis + sqlite RuntimeStorage backends are runtime-dead (only
+doc/test references). Only 3 files import `RuntimeStorage` (`spine`, `service`, half of `helpers`) →
+bounded blast radius. Delete `ProcessLifecycleStore`, and the whole substrate falls.
 
 ## Ordering
-**Logs (Cursor)** → delete `ProcessLifecycleStore` → retire facet substrate (owner-gated Slice 3). Cursor can continue **Run / CustomQueue** in parallel after Logs or in separate sessions. `layerQuery` only after owner approval.
+**Logs (#30 / Phase 5) ✓ cutover** → delete `ProcessLifecycleStore` → retire facet substrate (owner-gated Slice 3). Cursor can continue **Run / CustomQueue** in parallel. `layerQuery` only after owner approval. Logs **P1** (level pipes / followers / remote `Resource.logs`) is a separate follow-up PR.
 
 ## Surprises worth remembering
 - `ProcessLifecycleStore` is dead code (delete, don't migrate).

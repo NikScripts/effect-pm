@@ -8,10 +8,8 @@
 import { Duration, Effect, Layer, Queue, Ref, Stream } from "effect";
 import { LogAnnotationKeys } from "../../LogContext";
 import type { LogEntry } from "../../LogEntry";
-import { LogStore, type LogStoreApi } from "../../store/log";
+import { LogStore } from "../../store/log";
 import { LogRelay } from "./relay";
-
-const asApi = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogStoreApi;
 
 /**
  * Fork a batched writer that appends every relay line to {@link LogStore}.
@@ -26,7 +24,7 @@ export const persistLayer = (node: string): Layer.Layer<never, never, LogRelay |
   Layer.unwrap(
     Effect.gen(function* () {
       const relay = yield* LogRelay;
-      const store = asApi(yield* LogStore);
+      const store = yield* LogStore;
       const queue = yield* Queue.unbounded<LogEntry>();
       const counter = yield* Ref.make(0);
 

@@ -23,7 +23,7 @@ import { Atom } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
 import * as Logs from "../../src/Logs";
-import * as ProcessStorage from "../../src/ProcessStorage";
+import { LogStore } from "../../src/store/log";
 import * as Resource from "../../src/Resource";
 
 /** Node log key for the local TUI fleet — pairs with `Logs.persistLayer`. */
@@ -130,7 +130,7 @@ const AppLayer = Layer.mergeAll(
 ).pipe(
   Layer.provide(Logs.layer),
   Layer.provide(Logs.persistLayer(TuiNode)),
-  Layer.provide(ProcessStorage.layer),
+  Layer.provide(LogStore.layerMemory),
   // silence the default console logger so worker logs don't bleed onto the Ink alt-screen
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
 );

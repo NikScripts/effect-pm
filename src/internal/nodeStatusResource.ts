@@ -24,9 +24,7 @@ import * as Resource from "../Resource";
 import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
-import { LogStore, type LogStoreApi } from "../store/log";
-
-const asStore = (store: LogStore.Type): LogStoreApi => store as unknown as LogStoreApi;
+import { LogStore } from "../store/log";
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
@@ -83,7 +81,7 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
   logs: {
     stream: Resource.stream(LogEntrySchema).annotate({
       description:
-        "Runtime-wide node log stream (recent tail, then live). Empty unless NodeLogs.layer is provided.",
+        "Runtime-wide node log stream (recent tail, then live). Empty unless Logs.layer is provided.",
     }),
     query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
@@ -141,7 +139,7 @@ export const buildNodeStatusImpl = (options: {
             Option.match({
               onNone: () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
               onSome: (store) =>
-                asStore(store)
+                store
                   .load({ limit: payload.limit, sort: "desc" })
                   .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([]))),
             }),

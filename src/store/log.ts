@@ -10,8 +10,6 @@
 import { Effect, Option } from "effect";
 import type { LogLevel } from "effect/LogLevel";
 import type { LogEntry } from "../LogEntry";
-import type { LogQuery } from "../internal/manager/logQuery";
-import { LogQueryError } from "../internal/manager/logQuery";
 import { StoreWriteError } from "../internal/store/errors";
 import {
   builtInLogStoreContract,
@@ -48,34 +46,18 @@ export const isLogEntryRecorded = (
   event.type === "log.entry" && event.entityType === "log";
 
 /**
- * Service shape for {@link LogStore}.
+ * Public service shape for {@link LogStore} — the store methods apps call.
+ * (`yield* LogStore` also exposes the contract’s nested `log` shape; pick these for typing.)
  *
  * `groupId` parameters are **store bucket keys** — same value as the **node log key** (`Node.key`).
  * See `docs/LOGS.md` — Store / query parameters.
  *
  * @public
  */
-export interface LogStoreApi {
-  readonly record: (
-    /** Store bucket key (= **node log key**). */
-    groupId: string,
-    entryId: string,
-    entry: LogEntry,
-  ) => Effect.Effect<void, StoreWriteError>;
-  readonly recordBatch: (
-    /** Store bucket key (= **node log key**). */
-    groupId: string,
-    rows: ReadonlyArray<{ readonly entryId: string; readonly entry: LogEntry }>,
-  ) => Effect.Effect<void, StoreWriteError>;
-  readonly load: (
-    query: LogQuery,
-  ) => Effect.Effect<ReadonlyArray<LogEntry>, LogQueryError>;
-  readonly query: (
-    logQuery: LogQuery,
-  ) => Effect.Effect<void, LogQueryError>;
-}
-
-const asApi = (handle: LogStoreHandle): LogStoreApi => handle as unknown as LogStoreApi;
+export type LogStoreApi = Pick<
+  LogStoreHandle,
+  "record" | "recordBatch" | "load" | "query"
+>;
 
 /**
  * Context tag for {@link LogStoreApi}.
@@ -108,7 +90,7 @@ const optionalEmit =
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,
-          onSome: (store) => invoke(asApi(store), ...args),
+          onSome: (store) => invoke(store, ...args),
         }),
       ),
     );
