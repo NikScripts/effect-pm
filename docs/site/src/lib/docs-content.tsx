@@ -15,7 +15,21 @@ import { highlightToReact, loadHighlighter } from "./highlight.js";
 import { QueueIsland } from "../islands/QueueIsland.js";
 import { RunResourceIsland } from "../islands/RunResourceIsland.js";
 import { CounterIsland } from "../islands/CounterIsland.js";
+import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
+
+// The copy button copies the *visible* code: twoslash preambles are hidden behind `// ---cut---`
+// markers, so strip everything up to a cut and after a cut-after — mirroring what the reader sees.
+const CUT = /^\s*\/\/\s*---cut(-before)?---\s*$/;
+const CUT_AFTER = /^\s*\/\/\s*---cut-after---\s*$/;
+const visibleCode = (text: string): string => {
+  let lines = text.split("\n");
+  const start = lines.findIndex((l) => CUT.test(l));
+  if (start >= 0) lines = lines.slice(start + 1);
+  const end = lines.findIndex((l) => CUT_AFTER.test(l));
+  if (end >= 0) lines = lines.slice(0, end);
+  return lines.join("\n").replace(/^\n+|\n+$/g, "");
+};
 
 // --- render layer: Djot AST -> React elements (no dangerouslySetInnerHTML) ---
 let keySeq = 0;
@@ -68,10 +82,16 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "run-resource") return h(RunResourceIsland, { key: keySeq++ });
       if (n.lang === "resource") return h(CounterIsland, { key: keySeq++ });
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
-      // attribute above the fence opts the block into TS-language-service hover types.
+      // attribute above the fence opts the block into TS-language-service hover types. Wrapped in a
+      // `.code-block` container carrying the copy button; line numbers are pure CSS on `.line`.
       {
         const twoslash = (n.attributes?.class ?? "").split(/\s+/).includes("twoslash");
-        return highlightToReact(n.text, n.lang, { twoslash });
+        return h(
+          "div",
+          { key: keySeq++, className: "code-block" },
+          h(CopyButton, { key: keySeq++, code: visibleCode(n.text) }),
+          highlightToReact(n.text, n.lang, { twoslash }),
+        );
       }
     default: return kids(n);
   }
