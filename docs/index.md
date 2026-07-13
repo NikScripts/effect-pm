@@ -64,20 +64,22 @@ each reading the resource without ever touching its implementation.
 
 ## Scale to a fleet
 
-One runtime is rarely the whole story — run the same queue on several worker runtimes, a **fleet**,
-and reach them as one. Each runtime is a **node**; you mesh them so every instance knows its **peers**:
+One runtime is rarely the whole story — run the same `Emails` queue on several worker runtimes, a
+**fleet**, and reach them as one. Here's a standalone example. Each runtime is a **node**, and a node
+carries **its own address**, so the fleet is just a list of nodes:
 
 ``` ts
-class WorkerA extends Resource.Node<WorkerA>("app/WorkerA") {}
-class WorkerB extends Resource.Node<WorkerB>("app/WorkerB") {}
+class WorkerA extends Resource.Node<WorkerA>("app/WorkerA", { url: "http://10.0.0.1:3001" }) {}
+class WorkerB extends Resource.Node<WorkerB>("app/WorkerB", { url: "http://10.0.0.2:3001" }) {}
 
-// on each runtime — mesh Emails with the fleet (self + the others)
+// on each runtime — mesh Emails with the fleet; transport comes from each node's own url
 const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
-// fleet: Layer — provide it alongside the worker to join the mesh
+// fleet: Layer — provide it to join the mesh
 ```
 
-With the mesh in place, `peers` hands you a handle to **every** instance, and `combineQuery` folds a
-field across all of them — one call for a fleet-wide answer:
+Because each node carries its `url`, `peersLayer` wires every peer's transport for you — no client to
+hand-configure. With the mesh in place, `peers` hands you a handle to **every** instance, and
+`combineQuery` folds a field across all of them — one call for a fleet-wide answer:
 
 ``` ts
 const peers = yield* Resource.peers(Emails)          // peers: one Emails handle per instance
