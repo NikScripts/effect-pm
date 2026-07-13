@@ -15,14 +15,15 @@ Here are two resources — a queue and a scheduled process — on two runtimes, 
 
 ``` ts
 // two resources, defined once
-class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
-class Digest extends Process.Tag<Digest>()("app/Digest") {}
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
+class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
 The **worker runtime** owns the queue — it drains `Emails` and serves it on port 3001:
 
 ``` ts
 const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
+// worker: Layer — a runnable worker runtime, serving Emails on :3001
 ```
 
 The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
@@ -31,12 +32,13 @@ that lives on the *other* runtime, reached by port:
 ``` ts
 const scheduler = Process.layer(Digest, {
   effect: Effect.gen(function* () {
-    const emails = yield* Emails            // the queue on the worker runtime
-    const email = yield* nextEmail
-    yield* emails.add(email)
+    const emails = yield* Emails            // emails: the Emails handle (here, an RPC client)
+    const email = yield* nextEmail          // email: EmailJob
+    yield* emails.add(email)                // add(email: EmailJob): Effect<void>
   }),
   polling: Polling.spaced(Duration.hours(1)),
 }).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
+// scheduler: Layer — the scheduler runtime
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
@@ -50,11 +52,11 @@ handle that enqueues also controls and observes, so you steer and inspect the wo
 anywhere it's reached:
 
 ``` ts
-const emails = yield* Emails            // local, or a client to another runtime — same handle
+const emails = yield* Emails            // emails: the Emails handle — local OR an RPC client, same type
 
-yield* emails.pause                     // stop draining, at runtime
-const depth = yield* emails.size.get    // how many are waiting, right now
-yield* emails.events.pipe(Stream.runForEach(onChange)) // watch every state change, live
+yield* emails.pause                     // pause: Effect<void> — stop draining, at runtime
+const depth = yield* emails.size.get    // depth: number — how many are waiting, right now
+yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEvent> — every change, live
 ```
 
 And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
@@ -71,14 +73,15 @@ class WorkerB extends Resource.Node<WorkerB>("app/WorkerB") {}
 
 // on each runtime — mesh Emails with the fleet (self + the others)
 const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
+// fleet: Layer — provide it alongside the worker to join the mesh
 ```
 
 With the mesh in place, `peers` hands you a handle to **every** instance, and `combineQuery` folds a
 field across all of them — one call for a fleet-wide answer:
 
 ``` ts
-const peers = yield* Resource.peers(Emails)
-const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // WHOLE-fleet backlog
+const peers = yield* Resource.peers(Emails)          // peers: one Emails handle per instance
+const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // totalBacklog: number
 ```
 
 `size` is a field on every instance; `combineQuery` reads it from each peer and `Combine.sum` folds
