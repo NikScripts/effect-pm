@@ -2,43 +2,36 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration tip:** `39c75d7` — integration fold complete; **next: Logs store cutover**
+**Integration tip:** `d15b907` — Logs Phase 5 in flight on Agent 2 (`cursor/phase5-logs-migration-a3ad` / PR #30)
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | `integration/storage` | [session-2 storage docs](./agent-01-session-2-storage-docs.md) | **merged** | on line | typecheck + lint green | `pnpm run version` **deferred** until Logs | 2026-07-12 |
-| **2** | `cursor/process-run-rpc-a009` → merged | [process run RPC](./agent-02-process-run-rpc.md) | **merged** | `e7fcd9e` | 456 tests green | — | 2026-07-12 |
-| **3 (Cursor)** | `cursor/logs-store-cutover-a009` (next) | [logs store cutover](./agent-cursor-logs-store-cutover.md) | **ready-to-start** | — | — | Blocks substrate retirement + `main` release | 2026-07-12 |
-| **B** | `action/html-doc-platform` → merged | [plan](./agent-b-plan.md) | **merged** | on line | doc-site live | `src/web/data.ts` SSOT follow-on | 2026-07-12 |
-| **A** | `integration/rules-and-documentation` → merged | [brief](./agent-a-rules-and-documentation.md) | **merged** | on line | corpus on line | — | 2026-07-12 |
-| **C** | `chore/standards-audit` | [brief](./agent-c-standards-audit.md) | **step 0 done** | on line | manifest ✓ | audit plan owner-gated | 2026-07-12 |
+| **1** | — (research only) | [next headlining resource](./agent-01-next-headlining-resource.md) | **plan-first** | — | — | Research fleet/peers headline after Queue+Process; owner picks direction | 2026-07-13 |
+| **2** | `cursor/phase5-logs-migration-a3ad` | [logs plan](./agent-02-logs-platform-plan.md) · [PR #30 review](./phase5-logs-migration-review.md) | **in progress** | see PR | typecheck/test claimed | P0 hygiene from review; P1 platform gaps owner-gated | 2026-07-13 |
+| **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
+| **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
+| **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
 
 ---
 
 ## Supervisor queue
 
-### Active
-1. **Cursor Agent 3:** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md) — `LogStore` off `ProcessStore` facet
+### Active (owner approval required)
+1. **Agent 1:** [`agent-01-next-headlining-resource.md`](./agent-01-next-headlining-resource.md) — research next headlining resource (fleet/peers from day one). **No code until owner picks.**
+2. **Agent 2:** PR [#30](https://github.com/NikScripts/effect-pm/pull/30) — Phase 5 Logs; address [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) P0
 
-### After Logs
-2. Delete `ProcessLifecycleStore` + retire facet substrate (Slice 3 — owner review)
-3. CustomQueue store / RunResource `catchWriteErrors` (mechanical, parallel OK)
-4. `src/web/data.ts` SSOT derive from `QueueHandle`
+### After Logs merge
+3. Delete `ProcessLifecycleStore` + retire facet substrate
+4. Logs P1 (level pipes / store followers) if owner wants that model
+5. CustomQueue / Run mechanical store polish
+6. `main` merge + `pnpm run version` — still deferred
 
-### Deferred (owner)
-- **`main` merge + `pnpm run version`** — wait until Logs lands
-- **Agent B:** dashboard type-safety remediation — [`agent-b-dashboard-typesafety.md`](./agent-b-dashboard-typesafety.md) (kill `data.ts` discrimination `as` casts via `kind`-guards; contain the one runtime-`R` boundary; `@since`/`@public`/suppression hygiene in `src/web`+`src/ui`). Ready to start.
+### Deferred
+- Agent B dashboard type-safety (plan-first)
 - Agent C standards audit (plan-first)
-- Process live `events` stream (#20)
+- Process live `events` (#20)
 - `Store.layerQuery` (not approved)
-
----
-
-## Completed
-
-- [#26](https://github.com/NikScripts/effect-pm/pull/26) Process `run` RPC + effect/effectFn
-- Integration fold `4c543c8` (standards/docs group)
-- [#23–#25](https://github.com/NikScripts/effect-pm/pull/23) queue ref + node status + tag schemas
+- Implementation of next headlining resource (after Agent 1 research + owner pick)
 
 ---
 
