@@ -20,21 +20,18 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueResource`. |
 | `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
-| `src/Logs.ts` | Logs platform (`layer`, `stream`, `persistLayer`, `byNode`, `Resource.logs`) — [`docs/LOGS.md`](../LOGS.md). |
-| `src/NodeLogs.ts` | Deprecated shim re-exporting `Logs`. |
-| `src/HostLogs.ts` | Deprecated alias — use `Logs`. |
-| `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
+| `src/Logs.ts` | Logs platform (`layer`, `stream`, `persistLayer`, `byNode`, `Resource.logs`) — [`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` shims removed.) |
 | `src/Store.ts` | Shape-first store contracts; `EventJournal`-backed `layerMemory` / `SqlEventJournal` `layer` — see `docs/guides/store-backing.md`. |
-| `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
+| `src/store/*.ts` | Public storage facets → `@nikscripts/effect-pm/store/*` (e.g. `store/Log`). Facet substrate (`ProcessStorage` / `RuntimeStorage`) retired. |
 | `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations (`LogAnnotationKeys`) + NDJSON log entries (`LogEntry` / `LogEntrySchema`) — the structured-logging core. |
-| `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
+| `src/internal/store/*` | Shared Store helpers (e.g. process store specs) — **internal**. |
 | `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
 | `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
-| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); integration branch **`integration/storage`**. |
+| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); integration branch **`integration`**. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
@@ -44,9 +41,13 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 ## Invariants (do not break casually)
 
 1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc.
-2. **`Process.effect` typing** — `Process<R>`: `effect` needs the user environment plus optional storage facets supplied by `ProcessStorage.layer`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
+2. **`Process.effect` typing** — `Process<R>`: `effect` needs the user environment; storage is via
+   the Store bridge (`Process.store(tag)` / `Store.effects`), not the retired `ProcessStorage` layers.
+   Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **Location transparency** — a `Resource` tag is driven by the same `yield* Tag` code local or remote; only the provided layer differs (`.layer` vs `.client`/`.serve`). Don't special-case local vs remote in resource consumers.
-4. **Storage** — See [STORAGE.md](./STORAGE.md) only (`RuntimeStorage` + `src/store/*` facets, `ProcessStore` builder, `ProcessStorage` combined layers). Toolkit persistence ports: `HistoryStore` / `DurableQueueStore` (SQLite backends in `storage/sqlite`).
+4. **Storage** — See [STORAGE.md](./STORAGE.md) and [`docs/LOGS.md`](../LOGS.md). Facet substrate
+   (`RuntimeStorage` / `ProcessStorage`) is retired. Toolkit persistence ports: `HistoryStore` /
+   `DurableQueueStore` (SQLite backends in `storage/sqlite`); logs via `LogStore` + `Logs`.
 
 ---
 

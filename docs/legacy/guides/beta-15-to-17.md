@@ -56,7 +56,7 @@ class Database extends Resource.Tag<Database>()("app/Database", {
 ### 1. Durable log storage — by node *or* by resource
 
 > **Today:** use `@nikscripts/effect-pm/Logs` (`Logs.layer`, `Logs.persistLayer(node)`, `Logs.byNode` /
-> `byResource`, `Resource.logs`). `HostLogs` / `NodeLogs` are deprecated shims. Per-resource
+> `byResource`, `Resource.logs`). `HostLogs` / `NodeLogs` are **removed** — use `Logs`. Per-resource
 > `captureLogs` / handle `logs` were **removed** in Phase 5 — see [`docs/LOGS.md`](../../LOGS.md).
 
 Runtime logs are durably stored and queryable two ways. Add `Logs.persistLayer(node)` (durable)
@@ -154,7 +154,7 @@ The log-storage work removed the stranded process-group log paths. If you touche
 | `HostLogs.history()` (flat `HistoryStore` bucket) | `Logs.byNode(node, …)` / `Logs.byResource(…)` (`LogStore`) |
 | `LogAnnotationKeys.groupId` | `LogAnnotationKeys.node` (+ `withNodeLogAnnotations`) |
 | `captureLogs` / handle `logs.{stream,query}` (Phase 5) | `Logs.layer` + `Resource.logs(tag)` / `NodeStatus.logs` + `LogEntry.hasKey` |
-| `HostLogs` / `NodeLogs` (shim) | `Logs` ([`docs/LOGS.md`](../../LOGS.md)) |
+| `HostLogs` / `NodeLogs` (removed) | `Logs` ([`docs/LOGS.md`](../../LOGS.md)) |
 
 `LogStore` itself is unchanged and still public (`record` / `recordBatch` / `load`). Nothing else in
 beta.17 is breaking — the multi-host additions (`client(tag, host)`, `selfHost`, the `peersLayer`

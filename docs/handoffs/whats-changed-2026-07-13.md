@@ -21,7 +21,8 @@ it. Rebase/merge your working branch onto `integration` before your next slice.
 4. **Handle hovers changed** (cleaner, not breaking): `yield* Tag` resolves `Method<…>` → effects and
    `Schema.Struct.ReadonlySide<…>` → `{ to: string }` (internal `Simplify` + `PrettifyPayload`).
 5. **Logs:** legacy `captureLogs` / spec `logs` **removed**. Use `Resource.logs` / `NodeStatus.logs`
-   and `LogEntry.hasKey`. See [`../LOGS.md`](../LOGS.md).
+   and `LogEntry.hasKey`. See [`../LOGS.md`](../LOGS.md). The public `NodeLogs` shim is **gone** —
+   import `Logs` only.
 6. **`ProcessStorage` / `RuntimeStorage` facet substrate retired** (with its tests).
 7. **`Store.store` renamed to `scoped`** (+ `Resource.withStore`). Gitignored `scratchpad/store/*`
    experiments still call the old name.
@@ -36,7 +37,7 @@ The heaviest recent engine work.
 - **Process manual-run RPC** (#26) — typed `run` RPC with the `effect` / `effectFn` shape.
 - **Logs platform, Phases 1–5** (#30) — one public logs module; `captureLogs` / spec `logs` removed;
   consumers on `Resource.logs` / `NodeStatus.logs` + `LogEntry.hasKey`; `ProcessStorage`/`RuntimeStorage`
-  substrate retired. `Logs.ts` is the single public logs module.
+  substrate retired; **`NodeLogs` shim removed** (closeout). `Logs.ts` is the single public logs module.
 
 ### Agent A — standards corpus + intro
 - The **standards corpus** under `docs/standards/*` (principles, modules-and-boundaries, types-and-naming,

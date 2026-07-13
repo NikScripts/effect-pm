@@ -2,20 +2,25 @@
 
 **Reviewed:** 2026-07-13  
 **Against tip:** `9330588` (`Update legacy docs for Phase 5 Logs / Resource.logs migration`)  
-**Base:** `integration/storage` (`d15b907`) — branch is **0 behind / 10 ahead**, mergeable  
-**PR:** https://github.com/NikScripts/effect-pm/pull/30
+**Base at review:** `integration/storage` (`d15b907`)  
+**PR:** https://github.com/NikScripts/effect-pm/pull/30 — **MERGED** into `integration` (2026-07-13)
 
-**Audience:** Agent 2 (and owner). Pull this file on your branch and work the open items.
+**Closeout (2026-07-14):** P0 addressed on #30; ProcessStorage / RuntimeStorage / ProcessLifecycle
+substrate retired on the same tip; public `NodeLogs` shim removed on `cursor/logs-closeout-a3ad`.
+**P1 still owner-gated** — do not treat the logs *platform* as closed until owner picks P1 or
+explicitly parks it.
+
+**Audience:** historical review for Agent 2; new work uses the status board + `whats-changed-2026-07-13.md`.
 
 ---
 
 ## Verdict
 
-Treat as **merge-ready for the Phase 5 consumer break**, not as “Logs platform complete.”
+Treat as **merged Phase 5 consumer break**, not as “Logs platform complete.”
 
 Core ship is real: one `Logs` module, one capture, one relay, `LogStore` on `Store.Service`, `Resource.logs`, break of `captureLogs` / handle `logs` / HistoryStore log forks, `docs/LOGS.md`, changesets.
 
-The handoff’s **DONE (Phases 1–5)** claim overstates completeness relative to the same plan’s Phase 3–4 store-follower / level-pipe target. Do not close the platform workstream when #30 merges.
+The handoff’s **DONE (Phases 1–5)** claim overstates completeness relative to the same plan’s Phase 3–4 store-follower / level-pipe target. Platform P1 remains a separate owner call.
 
 ---
 
@@ -36,26 +41,12 @@ The handoff’s **DONE (Phases 1–5)** claim overstates completeness relative t
 
 ## Priority attention list
 
-### P0 — Fix on this branch before merge (hygiene)
+### P0 — Fix on this branch before merge (hygiene) — **DONE**
 
-1. **Finish consumer migration off `NodeLogs` / `ProcessStorage` in first-party tree**
-   - `examples/resource-web/server.ts` — still `NodeLogs.layer` / `persistLayer` / `byNode` / `ProcessStorage.layer`
-   - `test/host-logs.test.ts`, `test/host-logs-history.test.ts`, `test/log-pipeline.test.ts`, `test/host-status.test.ts`
-   - `test/fixtures/logsEnv.ts` — compose `Logs.layer` + `LogStore.layerMemory`, not `ProcessStorage.layer`
-   - Stale copy: `src/internal/nodeStatusResource.ts`, `src/NodeStatus.ts` still document `NodeLogs`
-
-2. **Remove / narrow `as unknown as LogStoreApi` casts**
-   - `src/Logs.ts`, `src/store/log.ts`, `src/internal/logs/storeFollower.ts`, `src/internal/logs/resourceLogs.ts`
-   - Prefer typed handle access that matches `Store.Service` single-registration yield (or a small typed adapter without cast)
-
-3. **CI green on the PR branch**
-   - No checks reported on `cursor/phase5-logs-migration-a3ad` at review time
-   - Re-run and paste: `pnpm typecheck && pnpm test && pnpm lint`
-
-4. **Update status bus**
-   - `docs/handoffs/agent-status.md` still says Agent 2 plan-first
-   - `docs/handoffs/store-migration-roadmap.md` still ticks Logs as plan-only
-   - Align them with: Phase 5 PR open; platform follow-ups remaining (below)
+1. **Finish consumer migration off `NodeLogs` / `ProcessStorage` in first-party tree** — done on #30
+2. **Remove / narrow `as unknown as LogStoreApi` casts** — done on #30
+3. **CI green on the PR branch** — verified before merge
+4. **Update status bus** — revisited on closeout (`agent-status.md`, `store-migration-roadmap.md`)
 
 ### P1 — Platform gaps vs your own plan (post-merge OK if owner agrees)
 
@@ -72,7 +63,7 @@ These are in `agent-02-logs-platform-plan.md` Phases 3–4 / §Open but **not sh
 | `LogQuery` evolution | Prefer `lineageContains` / `atRoot` / `atLeaf`; retire `processId`/`queueId` | Legacy filters still primary in `byResource` |
 | Child-runtime relay rule | Document inherit vs re-provide `Logs.layer` | Undocumented |
 
-**Owner call needed:** ship #30 as Phase 5 break now, and track P1 as a follow-up PR — or block merge until level pipes + store followers land.
+**Owner call needed:** track P1 as a follow-up PR — or park it explicitly.
 
 ### P2 — Footguns / clarity (cheap if you touch the files)
 
@@ -85,35 +76,18 @@ These are in `agent-02-logs-platform-plan.md` Phases 3–4 / §Open but **not sh
    - `withLogExport` only adds `Tag.logs` via `Object.assign`
    - Confirm intended type story in `logs-resource.test-d.ts` matches runtime (pipe required for `Tag.logs` only)
 
-3. **PR scope**
-   - Title says Phase 5; commits also include Store rename + Phases 1–4
-   - Fine if owner wants one merge; if not, call out dual changeset surface in the PR body (already partially done)
-
 ---
 
-## After merge (next agent / owner queue)
+## After merge — **status**
 
-1. Delete `ProcessLifecycleStore` → retire `RuntimeStorage` / `ProcessStorage` substrate (`store-migration-roadmap.md`)
-2. Remove public `NodeLogs` shim when migration window ends (changeset already says one release)
-3. CustomQueue / Run store cutovers (Cursor lane)
-4. `main` release + `pnpm run version` — still deferred until owner says Logs follow-ups are enough
-
----
-
-## Suggested Agent 2 actions on pull
-
-```text
-1. git pull origin cursor/phase5-logs-migration-a3ad
-2. Read this file
-3. P0 items 1–4 on this branch (migration hygiene + casts + CI + status bus)
-4. Stop for owner on P1 — do not expand into store-follower / level-pipe without approval
-5. Push; update PR #30 body with a short “addressed review” note listing commits
-```
+1. Delete `ProcessLifecycleStore` → retire substrate — **DONE** (on #30 tip / `integration`)
+2. Remove public `NodeLogs` shim — **DONE** on `cursor/logs-closeout-a3ad`
+3. CustomQueue / Run store cutovers (Cursor lane) — still open
+4. `main` release + `pnpm run version` — still deferred
 
 ---
 
 ## Non-goals of this review
 
-- Re-litigating owner locks already reflected in `docs/LOGS.md` (stream vs tail, `Logs` vs `NodeLogs`, lineage vs processId/queueId primary)
+- Re-litigating owner locks already reflected in `docs/LOGS.md`
 - Implementing P1 in this report commit
-- Closing substrate retirement (blocked on deliberate lifecycle delete)

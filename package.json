@@ -64,10 +64,6 @@
       "types": "./dist/Logs.d.ts",
       "default": "./dist/Logs.js"
     },
-    "./NodeLogs": {
-      "types": "./dist/NodeLogs.d.ts",
-      "default": "./dist/NodeLogs.js"
-    },
     "./NodeStatus": {
       "types": "./dist/NodeStatus.d.ts",
       "default": "./dist/NodeStatus.js"

@@ -4,9 +4,9 @@ The authoritative plan for migrating every module onto the new Store machinery. 
 for both the local (Claude) lane and the cloud (Cursor) lane. Tick modules off as they land.
 
 ## Branches & workflow
-- **Integration branch: `integration/storage`** (the go-forward integration branch; supersedes
-  `cursor/integration-result-schema-a3ad`). SHARED — merges need per-action owner permission.
-- **Working branches: `action/short-description`** (e.g. `fix/store-extend`, `refactor/queue-golden`),
+- **Integration branch: `integration`** (renamed from `integration/storage` — storage work done;
+  general integration line). SHARED — merges need per-action owner permission.
+- **Working branches: `action/short-description` or `cursor/<desc>-a3ad`**,
   pushed to origin under the same name, freely.
 - Lane split: **Claude = local**, handles critical / shared / design-heavy work (Store core, Logs,
   retiring the facet substrate). **Cursor = cloud clones**, one per module, mechanical work that copies
@@ -24,25 +24,25 @@ The queue is the finished reference. The patterns every module adopts:
   return + `Completed.success`/`Failed.cause` (worker-A).
 - Guides: `store.md`, `store-backing.md`, `store-migration.md`, `queue-resource.md`.
 
-## Done ✅ (on `integration/storage`)
+## Done ✅ (on `integration`)
 - **Store core + transform layer** — `Store.effects`, `mapEffects`, `catchWriteErrors`, categorized
   `StoreWriteError`, `Store.extend` (type-preserving), `Store.provideContext`, `resolve`/`resolveOrDie`
   (deprecated aliases removed).
 - **Resource transform layer** — `Resource.mapEffects`, `Resource.provideContext` (subtractive).
 - **Full-capture merged + worker-A** — success schema drives the worker return type.
 - **QueueResource** — three-tier store, 12 analytics reads, golden-clean.
+- **Logs Phase 5** (#30) — `captureLogs` / handle `logs` removed; `Resource.logs` / `NodeStatus.logs`.
+- **Facet substrate retired** — `ProcessLifecycleStore`, `ProcessStorage`, `RuntimeStorage`, related
+  redis/sqlite RuntimeStorage half, public facet modules.
+- **`NodeLogs` shim removed** — `cursor/logs-closeout-a3ad` (closeout after #30).
 
 ## Module inventory (tick as landed)
 
 ### Claude lane — local (critical / shared / design)
-- [x] **Logs** (`src/store/log.ts` `LogStore`) — on PR [#30](https://github.com/NikScripts/effect-pm/pull/30) (`cursor/phase5-logs-migration-a3ad`). Migrated off `ProcessStore.Service` → `Store.contract`/`Store.Service`; `Logs.persistLayer` is a relay subscriber; Phase 5 broke `captureLogs` / handle `logs`. **P1 remain** (level pipes, per-registration followers, remote `Resource.logs`) — see [review](./phase5-logs-migration-review.md). Blocks substrate retirement until lifecycle delete.
-- [ ] **Delete `ProcessLifecycleStore`** (`src/store/processLifecycle.ts`) — dead code, zero live emitters.
-- [ ] **Retire the facet substrate** (after Logs + the delete): `RuntimeStorage.ts`, `ProcessStore.ts`,
-      `ProcessStorage.ts`, `ProcessStoreEvent.ts`, `Query.ts`, `internal/store/spine.ts`,
-      `internal/store/service.ts`, the RuntimeStorage half of `internal/store/helpers.ts`,
-      `src/storage/redis/*`, and the RuntimeStorage half of `src/storage/sqlite/*` (KEEP the
-      `SQLiteHistoryStore` + `SQLiteDurableQueueStore` backends). Prune legacy `index.ts` re-exports + the
-      `./storage/redis` + `./storage/sqlite`-RuntimeStorage `package.json` subpaths.
+- [x] **Logs** (`src/store/log.ts` `LogStore`) — merged via [#30](https://github.com/NikScripts/effect-pm/pull/30). `Store.contract`/`Store.Service`; `Logs.persistLayer` is a relay subscriber; Phase 5 broke `captureLogs` / handle `logs`. **`NodeLogs` shim removed.** **P1 remain** (level pipes, per-registration followers, remote `Resource.logs`) — see [review](./phase5-logs-migration-review.md); owner-gated.
+- [x] **Delete `ProcessLifecycleStore`** — done (folded into `integration` with #30 tip).
+- [x] **Retire the facet substrate** — done (`RuntimeStorage`, `ProcessStore`, `ProcessStorage`,
+      `ProcessStoreEvent`, `Query`, RuntimeStorage redis/sqlite halves, related subpaths).
 - [ ] **`Store.layerQuery`** (multi-scope read) — designed in `store-layer-query.md`, **NOT approved**;
       build only if Logs by-node/by-resource querying needs it, and after owner sign-off on the API.
 - [ ] doc nit: dangling `{@link withDefault}` in `Store.ts` header.
@@ -67,19 +67,17 @@ The queue is the finished reference. The patterns every module adopts:
       MultiNode, Polling, Resource, ResourceConfigure, Telemetry, disarmedIdleSleep, cli/tui/ui/web.
 
 ## Retire-vs-migrate verdict (facet substrate)
-**RETIRE, not migrate** — gated on lifecycle delete after Logs. Evidence: Process/Run already left the
-substrate (their specs are `Store.contract`, resolved via `Store.Storage`); `LogStore` now uses
-`Store.Service` + `Logs.persistLayer` (relay subscriber); the only facet left on the substrate is
-`ProcessLifecycleStore` (dead). The redis + sqlite RuntimeStorage backends are runtime-dead (only
-doc/test references). Only 3 files import `RuntimeStorage` (`spine`, `service`, half of `helpers`) →
-bounded blast radius. Delete `ProcessLifecycleStore`, and the whole substrate falls.
+**RETIRED.** Process/Run left the substrate for `Store.contract`; Logs used `Store.Service` +
+`Logs.persistLayer`; `ProcessLifecycleStore` and the RuntimeStorage facet stack were deleted after
+Phase 5.
 
 ## Ordering
-**Logs (#30 / Phase 5) ✓ cutover** → delete `ProcessLifecycleStore` → retire facet substrate (owner-gated Slice 3). Cursor can continue **Run / CustomQueue** in parallel. `layerQuery` only after owner approval. Logs **P1** (level pipes / followers / remote `Resource.logs`) is a separate follow-up PR.
+**Logs (#30) ✓** → **ProcessLifecycle delete ✓** → **facet substrate retire ✓** → **`NodeLogs` remove
+(closeout)** → Cursor **Run / CustomQueue** in parallel. `layerQuery` only after owner approval.
+Logs **P1** is a separate follow-up if owner wants it.
 
 ## Surprises worth remembering
-- `ProcessLifecycleStore` is dead code (delete, don't migrate).
+- `ProcessLifecycleStore` was dead code (deleted, not migrated).
 - `HistoryStore` is a distinct third store the finished queue still uses — not legacy.
 - `DurableQueueStore` is a fourth axis (durability) — not the observability store.
-- `storage/sqlite/index.ts` is mixed (retire-able RuntimeStorage backend + keep HistoryStore/DurableQueue
-  backends) — surgical retirement, not a directory delete.
+- SQLite HistoryStore / DurableQueue backends remain; RuntimeStorage sqlite/redis halves are gone.

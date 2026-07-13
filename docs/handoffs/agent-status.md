@@ -2,12 +2,12 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration branch:** now **`integration`** (renamed from `integration/storage` — storage work done, general line). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 all folded. See [`whats-changed-2026-07-13.md`](./whats-changed-2026-07-13.md).
+**Integration branch:** **`integration`** (formerly `integration/storage`). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 + ProcessStorage retirement + `NodeLogs` removal all folded or queued. See [`whats-changed-2026-07-13.md`](./whats-changed-2026-07-13.md).
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | from `cursor/phase5-logs-migration-a3ad` | [next headlining resource](./agent-01-next-headlining-resource.md) | **plan-first** | — | — | Branch **from Agent 2 tip**; research fleet/peers headline — owner picks | 2026-07-13 |
-| **2** | `cursor/phase5-logs-migration-a3ad` | [logs plan](./agent-02-logs-platform-plan.md) · [PR #30 review](./phase5-logs-migration-review.md) | **PR open — P0 done** | on branch | `typecheck` + `test` + `lint` green | P1 platform gaps owner-gated (do not expand without approval) | 2026-07-13 |
+| **1** | from `integration` | [next headlining resource](./agent-01-next-headlining-resource.md) | **plan-first** | — | — | Research fleet/peers headline — owner picks; **no code until then** | 2026-07-14 |
+| **2** | `cursor/logs-closeout-a3ad` | [logs plan](./agent-02-logs-platform-plan.md) · [PR #30 review](./phase5-logs-migration-review.md) | **closeout** | on branch | pending verify | Phase 5 merged (#30); substrate retired; removing `NodeLogs` shim; **P1 still owner-gated** | 2026-07-14 |
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
@@ -19,14 +19,12 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** [`agent-01-next-headlining-resource.md`](./agent-01-next-headlining-resource.md) — research next headlining resource (fleet/peers from day one). **No code until owner picks.**
-2. **Agent 2:** PR [#30](https://github.com/NikScripts/effect-pm/pull/30) — Phase 5 Logs; **P0 from [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) addressed** — ready for merge when owner agrees; P1 deferred
+2. **Agent 2:** Logs closeout PR (`cursor/logs-closeout-a3ad`) — remove public `NodeLogs` shim + pristine handoffs; **do not expand into Logs P1**
 
-### After Logs merge
-3. Delete `ProcessLifecycleStore` + retire facet substrate
-4. Logs P1 (level pipes / store followers / remote `Resource.logs`) if owner wants that model
-5. CustomQueue / Run mechanical store polish
-6. Remove public `NodeLogs` shim when migration window ends
-7. `main` merge + `pnpm run version` — still deferred
+### Ready / next (no active Agent 2 engine work after closeout merges)
+3. Logs P1 (level pipes / store followers / remote `Resource.logs`) — only if owner wants that model
+4. CustomQueue / Run mechanical store polish
+5. `main` merge + `pnpm run version` — still deferred
 
 ### Deferred
 - Agent B dashboard type-safety (plan-first)
@@ -39,6 +37,8 @@
 
 ## Completed
 
+- [#30](https://github.com/NikScripts/effect-pm/pull/30) Phase 5 Logs — `captureLogs` / handle `logs` removed; `Resource.logs` / `NodeStatus.logs`; P0 review addressed
+- ProcessStorage / RuntimeStorage / ProcessLifecycleStore facet substrate **retired** (on #30 tip, folded into `integration`)
 - [#26](https://github.com/NikScripts/effect-pm/pull/26) Process `run` RPC + effect/effectFn
 - Integration fold `4c543c8` (standards/docs group)
 - [#23–#25](https://github.com/NikScripts/effect-pm/pull/23) queue ref + node status + tag schemas

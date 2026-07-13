@@ -59,7 +59,7 @@
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
  * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
  * **`@nikscripts/effect-pm/Group`**,
- * **`@nikscripts/effect-pm/NodeLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
+ * **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
  *
  * Structured log persistence: **`@nikscripts/effect-pm/store/Log`** (`LogStore.layerMemory` /
@@ -208,8 +208,6 @@ export {
 // Module namespace (Effect-style) so `Logs.captureLoggerLayer` etc. resolve the
 // same bindings as the flat root re-exports above.
 export * as Logs from "./Logs";
-export * as NodeLogs from "./NodeLogs";
-export type { NodeLogEntry } from "./NodeLogs";
 export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";

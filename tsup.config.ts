@@ -24,7 +24,6 @@ export default defineConfig([
       "store/Log": "src/store/log.ts",
       ResourceConfigure: "src/ResourceConfigure.ts",
       Logs: "src/Logs.ts",
-      NodeLogs: "src/NodeLogs.ts",
       NodeStatus: "src/NodeStatus.ts",
       HistoryStore: "src/HistoryStore.ts",
       DurableQueueStore: "src/DurableQueueStore.ts",
