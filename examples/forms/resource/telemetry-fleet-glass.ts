@@ -1,24 +1,20 @@
 /**
  * @module examples/forms/resource/telemetry-fleet-glass
  *
- * **Prototype — “The pack already instruments itself. Show the fleet.”**
+ * **“The pack already instruments itself. Show the fleet.”**
  *
- * Queues / processes emit Effect Metrics. Elevated Telemetry is the glass that admits there are
- * three droplets: leaf snapshot for this node, fleet folds via peers / selfNode / MultiNode.
+ * Elevated {@link Telemetry} — leaf snapshot for this node, fleet folds via peers.
  * Node ids are Context service keys (`app/Droplet…`).
- *
- * Today's shipped `Telemetry.Tag` is leaf-only. This file sketches the elevated factory shape.
  *
  * Run: `pnpm run example:telemetry-fleet-glass`
  */
 
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Metric, Stream } from "effect";
 import * as Resource from "../../../src/Resource";
 import * as Telemetry from "../../../src/Telemetry";
-import { Combine, combineQuery } from "../../../src/MultiNode";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-// ── Nodes = Context service keys (machines), same family as resource keys ─────
+// ── Nodes = Context service keys (machines) ───────────────────────────────────
 
 class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
@@ -26,108 +22,65 @@ class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral")
 
 const fleetNodes = [DropletEast, DropletWest, DropletCentral] as const;
 
-// ── Prototype contract: leaf Telemetry wire + fleet folds (elevation target) ─
+class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+  Resource.distributed([...fleetNodes]),
+) {}
 
-/**
- * Prototype of what an elevated `Telemetry.Tag` would expose when meshed:
- * - `snapshot` — this node's Metric registry (Telemetry's existing leaf)
- * - `inFlightByNode` / `fleetInFlight` — peers + self, MultiNode folds
- */
-class FleetMetrics extends Resource.Tag<FleetMetrics>()("app/FleetMetrics", {
-  snapshot: Resource.effect(Telemetry.metricsSnapshot).annotate({
-    description: "This node's Effect Metric registry (Telemetry leaf).",
-  }),
-  inFlightByNode: Resource.effect(
-    Schema.Record(Schema.String, Schema.Number),
-  ).pipe(Resource.fleet).annotate({
-    description: "queue_in_flight gauge per node — peers + self.",
-  }),
-  fleetInFlight: Resource.effect(Schema.Number).pipe(Resource.fleet).annotate({
-    description: "Sum of queue_in_flight across the mesh.",
-  }),
-}).pipe(Resource.distributed([...fleetNodes])) {}
-
-const IN_FLIGHT = "queue_in_flight";
-
-/** Pick a gauge from a Telemetry-shaped snapshot (homepage panel helper). */
-const gaugeValue = (
-  snap: Telemetry.MetricsSnapshot,
-  id: string,
-): number => {
-  const hit = snap.metrics.find(
-    (m): m is Telemetry.GaugeDatum => m._tag === "gauge" && m.id === id,
-  );
-  return hit?.value ?? 0;
-};
-
-/** One droplet's leaf registry — stamped gauge for the demo fold. */
-const leafSnapshot = (nodeKey: string, inFlight: number) =>
-  Effect.succeed({
-    ts: 0,
-    metrics: [
-      {
-        _tag: "gauge" as const,
-        id: IN_FLIGHT,
-        labels: { node: nodeKey },
-        value: inFlight,
-      },
-    ],
-  } satisfies Telemetry.MetricsSnapshot);
-
-const fleetMetricsImpl = (ownInFlight: number) =>
-  Effect.gen(function* () {
-    const peers = yield* Resource.peers(FleetMetrics);
-    const self = yield* Resource.selfNode(FleetMetrics);
-    return {
-      snapshot: leafSnapshot(self, ownInFlight),
-      inFlightByNode: Effect.gen(function* () {
-        const byNode = yield* combineQuery(
-          peers,
-          (peer) =>
-            peer.snapshot.pipe(Effect.map((s) => gaugeValue(s, IN_FLIGHT))),
-          Combine.byNode,
-        );
-        return { ...byNode, [self]: ownInFlight };
+/** Stamp this node's registry with a demo in-flight gauge. */
+const stampInFlight = (value: number) =>
+  Effect.sync(() =>
+    Metric.update(
+      Metric.gauge(Telemetry.inFlightMetricId, {
+        description: "demo queue in-flight",
       }),
-      fleetInFlight: combineQuery(
-        peers,
-        (peer) =>
-          peer.snapshot.pipe(Effect.map((s) => gaugeValue(s, IN_FLIGHT))),
-        Combine.sum,
-      ).pipe(Effect.map((others) => others + ownInFlight)),
-    };
-  });
-
-// Single-process mesh — same discharge order as multi-host-selfhost tests
-const eastLayer = Resource.layer(FleetMetrics, fleetMetricsImpl(5)).pipe(
-  Layer.provide(
-    Resource.peersFrom(FleetMetrics, {
-      [DropletWest.key]: {
-        snapshot: leafSnapshot(DropletWest.key, 3),
-      },
-      [DropletCentral.key]: {
-        snapshot: leafSnapshot(DropletCentral.key, 4),
-      },
-    }),
-  ),
-  Layer.provide(Resource.selfNodeLayer(FleetMetrics, DropletEast)),
-);
+      value,
+    ),
+  ).pipe(Effect.flatten);
 
 const formatByNode = (byNode: Readonly<Record<string, number>>): string =>
   Object.entries(byNode)
     .map(([node, n]) => `${node}=${String(n)}`)
     .join(", ");
 
+/** Peer leaves — Telemetry PeerService shape (fleet fields excluded). */
+const peerLeaf = (inFlight: number) => ({
+  snapshot: Effect.succeed({
+    ts: 0,
+    metrics: [
+      {
+        _tag: "gauge" as const,
+        id: Telemetry.inFlightMetricId,
+        labels: {},
+        value: inFlight,
+      },
+    ],
+  } satisfies Telemetry.MetricsSnapshot),
+  live: Stream.empty as Stream.Stream<Telemetry.MetricsSnapshot>,
+});
+
+const eastLayer = Telemetry.layer(FleetMetrics).pipe(
+  Layer.provide(
+    Resource.peersFrom(FleetMetrics, {
+      [DropletWest.key]: peerLeaf(3),
+      [DropletCentral.key]: peerLeaf(4),
+    }),
+  ),
+  Layer.provide(Resource.selfNodeLayer(FleetMetrics, DropletEast)),
+);
+
 const program = Effect.gen(function* () {
+  yield* stampInFlight(5);
   const glass = yield* FleetMetrics;
 
   const leaf = yield* glass.snapshot;
-  const localInFlight = gaugeValue(leaf, IN_FLIGHT);
+  const localInFlight = Telemetry.inFlightOf(leaf);
   const byNode = yield* glass.inFlightByNode;
   const fleet = yield* glass.fleetInFlight;
 
   yield* Effect.log("");
-  yield* Effect.log('=== "The pack already instruments itself. Show the fleet." ===');
+  yield* Effect.log(
+    '=== "The pack already instruments itself. Show the fleet." ===',
+  );
   yield* Effect.log("");
   yield* Effect.log("Stadium board — three droplets, one glass");
   yield* Effect.log(`  you are:           ${DropletEast.key}`);
@@ -135,7 +88,9 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`  columns:           ${formatByNode(byNode)}`);
   yield* Effect.log(`  fleet total:       ${String(fleet)}`);
   yield* Effect.log("");
-  yield* Effect.log("Caption: queues emit · Telemetry shows · peers fold the pack");
+  yield* Effect.log(
+    "Caption: queues emit · Telemetry shows · peers fold the pack",
+  );
   yield* Effect.log("");
 });
 

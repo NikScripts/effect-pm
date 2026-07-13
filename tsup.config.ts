@@ -32,6 +32,7 @@ export default defineConfig([
       Store: "src/Store.ts",
       ApiMetrics: "src/ApiMetrics.ts",
       Telemetry: "src/Telemetry.ts",
+      ShardMap: "src/ShardMap.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       HttpApiResource: "src/HttpApiResource.ts",
       web: "src/web/index.ts",

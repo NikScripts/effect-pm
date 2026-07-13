@@ -1,7 +1,7 @@
 # Telemetry & ShardMap — compelling pitches (2026-07-13)
 
 **Branch:** `cursor/telemetry-prototype-and-new-idea-ce05` · off `integration`  
-**Status:** prototype + pitch · not an implementation brief until you pick
+**Status:** **implemented** — Telemetry elevated + ShardMap factory on this branch (PR)
 
 ---
 
