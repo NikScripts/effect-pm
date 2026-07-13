@@ -19,11 +19,13 @@ class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-The **worker runtime** owns the queue — it drains `Emails` and serves it on port 3001:
+The **worker runtime** owns the queue. `QueueResource.serve` gives `Emails` its worker — the `effect`
+that drains each job — and `localServer` (from `@nikscripts/effect-pm/node`) serves that over HTTP on a
+port:
 
 ``` ts
 const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
-// worker: Layer — a runnable worker runtime, serving Emails on :3001
+// worker: Layer — provide it to a runtime to run the queue and its HTTP server on :3001
 ```
 
 The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
@@ -64,13 +66,20 @@ each reading the resource without ever touching its implementation.
 
 ## Scale to a fleet
 
-The same tag scales out. Run a resource across several runtimes — a **fleet** — and it aggregates over
-all of them: mark a field `Resource.fleet` and the resource folds it across every instance, so a
-caller reads one value and never sees the fan-out.
+The same tag scales out. Run a resource across several runtimes — a **fleet** — and it can aggregate
+over all of them. Mark a field `Resource.fleet` and the resource folds it across every instance:
+
+``` ts
+class Workers extends Resource.Tag<Workers>()("app/Workers", {
+  online: Resource.effect(Schema.Number).pipe(Resource.fleet), // folded across the fleet
+}) {}
+```
+
+The caller just reads that field and gets the fleet-wide value — the fan-out stays inside the layer:
 
 ``` ts
 const workers = yield* Workers
-const total = yield* workers.fleetActive   // number — the whole fleet's count, in one call
+const total = yield* workers.online   // number — the whole fleet, in one call
 ```
 
 Each runtime is a **node** carrying its own port, so forming the fleet is just a list of nodes — no
