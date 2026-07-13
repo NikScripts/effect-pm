@@ -13,7 +13,13 @@ typed handle, wherever it runs.
 
 Here are two resources — a queue and a scheduled process — on two runtimes, working together.
 
+{.twoslash}
 ``` ts
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as Process from "@nikscripts/effect-pm/Process"
+import { Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+// ---cut---
 // two resources, defined once
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
@@ -21,24 +27,43 @@ class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a
 
 The **worker runtime** owns the queue — it drains `Emails` and serves it on port 3001:
 
+{.twoslash}
 ``` ts
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import { Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
+declare const localServer: <A>(layer: A, port: number) => A
+// ---cut---
 const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
-// worker: Layer — a runnable worker runtime, serving Emails on :3001
+// a runnable worker runtime, serving Emails on :3001
 ```
 
 The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
 that lives on the *other* runtime, reached by port:
 
+{.twoslash}
 ``` ts
+import * as Process from "@nikscripts/effect-pm/Process"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Polling } from "@nikscripts/effect-pm/Polling"
+import { Effect, Duration, Layer, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+class Digest extends Process.Tag<Digest>()("app/Digest") {}
+declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
+// ---cut---
 const scheduler = Process.layer(Digest, {
   effect: Effect.gen(function* () {
-    const emails = yield* Emails            // emails: the Emails handle (here, an RPC client)
-    const email = yield* nextEmail          // email: EmailJob
-    yield* emails.add(email)                // add(email: EmailJob): Effect<void>
+    const emails = yield* Emails            // the Emails handle (here, an RPC client)
+    const email = yield* nextEmail
+    yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
 }).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
-// scheduler: Layer — the scheduler runtime
+// the scheduler runtime
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
@@ -79,22 +104,40 @@ One runtime is rarely the whole story — run the same `Emails` queue on several
 **fleet**, and reach them as one. Here's a standalone example. Each runtime is a **node**, and a node
 carries **its own address**, so the fleet is just a list of nodes:
 
+{.twoslash}
 ``` ts
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import { Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+// ---cut---
 class WorkerA extends Resource.Node<WorkerA>("app/WorkerA", { url: "http://10.0.0.1:3001" }) {}
 class WorkerB extends Resource.Node<WorkerB>("app/WorkerB", { url: "http://10.0.0.2:3001" }) {}
 
 // on each runtime — mesh Emails with the fleet; transport comes from each node's own url
 const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
-// fleet: Layer — provide it to join the mesh
+// provide it to join the mesh
 ```
 
 Because each node carries its `url`, `peersLayer` wires every peer's transport for you — no client to
 hand-configure. With the mesh in place, `peers` hands you a handle to **every** instance, and
 `combineQuery` folds a field across all of them — one call for a fleet-wide answer:
 
+{.twoslash}
 ``` ts
-const peers = yield* Resource.peers(Emails)          // peers: one Emails handle per instance
-const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // totalBacklog: number
+import { Effect, Schema } from "effect"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Combine, combineQuery } from "@nikscripts/effect-pm/MultiNode"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+const program = Effect.gen(function* () {
+// ---cut---
+const peers = yield* Resource.peers(Emails)          // one Emails handle per instance
+const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // fleet-wide total
+// ---cut-after---
+})
 ```
 
 `size` is a field on every instance; `combineQuery` reads it from each peer and `Combine.sum` folds
