@@ -50,15 +50,20 @@ export const isLogEntryRecorded = (
 /**
  * Service shape for {@link LogStore}.
  *
+ * `groupId` parameters are **store bucket keys** — same value as the **node log key** (`Node.key`).
+ * See `docs/LOGS.md` — Store / query parameters.
+ *
  * @public
  */
 export interface LogStoreApi {
   readonly record: (
+    /** Store bucket key (= **node log key**). */
     groupId: string,
     entryId: string,
     entry: LogEntry,
   ) => Effect.Effect<void, StoreWriteError>;
   readonly recordBatch: (
+    /** Store bucket key (= **node log key**). */
     groupId: string,
     rows: ReadonlyArray<{ readonly entryId: string; readonly entry: LogEntry }>,
   ) => Effect.Effect<void, StoreWriteError>;

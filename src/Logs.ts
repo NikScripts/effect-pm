@@ -9,7 +9,7 @@
  * {@link Resource.selfNode} returns). It is stamped as `annotations.node` and stored as
  * `LogStore` `groupId`. Use slash-separated paths (`billing/scores`), not invented placeholders.
  *
- * See `docs/LOGS.md` for the full key vocabulary.
+ * See `docs/LOGS.md` for the full **key catalog** (key kind, package path, source, example path).
  *
  * ## Surface
  *
@@ -51,17 +51,33 @@ import { LogStore, type LogStoreApi } from "./store/log";
 const asStore = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogStoreApi;
 
 /**
- * Durable log bucket id for one runtime host — **must** equal {@link Resource.Node} `.key`.
+ * **Node log key** — durable bucket id for one runtime host. Must equal {@link Resource.Node} `.key`
+ * (same string as {@link Resource.selfNode}). Stored as `LogStore` `groupId` and `annotations.node`.
+ *
+ * @see `docs/LOGS.md` — Key catalog → Node log keys
  *
  * @public
  */
 export type NodeLogKey = string;
 
-/** Anything with a {@link Resource.Node}-shaped `key` (node class or `NodeKey`). @public */
-export type NodeLogKeySource = { readonly key: string };
+/**
+ * **Resource key** — identity of a queue, process, or tag (`Resource.Tag.key`). Used in lineage,
+ * `byResource`, and {@link LogEntry.hasKey}.
+ *
+ * @see `docs/LOGS.md` — Key catalog → Resource keys
+ *
+ * @public
+ */
+export type ResourceLogKey = string;
+
+/** Source carrying a **node log key** (`Resource.Node.key`). @public */
+export type NodeLogKeySource = { readonly key: NodeLogKey };
 
 /**
- * Resolve the node log key from a {@link Resource.Node} (or any `{ key }` source).
+ * Resolve the **node log key** from a {@link Resource.Node} (or any `{ key }` source).
+ *
+ * @param node - `Resource.Node` class or `{ key: NodeLogKey }`
+ * @returns The node log key (`node.key`)
  *
  * @public
  */
@@ -148,16 +164,18 @@ export const byNode = (
   });
 
 /**
- * Read durable logs for a **specific resource** (`processId` / `queueId` annotation filter).
+ * Read durable logs for a **specific resource** (filter by **resource key** annotations).
+ *
+ * @param resource.processId - **Resource key** of a `Process.Tag` (`tag.key`, e.g. `wnba/LiveScorePoller`).
+ * @param resource.queueId - **Resource key** of a `QueueResource.Tag` (`tag.key`, e.g. `wnba/BoxScoreQueue`).
  *
  * @remarks
- * Prefer {@link Resource.logs} + {@link LogEntry.hasKey} for new code. `processId` / `queueId`
- * should be the resource's `tag.key` (e.g. `wnba/LiveScorePoller`).
+ * Prefer {@link Resource.logs} + {@link LogEntry.hasKey} for new code. See `docs/LOGS.md` — Store / query parameters.
  *
  * @public
  */
 export const byResource = (
-  resource: { readonly processId?: string; readonly queueId?: string },
+  resource: { readonly processId?: ResourceLogKey; readonly queueId?: ResourceLogKey },
   options?: LogReadOptions,
 ): Effect.Effect<ReadonlyArray<LogEntry>, never, LogStore> =>
   runQuery({

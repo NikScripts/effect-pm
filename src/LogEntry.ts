@@ -128,7 +128,10 @@ const parseLineageJson = (raw: string | undefined): ReadonlyArray<string> => {
 };
 
 /**
- * Decode resource lineage segments from a captured entry's annotations.
+ * Decode **lineage segment keys** from a captured entry's annotations.
+ *
+ * Reads annotation key {@link LogAnnotationKeys.lineage}; falls back to `processId` / `queueId`
+ * **resource keys** for legacy rows.
  *
  * @public
  */
@@ -144,7 +147,9 @@ export const lineage = (entry: LogEntry): ReadonlyArray<string> => {
 };
 
 /**
- * `true` when `key` appears anywhere in {@link lineage}.
+ * `true` when the **lineage segment key** appears anywhere in {@link lineage}.
+ *
+ * @param key - Usually a **resource key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `resource-web/hub.ts`).
  *
  * @public
  */
@@ -152,7 +157,9 @@ export const hasKey = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
   lineage(entry).includes(key);
 
 /**
- * `true` when `lineage[0] === key`.
+ * `true` when `lineage[0]` equals the **lineage segment key** (usually the **node log key**).
+ *
+ * @param key - **Node log key** (`Node.key`, e.g. `wnba/live` from `LiveNode.key`).
  *
  * @public
  */
@@ -160,7 +167,9 @@ export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
   lineage(entry)[0] === key;
 
 /**
- * `true` when the last lineage segment equals `key`.
+ * `true` when the last lineage segment equals the **lineage segment key** (usually the **resource key**).
+ *
+ * @param key - **Resource key** (`Tag.key`, e.g. `wnba/LiveScorePoller`).
  *
  * @public
  */

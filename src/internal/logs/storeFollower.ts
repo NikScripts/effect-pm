@@ -16,8 +16,9 @@ const asApi = (handle: LogStore.Type): LogStoreApi => handle as unknown as LogSt
 /**
  * Fork a batched writer that appends every relay line to {@link LogStore}.
  *
- * @param node - Node log key (`Resource.Node.key`) — stamped as `annotations.node` and used as
- *   `LogStore` `groupId`.
+ * @param node - **Node log key** (`Resource.Node.key`) — stamped under annotation key
+ *   `LogAnnotationKeys.node` and used as **store bucket key** `groupId`. Example: `WnbaNode.key` in
+ *   `resource-web/hub.ts`. Catalog: `docs/LOGS.md`.
  *
  * @internal
  */
