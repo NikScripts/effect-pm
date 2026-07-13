@@ -19,14 +19,24 @@ class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-The **worker runtime** owns the queue. `QueueResource.serve` gives `Emails` its worker — the `effect`
-that drains each job — and `Resource.httpServer` serves it; provide a Node HTTP server to bind a port:
+`Resource.httpServer(serve)` is platform-agnostic — it just needs an HTTP server provided, and that
+provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
+for Bun, Deno, or an edge runtime is the only line that changes:
 
 ``` ts
-const worker = Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail })).pipe(
-  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
-)
-// worker: Layer — provide it to a runtime to run the queue and its HTTP server on :3001
+// your app, once — the single place that names a platform
+const nodeServer = <A, E, R>(resource: Layer.Layer<A, E, R>, port: number) =>
+  Resource.httpServer(resource).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
+```
+
+Now the **worker runtime** is one line — `QueueResource.serve` gives `Emails` its worker (the `effect`
+that drains each job), served on port 3001:
+
+``` ts
+const worker = nodeServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
+// worker: Layer — provide it to a runtime to run the queue on :3001
 ```
 
 The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
