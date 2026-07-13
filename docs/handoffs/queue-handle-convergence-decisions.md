@@ -84,8 +84,7 @@ members). `Service` (`QueueHandleApi`, `src/internal/queueResource.ts:377`) must
 | `isEmpty` | `Subscribable<boolean>` | `Effect<boolean>` | **change** ref-shape |
 | `sizes` | — (folded into `status`) | `Effect<{high,normal,low}>` | **drop** |
 | `completed` | — (folded into `status`) | `Effect<number>` | **drop** |
-| `metrics` | `Stream<QueueMetrics>` (flat — see below) | `Stream<QueueMetrics>` | ✓ matches |
-| `metricsHistory` | `(q) => Effect<QueueMetrics[]>` (flat — see below) | **absent** | **add** |
+| `metrics` | `{ stream: Stream<QueueMetrics>; query: (q) => Effect<QueueMetrics[]> }` (nested — kept) | `Stream<QueueMetrics>` | **change** to nested group (add `.query`) |
 | `events` | `Stream<QueueEvent<Payload, Error, Success>>` | same | ✓ matches |
 | `start` / `clear` | `Effect<…, never, R>` | same | ✓ (channels) |
 | `pause` / `resume` / `shutdown` | `Effect<void>` | same | ✓ matches |
@@ -97,12 +96,11 @@ members). `Service` (`QueueHandleApi`, `src/internal/queueResource.ts:377`) must
 `status` already carries per-priority sizes + `completed` + phase — that is why standalone `sizes` /
 `completed` are dropped rather than duplicated (SSOT).
 
-**No nesting (owner, 2026-07-13).** The only nested member in the current Tag spec is
-`metrics: { stream, query }` (`QueueResource.ts:470`) — everything else is already flat. Flatten it to
-top-level **`metrics: Stream<QueueMetrics>`** (the live stream — `.Service` already exposes exactly
-this) **+ `metricsHistory: (q) => Effect<QueueMetrics[]>`** (the historical query; needs a
-`HistoryStore`, empty otherwise, as today). This is a **spec change** to `queueControlSpec` → ripples
-to the RPC group shape. `metricsHistory` name pending final confirm (`queryMetrics` the alternative).
+**Keep nesting (owner, 2026-07-13).** The nested `metrics: { stream, query }` (`QueueResource.ts:470`)
+is **kept as-is** — the Tag contract's nested groups are canonical and stay. Convergence brings the
+full nested shape through: **`Service` conforms UP to it** — its flat `metrics: Stream<QueueMetrics>`
+becomes the nested group `{ stream, query }` (gains `.query`, backed by `HistoryStore`; empty
+otherwise, as the Tag contract already is). No flattening; no spec change.
 
 ---
 
@@ -179,6 +177,6 @@ Any drift fails the build.
 ## Open items
 
 1. ~~Param order~~ — **LOCKED**: `<Payload, Success, Error, Requirements>` (Effect order + Payload).
-2. ~~`metrics` nesting~~ — **LOCKED**: flatten to `metrics: Stream` + `metricsHistory: (q) => …`.
-   Remaining: confirm the name `metricsHistory` vs `queryMetrics`.
+2. ~~`metrics` nesting~~ — **LOCKED**: KEEP nested `metrics: { stream, query }`; Service conforms up
+   (gains `.query`). No flattening, no spec change.
 3. ~~`CustomQueueResource`~~ — **LATER**, out of Phase 1.
