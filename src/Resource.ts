@@ -667,7 +667,25 @@ const assertEffectFnPayload = (
  *
  * @public
  */
-export function effect(): Method<"query", undefined, typeof Schema.Void, typeof Schema.Never>;
+// A void query is now written **explicitly** as `effect(Schema.Void)` — the empty `effect()` is freed
+// to be the two-stage entry (below), so `effect<Client>()(success)` works like `effectFn<Client>()`.
+// The schema-derived client shape of a query — an `Effect<Success>` property; `effect<Client>()`
+// constrains `Client` to NARROW it (a `Client` that widens the success makes the arg resolve to `never`).
+type QueryDerived<Su extends Schema.Top> = Effect.Effect<PrettifyPayload<Su["Type"]>>;
+type NarrowedSuccess<Su extends Schema.Top, Client> = [Client] extends [Derive]
+  ? Su
+  : [Client] extends [QueryDerived<Su>]
+    ? Su
+    : never;
+/**
+ * Two-stage {@link effect} — override the **client-facing** type with a `Client` (an **`Effect`** type;
+ * a read surfaces as `Effect<Success>`) that must **narrow** the schema-derived shape:
+ * `effect<Client>()(success)`. Widening the success fails to compile. For a free override, see
+ * {@link unsafeEffect}. @public
+ */
+export function effect<Client = Derive>(): <Su extends Schema.Top>(
+  success: NarrowedSuccess<Su, Client>,
+) => Method<"query", undefined, Su, typeof Schema.Never, false, MethodAnnotations, Client>;
 export function effect<Su extends Schema.Top>(success: Su): Method<"query", undefined, Su, Schema.Never>;
 export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
@@ -684,12 +702,16 @@ export function effect<const C extends EffectWireConfig>(
 export function effect(
   successOrConfig?: Schema.Top | EffectWireConfig,
   error?: Schema.Top,
-): AnyMethod {
+): AnyMethod | (<Su extends Schema.Top>(success: Su) => AnyMethod) {
+  // two-stage form `effect<Client>()(success)` — 0 args on the first call; the client override is
+  // type-only (phantom), so the returned builder is the ordinary schema-derived query builder.
+  if (successOrConfig === undefined) {
+    return <Su extends Schema.Top>(success: Su): AnyMethod =>
+      makeMethod("query", undefined, success, Schema.Never, false, {});
+  }
   let success: Schema.Top = Schema.Void;
   let errorSchema: Schema.Top = Schema.Never;
-  if (successOrConfig === undefined) {
-    // defaults
-  } else if (isEffectWireConfig(successOrConfig)) {
+  if (isEffectWireConfig(successOrConfig)) {
     success = successOrConfig.success ?? Schema.Void;
     errorSchema = successOrConfig.error ?? Schema.Never;
   } else {
@@ -704,7 +726,7 @@ export function effect(
  * `Client` — here an **`Effect`** type (a read surfaces as `Effect<Success>`, not a function):
  * `unsafeEffect<Client>()(success)`. The wire/impl stay schema-derived; only what `yield* Tag` reads is
  * replaced by `Client`. **Unsafe:** `Client` is not checked against the schema — you assert it matches.
- * (`effect` can't host a narrowing two-stage form because bare `effect()` already means a void query.)
+ * For a *narrowing* (checked) read override, use the two-stage {@link effect} form instead.
  *
  * @public
  */
