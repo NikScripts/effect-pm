@@ -2961,6 +2961,54 @@ const httpClient = <Self>(
   );
 };
 
+/** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
+class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
+  readonly target: string;
+}> {}
+
+/**
+ * Resolve a {@link clientHttp} target to an RPC url. A port (`3009` or `":3009"`) points at
+ * `http://localhost:3009/rpc`; a full `http(s)://…` url is used as-is; anything else fails loudly.
+ * @internal
+ */
+const resolveHttpTarget = (target: number | string): string => {
+  if (typeof target === "number") return `http://localhost:${target}/rpc`;
+  if (/^:\d+$/.test(target)) return `http://localhost${target}/rpc`;
+  if (/^https?:\/\//.test(target)) return target;
+  throw new InvalidHttpTarget({ target });
+};
+
+/**
+ * The single-resource client mirror of {@link httpServer}. Wire a served resource `tag` to a remote
+ * over **http** and get a ready client `Layer` in one call — {@link client}`(tag)` plus the
+ * batteries-included transport (Fetch + ndjson serialization), bundled.
+ *
+ * The `target` is a **port** (`3009` or `":3009"` → `http://localhost:3009/rpc`) for a runtime on the
+ * same machine, or a full **url** for one across the network:
+ *
+ * ```ts
+ * Effect.provide(program, Resource.clientHttp(Emails, 3001));                       // same machine
+ * Effect.provide(program, Resource.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
+ * ```
+ *
+ * @public
+ */
+export const clientHttp = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  target: number | string,
+  options?: {
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self> =>
+  clientLayer(tag).pipe(
+    Layer.provide(
+      RpcClient.layerProtocolHttp({ url: resolveHttpTarget(target) }).pipe(
+        Layer.provide(options?.serialization ?? defaultSerialization),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+    ),
+  );
+
 // ── multi-node: the fleet + peer clients ──
 
 /**
