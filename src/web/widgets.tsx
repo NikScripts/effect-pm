@@ -18,7 +18,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Cause, DateTime } from "effect";
+import { Cause, DateTime, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
@@ -131,7 +131,7 @@ export const QueueCard = (props: {
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useQueueBundle(props.tag).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
@@ -166,7 +166,7 @@ export const QueueCard = (props: {
 
 const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): React.ReactElement => {
   const r = useAtomValue(useQueueBundle(props.tag).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const sk = statusKey(s?.phase ?? "running", s?.paused ?? false);
   const pending = s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
   return (
@@ -250,8 +250,8 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
   React.useEffect(() => dlog("status", asyncTag(statusR), "· metrics", asyncTag(metricsR)), [statusR, metricsR]);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   return (
     <div className="flex flex-wrap gap-2">
@@ -552,7 +552,7 @@ export const LockToggle = (props: { readonly locked: boolean; readonly onToggle:
  *  state, a lock (locked by default), and confirm on the destructive actions. @since 1.0.0 */
 export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const paused = s?.paused === true;
   const [locked, setLocked] = React.useState(true);
   return (
@@ -1058,7 +1058,7 @@ export const ApiCard = (props: {
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
   const health = apiHealth(s?.requestsTotal ?? 0, s?.errorsTotal ?? 0);
   const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 6);
@@ -1103,7 +1103,7 @@ export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElem
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const requests = s?.requestsTotal ?? 0;
   const errors = s?.errorsTotal ?? 0;
   const rate = requests > 0 ? (errors / requests) * 100 : 0;
@@ -1223,7 +1223,7 @@ const SORT_GLYPH: Record<string, string> = { asc: " ▲", desc: " ▼" };
  *  distinctive API widget. @since 1.0.0 */
 export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.metrics);
-  const m = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const m = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const rows = React.useMemo(() => [...(m?.byEndpoint ?? [])], [m]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "requests", desc: true }]);
   const table = useReactTable({
