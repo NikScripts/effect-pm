@@ -35,7 +35,9 @@ Now the **worker runtime** is one pipe — `QueueResource.serve` gives `Emails` 
 that drains each job), piped onto port 3001:
 
 ``` ts
-const worker = QueueResource.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
+const worker = QueueResource
+  .serve(Emails, { effect: sendEmail })
+  .pipe(nodeServer(3001))
 // worker: Layer — provide it to a runtime to run the queue on :3001
 ```
 
