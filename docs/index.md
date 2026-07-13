@@ -60,6 +60,31 @@ yield* emails.events.pipe(Stream.runForEach(onChange)) // watch every state chan
 And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
 each reading the resource without ever touching its implementation.
 
+## Scale to a fleet
+
+One runtime is rarely the whole story — run the same queue on several worker runtimes, a **fleet**,
+and reach them as one. Each runtime is a **node**; you mesh them so every instance knows its **peers**:
+
+``` ts
+class WorkerA extends Resource.Node<WorkerA>("worker-a") {}
+class WorkerB extends Resource.Node<WorkerB>("worker-b") {}
+
+// on each runtime — mesh Emails with the fleet (self + the others)
+const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
+```
+
+With the mesh in place, `peers` hands you a handle to **every** instance, and `combineQuery` folds a
+field across all of them — one call for a fleet-wide answer:
+
+``` ts
+const peers = yield* Resource.peers(Emails)
+const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // WHOLE-fleet backlog
+```
+
+`size` is a field on every instance; `combineQuery` reads it from each peer and `Combine.sum` folds
+the results into one number. **From one queue, to two runtimes, to a whole fleet — all through the
+same tag.**
+
 ## Build your own
 
 Building your own cross-runtime service is a first-class part of effect-pm, not an escape hatch.
