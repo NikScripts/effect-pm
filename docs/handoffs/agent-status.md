@@ -19,12 +19,11 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** [`agent-01-next-headlining-resource.md`](./agent-01-next-headlining-resource.md) — research next headlining resource (fleet/peers from day one). **No code until owner picks.**
-2. **Agent 2:** Logs closeout PR (`cursor/logs-closeout-a3ad`) — remove public `NodeLogs` shim + pristine handoffs; **do not expand into Logs P1**
 
-### Ready / next (no active Agent 2 engine work after closeout merges)
-3. Logs P1 (level pipes / store followers / remote `Resource.logs`) — only if owner wants that model
-4. CustomQueue / Run mechanical store polish
-5. `main` merge + `pnpm run version` — still deferred
+### Ready / next (Agent 2 engine work closed)
+2. Logs P1 (level pipes / store followers / remote `Resource.logs`) — only if owner wants that model
+3. CustomQueue / Run mechanical store polish
+4. `main` merge + `pnpm run version` — still deferred
 
 ### Deferred
 - Agent B dashboard type-safety (plan-first)
@@ -37,6 +36,7 @@
 
 ## Completed
 
+- [#33](https://github.com/NikScripts/effect-pm/pull/33) Logs closeout — `NodeLogs` shim removed; Agent 2 handoffs pristine
 - [#30](https://github.com/NikScripts/effect-pm/pull/30) Phase 5 Logs — `captureLogs` / handle `logs` removed; `Resource.logs` / `NodeStatus.logs`; P0 review addressed
 - ProcessStorage / RuntimeStorage / ProcessLifecycleStore facet substrate **retired** (on #30 tip, folded into `integration`)
 - [#26](https://github.com/NikScripts/effect-pm/pull/26) Process `run` RPC + effect/effectFn
