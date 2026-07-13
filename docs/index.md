@@ -51,12 +51,23 @@ A cross-runtime service isn't just callable across runtimes — it's **operable*
 handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
 anywhere it's reached:
 
+{.twoslash}
 ``` ts
-const emails = yield* Emails            // emails: the Emails handle — local OR an RPC client, same type
+import { Effect, Stream } from "effect"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import { Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+declare const onChange: (e: unknown) => Effect.Effect<void>
+const program = Effect.gen(function* () {
+// ---cut---
+const emails = yield* Emails            // the Emails handle — local OR an RPC client, same type
 
-yield* emails.pause                     // pause: Effect<void> — stop draining, at runtime
-const depth = yield* emails.size.get    // depth: number — how many are waiting, right now
-yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEvent> — every change, live
+yield* emails.pause                     // stop draining, at runtime
+const depth = yield* emails.size.get    // how many are waiting, right now
+yield* emails.events.pipe(Stream.runForEach(onChange)) // every change, live
+// ---cut-after---
+})
 ```
 
 And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
