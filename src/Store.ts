@@ -18,7 +18,7 @@
  *
  * ## Registration
  *
- * Register scopes on an aggregate with {@link register} or `Resource.store(tag, contract)`.
+ * Register scopes on an aggregate with {@link register} or {@link scoped}.
  * Resolve handles with `yield* MyStore.at(Tag)` (tag-first) or `yield* tag.store` when the tag
  * carries a `.store` attachment. Standalone {@link store} yields a single-scope handle directly.
  *
@@ -1297,7 +1297,7 @@ export const logLevelNoneDefault = withDefaultLogLevel("None");
 // Standalone + tag attachment
 // ============================================================================
 
-/** Standalone single-scope store class from {@link store}. @public */
+/** Standalone single-scope store class from {@link scoped}. @public */
 export type Standalone<
   Self,
   Id extends string,
@@ -1306,55 +1306,74 @@ export type Standalone<
 > = StandaloneStore<Self, Id, K, C>;
 
 /**
- * Standalone store for one scope, or attach a public spec to a resource tag (pipe form).
+ * Standalone store for one scope — class with `layerMemory` / `layer({ filename? })` like
+ * {@link Service}, but single-scope.
  *
- * Standalone classes expose `layerMemory` and `layer({ filename? })` like {@link Service}.
- * Tag attachment adds `yield* Tag.store` resolved through the aggregate bridge.
+ * @example
+ * ```ts
+ * const ThermoStore = Store.scoped("solo", thermometerContract);
+ * Effect.provide(program, ThermoStore.layer({ filename: "data.sqlite" }));
+ * ```
  *
  * @public
  */
-export const store: {
-  <
-    const Scope extends string | StoreScopeTag,
-    const C extends StoreContractValue,
-  >(
-    scope: Scope,
-    contract: C,
-  ): StandaloneStore<
-    { readonly _tag: ScopeKeyOf<Scope> },
-    `@nikscripts/effect-pm/Store/scope/${ScopeKeyOf<Scope>}`,
-    ScopeKeyOf<Scope>,
-    C,
-    Scope extends StoreScopeTag ? Scope : undefined
+export const scoped = <
+  const ScopeKey extends string | StoreScopeTag,
+  const C extends StoreContractValue,
+>(
+  scope: ScopeKey,
+  contract: C,
+): StandaloneStore<
+  { readonly _tag: ScopeKeyOf<ScopeKey> },
+  `@nikscripts/effect-pm/Store/scope/${ScopeKeyOf<ScopeKey>}`,
+  ScopeKeyOf<ScopeKey>,
+  C,
+  ScopeKey extends StoreScopeTag ? ScopeKey : undefined
+> => {
+  const standaloneClass = defineStandaloneStore(scope, contract);
+  const registration = buildStandaloneRegistration(scope, contract);
+  const layerMemory = buildStandaloneMemoryLayer(standaloneClass, registration);
+  const layer = (options?: StoreLayerOptions) =>
+    buildStandaloneLayer(standaloneClass, registration, options);
+  return Object.assign(standaloneClass, {
+    layerMemory,
+    layer,
+  });
+};
+
+/**
+ * Attach a public store spec to a resource tag (pipe combinator).
+ *
+ * Adds `yield* Tag.store` resolved through the {@link Storage} bridge.
+ *
+ * @example
+ * ```ts
+ * class Thermometer extends Resource.Tag<Thermometer>()(key, contract).pipe(
+ *   Resource.withStore(thermometerStoreSpec),
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export const withStore = <const C extends StoreContractValue>(
+  contract: C,
+): (<T extends StoreScopeTag>(tag: T) => T & {
+  readonly store: Effect.Effect<
+    StoreHandleFromContract<C>,
+    StoreScopeNotRegistered,
+    Storage
   >;
-  <const C extends StoreContractValue>(
-    contract: C,
-  ): <T extends StoreScopeTag>(tag: T) => T & {
-    readonly store: Effect.Effect<
-      StoreHandleFromContract<C>,
-      StoreScopeNotRegistered,
-      Storage
-    >;
-  };
-} = ((scopeOrContract: string | StoreScopeTag | StoreContractValue, maybeContract?: StoreContractValue) => {
-  if (maybeContract !== undefined) {
-    const scope = scopeOrContract as string | StoreScopeTag;
-    const standaloneClass = defineStandaloneStore(scope, maybeContract);
-    const registration = buildStandaloneRegistration(scope, maybeContract);
-    const layerMemory = buildStandaloneMemoryLayer(standaloneClass, registration);
-    const layer = (options?: StoreLayerOptions) =>
-      buildStandaloneLayer(standaloneClass, registration, options);
-    return Object.assign(standaloneClass, {
-      layerMemory,
-      layer,
-    });
-  }
-  const contract = scopeOrContract as StoreContractValue;
-  return <T extends StoreScopeTag>(tag: T) =>
+}) =>
+  <T extends StoreScopeTag>(tag: T) =>
     Object.assign(tag, {
       store: resolve(tag.key, contract),
-    });
-}) as never;
+    }) as T & {
+      readonly store: Effect.Effect<
+        StoreHandleFromContract<C>,
+        StoreScopeNotRegistered,
+        Storage
+      >;
+    };
 
 /**
  * Register a scope on an aggregate {@link Service} without creating a standalone class.

@@ -123,7 +123,7 @@ yield* MyQueue.logs;
 
 ### Store integration
 
-Each `Store.register` / `Resource.store` materialization forks a **follower** on `Relay.publish`:
+Each `Store.register` / `Resource.withStore` materialization forks a **follower** on `Relay.publish`:
 
 1. Level gate from registration (`logStoreLevel` / `Store.logLevel*` today → split into store channel).
 2. Default row match: `LogEntry.hasKey(scopeKey)`.
@@ -132,7 +132,24 @@ Each `Store.register` / `Resource.store` materialization forks a **follower** on
 
 **Node-wide bucket:** separate registration on node store class (sketch: `Node.logs` / `Logs.registerNode` on `Store.Service`) — entire runtime, `groupId` = node id. Same follower pattern.
 
-Standalone `Resource.store` / `Store.effects` materializations use the same follower when scope is registered (default-memory follower when only `layerDefaultMemory`).
+Standalone `Resource.withStore` / `Store.effects` materializations use the same follower when scope is registered (default-memory follower when only `layerDefaultMemory`).
+
+---
+
+## Store naming (locked 2026-07-13)
+
+**Removed:** `Store.store` (overloaded, `Store.store` reads absurd).
+
+| Role | API |
+|------|-----|
+| Tag pipe — adds `yield* Tag.store` | `Resource.withStore(contract)` |
+| Single-scope class + `layerMemory` / `layer` | `Store.scoped(scope, contract)` |
+| Aggregate registration on `Store.Service` | `Store.register(scope, contract)` |
+| Multi-scope app DB | `Store.Service` |
+
+`Store.scoped` was briefly `Store.Scope` — rejected (clashes with `effect/Scope`).
+
+Single-resource SQLite: `Store.scoped(MyTag, spec).layer({ filename })` — not `Store.Service`.
 
 ---
 

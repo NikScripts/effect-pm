@@ -32,7 +32,7 @@ type ReadingOnlyHandle = Store.HandleOf<typeof readingOnlyContract>;
 
 class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
   temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.store(thermometerContract)) {}
+}).pipe(Resource.withStore(thermometerContract)) {}
 
 class Mail extends Resource.Tag<Mail>()("@app/Mail", {
   send: Resource.effect(Schema.Void),
@@ -55,18 +55,18 @@ const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
 const mailQueueRegistration = Store.register(MailQueue, mailQueueContract);
 
 class DropletStoreArray extends Store.Service<DropletStoreArray>("@repo/app/Store")([
-  Resource.store(Mail, thermometerContract),
-  Resource.store("custom-store", thermometerContract),
+  Store.scoped(Mail, thermometerContract),
+  Store.scoped("custom-store", thermometerContract),
 ]) {}
 
 class DropletStoreRest extends Store.Service<DropletStoreRest>("@repo/app/StoreRest")(
-  Resource.store(Mail, thermometerContract),
-  Resource.store(LabThermometer, thermometerContract),
-  Resource.store("custom-store", thermometerContract),
+  Store.scoped(Mail, thermometerContract),
+  Store.scoped(LabThermometer, thermometerContract),
+  Store.scoped("custom-store", thermometerContract),
 ) {}
 
 class NamedDropletStore extends Store.Service<NamedDropletStore>("@repo/app/NamedStore")({
-  temp: Resource.store(LabThermometer, thermometerContract),
+  temp: Store.scoped(LabThermometer, thermometerContract),
   custom: readingOnlyContract,
 }) {}
 
@@ -85,10 +85,10 @@ const extendedThermometerContract = thermometerContract.pipe(
 type ExtendedThermometerHandle = Store.HandleOf<typeof extendedThermometerContract>;
 
 class ExtendStore extends Store.Service<ExtendStore>("@repo/app/ExtendStore")(
-  Resource.store("extended", extendedThermometerContract),
+  Store.scoped("extended", extendedThermometerContract),
 ) {}
 
-const mailStore = Resource.store(Mail, thermometerContract);
+const mailStore = Store.scoped(Mail, thermometerContract);
 
 const customEffectContract = Store.contract(
   { readings: readingSchema, audit: Schema.Struct({ note: Schema.String }) },
@@ -109,7 +109,7 @@ const customEffectContract = Store.contract(
 type CustomEffectHandle = Store.HandleOf<typeof customEffectContract>;
 
 class CustomEffectStore extends Store.Service<CustomEffectStore>("@repo/app/CustomEffectStore")(
-  Resource.store("custom", customEffectContract),
+  Store.scoped("custom", customEffectContract),
 ) {}
 
 describe("Store.Service", () => {
@@ -181,8 +181,8 @@ describe("Store.Service", () => {
   it("throws on duplicate tuple scope keys at definition time", () => {
     expect(() =>
       class DupStore extends Store.Service<DupStore>("@repo/app/Dup")(
-        Resource.store("same-key", thermometerContract),
-        Resource.store("same-key", thermometerContract),
+        Store.scoped("same-key", thermometerContract),
+        Store.scoped("same-key", thermometerContract),
       ) {},
     ).toThrow();
   });
@@ -299,7 +299,7 @@ describe("Store.Service", () => {
     }).pipe(
       Effect.provide(
         Store.Service<DropletStoreRest>("@repo/app/StoreRest")(
-          Resource.store("custom-store", shapedThermometerContract),
+          Store.scoped("custom-store", shapedThermometerContract),
         ).layerMemory,
       ),
       Effect.scoped,

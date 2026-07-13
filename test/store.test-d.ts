@@ -30,7 +30,7 @@ const readingOnlyContract = Store.contract({ readings: readingSchema });
 
 class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
   temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.store(thermometerContract)) {}
+}).pipe(Resource.withStore(thermometerContract)) {}
 
 class Mail extends Resource.Tag<Mail>()("@app/Mail", {
   send: Resource.effect(Schema.Void),
@@ -116,8 +116,8 @@ void ({} as _QueueReadPayload satisfies { readonly limit?: number } | undefined)
 
 type DropletRegs = RegsOfStoreInput<
   [
-    ReturnType<typeof Resource.store<typeof Mail, typeof thermometerContract>>,
-    ReturnType<typeof Resource.store<"custom-store", typeof thermometerContract>>,
+    ReturnType<typeof Store.scoped<typeof Mail, typeof thermometerContract>>,
+    ReturnType<typeof Store.scoped<"custom-store", typeof thermometerContract>>,
     ReturnType<typeof Store.register<typeof MailQueue, typeof mailQueueContract>>,
   ]
 >;
@@ -154,7 +154,7 @@ type FacetCampaignAuditRow = Parameters<FacetQueueAtHandle["campaignAudit"]["app
 void ({} as FacetCampaignAuditRow satisfies { readonly campaignId: string });
 
 type NamedInput = {
-  temp: ReturnType<typeof Resource.store<typeof LabThermometer, typeof thermometerContract>>;
+  temp: ReturnType<typeof Store.scoped<typeof LabThermometer, typeof thermometerContract>>;
   custom: typeof readingOnlyContract;
 };
 type NamedRegsDirect = RegsOfStoreInput<NamedInput>;
@@ -164,14 +164,14 @@ declare const _customDirect: CustomHandleDirect;
 void _customDirect.readings.read();
 
 const NamedStoreBase = Store.Service<NamedStore>("@repo/app/NamedStore")({
-  temp: Resource.store(LabThermometer, thermometerContract),
+  temp: Store.scoped(LabThermometer, thermometerContract),
   custom: readingOnlyContract,
 });
 class NamedStore extends NamedStoreBase {}
 
 class DropletStore extends Store.Service<DropletStore>("@repo/app/Store")(
-  Resource.store(Mail, thermometerContract),
-  Resource.store("custom-store", thermometerContract),
+  Store.scoped(Mail, thermometerContract),
+  Store.scoped("custom-store", thermometerContract),
   Store.register(MailQueue, mailQueueContract),
 ) {}
 

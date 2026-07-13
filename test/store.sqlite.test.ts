@@ -16,7 +16,7 @@ class ThermoStore extends Store.Service<ThermoStore>("@test/ThermoStore")(
   Store.register("thermo", thermometerContract),
 ) {}
 
-const standaloneThermo = Store.store("solo", thermometerContract);
+const standaloneThermo = Store.scoped("solo", thermometerContract);
 
 class RetentionStore extends Store.Service<RetentionStore>("@test/Retention")(
   Store.retention(2)(Store.register("thermo", thermometerContract)),
@@ -111,7 +111,7 @@ describe("Store SQLite layer", () => {
     Effect.gen(function* () {
       class Sensor extends Resource.Tag<Sensor>()("@test/Sensor", {
         value: Resource.ref(Schema.Number),
-      }).pipe(Resource.store(thermometerContract)) {}
+      }).pipe(Resource.withStore(thermometerContract)) {}
 
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -123,7 +123,7 @@ describe("Store SQLite layer", () => {
       const filename = path.join(dir, "tag.db");
 
       class AppStore extends Store.Service<AppStore>("@test/AppStore")(
-        Resource.store(Sensor, thermometerContract),
+        Store.scoped(Sensor, thermometerContract),
       ) {}
 
       yield* Effect.scoped(
