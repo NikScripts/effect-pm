@@ -211,6 +211,18 @@ main {
 h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0.6rem 0 1rem; text-wrap: balance; }
 h2 { font-size: 1.28rem; letter-spacing: -0.01em; margin: 2.4rem 0 0.6rem; }
 h3 { font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
+
+/* Top-level section headings — grouping headers on standards pages, section breaks in guides.
+   These are bare `main > h2`; rule titles live inside `<section>` (`section > h2`) and keep the size
+   above. A size up + a divider rule so a section header never reads as just another rule title. */
+main > h2 {
+  font-size: 1.55rem;
+  margin-top: 3.2rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+/* the first rule right after a grouping header shouldn't stack its own big top gap */
+main > h2 + section > h2 { margin-top: 1.1rem; }
 p { margin: 0.85rem 0; }
 strong { font-weight: 650; }
 ul, ol { margin: 0.85rem 0; padding-left: 1.4rem; }
