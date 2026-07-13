@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | — (research only) | [next headlining resource](./agent-01-next-headlining-resource.md) | **plan-first** | — | — | Research fleet/peers headline after Queue+Process; owner picks direction | 2026-07-13 |
+| **1** | from `cursor/phase5-logs-migration-a3ad` | [next headlining resource](./agent-01-next-headlining-resource.md) | **plan-first** | — | — | Branch **from Agent 2 tip**; research fleet/peers headline — owner picks | 2026-07-13 |
 | **2** | `cursor/phase5-logs-migration-a3ad` | [logs plan](./agent-02-logs-platform-plan.md) · [PR #30 review](./phase5-logs-migration-review.md) | **in progress** | see PR | typecheck/test claimed | P0 hygiene from review; P1 platform gaps owner-gated | 2026-07-13 |
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
