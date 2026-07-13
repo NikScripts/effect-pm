@@ -699,6 +699,29 @@ export function effect(
   return makeMethod("query", undefined, success, errorSchema, false, {});
 }
 
+/**
+ * Two-stage {@link effect} that lets you **override the client-facing type** with an **unconstrained**
+ * `Client` — here an **`Effect`** type (a read surfaces as `Effect<Success>`, not a function):
+ * `unsafeEffect<Client>()(success)`. The wire/impl stay schema-derived; only what `yield* Tag` reads is
+ * replaced by `Client`. **Unsafe:** `Client` is not checked against the schema — you assert it matches.
+ * (`effect` can't host a narrowing two-stage form because bare `effect()` already means a void query.)
+ *
+ * @public
+ */
+export function unsafeEffect<Client = Derive>() {
+  return <Su extends Schema.Top>(
+    success: Su,
+  ): Method<"query", undefined, Su, typeof Schema.Never, false, MethodAnnotations, Client> =>
+    makeMethod<"query", undefined, Su, typeof Schema.Never, false, MethodAnnotations, Client>(
+      "query",
+      undefined,
+      success,
+      Schema.Never,
+      false,
+      {},
+    );
+}
+
 /** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
  *  surfaced as a plain value. Tagged with a readable `_tag: "constant"`. @public */
 export type ConstantField<M extends AnyMethod> = Marked<M, { readonly _tag: "constant" }>;
