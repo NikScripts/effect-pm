@@ -143,13 +143,31 @@ Standalone `Resource.withStore` / `Store.effects` materializations use the same 
 | Role | API |
 |------|-----|
 | Tag pipe — adds `yield* Tag.store` | `Resource.withStore(contract)` |
-| Single-scope class + `layerMemory` / `layer` | `Store.scoped(scope, contract)` |
-| Aggregate registration on `Store.Service` | `Store.register(scope, contract)` |
+| Single-scope class + `layerMemory` / `layer` (no `class extends`) | `Store.scoped(scope, contract)` — tests/escape hatch only |
+| Aggregate registration on `Store.Service` | `Store.register(scope, contract)` — custom `{}` entries |
 | Multi-scope app DB | `Store.Service` |
 
 `Store.scoped` was briefly `Store.Scope` — rejected (clashes with `effect/Scope`).
 
-Single-resource SQLite: `Store.scoped(MyTag, spec).layer({ filename })` — not `Store.Service`.
+### `Store.Service` input shapes (locked 2026-07-13)
+
+Three forms only. Registration for toolkit resources is always **`QueueResource.store(tag, additions?)`** /
+**`RunResource.store(tag)`** / **`Process.store(tag)`** — not raw `(tag, contract)` on `Service`.
+
+| Form | Example | Acquire |
+|------|---------|---------|
+| **Single store** | `Store.Service(id)(QueueResource.store(Mail))` | `yield* MailStore` — service type **is** the handle |
+| **Tag-keyed multi** | `Store.Service(id)([QueueResource.store(Mail), RunResource.store(Gate)])` | `yield* AppStore.at(Mail)` |
+| **Custom-keyed** | `Store.Service(id)({ mail: QueueResource.store(Mail), audit: spec })` | `yield* AppStore.at("audit")` / named bundle accessors |
+
+**Single store is not an aggregate.** One registration passed bare (not `[]`, not `{}`) → flat
+`StoreHandleFromContract`, no `.at()`. Layers unchanged: `MailStore.layer({ filename })`.
+
+**Do not use** `Store.scoped` for app single-resource SQLite — use `class MailStore extends
+Store.Service<MailStore>(…)(QueueResource.store(Mail))`.
+
+**Implementation:** branch in `defineStoreTag` when `normalizeStoreRegistrations` yields exactly one
+entry — `Context.Service` carries the handle directly; multi keeps `StoreBundle` + `at`.
 
 ---
 
