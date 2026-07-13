@@ -148,7 +148,33 @@ did. State what they must build and know — paths, constraints, the real gotcha
 so they never have to reconstruct your session to act. If it only makes sense to someone who was there,
 it isn't a handoff.
 
+## Authoring Djot (prototype)
+
 {.note}
-**Examples are an open question.** How examples are sourced, verified, and kept in sync across doc
-comments *and* narrative docs — one policy or two — is still being decided; this chapter will firm up
-once that's settled.
+**Prototype — provisional.** The authoring format below is documented as it stands today. **LSP support
+for the docs is coming and will change it** — read this as a description of the current shape, not a
+locked contract. It firms up into enforced rules once the LSP lands.
+
+Our docs are [Djot](https://djot.net), and the format doubles as data — the standards manifest is
+parsed straight from the blocks, so a page is both prose and a machine contract. The conventions today:
+
+- **Page block.** Every page opens with `{#id title="…"}` on the line above the H1. `id` matches the
+  slug and the filename; `title` is the single source — nav and the manifest *derive* it, never repeat
+  it.
+- **Rule block.** A standard is `{#id .severity appliesTo="…"}` followed by an H2 whose text *is* the
+  rule's title. `severity` is a closed set: `must` / `should` / `may`.
+- **`appliesTo` is a rule concern.** It scopes a rule to code trees — `src` / `examples` / `test` /
+  `docs` / `process`, with `all` = `src examples test`, space-joined for multiples. It belongs on
+  **rule blocks only**; on a page block the parser discards it (see rough edges).
+- **Fenced code names its language** — the opening fence is three backticks, a space, then the
+  language (`ts`, `bash`, …).
+- **`{.note}`** marks a callout, like this one.
+
+**Known rough edges — for the LSP work to resolve, not to hand-fix now:**
+- `order=N` on standards pages duplicates `nav.ts`'s ordering — two sources for one fact.
+- Page-level `appliesTo` is parsed-but-discarded, yet still written on every page (including the
+  non-rule guides, which have no rules to scope) — dead metadata that reads as load-bearing.
+
+{.note}
+**Examples are an open question.** How the real `examples/` apps are sourced, kept building, and used
+as the canonical demos is still being decided — a separate discussion from this chapter.
