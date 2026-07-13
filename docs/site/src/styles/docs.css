@@ -319,12 +319,10 @@ pre.shiki { background: transparent; }
 .copy-btn:hover { color: var(--fg); border-color: var(--primary); }
 .copy-btn[data-copied] { color: var(--primary); border-color: var(--primary); opacity: 1; }
 
-/* twoslash blocks keep `overflow: visible` so hover popups can escape upward — which means they
-   can't scroll horizontally, so a long trailing `// comment` would push the page. Wrap instead:
-   whitespace wraps at word boundaries, long unbroken tokens break rather than overflow. */
+/* Long lines scroll horizontally rather than wrap (owner preference) — same as any code block. */
 .code-block > pre.twoslash > code {
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 /* twoslash hover types — `{.twoslash}` blocks. The popup code keeps shiki's dual-theme token
@@ -360,9 +358,10 @@ pre.shiki { background: transparent; }
   font-size: 0.78rem;
 }
 .twoslash-popup-docs-tag-name { color: var(--primary); }
-/* twoslash blocks must not clip the escaping popup (intro snippets are short; revisit horizontal
-   scroll when rolling out to long Standards blocks). */
-.twoslash { overflow: visible; }
+/* twoslash blocks scroll horizontally like any code block. Trade-off: a scroll box clips vertical
+   overflow, so a hover popup on the very top row can be cut off (rows with space above are fine).
+   A fully-escaping popup would need a JS/portal reposition — a follow-up for the doc-site owner. */
+.twoslash { overflow-x: auto; }
 
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */
