@@ -1719,7 +1719,7 @@ export type ScheduleResourceSpec = typeof scheduleResourceSpec;
 
 /** The reactive `result` field a value-returning process gains via {@link result}. */
 type ResultField<A extends Schema.Top> = RefField<
-  Method<"query", undefined, Schema.Option<A>, typeof Schema.Never, true>
+  Method<undefined, Schema.Option<A>, typeof Schema.Never, true>
 >;
 
 /** The `result` field as a {@link Spec} fragment (what {@link result} grafts). */
@@ -1734,7 +1734,7 @@ export type ProcessInstanceSpec<
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > = typeof processControlSpec & {
-  readonly run: Resource.Method<"query", undefined, A, E>;
+  readonly run: Resource.Method<undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
 // ============================================================================

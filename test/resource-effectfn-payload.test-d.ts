@@ -4,8 +4,11 @@
 import { Schema } from "effect";
 import * as Resource from "../src/Resource";
 
-// @ts-expect-error effectFn requires payload — inputless members use effect
-Resource.effectFn();
+// effectFn() is the two-stage entry (returns a builder for the `<Client>` override form); valid.
+void Resource.effectFn();
+
+// @ts-expect-error the two-stage second call still requires a non-void payload
+Resource.effectFn()(Schema.Void);
 
 // @ts-expect-error Schema.Void is not a payload — use effect for inputless commands
 Resource.effectFn(Schema.Void);

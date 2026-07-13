@@ -4,41 +4,145 @@
 **Build cross-runtime services on Effect.**
 
 An Effect service lives inside one runtime. A *cross-runtime service* doesn't: define it once, run it
-on one process or node, and call it from another over RPC — the same typed handle whether it's local
-or across the network.
+on one runtime, and call it from another over RPC — with the same typed handle.
 
-Normally, moving a queue or a background job to another process means rewriting the call site — an
-HTTP client, serialization, its own error handling. A cross-runtime service erases that: you build it
-in-process, then serve it, and **the call site never changes.** Local and remote are the same code —
-only the layer you provide differs.
+A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
+there. Wiring those together normally means one side owns a resource and the others reach it through
+a hand-rolled HTTP client. Cross-runtime services drop that: every resource is reached with the same
+typed handle, wherever it runs.
 
+Here are two resources — a queue and a scheduled process — on two runtimes, working together.
+
+{.twoslash}
 ``` ts
-// define once — a queue whose items are validated by a schema
-class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as Process from "@nikscripts/effect-pm/Process"
+import { Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+// ---cut---
+// two resources, defined once
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
+class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
+```
 
-// the program that uses it — unchanged whether Emails runs here or elsewhere
+The **worker runtime** owns the queue — it drains `Emails` and serves it on port 3001:
+
+{.twoslash}
+``` ts
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import { Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
+declare const localServer: <A>(layer: A, port: number) => A
+// ---cut---
+const worker = localServer(QueueResource.serve(Emails, { effect: sendEmail }), 3001)
+// a runnable worker runtime, serving Emails on :3001
+```
+
+The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
+that lives on the *other* runtime, reached by port:
+
+{.twoslash}
+``` ts
+import * as Process from "@nikscripts/effect-pm/Process"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Polling } from "@nikscripts/effect-pm/Polling"
+import { Effect, Duration, Layer, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+class Digest extends Process.Tag<Digest>()("app/Digest") {}
+declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
+// ---cut---
+const scheduler = Process.layer(Digest, {
+  effect: Effect.gen(function* () {
+    const emails = yield* Emails            // the Emails handle (here, an RPC client)
+    const email = yield* nextEmail
+    yield* emails.add(email)
+  }),
+  polling: Polling.spaced(Duration.hours(1)),
+}).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
+// the scheduler runtime
+```
+
+`Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
+`emails.add(…)` read exactly as if the two shared one process. **Two resources, two runtimes, one
+program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
+
+## Operate them live
+
+A cross-runtime service isn't just callable across runtimes — it's **operable** across them. The same
+handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
+anywhere it's reached:
+
+{.twoslash}
+``` ts
+import { Effect, Stream } from "effect"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import { Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+declare const onChange: (e: unknown) => Effect.Effect<void>
 const program = Effect.gen(function* () {
-  const emails = yield* Emails
-  yield* emails.add(job)
+// ---cut---
+const emails = yield* Emails            // the Emails handle — local OR an RPC client, same type
+
+yield* emails.pause                     // stop draining, at runtime
+const depth = yield* emails.size.get    // how many are waiting, right now
+yield* emails.events.pipe(Stream.runForEach(onChange)) // every change, live
+// ---cut-after---
 })
 ```
 
-Run it in this process — provide the worker that drains the queue:
+And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
+each reading the resource without ever touching its implementation.
 
+## Scale to a fleet
+
+One runtime is rarely the whole story — run the same `Emails` queue on several worker runtimes, a
+**fleet**, and reach them as one. Here's a standalone example. Each runtime is a **node**, and a node
+carries **its own address**, so the fleet is just a list of nodes:
+
+{.twoslash}
 ``` ts
-Effect.provide(program, QueueResource.layer(Emails, { effect: sendEmail }))
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import { Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+// ---cut---
+class WorkerA extends Resource.Node<WorkerA>("app/WorkerA", { url: "http://10.0.0.1:3001" }) {}
+class WorkerB extends Resource.Node<WorkerB>("app/WorkerB", { url: "http://10.0.0.2:3001" }) {}
+
+// on each runtime — mesh Emails with the fleet; transport comes from each node's own url
+const fleet = Resource.peersLayer(Emails, WorkerA, { nodes: [WorkerA, WorkerB] })
+// provide it to join the mesh
 ```
 
-…or split it across runtimes. **`program` doesn't change** — the server provides the worker, the
-caller a client layer reaching it over HTTP:
+Because each node carries its `url`, `peersLayer` wires every peer's transport for you — no client to
+hand-configure. With the mesh in place, `peers` hands you a handle to **every** instance, and
+`combineQuery` folds a field across all of them — one call for a fleet-wide answer:
 
+{.twoslash}
 ``` ts
-// server — serve the queue over RPC
-Resource.httpServer(QueueResource.serve(Emails, { effect: sendEmail }))
-
-// caller — the same program, now reached across the network
-Effect.provide(program, Resource.client(Emails).pipe(Layer.provide(httpTransport)))
+import { Effect, Schema } from "effect"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Combine, combineQuery } from "@nikscripts/effect-pm/MultiNode"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
+const program = Effect.gen(function* () {
+// ---cut---
+const peers = yield* Resource.peers(Emails)          // one Emails handle per instance
+const totalBacklog = yield* combineQuery(peers, (p) => p.size, Combine.sum) // fleet-wide total
+// ---cut-after---
+})
 ```
+
+`size` is a field on every instance; `combineQuery` reads it from each peer and `Combine.sum` folds
+the results into one number. **From one queue, to two runtimes, to a whole fleet — all through the
+same tag.**
 
 ## Build your own
 

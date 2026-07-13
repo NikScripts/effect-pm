@@ -60,6 +60,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
+import type { Simplify } from "effect/Types";
 import {
   Rpc,
   RpcClient,
@@ -183,6 +184,16 @@ export interface MethodAnnotations {
  *  plain object; guarded with `Predicate.hasProperty`. */
 const MethodTypeId = "~nikscripts/effect-pm/Resource/Method" as const;
 
+/** Sentinel for a {@link Method}'s `Client` type meaning "no explicit client type — **derive** the shape
+ *  from the schema" (the default). Branded so nothing else structurally matches it. @public */
+declare const deriveSym: unique symbol;
+export interface Derive {
+  readonly [deriveSym]: true;
+}
+/** Phantom key carrying a method's optional client-type override (set by the `effect`/`effectFn` two-stage
+ *  forms). Type-only — runtime methods never hold it, so the property is optional. */
+declare const clientSym: unique symbol;
+
 /**
  * One method of a resource contract — built by {@link effect} /
  * {@link effectFn} / {@link Resource.stream}. Carries its `kind`, schemas
@@ -197,34 +208,37 @@ const MethodTypeId = "~nikscripts/effect-pm/Resource/Method" as const;
  * @public
  */
 export interface Method<
-  Kind extends MethodKind,
   P extends Schema.Struct.Fields | Schema.Top | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
   Str extends boolean = false,
   Ann extends MethodAnnotations = MethodAnnotations,
+  Client = Derive,
 > extends Pipeable.Pipeable {
   readonly [MethodTypeId]: typeof MethodTypeId;
-  readonly kind: Kind;
+  readonly kind: MethodKind;
   readonly payload: P;
   readonly success: Su;
   readonly error: E;
   /** A streaming read (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
   readonly stream: Str;
   readonly annotations: Ann;
+  /** Phantom: an explicit client-facing type (set via the `effect`/`effectFn` two-stage forms). `Derive`
+   *  ⇒ the client shape is derived from the schema. Optional + type-only. */
+  readonly [clientSym]?: (client: Client) => void;
   readonly annotate: <A extends MethodAnnotations>(
     annotations: A,
-  ) => Method<Kind, P, Su, E, Str, Ann & A>;
+  ) => Method<P, Su, E, Str, Ann & A, Client>;
 }
 
 /** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
 export type AnyMethod = Method<
-  MethodKind,
   Schema.Struct.Fields | Schema.Top | undefined,
   Schema.Top,
   Schema.Top,
   boolean,
-  MethodAnnotations
+  MethodAnnotations,
+  never
 >;
 
 /** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the nodes (in the
@@ -340,14 +354,14 @@ export type FlatSpecOf<S, Prefix extends string = ""> = UnionToIntersection<
  * `RpcOf` under a nested, generic `Spec`. @internal
  */
 type AsMethod<T> = T extends {
-  readonly kind: infer K extends MethodKind;
+  readonly kind: MethodKind;
   readonly payload: infer P extends Schema.Struct.Fields | Schema.Top | undefined;
   readonly success: infer Su extends Schema.Top;
   readonly error: infer E extends Schema.Top;
   readonly stream: infer Str extends boolean;
   readonly annotations: infer Ann extends MethodAnnotations;
 }
-  ? Method<K, P, Su, E, Str, Ann>
+  ? Method<P, Su, E, Str, Ann>
   : never;
 
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
@@ -493,7 +507,7 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
  * @public
  */
 export const isVoidCommand = (m: AnyMethod): boolean => {
-  if (m.kind !== "query" || m.payload !== undefined) {
+  if (m.payload !== undefined) {
     return false;
   }
   return (
@@ -516,27 +530,27 @@ export const isVoidCommand = (m: AnyMethod): boolean => {
  * @public
  */
 export const isEffect = (m: AnyMethod): boolean =>
-  m.kind === "query" && m.payload === undefined;
+  m.payload === undefined;
 
 /**
  * The single {@link Method} constructor — {@link effect}, {@link effectFn}, {@link constant},
  * {@link value}, and {@link stream} all go through it.
  */
 const makeMethod = <
-  Kind extends MethodKind,
   P extends Schema.Struct.Fields | Schema.Top | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
   Str extends boolean,
   Ann extends MethodAnnotations = MethodAnnotations,
+  Client = Derive,
 >(
-  kind: Kind,
+  kind: MethodKind,
   payload: P,
   success: Su,
   error: E,
   stream: Str,
   annotations: Ann,
-): Method<Kind, P, Su, E, Str, Ann> =>
+): Method<P, Su, E, Str, Ann, Client> =>
   Object.assign(Object.create(Pipeable.Prototype), {
     [MethodTypeId]: MethodTypeId,
     kind,
@@ -545,8 +559,11 @@ const makeMethod = <
     error,
     stream,
     annotations,
-    annotate: <A extends MethodAnnotations>(a: A): Method<Kind, P, Su, E, Str, Ann & A> =>
-      makeMethod(kind, payload, success, error, stream, { ...annotations, ...a } as Ann & A),
+    annotate: <A extends MethodAnnotations>(a: A): Method<P, Su, E, Str, Ann & A, Client> =>
+      makeMethod<P, Su, E, Str, Ann & A, Client>(kind, payload, success, error, stream, {
+        ...annotations,
+        ...a,
+      } as Ann & A),
   });
 
 /**
@@ -559,7 +576,7 @@ export type Marked<M extends AnyMethod, Mark> = Omit<M, "annotate"> &
     readonly annotate: <A extends MethodAnnotations>(
       a: A,
     ) => Marked<
-      Method<M["kind"], M["payload"], M["success"], M["error"], M["stream"], M["annotations"] & A>,
+      Method<M["payload"], M["success"], M["error"], M["stream"], M["annotations"] & A>,
       Mark
     >;
   };
@@ -647,16 +664,33 @@ const assertEffectFnPayload = (
  *
  * @public
  */
-export function effect(): Method<"query", undefined, typeof Schema.Void, typeof Schema.Never>;
-export function effect<Su extends Schema.Top>(success: Su): Method<"query", undefined, Su, Schema.Never>;
+// A void query is now written **explicitly** as `effect(Schema.Void)` — the empty `effect()` is freed
+// to be the two-stage entry (below), so `effect<Client>()(success)` works like `effectFn<Client>()`.
+// The schema-derived client shape of a query — an `Effect<Success>` property; `effect<Client>()`
+// constrains `Client` to NARROW it (a `Client` that widens the success makes the arg resolve to `never`).
+type QueryDerived<Su extends Schema.Top> = Effect.Effect<PrettifyPayload<Su["Type"]>>;
+type NarrowedSuccess<Su extends Schema.Top, Client> = [Client] extends [Derive]
+  ? Su
+  : [Client] extends [QueryDerived<Su>]
+    ? Su
+    : never;
+/**
+ * Two-stage {@link effect} — override the **client-facing** type with a `Client` (an **`Effect`** type;
+ * a read surfaces as `Effect<Success>`) that must **narrow** the schema-derived shape:
+ * `effect<Client>()(success)`. Widening the success fails to compile. For a free override, see
+ * {@link unsafeEffect}. @public
+ */
+export function effect<Client = Derive>(): <Su extends Schema.Top>(
+  success: NarrowedSuccess<Su, Client>,
+) => Method<undefined, Su, typeof Schema.Never, false, MethodAnnotations, Client>;
+export function effect<Su extends Schema.Top>(success: Su): Method<undefined, Su, Schema.Never>;
 export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   error: E,
-): Method<"query", undefined, Su, E>;
+): Method<undefined, Su, E>;
 export function effect<const C extends EffectWireConfig>(
   config: C,
 ): Method<
-  "query",
   undefined,
   C["success"] extends Schema.Top ? C["success"] : typeof Schema.Void,
   C["error"] extends Schema.Top ? C["error"] : typeof Schema.Never
@@ -664,12 +698,16 @@ export function effect<const C extends EffectWireConfig>(
 export function effect(
   successOrConfig?: Schema.Top | EffectWireConfig,
   error?: Schema.Top,
-): AnyMethod {
+): AnyMethod | (<Su extends Schema.Top>(success: Su) => AnyMethod) {
+  // two-stage form `effect<Client>()(success)` — 0 args on the first call; the client override is
+  // type-only (phantom), so the returned builder is the ordinary schema-derived query builder.
+  if (successOrConfig === undefined) {
+    return <Su extends Schema.Top>(success: Su): AnyMethod =>
+      makeMethod("query", undefined, success, Schema.Never, false, {});
+  }
   let success: Schema.Top = Schema.Void;
   let errorSchema: Schema.Top = Schema.Never;
-  if (successOrConfig === undefined) {
-    // defaults
-  } else if (isEffectWireConfig(successOrConfig)) {
+  if (isEffectWireConfig(successOrConfig)) {
     success = successOrConfig.success ?? Schema.Void;
     errorSchema = successOrConfig.error ?? Schema.Never;
   } else {
@@ -677,6 +715,29 @@ export function effect(
     errorSchema = error ?? Schema.Never;
   }
   return makeMethod("query", undefined, success, errorSchema, false, {});
+}
+
+/**
+ * Two-stage {@link effect} that lets you **override the client-facing type** with an **unconstrained**
+ * `Client` — here an **`Effect`** type (a read surfaces as `Effect<Success>`, not a function):
+ * `unsafeEffect<Client>()(success)`. The wire/impl stay schema-derived; only what `yield* Tag` reads is
+ * replaced by `Client`. **Unsafe:** `Client` is not checked against the schema — you assert it matches.
+ * For a *narrowing* (checked) read override, use the two-stage {@link effect} form instead.
+ *
+ * @public
+ */
+export function unsafeEffect<Client = Derive>() {
+  return <Su extends Schema.Top>(
+    success: Su,
+  ): Method<undefined, Su, typeof Schema.Never, false, MethodAnnotations, Client> =>
+    makeMethod<undefined, Su, typeof Schema.Never, false, MethodAnnotations, Client>(
+      "query",
+      undefined,
+      success,
+      Schema.Never,
+      false,
+      {},
+    );
 }
 
 /** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
@@ -697,7 +758,7 @@ const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  */
 export const constant = <Su extends Schema.Top>(
   success: Su,
-): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
+): ConstantField<Method<undefined, Su, typeof Schema.Never>> =>
   marked(effect(success), { _tag: "constant" as const });
 
 /** A {@link Method} marked as a **ref** field (via {@link ref}) — surfaces as a {@link Subscribable}.
@@ -719,7 +780,7 @@ const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  */
 export const ref = <Su extends Schema.Top>(
   success: Su,
-): RefField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
+): RefField<Method<undefined, Su, typeof Schema.Never, true>> =>
   marked(stream(success), { _tag: "ref" as const });
 
 /**
@@ -994,10 +1055,27 @@ export const grantLocal = <Self, S extends Spec, R>(
  *
  * @public
  */
+// The schema-derived client shape of a void mutation — the two-stage `effectFn<Client>()` constrains
+// `Client` to **narrow** this (add overloads / refine), never widen it. A `Client` that would accept a
+// payload the wire rejects makes {@link NarrowedPayload} resolve to `never`, so the call fails to compile.
+type MutateDerived<P extends Schema.Top> = (payload: PrettifyPayload<P["Type"]>) => Effect.Effect<void>;
+type NarrowedPayload<P extends Schema.Top, Client> = [Client] extends [Derive]
+  ? RequiredPayloadSchema<P>
+  : [Client] extends [MutateDerived<P>]
+    ? RequiredPayloadSchema<P>
+    : never;
+/**
+ * Two-stage {@link effectFn} — override the **client-facing** type with a `Client` that must **narrow**
+ * the schema-derived shape: `effectFn<Client>()(payload)`. Reshape freely (e.g. add overloads), but a
+ * `Client` that would accept payloads the wire rejects fails to compile (payload resolves to `never`).
+ * For an override that can't be a narrowing (a generic library), use {@link unsafeEffectFn}. @public
+ */
+export function effectFn<Client = Derive>(): <P extends Schema.Top>(
+  payload: NarrowedPayload<P, Client>,
+) => Method<P, typeof Schema.Void, typeof Schema.Never, false, MethodAnnotations, Client>;
 export function effectFn<const C extends EffectFnWireConfig>(
   config: C,
 ): Method<
-  "mutate",
   C["payload"] extends Schema.Struct.Fields
     ? C["payload"]
     : C["payload"] extends Schema.Top
@@ -1008,23 +1086,23 @@ export function effectFn<const C extends EffectFnWireConfig>(
 >;
 export function effectFn<P extends Schema.Top>(
   payload: RequiredPayloadSchema<P>,
-): Method<"mutate", P, typeof Schema.Void, typeof Schema.Never>;
+): Method<P, typeof Schema.Void, typeof Schema.Never>;
 export function effectFn<P extends Schema.Top, Su extends Schema.Top>(
   payload: RequiredPayloadSchema<P>,
   success: Su,
-): Method<"mutate", P, Su, Schema.Never>;
+): Method<P, Su, Schema.Never>;
 export function effectFn<P extends Schema.Top, Su extends Schema.Top, E extends Schema.Top>(
   payload: RequiredPayloadSchema<P>,
   success: Su,
   error: E,
-): Method<"mutate", P, Su, E>;
+): Method<P, Su, E>;
 export function effectFn<const F extends Schema.Struct.Fields>(
   payload: RequiredPayloadFields<F>,
-): Method<"mutate", F, typeof Schema.Void, typeof Schema.Never>;
+): Method<F, typeof Schema.Void, typeof Schema.Never>;
 export function effectFn<const F extends Schema.Struct.Fields, Su extends Schema.Top>(
   payload: RequiredPayloadFields<F>,
   success: Su,
-): Method<"mutate", F, Su, Schema.Never>;
+): Method<F, Su, Schema.Never>;
 export function effectFn<
   const F extends Schema.Struct.Fields,
   Su extends Schema.Top,
@@ -1033,12 +1111,18 @@ export function effectFn<
   payload: RequiredPayloadFields<F>,
   success: Su,
   error: E,
-): Method<"mutate", F, Su, E>;
+): Method<F, Su, E>;
 export function effectFn(
-  payloadOrConfig: EffectFnPayload | EffectFnWireConfig,
+  payloadOrConfig?: EffectFnPayload | EffectFnWireConfig,
   success?: Schema.Top,
   error?: Schema.Top,
-): AnyMethod {
+): AnyMethod | (<P extends Schema.Top>(payload: RequiredPayloadSchema<P>) => AnyMethod) {
+  // two-stage form `effectFn<Client>()(payload)` — 0 args on the first call; the client override is
+  // type-only (phantom), so the returned builder is identical to the single-stage void/never path.
+  if (payloadOrConfig === undefined) {
+    return <P extends Schema.Top>(payload: RequiredPayloadSchema<P>): AnyMethod =>
+      makeMethod("mutate", assertEffectFnPayload(payload), Schema.Void, Schema.Never, false, {});
+  }
   let payload: EffectFnPayload;
   let successSchema: Schema.Top = Schema.Void;
   let errorSchema: Schema.Top = Schema.Never;
@@ -1052,6 +1136,36 @@ export function effectFn(
     errorSchema = error ?? Schema.Never;
   }
   return makeMethod("mutate", payload, successSchema, errorSchema, false, {});
+}
+
+/**
+ * Two-stage `effectFn` that lets you **override the client-facing type** with an **unconstrained** `Client`:
+ * `unsafeEffectFn<Client>()(payload)`. The wire/impl still come from the schema; only what `yield* Tag`
+ * reads is replaced by `Client`. **Unsafe:** unlike the narrowing `effectFn<Client>()` form, `Client` is
+ * *not* checked against the schema — you assert it matches. Reach for it only when the derivation can't be
+ * expressed (e.g. a generic library like the queue, whose correct overloads are unprovable under `<F>`).
+ *
+ * ```ts
+ * add: Resource.unsafeEffectFn<{
+ *   (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>
+ *   (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>
+ * }>()(itemOrItems)
+ * ```
+ *
+ * @public
+ */
+export function unsafeEffectFn<Client = Derive>() {
+  return <P extends Schema.Top>(
+    payload: RequiredPayloadSchema<P>,
+  ): Method<P, typeof Schema.Void, typeof Schema.Never, false, MethodAnnotations, Client> =>
+    makeMethod<P, typeof Schema.Void, typeof Schema.Never, false, MethodAnnotations, Client>(
+      "mutate",
+      payload,
+      Schema.Void,
+      Schema.Never,
+      false,
+      {},
+    );
 }
 
 type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
@@ -1070,16 +1184,16 @@ export function mutatePair<
   success: Su,
   head: H,
   tail: T,
-): Method<"mutate", Schema.Tuple<readonly [H, T]>, Su, Schema.Never, false, PairMethodAnnotations>;
+): Method<Schema.Tuple<readonly [H, T]>, Su, Schema.Never, false, PairMethodAnnotations>;
 export function mutatePair<Su extends Schema.Top, P extends Schema.Tuple<readonly [Schema.Top, Schema.Top]>>(
   success: Su,
   payload: P,
-): Method<"mutate", P, Su, Schema.Never, false, PairMethodAnnotations>;
+): Method<P, Su, Schema.Never, false, PairMethodAnnotations>;
 export function mutatePair(
   success: Schema.Top,
   headOrPayload: Schema.Top,
   tail?: Schema.Top,
-): Method<"mutate", Schema.Tuple<readonly [Schema.Top, Schema.Top]>, Schema.Top, Schema.Never, false, PairMethodAnnotations> {
+): Method<Schema.Tuple<readonly [Schema.Top, Schema.Top]>, Schema.Top, Schema.Never, false, PairMethodAnnotations> {
   const payload =
     tail === undefined
       ? headOrPayload
@@ -1114,20 +1228,20 @@ export function mutatePair(
  */
 export function stream<Su extends Schema.Top>(
   success: Su,
-): Method<"query", undefined, Su, Schema.Never, true>;
+): Method<undefined, Su, Schema.Never, true>;
 export function stream<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
   success: Su,
   options: { readonly payload: F },
-): Method<"query", F, Su, Schema.Never, true>;
+): Method<F, Su, Schema.Never, true>;
 // whole-schema payload — the value is passed/decoded directly (mirrors `Rpc.make`'s schema form).
 export function stream<Su extends Schema.Top, P extends Schema.Top>(
   success: Su,
   options: { readonly payload: P },
-): Method<"query", P, Su, Schema.Never, true>;
+): Method<P, Su, Schema.Never, true>;
 export function stream<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
-): Method<"query", undefined, Su, E, true>;
+): Method<undefined, Su, E, true>;
 export function stream<
   Su extends Schema.Top,
   const F extends Schema.Struct.Fields,
@@ -1135,7 +1249,7 @@ export function stream<
 >(
   success: Su,
   options: { readonly payload: F; readonly error: E },
-): Method<"query", F, Su, E, true>;
+): Method<F, Su, E, true>;
 export function stream<
   Su extends Schema.Top,
   P extends Schema.Top,
@@ -1143,7 +1257,7 @@ export function stream<
 >(
   success: Su,
   options: { readonly payload: P; readonly error: E },
-): Method<"query", P, Su, E, true>;
+): Method<P, Su, E, true>;
 export function stream(
   success: Schema.Top,
   options?: {
@@ -1171,10 +1285,31 @@ type ErrorOf<M extends AnyMethod> = M["error"]["Type"];
 // **fields record** (decoded as a struct), or `undefined` (no payload). The schema branch is
 // checked first; a concrete-shaped schema type (`Schema.Struct<F>`, `Schema.Array<…>`) resolves
 // `extends Schema.Top` even when its inner field/element params are abstract.
+// Resolve the schema's decoded `.Type` alias (`Schema.Struct.ReadonlySide<…>`) to its plain object shape
+// (`{ to: string }`) and strip the schema's `readonly`, at the payload position. Per union-member; genuine
+// arrays keep their prettified element; tuples (pair call-style) are left intact; non-objects pass through.
+type PrettyObject<T> = T extends object ? { -readonly [K in keyof T]: T[K] } : T;
+type PrettifyPayload<P> = P extends readonly unknown[]
+  ? number extends P["length"]
+    ? P extends readonly (infer E)[]
+      ? readonly PrettyObject<E>[]
+      : P
+    : P
+  : PrettyObject<P>;
+
+/**
+ * A schema's decoded value type (`.Type`), **prettified** — `{ to: string }`, not the
+ * `Schema.Struct.ReadonlySide<…>` alias, and with the schema's `readonly` dropped. Use it to spell out a
+ * client-type override for the `effect`/`effectFn` two-stage forms without re-deriving the alias by hand.
+ *
+ * @public
+ */
+export type Decoded<S extends Schema.Top> = PrettifyPayload<S["Type"]>;
+
 type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
-  ? M["payload"]["Type"]
+  ? PrettifyPayload<M["payload"]["Type"]>
   : M["payload"] extends infer F extends Schema.Struct.Fields
-    ? Schema.Struct<F>["Type"]
+    ? PrettifyPayload<Schema.Struct<F>["Type"]>
     : never;
 
 /**
@@ -1192,7 +1327,6 @@ type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
 // is instead decidable with `Sch` fully opaque (an object type is never `undefined`, regardless
 // of `Sch`), so it resolves eagerly under a generic spec. `M["stream"]` is a literal boolean.
 type MutateMethodFn<M extends AnyMethod> = M extends Method<
-  MethodKind,
   infer _P,
   infer _Su,
   infer _E,
@@ -1216,6 +1350,22 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
     ? Effect.Effect<SuccessOf<M>, ErrorOf<M>>
     : MutateMethodFn<M>;
 
+// Extract a method's explicit `Client` override (the 6th `Method` param), or `Derive` if it carries none.
+type ClientOverrideOf<T> = T extends Method<
+  Schema.Struct.Fields | Schema.Top | undefined,
+  Schema.Top,
+  Schema.Top,
+  boolean,
+  MethodAnnotations,
+  infer Client
+>
+  ? Client
+  : Derive;
+// The CLIENT projection: an explicit override (set via the two-stage `effect`/`effectFn`) is used
+// verbatim; otherwise the shape is **derived** from the schema via {@link ServiceMethod}. `ImplOf` /
+// wire / peer always use `ServiceMethod`, so an override reshapes only what `yield* Tag` reads.
+type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? ServiceMethod<M> : Client;
+
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
  * `Effect`/function members; off-wire {@link LocalMethod}s surface as
@@ -1233,7 +1383,7 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 // the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
 // keeps the result identical for every concrete spec while letting it reduce under a generic
 // spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
-export type ServiceOf<S extends Spec, Self = unknown> = {
+export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
     : S[K] extends { readonly _tag: "constant" }
@@ -1241,11 +1391,11 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
       : S[K] extends { readonly _tag: "ref" }
         ? Subscribable<SuccessOf<AsMethod<S[K]>>>
         : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
-          ? ServiceMethod<AsMethod<S[K]>>
+          ? ClientMethod<AsMethod<S[K]>, ClientOverrideOf<S[K]>> // client handle → override or derived
           : S[K] extends Spec
             ? ServiceOf<S[K], Self> // nested group → nested service
             : never;
-};
+}>;
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). @internal */
 type WireServiceOf<S extends Spec> = {
@@ -2960,6 +3110,54 @@ const httpClient = <Self>(
     ),
   );
 };
+
+/** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
+class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
+  readonly target: string;
+}> {}
+
+/**
+ * Resolve a {@link clientHttp} target to an RPC url. A port (`3009` or `":3009"`) points at
+ * `http://localhost:3009/rpc`; a full `http(s)://…` url is used as-is; anything else fails loudly.
+ * @internal
+ */
+const resolveHttpTarget = (target: number | string): string => {
+  if (typeof target === "number") return `http://localhost:${target}/rpc`;
+  if (/^:\d+$/.test(target)) return `http://localhost${target}/rpc`;
+  if (/^https?:\/\//.test(target)) return target;
+  throw new InvalidHttpTarget({ target });
+};
+
+/**
+ * The single-resource client mirror of {@link httpServer}. Wire a served resource `tag` to a remote
+ * over **http** and get a ready client `Layer` in one call — {@link client}`(tag)` plus the
+ * batteries-included transport (Fetch + ndjson serialization), bundled.
+ *
+ * The `target` is a **port** (`3009` or `":3009"` → `http://localhost:3009/rpc`) for a runtime on the
+ * same machine, or a full **url** for one across the network:
+ *
+ * ```ts
+ * Effect.provide(program, Resource.clientHttp(Emails, 3001));                       // same machine
+ * Effect.provide(program, Resource.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
+ * ```
+ *
+ * @public
+ */
+export const clientHttp = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  target: number | string,
+  options?: {
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self> =>
+  clientLayer(tag).pipe(
+    Layer.provide(
+      RpcClient.layerProtocolHttp({ url: resolveHttpTarget(target) }).pipe(
+        Layer.provide(options?.serialization ?? defaultSerialization),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+    ),
+  );
 
 // ── multi-node: the fleet + peer clients ──
 

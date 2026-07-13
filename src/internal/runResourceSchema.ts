@@ -26,11 +26,11 @@ export const runGateStatus = Schema.Struct({
 type Void = typeof Schema.Void;
 
 type RunStatusRef = RefField<
-  Method<"query", undefined, typeof runGateStatus, typeof Schema.Never, true>
+  Method<undefined, typeof runGateStatus, typeof Schema.Never, true>
 >;
 
 type RunCountRef = RefField<
-  Method<"query", undefined, typeof Schema.Number, typeof Schema.Never, true>
+  Method<undefined, typeof Schema.Number, typeof Schema.Never, true>
 >;
 
 /** `run` wire member — inputless {@link Resource.effect} for unit gates, {@link Resource.effectFn} otherwise. @internal */
@@ -40,9 +40,9 @@ export type RunWireMember<
   E extends Schema.Top,
 > = [I] extends [Void]
   ? [E] extends [typeof Schema.Never]
-    ? Method<"query", undefined, A, typeof Schema.Never>
-    : Method<"query", undefined, A, E>
-  : Method<"mutate", I, A, E>;
+    ? Method<undefined, A, typeof Schema.Never>
+    : Method<undefined, A, E>
+  : Method<I, A, E>;
 
 const RUN_DESCRIPTION =
   "Acquire a permit, run the gated effect, release the permit — returns the effect result.";

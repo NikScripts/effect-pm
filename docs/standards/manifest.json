@@ -59,6 +59,16 @@
           "title": "Read the resolved Effect source before guessing"
         },
         {
+          "id": "effect-style.no-nested-yield",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples",
+            "test"
+          ],
+          "title": "Never nest a `yield*` inside another expression"
+        },
+        {
           "id": "effect-style.one-field-per-line",
           "severity": "must",
           "appliesTo": [
@@ -960,5 +970,5 @@
       ]
     }
   ],
-  "ruleCount": 104
+  "ruleCount": 105
 }

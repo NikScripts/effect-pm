@@ -284,7 +284,6 @@ type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pai
 
 /** Wire `add` member — tuple payload surfaced as `add(item, level?)`. @public */
 export type CustomQueueAddMethod = Method<
-  "mutate",
   Schema.Tuple<readonly [Schema.Top, Schema.Top]>,
   Schema.Void,
   Schema.Never,
