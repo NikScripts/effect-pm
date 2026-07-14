@@ -37,7 +37,14 @@ Derivations **stack**. A later `withReadiness` receives the previous check as `b
 `Resource.readinessOf(tag)` yields that tag’s service and runs *its* derivation. The dependency lands in the Effect’s requirements — compile-time checked — and works whether the dependency is local or reached over RPC. `Resource.allReady([...])` AND-combines checks (first not-ready wins, with its `detail`).
 
 ``` ts
-class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", { payload: Job }).pipe(
+import { Effect, Schema } from "effect"
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+
+const Job = Schema.Struct({ id: Schema.String })
+// Database — some other resource on this node that already has withReadiness
+
+class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Job).pipe(
   Resource.withReadiness((_svc, base) =>
     Resource.allReady([base, Resource.readinessOf(Database)]),
   ),
@@ -51,6 +58,9 @@ When `Database` reports not ready, `Jobs` degrades too — one readiness pass, s
 Many operational deps share the same contract shape: a `status` read, a live `changes` stream, and readiness derived from status. `Resource.monitoredDependency` builds that pair so you don’t re-hand-roll it per league or per dep type. Still a plain `Resource.Tag` — **not** a new kind.
 
 ``` ts
+import { Schema } from "effect"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+
 const DbStatus = Schema.Struct({
   connected: Schema.Boolean,
   latencyMs: Schema.Number,
