@@ -14,7 +14,8 @@ Finish the durable half of the logs platform:
 - One capture (`Logs.layer`) and one bus (`LogRelay`) stay as shipped.
 - Every **store registration** that should persist logs forks a **follower** on that bus.
 - Followers share one factory (grown from today’s `persistLayer` seed).
-- Registrations expose implicit **`appendLog`** + **`logQuery`**.
+- Registrations expose an implicit Store shape **`log`** → `handle.log.append` / `handle.log.read`.
+- Node durability uses a **node store registration** (`Resource.store(node)`), not a logs-only special case forever.
 - The standalone `LogStore` + `Logs.persistLayer` story shrinks to a thin compat wrapper, then exits the product path.
 
 ---
@@ -39,9 +40,9 @@ import { WnbaNode, BoxScoreQueue, LiveScorePoller } from "./hub";
 export class WnbaAppStore extends Store.Service<WnbaAppStore>()(
   "@repo/WnbaAppStore",
 )([
-  Logs.registerNode(WnbaNode),                 // scopeKey = WnbaNode.key, match all / atRoot
-  QueueResource.store(BoxScoreQueue),          // + implicit appendLog / logQuery
-  Process.store(LiveScorePoller),              // + implicit appendLog / logQuery
+  Resource.store(WnbaNode),                    // node registration (see §Node store) — implicit `log` shape
+  QueueResource.store(BoxScoreQueue),          // + implicit `log` shape
+  Process.store(LiveScorePoller),              // + implicit `log` shape
 ]) {}
 
 const nodeStack = Resource.httpServer([/* … */]).pipe(
@@ -52,29 +53,49 @@ const nodeStack = Resource.httpServer([/* … */]).pipe(
 );
 ```
 
+### Shape naming (locked correction)
+
+Not top-level `appendLog` / `logQuery`. Use a normal Store **shape** named `log` — same pattern as today’s interim `LogStore` contract and every other shape (`readings.append`, `event.append`, …):
+
+```ts
+// implicit on each registration that follows logs
+{
+  log: Store.shape(logRowSchema, logReadPayloadSchema),
+}
+```
+
+Follower write / durable read:
+
+```ts
+yield* handle.log.append(row);
+const rows = yield* handle.log.read({ limit: 200 }); // Store.shape read side today
+```
+
+Owner asked for `log.query` vocabulary — see open checklist: either teach Store’s existing **`log.read`** as the durable side, or add a thin `log.query` alias. Do **not** invent parallel `Store.query` / `appendLog` custom methods for this.
+
 ### What a registration-native write looks like (internals, not app code)
 
 When `WnbaAppStore.layerMemory` builds, for each registration the platform:
 
 1. Materializes the contract handle (existing Store path).
 2. Forks `followRelay({ scopeKey, match, level, append })` in the layer scope.
-3. On each relay line: level gate → match → memo → `appendLog`.
+3. On each relay line: level gate → match → memo → `handle.log.append(...)`.
 
 Reads:
 
 ```ts
-// Node journal (everything captured on this runtime)
-const nodeRows = yield* WnbaAppStore.at(WnbaNode).logQuery({ limit: 200 });
+const nodeHandle = yield* WnbaAppStore.at(WnbaNode);
+const nodeRows = yield* nodeHandle.log.read({ limit: 200 });
 
-// One resource’s partition (follower only appended hasKey(LiveScorePoller.key))
-const pollerRows = yield* WnbaAppStore.at(LiveScorePoller).logQuery({ limit: 50 });
+const pollerHandle = yield* WnbaAppStore.at(LiveScorePoller);
+const pollerRows = yield* pollerHandle.log.read({ limit: 50 });
 
 // Live still comes from the relay (unchanged product)
 const live = yield* Resource.logs(LiveScorePoller);
 live.stream.pipe(Stream.filter(LogEntry.hasKey(LiveScorePoller.key)));
 ```
 
-`Resource.logs(tag).query` becomes a thin redirect onto that registration’s `logQuery` when a store layer is present (exact wiring in Phase 3 below).
+`Resource.logs(tag).query` becomes a thin redirect onto that registration’s `log.read` (or `log.query` alias) when a store layer is present (Phase 3).
 
 ---
 
@@ -208,75 +229,62 @@ Apps keep working during migration; the product docs move to `Logs.registerNode`
 
 ---
 
-## Phase 1 — Implicit `appendLog` / `logQuery` on toolkit registrations
+## Phase 1 — Implicit `log` shape on toolkit (+ node) registrations
 
 ### Contract merge
 
-Today `Process.store(tag)` / `QueueResource.store(tag)` return `facetStoreRegistration(tag, analyticsContract)`. Extend the built-in contract (or a fixed merge helper applied inside `facetStoreRegistration`) with log shapes:
+Today `Process.store(tag)` / `QueueResource.store(tag)` return `facetStoreRegistration(tag, analyticsContract)`. Extend the built-in contract with a normal Store shape named **`log`** (reuse / slim `builtInLogStoreContract`’s shape — it already uses `log: Store.shape(...)`):
 
 ```ts
 // src/internal/store/logShapes.ts (new)
-import { LogEntrySchema } from "../../LogEntry";
 import * as Store from "../../Store";
 
-/** Payload for registration-scoped durable log reads. */
-export const registrationLogQuerySchema = Schema.Struct({
-  lineageContains: Schema.optional(Schema.String),
-  atRoot: Schema.optional(Schema.String),
-  atLeaf: Schema.optional(Schema.String),
-  from: Schema.optional(Schema.Number),
-  to: Schema.optional(Schema.Number),
-  limit: Schema.Number,
-  sort: Schema.Literals(["asc", "desc"] as const),
-});
-
-export const withImplicitLogShapes = <C extends StoreContractValue>(
+/** Row + read payload — same idea as interim logStoreSpec. */
+export const withImplicitLogShape = <C extends StoreContractValue>(
   contract: C,
-  scopeKey: string,
 ): /* extended contract */ =>
   Store.extend(contract, {
-    // Name locked by Agent 2 plan — append path for the follower
-    appendLog: Store.append(LogEntrySchema),
-    logQuery: Store.query({
-      payload: registrationLogQuerySchema,
-      result: Schema.Array(LogEntrySchema),
-    }),
+    log: Store.shape(logRowSchema, logReadPayloadSchema),
   });
 ```
 
-Exact naming on the materialized handle must match Store shape conventions (`append` / custom query method). If `Store.append` always creates `{ shapeKey: { append, read } }`, the follower closes over `handle.appendLog.append(entry)` (or whichever path the contract materializer produces). Plan rule: **one obvious write method the follower calls; one query method apps/tests call.** Document the final names in `LOGS.md` when implemented — if Store’s shape API forces `log.append` + custom `logQuery`, keep public sketches using those real names and update this plan in the same PR.
+Materialized handle (matches every other shape in the package):
+
+```ts
+yield* handle.log.append({ groupId, entryId, entry });
+yield* handle.log.read({ limit: 50, lineageContains: tag.key });
+```
+
+Follower closes over **`handle.log.append`**. No top-level `appendLog` / `logQuery` customs for the platform path. (Interim `LogStore`’s extra `record` / `load` / `query` wrappers can remain on the compat class only.)
 
 ### Apply at registration builders
 
 ```ts
 // Process.store / QueueResource.store / CustomQueueResource.store / RunResource.store
 export function store(tag: StoreScopeTag, extended?: StoreShapes) {
-  const builtIn = withImplicitLogShapes(
-    makeProcessStoreAnalyticsContract(tag),
-    tag.key,
-  );
+  const builtIn = withImplicitLogShape(makeProcessStoreAnalyticsContract(tag));
   return extended === undefined
     ? facetStoreRegistration(tag, builtIn)
     : facetStoreRegistration(tag, builtIn, extended);
 }
 ```
 
-### Node registration helper
+### Node store registration (not `Logs.registerNode`)
+
+Logs are **not** the only future thing a node might persist. Prefer a **node store registration** parallel to resources — sketch:
 
 ```ts
-// src/Logs.ts (public)
-export const registerNode = <N extends NodeLogKeySource>(
-  node: N,
-): NormalizedStoreRegistration =>
-  Store.register(resolveNodeLogKey(node), nodeLogContract(resolveNodeLogKey(node)));
+// Preferred product API (owner-leaning)
+Resource.store(WnbaNode)                    // empty / base node contract + implicit `log` shape
+Resource.store(WnbaNode, { /* future node domain shapes */ })
 
-// nodeLogContract ≈ today’s builtInLogStoreContract, but:
-// - scopeKey = node key
-// - follower match = all lines (stamp annotations.node on append)
-// - same appendLog / logQuery surface as resources
+// Optional sugar if we keep design-doc naming
+WnbaNode.logs                               // registration that is log-only (still a Store.register)
 ```
 
-**Done when:** a `Store.Service` that includes `Process.store(tag)` materializes handles with log write/query methods; unit test appends a row and reads it back **without** any follower yet (contract-only).
+`Logs.registerNode` from the first plan draft is **withdrawn** as the primary story — node durability hangs off `Resource.store(node)` (name TBD in unlock checklist), with the same implicit `log` shape and the same follower factory (match-all / `atRoot`).
+
+**Done when:** a `Store.Service` that includes `Process.store(tag)` and `Resource.store(node)` materializes `handle.log.append` / `handle.log.read`; unit test writes a row and reads it back **without** any follower yet (contract-only).
 
 ---
 
@@ -298,8 +306,7 @@ const followerLayers = registrations
       append: (row) =>
         Effect.gen(function* () {
           const handle = yield* bridge.at(reg.scopeKey /* + contract */);
-          yield* handle.appendLog.append(annotateNodeIfNeeded(reg, row.entry));
-          // entryId: prefer including in row schema / journal id strategy used by Store.append
+          yield* handle.log.append(annotateNodeIfNeeded(reg, row));
         }).pipe(Effect.orDie),
     }),
   );
@@ -330,7 +337,7 @@ If `LogRelay` is absent: **skip forking** (durable off, live still optional). Do
 | Memo key | `(scopeKey, lineId)` inside each follower |
 | Same scope, same line, twice on the bus | Second append suppressed |
 | Node scope vs resource scope | **Different** `scopeKey`s → both may store a copy (node journal for cross-resource dashboards; resource partition for scoped tables). That is intentional, not a double-write bug. |
-| Forbidden | Running interim `Logs.persistLayer` → `LogStore` **and** `Logs.registerNode` on the same node key in one process — two writers for the **same** scope. Migration: pick one. Compat tests cover wrapper-only or registerNode-only. |
+| Forbidden | Running interim `Logs.persistLayer` → `LogStore` **and** `Resource.store(node)` (node registration follower) for the **same** node key in one process — two writers for the **same** scope. Migration: pick one. Compat tests cover wrapper-only or node-store-only. |
 
 **Done when:** `test/logs-follower.test.ts` covers match / memo / level gate (using today’s `Store.logLevel*` as `storeLevel`); resource-web or a focused example runs without `persistLayer`.
 
@@ -340,11 +347,11 @@ If `LogRelay` is absent: **skip forking** (durable off, live still optional). Do
 
 | Surface | During slice | After slice (docs) |
 |---------|--------------|--------------------|
-| `Logs.persistLayer` | Thin wrapper over `followRelayLayer` → `LogStore` | Deprecated; example migrate to `Logs.registerNode` on app store |
-| `LogStore` class | Still exported for compat / tests | Prefer `registerNode` registration; deprecate in a later changeset if owner unlocks |
-| `Logs.byNode` / `Resource.logs().query` | Prefer registration `logQuery` when `Storage` present; fall back to `LogStore.load` while compat lives | Document registration path as SSOT |
+| `Logs.persistLayer` | Thin wrapper over `followRelayLayer` → `LogStore` | Deprecated; example migrate to `Resource.store(node)` on app store |
+| `LogStore` class | Still exported for compat / tests | Prefer node store registration; deprecate in a later changeset if owner unlocks |
+| `Logs.byNode` / `Resource.logs().query` | Prefer registration `log.read` when `Storage` present; fall back to `LogStore.load` while compat lives | Document registration path as SSOT |
 | `docs/LOGS.md` | Rewrite write-path diagram to followers | — |
-| `examples/resource-web/server.ts` | Replace `persistLayer` + `LogStore.layerMemory` with app `Store.Service` that `registerNode`s + resource stores | — |
+| `examples/resource-web/server.ts` | Replace `persistLayer` + `LogStore.layerMemory` with app `Store.Service` that registers the node + resources | — |
 
 Example migration for `liveNode` in `server.ts`:
 
@@ -359,7 +366,7 @@ Layer.provide(Store.layerDefaultMemory),
 class LiveNodeStore extends Store.Service<LiveNodeStore>()(
   "@example/LiveNodeStore",
 )([
-  Logs.registerNode(LiveNode),
+  Resource.store(LiveNode),
   Process.store(LiveScorePoller),
 ]) {}
 
@@ -378,7 +385,7 @@ Layer.provide(LiveNodeStore.layerMemory),
 1. **Match** — publish three lines (keys A, B, A); resource follower for A appends two rows; node follower appends three.
 2. **Memo** — publish the same `lineId` twice on the bus; follower appends once.
 3. **Level gate** — registration `Store.logLevelWarn`; Info dropped, Warn appended.
-4. **No double scope writer** — constructing both `persistLayer(node)` and `registerNode(node)` in one test runtime either fails fast or is documented as unsupported; preferred: test asserts registerNode-only path.
+4. **No double scope writer** — constructing both `persistLayer(node)` and `Resource.store(node)` in one test runtime either fails fast or is documented as unsupported; preferred: test asserts node-store-only path.
 
 ### Keep green
 
@@ -423,7 +430,7 @@ pnpm typecheck && pnpm test && pnpm lint
 | Unlock name | Delivers |
 |-------------|----------|
 | **`followers-0`** | Shared `followRelayLayer` + `persistLayer` wrapper + lineId decision |
-| **`followers-1`** | Implicit log shapes on `*.store(tag)` + `Logs.registerNode` |
+| **`followers-1`** | Implicit `log` shape on `*.store(tag)` + `Resource.store(node)` (or chosen node API) |
 | **`followers-2`** | Fork followers from store layer build + `test/logs-follower.test.ts` |
 | **`followers-3`** | Example + `LOGS.md` + `Resource.logs`/`byNode` reader wiring + changeset |
 
@@ -433,10 +440,11 @@ Owner may unlock `followers-0` alone or `followers-0..2` as one PR if preferred.
 
 ## Owner unlock checklist
 
-1. Accept this plan (or correct API names: `appendLog` vs `log.append`, `registerNode` vs `Node.logs` pipe).  
-2. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
-3. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
-4. Unlock named slice: `followers-0` / `0–2` / `0–3`.  
-5. Levels + remote remain parked until a later unlock.
+1. Confirm durable shape API: **`log.append` + `log.read`** (current `Store.shape`) vs alias **`log.query`**.  
+2. Confirm node registration API: **`Resource.store(WnbaNode)`** (general node store; logs = implicit `log` shape) vs log-only sugar (`WnbaNode.logs`) vs both.  
+3. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
+4. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
+5. Unlock named slice: `followers-0` / `0–2` / `0–3`.  
+6. Levels + remote remain parked until a later unlock.
 
 **Stop — no code until unlock.**
