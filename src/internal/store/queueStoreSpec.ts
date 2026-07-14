@@ -32,6 +32,7 @@ import type {
   StoreShapeDef,
 } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
+import { withImplicitLogShape } from "./logShapes";
 import type { StoreScopeTag } from "./registration";
 
 /** Queue tag shape for store registration — `specSym` carries the flat wire spec. @internal */
@@ -456,7 +457,8 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
   const isTerminal = (event: QueueStoreEvent<Tag>): boolean =>
     event._tag === "Completed" || event._tag === "Failed";
 
-  return Store.extend(
+  return withImplicitLogShape(
+    Store.extend(
     ({ event }) => ({
       failures: (): Effect.Effect<ReadonlyArray<QueueStoreFailed<Tag>>> =>
         Effect.map(event.read(), (events) => events.filter(isFailed)),
@@ -597,6 +599,7 @@ export const makeQueueStoreAnalyticsContract = <const Tag extends QueueStoreTag>
       > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
     }),
     base,
+    ),
   );
 };
 

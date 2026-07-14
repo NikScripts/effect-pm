@@ -21,6 +21,7 @@ import { errorOf, successOf } from "../runTagSchemas";
 import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
+import { withImplicitLogShape } from "./logShapes";
 import type { StoreScopeTag } from "./registration";
 
 /** Reasons attached to run gate state transitions. @internal */
@@ -294,16 +295,18 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
   const base = builtInRunResourceStoreContract(tag);
   const storeClass = { scopeKey: tag.key, contract: base };
 
-  return Store.extend(
-    (handles) =>
-      runResourceAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
-        fact: handles.fact,
-        storeClass,
-        isStarted,
-        isCompleted,
-        isFailed,
-      }),
-    base,
+  return withImplicitLogShape(
+    Store.extend(
+      (handles) =>
+        runResourceAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
+          fact: handles.fact,
+          storeClass,
+          isStarted,
+          isCompleted,
+          isFailed,
+        }),
+      base,
+    ),
   );
 };
 

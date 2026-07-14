@@ -19,7 +19,7 @@ class ThermoStore extends Store.Service<ThermoStore>("@test/ThermoStore")(
 const standaloneThermo = Store.scoped("solo", thermometerContract);
 
 class RetentionStore extends Store.Service<RetentionStore>("@test/Retention")(
-  Store.retention(2)(Store.register("thermo", thermometerContract)),
+  Store.register("thermo", thermometerContract).pipe(Store.retention(2)),
 ) {}
 
 describe("Store SQLite layer", () => {

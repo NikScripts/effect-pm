@@ -16,7 +16,7 @@ const contract = Store.contract({
 });
 
 class AppStore extends Store.Service<AppStore>("@examples/SqliteStore")(
-  Store.retention(100)(Store.register("thermo", contract)),
+  Store.register("thermo", contract).pipe(Store.retention(100)),
 ) {}
 
 const filename = ".effect-pm/examples-store.sqlite";

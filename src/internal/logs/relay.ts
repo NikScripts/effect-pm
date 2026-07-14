@@ -8,12 +8,26 @@
 import { Context, Effect, Layer, Logger, Option, PubSub, Ref, Stream } from "effect";
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
+import { LogAnnotationKeys } from "../../LogContext";
 import {
   logEntryFromLoggerOptions,
   type LogEntry,
 } from "../../LogEntry";
 
 const historyCapacity = 500;
+
+const stampLineId = (entry: LogEntry, lineId: string): LogEntry => {
+  if (entry.annotations[LogAnnotationKeys.lineId] !== undefined) {
+    return entry;
+  }
+  return {
+    ...entry,
+    annotations: {
+      ...entry.annotations,
+      [LogAnnotationKeys.lineId]: lineId,
+    },
+  };
+};
 
 /** @internal */
 export interface LogRelayService {
@@ -44,12 +58,15 @@ export const relayLayer = Layer.effect(
   Effect.gen(function* () {
     const pubsub = yield* PubSub.unbounded<LogEntry>();
     const history = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const nextLineId = yield* Ref.make(0);
 
     return LogRelay.of({
       publish: (entry) =>
         Effect.gen(function* () {
-          yield* PubSub.publish(pubsub, entry);
-          yield* pushHistory(history, entry);
+          const id = yield* Ref.getAndUpdate(nextLineId, (n) => n + 1);
+          const stamped = stampLineId(entry, String(id));
+          yield* PubSub.publish(pubsub, stamped);
+          yield* pushHistory(history, stamped);
         }),
       snapshot: Ref.get(history),
       stream: Stream.fromPubSub(pubsub),

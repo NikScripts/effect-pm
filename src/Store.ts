@@ -107,6 +107,7 @@ import { buildDefaultScopeBridge, buildScopeBridge } from "./internal/store/scop
 import { buildScopeStateMap, type ScopeState } from "./internal/store/memoryScope";
 import { buildBundle, mapSqliteBuildError } from "./internal/store/sqliteLayer";
 import type { NormalizedStoreRegistration } from "./internal/store/registrationNormalize";
+import { layersForRegistrations as logTailLayersForRegistrations } from "./internal/logs/durableTail";
 import {
   StoreScopeNotRegistered,
   StoreChangeEvent,
@@ -230,10 +231,15 @@ const layerFromBuiltBridge = <
   tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
   bundle: StoreBundle<Regs>,
   bridge: StorageApi,
+  registrations: ReadonlyArray<NormalizedStoreRegistration>,
 ): Layer.Layer<Self | Storage> =>
   Layer.mergeAll(
     Layer.succeed(tag, bundle as unknown as StoreBundle<Regs>),
     Layer.succeed(Storage, bridge),
+    logTailLayersForRegistrations(
+      registrations,
+      bundle as unknown as Readonly<Record<string, unknown>>,
+    ),
   );
 
 /** @internal */
@@ -256,6 +262,10 @@ const layerForSingleRegistration = <
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
         Layer.succeed(Storage, bridge),
+        logTailLayersForRegistrations(
+          [registration],
+          { [registration.accessor]: handle },
+        ),
       );
     }),
   );
@@ -302,6 +312,10 @@ const buildStandaloneSqliteLayer = <
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
         Layer.succeed(Storage, bridge),
+        logTailLayersForRegistrations(
+          [registration],
+          { [registration.accessor]: handle },
+        ),
       ).pipe(Layer.provide(Layer.succeedContext(context)));
     }).pipe(Effect.mapError(mapSqliteBuildError)),
   );
@@ -340,7 +354,12 @@ const layerFromScopeState = <
       const journal = yield* EventJournal.EventJournal;
       const bridge = buildScopeBridge(scopes, journal);
       const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
-      return layerFromBuiltBridge(tag, bundle as StoreBundle<Regs>, bridge);
+      return layerFromBuiltBridge(
+        tag,
+        bundle as StoreBundle<Regs>,
+        bridge,
+        registrations,
+      );
     }),
   );
 
@@ -383,7 +402,12 @@ const buildSqliteLayerForAggregate = <
       const journal = Context.get(context, EventJournal.EventJournal);
       const bridge = buildScopeBridge(scopes, journal);
       const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
-      return layerFromBuiltBridge(tag, bundle as StoreBundle<Regs>, bridge).pipe(
+      return layerFromBuiltBridge(
+        tag,
+        bundle as StoreBundle<Regs>,
+        bridge,
+        registrations,
+      ).pipe(
         Layer.provide(Layer.succeedContext(context)),
       );
     }).pipe(Effect.mapError(mapSqliteBuildError)),
