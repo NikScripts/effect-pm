@@ -56,29 +56,35 @@ describe("Logs.withScope — lineage append", () => {
     }),
   );
 
-  it.effect("atRoot / atLeaf / hasKey match the combined path", () =>
+  it.effect("nested fiber path has root parent and leaf child", () =>
     Effect.gen(function* () {
       const segments = yield* readLineage.pipe(
         Logs.withScope(Child),
         Logs.withScope(Parent),
       );
-      const entry: LogEntry.LogEntry = {
-        date: new Date(0).toISOString(),
-        level: "Info",
-        message: "x",
-        annotations: {
-          [LogAnnotationKeys.lineage]: JSON.stringify(segments),
-        },
-        spans: [],
-      };
-      expect(LogEntry.lineage(entry)).toEqual([Parent.key, Child.key]);
-      expect(LogEntry.atRoot(Parent.key)(entry)).toBe(true);
-      expect(LogEntry.atLeaf(Child.key)(entry)).toBe(true);
-      expect(LogEntry.hasKey(Parent.key)(entry)).toBe(true);
-      expect(LogEntry.hasKey(Child.key)(entry)).toBe(true);
-      expect(LogEntry.atRoot(Child.key)(entry)).toBe(false);
+      expect(segments).toEqual([Parent.key, Child.key]);
+      expect(segments[0]).toBe(Parent.key);
+      expect(segments[segments.length - 1]).toBe(Child.key);
     }),
   );
+
+  it("LogEntry predicates honor a multi-segment lineage annotation", () => {
+    const entry: LogEntry.LogEntry = {
+      date: "1970-01-01T00:00:00.000Z",
+      level: "Info",
+      message: "x",
+      annotations: {
+        [LogAnnotationKeys.lineage]: `["${Parent.key}","${Child.key}"]`,
+      },
+      spans: [],
+    };
+    expect(LogEntry.lineage(entry)).toEqual([Parent.key, Child.key]);
+    expect(LogEntry.atRoot(Parent.key)(entry)).toBe(true);
+    expect(LogEntry.atLeaf(Child.key)(entry)).toBe(true);
+    expect(LogEntry.hasKey(Parent.key)(entry)).toBe(true);
+    expect(LogEntry.hasKey(Child.key)(entry)).toBe(true);
+    expect(LogEntry.atRoot(Child.key)(entry)).toBe(false);
+  });
 
   it.live("capture logger stamps the appended lineage on a published line", () =>
     Effect.gen(function* () {
