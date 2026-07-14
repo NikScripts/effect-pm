@@ -81,10 +81,12 @@
  * @module Store
  */
 
-import { Context, Effect, Layer, Predicate, Schema, Scope, Stream } from "effect";
+import { Context, Effect, Layer, Option, Predicate, Schema, Scope, Stream } from "effect";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
 import * as SqlEventJournal from "effect/unstable/eventlog/SqlEventJournal";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import { LogRelay } from "./internal/logs/relay";
+import type { LogRelayService } from "./internal/logs/relay";
 import {
   buildStandaloneRegistration,
   defineStandaloneStore,
@@ -232,6 +234,7 @@ const layerFromBuiltBridge = <
   bundle: StoreBundle<Regs>,
   bridge: StorageApi,
   registrations: ReadonlyArray<NormalizedStoreRegistration>,
+  relay: Option.Option<LogRelayService>,
 ): Layer.Layer<Self | Storage> =>
   Layer.mergeAll(
     Layer.succeed(tag, bundle as unknown as StoreBundle<Regs>),
@@ -239,6 +242,7 @@ const layerFromBuiltBridge = <
     logTailLayersForRegistrations(
       registrations,
       bundle as unknown as Readonly<Record<string, unknown>>,
+      relay,
     ),
   );
 
@@ -255,6 +259,7 @@ const layerForSingleRegistration = <
   Layer.unwrap(
     Effect.gen(function* () {
       const journal = yield* EventJournal.EventJournal;
+      const relay = yield* Effect.serviceOption(LogRelay);
       const bridge = buildScopeBridge(scopes, journal);
       const handle = yield* bridge
         .at(registration.scopeKey, registration.contract ?? registration.spec)
@@ -265,6 +270,7 @@ const layerForSingleRegistration = <
         logTailLayersForRegistrations(
           [registration],
           { [registration.accessor]: handle },
+          relay,
         ),
       );
     }),
@@ -309,12 +315,14 @@ const buildStandaloneSqliteLayer = <
       const handle = yield* bridge
         .at(registration.scopeKey, registration.contract ?? registration.spec)
         .pipe(Effect.orDie);
+      const relay = yield* Effect.serviceOption(LogRelay);
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
         Layer.succeed(Storage, bridge),
         logTailLayersForRegistrations(
           [registration],
           { [registration.accessor]: handle },
+          relay,
         ),
       ).pipe(Layer.provide(Layer.succeedContext(context)));
     }).pipe(Effect.mapError(mapSqliteBuildError)),
@@ -352,6 +360,7 @@ const layerFromScopeState = <
   Layer.unwrap(
     Effect.gen(function* () {
       const journal = yield* EventJournal.EventJournal;
+      const relay = yield* Effect.serviceOption(LogRelay);
       const bridge = buildScopeBridge(scopes, journal);
       const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
       return layerFromBuiltBridge(
@@ -359,6 +368,7 @@ const layerFromScopeState = <
         bundle as StoreBundle<Regs>,
         bridge,
         registrations,
+        relay,
       );
     }),
   );
@@ -402,11 +412,13 @@ const buildSqliteLayerForAggregate = <
       const journal = Context.get(context, EventJournal.EventJournal);
       const bridge = buildScopeBridge(scopes, journal);
       const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
+      const relay = yield* Effect.serviceOption(LogRelay);
       return layerFromBuiltBridge(
         tag,
         bundle as StoreBundle<Regs>,
         bridge,
         registrations,
+        relay,
       ).pipe(
         Layer.provide(Layer.succeedContext(context)),
       );

@@ -74,6 +74,8 @@ describe("durable log store tail", () => {
   it.effect("resource tail is lineage-scoped", () =>
     Effect.gen(function* () {
       const relay = yield* Logs.Relay;
+      // Let forked PubSub subscribers attach before publish.
+      yield* TestClock.adjust(Duration.millis(1));
       yield* relay.publish(entry("a", { lineage: [ProcA.key] }));
       yield* relay.publish(entry("b", { lineage: [ProcB.key] }));
       yield* TestClock.adjust(Duration.millis(300));
@@ -92,6 +94,7 @@ describe("durable log store tail", () => {
   it.effect("memo appends once for the same lineId", () =>
     Effect.gen(function* () {
       const relay = yield* Logs.Relay;
+      yield* TestClock.adjust(Duration.millis(1));
       const duplicated = entry("dup", { lineage: [ProcA.key], lineId: "same" });
       yield* relay.publish(duplicated);
       yield* relay.publish(duplicated);
@@ -106,6 +109,7 @@ describe("durable log store tail", () => {
   it.effect("Warn floor drops Info on that registration", () =>
     Effect.gen(function* () {
       const relay = yield* Logs.Relay;
+      yield* TestClock.adjust(Duration.millis(1));
       yield* relay.publish(entry("info", { lineage: [ProcB.key], level: "Info" }));
       yield* relay.publish(entry("warn", { lineage: [ProcB.key], level: "Warn" }));
       yield* TestClock.adjust(Duration.millis(300));

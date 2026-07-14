@@ -89,9 +89,24 @@ export const layer = (options: DurableTail): Layer.Layer<never, never, LogRelay>
   );
 
 /**
+ * Closed tail layer over an already-resolved relay (no further LogRelay lookup).
+ *
+ * @internal
+ */
+export const layerFromRelay = (
+  relay: LogRelayService,
+  options: DurableTail,
+): Layer.Layer<never> =>
+  Layer.effectDiscard(
+    Effect.forkScoped(runDurableTail(relay, options)).pipe(Effect.asVoid),
+  );
+
+/**
  * Store builds whether or not {@link Logs.layer} is present. When {@link LogRelay} is in the
  * **parent** context at layer build time (e.g. `AppStore.layerMemory.pipe(Layer.provideMerge(Logs.layer))`),
  * the tail starts; otherwise this is {@link Layer.empty}.
+ *
+ * Prefer {@link layersForRegistrations} at the store unwrap site (captures relay once).
  *
  * @internal
  */
@@ -100,26 +115,29 @@ export const layerOptional = (options: DurableTail): Layer.Layer<never> =>
     Effect.map(
       Effect.serviceOption(LogRelay),
       (opt): Layer.Layer<never> =>
-        Option.isSome(opt)
-          ? Layer.effectDiscard(
-              Effect.forkScoped(runDurableTail(opt.value, options)).pipe(Effect.asVoid),
-            )
-          : Layer.empty,
+        Option.isSome(opt) ? layerFromRelay(opt.value, options) : Layer.empty,
     ),
   );
 
 /**
  * Optional durable tails for registrations that carry the implicit {@link LogEntry} `log` shape.
  *
- * Resource scopes match {@link LogEntry.hasKey}; node-wide match is `() => true` (reserved for
- * `Resource.store(Node)`).
+ * Pass the {@link LogRelay} resolved in the same store-layer unwrap that builds the bundle so
+ * nested `Layer.provide` does not lose the service. When `relay` is `None`, returns {@link Layer.empty}.
+ *
+ * Resource scopes match {@link LogEntry.hasKey}.
  *
  * @internal
  */
 export const layersForRegistrations = (
   registrations: ReadonlyArray<NormalizedStoreRegistration>,
   handlesByAccessor: Readonly<Record<string, unknown>>,
+  relay: Option.Option<LogRelayService>,
 ): Layer.Layer<never> => {
+  if (Option.isNone(relay)) {
+    return Layer.empty;
+  }
+  const service = relay.value;
   let merged: Layer.Layer<never> = Layer.empty;
   for (const registration of registrations) {
     if (!hasImplicitLogShape(registration.contract)) {
@@ -132,7 +150,7 @@ export const layersForRegistrations = (
     const log = handle.log;
     merged = Layer.mergeAll(
       merged,
-      layerOptional({
+      layerFromRelay(service, {
         scopeKey: registration.scopeKey,
         storeLevel: registration.logLevel ?? "All",
         match: LogEntry.hasKey(registration.scopeKey),
