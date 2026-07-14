@@ -616,6 +616,14 @@
           "title": "Compose behaviour with piped combinators, not constructor flags"
         },
         {
+          "id": "resources.data-last-tag-duals-shallow",
+          "severity": "must",
+          "appliesTo": [
+            "src"
+          ],
+          "title": "Data-last tag duals must not constrain `Svc`-bearing tag unions"
+        },
+        {
           "id": "resources.polling-vs-schedule",
           "severity": "must",
           "appliesTo": [
@@ -1059,5 +1067,5 @@
       ]
     }
   ],
-  "ruleCount": 115
+  "ruleCount": 116
 }

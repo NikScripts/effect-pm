@@ -2014,7 +2014,13 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
  *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
  *  node-bound self-referential class's service default (`ServiceOf<S, Self>`), which stock tsc caps
  *  out on as "excessively deep" (tsgo tolerates it). `T` is still inferred as the full concrete tag,
- *  so the `(tag: T) => T` return preserves it exactly. @internal */
+ *  so the `(tag: T) => T` return preserves it exactly.
+ *
+ *  **Rule:** any new `Fn.dual` data-last combinator that accepts a resource tag in a class
+ *  `extends … .pipe(…)` position must constrain `T` with this brand (or an equivalent non-`Svc`
+ *  shape) — never `ResourceTag | NodeBoundTag`, which reopens TS2589 under stock tsc.
+ *
+ *  @internal */
 type PipeableTag = { readonly [specSym]: FlatSpec };
 
 /**
@@ -2035,11 +2041,10 @@ type PipeableTag = { readonly [specSym]: FlatSpec };
  * @public
  */
 export const withReadiness: {
-  // The input is "any resource tag, node-bound or not" — `NodeBoundTag` is a distinct interface, so
-  // it isn't structurally assignable to a bare `ResourceTag<any, any, any>` (its one invariant member,
-  // `[groupSym]`); naming both arms is the honest type for "accepts either variant" (`client` does the
-  // same). `Self` is widened to `any` on the data-last form so it works in a class `extends` position
-  // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
+  // Data-last: `T extends PipeableTag` (shallow) — do not constrain against ResourceTag|NodeBoundTag
+  // or stock tsc TS2589s on node-bound `class extends Tag(…).pipe(withReadiness(…))` (expands Svc).
+  // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
+  // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
   //
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
   <T extends PipeableTag>(
