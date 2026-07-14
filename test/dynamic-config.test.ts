@@ -136,6 +136,25 @@ describe("DynamicConfig (bag + field-method control)", () => {
     ),
   );
 
+  it.effect("a provided SwappableRegistry isolates the allowlist", () =>
+    withLayer(
+      Effect.gen(function* () {
+        // allowed against the global default (where declarations register)...
+        yield* DynamicConfig.setByKey("DCFG3_KEY", "ok");
+        // ...but a fresh registry provided for isolation doesn't know that key.
+        const isolated = yield* Effect.exit(
+          DynamicConfig.setByKey("DCFG3_KEY", "x").pipe(
+            Effect.provideService(
+              DynamicConfig.SwappableRegistry,
+              new Map<string, Config.Config<unknown>>(),
+            ),
+          ),
+        );
+        expect(Exit.isFailure(isolated)).toBe(true);
+      }),
+    ),
+  );
+
   it.effect("a single swappable field works on its own, no make()", () =>
     withLayer(
       Effect.gen(function* () {
