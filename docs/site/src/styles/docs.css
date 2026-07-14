@@ -429,6 +429,8 @@ pre.shiki { background: transparent; }
   border-radius: 0.35rem;
   background: color-mix(in oklab, var(--fg) 7%, transparent) !important;
   overflow-x: auto;
+  /* match the comment font size (.twoslash-popup-docs) so the code blocks don't tower over the prose */
+  font-size: 0.78rem;
 }
 /* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
    background with a border and rounded corners. Strip it so it blends into the description instead of
