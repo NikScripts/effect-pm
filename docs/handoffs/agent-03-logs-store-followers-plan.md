@@ -55,23 +55,36 @@ const nodeStack = Resource.httpServer([/* … */]).pipe(
 
 ### Shape naming (locked correction)
 
-Not top-level `appendLog` / `logQuery`. Use a normal Store **shape** named `log` — same pattern as today’s interim `LogStore` contract and every other shape (`readings.append`, `event.append`, …):
+Not top-level `appendLog` / `logQuery`. Use a normal Store **shape** named `log` — same pattern as every other shape (`readings.append`, `event.append`, …).
+
+`Store.shape` takes the **row** schema; the read payload is **optional** and defaults to `{}` (`emptyPayloadSchema`). Shared journal helpers already understand common options (`limit` / `since` / `until`) when a payload schema includes them. Domain filters (lineage, atRoot, …) are **custom methods**, not a second fat schema jammed into `Store.shape`.
 
 ```ts
-// implicit on each registration that follows logs
+// implicit on each registration that follows logs — row only (or row + small shared defaults)
 {
-  log: Store.shape(logRowSchema, logReadPayloadSchema),
+  log: Store.shape(LogEntrySchema),
+  // optional, if we want shape.read({ limit }) without customs:
+  // log: Store.shape(LogEntrySchema, Schema.Struct({ limit: Schema.optional(Schema.Number) })),
 }
+
+// richer reads = contract part 2 customs, e.g.
+Store.contract(
+  { log: Store.shape(LogEntrySchema) },
+  ({ log }) => ({
+    // name TBD — lineage / byResource helpers, not a parallel persistence API
+    recentLogs: ({ limit }: { limit?: number }) => log.read(/* … */),
+  }),
+);
 ```
 
-Follower write / durable read:
+Follower write / default durable read:
 
 ```ts
-yield* handle.log.append(row);
-const rows = yield* handle.log.read({ limit: 200 }); // Store.shape read side today
+yield* handle.log.append(entry);
+const rows = yield* handle.log.read(); // default payload
 ```
 
-Owner asked for `log.query` vocabulary — see open checklist: either teach Store’s existing **`log.read`** as the durable side, or add a thin `log.query` alias. Do **not** invent parallel `Store.query` / `appendLog` custom methods for this.
+Do **not** copy the interim `LogStore`’s fat `logQueryPayloadSchema` (processId / queueId / lineageContains / …) onto the implicit shape. That was cutover scaffolding; lineage filters belong in customs or in `Resource.logs().query` wiring.
 
 ### What a registration-native write looks like (internals, not app code)
 
@@ -233,29 +246,29 @@ Apps keep working during migration; the product docs move to `Logs.registerNode`
 
 ### Contract merge
 
-Today `Process.store(tag)` / `QueueResource.store(tag)` return `facetStoreRegistration(tag, analyticsContract)`. Extend the built-in contract with a normal Store shape named **`log`** (reuse / slim `builtInLogStoreContract`’s shape — it already uses `log: Store.shape(...)`):
+Today `Process.store(tag)` / `QueueResource.store(tag)` return `facetStoreRegistration(tag, analyticsContract)`. Extend the built-in contract with a normal Store shape named **`log`**:
 
 ```ts
 // src/internal/store/logShapes.ts (new)
 import * as Store from "../../Store";
+import { LogEntrySchema } from "../../LogEntry";
 
-/** Row + read payload — same idea as interim logStoreSpec. */
 export const withImplicitLogShape = <C extends StoreContractValue>(
   contract: C,
 ): /* extended contract */ =>
   Store.extend(contract, {
-    log: Store.shape(logRowSchema, logReadPayloadSchema),
+    log: Store.shape(LogEntrySchema), // default empty read payload
   });
 ```
 
-Materialized handle (matches every other shape in the package):
+Materialized handle:
 
 ```ts
-yield* handle.log.append({ groupId, entryId, entry });
-yield* handle.log.read({ limit: 50, lineageContains: tag.key });
+yield* handle.log.append(entry);
+yield* handle.log.read(); // or read({ limit }) only if we opt into a small default payload schema
 ```
 
-Follower closes over **`handle.log.append`**. No top-level `appendLog` / `logQuery` customs for the platform path. (Interim `LogStore`’s extra `record` / `load` / `query` wrappers can remain on the compat class only.)
+Follower closes over **`handle.log.append`**. Lineage-scoped product reads (`Resource.logs(tag).query`, dashboard helpers) are custom methods or thin facades over `log.read` + in-memory / shared filters — not a second schema on the shape. Interim `LogStore` fat query payload stays on the compat class only until removed.
 
 ### Apply at registration builders
 
@@ -440,7 +453,7 @@ Owner may unlock `followers-0` alone or `followers-0..2` as one PR if preferred.
 
 ## Owner unlock checklist
 
-1. Confirm durable shape API: **`log.append` + `log.read`** (current `Store.shape`) vs alias **`log.query`**.  
+1. Implicit `log` shape: **row-only** `Store.shape(LogEntrySchema)` vs row + small shared defaults (`limit` / `since` / `until`). Fat lineage filters stay in customs — locked.  
 2. Confirm node registration API: **`Resource.store(WnbaNode)`** (general node store; logs = implicit `log` shape) vs log-only sugar (`WnbaNode.logs`) vs both.  
 3. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
 4. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
