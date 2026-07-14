@@ -274,7 +274,7 @@ const wnbaNode = Resource.httpServer([
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
   Resource.serve(WorkerPool, workerPoolImpl(5)),
-]).pipe(
+], { protocol: "websocket" }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
@@ -290,7 +290,7 @@ const liveNode = Resource.httpServer([
     polling: Polling.spaced(Duration.seconds(2)),
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
-]).pipe(
+], { protocol: "websocket" }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(LiveStore.layerMemory),
@@ -304,7 +304,7 @@ const statsNode = Resource.httpServer([
     concurrency: 3,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
-]).pipe(
+], { protocol: "websocket" }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(StatsStore.layerMemory),

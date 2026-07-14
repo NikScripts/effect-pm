@@ -64,6 +64,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
+import * as Socket from "effect/unstable/socket/Socket";
 import type { Simplify } from "effect/Types";
 import {
   Rpc,
@@ -2863,6 +2864,16 @@ export interface HttpServerOptions {
    * bound {@link Node} when all share one key.
    */
   readonly node?: string | { readonly key: string };
+  /**
+   * RPC transport. `"http"` (default) serves request/response + streams over HTTP POST — fine for
+   * servers, CLIs, and a handful of streams. `"websocket"` serves everything over **one multiplexed
+   * WebSocket per client**, which a **browser dashboard needs**: it opens many concurrent live streams
+   * (each resource's status + metrics + logs), and over HTTP/1.1 the browser caps at ~6 connections
+   * per origin, so beyond ~6 streams the rest are starved (no graphs, no logs, some resources blank).
+   * A WebSocket sidesteps that cap entirely. Clients must match the server: {@link client} /
+   * {@link httpClient} for `"http"`, {@link socketClient} for `"websocket"`.
+   */
+  readonly protocol?: "http" | "websocket";
 }
 
 const httpServerBase = (
@@ -2931,7 +2942,7 @@ const httpServerBase = (
       const rpcAppLayer = RpcServer.layerHttp({
         group: merged,
         path: options?.path ?? "/rpc",
-        protocol: "http",
+        protocol: options?.protocol ?? "http",
       }).pipe(
         Layer.provide(
           nodeTag[groupSym].toLayer(
@@ -3361,6 +3372,42 @@ const httpClient = <Self>(
     RpcClient.layerProtocolHttp({ url }).pipe(
       Layer.provide(options?.serialization ?? defaultSerialization),
       Layer.provide(FetchHttpClient.layer),
+    ),
+  );
+};
+
+/**
+ * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
+ * {@link httpClient}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
+ * multiplexed connection**, so a dashboard never trips the browser's ~6-connection-per-origin
+ * HTTP/1.1 limit that starves streams over {@link httpClient} (past ~6 live streams: no graphs, no
+ * logs, some resources blank). The server must serve `protocol: "websocket"` — see
+ * {@link httpServer}. The socket uses the browser's global `WebSocket`; pass a `ws://…` / `wss://…`
+ * url (same-origin: resolve a path against `location`).
+ *
+ * ```ts
+ * const EdgeLive = Resource.socketClient(EdgeNode, { url: `wss://${location.host}/rpc` });
+ * ```
+ *
+ * @public
+ */
+const socketClient = <Self>(
+  node: NodeKey<Self> & { readonly url?: string },
+  options?: {
+    readonly url?: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self> => {
+  const url = options?.url ?? node.url;
+  if (url === undefined) {
+    throw new MissingNodeUrl({ node: node.key });
+  }
+  return connectLayer(
+    node,
+    RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(options?.serialization ?? defaultSerialization),
+      Layer.provide(Socket.layerWebSocket(url)),
+      Layer.provide(Socket.layerWebSocketConstructorGlobal),
     ),
   );
 };
@@ -4029,6 +4076,7 @@ export {
   makeNode as Node,
   connectLayer as connect,
   httpClient,
+  socketClient,
   instance,
   localLayer as layer,
   serveInstances,
