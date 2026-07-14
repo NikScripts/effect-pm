@@ -97,7 +97,7 @@ export interface SwappableField<A> extends ConfigField<A> {
   >;
 }
 
-/** A read-only field — a {@link ConfigField} with no control methods. */
+/** A read-only field — a {@link ConfigField} with no control methods. @public */
 export type FixedField<A> = ConfigField<A>;
 
 // Yieldable prototype: a field reads by delegating to its underlying Config
@@ -171,7 +171,7 @@ type FieldOf<S> = S extends SwappableField<infer A>
       ? FixedField<A>
       : never;
 
-/** A bag of {@link ConfigField}s produced by {@link make} / {@link extend}. */
+/** A bag of {@link ConfigField}s produced by {@link make} / {@link extend}. @public */
 export type ConfigBag<F extends FieldsInput> = {
   readonly [K in keyof F]: FieldOf<F[K]>;
 };

@@ -5,8 +5,6 @@ src/cli/index.ts:makeResourceCli
 src/cli/index.ts:render
 src/cli/index.ts:resourcesByName
 src/CustomQueueResource.ts:customQueueTag
-src/DynamicConfig.ts:ConfigBag
-src/DynamicConfig.ts:FixedField
 src/internal/logs/streamLevel.ts:logStreamLevelSym
 src/internal/manager/logQuery.ts:buildLogQuery
 src/internal/manager/targetResolver.ts:AmbiguousProcessManagerTarget
@@ -15,13 +13,6 @@ src/internal/manager/targetResolver.ts:normalizeProcessManagerTarget
 src/internal/manager/targetResolver.ts:ProcessManagerTargetResolution
 src/internal/manager/targetResolver.ts:ResolvedProcessManagerTarget
 src/internal/manager/targetResolver.ts:resolveProcessManagerTarget
-src/internal/nodeStatusResource.ts:buildNodeStatusImpl
-src/internal/nodeStatusResource.ts:nodeResourceReadiness
-src/internal/nodeStatusResource.ts:NodeResourceReadiness
-src/internal/nodeStatusResource.ts:nodeStatus
-src/internal/nodeStatusResource.ts:NodeStatus
-src/internal/nodeStatusResource.ts:NodeStatusResource
-src/internal/nodeStatusResource.ts:nodeStatusServeEntry
 src/internal/processSchedule.ts:ScheduleDefineApi
 src/internal/processTagSchemas.ts:errorSym
 src/internal/processTagSchemas.ts:successSym
