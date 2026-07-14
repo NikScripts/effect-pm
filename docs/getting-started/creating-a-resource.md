@@ -4,4 +4,4 @@
 {.note}
 **Placeholder — outline only.** Full content to come; this page exists now so other pages can link to it.
 
-A basic walkthrough: define the simplest resource, give it an implementation, run it in-process, and call it — the most basic kind of cross-runtime service.
+A basic walkthrough: define the simplest Resource, give it an Implementation, run it in-process, and call it — the most basic kind of cross-runtime Service.

@@ -2,16 +2,16 @@
 # Core Concepts
 
 Every program depends on capabilities it does not build itself — a clock, a database, somewhere to send
-email. Effect models each of these as a [**service**](/docs/glossary#service), and effect-pm's resources
-build directly on that model. This page starts with services and adds one idea at a time.
+email. Effect models each of these as a [**Service**](/docs/glossary#service), and effect-pm's Resources
+build directly on that model. This page starts with Services and adds one idea at a time.
 
-## Services and tags
+## Services and Tags
 
-A service is a capability your program depends on. Rather than thread it through function after
-function, you refer to it through a [**tag**](/docs/glossary#tag): a typed name that stands for the service everywhere it is
+A Service is a capability your program depends on. Rather than thread it through function after
+function, you refer to it through a [**Tag**](/docs/glossary#tag): a typed name that stands for the Service everywhere it is
 used. Your code declares what it needs, and the type system keeps track of it for you.
 
-Working with a service is three steps — define it, use it, and provide it:
+Working with a Service is three steps — define it, use it, and provide it:
 
 {.twoslash}
 ``` ts
@@ -23,16 +23,16 @@ class Random extends Context.Service<Random, {
 }>()("app/Random") {}
 ```
 
-You reach the service by yielding its tag, and you supply an implementation once, at the edge of the
-program, with a **layer**. The tag sits between the two: the single point where a capability is asked
+You reach the Service by yielding its Tag, and you supply an Implementation once, at the edge of the
+program, with a **Layer**. The Tag sits between the two: the single point where a capability is asked
 for on one side and fulfilled on the other. Because that point is explicit, you can provide the real
-service in production, a stub in a test, or swap one for another — without touching the code that
+Service in production, a stub in a test, or swap one for another — without touching the code that
 depends on it.
 
-## From services to contracts
+## From Services to Contracts
 
-effect-pm starts where Effect's services leave off. A resource is a service, but its tag declares a
-[**contract**](/docs/glossary#contract): the resource's methods, together with a schema for every value that passes through them.
+effect-pm starts where Effect's Services leave off. A Resource is a Service, but its Tag declares a
+[**Contract**](/docs/glossary#contract): the Resource's methods, together with a schema for every value that passes through them.
 
 {.twoslash}
 ``` ts
@@ -45,14 +45,14 @@ class Counter extends Resource.Tag<Counter>()("app/Counter", {
 }) {}
 ```
 
-That difference is what makes a resource *cross-runtime*. An ordinary service is an interface for one
-runtime to satisfy. A contract, because every value it names is a schema, is an interface that can be
-satisfied across runtimes — the schemas are enough to carry each call over the wire. The seam a tag
+That difference is what makes a Resource *cross-runtime*. An ordinary Service is an interface for one
+runtime to satisfy. A Contract, because every value it names is a schema, is an interface that can be
+satisfied across runtimes — the schemas are enough to carry each call over the wire. The seam a Tag
 creates, once a line between modules, can now be a line between processes.
 
-## The same tag, wherever it runs
+## The same Tag, wherever it runs
 
-You declare a resource once. Where it runs, you decide later — with the layer you provide:
+You declare a Resource once. Where it runs, you decide later — with the Layer you provide:
 
 {.twoslash}
 ``` ts
@@ -77,13 +77,13 @@ const client = Resource.clientHttp(Counter, 4000)      // reach one running else
 void inProcess; void served; void client
 ```
 
-Whichever you choose, `yield* Counter` returns the same handle. Reading a value, calling a method,
-watching it change — the code reads identically whether the resource sits beside it or across a
-network. Only the layer changes. That is what *cross-runtime* means.
+Whichever you choose, `yield* Counter` returns the same Handle. Reading a value, calling a method,
+watching it change — the code reads identically whether the Resource sits beside it or across a
+network. Only the Layer changes. That is what *cross-runtime* means.
 
-## The shape of a contract
+## The shape of a Contract
 
-A contract's methods take a small number of forms:
+A Contract's methods take a small number of forms:
 
 - **`Resource.effect(schema)`** — a value to read.
 - **`Resource.effectFn(input, output?)`** — a call that takes an argument.
@@ -92,16 +92,16 @@ A contract's methods take a small number of forms:
 
 ## Nodes
 
-When a program spans more than one runtime, each runtime is a [**node**](/docs/glossary#node). A node carries the address at
-which its resources can be reached, and served resources find one another through the nodes they share.
-You reach for nodes only when a resource is served or distributed; a single-runtime program needs none.
+When a program spans more than one runtime, each runtime is a [**Node**](/docs/glossary#node). A Node carries the address at
+which its Resources can be reached, and served Resources find one another through the Nodes they share.
+You reach for Nodes only when a Resource is served or distributed; a single-runtime program needs none.
 **[Fleets & Peers](/docs/fleets-and-peers)** covers them in full.
 
 ## In brief
 
-A **tag** names a resource. Its **contract** describes the methods and their schemas. An
-**implementation** fulfils the contract, and a **layer** places it — in process, served, or reached as
-a client. The **handle** you get from the tag is the same in every case.
+A **Tag** names a Resource. Its **Contract** describes the methods and their schemas. An
+**Implementation** fulfils the Contract, and a **Layer** places it — in process, served, or reached as
+a client. The **Handle** you get from the Tag is the same in every case.
 
 ## Next
 

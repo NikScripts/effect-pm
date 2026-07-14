@@ -1,17 +1,17 @@
 {#index title="Introduction" status="draft" done="api previews types" appliesTo=all}
 # effect-pm
 
-**Build cross-runtime services on Effect.**
+**Build cross-runtime Services on Effect.**
 
-An Effect service lives inside one runtime. A *cross-runtime service* doesn't: define it once, run it
-on one runtime, and call it from another over RPC — with the same typed handle.
+An Effect Service lives inside one runtime. A *cross-runtime Service* doesn't: define it once, run it
+on one runtime, and call it from another over RPC — with the same typed Handle.
 
 A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
-there. Wiring those together normally means one side owns a resource and the others reach it through
-a hand-rolled HTTP client. Cross-runtime services drop that: every resource is reached with the same
-typed handle, wherever it runs.
+there. Wiring those together normally means one side owns a Resource and the others reach it through
+a hand-rolled HTTP client. Cross-runtime Services drop that: every Resource is reached with the same
+typed Handle, wherever it runs.
 
-Here are two resources — a queue and a scheduled process — on two runtimes, working together.
+Here are two Resources — a queue and a scheduled process — on two runtimes, working together.
 
 {.twoslash}
 ``` ts
@@ -94,13 +94,13 @@ const scheduler = Process.layer(Digest, {
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
-`emails.add(…)` read exactly as if the two shared one process. **Two resources, two runtimes, one
+`emails.add(…)` read exactly as if the two shared one process. **Two Resources, two runtimes, one
 program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
 
 ## Operate them live
 
-A cross-runtime service isn't just callable across runtimes — it's **operable** across them. The same
-handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
+A cross-runtime Service isn't just callable across runtimes — it's **operable** across them. The same
+Handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
 anywhere it's reached:
 
 {.twoslash}
@@ -121,14 +121,14 @@ yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEv
 })
 ```
 
-And it comes with dashboards over the same tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
-each reading the resource without ever touching its implementation.
+And it comes with dashboards over the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
+each reading the Resource without ever touching its Implementation.
 
 ## Working with peers
 
-The same tag also lets a resource reach its **peers** — its own other instances — and coordinate with
-them. Take sessions sharded across droplets: each node holds the entries it owns, and a lookup for
-someone else's session is **forwarded to the node that owns it**. [`ShardMap`](/docs/shardmap) is that
+The same Tag also lets a Resource reach its **peers** — its own other instances — and coordinate with
+them. Take sessions sharded across droplets: each Node holds the entries it owns, and a lookup for
+someone else's session is **forwarded to the Node that owns it**. [`ShardMap`](/docs/shardmap) is that
 pattern as a Resource factory — schemas on the Tag, routed ops, leaf shards, fleet sizes.
 
 {.twoslash}
@@ -183,7 +183,7 @@ const east = ShardMap.serve(Sessions).pipe(
 )
 ```
 
-From any node, a caller just asks — ownership and the cross-node hop stay inside the Resource:
+From any Node, a caller just asks — ownership and the cross-Node hop stay inside the Resource:
 
 {.twoslash}
 ``` ts
@@ -205,14 +205,14 @@ const program = Effect.gen(function* () {
 ```
 
 An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
-reaching others, through the same tag.**
+reaching others, through the same Tag.**
 
 ## Build your own
 
 Everything so far — `Emails`, `Digest`, `Sessions` — is built on one primitive you use directly. A
-resource is a **contract** plus an **implementation**, and it's first-class, not an escape hatch.
+Resource is a **Contract** plus an **Implementation**, and it's first-class, not an escape hatch.
 
-Describe the contract — methods and their schemas:
+Describe the Contract — methods and their schemas:
 
 {.twoslash}
 ``` ts
@@ -226,7 +226,7 @@ class Counter extends Resource.Tag<Counter>()("app/Counter", {
 }) {}
 ```
 
-Give it an implementation:
+Give it an Implementation:
 
 {.twoslash}
 ``` ts
@@ -248,7 +248,7 @@ const counterImpl = Effect.gen(function* () {
 })
 ```
 
-That's it — it's now a cross-runtime service like any built-in. The **same tag**, provided the same
+That's it — it's now a cross-runtime Service like any built-in. The **same Tag**, provided the same
 three ways:
 
 {.twoslash}
@@ -281,7 +281,7 @@ and web dashboards — because it's the same kind of thing `Emails` is.
 ## The included types
 
 You don't start from scratch, either — the types you reach for most ship ready-made, each a
-cross-runtime service you use like an Effect primitive:
+cross-runtime Service you use like an Effect primitive:
 
 - **Long-running processes** ([`Process`](/docs/processes)) — continuous or recurring work: a polling
   cadence, arm/disarm schedule windows, execution history, and more.
