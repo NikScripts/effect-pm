@@ -186,7 +186,9 @@ function preprocessJsdoc(md: string): string {
   );
 }
 
-function jsdocToHast(this: any, docs: string): any[] {
+// `this`-free so the same renderer serves both the twoslash hover popups and the API-reference pages;
+// fenced code uses the shared highlighter directly (loadHighlighter must have run first).
+function jsdocToHast(docs: string): any[] {
   const tree = fromMarkdown(preprocessJsdoc(docs));
   const root: any = toHast(tree, {
     handlers: {
@@ -195,8 +197,9 @@ function jsdocToHast(this: any, docs: string): any[] {
         const lang = (node.lang && ALIAS[String(node.lang).toLowerCase()]) || "typescript";
         let children: any[];
         try {
-          children = (this as any).codeToHast(String(node.value), {
-            ...(this as any).options,
+          if (!hl) throw new Error("highlighter not loaded");
+          children = hl.codeToHast(String(node.value), {
+            themes: THEMES,
             meta: {},
             transformers: [],
             lang,
@@ -220,13 +223,13 @@ function jsdocToHast(this: any, docs: string): any[] {
   });
   return root?.children ?? [];
 }
-function renderJsdocMarkdown(this: any, docs: string): any[] {
-  return jsdocToHast.call(this, docs);
+function renderJsdocMarkdown(docs: string): any[] {
+  return jsdocToHast(docs);
 }
 // Inline context (JSDoc @tag values): parse the same way, but unwrap a lone paragraph so a one-line
 // value (e.g. `@since 4.0.0`) doesn't become a block.
-function renderJsdocInline(this: any, text: string): any[] {
-  const hast = jsdocToHast.call(this, text);
+function renderJsdocInline(text: string): any[] {
+  const hast = jsdocToHast(text);
   if (hast.length === 1 && hast[0]?.tagName === "p") return hast[0].children;
   return hast;
 }
@@ -319,3 +322,8 @@ export const highlightToReact = (
   });
   return hastToReact(hast);
 };
+
+/** Render a JSDoc comment body — markdown with `{@link}`, fenced code, bold, etc. — to React, for the
+ *  API-reference pages. `loadHighlighter()` must have run first so fenced code can be highlighted. */
+export const renderJsdocToReact = (docs: string): React.ReactNode =>
+  hastToReact({ type: "root", children: jsdocToHast(docs) });

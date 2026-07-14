@@ -8,6 +8,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "types": ["react", "vite/client"],
     // Mirror the Vite `@pm` alias (waku.config.ts) so `tsc` resolves island imports of the
     // effect-pm package source the same way the bundler does. Without this, `@pm/Resource` etc.

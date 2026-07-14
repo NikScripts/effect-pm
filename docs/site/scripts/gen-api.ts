@@ -14,7 +14,7 @@
 import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
-import { Cause, Config, Console, Data, DateTime, Effect, Exit, Schema } from "effect";
+import { Cause, Config, Console, Data, Effect, Exit, Schema } from "effect";
 import ts from "typescript";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -55,7 +55,6 @@ const ApiEntry = Schema.Struct({
   symbols: Schema.Array(ApiSymbol),
 });
 const ApiModel = Schema.Struct({
-  generated: Schema.String,
   entries: Schema.Array(ApiEntry),
 });
 type ApiSymbol = Schema.Schema.Type<typeof ApiSymbol>;
@@ -304,9 +303,7 @@ const program = Effect.gen(function* () {
     .filter((e) => e.symbols.length > 0)
     .sort((a, b) => b.symbols.length - a.symbols.length);
 
-  const generated = DateTime.formatIso(yield* DateTime.now);
   const json = yield* Schema.encodeEffect(Schema.fromJsonString(ApiModel))({
-    generated,
     entries: model,
   }).pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
   yield* writeText(outPath, `${json}\n`);

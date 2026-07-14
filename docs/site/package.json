@@ -8,7 +8,8 @@
     "build": "waku build",
     "preview": "waku start --host 0.0.0.0 --port 5190",
     "docs:manifest": "tsx scripts/gen-manifest.ts",
-    "docs:manifest:check": "tsx scripts/gen-manifest.ts --check"
+    "docs:manifest:check": "tsx scripts/gen-manifest.ts --check",
+    "docs:api": "tsx scripts/gen-api.ts"
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",

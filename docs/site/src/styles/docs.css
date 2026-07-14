@@ -765,3 +765,92 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 }
 .glossary-popup-term { font-weight: 650; margin-bottom: 0.2rem; }
 .glossary-popup-def { color: var(--muted-fg); }
+
+/* ===== API reference (generated from api.json by scripts/gen-api.ts) ===== */
+.sidebar-api {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  padding: 0.4rem 0;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-api:hover { text-decoration: underline; }
+
+.api-back { margin: 0 0 1.2rem; font-size: 0.85rem; }
+.api-back a { color: var(--muted-fg); text-decoration: none; }
+.api-back a:hover { color: var(--primary); }
+
+/* landing grid of namespaces */
+.api-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.55rem;
+  margin: 1.4rem 0;
+}
+.api-index-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+}
+.api-index-item:hover { border-color: var(--primary); }
+.api-index-count { color: var(--primary); font-weight: 600; }
+
+.api-ns-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.api-ns-count { margin-left: auto; font-size: 0.8rem; color: var(--muted-fg); font-weight: 500; }
+
+.api-syms { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1.4rem; }
+.api-sym {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 0.95rem;
+  scroll-margin-top: 1rem;
+}
+.api-sym-head { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.55rem; }
+.api-sym-name { font-family: var(--font-mono); font-weight: 600; font-size: 0.95rem; }
+.api-src { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-fg); white-space: nowrap; }
+
+.api-kind {
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+.api-kind-type, .api-kind-interface { color: var(--should); background: color-mix(in oklab, var(--should) 13%, transparent); }
+.api-kind-const { color: var(--may); background: color-mix(in oklab, var(--may) 13%, transparent); }
+
+.api-sig { margin: 0 0 0.5rem; overflow-x: auto; }
+.api-sig pre { margin: 0; padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.79rem; }
+.api-doc { font-size: 0.87rem; color: var(--muted-fg); margin-top: 0.3rem; }
+.api-doc p { margin: 0.4rem 0; }
+.api-doc code { font-family: var(--font-mono); font-size: 0.86em; }
+.api-doc strong { color: var(--fg); }
+
+.api-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+.api-chip { font-size: 0.68rem; padding: 0.12rem 0.42rem; border-radius: 4px; font-family: var(--font-mono); }
+.api-chip-cat { text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
+.api-chip-link { color: var(--muted-fg); border: 1px solid var(--border); }
+.api-chip-link::before { content: "@link "; opacity: 0.6; }
