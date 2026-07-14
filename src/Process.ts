@@ -108,7 +108,6 @@ import type {
   ResourceTag,
   Spec,
   Subscribable,
-  WithRequirement,
 } from "./Resource";
 import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
@@ -2161,9 +2160,11 @@ export const Tag = <Self>() => {
     }
     return buildProcessTag<Self>(key, undefined);
   }
-  // `build`'s overload *implementation* signature doesn't structurally satisfy the named overload
-  // union `ProcessTagBuild<Self>` (a standard TS gap) — the overload signatures above are the checked
-  // surface; assert the impl to them.
+  // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
+  // call-signature *object* type (`ProcessTagBuild<Self>`) even when it implements exactly those
+  // overloads — a known TS limitation (the same class as QueueResource's `nameQueueService` cast).
+  // It's soundness-guarded: `process-built-resource` / `process-contract-shape` .test-d.ts exercise
+  // `Process.Tag()` in every form, so a drift between `build` and `ProcessTagBuild` fails the build.
   return build as ProcessTagBuild<Self>;
 };
 
@@ -2337,8 +2338,7 @@ const buildProcessImpl = <A, E, R>(
         : Effect.asVoid(config.effect);
 
     const tapLogs = <A2, E2, R2>(effect: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
-        // the process tag doubles as its own log/store scope (structurally a StoreScopeTag).
-      withLogScope(tag as StoreScopeTag)(effect);
+      withLogScope(tag)(effect);
 
     // ── schedule: inline windows own an in-memory store; otherwise always-armed ──
     const baseScheduleLayer =
@@ -2410,16 +2410,13 @@ const buildProcessImpl = <A, E, R>(
       start,
       stop,
       events: handle.events,
-      // the log-tapped engine `run` effect is bridged to the contract's `run` member type here.
-      run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
+      run: handle.run().pipe(tapLogs),
       ...scheduleMembers,
       ...resultMembers,
     };
     return Resource.builtResource(
       tag,
-      // engine→contract impl boundary: the assembled `impl` carries the worker/refill `R`; assert
-      // it to the resource's expected `WithRequirement<ImplOf<ProcessSpec>, R>` shape.
-      impl as WithRequirement<ImplOf<ProcessSpec>, R>,
+      impl,
       context,
     );
   });
