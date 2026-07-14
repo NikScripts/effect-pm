@@ -1,5 +1,5 @@
 /**
- * Read durable log rows from registration Storage or interim LogStore.
+ * Read durable log rows from registration Storage.
  *
  * @module internal/logs/durableRead
  * @internal
@@ -8,8 +8,6 @@
 import { Effect, Option } from "effect";
 import type { LogEntry } from "../../LogEntry";
 import { Storage } from "../../Store";
-import { LogStore } from "../../store/log";
-import { LogQueryError } from "../manager/logQuery";
 import { withImplicitLogShape } from "../store/logShapes";
 import { makeStoreContractValue } from "../store/contractDef";
 
@@ -30,27 +28,8 @@ export const readScopeLog = (
     return Option.some(rows as ReadonlyArray<LogEntry>);
   });
 
-/** @internal */
-export const readLogStoreLineage = (
-  tagKey: string,
-  limit: number,
-): Effect.Effect<ReadonlyArray<LogEntry>, never, LogStore> =>
-  Effect.flatMap(LogStore, (store) =>
-    store.load({
-      lineageContains: tagKey,
-      limit,
-      sort: "desc",
-    }),
-  ).pipe(
-    Effect.catchIf(
-      (error): error is LogQueryError => error instanceof LogQueryError,
-      () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
-    ),
-    Effect.orDie,
-  );
-
 /**
- * Prefer `handle.log.read` for `scopeKey`, else interim LogStore lineage filter.
+ * Durable rows for a resource registration scope (`handle.log.read`), or `[]` when unregistered.
  *
  * @internal
  */
@@ -61,56 +40,23 @@ export const queryDurableScope = (
   const limit = options?.limit ?? 200;
   return Effect.gen(function* () {
     const storage = yield* Effect.serviceOption(Storage);
-    if (Option.isSome(storage)) {
-      const fromStore = yield* readScopeLog(scopeKey, limit).pipe(
-        Effect.provideService(Storage, storage.value),
-      );
-      if (Option.isSome(fromStore)) {
-        return fromStore.value;
-      }
+    if (Option.isNone(storage)) {
+      return [];
     }
-    const store = yield* Effect.serviceOption(LogStore);
-    if (Option.isSome(store)) {
-      return yield* readLogStoreLineage(scopeKey, limit).pipe(
-        Effect.provideService(LogStore, store.value),
-      );
-    }
-    return [];
+    const fromStore = yield* readScopeLog(scopeKey, limit).pipe(
+      Effect.provideService(Storage, storage.value),
+    );
+    return Option.isSome(fromStore) ? fromStore.value : [];
   });
 };
 
 /**
- * Node journal via Storage (`Resource.store(node)`), else LogStore `groupId` bucket.
+ * Node journal via Storage (`Resource.store(node)` / `Node.logs`), or `[]` when unregistered.
  *
  * @internal
  */
 export const queryDurableNode = (
   nodeKey: string,
   options?: { readonly limit?: number },
-): Effect.Effect<ReadonlyArray<LogEntry>> => {
-  const limit = options?.limit ?? 200;
-  return Effect.gen(function* () {
-    const storage = yield* Effect.serviceOption(Storage);
-    if (Option.isSome(storage)) {
-      const fromStore = yield* readScopeLog(nodeKey, limit).pipe(
-        Effect.provideService(Storage, storage.value),
-      );
-      if (Option.isSome(fromStore)) {
-        return fromStore.value;
-      }
-    }
-    const store = yield* Effect.serviceOption(LogStore);
-    if (Option.isSome(store)) {
-      return yield* store.value
-        .load({ groupId: nodeKey, limit, sort: "desc" })
-        .pipe(
-          Effect.catchIf(
-            (error): error is LogQueryError => error instanceof LogQueryError,
-            () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
-          ),
-          Effect.orDie,
-        );
-    }
-    return [];
-  });
-};
+): Effect.Effect<ReadonlyArray<LogEntry>> =>
+  queryDurableScope(nodeKey, options);

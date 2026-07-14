@@ -20,9 +20,9 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/CustomQueueContract.ts` | Toolkit **custom queue** (N-level lanes, `add(item, level?)`) → `@nikscripts/effect-pm/CustomQueueResource`. |
 | `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
-| `src/Logs.ts` | Logs platform (`layer`, `stream`, `persistLayer`, `byNode`, `Resource.logs`) — [`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` shims removed.) |
+| `src/Logs.ts` | Logs platform (`layer`, `stream`, `byNode`, `Resource.logs`) — [`docs/LOGS.md`](../LOGS.md). Durable journals via `Node.logs` / toolkit `.store` on `Store.Service`. |
 | `src/Store.ts` | Shape-first store contracts; `EventJournal`-backed `layerMemory` / `SqlEventJournal` `layer` — see `docs/guides/store-backing.md`. |
-| `src/store/*.ts` | Public storage facets → `@nikscripts/effect-pm/store/*` (e.g. `store/Log`). Facet substrate (`ProcessStorage` / `RuntimeStorage`) retired. |
+| `src/store/*.ts` | Public storage facets (none currently — `store/Log` removed). Facet substrate (`ProcessStorage` / `RuntimeStorage`) retired. |
 | `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations (`LogAnnotationKeys`) + NDJSON log entries (`LogEntry` / `LogEntrySchema`) — the structured-logging core. |
 | `src/internal/store/*` | Shared Store helpers (e.g. process store specs) — **internal**. |
 | `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
@@ -47,7 +47,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 3. **Location transparency** — a `Resource` tag is driven by the same `yield* Tag` code local or remote; only the provided layer differs (`.layer` vs `.client`/`.serve`). Don't special-case local vs remote in resource consumers.
 4. **Storage** — See [STORAGE.md](./STORAGE.md) and [`docs/LOGS.md`](../LOGS.md). Facet substrate
    (`RuntimeStorage` / `ProcessStorage`) is retired. Toolkit persistence ports: `HistoryStore` /
-   `DurableQueueStore` (SQLite backends in `storage/sqlite`); logs via `LogStore` + `Logs`.
+   `DurableQueueStore` (SQLite backends in `storage/sqlite`); logs via `Node.logs` / toolkit store registrations + `Logs`.
 
 ---
 

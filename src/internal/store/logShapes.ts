@@ -23,7 +23,6 @@ type ImplicitLogShape = {
  * Extend a store contract with bare {@link LogEntrySchema} under shape key `log`.
  *
  * Toolkit `*.store(tag)` registrations get this so durable tails can `handle.log.append`.
- * Interim {@link LogStore} keeps its wrapped row schema and is **not** detected as implicit.
  *
  * @internal
  */

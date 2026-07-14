@@ -1,9 +1,9 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
-import { LogStore } from "../../store/log";
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
+
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
 
@@ -50,13 +50,6 @@ export class LogQueryError extends Data.TaggedError(
 )<{
   readonly reason: string;
 }> {}
-
-const storageLogQueryError = (error: unknown): LogQueryError =>
-  error instanceof LogQueryError
-    ? error
-    : new LogQueryError({
-        reason: `Unable to read log history from storage: ${String(error)}`,
-      });
 
 const parseIsoDate = (
   field: string,
@@ -153,30 +146,7 @@ export const buildLogQuery = (input: {
   });
 
 /**
- * Run a storage-backed log query and replay matching entries through the operator logger.
- *
- * @public
- */
-export const queryGroupLogs = (
-  query: LogQuery,
-): Effect.Effect<void, LogQueryError> =>
-  Effect.serviceOption(LogStore).pipe(
-    Effect.flatMap(
-      Option.match({
-        onNone: () =>
-          Effect.fail(
-            new LogQueryError({
-              reason:
-                "LogStore layer is not provided; compose LogStore.layerMemory or LogStore.layer(...) before reading log history.",
-            }),
-          ),
-        onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),
-      }),
-    ),
-  );
-
-/**
- * Replay log rows returned from a future storage adapter.
+ * Replay log rows returned from a storage adapter / registration handle.
  *
  * @internal
  */

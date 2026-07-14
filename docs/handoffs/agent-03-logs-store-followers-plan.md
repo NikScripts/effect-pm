@@ -4,7 +4,7 @@
 **Brief:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) (owner-locked registration-follower model).  
 **Done:** `store-read-0` + `followers-0`…`3` + level pipes + remote NodeStatus/`Resource.logs` fallback; examples/docs on `Node.logs`.  
 **Deferred:** store-layer durable `(scopeKey, lineId)` memo (tail claim remains).  
-**Next (owner unlock):** hard-remove interim `Logs.persistLayer` / standalone `LogStore` / `storeFollower.ts`.
+**In flight:** hard-remove interim `Logs.persistLayer` / standalone `LogStore` / `storeFollower.ts` (`cursor/remove-persist-layer-906e`).
 
 ---
 
