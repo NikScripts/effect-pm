@@ -127,83 +127,85 @@ each reading the resource without ever touching its implementation.
 ## Working with peers
 
 The same tag also lets a resource reach its **peers** — its own other instances — and coordinate with
-them. Take a session store sharded across nodes: each node holds the sessions for the users connected
-to it, and a lookup for someone else's session is **forwarded to the node that owns it**.
+them. Take sessions sharded across droplets: each node holds the entries it owns, and a lookup for
+someone else's session is **forwarded to the node that owns it**. [`ShardMap`](/docs/shardmap) is that
+pattern as a Resource factory — schemas on the Tag, routed ops, leaf shards, fleet sizes.
 
 {.twoslash}
 ``` ts
+import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
 import * as Resource from "@nikscripts/effect-pm/Resource"
 import { Schema } from "effect"
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
 // ---cut---
-class Sessions extends Resource.Tag<Sessions>()("app/Sessions", {
-  get: Resource.effectFn(SessionId, Schema.Option(Session)),      // from whoever owns it
-  getLocal: Resource.effectFn(SessionId, Schema.Option(Session)), // this node's own shard
-}) {}
+class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+  key: SessionId,
+  value: Session,
+  keyOf: (s) => s.id,
+}).pipe(
+  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+) {}
 ```
 
-Inside the layer, `Resource.peers` is an addressable set of siblings and `Resource.selfNode` says which
-one you are — so `get` routes to **the one peer** that owns the key:
+Serve a droplet with the mesh discharge — local shard + peer clients from one materialization:
 
 {.twoslash}
 ``` ts
+import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
 import * as Resource from "@nikscripts/effect-pm/Resource"
-import { Effect, Option, Schema } from "effect"
+import { Layer, Schema } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
-class Sessions extends Resource.Tag<Sessions>()("app/Sessions", {
-  get: Resource.effectFn(SessionId, Schema.Option(Session)),
-  getLocal: Resource.effectFn(SessionId, Schema.Option(Session)),
-}) {}
-declare const ownerOf: (id: typeof SessionId.Type, nodes: ReadonlyArray<string>) => string
-declare const getLocal: (id: typeof SessionId.Type) => Effect.Effect<Option.Option<typeof Session.Type>>
-interface SessionsImpl {
-  get: (id: typeof SessionId.Type) => Effect.Effect<Option.Option<typeof Session.Type>, never, any>
-  getLocal?: (id: typeof SessionId.Type) => Effect.Effect<Option.Option<typeof Session.Type>, never, any>
-}
-const impl: SessionsImpl = {
+class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+  key: SessionId,
+  value: Session,
+  keyOf: (s) => s.id,
+}).pipe(
+  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+) {}
+const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
+  Resource.httpServer(resource).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
 // ---cut---
-  get: (id) => Effect.gen(function* () {
-  const self = yield* Resource.selfNode(Sessions)
-  const peers = yield* Resource.peers(Sessions)          // my other instances, keyed by node
-  const owner = ownerOf(id, [self, ...Object.keys(peers)])
-
-  if (owner === self) return yield* getLocal(id)         // mine — answer directly
-  const peer = peers[owner]
-  if (peer === undefined) return Option.none()           // owner unreachable → miss
-  return yield* peer.getLocal(id)                        // forward to THAT peer
-})
-// ---cut-after---
-}
+const east = ShardMap.serve(Sessions).pipe(
+  Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
+  nodeServer(3001),
+)
 ```
 
-From any node, a caller just asks — the routing and the cross-node hop stay inside the resource:
+From any node, a caller just asks — ownership and the cross-node hop stay inside the Resource:
 
 {.twoslash}
 ``` ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
 import { Effect, Schema } from "effect"
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
-class Sessions extends Resource.Tag<Sessions>()("app/Sessions", {
-  get: Resource.effectFn(SessionId, Schema.Option(Session)),
-  getLocal: Resource.effectFn(SessionId, Schema.Option(Session)),
+class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+  key: SessionId,
+  value: Session,
+  keyOf: (s) => s.id,
 }) {}
 declare const id: typeof SessionId.Type
-const program = Effect.gen(function* () {
 // ---cut---
-const sessions = yield* Sessions
-const session = yield* sessions.get(id) // Option<Session> — from whatever node owns it
-// ---cut-after---
+const program = Effect.gen(function* () {
+  const sessions = yield* Sessions
+  const session = yield* sessions.get(id) // Option<Session> — from whoever owns it
 })
 ```
 
 An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
-reaching others, through the same tag.** The
-[`ShardMap`](/docs/shardmap) factory productizes this pattern (schemas on the Tag, routed
-`get`/`put`/`delete`, leaf `*Local`, fleet `size` folds) so apps don't re-hand-roll the Sessions
-forwarder.
+reaching others, through the same tag.**
 
 ## Build your own
 
@@ -285,5 +287,5 @@ cross-runtime service you use like an Effect primitive:
   cadence, arm/disarm schedule windows, execution history, and more.
 - **Queue** ([`QueueResource`](/docs/queues)) — a priority work queue: enqueue items, workers drain them
   with dedup, retry, and concurrency control; durable when you provide a store.
-- **Run resources** ([`RunResource`](/docs/run-resources)) — an on-demand effect behind a concurrency
-  gate: callers get a typed result, but only so many run at once.
+- **Shard map** ([`ShardMap`](/docs/shardmap)) — partitioned key/value across a fleet: routed
+  `get` / `put` / `delete`, leaf shards, and fleet size folds via peers.
