@@ -1,18 +1,17 @@
+import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
-import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
 const DbStatus = Schema.Struct({
   connected: Schema.Boolean,
   latencyMs: Schema.Number,
 });
-const DbChange = DbStatus;
 
 const { spec, readiness } = Resource.monitoredDependency({
   status: DbStatus,
-  change: DbChange,
+  changes: DbStatus,
   readyWhen: (s) => s.connected,
   detail: (s) => (s.connected ? `${s.latencyMs}ms` : "disconnected"),
 });
@@ -37,8 +36,8 @@ const withPort = <A, E, R>(
     return yield* use(addr._tag === "TcpAddress" ? addr.port : 0);
   });
 
-it("monitoredDependency wires status + changes + readiness into /health", () =>
-  Effect.runPromise(
+describe("Resource.monitoredDependency", () => {
+  it.effect("wires status + changes + readiness into /health", () =>
     withPort((port) =>
       Effect.gen(function* () {
         const client = yield* HttpClient.HttpClient;
@@ -49,10 +48,9 @@ it("monitoredDependency wires status + changes + readiness into /health", () =>
         expect(body).toContain("disconnected");
       }).pipe(Effect.provide(FetchHttpClient.layer), Effect.scoped),
     ).pipe(Effect.provide(Server), Effect.scoped),
-  ));
+  );
 
-it("readinessCheck reads readyWhen from status", () =>
-  Effect.runPromise(
+  it.effect("readinessCheck derives readyWhen from status", () =>
     Effect.gen(function* () {
       const down = yield* Resource.readinessCheck(Database, {
         status: Effect.succeed({ connected: false, latencyMs: 0 }),
@@ -64,4 +62,5 @@ it("readinessCheck reads readyWhen from status", () =>
       });
       expect(up).toEqual({ ready: true, detail: "12ms" });
     }),
-  ));
+  );
+});

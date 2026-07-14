@@ -1,6 +1,7 @@
 /**
- * Type-level proof: {@link Resource.monitoredDependency} returns effect/stream methods and
- * a readiness derivation keyed on the decoded `status` type.
+ * Type-level proof: {@link Resource.monitoredDependency} returns a checked
+ * {@link Resource.contract | contract} spec and a readiness derivation for its
+ * service shape; `readyWhen` is keyed on the decoded `status` type.
  */
 import { Schema } from "effect";
 import * as Resource from "../src/Resource";
@@ -10,12 +11,14 @@ const DbStatus = Schema.Struct({
   latencyMs: Schema.Number,
 });
 
-const built = Resource.monitoredDependency({
+const options = {
   status: DbStatus,
-  change: DbStatus,
-  readyWhen: (s) => s.connected,
-  detail: (s) => `${s.latencyMs}ms`,
-});
+  changes: DbStatus,
+  readyWhen: (s: Schema.Schema.Type<typeof DbStatus>) => s.connected,
+  detail: (s: Schema.Schema.Type<typeof DbStatus>) => `${s.latencyMs}ms`,
+} satisfies Resource.MonitoredDependencyOptions<typeof DbStatus, typeof DbStatus>;
+
+const built = Resource.monitoredDependency(options);
 
 void built.spec.status;
 void built.spec.changes;
@@ -27,9 +30,16 @@ const _changesOk: typeof built.spec.changes = Resource.stream(DbStatus);
 void _statusOk;
 void _changesOk;
 
+// withReadiness accepts the factory readiness on a tag built from its spec.
+class Database extends Resource.withReadiness(
+  Resource.Tag<Database>()("monitored/Database", built.spec),
+  built.readiness,
+) {}
+void Database;
+
 Resource.monitoredDependency({
   status: DbStatus,
-  change: DbStatus,
+  changes: DbStatus,
   // @ts-expect-error readyWhen must take the status decoded type, not a string
   readyWhen: (_s: string) => true,
 });

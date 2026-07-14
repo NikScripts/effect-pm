@@ -39,6 +39,10 @@
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
  *
+ * For a repeated dependency-monitor shape (`status` + `changes` + readiness from
+ * status), {@link monitoredDependency} builds the spec and readiness together —
+ * still a plain tag, not a new kind. Attach readiness with {@link withReadiness}.
+ *
  * @module Resource
  */
 import {
@@ -1720,89 +1724,6 @@ export type ReadinessOf<Service> = (
   // is satisfied by the serve context the node runs readiness in, and erased at this storage seam.
 ) => Effect.Effect<Readiness, never, any>;
 
-/**
- * Options for {@link monitoredDependency} — a repeated "dependency monitor" shape
- * (`status` effect + `changes` stream + readiness from status).
- *
- * @public
- */
-export interface MonitoredDependencyOptions<
-  Status extends Schema.Top,
-  Change extends Schema.Top,
-> {
-  readonly status: Status;
-  readonly change: Change;
-  readonly readyWhen: (status: Schema.Schema.Type<Status>) => boolean;
-  readonly detail?: (status: Schema.Schema.Type<Status>) => string | undefined;
-}
-
-/**
- * Spec + readiness produced by {@link monitoredDependency}. Pass `spec` to
- * {@link Resource.Tag} and `readiness` to {@link withReadiness}.
- *
- * @public
- */
-export interface MonitoredDependency<
-  Status extends Schema.Top,
-  Change extends Schema.Top,
-> {
-  readonly spec: {
-    readonly status: Method<undefined, Status, Schema.Never>;
-    readonly changes: Method<undefined, Change, Schema.Never, true>;
-  };
-  readonly readiness: ReadinessOf<{
-    readonly status: Effect.Effect<Schema.Schema.Type<Status>>;
-  }>;
-}
-
-/**
- * Build the common **monitored dependency** contract: `status` (one-shot read),
- * `changes` (live stream), and a readiness derivation from `status`. Still a plain
- * {@link Resource.Tag} shape — not a new resource kind.
- *
- * ```ts
- * const DbStatus = Schema.Struct({
- *   connected: Schema.Boolean,
- *   latencyMs: Schema.Number,
- * })
- * const DbChange = DbStatus
- *
- * const { spec, readiness } = Resource.monitoredDependency({
- *   status: DbStatus,
- *   change: DbChange,
- *   readyWhen: (s) => s.connected,
- *   detail: (s) => `${s.latencyMs}ms`,
- * })
- *
- * export class WnbaDatabase extends Resource.withReadiness(
- *   Resource.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
- *   readiness,
- * ) {}
- * ```
- *
- * @public
- */
-export const monitoredDependency = <
-  Status extends Schema.Top,
-  Change extends Schema.Top,
->(
-  options: MonitoredDependencyOptions<Status, Change>,
-): MonitoredDependency<Status, Change> => {
-  const readiness: MonitoredDependency<Status, Change>["readiness"] = (svc) =>
-    Effect.map(svc.status, (status) => {
-      const ready = options.readyWhen(status);
-      const detail = options.detail?.(status);
-      return detail === undefined ? { ready } : { ready, detail };
-    });
-  return {
-    spec: {
-      status: effect(options.status),
-      changes: stream(options.change),
-    },
-    readiness,
-  };
-};
-
 // ── node: the transport for a resource, carried in the Tag ──
 
 /**
@@ -2034,6 +1955,14 @@ export declare namespace Resource {
     E,
     T | R
   >;
+
+  /** @inheritdoc */
+  export type {
+    MonitoredDependencyOptions,
+    MonitoredDependency,
+    MonitoredDependencySpec,
+    MonitoredDependencyService,
+  };
 }
 
 /**
@@ -2202,6 +2131,111 @@ export const allReady = <R>(
     const notReady = results.find((r) => !r.ready);
     return notReady ?? { ready: true };
   });
+
+// ── monitored dependency: shared status + changes + readiness shape ──
+
+/**
+ * Wire spec for a {@link monitoredDependency} — `status` effect + `changes` stream.
+ *
+ * @public
+ */
+export type MonitoredDependencySpec<
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+> = {
+  readonly status: Method<undefined, Status, Schema.Never>;
+  readonly changes: Method<undefined, Change, Schema.Never, true>;
+};
+
+/**
+ * The service slice {@link monitoredDependency} readiness reads — `status` only.
+ * Assignable into {@link withReadiness} for a full {@link MonitoredDependencySpec}
+ * tag (extra `changes` is ignored).
+ *
+ * @public
+ */
+export interface MonitoredDependencyService<Status extends Schema.Top> {
+  readonly status: Effect.Effect<Schema.Schema.Type<Status>>;
+}
+
+/**
+ * Authoring options for {@link monitoredDependency}. Field names match the
+ * produced {@link MonitoredDependencySpec} (`status` / `changes`); `changes` is the
+ * **element** schema of the live stream.
+ *
+ * @public
+ */
+export interface MonitoredDependencyOptions<
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+> {
+  readonly status: Status;
+  readonly changes: Change;
+  readonly readyWhen: (status: Schema.Schema.Type<Status>) => boolean;
+  readonly detail?: (status: Schema.Schema.Type<Status>) => string | undefined;
+}
+
+/**
+ * Spec + readiness from {@link monitoredDependency}. Pass `spec` to
+ * {@link Resource.Tag}; attach `readiness` with {@link withReadiness}.
+ *
+ * @public
+ */
+export interface MonitoredDependency<
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+> {
+  readonly spec: MonitoredDependencySpec<Status, Change>;
+  readonly readiness: ReadinessOf<MonitoredDependencyService<Status>>;
+}
+
+/**
+ * Build the common **monitored dependency** contract: `status` (one-shot read),
+ * `changes` (live snapshot stream), and readiness derived from `status`. Still a
+ * plain {@link Resource.Tag} shape — **not** a new resource kind.
+ *
+ * Compose behaviour the usual way: tag + {@link withReadiness} (see
+ * *Resources → behaviour via piped combinators*).
+ *
+ * @example
+ * ```ts
+ * const DbStatus = Schema.Struct({
+ *   connected: Schema.Boolean,
+ *   latencyMs: Schema.Number,
+ * })
+ *
+ * const { spec, readiness } = Resource.monitoredDependency({
+ *   status: DbStatus,
+ *   changes: DbStatus,
+ *   readyWhen: (s) => s.connected,
+ *   detail: (s) => `${s.latencyMs}ms`,
+ * })
+ *
+ * export class WnbaDatabase extends Resource.withReadiness(
+ *   Resource.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
+ *   readiness,
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export const monitoredDependency = <
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+>(
+  options: MonitoredDependencyOptions<Status, Change>,
+): MonitoredDependency<Status, Change> => ({
+  spec: contract({
+    status: effect(options.status),
+    changes: stream(options.changes),
+  }),
+  readiness: (svc, _base) =>
+    Effect.map(svc.status, (status): Readiness => {
+      const ready = options.readyWhen(status);
+      const detail = options.detail?.(status);
+      return detail === undefined ? { ready } : { ready, detail };
+    }),
+});
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedKeys = new Set<string>();
