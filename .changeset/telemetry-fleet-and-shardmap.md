@@ -44,3 +44,8 @@ ShardMap.serve(Sessions).pipe(
 Routed `get` / `put` / `delete`, leaf `*Local` / `sizeLocal`, fleet `size` / `sizeByNode`.
 Default partition: `ShardMap.consistentHash` (fixed node set). Unreachable owner → miss /
 `put` returns `false` (never a silent write on the wrong shard).
+
+### Docs
+
+Djot guides: `docs/guides/telemetry.md`, `docs/guides/shardmap.md` (nav + Metrics / Fleets & Peers
+pointers). `Resource.distributedOf(tag)` reads a tag's declared fleet.
