@@ -1,11 +1,12 @@
 /**
  * @module examples/resource-web/server
  *
- * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over
- * http on one port, plus the `NodeStatus` that `httpServer` auto-mounts. The browser dashboard
- * reaches it via `Resource.httpClient(WnbaNode, …)` (vite proxies `/rpc` here), so the top-right
- * node status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
- * `pnpm run example:resource-web`).
+ * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over a
+ * **WebSocket** (`httpServer({ protocol: "websocket" })`) on one port, plus the `NodeStatus` that
+ * `httpServer` auto-mounts. The browser dashboard reaches it via `Resource.socketClient(WnbaNode, …)`
+ * (vite proxies `/rpc` here with `ws: true`) — one multiplexed connection carries every resource's
+ * status/metrics/logs streams, which HTTP/1.1's ~6-connection cap would otherwise starve. Run:
+ * `pnpm run example:resource-web-server` (alongside `pnpm run example:resource-web`).
  */
 import { Clock, Console, DateTime, Duration, Effect, Layer, Random, Stream } from "effect";
 // A node node entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
