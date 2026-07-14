@@ -48,7 +48,7 @@ const peerLeaf = (inFlight: number) => ({
     ts: 0,
     metrics: [
       {
-        _tag: "gauge" as const,
+        _tag: "Gauge" as const,
         id: Telemetry.inFlightMetricId,
         labels: {},
         value: inFlight,
