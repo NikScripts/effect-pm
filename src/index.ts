@@ -127,6 +127,7 @@ export {
   type ApiUsageSnapshot,
 } from "./ApiUsageSchema";
 export * as Telemetry from "./Telemetry";
+export * as ShardMap from "./ShardMap";
 export {
   DuplicateGroupId,
   DuplicateInstance,

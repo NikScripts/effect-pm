@@ -200,7 +200,10 @@ const session = yield* sessions.get(id) // Option<Session> — from whatever nod
 ```
 
 An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
-reaching others, through the same tag.**
+reaching others, through the same tag.** The
+[`ShardMap`](/docs/shardmap) factory productizes this pattern (schemas on the Tag, routed
+`get`/`put`/`delete`, leaf `*Local`, fleet `size` folds) so apps don't re-hand-roll the Sessions
+forwarder.
 
 ## Build your own
 

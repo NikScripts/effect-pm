@@ -1,7 +1,17 @@
 {#metrics title="Metrics" appliesTo=all}
 # Metrics
 
-{.note}
-**Placeholder — outline only.** Full content to come; this page exists now so other pages can link to it.
+Resources already emit into Effect's per-process `Metric` registry (queues, processes, HTTP
+clients, runtime metrics). Two sinks read that registry:
 
-The metrics a resource exposes and the observability surface built into every resource.
+| Sink | When |
+|------|------|
+| **OTEL export** | Professional stack — Sentry, Grafana, Honeycomb, alerting, retention |
+| **[Telemetry](/docs/telemetry)** | Custom in-app glass — fleet page, TUI, `pm metrics` — no sidecar |
+
+Telemetry is the Resource path: leaf `snapshot` / `live`, plus fleet `inFlightByNode` /
+`fleetInFlight` when the tag is meshed. Cardinality stays cheap (`node` / `client` /
+`status` labels; no per-entity metric ids). Per-entity *current* state still comes from that
+entity's own `status` / refs — not from Telemetry.
+
+See the [Telemetry guide](/docs/telemetry).

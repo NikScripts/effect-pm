@@ -29,7 +29,9 @@ const protocol = (url: string) =>
   );
 
 const Node = Resource.httpServer([
-  Telemetry.serve(FleetTelemetry, { interval: Duration.millis(50) }),
+  Telemetry.serve(FleetTelemetry, { interval: Duration.millis(50) }).pipe(
+    Layer.provide(Telemetry.alone(FleetTelemetry)),
+  ),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("serves the Metric registry — a labeled counter round-trips via snapshot over RPC", () =>
@@ -70,7 +72,11 @@ it("live streams sampled snapshots (in-process)", () =>
         expect(first.value.metrics.some((m) => m.id === "test_telemetry_total")).toBe(true);
       }
     }).pipe(
-      Effect.provide(Telemetry.layer(FleetTelemetry, { interval: Duration.millis(20) })),
+      Effect.provide(
+        Telemetry.layer(FleetTelemetry, { interval: Duration.millis(20) }).pipe(
+          Layer.provide(Telemetry.alone(FleetTelemetry)),
+        ),
+      ),
       Effect.scoped,
     ),
   ));
