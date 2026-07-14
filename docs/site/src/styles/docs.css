@@ -338,10 +338,11 @@ pre.shiki { background: transparent; }
   width: max-content;
   max-width: min(88vw, 42rem);
   padding: 0;               /* no gutter — the type fills the popup */
+  overflow: hidden;         /* full-bleed type respects the rounded frame */
   background: var(--panel) !important;
-  border: none;             /* no frame border */
-  border-radius: 0;         /* no rounded corners */
-  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.5);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
   white-space: pre-wrap;
   font-size: 0.82rem;
   line-height: 1.5;
