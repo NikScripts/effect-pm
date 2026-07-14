@@ -331,13 +331,228 @@ class Emails extends QueueResource.Service<Emails, typeof EmailJob.Type, never>(
 `yield* Emails` yields the exact same handle type. Reach for `Service` for a
 self-contained local queue; reach for `Tag` + `layer` when the queue might move.
 
-## Where to next
+---
 
-- **Persistence & analytics** — every queue has an observability store baked in;
-  provide a durable one and `metrics.query` reads history back across restarts.
-- **Running it remotely** — serve a queue over RPC and drive it from a browser or
-  another process with the *same* `yield* Tag` code.
-- **Custom priority lanes** — beyond high/normal/low, a custom queue defines its
-  own levels.
+Everything so far is the *basic* queue. The rest of this guide is the operating
+surface — the controls you reach for once a queue is real.
 
-Those build directly on what's here — same tag, same handle.
+## Handling failure
+
+`attempts` is the blunt instrument: try N times, then dead-letter. Real failure
+handling is per-error, and that's what **`onFailure`** is for. It runs when an
+attempt fails, receives the entry and the `Cause`, and *decides* what happens
+next — retry, dead-letter, or drop:
+
+{.twoslash}
+``` ts
+import { QueueResource } from "@nikscripts/effect-pm"
+import { Cause, Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", {
+  payload: EmailJob,
+  error: Schema.String,
+}) {}
+declare const isTransient: (cause: Cause.Cause<string>) => boolean
+declare const send: (job: { to: string }) => Effect.Effect<void, string>
+// ---cut---
+const EmailsLive = QueueResource.layer(Emails, {
+  effect: (job) => send(job),
+  attempts: 5,
+  onFailure: (entry, cause) =>
+    isTransient(cause)
+      ? Effect.succeed("retry" as const)        // a blip — spend an attempt
+      : Effect.succeed("dead-letter" as const),  // a bad address — set it aside
+})
+```
+
+Three dispositions: **`"retry"`** re-enqueues (until `attempts` runs out),
+**`"dead-letter"`** sets the entry aside as failed (a `DeadLettered` event), and
+**`"drop"`** discards it silently. Without `onFailure`, the default is retry until
+`attempts`, then dead-letter. For *retrying the effect itself* (backoff, jitter),
+put `Effect.retry` on your worker `effect` — that's a different layer of the onion:
+`onFailure` decides the entry's fate *after* the effect has given up.
+
+## Rate limiting the drain
+
+A queue that hammers a downstream API needs a ceiling. `rateLimit` caps how many
+items start per window; excess wait, and a `RateLimitExceeded` event fires when the
+ceiling bites:
+
+{.twoslash}
+``` ts
+import { QueueResource } from "@nikscripts/effect-pm"
+import { Duration, Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+// ---cut---
+const EmailsLive = QueueResource.layer(Emails, {
+  effect: (job) => Effect.log(`send ${job.to}`),
+  concurrency: 8,
+  rateLimit: { limit: 100, window: Duration.seconds(1) }, // ≤ 100 starts/sec
+})
+```
+
+`concurrency` and `rateLimit` are orthogonal: concurrency bounds *in-flight* work,
+rate limit bounds *start rate*. Use both — a pool of 8 workers that collectively
+start no faster than 100/sec.
+
+## Bootstrapping: start paused
+
+Sometimes you want to load a queue *before* it drains — seed a backlog, wire up a
+subscriber, then let it rip. Start it paused and `resume` when ready:
+
+{.twoslash}
+``` ts
+import { QueueResource } from "@nikscripts/effect-pm"
+import { Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+const EmailsLive = QueueResource.layer(Emails, {
+  effect: (job) => Effect.log(job.to),
+  paused: true,        // workers are forked but idle
+})
+const program = Effect.gen(function* () {
+const emails = yield* Emails
+// ---cut---
+yield* emails.add({ to: "a@b.c", subject: "queued while paused" })
+yield* emails.resume  // now it drains
+})
+```
+
+## Pulling work in
+
+The queues so far are *push* — something calls `add`. A queue can also *pull*, with
+**`refill`**: a loader that the engine calls to fetch work. `onStart` seeds it once
+on boot; `onDrained` re-polls the source every time the queue empties — turning a
+queue into a durable poller over an external source (a table, a topic, an inbox):
+
+{.twoslash}
+``` ts
+import { QueueResource } from "@nikscripts/effect-pm"
+import { Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+declare const nextBatch: Effect.Effect<ReadonlyArray<{ to: string; subject: string }>>
+// ---cut---
+const EmailsLive = QueueResource.layer(Emails, {
+  effect: (job) => Effect.log(job.to),
+  refill: {
+    onStart: true,                                    // seed on boot
+    onDrained: true,                                  // re-poll when empty
+    load: (queue) => Effect.flatMap(nextBatch, queue.add),
+  },
+})
+```
+
+The loader gets the queue handle, so it enqueues with the same verbs you do.
+
+## Operating a live queue
+
+Three streams tell you what a running queue is doing, from three angles.
+
+**`events`** is the fact log. Every discrete thing the queue does is a tagged event,
+and they fall into four families:
+
+- *lifecycle* — `Enqueued`, `Started`, `Completed`
+- *failure* — `Failed`, `RetryScheduled`, `RetryExhausted`
+- *routing* — `Released`, `DeadLettered`, `Dropped`, `Cleared`
+- *queue-level* — `Start`, `RateLimitExceeded`, `ShutdownRequested`, `ShutdownComplete`, `Drained`
+
+You never handle all of them — pick the tags you care about with
+`Resource.runForEachTag` and ignore the rest.
+
+**`status`** is the current-state snapshot (a `Subscribable`): per-priority pending
+`sizes`, how many are `inFlight`, the running `completed` count, whether it's
+`paused`, and its `phase` — `running`, then `draining` after a shutdown request,
+then `off`. It's the one value a dashboard renders.
+
+**`metrics`** is the aggregate view: `metrics.stream` emits one windowed summary per
+window (throughput, average wait and execution time, per-window counts);
+`metrics.query` reads past windows back from the store for charts and trends.
+
+{.note}
+`status` answers "what *is* true now", `events` answers "what *happened*", `metrics`
+answers "how is it *trending*". Reach for the one that matches the question — they
+don't overlap.
+
+## Persistence and analytics
+
+Every queue comes with an **observability store** already wired in. By default it's
+in-memory: lifecycle events and metric windows are recorded, and `metrics.query`
+reads them back — for the life of the process. Provide a **durable** store instead
+(the toolkit ships a SQLite-backed one) and that history survives restarts: a
+dashboard reconnecting after a redeploy still sees yesterday's throughput.
+
+The store is also an analytics surface in its own right — beyond `metrics.query` it
+answers questions like "the *slowest* completions" and "how many have completed",
+computed over the recorded history rather than the live queue. You reach it with
+`QueueResource.store(tag)`.
+
+## Running it across the network
+
+This is the payoff of the tag/layer split. The **tag is the contract**; the
+**layer decides where the work runs** — and nothing else in your code changes.
+
+Provide `QueueResource.layer` and the queue is local. Provide
+`QueueResource.serve` instead and the worker runs behind an RPC server, its
+handlers mounted for callers. A *different* process then provides
+`Resource.client(Tag)` (or `Resource.clientHttp(Tag, port)` over HTTP), and the
+**same `yield* Tag` code** drives the remote queue — `add`, `size`, `events`,
+`pause`, all of it — as if it were in-process. The handle's `Requirements` param is
+the only tell: `never` locally, the transport for a client.
+
+For moving *pending work* between runtimes, `release` exports entries decoded and
+`releaseEncoded` exports them in wire form (no item schema needed on the receiver);
+the other side `enqueue`s them, attempt budgets intact.
+
+## Reconfiguring at runtime
+
+A queue's `concurrency`, `rateLimit`, or `paused` state isn't frozen at definition.
+`QueueResource.configure(Tag, patch)` is a layer that overlays a config patch on top
+of the base — `Layer.provideMerge` it, and the queue drains under the merged config:
+
+{.twoslash}
+``` ts
+import { QueueResource } from "@nikscripts/effect-pm"
+import { Layer, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
+class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+declare const EmailsLive: Layer.Layer<Emails>
+// ---cut---
+const Tuned = EmailsLive.pipe(
+  Layer.provideMerge(QueueResource.configure(Emails, { concurrency: 16 })),
+)
+```
+
+Because it's just a layer, the patch can come from anywhere a layer can — an env
+flag, or a live `DynamicConfig` swap that re-tunes the queue while it runs.
+
+## Custom priority lanes
+
+`high` / `normal` / `defer` covers most needs, but some domains have their own
+ordering — tiers, SLAs, numbered levels. `CustomQueueResource` is the same queue
+with **arbitrary lanes**: you define the levels, and `add` targets one by name. The
+handle reads the same; only the priority axis is yours to shape.
+
+## A live control panel
+
+Because the handle *is* the whole surface, a UI is just another consumer of it.
+These docs render one inline: a ` ``` queue ` block mounts a live control panel for
+a declared queue — buttons that call `add` / `prioritize` / `pause` / `resume` /
+`clear`, and stats read straight off the `status` stream. Enqueue an item and watch
+`pending` climb, then drain to `completed`:
+
+``` queue
+app/EmailQueue
+```
+
+The same handle that runs the queue drives the panel — no separate admin API, no
+extra wiring.
+
+## The raw engine
+
+Under the resource wrapper is a plain queue engine. `QueueResource.make(config)`
+returns a handle directly — the workers, retries, and events, without the Tag,
+Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
+only when you want to embed a queue inside something else and manage its scope
+yourself. For everything else, the tag *is* the queue.
