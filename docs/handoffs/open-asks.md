@@ -29,5 +29,5 @@ Not a blocker. No `layerNoop` under `src/` today.
 | Ask | Fate |
 |-----|------|
 | Dashboard widget plug-in seam | **Shipped** — `src/web/widget-registry.ts` (`forKind` / `forKey` / `withEntries` onto `base`; Agent C on `integration`) |
-| Docs: when NOT to hoist `Effect.provide` to `serve` | **Shipped** — section in [`docs/legacy/guides/per-resource-dependencies.md`](../legacy/guides/per-resource-dependencies.md) |
+| Docs: when NOT to hoist `Effect.provide` to `serve` | **Shipped** — standards *Resources* (declare-don’t-provide) + the “when not to hoist” guidance in that rule |
 | beta.22 `withReadiness` pipe TS2589 | **Fixed** — `PipeableTag` + type-hygiene [#54](https://github.com/NikScripts/effect-pm/pull/54) on `integration` |

@@ -12,7 +12,7 @@ Start here when browsing the repo in GitHub or an editor.
 | [guides/history-and-persistence.md](./guides/history-and-persistence.md) | Everyone | History, the durable queue, and the dashboard data layer. |
 | [STORAGE.md](./STORAGE.md) | Integrators | Persistence model (the SSOT). |
 | [guides/README.md](./guides/README.md) | Integrators | How-to guides. |
-| [plans/README.md](./plans/README.md) | Contributors | **Future-only** roadmap: priority table + topic files (no shipped API truth here). |
+| [plans/README.md](../plans/README.md) | Contributors | **Future-only** roadmap: priority table + topic files (no shipped API truth here). |
 
 **Examples**: [`../examples/README.md`](../examples/README.md).
 

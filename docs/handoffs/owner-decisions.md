@@ -6,6 +6,25 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks
+
+- **Owner said:** Scrub living cites of anything under `docs/legacy/**`. Confirm fleet health as the health roadmap item; Resource-RPC auth = README-only (A). Agree `docs/plans/` home, archive hybrid, refresh treeshaking.
+- **Chose:** Create `docs/plans/` (README + treeshaking refresh + weighted-middle + non-serializable items). Delete `docs/legacy/plans/`. Archive hybrid RuntimeStorage design. Roadmap: **fleet health** (per-node shipped; fleet aggregate open); **auth** stays a bullet with no stub file.
+- **Rejected:** Host health wording; rewriting hybrid under Store; auth stub file; leaving a “see legacy” stub.
+- **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`. Phase 3 still owner-gated.
+
+---
+
+## 2026-07-14 — Phase 1 Batch E design-lock + Phase 2 plan unlock
+
+- **Owner said:** “Next” after #54/#55 land — continue corpus.
+- **Chose (Batch E):** Keep `*-decisions.md` + store-cutover SSOTs **flat at handoffs root** (no `decisions/` folder). Archive closed Agent 3 followers/tail plans + not-approved `store-layer-query` under `archive/2026-07/`. `queue-persistence-design` stays as historical SSOT; `queue-nonserializable-items` waits for Phase 2 move to `docs/plans/`.
+- **Chose (Phase 2):** Plan-first only — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md). Proposed home = **`docs/plans/`**; no mass moves until owner unlocks P1–P4.
+- **Rejected / deferred:** Batch Z deletes; relocating STORAGE-cited cutover files; implementing roadmap features.
+- **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`.
+
+---
+
 ## 2026-07-14 — Phase 1 handoffs archive batches A–D (“do it all”)
 
 - **Owner said:** Unlock Phase 1 execution — do the archive batches (archive-first). Close what we can from open-asks in the same pass.

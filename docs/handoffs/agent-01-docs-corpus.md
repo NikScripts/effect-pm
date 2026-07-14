@@ -1,10 +1,11 @@
 # Agent 1 — Docs corpus: handoffs → plans → legacy (Draft)
 
-**Status:** **PHASE 1 BATCHES A–D LANDED** (2026-07-14) — archive under `handoffs/archive/2026-07/`; SSOTs + deferred rows still at root.  
-**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md). Still awaiting owner for batch **E** (SSOT layout) / **Z** (deletes) / Phases 2–3.  
+**Status:** **PHASE 1 A–E DONE** · **PHASE 2 P1–P4 LANDED** (2026-07-14).  
+**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md).  
+**Phase 2 plan:** [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md) — `docs/plans/` is the living roadmap.  
 **Agent:** **1**.  
 **Branch from:** **`integration`**.  
-**Working branch:** landed on **`integration`** via [#54](https://github.com/NikScripts/effect-pm/pull/54) + [#55](https://github.com/NikScripts/effect-pm/pull/55).
+**Working branch:** `cursor/docs-corpus-phase2-plan-ce05`.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/standards/documentation.md`](../standards/documentation.md) · [`docs/nav.ts`](../nav.ts) · [`docs/site/src/lib/content.ts`](../site/src/lib/content.ts)
 
@@ -26,12 +27,10 @@
 | Area | Path | Served by site? | Format today |
 |------|------|-----------------|--------------|
 | Live book | `docs/index.md`, `getting-started/`, `resources/`, `guides/`, `observe/`, `standards/` | **Yes** (`content.ts` glob) | `.md` with Djot-style `{#id title=…}` blocks (Djot prototype — see standards *Documentation*) |
-| Handoffs | `docs/handoffs/**` (~87 `.md`) | **No** | Agent/session notes, plans-in-handoffs, reviews, roadmaps |
-| Legacy | `docs/legacy/**` (guides, PACKAGE-GUIDE, STORAGE, plans, …) | **No** | Pre-site markdown; often stale vs tip |
+| Handoffs | `docs/handoffs/**` | **No** | Agent/session notes, reviews, decision SSOTs |
+| Plans | `docs/plans/` | **No** | Future-only roadmap + design specs |
 | Orphan roots | e.g. `docs/LOGS.md` | **No** (not in glob) | Should eventually live under `guides/` or similar |
-| Plans (legacy) | `docs/legacy/plans/` | **No** | Roadmap + a few design specs |
-| Plans (scattered) | handoffs `*-plan.md`, design docs | **No** | Mixed with agent briefs |
-
+| Pre-site corpus | `docs/legacy/**` | **No** | Port candidates for Phase 3 — living docs must not cite this tree |
 **Important:** There are **zero** `.dj` files in-repo. The site still loads **`.md`**. “Convert to Djot” means align content with the Djot **conventions** in `documentation.md` (page blocks, rule blocks) — not a mass rename to `.dj` unless owner later unlocks a site change (that’s lettered-agent territory).
 
 ---
@@ -74,23 +73,9 @@ Then **stop**. After owner unlocks: execute moves/deletes + fix links + update `
 
 ---
 
-## Phase 2 — Plans refactor & migration (owner unlock later)
+## Phase 2 — Plans refactor & migration (**done**)
 
-**Do not start until Phase 1 is approved and landed (or owner says parallelize).**
-
-### Goal
-
-One coherent place for **future / not-yet-shipped** design, separate from agent briefs and from shipped guides.
-
-### Known plan surfaces today
-
-- `docs/legacy/plans/` — roadmap README + hybrid storage, treeshaking, weighted middle scheduling (many items may be **obsolete** post-Store / Logs / Host→Node rename).  
-- Handoff `*-plan.md` / design docs used as living plans.  
-- Shipped behavior wrongly stranded in plans → should move to **guides** or be deleted.
-
-### Deliverable when unlocked
-
-Plan again: inventory every plan-ish doc · keep / rewrite / migrate to guide · delete obsolete · propose `docs/plans/` (or other) vs keep under legacy. Owner picks layout before moves.
+Living roadmap: [`docs/plans/README.md`](../plans/README.md). Specs beside it. Owner locks recorded in [`owner-decisions.md`](./owner-decisions.md) + [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md).
 
 ---
 

@@ -182,7 +182,6 @@ export const configureWrapEffectField = <
 // namespace (`import * as ResourceConfigure`): `configureLayer` / `foldConfig` /
 // `foldConfiguredSpec` are the flat exports above; `tagKey` / `wrapEffectField` are aliased
 // below so the namespace members match. Root imports match these bindings.
-// See `docs/legacy/guides/resource-configure.md`.
 
 /**
  * Deterministic configure tag key for a resource id, aliased as `ResourceConfigure.tagKey`.

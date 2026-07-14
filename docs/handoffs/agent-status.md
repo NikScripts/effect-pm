@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | **on `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) | **#54 + #55 landed** — Phase 1 A–D archived; withReadiness type hygiene; open-asks §1–2 closed | `integration` tip | tsgo + tsc / link ripples | Batch E/Z + Phase 2 deferred; `layerNoop` parked | 2026-07-14 |
+| **1** | `cursor/docs-corpus-phase2-plan-ce05` | [docs corpus](./agent-01-docs-corpus.md) · [Phase 2](./agent-01-docs-corpus-phase2-plan.md) · [plans](../plans/README.md) · [open asks](./open-asks.md) | **Phase 2 P1–P4 landed** — `docs/plans/` live; fleet health on roadmap; auth README-only | tip of phase2-plan | docs only | Phase 3 unlock next; Batch Z deferred; `layerNoop` parked | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **ready perfection / closed** | [Logs store followers](./agent-03-logs-p1.md) · Process.events | **tracks done** — [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#48](https://github.com/NikScripts/effect-pm/pull/48)/[#51](https://github.com/NikScripts/effect-pm/pull/51) on `integration` | `integration` tip | typecheck / suite green at #51 | Superseded [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed. [#52](https://github.com/NikScripts/effect-pm/pull/52)/[#50](https://github.com/NikScripts/effect-pm/pull/50) landed. Out of scope: D handles, site UI, store memo, Logs followers/`LogStore`/`persistLayer`. No further Process.events Eng. | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** [#54](https://github.com/NikScripts/effect-pm/pull/54) + [#55](https://github.com/NikScripts/effect-pm/pull/55) **on `integration`**. Phase 1 A–D archived; open-asks §1–2 closed; `layerNoop` parked. Next unlock: batch E / Z or Phase 2. No UI / `docs/site` chrome.
+1. **Agent 1:** Phase 2 P1–P4 on `cursor/docs-corpus-phase2-plan-ce05` — `docs/plans/` is SSOT; fleet health roadmap bullet locked; Resource-RPC auth stays README-only. Next: Phase 3 unlock. No UI / `docs/site` chrome.
 2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls

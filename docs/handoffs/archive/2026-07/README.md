@@ -4,8 +4,9 @@ Store-cutover / post-beta.17 era handoffs moved here in Phase 1 batch B+C+D (own
 
 | Folder | What |
 |--------|------|
-| [`agents/`](./agents/) | Merged Agent 1/2/A/cursor closeouts + sync notes |
+| [`agents/`](./agents/) | Merged Agent 1/2/A/3/cursor closeouts + sync notes |
 | [`features/`](./features/) | Shipped feature / design handoffs |
+| [`designs/`](./designs/) | Not-approved / parked design drafts |
 | [`reports/`](./reports/) | 2026-07-07 agent review reports |
 
 Live index for reports: [`../../reports/README.md`](../../reports/README.md).

@@ -43,7 +43,7 @@ The queue is the finished reference. The patterns every module adopts:
 - [x] **Delete `ProcessLifecycleStore`** — done (folded into `integration` with #30 tip).
 - [x] **Retire the facet substrate** — done (`RuntimeStorage`, `ProcessStore`, `ProcessStorage`,
       `ProcessStoreEvent`, `Query`, RuntimeStorage redis/sqlite halves, related subpaths).
-- [ ] **`Store.layerQuery`** (multi-scope read) — designed in `store-layer-query.md`, **NOT approved**;
+- [ ] **`Store.layerQuery`** (multi-scope read) — designed in [`store-layer-query.md`](../designs/store-layer-query.md), **NOT approved**;
       build only if Logs by-node/by-resource querying needs it, and after owner sign-off on the API.
 - [ ] doc nit: dangling `{@link withDefault}` in `Store.ts` header.
 

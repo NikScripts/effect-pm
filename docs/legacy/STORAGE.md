@@ -297,6 +297,6 @@ const live = Layer.provideMerge(
 
 ## Pending work
 
-Future items: [`plans/README.md`](./plans/README.md) — hybrid `RuntimeStorage`, Postgres adapters,
+Future items: [`plans/README.md`](../plans/README.md) — Postgres adapters,
 queue write-buffer, richer history vocabulary. Implemented Store-bridge behavior belongs in this file
 and toolkit handoffs, not `docs/plans/`.
