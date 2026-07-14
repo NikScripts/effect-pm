@@ -253,18 +253,23 @@ The contract path (`materializeQueueTag` + `layer`) is schema-driven: it needs `
 worker `effect`'s *types*, with no `success`/`error` schema. Confirmed by the doc at `:1080`: `A` "is
 driven by the tag's `success` wire schema (default `void`)."
 
-`materializeQueueTag` defaults missing `success`→`Void`, `error`→`Unknown`. So unifying `.Service`
-onto the contract **without** those schemas would degrade value-returning / typed-error queues —
-e.g. the docs example's `SendError` would surface on the handle's `events` as `Unknown`, and a
-non-void worker return would erase to `void`. **Decision needed (owner):**
+**RESOLVED (owner, 2026-07-13).** `.Service` is the **engine-included** path (it pulls the engine, so
+it is **not browser-safe** — that's expected); `.Tag` is the **light, browser-safe** path. Therefore:
 
-- **(A) Add optional `success`/`error` schema fields to `.Service`'s config** — preserves `A`/`E` on
-  the unified contract handle + wire; a small public API addition; default `Void`/`Unknown` when
-  omitted (matches today's inferred-void behaviour for the common case).
-- **(B) Default `Void`/`Unknown` always** — no API change, but typed-error / value-returning
-  `.Service` queues lose that typing on the handle's `events`. Simpler, lossy.
+- **No-schema `.Service` must keep working** — its `Success`/`Error` are **inferred from the worker
+  `effect`'s types**, never required as schemas.
+- **`success`/`error` schemas are optional** on `.Service`; when supplied they **must infer to match**
+  the effect's `A`/`E`.
+- The handle type `QueueHandle<Payload, Success, Error, Requirements>` is parameterized by the decoded
+  **types**. Each path supplies them from its natural source: **schema `.Type` for `.Tag`**, **effect
+  inference for `.Service`**. Runtime wire schema defaults to `Void`/`Unknown` when absent; the handle's
+  `A`/`E` come from inference (correct for a local `yield*`; the wire schema only matters when *served*,
+  where the caller passes schemas). Getting this cast-free (handle `A`/`E` inferred while the default
+  wire schema is `Void`/`Unknown`) is the M2 implementation constraint.
 
-Recommend **A** (keeps the handle honest; opt-in, non-breaking for the void case). Blocks M2.
+**Consequence for sequencing:** M3 (define + name `QueueHandle`) is the shared foundation both paths
+adopt, so it comes **before** the `.Service` runtime adoption. Build `QueueHandle` first, prove the
+`.Tag` naming, then have `.Service` produce the same handle with `A`/`E` from inference.
 
 ### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
 
