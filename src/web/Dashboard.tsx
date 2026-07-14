@@ -35,7 +35,8 @@ import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRun
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { WidgetsProvider, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -407,11 +408,16 @@ export const DashboardView = <R, ER>(props: {
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
+  /** The widget set (defaults to the built-in {@link base}); extend/override with
+   *  `withEntries(base, [forKind(...), forKey(...)])`. */
+  readonly widgets?: WidgetRegistry;
 }): React.ReactElement => (
   <RegistryProvider>
-    <ViewTransitionProvider>
-      <DashboardView runtime={props.runtime} group={props.group} />
-      <DebugConsole />
-    </ViewTransitionProvider>
+    <WidgetsProvider registry={props.widgets ?? base}>
+      <ViewTransitionProvider>
+        <DashboardView runtime={props.runtime} group={props.group} />
+        <DebugConsole />
+      </ViewTransitionProvider>
+    </WidgetsProvider>
   </RegistryProvider>
 );

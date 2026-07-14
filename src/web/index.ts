@@ -28,6 +28,7 @@ export * from "./useGroupRoute";
 export * from "./data";
 export * from "./runtime";
 export * from "./widgets";
+export * from "./widget-registry";
 export * from "./Dashboard";
 export * from "./debug-console";
 export { cn } from "./cn";

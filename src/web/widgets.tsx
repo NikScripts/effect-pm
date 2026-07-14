@@ -17,7 +17,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Cause, DateTime, Option } from "effect";
+import { Cause, DateTime, HashMap, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
@@ -35,13 +35,30 @@ import {
   type QueueTag,
   type ScheduleEntry,
   type NodeRef,
+  isApiTag,
+  isProcessTag,
+  isQueueTag,
   nodesOf,
-  kindOf,
   leafTags,
   queueLeaves,
   resourceNodeRef,
   tagWireKey,
 } from "./data";
+import { kindOf as resourceKindOf, kind as resourceKind } from "../Resource";
+import { kind as queueKind } from "../QueueResource";
+import { kind as processKind } from "../Process";
+import { kind as apiKind } from "../ApiMetrics";
+import {
+  type LeafTag,
+  type Widget,
+  type WidgetProps,
+  type WidgetRegistry,
+  forKind,
+  isLeafTag,
+  useWidgets,
+  widgetFor,
+  withEntries,
+} from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
 import { useApiBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
@@ -217,21 +234,18 @@ export const Cell = (props: {
   readonly member: unknown;
   /** Display name — the member key under which the current group holds this member. */
   readonly name: string;
-  readonly onOpenLeaf: (tag: QueueTag | ProcessTag | ApiTag) => void;
+  readonly onOpenLeaf: (tag: LeafTag) => void;
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
+  const registry = useWidgets();
   if (Group.isGroup(props.member)) {
-    return <GroupCard node={props.member as GroupNode} name={props.name} onOpen={props.onOpenGroup} />;
+    return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
   }
-  const kind = kindOf(props.member);
-  if (kind === "api") {
-    return <ApiCard tag={props.member as ApiTag} name={props.name} onOpen={props.onOpenLeaf} />;
-  }
-  return kind === "process" ? (
-    <ProcessCard tag={props.member as ProcessTag} name={props.name} onOpen={props.onOpenLeaf} />
-  ) : (
-    <QueueCard tag={props.member as QueueTag} name={props.name} onOpen={props.onOpenLeaf} />
-  );
+  // A non-group member is a resource tag; resolve its widget by key → kind → fallback.
+  if (!isLeafTag(props.member)) return <></>;
+  const tag = props.member;
+  const Widget = widgetFor(registry, tag.key, resourceKindOf(tag) ?? resourceKind);
+  return <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />;
 };
 
 /** A labelled stat card. */
@@ -1738,3 +1752,59 @@ export const NodeDetail = (props: {
     </div>
   );
 };
+
+// ============================================================================
+// Widget registry — the built-in set
+// ============================================================================
+
+/**
+ * Basic fallback card — a resource whose kind has no registered widget (a bare `…/Resource`, or an
+ * unregistered kind). Shows the resource's name, its kind, and a degraded banner; a richer card is
+ * left to a dedicated widget registered for that kind. @public
+ */
+export const FallbackCard = (props: WidgetProps): React.ReactElement => (
+  <Card>
+    <CardContent className="p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-medium text-foreground">{props.name}</span>
+        <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
+      </div>
+      <ResourceReadinessBanner tag={props.tag} />
+    </CardContent>
+  </Card>
+);
+
+// Each built-in adapts a typed card to the registry's LeafTag props. Registered under its kind, so
+// the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
+const queueWidget: Widget = ({ tag, name, onOpen }) =>
+  isQueueTag(tag) ? (
+    <QueueCard tag={tag} name={name} onOpen={onOpen} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
+const processWidget: Widget = ({ tag, name, onOpen }) =>
+  isProcessTag(tag) ? (
+    <ProcessCard tag={tag} name={name} onOpen={onOpen} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
+const apiWidget: Widget = ({ tag, name, onOpen }) =>
+  isApiTag(tag) ? (
+    <ApiCard tag={tag} name={name} onOpen={onOpen} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
+
+/**
+ * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
+ * everything else. The default for `<Dashboard>`; extend or override it with
+ * `withEntries(base, [forKind(...), forKey(...)])`. @public
+ */
+export const base: WidgetRegistry = withEntries(
+  {
+    byKey: HashMap.empty<string, Widget>(),
+    byKind: HashMap.empty<string, Widget>(),
+    fallback: FallbackCard,
+  },
+  [forKind(queueKind, queueWidget), forKind(processKind, processWidget), forKind(apiKind, apiWidget)],
+);
