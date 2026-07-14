@@ -384,7 +384,10 @@ export const queueRouteOptions = Schema.Struct({
  * @public
  */
 export const queueEncodedEntry = Schema.Struct({
-  payload: Schema.Unknown,
+  // Encoded wire payload is JSON by construction; type it as the narrower `JsonValue` (not
+  // `Schema.Unknown`) so the schema `.Type` matches the hand-authored `QueueEncodedEntry.payload`
+  // (retain-narrower — the single-source-of-truth convergence, tightening the schema to the type).
+  payload: jsonValue,
   item: QueueItemCodecDescriptorSchema,
   entryId: Schema.String,
   // engine-output entry: optional metadata may be present-but-`undefined` (see queueEntry).
