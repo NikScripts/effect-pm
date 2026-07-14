@@ -77,6 +77,13 @@ const toReact = (n: any): React.ReactNode => {
     case "bullet_list": return h("ul", { key: keySeq++ }, kids(n));
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
     case "list_item": return h("li", { key: keySeq++ }, kids(n));
+    case "table": return h("table", { key: keySeq++ }, kids(n));
+    case "caption": return h("caption", { key: keySeq++ }, kids(n));
+    case "row": return h("tr", { key: keySeq++ }, kids(n));
+    case "cell": {
+      const align = n.align && n.align !== "default" ? { textAlign: n.align } : undefined;
+      return h(n.head ? "th" : "td", { key: keySeq++, style: align }, kids(n));
+    }
     case "code_block":
       // island seam: a ```queue block becomes a live client component (RSC boundary)
       if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });

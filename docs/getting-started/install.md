@@ -19,18 +19,25 @@ can still change between betas — nothing is frozen until 1.0 (there's no `@sin
 @nikscripts/effect-pm effect
 ```
 
-That's the core: [queues](/docs/queues), [processes](/docs/processes), [resources](/docs/creating-a-resource),
-and serving them over RPC. `@effect/platform-node` — used when you serve a resource over HTTP — ships as
-a dependency, so it's already there; add it directly only if your setup requires every import to be a
-declared dependency.
+That's the core — queues, processes, resources, and serving them over RPC.
 
-### Dashboards (optional)
+## Additional dependencies
 
-The web, TUI, and CLI dashboards (`@nikscripts/effect-pm/web`, `/tui`, `/cli`) render with React, so add
-it — plus `recharts` for the charts — when you use them:
+Beyond `effect`, some entry points want extra peers. Install them **only when you use that entry
+point** — nothing here is needed for core resources:
+
+| Using | Also install |
+|-------|--------------|
+| Core — `/Resource`, `/QueueResource`, `/Process`, `/ShardMap`, `/Store` | *nothing beyond `effect`* |
+| Serving over HTTP | `@effect/platform-node` (bundled for Node; swap `@effect/platform-bun` / `-deno` per runtime) |
+| Web dashboard — `/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
+| Terminal dashboard — `/tui` | `react`, `ink` |
+| CLI — `/cli` | *nothing* — uses Effect's own CLI |
+
+Install them the same way — for the full web dashboard:
 
 ``` install
-react react-dom recharts
+react react-dom recharts @tanstack/react-table
 ```
 
 ## Verify it works
