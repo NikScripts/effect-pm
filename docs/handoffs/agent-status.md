@@ -30,7 +30,7 @@
 7. Process live `events` (#20) — needs failure-surface decision
 
 ### Deferred / parked
-- **ShardMap author (Cursor):** type-safety remediation — [`agent-cursor-shardmap-typesafety.md`](./agent-cursor-shardmap-typesafety.md) (~20 unjustified boundary casts + erased engine; genericize `buildImpl` per the Telemetry pattern; drop 13 `@since`). Found by Agent C.
+- **ShardMap author (Cursor):** type-safety remediation — [`agent-cursor-shardmap-typesafety.md`](./agent-cursor-shardmap-typesafety.md) — **PR [#39](https://github.com/NikScripts/effect-pm/pull/39)** on `cursor/shardmap-typesafety-ce05` (generic `buildImpl`, `@since` removed, residual casts carry `// SAFE:`; `test/shardmap.test-d.ts`). Awaiting merge to `integration`.
 - Agent B dashboard type-safety (plan-first)
 - Agent C standards audit (plan-first)
 - `Store.layerQuery` (not approved)
