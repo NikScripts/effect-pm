@@ -1,10 +1,10 @@
-// Renders one namespace of the API reference — its symbols, each with the checker-resolved
-// signature(s) (Shiki-highlighted) and the doc comment (through the shared JSDoc renderer, so
-// `{@link}` and fenced code render exactly as they do in the twoslash hovers).
+// Two views of one API symbol: a compact row for the namespace index (no Shiki — keeps those pages
+// small) and the full card for its own page (checker-resolved signatures Shiki-highlighted, doc
+// comment through the shared JSDoc renderer). loadHighlighter() must run before rendering a card.
 
 import * as React from "react";
-import type { ApiNamespace, ApiSymbol } from "../lib/api.js";
-import { highlightToReact, loadHighlighter, renderJsdocToReact } from "../lib/highlight.js";
+import type { ApiSymbol as Sym } from "../lib/api.js";
+import { highlightToReact, renderJsdocToReact } from "../lib/highlight.js";
 
 // Raw `/** … */` → clean markdown: drop the comment fences and the per-line ` * ` gutter.
 const cleanComment = (raw: string): string =>
@@ -24,7 +24,23 @@ const docLead = (raw: string): string =>
     .replace(/\s*@(public|internal|category|since)\b.*$/s, "")
     .trim();
 
-const Symbol = ({ s }: { s: ApiSymbol }): React.ReactElement => {
+// The row summary is plain text, so flatten inline markdown: {@link X} → X, drop `` ` `` and `*`.
+const plain = (s: string): string =>
+  s.replace(/\{@link\s+([^}|\s]+)[^}]*\}/g, "$1").replace(/[`*]/g, "");
+const firstSentence = (s: string): string => {
+  const i = s.indexOf(". ");
+  return i > 0 ? s.slice(0, i + 1) : s;
+};
+
+export const ApiSymbolRow = ({ s, href }: { s: Sym; href: string }): React.ReactElement => (
+  <a className="api-row" href={href}>
+    <code className="api-row-name">{s.qualifiedName}</code>
+    <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
+    <span className="api-row-sum">{firstSentence(plain(s.summary))}</span>
+  </a>
+);
+
+export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
   const sigs = s.signatures.length > 0 ? s.signatures : s.typeText !== undefined ? [s.typeText] : [];
   const lead = docLead(s.rawComment);
   const chips = [
@@ -32,7 +48,7 @@ const Symbol = ({ s }: { s: ApiSymbol }): React.ReactElement => {
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),
   ];
   return (
-    <article className="api-sym" id={s.name}>
+    <article className="api-sym">
       <div className="api-sym-head">
         <code className="api-sym-name">{s.qualifiedName}</code>
         <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
@@ -58,20 +74,3 @@ const Symbol = ({ s }: { s: ApiSymbol }): React.ReactElement => {
     </article>
   );
 };
-
-export async function ApiEntrySection({ ns }: { ns: ApiNamespace }): Promise<React.ReactElement> {
-  await loadHighlighter();
-  return (
-    <section className="api-ns">
-      <h1 className="api-ns-title">
-        {ns.entry}
-        <span className="api-ns-count">{ns.symbols.length}</span>
-      </h1>
-      <div className="api-syms">
-        {ns.symbols.map((s) => (
-          <Symbol key={s.name} s={s} />
-        ))}
-      </div>
-    </section>
-  );
-}

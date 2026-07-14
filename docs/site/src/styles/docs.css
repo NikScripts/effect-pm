@@ -854,3 +854,24 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 .api-chip-cat { text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
 .api-chip-link { color: var(--muted-fg); border: 1px solid var(--border); }
 .api-chip-link::before { content: "@link "; opacity: 0.6; }
+
+/* API namespace page: a light list of symbol rows (full detail lives on each symbol's own page) */
+.api-rows { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 1.2rem; }
+.api-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, auto) auto 1fr;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--fg);
+}
+.api-row:hover { background: var(--panel); border-color: var(--border); }
+.api-row-name { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; color: var(--primary); white-space: nowrap; }
+.api-row-sum { color: var(--muted-fg); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) {
+  .api-row { grid-template-columns: 1fr auto; }
+  .api-row-sum { display: none; }
+}

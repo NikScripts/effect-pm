@@ -4,7 +4,9 @@
 import type { PathsForPages, GetConfigResponse } from 'waku/router';
 
 // prettier-ignore
-import type { getConfig as File_ApiNamespace_getConfig } from './pages/api/[namespace]';
+import type { getConfig as File_ApiNamespaceSymbol_getConfig } from './pages/api/[namespace]/[symbol]';
+// prettier-ignore
+import type { getConfig as File_ApiNamespaceIndex_getConfig } from './pages/api/[namespace]/index';
 // prettier-ignore
 import type { getConfig as File_ApiIndex_getConfig } from './pages/api/index';
 // prettier-ignore
@@ -14,7 +16,8 @@ import type { getConfig as File_Index_getConfig } from './pages/index';
 
 // prettier-ignore
 type Page =
-| ({ path: '/api/[namespace]' } & GetConfigResponse<typeof File_ApiNamespace_getConfig>)
+| ({ path: '/api/[namespace]/[symbol]' } & GetConfigResponse<typeof File_ApiNamespaceSymbol_getConfig>)
+| ({ path: '/api/[namespace]' } & GetConfigResponse<typeof File_ApiNamespaceIndex_getConfig>)
 | ({ path: '/api' } & GetConfigResponse<typeof File_ApiIndex_getConfig>)
 | ({ path: '/docs/[chapter]' } & GetConfigResponse<typeof File_DocsChapter_getConfig>)
 | ({ path: '/' } & GetConfigResponse<typeof File_Index_getConfig>);

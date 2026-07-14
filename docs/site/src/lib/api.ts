@@ -44,3 +44,17 @@ export const namespaces = (): ReadonlyArray<ApiNamespace> => model.entries;
 
 export const namespaceBySlug = (slug: string): ApiNamespace | undefined =>
   model.entries.find((e) => slugForEntry(e.entry) === slug);
+
+export interface FoundSymbol {
+  readonly ns: ApiNamespace;
+  readonly symbol: ApiSymbol;
+}
+export const findSymbol = (nsSlug: string, name: string): FoundSymbol | undefined => {
+  const ns = namespaceBySlug(nsSlug);
+  const symbol = ns?.symbols.find((s) => s.name === name);
+  return ns !== undefined && symbol !== undefined ? { ns, symbol } : undefined;
+};
+
+// Every [namespace, symbol] pair — the static paths for the per-symbol routes.
+export const allSymbolPaths = (): ReadonlyArray<readonly [string, string]> =>
+  model.entries.flatMap((e) => e.symbols.map((s): readonly [string, string] => [slugForEntry(e.entry), s.name]));
