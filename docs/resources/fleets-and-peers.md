@@ -1,7 +1,19 @@
 {#fleets-and-peers title="Fleets & Peers" appliesTo=all}
 # Fleets & Peers
 
-{.note}
-**Placeholder — outline only.** Full content to come; this page exists now so other pages can link to it.
+Running one resource across many runtimes and having its instances coordinate.
 
-Running one resource across many runtimes and having its instances coordinate. **Fleets** — nodes, `distributed`, and fields folded across the whole fleet. **Peers** — a resource working with its peers from inside its own layer via `peers` / `selfNode`, and routing between instances.
+**Fleets** — declare nodes, pipe `Resource.distributed([...])` onto a tag, mark fields with
+`Resource.fleet` so peers don't recurse into them. **Peers** — inside a layer,
+`Resource.peers` / `Resource.selfNode` (discharged by `Resource.peersLayer`) let an instance
+reach siblings.
+
+Two shipped factories lean on this mesh:
+
+- **[Telemetry](/docs/telemetry)** — leaf metric snapshots; fleet folds (`inFlightByNode`,
+  `fleetInFlight`) for the stadium board.
+- **[ShardMap](/docs/shardmap)** — partitioned key/value; routed `get` / `put` / `delete`
+  forward to the owning node; leaf `*Local` ops; fleet `size` / `sizeByNode`.
+
+`Resource.distributedOf(tag)` reads the declared node set (empty when undeclared) — partition
+strategies use that fixed membership rather than remapping when a peer is briefly down.

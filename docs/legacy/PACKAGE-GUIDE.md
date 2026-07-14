@@ -66,17 +66,12 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/Group`
 - `@nikscripts/effect-pm/Logs` — runtime capture, relay, `persistLayer`, `byNode` / `byResource`
 - `@nikscripts/effect-pm/HistoryStore`, `@nikscripts/effect-pm/DurableQueueStore`
-- `@nikscripts/effect-pm/ProcessStore`
-- `@nikscripts/effect-pm/storage/sqlite`
-- `@nikscripts/effect-pm/storage/redis`
+- `@nikscripts/effect-pm/store/Log` — durable log journal (`LogStore`)
+- `@nikscripts/effect-pm/storage/sqlite` — HistoryStore / DurableQueue backends
 
-Structured logs use `LogStore` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore`;
-node capture uses `@nikscripts/effect-pm/Logs` (`layer`, `persistLayer`, `stream`) — see
-[`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` are deprecated shims.) Durable
-normalized runtime records use `@nikscripts/effect-pm/storage/sqlite`
-(`SQLiteRuntimeStorage`) with `ProcessStorage.layerRuntimeStorage`. Run
-`SQLiteRuntimeStorage.make` under `Effect.scoped` (or `it.live`) so the
-underlying `SqlClient` stays open for the whole usage window.
+Structured logs use `LogStore` + `@nikscripts/effect-pm/Logs` (`layer`, `persistLayer`, `stream`,
+`Resource.logs`) — see [`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` and the
+`ProcessStorage` / `RuntimeStorage` facet substrate are removed.)
 
 For durable adapter work, start with
 [STORAGE.md](./STORAGE.md).
@@ -92,7 +87,7 @@ For durable adapter work, start with
 | `Group` | Organize member tags (nestable; same or different hosts). |
 | `Process`, `Polling` | The managed-process toolkit + engine (`Process.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
 | `Logs`, `HistoryStore`, `DurableQueueStore` | Runtime-wide logs ([`docs/LOGS.md`](../LOGS.md)); metrics history; durable queue (in-memory or SQLite). |
-| `ProcessStore` / `ProcessStorage` | Facet builder and combined storage layers for runtime records and resource facts. |
+| `Store` / `store/*` | Shape-first store contracts and public facets (e.g. `LogStore`). Resource execution history uses `*.store(tag)` / `Store.effects`. |
 | `RunResource`, `HttpClientRunGate`, `HttpApiResource` | Concurrency/throttle gates and typed HttpApi client building blocks. |
 | `disarmedIdleSleep` exports | Helpers for custom schedule logic. |
 

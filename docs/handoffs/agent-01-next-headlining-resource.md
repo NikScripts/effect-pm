@@ -2,9 +2,9 @@
 
 **Status:** **PLAN-FIRST / RESEARCH ONLY** — owner 2026-07-13.  
 **Agent:** Agent 1 (free).  
-**Branch from (required):** Agent 2’s Logs branch — `cursor/phase5-logs-migration-a3ad` (PR [#30](https://github.com/NikScripts/effect-pm/pull/30)), **not** bare `integration/storage`.  
-**Why:** Logs Phase 5 + `Resource.logs` / platform module land there; research and any later impl should sit on that tip so fleet work does not fork pre-Logs.  
-**Research branch:** after pull, create `cursor/<short-name>-a009` off Agent 2’s tip **only if** you need to commit findings docs — prefer posting research in owner chat first. **No implementation** until owner picks a direction.
+**Branch from (required):** **`integration`** (Logs Phase 5 / #30 and ProcessStorage retirement are already folded).  
+**Why:** research and any later impl must sit on the current integration tip so fleet work does not fork pre-Logs.  
+**Research branch:** after pull, create `cursor/<short-name>-a3ad` off `integration` **only if** you need to commit findings docs — prefer posting research in owner chat first. **No implementation** until owner picks a direction.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) · [`multi-host-instances-decisions.md`](./multi-host-instances-decisions.md) · [`docs/standards/resources.md`](../standards/resources.md)
 

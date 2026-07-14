@@ -9,7 +9,6 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 | Module | Package import | Source |
 |--------|----------------|--------|
 | Logs platform | `@nikscripts/effect-pm/Logs` | `src/Logs.ts` |
-| Node shim (deprecated) | `@nikscripts/effect-pm/NodeLogs` | `src/NodeLogs.ts` |
 | Log annotations | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
 | Log entry + predicates | `@nikscripts/effect-pm/LogEntry` | `src/LogEntry.ts` |
 | Resource foundation | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` |
@@ -299,7 +298,7 @@ Server must provide `Logs.layer` + `Logs.persistLayer(node)` on the node stack (
 
 | Old | New |
 |-----|-----|
-| `NodeLogs.*` | `Logs.*` (shim remains one release) |
+| `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `@nikscripts/effect-pm/Logs` |
 | `ProcessStore` log facet | `LogStore` + `Store.contract` |
 | `captureLogs` on engines | **Removed** — `Logs.layer` + `Logs.withScope(tag)` at materialize |
 | `queue.logs` / `proc.logs` on handle | `Resource.logs(tag)` locally; `NodeStatus.logs` + `LogEntry.hasKey` remotely |

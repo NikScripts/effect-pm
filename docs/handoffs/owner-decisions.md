@@ -27,6 +27,30 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Logs store followers: Agent 3 must repeat back (correction)
+
+- **Owner said:** Agent 2’s job included stores **following** the log bus and persisting via
+  registration-native followers. Leaving only `Logs.persistLayer` → standalone `LogStore` left
+  Agent 3 clueless. Put a handoff on `integration` that states the locked intent and **requires
+  Agent 3 to repeat it back** before code.
+- **Chose:** Rewrite [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — supersede the “B1/B2/B3 menu”
+  brief. End state = registration followers (`appendLog` / `logQuery` / shared follower factory);
+  current `LogStore`+`persistLayer` is interim. Agent 3 first reply = repeat-back only.
+- **Rejected:** Treating node-primary-only as the approved permanent design without an explicit
+  unlock; Agent 3 coding before restating the model.
+- **Supervisor impact:** Agent 3 blocked on owner accepting the repeat-back.
+
+---
+
+## 2026-07-14 — Logs P1 → Agent 3 (Agent 2 retired)
+
+- **Owner said:** Handles are owned by other agents for now. Focus next engine work on **Logs P1** (former “option 2”): level pipes / store followers / remote per-resource logs. Expand and clarify that brief for a **new Agent 3**.
+- **Chose:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — **superseded by the correction entry above** (registration followers are the locked write model; repeat-back first).
+- **Rejected:** Assigning named-handles work to Agent 3; treating Logs as closed without an explicit P1 park/unlock.
+- **Supervisor impact:** Agent 2 retired after #33; Agent 3 owns Logs P1.
+
+---
+
 ## 2026-07-13 — Next headlining resource research (Agent 1)
 
 - **Owner said:** Agent 1 is free. Process + QueueResource are the top two; RunResource is lackluster as a product headline. Explore leaning into **fleet / peer** features — ideally first resource with mesh from day one.
