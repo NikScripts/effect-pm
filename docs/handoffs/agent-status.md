@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | from `integration` | [next headlining resource](./agent-01-next-headlining-resource.md) · [#32 prototype](https://github.com/NikScripts/effect-pm/pull/32) | **plan-first** | — | — | Research / Telemetry+ShardMap prototype — owner picks; **no impl until then** | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | from `integration` | [Logs P1](./agent-03-logs-p1.md) | **plan-first** | — | — | Level pipes / store followers / remote logs — owner unlocks slices | 2026-07-14 |
+| **3** | from `integration` | [Logs store followers](./agent-03-logs-p1.md) | **repeat-back first** | — | — | Must restate registration-follower model; **no code until owner accepts** | 2026-07-14 |
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
@@ -19,14 +19,15 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 3:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — expand Logs platform P1 (levels / followers / remote). **Plan first.**
+1. **Agent 3:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — **repeat-back** the locked store-follower model, then stop. No code until owner accepts.
 2. **Agent 1:** next headlining resource research / [#32](https://github.com/NikScripts/effect-pm/pull/32) prototype — owner picks direction.
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. Logs P1 slice unlock (after Agent 3 plan) — `A` / `B1|B2|B3` / `C1|C2|C3`
-5. `main` merge + `pnpm run version` — still deferred
-6. Process live `events` (#20) — needs failure-surface decision
+4. After Agent 3 repeat-back accepted: unlock store-follower implementation slice
+5. Level pipes / remote `Resource.logs` — ordered after followers unless owner says otherwise
+6. `main` merge + `pnpm run version` — still deferred
+7. Process live `events` (#20) — needs failure-surface decision
 
 ### Deferred / parked
 - Agent B dashboard type-safety (plan-first)
