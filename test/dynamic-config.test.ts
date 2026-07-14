@@ -5,13 +5,13 @@ import { DynamicConfigStore } from "../src/DynamicConfig";
 
 // `key` is a field name here — proves the bag has no Tag.key collision.
 const cfg = DynamicConfig.make({
-  key: DynamicConfig.swappable(
+  key: DynamicConfig.globalSwappable(
     Config.redacted("DCFG3_KEY").pipe(Config.withDefault(Redacted.make(""))),
   ),
   baseUrl: Config.string("DCFG3_BASE").pipe(
     Config.withDefault("https://api.example.com"),
   ),
-  retries: DynamicConfig.swappable(
+  retries: DynamicConfig.globalSwappable(
     Config.int("DCFG3_RETRIES").pipe(Config.withDefault(3)),
   ),
 });
@@ -23,25 +23,30 @@ const child = DynamicConfig.extend(cfg, {
 
 // nested field — env key is the joined path DCFG3_DB_HOST
 const nestedCfg = DynamicConfig.make({
-  host: DynamicConfig.swappable(
+  host: DynamicConfig.globalSwappable(
     Config.string("DCFG3_HOST").pipe(Config.nested("DCFG3_DB")),
   ),
 });
 
 // single field — swappable used on its own, no make()
-const loneKey = DynamicConfig.swappable(
+const loneKey = DynamicConfig.globalSwappable(
   Config.redacted("DCFG3_LONE").pipe(Config.withDefault(Redacted.make(""))),
 );
 
-// piped form — Config.x.pipe(..., DynamicConfig.swappable)
+// piped form — Config.x.pipe(..., DynamicConfig.globalSwappable)
 const pipedKey = Config.redacted("DCFG3_PIPED").pipe(
   Config.withDefault(Redacted.make("")),
-  DynamicConfig.swappable,
+  DynamicConfig.globalSwappable,
+);
+
+// scoped (pure) swappable — no global registration; allowed only via layer(config)
+const scopedKey = DynamicConfig.swappable(
+  Config.string("DCFG3_SCOPED").pipe(Config.withDefault("scoped-default")),
 );
 
 const withLayer = <A, E>(
   effect: Effect.Effect<A, E, DynamicConfigStore>,
-) => effect.pipe(Effect.provide(DynamicConfig.layer));
+) => effect.pipe(Effect.provide(DynamicConfig.layer()));
 
 describe("DynamicConfig (bag + field-method control)", () => {
   it.effect("reads are native and return defaults; field named `key` works", () =>
@@ -134,6 +139,22 @@ describe("DynamicConfig (bag + field-method control)", () => {
         expect(Exit.isFailure(invalid)).toBe(true);
       }),
     ),
+  );
+
+  it.effect("scoped swappable is NOT in the process-wide allowlist (bare layer)", () =>
+    Effect.gen(function* () {
+      const rejected = yield* Effect.exit(
+        DynamicConfig.setByKey("DCFG3_SCOPED", "x"),
+      );
+      expect(Exit.isFailure(rejected)).toBe(true);
+    }).pipe(Effect.provide(DynamicConfig.layer())),
+  );
+
+  it.effect("scoped swappable is allowed when its config is passed to layer(config)", () =>
+    Effect.gen(function* () {
+      yield* DynamicConfig.setByKey("DCFG3_SCOPED", "ok");
+      expect(yield* scopedKey).toBe("ok");
+    }).pipe(Effect.provide(DynamicConfig.layer({ scopedKey }))),
   );
 
   it.effect("a single swappable field works on its own, no make()", () =>

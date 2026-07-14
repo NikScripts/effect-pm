@@ -91,10 +91,10 @@ export interface CustomQueueHandleApi<
 > {
   readonly add: CustomQueueEnqueue<T, EEnqueue, R>;
   readonly enqueue: QueueEnqueueEntries<T, R>;
-  readonly size: Effect.Effect<number>;
+  readonly size: Resource.Subscribable<number>;
   readonly sizes: Effect.Effect<Record<string, number>, never, R>;
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
-  readonly isEmpty: Effect.Effect<boolean>;
+  readonly isEmpty: Resource.Subscribable<boolean>;
   readonly completed: Effect.Effect<number>;
   readonly events: Stream.Stream<QueueEvent<T, E>>;
   readonly status: Resource.Subscribable<CustomQueueStatus>;

@@ -8,12 +8,26 @@
 import { Context, Effect, Layer, Logger, Option, PubSub, Ref, Stream } from "effect";
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
+import { LogAnnotationKeys } from "../../LogContext";
 import {
   logEntryFromLoggerOptions,
   type LogEntry,
 } from "../../LogEntry";
 
 const historyCapacity = 500;
+
+const stampLineId = (entry: LogEntry, lineId: string): LogEntry => {
+  if (entry.annotations[LogAnnotationKeys.lineId] !== undefined) {
+    return entry;
+  }
+  return {
+    ...entry,
+    annotations: {
+      ...entry.annotations,
+      [LogAnnotationKeys.lineId]: lineId,
+    },
+  };
+};
 
 /** @internal */
 export interface LogRelayService {
@@ -44,12 +58,15 @@ export const relayLayer = Layer.effect(
   Effect.gen(function* () {
     const pubsub = yield* PubSub.unbounded<LogEntry>();
     const history = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const nextLineId = yield* Ref.make(0);
 
     return LogRelay.of({
       publish: (entry) =>
         Effect.gen(function* () {
-          yield* PubSub.publish(pubsub, entry);
-          yield* pushHistory(history, entry);
+          const id = yield* Ref.getAndUpdate(nextLineId, (n) => n + 1);
+          const stamped = stampLineId(entry, String(id));
+          yield* PubSub.publish(pubsub, stamped);
+          yield* pushHistory(history, stamped);
         }),
       snapshot: Ref.get(history),
       stream: Stream.fromPubSub(pubsub),
@@ -58,7 +75,38 @@ export const relayLayer = Layer.effect(
 );
 
 /**
- * Logger that captures {@link LogEntry} values into {@link LogRelay}.
+ * Build a capture {@link Logger} closed over a concrete {@link LogRelay}.
+ *
+ * Closing over the relay (instead of reading it from `fiber.context` at log time) means
+ * worker fibers forked during layer acquisition still publish — they may not carry
+ * {@link LogRelay} in context even when the node root installed capture.
+ *
+ * @internal
+ */
+export const makeCaptureLogger = (
+  relay: LogRelayService,
+): Logger.Logger<unknown, void> =>
+  Logger.make((options) => {
+    const entry = logEntryFromLoggerOptions({
+      message: options.message,
+      logLevel: options.logLevel,
+      cause: options.cause,
+      date: options.date,
+      annotations: options.fiber.getRef(CurrentLogAnnotations),
+      spans: options.fiber.getRef(CurrentLogSpans),
+    });
+    const context = Context.add(options.fiber.context, LogRelay, relay);
+    options.fiber.currentDispatcher.scheduleTask(
+      () => {
+        Effect.runForkWith(context)(relay.publish(entry));
+      },
+      0,
+    );
+  });
+
+/**
+ * @deprecated Prefer {@link layer} / {@link makeCaptureLogger}. Fiber-context lookup misses
+ * queue workers forked during layer acquisition before {@link LogRelay} is on that fiber.
  *
  * @internal
  */
@@ -67,31 +115,22 @@ export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options)
   if (Option.isNone(relayOption)) {
     return;
   }
-  const relay = relayOption.value;
-  const entry = logEntryFromLoggerOptions({
-    message: options.message,
-    logLevel: options.logLevel,
-    cause: options.cause,
-    date: options.date,
-    annotations: options.fiber.getRef(CurrentLogAnnotations),
-    spans: options.fiber.getRef(CurrentLogSpans),
-  });
-  const context = Context.add(options.fiber.context, LogRelay, relay);
-  options.fiber.currentDispatcher.scheduleTask(
-    () => {
-      Effect.runForkWith(context)(relay.publish(entry));
-    },
-    0,
-  );
+  makeCaptureLogger(relayOption.value).log(options);
 });
 
-/** Merged capture logger layer (requires {@link LogRelay}). @internal */
-export const captureLoggerLayer = Logger.layer([captureLogger], {
-  mergeWithExisting: true,
-});
+/**
+ * Merged capture logger layer — requires {@link LogRelay} and closes the logger over it.
+ *
+ * @internal
+ */
+export const captureLoggerLayer: Layer.Layer<never, never, LogRelay> = Layer.unwrap(
+  Effect.map(LogRelay, (relay) =>
+    Logger.layer([makeCaptureLogger(relay)], { mergeWithExisting: true }),
+  ),
+);
 
 /** Node root: relay + one merged capture logger. @internal */
-export const layer = Layer.merge(relayLayer, captureLoggerLayer);
+export const layer = captureLoggerLayer.pipe(Layer.provideMerge(relayLayer));
 
 const logAtLevel = (level: LogLevel.LogLevel, message: string): Effect.Effect<void> => {
   switch (level) {

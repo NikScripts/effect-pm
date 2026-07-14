@@ -12,8 +12,8 @@
  * } from "@nikscripts/effect-pm/storage/sqlite";
  * ```
  *
- * Structured log persistence uses `LogStore.layer({ filename })` from
- * `@nikscripts/effect-pm/store/Log`.
+ * Structured log persistence uses an app {@link Store.Service} with `Node.logs` /
+ * toolkit `*.store` registrations and `Store.layer({ filename })`.
  *
  * @module storage/sqlite
  */

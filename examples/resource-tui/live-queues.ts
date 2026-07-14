@@ -22,11 +22,10 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
-import * as Logs from "../../src/Logs";
-import { LogStore } from "../../src/store/log";
 import * as Resource from "../../src/Resource";
+import * as Store from "../../src/Store";
 
-/** Node log key for the local TUI fleet — pairs with `Logs.persistLayer`. */
+/** Node log key for the local TUI fleet — pairs with `TuiNode.logs` on {@link TuiStore}. */
 class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
 
 const Job = Schema.Struct({ id: Schema.String });
@@ -111,6 +110,21 @@ type Metrics = QueueSvc extends { readonly metrics: Stream.Stream<infer M, infer
   ? M
   : never;
 
+class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/TuiStore")(
+  TuiNode.logs,
+  QueueResource.store(Mail),
+  QueueResource.store(Jobs),
+  QueueResource.store(Billing),
+  QueueResource.store(Notify),
+  QueueResource.store(Worker1),
+  QueueResource.store(Worker2),
+  QueueResource.store(Worker3),
+  QueueResource.store(RegionUS),
+  QueueResource.store(RegionEU),
+  QueueResource.store(Daily),
+  QueueResource.store(Weekly),
+) {}
+
 // The queue engines only (workers). Producers + accumulators are run imperatively in
 // the boot below — NOT as layers — because `Atom.runtime` builds layers lazily and
 // can skip side-effecting daemon layers entirely. Running them on a ManagedRuntime
@@ -128,9 +142,7 @@ const AppLayer = Layer.mergeAll(
   QueueResource.layer(Daily, cfg),
   QueueResource.layer(Weekly, cfg),
 ).pipe(
-  Layer.provide(Logs.layer),
-  Layer.provide(Logs.persistLayer(TuiNode)),
-  Layer.provide(LogStore.layerMemory),
+  Layer.provide(TuiStore.layerMemory),
   // silence the default console logger so worker logs don't bleed onto the Ink alt-screen
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
 );

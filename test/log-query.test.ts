@@ -1,11 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
-import {
-  buildLogQuery,
-  LogQueryError,
-  queryGroupLogs,
-} from "../src/internal/manager/logQuery";
-
+import { buildLogQuery, LogQueryError } from "../src/internal/manager/logQuery";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 
 describe("logQuery", () => {
@@ -41,7 +36,7 @@ describe("logQuery", () => {
       assert.instanceOf(result, LogQueryError);
     }));
 
-  it("fails query execution until storage is wired", () =>
+  it("builds a process-scoped query", () =>
     Effect.gen(function* () {
       const query = yield* buildLogQuery({
         scope: {
@@ -57,8 +52,6 @@ describe("logQuery", () => {
         sort: "desc",
       });
       assert.strictEqual(query.processId, testSyncProcessKey);
-      const error = yield* queryGroupLogs(query).pipe(Effect.flip);
-      assert.instanceOf(error, LogQueryError);
-      assert.match(error.reason, /LogStore layer is not provided/);
+      assert.strictEqual(query.groupId, testBillingNodeKey);
     }));
 });

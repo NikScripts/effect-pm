@@ -1,9 +1,9 @@
 # Agent 3 — Logs store followers (owner intent — REPEAT BACK FIRST)
 
-**Status:** **PLAN POSTED** — [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md). Awaiting unlock (`followers-0`…).  
+**Status:** **FOLLOWERS CUTOVER SHIPPED** — [#40](https://github.com/NikScripts/effect-pm/pull/40) / [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md).  
 **Agent:** **3**  
-**Branch from:** **`integration`**  
-**Plan branch:** `cursor/logs-store-followers-plan-906e`. **Working branch after unlock:** `cursor/logs-store-followers-a3ad`
+**Branch:** `cursor/logs-store-followers-906e` (landing on `integration`)  
+**Deferred:** store-layer `lineId` memo. **In flight:** hard-remove interim `persistLayer` / `LogStore`.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · this file · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) §Store integration · [`store-and-logs-design.md`](./store-and-logs-design.md) §Single capture · [`docs/LOGS.md`](../LOGS.md)
 

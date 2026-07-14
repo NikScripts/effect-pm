@@ -70,6 +70,13 @@ import {
   RpcServer,
 } from "effect/unstable/rpc";
 import { Combine, combineQuery } from "./MultiNode";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import { builtInNodeStoreContract } from "./internal/store/nodeStoreSpec";
+import type { StoreShapes } from "./internal/store/contractDef";
+import {
+  withRegistrationJournal,
+  type StoreScopeTag,
+} from "./internal/store/registration";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -792,6 +799,50 @@ export const contract = <const S extends Spec>(spec: S): S => spec;
 
 export { withStore } from "./Store";
 export { logs, withLogExport, type LogsExportHandle } from "./internal/logs/resourceLogs";
+export {
+  logStreamLevel,
+  logStreamLevelAll,
+  logStreamLevelDebug,
+  logStreamLevelInfo,
+  logStreamLevelWarn,
+  logStreamLevelError,
+  logStreamLevelNone,
+} from "./internal/logs/resourceStreamLevel";
+
+/**
+ * Register a {@link Node} on an app {@link Store.Service} — node-wide durable log journal
+ * (match-all follower). Prefer {@link Node.logs} sugar (`WnbaNode.logs`).
+ *
+ * @example
+ * ```ts
+ * class AppStore extends Store.Service<AppStore>("@app/Store")(
+ *   Resource.store(WnbaNode),
+ *   Process.store(Daily),
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export function store<const Tag extends StoreScopeTag>(
+  tag: Tag,
+): ReturnType<typeof facetStoreRegistration<Tag, ReturnType<typeof builtInNodeStoreContract>>>;
+export function store<
+  const Tag extends StoreScopeTag,
+  const Shapes extends StoreShapes,
+>(
+  tag: Tag,
+  extended: Shapes,
+): ReturnType<
+  typeof facetStoreRegistration<Tag, ReturnType<typeof builtInNodeStoreContract>, Shapes>
+>;
+export function store(tag: StoreScopeTag, extended?: StoreShapes) {
+  const builtIn = builtInNodeStoreContract();
+  const registered =
+    extended === undefined
+      ? facetStoreRegistration(tag, builtIn)
+      : facetStoreRegistration(tag, builtIn, extended);
+  return withRegistrationJournal(registered, "node");
+}
 
 /**
  * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream
@@ -2444,6 +2495,8 @@ export interface ServedResource {
   readonly group: RpcGroup.RpcGroup<any>;
   readonly kind: string;
   readonly readiness: Effect.Effect<Readiness>;
+  /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
+  readonly nodeLogKey?: string;
 }
 
 /**
@@ -2591,13 +2644,16 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,
-          onSome: (registry) =>
-            registry.register({
+          onSome: (registry) => {
+            const bound = nodeOf(tag);
+            return registry.register({
               groupId: tag.groupId,
               group,
               kind: kindOf(tag) ?? "resource",
               readiness: readinessCheckServed(tag, wireImpl),
-            }),
+              ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
+            });
+          },
         }),
       ),
     ),
@@ -2662,6 +2718,12 @@ export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   readonly health?: { readonly path?: HttpRouter.PathInput };
+  /**
+   * Node log key for auto-mounted {@link NodeStatus} durable `logs.query`
+   * (`Resource.store(Node)` / `Node.logs`). When omitted, inferred from served tags'
+   * bound {@link Node} when all share one key.
+   */
+  readonly node?: string | { readonly key: string };
 }
 
 const httpServerBase = (
@@ -2687,6 +2749,21 @@ const httpServerBase = (
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );
+      const optionNodeKey =
+        options?.node === undefined
+          ? undefined
+          : typeof options.node === "string"
+            ? options.node
+            : options.node.key;
+      const boundKeys = [
+        ...new Set(
+          entries.flatMap((entry) =>
+            entry.nodeLogKey === undefined ? [] : [entry.nodeLogKey],
+          ),
+        ),
+      ];
+      const inferredNodeKey =
+        optionNodeKey ?? (boundKeys.length === 1 ? boundKeys[0] : undefined);
       // Every node auto-serves the reserved node-status resource (status / logs / ping) alongside the
       // registered resources, so a client can inspect any node without the author wiring it. Built here
       // (not a registered `serve` layer) so it reports the user resources without counting itself.
@@ -2697,6 +2774,7 @@ const httpServerBase = (
         startedAt,
         resourceCount: entries.length,
         readiness,
+        ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
       const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
@@ -3053,8 +3131,8 @@ export const forwardClient = <S extends Spec>(
 const makeNode = <Self>(
   name: string,
   target?: number | string | { readonly url?: string },
-) =>
-  Object.assign(Context.Service<Self, NodeProtocol>()(name), {
+) => {
+  const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
     // bad string); an explicit `{ url }` is used verbatim.
     url:
@@ -3064,6 +3142,16 @@ const makeNode = <Self>(
           ? target.url
           : resolveHttpTarget(target),
   });
+  return Object.assign(node, {
+    /**
+     * Node-wide durable log registration — same as {@link store}`(this node)`.
+     * Use on an app `Store.Service`: `Store.Service(...)(WnbaNode.logs, Process.store(Daily))`.
+     */
+    get logs() {
+      return store(node);
+    },
+  });
+};
 
 /**
  * Wire a {@link Node}'s transport, **once**, from any RPC client `Protocol` layer — the

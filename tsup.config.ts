@@ -21,7 +21,6 @@ export default defineConfig([
       CustomQueueResource: "src/CustomQueueResource.ts",
       Resource: "src/Resource.ts",
       MultiNode: "src/MultiNode.ts",
-      "store/Log": "src/store/log.ts",
       ResourceConfigure: "src/ResourceConfigure.ts",
       Logs: "src/Logs.ts",
       NodeStatus: "src/NodeStatus.ts",

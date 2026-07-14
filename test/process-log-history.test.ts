@@ -3,14 +3,19 @@ import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
-import { LogStore } from "../src/store/log";
-import { testLogsEnv } from "./fixtures/logsEnv";
+import * as Store from "../src/Store";
 
 // A process started disarmed (empty inline schedule) so it only runs on `run`; with the logs
 // stack provided, worker lines are scoped by tag key and read back via Resource.logs.
 class LogProc extends Process.Tag<LogProc>()(
   "test/process-log-history/Proc",
 ).pipe(Process.schedule([])) {}
+
+const logProcRegistration = Process.store(LogProc);
+
+class AppStore extends Store.Service<AppStore>("@test/process-log-history/Store")(
+  logProcRegistration,
+) {}
 
 it("Resource.logs reads back process worker logs", () =>
   Effect.runPromise(
@@ -31,13 +36,13 @@ it("Resource.logs reads back process worker logs", () =>
       Effect.provide(
         Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-        }).pipe(Layer.provideMerge(testLogsEnv())),
+        }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
     ),
   ));
 
-it("Resource.logs query is empty without persistLayer (live relay only)", () =>
+it("Resource.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
@@ -50,7 +55,7 @@ it("Resource.logs query is empty without persistLayer (live relay only)", () =>
       Effect.provide(
         Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-        }).pipe(Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory))),
+        }).pipe(Layer.provideMerge(Logs.layer)),
       ),
       Effect.scoped,
     ),

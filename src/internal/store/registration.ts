@@ -5,6 +5,7 @@
  * @internal
  */
 
+import { Pipeable } from "effect";
 import type { StoreLogLevel } from "./types";
 import {
   contractSpec,
@@ -23,18 +24,30 @@ export interface StoreScopeTag {
   readonly key: string;
 }
 
+/**
+ * How durable log tails match relay lines for this registration.
+ * - `"resource"` (default) — {@link LogEntry.hasKey}(scopeKey)
+ * - `"node"` — match all (node-wide journal)
+ *
+ * @internal
+ */
+export type StoreJournalKind = "resource" | "node";
+
 /** @internal */
 export interface StoreRegistration<
   K extends string = string,
   S extends StoreSpec = StoreSpec,
-> {
+> extends Pipeable.Pipeable {
   readonly [storeRegSym]: typeof storeRegSym;
   readonly scopeKey: K;
   readonly spec: S;
   readonly contract?: StoreContractValue;
   readonly tag?: StoreScopeTag;
   readonly logLevel?: StoreLogLevel;
+  /** Live relay gate for {@link Resource.logs} stream (optional). */
+  readonly streamLevel?: StoreLogLevel;
   readonly maxRows?: number;
+  readonly journal?: StoreJournalKind;
 }
 
 /** @internal */
@@ -111,7 +124,7 @@ export const makeRegistration = <
     isStoreContractValue(spec) || isStoreShapeMap(spec)
       ? toStoreContract(spec as StoreContractValue | StoreContractValue["shapes"])
       : undefined;
-  return {
+  return Object.assign(Object.create(Pipeable.Prototype), {
     [storeRegSym]: storeRegSym,
     scopeKey,
     spec: (contract !== undefined ? contractSpec(contract) : spec) as Input extends StoreContractValue
@@ -119,7 +132,7 @@ export const makeRegistration = <
       : AsStoreSpec<Input>,
     ...(contract !== undefined ? { contract } : {}),
     ...(typeof scope === "string" ? {} : { tag: scope }),
-  } as unknown as Input extends StoreContractValue
+  }) as unknown as Input extends StoreContractValue
     ? Scope extends StoreScopeTag
       ? RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input, Scope>
       : RegisteredWithContract<ScopeKeyOf<Scope>, Input["spec"], Input>
@@ -156,13 +169,25 @@ export type TagForKey<
 export const withRegistrationLogLevel = <R extends StoreRegistrationAny>(
   registration: R,
   logLevel: StoreLogLevel,
-): R => Object.assign({}, registration, { logLevel });
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { logLevel });
+
+/** @internal */
+export const withRegistrationStreamLevel = <R extends StoreRegistrationAny>(
+  registration: R,
+  streamLevel: StoreLogLevel,
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { streamLevel });
+
+/** @internal */
+export const withRegistrationJournal = <R extends StoreRegistrationAny>(
+  registration: R,
+  journal: StoreJournalKind,
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { journal });
 
 /** @internal */
 export const withRegistrationRetention = <R extends StoreRegistrationAny>(
   registration: R,
   maxRows: number,
-): R => Object.assign({}, registration, { maxRows });
+): R => Object.assign(Object.create(Pipeable.Prototype), registration, { maxRows });
 
 /** @internal */
 export const isRegistrationPipeTarget = (

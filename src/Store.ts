@@ -81,10 +81,12 @@
  * @module Store
  */
 
-import { Context, Effect, Layer, Predicate, Schema, Scope, Stream } from "effect";
+import { Context, Effect, Layer, Option, Predicate, Schema, Scope, Stream } from "effect";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
 import * as SqlEventJournal from "effect/unstable/eventlog/SqlEventJournal";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import { LogRelay, layer as logsLayer } from "./internal/logs/relay";
+import type { LogRelayService } from "./internal/logs/relay";
 import {
   buildStandaloneRegistration,
   defineStandaloneStore,
@@ -107,6 +109,7 @@ import { buildDefaultScopeBridge, buildScopeBridge } from "./internal/store/scop
 import { buildScopeStateMap, type ScopeState } from "./internal/store/memoryScope";
 import { buildBundle, mapSqliteBuildError } from "./internal/store/sqliteLayer";
 import type { NormalizedStoreRegistration } from "./internal/store/registrationNormalize";
+import { layersForRegistrations as logTailLayersForRegistrations } from "./internal/logs/durableTail";
 import {
   StoreScopeNotRegistered,
   StoreChangeEvent,
@@ -122,6 +125,7 @@ import {
   type StoreScopeTag,
   withRegistrationLogLevel,
   withRegistrationRetention,
+  withRegistrationStreamLevel,
 } from "./internal/store/registration";
 import {
   isStoreContractValue,
@@ -192,10 +196,11 @@ export type { StorageApi } from "./internal/store/bridge";
 
 /** Layer attachments shared by aggregate and standalone store classes. @internal */
 type StoreLayers<Self> = {
-  readonly layerMemory: Layer.Layer<Self | Storage>;
+  /** Includes {@link LogRelay} + capture logger (durable log tails). */
+  readonly layerMemory: Layer.Layer<Self | Storage | LogRelay>;
   readonly layer: (
     options?: StoreLayerOptions,
-  ) => Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope>;
+  ) => Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope>;
 };
 
 /** Aggregate store class with attached {@link Storage} layers. @internal */
@@ -230,10 +235,17 @@ const layerFromBuiltBridge = <
   tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
   bundle: StoreBundle<Regs>,
   bridge: StorageApi,
+  registrations: ReadonlyArray<NormalizedStoreRegistration>,
+  relay: Option.Option<LogRelayService>,
 ): Layer.Layer<Self | Storage> =>
   Layer.mergeAll(
     Layer.succeed(tag, bundle as unknown as StoreBundle<Regs>),
     Layer.succeed(Storage, bridge),
+    logTailLayersForRegistrations(
+      registrations,
+      bundle as unknown as Readonly<Record<string, unknown>>,
+      relay,
+    ),
   );
 
 /** @internal */
@@ -249,6 +261,7 @@ const layerForSingleRegistration = <
   Layer.unwrap(
     Effect.gen(function* () {
       const journal = yield* EventJournal.EventJournal;
+      const relay = yield* Effect.serviceOption(LogRelay);
       const bridge = buildScopeBridge(scopes, journal);
       const handle = yield* bridge
         .at(registration.scopeKey, registration.contract ?? registration.spec)
@@ -256,6 +269,11 @@ const layerForSingleRegistration = <
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
         Layer.succeed(Storage, bridge),
+        logTailLayersForRegistrations(
+          [registration],
+          { [registration.accessor]: handle },
+          relay,
+        ),
       );
     }),
   );
@@ -268,9 +286,10 @@ const buildStandaloneMemoryLayer = <
 >(
   tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
   registration: NormalizedStoreRegistration,
-): Layer.Layer<Self | Storage> =>
+): Layer.Layer<Self | Storage | LogRelay> =>
   layerForSingleRegistration(tag, registration, buildScopeStateMap([registration])).pipe(
     Layer.provide(EventJournal.layerMemory),
+    Layer.provideMerge(logsLayer),
   );
 
 /** @internal */
@@ -282,7 +301,7 @@ const buildStandaloneSqliteLayer = <
   tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
   registration: NormalizedStoreRegistration,
   filename: string,
-): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> => {
+): Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope> => {
   const scopes = buildScopeStateMap([registration]);
   const sqlStack = Layer.provideMerge(
     SqlEventJournal.layer(),
@@ -299,12 +318,18 @@ const buildStandaloneSqliteLayer = <
       const handle = yield* bridge
         .at(registration.scopeKey, registration.contract ?? registration.spec)
         .pipe(Effect.orDie);
+      const relay = yield* Effect.serviceOption(LogRelay);
       return Layer.mergeAll(
         Layer.succeed(tag, handle as unknown as StoreHandleFromContract<C>),
         Layer.succeed(Storage, bridge),
+        logTailLayersForRegistrations(
+          [registration],
+          { [registration.accessor]: handle },
+          relay,
+        ),
       ).pipe(Layer.provide(Layer.succeedContext(context)));
     }).pipe(Effect.mapError(mapSqliteBuildError)),
-  );
+  ).pipe(Layer.provideMerge(logsLayer));
 };
 
 /** @internal */
@@ -316,11 +341,11 @@ const buildStandaloneLayer = <
   tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
   registration: NormalizedStoreRegistration,
   options?: { readonly filename?: string },
-): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> =>
+): Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope> =>
   options?.filename !== undefined
     ? buildStandaloneSqliteLayer(tag, registration, options.filename)
     : (buildStandaloneMemoryLayer(tag, registration) as Layer.Layer<
-        Self | Storage,
+        Self | Storage | LogRelay,
         StoreSqliteConnectionError,
         Scope.Scope
       >);
@@ -338,9 +363,16 @@ const layerFromScopeState = <
   Layer.unwrap(
     Effect.gen(function* () {
       const journal = yield* EventJournal.EventJournal;
+      const relay = yield* Effect.serviceOption(LogRelay);
       const bridge = buildScopeBridge(scopes, journal);
       const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
-      return layerFromBuiltBridge(tag, bundle as StoreBundle<Regs>, bridge);
+      return layerFromBuiltBridge(
+        tag,
+        bundle as StoreBundle<Regs>,
+        bridge,
+        registrations,
+        relay,
+      );
     }),
   );
 
@@ -352,10 +384,11 @@ const buildMemoryLayerForAggregate = <
 >(
   tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
   registrations: ReadonlyArray<NormalizedStoreRegistration>,
-): Layer.Layer<Self | Storage> => {
+): Layer.Layer<Self | Storage | LogRelay> => {
   const scopes = buildScopeStateMap(registrations);
   return layerFromScopeState(tag, registrations, scopes).pipe(
     Layer.provide(EventJournal.layerMemory),
+    Layer.provideMerge(logsLayer),
   );
 };
 
@@ -368,7 +401,7 @@ const buildSqliteLayerForAggregate = <
   tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
   registrations: ReadonlyArray<NormalizedStoreRegistration>,
   filename: string,
-): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> => {
+): Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope> => {
   const scopes = buildScopeStateMap(registrations);
   const sqlStack = Layer.provideMerge(
     SqlEventJournal.layer(),
@@ -383,11 +416,18 @@ const buildSqliteLayerForAggregate = <
       const journal = Context.get(context, EventJournal.EventJournal);
       const bridge = buildScopeBridge(scopes, journal);
       const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
-      return layerFromBuiltBridge(tag, bundle as StoreBundle<Regs>, bridge).pipe(
+      const relay = yield* Effect.serviceOption(LogRelay);
+      return layerFromBuiltBridge(
+        tag,
+        bundle as StoreBundle<Regs>,
+        bridge,
+        registrations,
+        relay,
+      ).pipe(
         Layer.provide(Layer.succeedContext(context)),
       );
     }).pipe(Effect.mapError(mapSqliteBuildError)),
-  );
+  ).pipe(Layer.provideMerge(logsLayer));
 };
 
 /** @internal */
@@ -399,11 +439,11 @@ const buildLayerForAggregate = <
   tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
   registrations: ReadonlyArray<NormalizedStoreRegistration>,
   options?: StoreLayerOptions,
-): Layer.Layer<Self | Storage, StoreSqliteConnectionError, Scope.Scope> =>
+): Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope> =>
   options?.filename !== undefined
     ? buildSqliteLayerForAggregate(tag, registrations, options.filename)
     : (buildMemoryLayerForAggregate(tag, registrations) as Layer.Layer<
-        Self | Storage,
+        Self | Storage | LogRelay,
         StoreSqliteConnectionError,
         Scope.Scope
       >);
@@ -817,6 +857,30 @@ export const logLevelNone = <R extends StoreRegistrationAny>(registration: R): R
 
 /** @public */
 export const logLevel = logLevelAll;
+
+/** Per-registration live stream floor for {@link Resource.logs} (distinct from durable {@link logLevel}). @public */
+export const streamLevelAll = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "All");
+
+/** @public */
+export const streamLevelDebug = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Debug");
+
+/** @public */
+export const streamLevelInfo = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Info");
+
+/** @public */
+export const streamLevelWarn = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Warn");
+
+/** @public */
+export const streamLevelError = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Error");
+
+/** @public */
+export const streamLevelNone = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "None");
 
 // ============================================================================
 // Retention pipe modifiers

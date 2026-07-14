@@ -52,10 +52,6 @@
       "types": "./dist/MultiNode.d.ts",
       "default": "./dist/MultiNode.js"
     },
-    "./store/Log": {
-      "types": "./dist/store/Log.d.ts",
-      "default": "./dist/store/Log.js"
-    },
     "./ResourceConfigure": {
       "types": "./dist/ResourceConfigure.d.ts",
       "default": "./dist/ResourceConfigure.js"

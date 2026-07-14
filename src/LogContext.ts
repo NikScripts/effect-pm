@@ -20,6 +20,7 @@ import { Effect } from "effect";
  * | `processId` | `"processId"` | **resource key** (`Process.Tag.key`) |
  * | `queueId` | `"queueId"` | **resource key** (`QueueResource.Tag.key`) |
  * | `lineage` | `"@nikscripts/effect-pm/lineage"` | JSON array of **lineage segment keys** |
+ * | `lineId` | `"@nikscripts/effect-pm/lineId"` | Stable id for one published relay line (memo / dedupe) |
  *
  * Package: `@nikscripts/effect-pm/LogContext` · Source: `src/LogContext.ts` · See `docs/LOGS.md`.
  *
@@ -34,11 +35,13 @@ export const LogAnnotationKeys = {
   queueId: "queueId",
   /** Annotation key whose value is JSON **lineage segment keys**. */
   lineage: "@nikscripts/effect-pm/lineage",
+  /** Annotation key whose value is the stable **line id** stamped at relay publish. */
+  lineId: "@nikscripts/effect-pm/lineId",
 } as const;
 
 /**
  * Annotate every log line with a **node log key** value under annotation key {@link LogAnnotationKeys.node}.
- * Applied at the node runtime root (`Logs.persistLayer(nodeLogKey)` in `resource-web/server.ts`).
+ * Applied by node durable tails (`Node.logs` / `Resource.store(Node)` in `resource-web/server.ts`).
  *
  * @param node - **Node log key** value (`Resource.Node.key`).
  *

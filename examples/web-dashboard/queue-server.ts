@@ -14,10 +14,10 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as queueEntry } from "../../src/QueueResource";
+import * as QueueResource from "../../src/QueueResource";
 import { HistoryStore } from "../../src/HistoryStore";
-import * as Logs from "../../src/Logs";
 import * as Resource from "../../src/Resource";
-import { LogStore } from "../../src/store/log";
+import * as Store from "../../src/Store";
 import {
   Billing,
   Daily,
@@ -35,6 +35,22 @@ import {
 } from "./fleet";
 
 const PORT = 7777;
+
+/** Node journal + per-queue log shapes — `layerMemory` bakes in Logs.layer + durable tails. */
+class DropletStore extends Store.Service<DropletStore>("@examples/web-dashboard/DropletStore")(
+  Droplet.logs,
+  QueueResource.store(Mail),
+  QueueResource.store(Jobs),
+  QueueResource.store(Billing),
+  QueueResource.store(Notify),
+  QueueResource.store(Worker1),
+  QueueResource.store(Worker2),
+  QueueResource.store(Worker3),
+  QueueResource.store(RegionUS),
+  QueueResource.store(RegionEU),
+  QueueResource.store(Daily),
+  QueueResource.store(Weekly),
+) {}
 
 // ── request-rate monitor ─────────────────────────────────────────────────────
 // Streams are persistent connections (one open request the server pushes down), so the
@@ -86,9 +102,7 @@ const serveLayer = Resource.httpServer([
 ]).pipe(
   // capture metrics history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(Logs.layer),
-  Layer.provide(Logs.persistLayer(Droplet)),
-  Layer.provide(LogStore.layerMemory),
+  Layer.provide(DropletStore.layerMemory),
   // silence the served layer's console logging (per-request http access logs) — node logs
   // still reach the dashboard via NodeStatus.logs + lineage filter.
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),

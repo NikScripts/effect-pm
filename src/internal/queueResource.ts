@@ -368,7 +368,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  * yield* queue.add(item1)
  * yield* queue.add([item2, item3])
  * yield* queue.prioritize(urgentItem)
- * const pending = yield* queue.size
+ * const pending = yield* queue.size.get
  * yield* queue.pause
  * ```
  *
@@ -396,7 +396,7 @@ export interface QueueHandleApi<
   readonly enqueue: QueueEnqueueEntries<T, R>;
 
   /** Total pending items across all priority levels. */
-  readonly size: Effect.Effect<number>;
+  readonly size: Resource.Subscribable<number>;
   /** Pending item count per priority level. */
   readonly sizes: Effect.Effect<{
     readonly high: number;
@@ -404,7 +404,7 @@ export interface QueueHandleApi<
     readonly low: number;
   }>;
   /** Whether all priority queues are empty. */
-  readonly isEmpty: Effect.Effect<boolean>;
+  readonly isEmpty: Resource.Subscribable<boolean>;
   /** Total items that have finished processing (success or failure). */
   readonly completed: Effect.Effect<number>;
 
@@ -2902,7 +2902,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
             const shutdown = yield* Ref.get(isShutdownRef);
             if (shutdown) return yield* Effect.interrupt;
 
-            const empty = yield* handle.isEmpty;
+            const empty = yield* handle.isEmpty.get;
             if (empty) {
               yield* Effect.logDebug(`Queue "${queueName}" drained`);
               const completed = yield* Ref.get(completedCount);
@@ -3170,11 +3170,26 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       enqueueAtLevel: enqueueAtLevelPublic,
       levelSizes,
 
-      size: totalPendingEffect,
+      // `size`/`isEmpty` are reactive Subscribables (the contract shape) — `.get` keeps the
+      // authoritative one-shot computation (so internal drain reads are unchanged) and `.changes`
+      // projects the live `status` stream. The toolkit adapter passes these through untouched.
+      size: {
+        get: totalPendingEffect,
+        changes: Stream.map(
+          statusSub.changes,
+          (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
+        ),
+      },
 
       sizes: projectedSizes,
 
-      isEmpty: Effect.map(levelSizes, (levels) => projection.isEmptyLevels(levels)),
+      isEmpty: {
+        get: Effect.map(levelSizes, (levels) => projection.isEmptyLevels(levels)),
+        changes: Stream.map(
+          statusSub.changes,
+          (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
+        ),
+      },
 
       // Counter incremented after each item completes processing
       completed: Ref.get(completedCount),

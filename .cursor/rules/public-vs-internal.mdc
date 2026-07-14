@@ -12,30 +12,31 @@ alwaysApply: true
 
 ## Storage facets → `src/store/`
 
-Storage facets are **public** under **`src/store/`** with **`@nikscripts/effect-pm/store/<Domain>`** subpaths.
+Storage facets (when present) are **public** under **`src/store/`** with
+**`@nikscripts/effect-pm/store/<Domain>`** subpaths.
 
-| File (either naming style) | Subpath | Service tag |
-|----------------------------|---------|-------------|
-| `src/store/log.ts` | `store/Log` | `LogStore` |
-| `src/store/processLifecycle.ts` | `store/ProcessLifecycle` | `ProcessLifecycleStore` |
-
-**Removed:** `store/QueueResource` facet — queue execution history uses `QueueResource.store(tag)` on the Store bridge.
+| Status | Notes |
+|--------|-------|
+| **Removed** | `store/Log` (`LogStore`) — durable logs use `Node.logs` / toolkit `*.store(tag)` on `Store.Service` |
+| **Removed** | `store/QueueResource` facet — queue history uses `QueueResource.store(tag)` |
+| **Removed** | `store/ProcessLifecycle` facet substrate (retired with ProcessStorage) |
 
 **Not the worker module:** `@nikscripts/effect-pm/QueueResource` is the queue worker; `@nikscripts/effect-pm/QueueResource` + `*.store(tag)` is queue store registration.
 
-**`internal/store/`** — `spine.ts`, `service.ts`, `helpers.ts`. Type-agnostic plumbing only. No per-facet codecs, no facet tags.
+**`internal/store/`** — type-agnostic Store plumbing. No per-facet codecs, no facet tags.
 
 ## Placement
 
 | Location | Meaning |
 |----------|---------|
-| `src/store/*.ts` | Public storage facets |
+| `src/store/*.ts` | Public storage facets (when any ship) |
 | `src/Process.ts`, `src/Logs.ts`, … | Other app-facing modules |
-| `src/internal/store/spine.ts`, `composite.ts` | Package-private plumbing |
+| `src/internal/store/*` | Package-private store plumbing |
 | `src/storage/*` | Durable adapters (`storage/sqlite`, …) |
 
 ## When adding code
 
-1. App composes `Facet.layerRuntimeStorage`? → **`src/store/<name>.ts`** + **`store/<Domain>`** subpath.
+1. App composes a durable journal via registrations? → toolkit `*.store(tag)` / `Node.logs` on `Store.Service`.
 2. Shared spine/composite helpers? → `src/internal/store/`.
-3. CLI-only? → `src/internal/`; no subpath.
+3. New public storage facet (rare)? → **`src/store/<name>.ts`** + **`store/<Domain>`** subpath.
+4. CLI-only? → `src/internal/`; no subpath.

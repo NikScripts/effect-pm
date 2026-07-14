@@ -4,9 +4,9 @@ import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
 import * as QueueResource from "../src/QueueResource";
 import * as Resource from "../src/Resource";
-import { LogStore } from "../src/store/log";
+import * as Store from "../src/Store";
 import { Schema } from "effect";
-import { testLogsEnv } from "./fixtures/logsEnv";
+import { testBillingNodeKey } from "./fixtures/logKeys";
 
 const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
@@ -18,6 +18,14 @@ class LogQueue extends QueueResource.Tag<LogQueue>()("test/logs-resource/Q", {
 }) {}
 
 class LogProc extends Process.Tag<LogProc>()("test/logs-resource/Proc").pipe(Process.schedule([])) {}
+
+class EnvNode extends Resource.Node<EnvNode>(testBillingNodeKey) {}
+
+class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
+  EnvNode.logs,
+  Process.store(LogProc),
+  QueueResource.store(LogQueue),
+) {}
 
 it("Resource.logs surfaces queue worker lines on stream + query", () =>
   Effect.runPromise(
@@ -46,10 +54,11 @@ it("Resource.logs surfaces queue worker lines on stream + query", () =>
       expect(rows.some((r) => r.message.includes("handling 7"))).toBe(true);
     }).pipe(
       Effect.provide(
+        // AppStore (Logs.layer + Storage) must build before auto-started queue workers fork.
         QueueResource.layer(LogQueue, {
           effect: (item) => Effect.logInfo(`handling ${String(item.n)}`),
           concurrency: 1,
-        }).pipe(Layer.provideMerge(testLogsEnv())),
+        }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
     ),
@@ -72,13 +81,13 @@ it("Resource.logs surfaces process worker lines on query", () =>
       Effect.provide(
         Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-        }).pipe(Layer.provideMerge(testLogsEnv())),
+        }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
     ),
   ));
 
-it("Resource.logs query is empty without persistLayer (live relay only)", () =>
+it("Resource.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
@@ -91,7 +100,7 @@ it("Resource.logs query is empty without persistLayer (live relay only)", () =>
       Effect.provide(
         Process.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
-        }).pipe(Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory))),
+        }).pipe(Layer.provideMerge(Logs.layer)),
       ),
       Effect.scoped,
     ),

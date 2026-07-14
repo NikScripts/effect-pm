@@ -62,8 +62,9 @@
  * **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
  *
- * Structured log persistence: **`@nikscripts/effect-pm/store/Log`** (`LogStore.layerMemory` /
- * `LogStore.layer({ filename })`). Capture/relay pipeline: `@nikscripts/effect-pm/Logs`.
+ * Durable logs: register `Node.logs` / toolkit `*.store(tag)` on a {@link Store.Service}
+ * (`layerMemory` / `layer` bake in capture + per-registration tails). Capture/relay:
+ * `@nikscripts/effect-pm/Logs`.
  *
  * Durable adapters: **`@nikscripts/effect-pm/storage/sqlite`**
  * (`SQLiteDurableQueueStore`, `SQLiteHistoryStore`).
@@ -247,12 +248,6 @@ export {
   withQueueLogAnnotations,
 } from "./LogContext";
 export * as LogContext from "./LogContext";
-export type { LogEntryRecordedEvent } from "./store/log";
-export { isLogEntryRecorded } from "./store/log";
-
-export { LogStore } from "./store/log";
-export type { LogStoreApi } from "./store/log";
-
 // Types - Process
 export type {
   Process as ProcessInterface,

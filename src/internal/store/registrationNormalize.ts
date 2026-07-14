@@ -33,7 +33,9 @@ export interface NormalizedStoreRegistration<
   readonly contract?: StoreContractValue;
   readonly tag?: StoreRegistrationAny["tag"];
   readonly logLevel?: StoreRegistrationAny["logLevel"];
+  readonly streamLevel?: StoreRegistrationAny["streamLevel"];
   readonly maxRows?: number;
+  readonly journal?: StoreRegistrationAny["journal"];
 }
 
 /** @internal */
@@ -94,7 +96,9 @@ const fromRegistration = (
   contract: registration.contract,
   tag: registration.tag,
   logLevel: registration.logLevel,
+  streamLevel: registration.streamLevel,
   maxRows: registration.maxRows,
+  journal: registration.journal,
 });
 
 /** @internal */

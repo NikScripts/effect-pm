@@ -1,9 +1,10 @@
 # Agent 3 — Store followers implementation plan
 
-**Status:** plan + **unlocked focus `store-read-0`** (unified Store read / RQB `where`). Followers slices still gated.  
-**Plan branch:** `cursor/logs-store-followers-plan-906e`. **Impl branch:** `cursor/store-read-rqb-where-906e`.  
+**Status:** **followers cutover shipped** on [#40](https://github.com/NikScripts/effect-pm/pull/40) (`cursor/logs-store-followers-906e`).  
 **Brief:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) (owner-locked registration-follower model).  
-**Out of scope this slice:** named handles (Agent D); level pipes; remote `Resource.logs` RPC; resurrecting Phase 5 surfaces; follower fork wiring (until `followers-*` unlock).
+**Done:** `store-read-0` + `followers-0`…`3` + level pipes + remote NodeStatus/`Resource.logs` fallback; examples/docs on `Node.logs`.  
+**Deferred:** store-layer durable `(scopeKey, lineId)` memo (tail claim remains).  
+**In flight:** hard-remove interim `Logs.persistLayer` / standalone `LogStore` / `storeFollower.ts` (`cursor/remove-persist-layer-906e`).
 
 ---
 
@@ -460,12 +461,13 @@ pnpm typecheck && pnpm test && pnpm lint
 
 ---
 
-## Ordered follow-ups (not this unlock)
+## Ordered follow-ups
 
-1. **Level pipes (A)** — `Resource.logStoreLevel` / `logStreamLevel` / …; split store channel from today’s single `Store.logLevel*`. Wire `logStoreLevel` into `FollowRelayOptions.storeLevel`.
-2. **Remote per-resource logs (C)** — after local registration `logQuery` is real; decide C1 helpers vs C2 inject vs C3 NodeStatus RPC.
-3. **`Resource.logs().stream` footgun** — pre-filter vs helper; pair with C.
-4. **Hard-remove** standalone `LogStore` / `persistLayer` after one release shim (owner unlock).
+1. ~~**Level pipes (A)**~~ — shipped (`Store.logLevel*` / `streamLevel*`, `Resource.logStreamLevel*`).
+2. ~~**Remote per-resource logs (C)**~~ — shipped via NodeStatus + `Resource.logs` Storage/NodeStatus fallback (RPC inject later if needed).
+3. **Hard-remove** standalone `LogStore` / `persistLayer` / `storeFollower.ts` (owner unlock; compat tests still exercise the shim).
+4. **Store-layer `(scopeKey, lineId)` memo** — **deferred**; keep in-memory tail claim for live followers.
+5. **`Resource.logs().stream` footgun** — pre-filter vs helper polish (optional).
 
 ---
 

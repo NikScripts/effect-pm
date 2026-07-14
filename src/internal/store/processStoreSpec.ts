@@ -27,6 +27,7 @@ import type {
 } from "./contractDef";
 import type { ShapeHandles } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
+import { withImplicitLogShape } from "./logShapes";
 import type { StoreScopeTag } from "./registration";
 
 const processEventSchema = (
@@ -233,138 +234,140 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
     event._tag === "Failed" ||
     event._tag === "Interrupted";
 
-  return Store.extend(
-    ({ event }) => ({
-      failures: (): Effect.Effect<ReadonlyArray<ProcessStoreFailed<Tag>>> =>
-        Effect.map(event.read(), (events) =>
-          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed),
-        ),
-      completions: (): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
-        Effect.map(event.read(), (events) => events.filter(isCompleted)),
-      interruptions: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
-        Effect.map(event.read(), (events) =>
-          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
-            (e) => e._tag === "Interrupted",
+  return withImplicitLogShape(
+    Store.extend(
+      ({ event }) => ({
+        failures: (): Effect.Effect<ReadonlyArray<ProcessStoreFailed<Tag>>> =>
+          Effect.map(event.read(), (events) =>
+            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed),
           ),
-        ),
-      inFlight: (): Effect.Effect<ReadonlyArray<ProcessStoreStarted<Tag>>> =>
-        Effect.map(event.read(), (events) => {
-          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
-          const terminated = new Set<string>();
-          for (const e of rows) {
-            if (isTerminal(e)) {
-              terminated.add(runKey(e.startedAt, e.scheduleKey));
-            }
-          }
-          return rows.filter(
-            (e): e is ProcessStoreStarted<Tag> =>
-              isStarted(e) &&
-              !terminated.has(runKey(e.startedAt, e.scheduleKey)),
-          );
-        }),
-      lastFailure: (): Effect.Effect<Option.Option<ProcessStoreFailed<Tag>>> =>
-        Effect.map(event.read(), (events) => {
-          const failures = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed);
-          return failures.length === 0
-            ? Option.none()
-            : Option.some(failures[failures.length - 1]!);
-        }),
-      lastCompletion: (): Effect.Effect<Option.Option<ProcessStoreCompleted<Tag>>> =>
-        Effect.map(event.read(), (events) => {
-          const completions = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted);
-          return completions.length === 0
-            ? Option.none()
-            : Option.some(completions[completions.length - 1]!);
-        }),
-      recent: (n: number): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
-        Effect.map(event.read(), (events) => {
-          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
-          return n <= 0 ? [] : rows.slice(Math.max(0, rows.length - n));
-        }),
-      stats: (): Effect.Effect<ProcessStoreStats> =>
-        Effect.map(event.read(), (events) => {
-          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
-          let started = 0;
-          let completed = 0;
-          let failed = 0;
-          let interrupted = 0;
-          for (const e of rows) {
-            switch (e._tag) {
-              case "Started":
-                started += 1;
-                break;
-              case "Completed":
-                completed += 1;
-                break;
-              case "Failed":
-                failed += 1;
-                break;
-              case "Interrupted":
-                interrupted += 1;
-                break;
-              default:
-                break;
-            }
-          }
-          return { started, completed, failed, interrupted };
-        }),
-      failureRate: (): Effect.Effect<number> =>
-        Effect.map(event.read(), (events) => {
-          const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
-          let completed = 0;
-          let failed = 0;
-          for (const e of rows) {
-            if (e._tag === "Completed") completed += 1;
-            else if (e._tag === "Failed") failed += 1;
-          }
-          const total = completed + failed;
-          return total === 0 ? 0 : failed / total;
-        }),
-      durationStats: (): Effect.Effect<ProcessStoreDurationStats> =>
-        Effect.map(event.read(), (events) => {
-          const durations = (events as ReadonlyArray<ProcessStoreEvent<Tag>>)
-            .filter(isCompleted)
-            .map((e) => e.durationMs);
-          if (durations.length === 0) {
-            return { meanMs: 0, p50Ms: 0, p95Ms: 0, p99Ms: 0, maxMs: 0 };
-          }
-          const sorted = [...durations].sort((a, b) => a - b);
-          const mean = durations.reduce((a, b) => a + b, 0) / durations.length;
-          return {
-            meanMs: mean,
-            p50Ms: percentile(sorted, 50),
-            p95Ms: percentile(sorted, 95),
-            p99Ms: percentile(sorted, 99),
-            maxMs: sorted[sorted.length - 1]!,
-          };
-        }),
-      bySchedule: (
-        scheduleKey: string | null,
-      ): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
-        Effect.map(event.read(), (events) =>
-          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
-            (e) => e.scheduleKey === scheduleKey,
+        completions: (): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
+          Effect.map(event.read(), (events) => events.filter(isCompleted)),
+        interruptions: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+          Effect.map(event.read(), (events) =>
+            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
+              (e) => e._tag === "Interrupted",
+            ),
           ),
-        ),
-      startupRuns: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
-        Effect.map(event.read(), (events) =>
-          (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter((e) => e.isStartupRun),
-        ),
-      longestRuns: (
-        n: number,
-      ): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
-        Effect.map(event.read(), (events) =>
-          [...(events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted)]
-            .sort((a, b) => b.durationMs - a.durationMs)
-            .slice(0, Math.max(0, n)),
-        ),
-      changes: (): Stream.Stream<
-        ProcessStoreEvent<Tag>,
-        StoreJournalDecodeError,
-        Store.Storage
-      > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
-    }),
-    base,
+        inFlight: (): Effect.Effect<ReadonlyArray<ProcessStoreStarted<Tag>>> =>
+          Effect.map(event.read(), (events) => {
+            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            const terminated = new Set<string>();
+            for (const e of rows) {
+              if (isTerminal(e)) {
+                terminated.add(runKey(e.startedAt, e.scheduleKey));
+              }
+            }
+            return rows.filter(
+              (e): e is ProcessStoreStarted<Tag> =>
+                isStarted(e) &&
+                !terminated.has(runKey(e.startedAt, e.scheduleKey)),
+            );
+          }),
+        lastFailure: (): Effect.Effect<Option.Option<ProcessStoreFailed<Tag>>> =>
+          Effect.map(event.read(), (events) => {
+            const failures = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed);
+            return failures.length === 0
+              ? Option.none()
+              : Option.some(failures[failures.length - 1]!);
+          }),
+        lastCompletion: (): Effect.Effect<Option.Option<ProcessStoreCompleted<Tag>>> =>
+          Effect.map(event.read(), (events) => {
+            const completions = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted);
+            return completions.length === 0
+              ? Option.none()
+              : Option.some(completions[completions.length - 1]!);
+          }),
+        recent: (n: number): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+          Effect.map(event.read(), (events) => {
+            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            return n <= 0 ? [] : rows.slice(Math.max(0, rows.length - n));
+          }),
+        stats: (): Effect.Effect<ProcessStoreStats> =>
+          Effect.map(event.read(), (events) => {
+            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            let started = 0;
+            let completed = 0;
+            let failed = 0;
+            let interrupted = 0;
+            for (const e of rows) {
+              switch (e._tag) {
+                case "Started":
+                  started += 1;
+                  break;
+                case "Completed":
+                  completed += 1;
+                  break;
+                case "Failed":
+                  failed += 1;
+                  break;
+                case "Interrupted":
+                  interrupted += 1;
+                  break;
+                default:
+                  break;
+              }
+            }
+            return { started, completed, failed, interrupted };
+          }),
+        failureRate: (): Effect.Effect<number> =>
+          Effect.map(event.read(), (events) => {
+            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            let completed = 0;
+            let failed = 0;
+            for (const e of rows) {
+              if (e._tag === "Completed") completed += 1;
+              else if (e._tag === "Failed") failed += 1;
+            }
+            const total = completed + failed;
+            return total === 0 ? 0 : failed / total;
+          }),
+        durationStats: (): Effect.Effect<ProcessStoreDurationStats> =>
+          Effect.map(event.read(), (events) => {
+            const durations = (events as ReadonlyArray<ProcessStoreEvent<Tag>>)
+              .filter(isCompleted)
+              .map((e) => e.durationMs);
+            if (durations.length === 0) {
+              return { meanMs: 0, p50Ms: 0, p95Ms: 0, p99Ms: 0, maxMs: 0 };
+            }
+            const sorted = [...durations].sort((a, b) => a - b);
+            const mean = durations.reduce((a, b) => a + b, 0) / durations.length;
+            return {
+              meanMs: mean,
+              p50Ms: percentile(sorted, 50),
+              p95Ms: percentile(sorted, 95),
+              p99Ms: percentile(sorted, 99),
+              maxMs: sorted[sorted.length - 1]!,
+            };
+          }),
+        bySchedule: (
+          scheduleKey: string | null,
+        ): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+          Effect.map(event.read(), (events) =>
+            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
+              (e) => e.scheduleKey === scheduleKey,
+            ),
+          ),
+        startupRuns: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+          Effect.map(event.read(), (events) =>
+            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter((e) => e.isStartupRun),
+          ),
+        longestRuns: (
+          n: number,
+        ): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
+          Effect.map(event.read(), (events) =>
+            [...(events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted)]
+              .sort((a, b) => b.durationMs - a.durationMs)
+              .slice(0, Math.max(0, n)),
+          ),
+        changes: (): Stream.Stream<
+          ProcessStoreEvent<Tag>,
+          StoreJournalDecodeError,
+          Store.Storage
+        > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
+      }),
+      base,
+    ),
   );
 };
 
