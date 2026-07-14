@@ -12,9 +12,15 @@ type PM = (typeof PMS)[number];
 
 const isPM = (v: unknown): v is PM => typeof v === "string" && (PMS as readonly string[]).includes(v);
 
-// npm installs with `install`; pnpm / yarn / bun with `add`.
-const commandFor = (pm: PM, packages: string): string =>
-  `${pm} ${pm === "npm" ? "install" : "add"} ${packages}`;
+// npm installs with `install`; pnpm / yarn / bun with `add`. A leading `-D` in the package spec means a
+// dev dependency — emitted as each manager's dev flag (`--dev` for bun, `-D` elsewhere).
+const commandFor = (pm: PM, packages: string): string => {
+  const dev = /^-D(\s|$)/.test(packages);
+  const list = dev ? packages.replace(/^-D\s*/, "") : packages;
+  const verb = pm === "npm" ? "install" : "add";
+  const devFlag = dev ? (pm === "bun" ? " --dev" : " -D") : "";
+  return `${pm} ${verb}${devFlag} ${list}`;
+};
 
 const STORAGE_KEY = "docs:pm";
 const CHANGE_EVENT = "docs:pm-change";
