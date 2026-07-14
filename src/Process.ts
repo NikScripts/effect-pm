@@ -399,6 +399,7 @@ interface ProcessBuildStateBase<E, RUser> {
   readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
 }
 
+/** User-facing controls for a process's schedule — enumerate, set, add, and clear entries. @public */
 export interface ProcessScheduleControls {
   readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
   readonly set: (
@@ -410,6 +411,7 @@ export interface ProcessScheduleControls {
   readonly clear: Effect.Effect<void, never, never>;
 }
 
+/** A function that seeds a process's schedule via its {@link ProcessScheduleControls}. @public */
 export type ProcessScheduleInitializer<R = never> = (
   controls: ProcessScheduleControls,
 ) => Effect.Effect<void, never, R>;
