@@ -1,9 +1,9 @@
 # Agent 3 — Logs store followers (owner intent — REPEAT BACK FIRST)
 
-**Status:** **REPEAT-BACK THEN PLAN** — owner 2026-07-14.  
+**Status:** **PLAN POSTED** — [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md). Awaiting unlock (`followers-0`…).  
 **Agent:** **3**  
 **Branch from:** **`integration`**  
-**Working branch:** only after owner accepts your repeat-back — `cursor/logs-store-followers-a3ad`
+**Plan branch:** `cursor/logs-store-followers-plan-906e`. **Working branch after unlock:** `cursor/logs-store-followers-a3ad`
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · this file · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) §Store integration · [`store-and-logs-design.md`](./store-and-logs-design.md) §Single capture · [`docs/LOGS.md`](../LOGS.md)
 

@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | from `integration` | [next headlining resource](./agent-01-next-headlining-resource.md) · [#32 prototype](https://github.com/NikScripts/effect-pm/pull/32) | **plan-first** | — | — | Research / Telemetry+ShardMap prototype — owner picks; **no impl until then** | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | from `integration` | [Logs store followers](./agent-03-logs-p1.md) | **repeat-back first** | — | — | Must restate registration-follower model; **no code until owner accepts** | 2026-07-14 |
+| **3** | `cursor/logs-store-followers-plan-906e` | [Logs store followers](./agent-03-logs-p1.md) · [plan](./agent-03-logs-store-followers-plan.md) | **plan posted — awaiting unlock** | — | — | Registration-follower plan with code sketches; no impl until unlock | 2026-07-14 |
 | **B** | merged / brief | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated | 2026-07-13 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | `chore/standards-audit` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated | 2026-07-13 |
