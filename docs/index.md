@@ -1,4 +1,4 @@
-{#index title="Introduction" appliesTo=all}
+{#index title="Introduction" status="draft" done="api previews types" appliesTo=all}
 # effect-pm
 
 **Build cross-runtime services on Effect.**

@@ -1,4 +1,4 @@
-{#queues title="Queues" appliesTo=all}
+{#queues title="Queues" status="draft" appliesTo=all}
 # Queues
 
 {.note}

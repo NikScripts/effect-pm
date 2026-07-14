@@ -1,4 +1,4 @@
-{#metrics title="Metrics" appliesTo=all}
+{#metrics title="Metrics" status="draft" appliesTo=all}
 # Metrics
 
 Resources already emit into Effect's per-process `Metric` registry (queues, processes, HTTP

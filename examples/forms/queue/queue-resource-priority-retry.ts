@@ -87,7 +87,7 @@ const program = Effect.gen(function* () {
     { id: "password-reset", to: "reader@example.com", failFirstAttempt: false },
   ]);
 
-  const pending = yield* queue.size;
+  const pending = yield* queue.size.get;
   yield* Effect.logInfo(`pending before resume: ${String(pending)}`);
 
   yield* queue.resume;
@@ -96,7 +96,7 @@ const program = Effect.gen(function* () {
   const completed = yield* waitUntilCompleted(queue, 4);
   yield* Effect.logInfo(`completed item attempts: ${String(completed)}`);
 
-  const empty = yield* queue.isEmpty;
+  const empty = yield* queue.isEmpty.get;
   yield* Effect.logInfo(`queue empty: ${String(empty)}`);
 });
 

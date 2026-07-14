@@ -1,4 +1,4 @@
-{#documentation title="Documentation" order=50 appliesTo=src}
+{#documentation title="Documentation" order=50 status="draft" appliesTo=src}
 # Documentation
 
 Three kinds of documentation, three different jobs — and each has a shape worth holding to:

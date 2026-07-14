@@ -1,4 +1,4 @@
-{#tui-cli title="TUI & CLI" appliesTo=all}
+{#tui-cli title="TUI & CLI" status="draft" appliesTo=all}
 # TUI & CLI
 
 {.note}

@@ -1,4 +1,4 @@
-{#contracts title="Service Contracts" appliesTo=all}
+{#contracts title="Service Contracts" status="draft" appliesTo=all}
 # Service Contracts
 
 {.note}

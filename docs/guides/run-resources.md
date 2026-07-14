@@ -1,4 +1,4 @@
-{#run-resources title="Run resources" appliesTo=all}
+{#run-resources title="Run resources" status="draft" appliesTo=all}
 # Run resources
 
 {.note}

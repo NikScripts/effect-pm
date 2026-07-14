@@ -1,4 +1,4 @@
-{#stores title="Stores" appliesTo=all}
+{#stores title="Stores" status="draft" appliesTo=all}
 # Stores
 
 {.note}

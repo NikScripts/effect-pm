@@ -61,6 +61,7 @@ const program = Effect.gen(function* () {
 
 runNodeProgramWithLayer(
   program,
-  DynamicConfig.layer,
+  // scoped: layer(cfg) allowlists cfg's swappable keys for the setByKey path
+  DynamicConfig.layer(cfg),
   "form:dynamic-config-hot-swap finished",
 );

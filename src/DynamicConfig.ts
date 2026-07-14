@@ -3,9 +3,10 @@
  *
  * @remarks
  * Define config the normal way with `Config.*`; wrap fields that may change at
- * runtime in {@link swappable}. {@link make} returns a plain **bag** of
- * {@link ConfigField} wrappers — not a service tag, so a field can be named
- * anything (even `key`) with no collisions.
+ * runtime in {@link swappable} (scoped to the config you hand {@link layer}) or
+ * {@link globalSwappable} (process-wide, for the remote/RPC {@link setByKey} path).
+ * {@link make} returns a plain **bag** of {@link ConfigField} wrappers — not a
+ * service tag, so a field can be named anything (even `key`) with no collisions.
  *
  * Reads keep the **native `Config` interface**: a `ConfigField` is yieldable and
  * delegates to its underlying `Config`, so `yield* cfg.apiKey` reads through the
@@ -194,14 +195,37 @@ export class DynamicConfigStore extends Context.Service<
     ) => Effect.Effect<void>;
     readonly unsetRaw: (keys: ReadonlyArray<string>) => Effect.Effect<void>;
     readonly changedKeys: Stream.Stream<ReadonlyArray<string>>;
-    /** Per-runtime snapshot: env key → its Config, for declared-swappable keys. */
+    /** This provision's {@link setByKey} allowlist: the process-wide {@link SwappableRegistry}
+     *  (from {@link globalSwappable}) plus any {@link swappable} fields in the config passed to
+     *  {@link layer}. */
     readonly allowed: ReadonlyMap<string, Config.Config<unknown>>;
   }
 >()("@nikscripts/effect-pm/DynamicConfig/DynamicConfigStore") {}
 
-// Module registry: every swappable field's env key → its Config, recorded as
-// configs are defined. `layer` snapshots this per runtime.
-const swappableRegistry = new Map<string, Config.Config<unknown>>();
+const SwappableRegistryKey =
+  "@nikscripts/effect-pm/DynamicConfig/SwappableRegistry";
+
+/**
+ * The process-wide allowlist of declared-swappable env keys → their `Config`, held the way
+ * Effect holds its own registries (`Metric.MetricRegistry`): a `Context.Reference` whose
+ * cached default *is* the global — declare {@link swappable} anywhere, no wiring — while a
+ * test or isolated program can substitute its own allowlist with
+ * `Effect.provideService(SwappableRegistry, new Map())`.
+ *
+ * @public
+ */
+export const SwappableRegistry = Context.Reference<
+  Map<string, Config.Config<unknown>>
+>(SwappableRegistryKey, { defaultValue: () => new Map() });
+
+// The one write into the registry. Runs at declaration time (sync, module scope), so it
+// reaches the cached default — the process-wide allowlist — not any per-context override.
+const registerSwappable = (
+  key: string,
+  config: Config.Config<unknown>,
+): void => {
+  Context.get(Context.empty(), SwappableRegistry).set(key, config);
+};
 
 const constProvider = (raw: string) =>
   ConfigProvider.make(() => Effect.succeed(ConfigProvider.makeValue(raw)));
@@ -212,6 +236,8 @@ const recordKeys = (config: Config.Config<unknown>): ReadonlyArray<string> => {
     keys.push(path.join("_"));
     return Effect.succeed(ConfigProvider.makeValue("probe"));
   });
+  // Pure, deterministic key-probe: parse against an in-memory provider that records the
+  // paths the Config reads. No I/O, so runSync at declaration is safe.
   Effect.runSync(Effect.ignore(config.parse(probe)));
   return keys;
 };
@@ -221,28 +247,48 @@ const recordKeys = (config: Config.Config<unknown>): ReadonlyArray<string> => {
 // ============================================================================
 
 /**
- * Make a single hot-swappable field — the **single-field** constructor. Returns
- * a usable {@link SwappableField} on its own (yieldable for reads, with `.set` /
- * `.reset` / `.changes` on the field); no {@link make} needed. Its env key joins
- * this runtime's allowlist.
+ * A hot-swappable field whose key joins the **process-wide** allowlist — declare it anywhere
+ * (even at module scope), no wiring, and {@link setByKey} can swap it by string on any runtime.
+ * Reach for this when a remote/RPC handler swaps the value. For a field with no global footprint,
+ * scoped to one provision, use {@link swappable}.
  *
  * @example
  * ```ts
- * const apiKey = DynamicConfig.swappable(Config.redacted("API_KEY"));
- * const k = yield* apiKey;        // read
- * yield* apiKey.set("new");       // swap (control is on the field)
+ * const apiKey = DynamicConfig.globalSwappable(Config.redacted("API_KEY"));
+ * yield* apiKey.set("new");                             // typed, in-process
+ * yield* DynamicConfig.setByKey("API_KEY", "rotated");  // string path — allowed process-wide
  * ```
  *
  * @public
  */
-export const swappable = <A>(config: Config.Config<A>): SwappableField<A> => {
+export const globalSwappable = <A>(
+  config: Config.Config<A>,
+): SwappableField<A> => {
   const envKeys = recordKeys(config);
-  // "any time you add swappable, its key joins the allowlist registry"
+  // joins the process-wide allowlist registry
   for (const key of envKeys) {
-    swappableRegistry.set(key, config);
+    registerSwappable(key, config);
   }
   return makeSwappableField(config, envKeys);
 };
+
+/**
+ * A hot-swappable field with **no global footprint** — pure construction, no registry write. Its
+ * typed control (`.set` / `.reset` / `.changes`) works wherever {@link layer} is provided; to also
+ * open the string {@link setByKey} path for it, hand its config to `layer(config)`, which scopes
+ * the key to that one provision. Use {@link globalSwappable} for the declare-anywhere, process-wide
+ * string path instead.
+ *
+ * @example
+ * ```ts
+ * const apiKey = DynamicConfig.swappable(Config.redacted("API_KEY"));
+ * yield* apiKey.set("new");   // typed swap; no process-wide allowlist entry
+ * ```
+ *
+ * @public
+ */
+export const swappable = <A>(config: Config.Config<A>): SwappableField<A> =>
+  makeSwappableField(config, recordKeys(config));
 
 const makeField = (spec: Config.Config<unknown> | ConfigField<unknown>) =>
   // already a field (swappable, or another bag's field) → use as-is;
@@ -540,64 +586,91 @@ export const freezeField = <
 // layer — the store + the dynamic ConfigProvider (env fallback)
 // ============================================================================
 
+/** True for a field carrying the swap controls (structural — has `.set`). */
+const isSwappableField = (
+  field: ConfigField<unknown>,
+): field is SwappableField<unknown> => "set" in field;
+
+/** Normalize a {@link layer} config — a bag from {@link make}/{@link extend} or a lone field. */
+const fieldsOf = (
+  config: FieldRecord | ConfigField<unknown>,
+): ReadonlyArray<ConfigField<unknown>> =>
+  isConfigField(config) ? [config] : Object.values(config);
+
 /**
- * Provides the override store and a `ConfigProvider` that reads it first, then
- * the real environment. Provide once per runtime; every `Config` read then sees
- * swaps, and {@link DynamicConfigStore} is available for field control / {@link setByKey}.
- *
- * Provide at or above any scope that reads or swaps — scoping (`Effect.scoped`)
- * and forked fibers inherit it. Separate runtimes get their own store, so a swap
- * in one is not seen by another (swap each via its own {@link setByKey}).
+ * Provide the override store and a `ConfigProvider` (reads swaps first, then the real
+ * environment). The {@link setByKey} allowlist is the process-wide {@link SwappableRegistry}
+ * (every {@link globalSwappable}) plus — when you pass `config` (a bag from {@link make} /
+ * {@link extend}, or a lone {@link swappable} field) — that config's own swappable keys, scoped to
+ * this provision. Provide once, at or above any scope that reads or swaps; scoping (`Effect.scoped`)
+ * and forked fibers inherit it. Separate runtimes get their own store.
  *
  * @example
  * ```ts
- * program.pipe(Effect.provide(DynamicConfig.layer));
+ * program.pipe(Effect.provide(DynamicConfig.layer()));           // global keys only
+ * program.pipe(Effect.provide(DynamicConfig.layer(scopedCfg)));  // + scopedCfg's swappable keys
  * ```
  *
  * @public
  */
-export const layer: Layer.Layer<DynamicConfigStore> = Layer.unwrap(
-  Effect.gen(function* () {
-    const overrides = yield* SubscriptionRef.make(new Map<string, string>());
+export const layer = (
+  config?: FieldRecord | ConfigField<unknown>,
+): Layer.Layer<DynamicConfigStore> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const overrides = yield* SubscriptionRef.make(new Map<string, string>());
 
-    const provider = ConfigProvider.make((path) =>
-      Effect.map(SubscriptionRef.get(overrides), (map) => {
-        const value = map.get(path.join("_"));
-        return value === undefined
-          ? undefined
-          : ConfigProvider.makeValue(value);
-      }),
-    );
-
-    const store = DynamicConfigStore.of({
-      setRaw: (entries) =>
-        SubscriptionRef.update(overrides, (map) => {
-          const next = new Map(map);
-          for (const [key, value] of entries) {
-            next.set(key, value);
-          }
-          return next;
+      const provider = ConfigProvider.make((path) =>
+        Effect.map(SubscriptionRef.get(overrides), (map) => {
+          const value = map.get(path.join("_"));
+          return value === undefined
+            ? undefined
+            : ConfigProvider.makeValue(value);
         }),
-      unsetRaw: (keys) =>
-        SubscriptionRef.update(overrides, (map) => {
-          const next = new Map(map);
-          for (const key of keys) {
-            next.delete(key);
-          }
-          return next;
-        }),
-      changedKeys: Stream.map(SubscriptionRef.changes(overrides), (map) =>
-        Array.from(map.keys()),
-      ),
-      // per-runtime snapshot of declared-swappable keys
-      allowed: new Map(swappableRegistry),
-    });
+      );
 
-    return Layer.merge(
-      ConfigProvider.layer(
-        ConfigProvider.orElse(provider, ConfigProvider.fromEnv()),
-      ),
-      Layer.succeed(DynamicConfigStore, store),
-    );
-  }),
-);
+      // allowlist = the process-wide registry, plus this config's own swappable keys.
+      const allowed = new Map<string, Config.Config<unknown>>(
+        yield* SwappableRegistry,
+      );
+      if (config !== undefined) {
+        for (const field of fieldsOf(config)) {
+          if (isSwappableField(field)) {
+            for (const key of metaOf(field).envKeys) {
+              allowed.set(key, field.config);
+            }
+          }
+        }
+      }
+
+      const store = DynamicConfigStore.of({
+        setRaw: (entries) =>
+          SubscriptionRef.update(overrides, (map) => {
+            const next = new Map(map);
+            for (const [key, value] of entries) {
+              next.set(key, value);
+            }
+            return next;
+          }),
+        unsetRaw: (keys) =>
+          SubscriptionRef.update(overrides, (map) => {
+            const next = new Map(map);
+            for (const key of keys) {
+              next.delete(key);
+            }
+            return next;
+          }),
+        changedKeys: Stream.map(SubscriptionRef.changes(overrides), (map) =>
+          Array.from(map.keys()),
+        ),
+        allowed,
+      });
+
+      return Layer.merge(
+        ConfigProvider.layer(
+          ConfigProvider.orElse(provider, ConfigProvider.fromEnv()),
+        ),
+        Layer.succeed(DynamicConfigStore, store),
+      );
+    }),
+  );

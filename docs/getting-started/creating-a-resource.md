@@ -1,4 +1,4 @@
-{#creating-a-resource title="Creating a Resource" appliesTo=all}
+{#creating-a-resource title="Creating a Resource" status="draft" appliesTo=all}
 # Creating a Resource
 
 {.note}

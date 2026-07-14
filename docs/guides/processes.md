@@ -1,4 +1,4 @@
-{#processes title="Processes" appliesTo=all}
+{#processes title="Processes" status="draft" appliesTo=all}
 # Processes
 
 {.note}

@@ -1,17 +1,22 @@
 import { chapterBySlug } from "../lib/content.js";
 import { renderChapter } from "../lib/docs-content.js";
 import { PrevNext } from "../components/PrevNext.js";
+import { DraftBanner, PageAside } from "../components/PageAside.js";
 
 // Home = the "Getting started" overview chapter, rendered through the Effect pipeline.
 export default async function HomePage() {
   const chapter = chapterBySlug("index");
   if (!chapter) return <p>Missing content/index.dj</p>;
-  const { element, meta } = await renderChapter(chapter.raw);
+  const { element, meta, toc } = await renderChapter(chapter.raw);
   return (
     <>
       <title>{`${meta.title} — effect-pm`}</title>
-      {element}
-      <PrevNext slug="index" />
+      <DraftBanner meta={meta} />
+      <article className="prose">
+        {element}
+        <PrevNext slug="index" />
+      </article>
+      <PageAside meta={meta} toc={toc} />
     </>
   );
 }

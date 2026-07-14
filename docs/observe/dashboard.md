@@ -1,4 +1,4 @@
-{#dashboard title="Dashboard" appliesTo=all}
+{#dashboard title="Dashboard" status="draft" appliesTo=all}
 # Dashboard
 
 {.note}
