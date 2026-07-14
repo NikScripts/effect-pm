@@ -463,6 +463,10 @@ const provideWithLayer = <A, E, RIn, ROut>(
   step: Effect.Effect<A, E, RIn>,
   layer: Layer.Layer<ROut, E, never>,
 ): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
+  // `R` is deliberately FORWARDED to the caller (`Exclude<RIn, ROut>`), not left unprovided;
+  // `missingEffectContext` can't distinguish requirement-forwarding from a leak on a generic
+  // helper, so it false-positives here (the code is type-correct — tsc is clean).
+  // @effect-diagnostics-next-line missingEffectContext:off
   Effect.scoped(
     Effect.gen(function* () {
       const context = yield* Layer.build(layer);
@@ -502,16 +506,22 @@ function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
   state: Pick<AnyProcessBuildState<never, never>, "pollingLayer" | "scheduleLayer">,
 ) {
+  // Each branch forwards the caller's residual `R` (the overload signatures above type it exactly);
+  // `missingEffectContext` false-positives on the forwarding, same as {@link provideWithLayer}.
   const { pollingLayer, scheduleLayer } = state;
   if (pollingLayer !== undefined && scheduleLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, Layer.mergeAll(pollingLayer, scheduleLayer));
   }
   if (pollingLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, pollingLayer);
   }
   if (scheduleLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, scheduleLayer);
   }
+  // @effect-diagnostics-next-line missingEffectContext:off
   return step;
 }
 
@@ -1981,11 +1991,18 @@ type ScheduleMode =
   | { readonly _tag: "inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
   | { readonly _tag: "reference"; readonly source: ResourceTag<unknown, ScheduleResourceSpec> };
 
+/** Runtime guard for a stamped {@link ScheduleMode} — its `_tag` discriminant. @internal */
+const isScheduleMode = (value: unknown): value is ScheduleMode =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  (value._tag === "inline" || value._tag === "reference");
+
 /** Read a process tag's {@link ScheduleMode}, if any (set by {@link schedule}). @internal */
 const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && scheduleModeSym in tag) {
-    const value = (tag as { readonly [scheduleModeSym]?: unknown })[scheduleModeSym];
-    return value as ScheduleMode | undefined;
+    const value = tag[scheduleModeSym];
+    return isScheduleMode(value) ? value : undefined;
   }
   return undefined;
 };
@@ -2144,6 +2161,9 @@ export const Tag = <Self>() => {
     }
     return buildProcessTag<Self>(key, undefined);
   }
+  // `build`'s overload *implementation* signature doesn't structurally satisfy the named overload
+  // union `ProcessTagBuild<Self>` (a standard TS gap) — the overload signatures above are the checked
+  // surface; assert the impl to them.
   return build as ProcessTagBuild<Self>;
 };
 
@@ -2317,6 +2337,7 @@ const buildProcessImpl = <A, E, R>(
         : Effect.asVoid(config.effect);
 
     const tapLogs = <A2, E2, R2>(effect: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+        // the process tag doubles as its own log/store scope (structurally a StoreScopeTag).
       withLogScope(tag as StoreScopeTag)(effect);
 
     // ── schedule: inline windows own an in-memory store; otherwise always-armed ──
@@ -2389,12 +2410,15 @@ const buildProcessImpl = <A, E, R>(
       start,
       stop,
       events: handle.events,
+      // the log-tapped engine `run` effect is bridged to the contract's `run` member type here.
       run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       ...scheduleMembers,
       ...resultMembers,
     };
     return Resource.builtResource(
       tag,
+      // engine→contract impl boundary: the assembled `impl` carries the worker/refill `R`; assert
+      // it to the resource's expected `WithRequirement<ImplOf<ProcessSpec>, R>` shape.
       impl as WithRequirement<ImplOf<ProcessSpec>, R>,
       context,
     );
