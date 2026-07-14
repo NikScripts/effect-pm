@@ -15,7 +15,6 @@ import { createTwoslasher } from "twoslash";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toHast } from "mdast-util-to-hast";
 import { makeTypeExpander } from "./expandType";
-import { buildTermIndex } from "./glossary.js";
 
 const THEMES = { light: "github-light", dark: "github-dark" } as const;
 const LOAD_LANGS = ["typescript", "tsx", "bash", "json"] as const;
@@ -186,86 +185,6 @@ function preprocessJsdoc(md: string): string {
     (_m, target, text) => label(String(target), String(text ?? "")),
   );
 }
-// Auto-link glossary terms inside a hover's JSDoc — LINK ONLY. These links carry glossary hrefs but
-// live inside the twoslash popup, where GlossaryHover deliberately shows no preview (no popup on a
-// popup). First occurrence per doc; never inside code or an existing link. The index is cached (dev:
-// restart the doc server after glossary edits, same as twoslash).
-let hoverTermIndex: ReturnType<typeof buildTermIndex> | null = null;
-let hoverRegex: RegExp | null = null;
-// In hover JSDoc — often third-party reference prose we don't author — match conservatively: a term
-// must be a whitespace/line-start-delimited word that ends at a space, a sentence-ending period, or
-// the end of the text. So `Node.js`, `Resource.local`, and punctuation-glued forms never match. The
-// space it ends at must not be followed by another capitalized word, so a compound proper noun like
-// `Node HttpServer` (Node.js, not our Node) doesn't match either.
-// (Prose linking uses plain word boundaries; this stricter rule is hover-only.)
-const ensureHoverIndex = (): void => {
-  if (hoverTermIndex) return;
-  hoverTermIndex = buildTermIndex();
-  const words = [...hoverTermIndex.termToSlug.keys()].sort((a, b) => b.length - a.length);
-  hoverRegex = words.length
-    ? new RegExp(
-        `(?<=^|\\s)(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})s?(?=\\.(?:\\s|$)|$|\\s(?![A-Z]))`,
-        "g",
-      )
-    : null;
-};
-const linkifyHastText = (
-  text: string,
-  regex: RegExp,
-  termToSlug: ReadonlyMap<string, string>,
-  linked: Set<string>,
-): any[] | null => {
-  regex.lastIndex = 0;
-  const out: any[] = [];
-  let last = 0;
-  let matched = false;
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(text)) !== null) {
-    const slug = termToSlug.get(m[1]);
-    if (slug === undefined || linked.has(slug)) continue;
-    linked.add(slug);
-    matched = true;
-    if (m.index > last) out.push({ type: "text", value: text.slice(last, m.index) });
-    out.push({
-      type: "element",
-      tagName: "a",
-      properties: { href: `/docs/glossary#${slug}`, className: ["twoslash-glossary-link"] },
-      children: [{ type: "text", value: m[0] }],
-    });
-    last = m.index + m[0].length;
-  }
-  if (!matched) return null;
-  if (last < text.length) out.push({ type: "text", value: text.slice(last) });
-  return out;
-};
-const linkifyHast = (nodes: any[]): void => {
-  ensureHoverIndex();
-  if (!hoverRegex || !hoverTermIndex) return;
-  const regex = hoverRegex;
-  const { termToSlug } = hoverTermIndex;
-  const linked = new Set<string>();
-  const walk = (kids: any[]): void => {
-    for (let i = 0; i < kids.length; i++) {
-      const node = kids[i];
-      if (node?.type === "text") {
-        const parts = linkifyHastText(node.value, regex, termToSlug, linked);
-        if (parts) {
-          kids.splice(i, 1, ...parts);
-          i += parts.length - 1;
-        }
-      } else if (node?.type === "element") {
-        const tag = node.tagName;
-        const cls = node.properties?.className;
-        const classes = Array.isArray(cls) ? cls : typeof cls === "string" ? cls.split(/\s+/) : [];
-        // never inside links, code, or a `{@link}` reference span (those name symbols, not concepts)
-        if (tag === "a" || tag === "code" || tag === "pre" || classes.includes("twoslash-jsdoc-link"))
-          continue;
-        walk(node.children ?? []);
-      }
-    }
-  };
-  walk(nodes);
-};
 
 function jsdocToHast(this: any, docs: string): any[] {
   const tree = fromMarkdown(preprocessJsdoc(docs));
@@ -299,9 +218,7 @@ function jsdocToHast(this: any, docs: string): any[] {
       },
     },
   });
-  const children = root?.children ?? [];
-  linkifyHast(children);
-  return children;
+  return root?.children ?? [];
 }
 function renderJsdocMarkdown(this: any, docs: string): any[] {
   return jsdocToHast.call(this, docs);

@@ -67,18 +67,15 @@ export function GlossaryHover({
       p.style.top = r.top - h - 8 >= 0 ? `${r.top - h - 8}px` : `${r.bottom + 8}px`;
     };
 
-    // Glossary links inside a twoslash hover popup are link-only — no preview on a preview.
-    const inPopup = (link: Element): boolean => link.closest(".twoslash-popup-container") !== null;
     const onOver = (e: MouseEvent): void => {
       const link = (e.target as Element | null)?.closest?.(`a[href*="${MARK}"]`);
-      if (!link || inPopup(link)) return;
+      if (!link) return;
       const slug = slugOf(link.getAttribute("href") ?? "");
       const entry = slug ? data[slug] : undefined;
       if (entry) show(link, entry);
     };
     const onOut = (e: MouseEvent): void => {
-      const link = (e.target as Element | null)?.closest?.(`a[href*="${MARK}"]`);
-      if (link && !inPopup(link)) scheduleHide();
+      if ((e.target as Element | null)?.closest?.(`a[href*="${MARK}"]`)) scheduleHide();
     };
     document.addEventListener("mouseover", onOver);
     document.addEventListener("mouseout", onOut);
