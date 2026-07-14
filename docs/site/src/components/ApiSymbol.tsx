@@ -56,11 +56,9 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
           {s.source.file}:{s.source.line}
         </span>
       </div>
-      {sigs.map((sig, i) => (
-        <div className="api-sig" key={i}>
-          {highlightToReact(sig, "ts")}
-        </div>
-      ))}
+      {sigs.length > 0 ? (
+        <div className="api-sig">{highlightToReact(sigs.join("\n"), "ts")}</div>
+      ) : null}
       {lead ? <div className="api-doc">{renderJsdocToReact(lead)}</div> : null}
       {chips.length > 0 ? (
         <div className="api-chips">
