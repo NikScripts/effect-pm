@@ -23,7 +23,7 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Effect, Layer, Option, Ref, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
-import { Combine, combineQuery } from "./MultiNode";
+import { combineByNode, combineQuery, combineSum } from "./MultiNode";
 import * as Resource from "./Resource";
 import {
   Tag as resourceTag,
@@ -516,7 +516,7 @@ const buildImpl = <
         const byNode = yield* combineQuery(
           peers,
           (peer) => asPeerLeaf(peer).sizeLocal,
-          Combine.byNode,
+          combineByNode,
         );
         const own = yield* sizeLocal;
         return { ...byNode, [self]: own };
@@ -525,7 +525,7 @@ const buildImpl = <
         const others = yield* combineQuery(
           peers,
           (peer) => asPeerLeaf(peer).sizeLocal,
-          Combine.sum,
+          combineSum,
         );
         return others + (yield* sizeLocal);
       }),

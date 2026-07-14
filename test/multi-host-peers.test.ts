@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiNode";
+import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 
 // combined fields are plain queries, tagged `fleet` (so peers exclude them); the layer implements them
@@ -18,7 +18,7 @@ const database = Resource.layer(
     const peers = yield* Resource.peers(Database);
     return {
       connections: Effect.succeed(2),
-      totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+      totalConnections: combineQuery(peers, (p) => p.connections, combineSum).pipe(
         Effect.map((others) => 2 + others), // self (2) + peers — you write self in
       ),
     };
