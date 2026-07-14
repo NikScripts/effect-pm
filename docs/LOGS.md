@@ -1,8 +1,8 @@
-# Logs platform
+# Logs platform — key catalog & reference
 
-One module (`Logs`) for runtime-wide capture, live relay, and durable history. Per-resource export uses `Resource.logs` / `Resource.withLogExport`.
+**Narrative guide (start here):** [`docs/guides/logs.md`](./guides/logs.md) — architecture, live bus, durable journals, lineage, remote clients, migration.
 
-**Start here:** every identifier below is labeled by **key kind** and mapped to a **package import path**, **source file**, and **example file** (short path under `examples/` or `test/`).
+This file remains the **lookup SSOT**: every identifier below is labeled by **key kind** and mapped to a **package import path**, **source file**, and **example file** (short path under `examples/` or `test/`). Per-resource export uses `Resource.logs` / `Resource.withLogExport`.
 
 ## Module paths
 
