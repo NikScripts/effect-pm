@@ -162,8 +162,67 @@ function splitExpand(info: any): string | undefined {
   info.docs = real || undefined;
   return docs.slice(at + EXPAND_OPEN.length);
 }
+// Minimal JSDoc-markdown renderer for the comments box: fenced code blocks are syntax-highlighted,
+// inline `code` becomes <code>, and blank lines split paragraphs. (rendererRich's default dumps the
+// raw markdown text, so ``` fences and `code` showed as literal characters.)
+function mdInline(text: string): any[] {
+  const nodes: any[] = [];
+  const re = /`([^`]+)`/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push({ type: "text", value: text.slice(last, m.index) });
+    nodes.push({ type: "element", tagName: "code", properties: {}, children: [{ type: "text", value: m[1] }] });
+    last = re.lastIndex;
+  }
+  if (last < text.length) nodes.push({ type: "text", value: text.slice(last) });
+  return nodes;
+}
+function renderJsdocMarkdown(this: any, docs: string): any[] {
+  const out: any[] = [];
+  // split on fenced code blocks -> [prose, lang, code, prose, lang, code, ...]
+  const parts = docs.split(/```(\w*)\r?\n?([\s\S]*?)```/g);
+  for (let i = 0; i < parts.length; i += 3) {
+    const prose = parts[i];
+    if (prose && prose.trim()) {
+      for (const para of prose.split(/\n{2,}/)) {
+        const t = para.trim();
+        if (t) out.push({ type: "element", tagName: "p", properties: {}, children: mdInline(t) });
+      }
+    }
+    const lang = parts[i + 1];
+    const code = parts[i + 2];
+    if (code != null) {
+      const resolved = (lang && ALIAS[lang.toLowerCase()]) || "typescript";
+      try {
+        out.push({
+          type: "element",
+          tagName: "div",
+          properties: { class: "twoslash-popup-docs-code" },
+          children: this.codeToHast(code.replace(/\r?\n$/, ""), {
+            ...this.options,
+            meta: {},
+            transformers: [],
+            lang: resolved,
+            structure: "classic",
+          }).children,
+        });
+      } catch {
+        out.push({ type: "element", tagName: "pre", properties: { class: "twoslash-popup-docs-code" }, children: [{ type: "text", value: code }] });
+      }
+    }
+  }
+  return out;
+}
+function renderJsdocInline(this: any, text: string): any[] {
+  if (text.includes("```")) return renderJsdocMarkdown.call(this, text);
+  return mdInline(text);
+}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST renderer plumbing
-const baseRenderer: any = rendererRich();
+const baseRenderer: any = rendererRich({
+  renderMarkdown: renderJsdocMarkdown as never,
+  renderMarkdownInline: renderJsdocInline as never,
+});
 const renderer = {
   ...baseRenderer,
   nodeStaticInfo(this: any, info: any, node: any) {

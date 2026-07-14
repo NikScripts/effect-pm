@@ -402,15 +402,13 @@ pre.shiki { background: transparent; }
   overflow: visible;
   background: transparent !important;
 }
-/* Zebra sections (type / expanded / comments): alternate blue and white so each panel is set off from
-   the next. Positional — the comments box flips to whichever colour keeps it opposite the box above,
-   whether or not an "expanded" box is present. */
-.twoslash-popup-code:not(.twoslash-popup-expand) {
-  background: color-mix(in oklab, var(--primary) 14%, var(--card)) !important;
-}
+/* Zebra sections (type / expanded / comments): odd = transparent (the popup panel shows through),
+   even = white (--card). Positional — the comments box flips to whichever keeps it opposite the box
+   above it, whether or not an "expanded" box is present. */
+.twoslash-popup-code:not(.twoslash-popup-expand) { background: transparent !important; }
 .twoslash-popup-expand { background: var(--card) !important; }
 .twoslash-popup-container:has(.twoslash-popup-expand) .twoslash-popup-docs {
-  background: color-mix(in oklab, var(--primary) 14%, var(--card));
+  background: transparent;
 }
 .twoslash-popup-container:not(:has(.twoslash-popup-expand)) .twoslash-popup-docs {
   background: var(--card);
@@ -419,6 +417,19 @@ pre.shiki { background: transparent; }
    (`@category layers`, `@since 4.0.0`) instead of running together. */
 .twoslash-popup-docs-tag { display: block; }
 .twoslash-popup-docs-tag-name { color: var(--primary); margin-right: 0.4em; }
+/* JSDoc markdown in the comments box: paragraph spacing + highlighted fenced code blocks
+   (`renderJsdocMarkdown` in highlight.ts renders these — the default just dumped raw ``` text). */
+.twoslash-popup-docs p { margin: 0.15rem 0; }
+.twoslash-popup-docs p:first-child { margin-top: 0; }
+.twoslash-popup-docs p:last-child { margin-bottom: 0; }
+.twoslash-popup-docs-code { margin: 0.4rem 0; }
+.twoslash-popup-docs-code:last-child { margin-bottom: 0; }
+.twoslash-popup-docs-code pre {
+  padding: 0.45rem 0.6rem !important;
+  border-radius: 0.35rem;
+  background: color-mix(in oklab, var(--fg) 7%, transparent) !important;
+  overflow-x: auto;
+}
 /* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
    background with a border and rounded corners. Strip it so it blends into the description instead of
    being a boxed chip. (The main type code, .twoslash-popup-code, is already handled above.) */
