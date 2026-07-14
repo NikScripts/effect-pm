@@ -7,7 +7,8 @@ import * as CustomQueueResource from "../src/CustomQueueResource";
 import * as ApiMetrics from "../src/ApiMetrics";
 
 // Each contract stamps its canonical kind on the tag, so `Resource.kindOf` classifies a tag
-// without sniffing its spec (and a bare `Resource.Tag` reports no kind).
+// without sniffing its spec. Every tag carries a kind: a bare `Resource.Tag` defaults to
+// `Resource.kind` (`…/Resource`), so nothing is ever kind-less.
 const Item = Schema.Struct({ n: Schema.Number });
 
 class Q extends QueueResource.Tag<Q>()("kindtest/Q", { payload: Item }) {}
@@ -18,12 +19,13 @@ class Bare extends Resource.Tag<Bare>()("kindtest/Bare", {
   ping: Resource.effect(Schema.String),
 }) {}
 
-it("each contract stamps its kind; a bare Resource.Tag has none", () => {
+it("each contract stamps its kind; a bare Resource.Tag defaults to Resource.kind", () => {
   expect(Resource.kindOf(Q)).toBe(QueueResource.kind);
   expect(Resource.kindOf(P)).toBe(Process.kind);
   expect(Resource.kindOf(C)).toBe(CustomQueueResource.kind);
   expect(Resource.kindOf(M)).toBe(ApiMetrics.kind);
-  expect(Resource.kindOf(Bare)).toBeUndefined();
+  expect(Resource.kindOf(Bare)).toBe(Resource.kind);
+  expect(Resource.kind).toBe("@nikscripts/effect-pm/Resource");
 });
 
 it("kindOf is safe on non-tags", () => {
