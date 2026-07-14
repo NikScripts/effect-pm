@@ -40,6 +40,15 @@ export default defineConfig({
         "is-in-ci": fileURLToPath(new URL("./shims/is-in-ci.js", import.meta.url)),
       },
     },
+    // `highlight.ts` runs the TypeScript compiler (via `twoslash`) at SSG time to type-check
+    // code blocks. Left bundled, the TS compiler's CJS `__filename` reference is undefined in the
+    // ESM server bundle and `waku build` throws `__filename is not defined`. Externalize the
+    // build-time Node deps (per server environment — rsc + ssr) so the SSG server loads them
+    // normally (`waku dev` was unaffected — it doesn't bundle a server chunk).
+    environments: {
+      rsc: { resolve: { external: ["typescript", "twoslash", "@shikijs/twoslash"] } },
+      ssr: { resolve: { external: ["typescript", "twoslash", "@shikijs/twoslash"] } },
+    },
     // Content is at docs/ and the package source is at repo/src — both above this app's
     // root (docs/site). Allow the dev server to read up to the repo root.
     server: { fs: { allow: ["../.."] } },
