@@ -12,6 +12,8 @@ Two shipped factories lean on this mesh:
 
 - **[Telemetry](/docs/telemetry)** — leaf metric snapshots; fleet folds (`inFlightByNode`,
   `fleetInFlight`) for the stadium board.
+- **[Fleet Health](/docs/fleet-health)** — leaf readiness aggregate; fleet `byNode` /
+  `status` with Reachable / Unreachable (local `/health` stays local).
 - **[ShardMap](/docs/shardmap)** — partitioned key/value; routed `get` / `put` / `delete`
   forward to the owning node; leaf `*Local` ops; fleet `size` / `sizeByNode`.
 

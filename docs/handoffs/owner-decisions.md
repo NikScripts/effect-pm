@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — FleetHealth (meshed stadium-board readiness)
+
+- **Owner said:** Cost worth it if it fits Effect; then build. Fleet health product locked earlier (fleet board, not Host; auth stays README-only).
+- **Chose:** `@nikscripts/effect-pm/FleetHealth` as Telemetry twin — leaf `local`, fleet `byNode` / `status`, Schema `Reachable` | `Unreachable` via `Exit.match`, `MultiNode.combineByNodeExit` keeps peer failures. Local `/health` / `withReadiness` unchanged (standards).
+- **Rejected:** Folding peers inside `withReadiness`; silent omit of down peers (metric-style `fleetHealth` helper).
+- **Supervisor impact:** Branch `cursor/fleet-health-ce05`; roadmap bullet marked shipped.
+
+---
+
 ## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks
 
 - **Owner said:** Scrub living cites of anything under `docs/legacy/**`. Confirm fleet health as the health roadmap item; Resource-RPC auth = README-only (A). Agree `docs/plans/` home, archive hybrid, refresh treeshaking.
