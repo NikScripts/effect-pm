@@ -1,298 +1,251 @@
-# Agent 3 — Log store durable tail — code plan
+# Agent 3 — Durable log store tail (Effect-true redesign)
 
 **Branch:** `cursor/logs-store-followers-906e`  
-**Status:** code plan for owner review — implement after accept.
+**Bar:** Effect v4 headliner quality — pipe-first, `Filter`/`Predicate`, one Stream, no ad-hoc Queue loops, no public junk names.
+
+`persistLayer` / `LogStore` stay until a later revisit.
 
 ---
 
-## 1. Implicit `log` shape on every registration
+## Design thesis
+
+A durable store tail is **a Stream pipeline over `LogRelay`**, not a mini actor with two fibers and a hand-managed queue.
+
+```
+LogRelay.stream
+  |> filter(policy)          // level ∧ match — pure Predicate
+  |> filterEffect(claimId)   // memo (scopeKey, lineId) — HashSet
+  |> groupedWithin(64, 250ms)
+  |> mapEffect(appendBatch)  // handle.log.append
+  |> runDrain                // one scoped fiber
+```
+
+Policy is data. Dedupe is an effectful filter. The Layer only acquires that drain in a Scope.
+
+---
+
+## 1. Pure policy (no Effects)
 
 ```ts
-// src/internal/store/logShapes.ts  (NEW)
+// src/internal/logs/durableTailPolicy.ts
+import { LogLevel, Predicate } from "effect"
+import type { LogEntry } from "../../LogEntry"
+import type { StoreLogLevel } from "../store/types"
 
-import { Schema } from "effect";
-import { LogEntrySchema } from "../../LogEntry";
-import * as Store from "../../Store";
-import type { StoreContractValue } from "./contractDef";
+/** Store export floor → Effect LogLevel gate. "All"/"None" are store vocabulary. */
+export const meetsStoreLevel =
+  (floor: StoreLogLevel): Predicate.Predicate<LogEntry> => {
+    if (floor === "All") return Predicate.constTrue
+    if (floor === "None") return Predicate.constFalse
+    return (entry) => LogLevel.isGreaterThanOrEqualTo(entry.level, floor)
+  }
 
+export const durableTailPolicy = (options: {
+  readonly storeLevel: StoreLogLevel
+  readonly match: Predicate.Predicate<LogEntry>
+}): Predicate.Predicate<LogEntry> =>
+  Predicate.and(meetsStoreLevel(options.storeLevel), options.match)
+```
+
+Resource registration: `match = LogEntry.hasKey(scopeKey)`.  
+Node registration: `match = Predicate.constTrue` (or `LogEntry.atRoot(nodeKey)` once lineage is solid).
+
+---
+
+## 2. Line identity + claim (dedupe)
+
+```ts
+// src/internal/logs/lineId.ts
+import type { LogEntry } from "../../LogEntry"
+import { LogAnnotationKeys } from "../../LogContext"
+
+export type LineId = string & { readonly _tag: "LineId" }
+
+export const lineIdFromEntry = (entry: LogEntry): LineId => {
+  const stamped = entry.annotations[LogAnnotationKeys.lineId] // add key if missing
+  if (stamped !== undefined) return stamped as LineId
+  // transitional fallback — prefer stamping at capture in same PR
+  return `${entry.date}\0${entry.level}\0${entry.message}\0${entry.annotations[LogAnnotationKeys.lineage] ?? ""}` as LineId
+}
+```
+
+```ts
+// claim: first observer for (scope, id) wins
+import { Effect, HashSet, Ref } from "effect"
+
+export const makeLineIdClaim = (scopeKey: string) =>
+  Effect.map(Ref.make(HashSet.empty<LineId>()), (seen) =>
+    (id: LineId): Effect.Effect<boolean> =>
+      Ref.modify(seen, (set) =>
+        HashSet.has(set, id)
+          ? [false, set] as const
+          : [true, HashSet.add(set, id)] as const,
+      ),
+  )
+```
+
+Stream side:
+
+```ts
+Stream.filterEffect((entry) => claim(lineIdFromEntry(entry)))
+```
+
+---
+
+## 3. The pipeline (one fiber)
+
+```ts
+// src/internal/logs/durableTail.ts
+import { Duration, Effect, Layer, Stream } from "effect"
+import type { Predicate } from "effect/Predicate"
+import type { LogEntry } from "../../LogEntry"
+import type { StoreLogLevel } from "../store/types"
+import { LogRelay } from "./relay"
+import { durableTailPolicy } from "./durableTailPolicy"
+import { lineIdFromEntry, makeLineIdClaim } from "./lineId"
+
+export interface DurableTail {
+  readonly scopeKey: string
+  readonly storeLevel: StoreLogLevel
+  readonly match: Predicate.Predicate<LogEntry>
+  readonly append: (entry: LogEntry) => Effect.Effect<void>
+  readonly batchSize?: number
+  readonly batchWindow?: Duration.Input
+}
+
+const runDurableTail = (relay: LogRelay["Service"], options: DurableTail) =>
+  Effect.gen(function* () {
+    const claim = yield* makeLineIdClaim(options.scopeKey)
+    const policy = durableTailPolicy(options)
+    const batchSize = options.batchSize ?? 64
+    const batchWindow = options.batchWindow ?? "250 millis"
+
+    yield* relay.stream.pipe(
+      Stream.filter(policy),
+      Stream.filterEffect((entry) => claim(lineIdFromEntry(entry))),
+      Stream.groupedWithin(batchSize, batchWindow),
+      Stream.mapEffect((batch) =>
+        Effect.forEach(batch, options.append, { concurrency: 1, discard: true }),
+      ),
+      Stream.runDrain,
+    )
+  })
+
+/**
+ * Forks the durable tail in the layer Scope. Requires LogRelay.
+ * Prefer this over a second capture logger — subscribe only.
+ */
+export const layer = (options: DurableTail): Layer.Layer<never, never, LogRelay> =>
+  Layer.effectDiscard(
+    Effect.flatMap(LogRelay, (relay) =>
+      Effect.forkScoped(runDurableTail(relay, options)).pipe(Effect.asVoid),
+    ),
+  )
+
+/** Store builds whether or not Logs.layer is present. */
+export const layerOptional = (options: DurableTail): Layer.Layer<never> =>
+  Layer.unwrap(
+    Effect.map(Effect.serviceOption(LogRelay), (opt) =>
+      opt._tag === "Some" ? layer(options) : Layer.empty,
+    ),
+  )
+```
+
+Notes vs the earlier sketch:
+
+| Before (weak) | After (Effect-true) |
+|---------------|---------------------|
+| Two fibers + `Queue.unbounded` | One `runDrain` on a composed Stream |
+| `Set` + copy-on-write | `HashSet` + `Ref.modify` claim |
+| Manual level ordinal table | `LogLevel.isGreaterThanOrEqualTo` |
+| Nested `Effect.gen` in `runForEach` | `Stream.filter` / `filterEffect` / `mapEffect` |
+| Invented public name | Internal `durableTail.layer` only |
+
+---
+
+## 4. Implicit `log` shape (unchanged product)
+
+```ts
+// src/internal/store/logShapes.ts
 export const withImplicitLogShape = <C extends StoreContractValue>(contract: C) =>
   Store.extend(contract, {
     log: Store.shape(LogEntrySchema),
-  });
+  })
 ```
 
-```ts
-// Process.store / QueueResource.store / … — wrap built-in contract
-
-export function store(tag: StoreScopeTag, extended?: StoreShapes) {
-  const builtIn = withImplicitLogShape(makeProcessStoreAnalyticsContract(tag));
-  return extended === undefined
-    ? facetStoreRegistration(tag, builtIn)
-    : facetStoreRegistration(tag, builtIn, extended);
-}
-```
-
-Node (v1 sketch — same shape):
-
-```ts
-// Resource.store(WnbaNode) or WnbaNode.logs → Store.register(node.key, nodeLogContract)
-
-const nodeLogContract = Store.contract({
-  log: Store.shape(LogEntrySchema),
-});
-```
-
-Handle after materialize:
-
-```ts
-yield* handle.log.append(entry);
-yield* handle.log.read({ limit: 50, where: { level: { in: ["Warn", "Error"] } } });
-```
+Toolkit `*.store(tag)` wraps built-ins. Node: `Resource.store(node)` / `Node.logs` → same shape.
 
 ---
 
-## 2. Durable tail — generalize `storeFollower.ts`
-
-Replace the LogStore-only body with a private factory. **Not exported from `Logs`.**
+## 5. Store layer wiring (composition, not casts)
 
 ```ts
-// src/internal/logs/storeFollower.ts
+// after bridge + bundle exist
+const logTails = registrations.flatMap((reg) => {
+  if (!hasLogShape(reg.contract)) return []
 
-import {
-  Context,
-  Duration,
-  Effect,
-  Layer,
-  LogLevel,
-  Option,
-  Queue,
-  Ref,
-  Stream,
-} from "effect";
-import type { Predicate } from "effect/Predicate";
-import type { LogEntry } from "../../LogEntry";
-import type { StoreLogLevel } from "../store/types";
-import { LogRelay } from "./relay";
+  const handle = bundleHandleFor(reg) // typed path from buildBundle — exposes .log.append
+  const match = isNodeRegistration(reg)
+    ? Predicate.constTrue
+    : LogEntry.hasKey(reg.scopeKey)
 
-export interface DurableLogTailOptions {
-  readonly scopeKey: string;
-  readonly match: Predicate.Predicate<LogEntry>;
-  readonly storeLevel: StoreLogLevel;
-  /** Closed over the registration handle — e.g. `(e) => handle.log.append(e)`. */
-  readonly append: (entry: LogEntry) => Effect.Effect<void, never>;
-  readonly batchSize?: number;
-  readonly batchWindow?: Duration.DurationInput;
-}
-
-const levelRank: Record<StoreLogLevel, number> = {
-  All: Number.NEGATIVE_INFINITY,
-  Debug: LogLevel.getOrdinal("Debug"),
-  Info: LogLevel.getOrdinal("Info"),
-  Warn: LogLevel.getOrdinal("Warn"),
-  Error: LogLevel.getOrdinal("Error"),
-  None: Number.POSITIVE_INFINITY,
-};
-
-const allowsLevel = (min: StoreLogLevel, entry: LogEntry): boolean => {
-  if (min === "All") return true;
-  if (min === "None") return false;
-  return LogLevel.getOrdinal(entry.level) >= levelRank[min];
-};
-
-const lineIdOf = (entry: LogEntry): string => {
-  const stamped = entry.annotations["@nikscripts/effect-pm/lineId"];
-  if (stamped !== undefined) return stamped;
-  // fallback until capture stamps lineId
-  return `${entry.date}|${entry.level}|${entry.message}|${entry.annotations["@nikscripts/effect-pm/lineage"] ?? ""}`;
-};
-
-/**
- * Scoped layer: fork a bus subscriber that durable-appends matching lines.
- * Requires LogRelay. Provides nothing.
- *
- * @internal
- */
-export const durableLogTailLayer = (
-  options: DurableLogTailOptions,
-): Layer.Layer<never, never, LogRelay> =>
-  Layer.scopedDiscard(
-    Effect.gen(function* () {
-      const relay = yield* LogRelay;
-      const seen = yield* Ref.make(new Set<string>());
-      const queue = yield* Queue.unbounded<LogEntry>();
-
-      yield* Effect.forkScoped(
-        relay.stream.pipe(
-          Stream.runForEach((entry) =>
-            Effect.gen(function* () {
-              if (!allowsLevel(options.storeLevel, entry)) return;
-              if (!options.match(entry)) return;
-              const id = lineIdOf(entry);
-              const already = yield* Ref.get(seen);
-              if (already.has(id)) return;
-              yield* Ref.update(seen, (s) => new Set([...s, id]));
-              yield* Queue.offer(queue, entry);
-            }),
-          ),
-        ),
-      );
-
-      yield* Effect.forkScoped(
-        Stream.runForEach(
-          Stream.groupedWithin(
-            Stream.fromQueue(queue),
-            options.batchSize ?? 64,
-            Duration.decode(options.batchWindow ?? Duration.millis(250)),
-          ),
-          (batch) =>
-            Effect.forEach(batch, (entry) => options.append(entry), {
-              concurrency: 1,
-              discard: true,
-            }),
-        ),
-      );
+  return [
+    durableTail.layerOptional({
+      scopeKey: reg.scopeKey,
+      storeLevel: reg.logLevel ?? "All",
+      match,
+      append: (entry) => handle.log.append(entry).pipe(Effect.orDie),
     }),
-  );
+  ]
+})
 
-/** Optional: if LogRelay missing, skip (store still builds). @internal */
-export const durableLogTailLayerOptional = (
-  options: DurableLogTailOptions,
-): Layer.Layer<never> =>
-  Layer.unwrap(
-    Effect.map(Effect.serviceOption(LogRelay), (opt) =>
-      Option.isSome(opt) ? durableLogTailLayer(options) : Layer.empty,
-    ),
-  );
+return Layer.mergeAll(layerFromBuiltBridge(...), ...logTails)
 ```
 
-`Logs.persistLayer` **unchanged this slice** (still the old LogStore writer). Revisit later.
+Typing goal: no `as { log: … }` — extend registration/contract types so `hasLogShape` narrows to a handle with `log.append`.
 
 ---
 
-## 3. Wire tails when the store layer builds
+## 6. Capture stamp (same PR if cheap)
 
-Hook after handles exist in aggregate (and standalone) layer builders:
-
-```ts
-// src/Store.ts — inside layerFromScopeState (sketch)
-
-import * as LogEntry from "./LogEntry";
-import { durableLogTailLayerOptional } from "./internal/logs/storeFollower";
-
-const layerFromScopeState = (tag, registrations, scopes) =>
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const journal = yield* EventJournal.EventJournal;
-      const bridge = buildScopeBridge(scopes, journal);
-      const bundle = yield* buildBundle(registrations, bridge.at).pipe(Effect.orDie);
-
-      const storeServices = layerFromBuiltBridge(tag, bundle, bridge);
-
-      // One durable tail per registration that has a `log` shape
-      const tails = yield* Effect.forEach(registrations, (reg) =>
-        Effect.gen(function* () {
-          if (!contractHasLogShape(reg.contract)) return Layer.empty;
-
-          const handle = yield* Effect.promise(() =>
-            // same path buildBundle used — typed handle with .log.append
-            bridge.at(reg.scopeKey, reg.contract),
-          );
-
-          const append = (entry: LogEntry.LogEntry) =>
-            (handle as { log: { append: (e: LogEntry.LogEntry) => Effect.Effect<void> } })
-              .log.append(entry)
-              .pipe(Effect.orDie);
-
-          return durableLogTailLayerOptional({
-            scopeKey: reg.scopeKey,
-            match: isNodeScope(reg)
-              ? () => true
-              : LogEntry.hasKey(reg.scopeKey),
-            storeLevel: reg.logLevel ?? "All",
-            append,
-          });
-        }),
-      );
-
-      return Layer.mergeAll(storeServices, ...tails);
-    }),
-  );
-```
-
-Same pattern on standalone single-registration `buildStandaloneMemoryLayer`.
-
-App composition (requirement):
-
-```ts
-AppStore.layerMemory.pipe(Layer.provide(Logs.layer))
-// or provideMerge — LogRelay must be available when store layer builds
-```
+In `captureLogger` / `logEntryFromLoggerOptions`, assign monotonic `lineId` onto annotations once per published line so every store tail memos the same token. Fallback hash remains for old rows.
 
 ---
 
-## 4. End-to-end app picture
+## 7. Tests (Exit / `_tag`, TestClock)
 
 ```ts
-class AppStore extends Store.Service<AppStore>()("@app/Store")([
-  Resource.store(WnbaNode),
-  Process.store(LiveScorePoller),
-]) {}
-
-const live = Resource.httpServer([
-  processEntry(LiveScorePoller, { /* … */ }),
-]).pipe(
-  Layer.provide(Logs.layer),
-  Layer.provide(AppStore.layerMemory),
-);
-
-// After LiveScorePoller logs "tick":
-const { log } = yield* AppStore.at(LiveScorePoller);
-const rows = yield* log.read({ limit: 20 });
-// rows only include lines whose lineage has LiveScorePoller.key
-
-const node = yield* AppStore.at(WnbaNode);
-const all = yield* node.log.read({ limit: 200 });
-// all lines on this runtime (if node match = everything)
-```
-
----
-
-## 5. Tests (`test/logs-follower.test.ts`)
-
-```ts
-it.effect("resource tail only appends matching lineage", () =>
+it.effect("resource tail is lineage-scoped", () =>
   Effect.gen(function* () {
-    // provide Logs.layer + AppStore with Process.store(TagA) + Process.store(TagB)
-    yield* Effect.logInfo("from A").pipe(Effect.provide(Logs.withScope(TagA)));
-    yield* Effect.logInfo("from B").pipe(Effect.provide(Logs.withScope(TagB)));
-    // drain batch window
-    yield* TestClock.adjust("300 millis");
+    // Logs.layer + AppStore[Process.store(A), Process.store(B)]
+    yield* Effect.log("a").pipe(Effect.provide(Logs.withScope(A)))
+    yield* Effect.log("b").pipe(Effect.provide(Logs.withScope(B)))
+    yield* TestClock.adjust("300 millis")
 
-    const a = yield* AppStore.at(TagA);
-    const rows = yield* a.log.read();
-    assert.ok(rows.every(LogEntry.hasKey(TagA.key)));
+    const rows = yield* (yield* AppStore.at(A)).log.read()
+    assert.ok(rows.every(LogEntry.hasKey(A.key)))
   }),
-);
-
-it.effect("memo: same lineId once per scope", () => { /* republish same id */ });
-it.effect("Store.logLevelWarn drops Info", () => { /* … */ });
+)
 ```
 
----
-
-## 6. Commit sequence on this branch
-
-1. `withImplicitLogShape` + wire into `*.store(tag)` + type/tests for `handle.log`  
-2. `durableLogTailLayer` in `storeFollower.ts` (+ lineId helper)  
-3. Store layer merge of tails  
-4. Follower tests + changeset  
-
-Frequent commits/pushes on `cursor/logs-store-followers-906e`. Merge to `integration` only when you say so.
+Also: memo once; Warn floor drops Info; no LogRelay → store builds, empty `log.read`.
 
 ---
 
-## Still need from you
+## 8. Commit sequence
 
-1. Node + resource both tailing → **two copies OK?**  
-2. Prefer **relay-stamped `lineId`** in the same PR?  
-3. Ship **`Resource.store(Node)`** in this PR or sugar-only later?
+1. `lineId` + capture stamp  
+2. `durableTailPolicy` + `durableTail.layer` (+ unit Stream tests)  
+3. `withImplicitLogShape` on toolkit stores  
+4. Store layer merge of `layerOptional`  
+5. Integration tests + changeset  
+
+Branch: `cursor/logs-store-followers-906e`. Frequent commits/pushes. Merge to `integration` only on your say.
+
+---
+
+## Open (owner)
+
+1. Node + resource both tailing → two copies OK?  
+2. Ship capture `lineId` stamp in this PR?  
+3. `Resource.store(Node)` in this PR or sugar follow-up?
