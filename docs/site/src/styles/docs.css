@@ -337,30 +337,62 @@ pre.shiki { background: transparent; }
   display: none;
   width: max-content;
   max-width: min(88vw, 42rem);
-  padding: 0.5rem 0.7rem;
+  padding: 0;               /* no gutter — the type fills the popup */
+  overflow: hidden;         /* full-bleed type respects the rounded frame */
   background: var(--panel) !important;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.4);
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
   white-space: pre-wrap;
   font-size: 0.82rem;
   line-height: 1.5;
   text-align: left;
 }
 .twoslash-hover:hover > .twoslash-popup-container { display: block; }
-.twoslash-popup-code { display: block; font-family: var(--font-mono); background: transparent !important; }
+/* The type is a <code>, so it inherited the base code chrome (border/radius/padding). Strip it so
+   it reads as the popup's content, filling the width, not a boxed chip inside the popup. */
+.twoslash-popup-code {
+  display: block;
+  padding: 0;              /* the type fills the preview, no inset */
+  font-family: var(--font-mono);
+  background: transparent !important;
+  border: none;
+  border-radius: 0;
+}
+/* Rich popups render the type as a nested shiki <pre>, which carries the base `pre {}` border, radius,
+   and padding — a boxed chip. Drop only the border + radius (and reset margin); keep shiki's own inline
+   background (the original white) and give it padding so the type fills the popup as a clean panel. */
+.twoslash-popup-code pre {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 0;
+}
 .twoslash-popup-docs {
-  margin-top: 0.45rem;
-  padding-top: 0.45rem;
+  margin: 0;
+  padding: 0.45rem 0.7rem 0.5rem;
   border-top: 1px solid var(--border);
   color: var(--muted-fg);
   font-family: var(--font-sans);
   font-size: 0.78rem;
 }
-.twoslash-popup-docs-tag-name { color: var(--primary); }
-/* twoslash blocks scroll horizontally like any code block. Trade-off: a scroll box clips vertical
-   overflow, so a hover popup on the very top row can be cut off (rows with space above are fine).
-   A fully-escaping popup would need a JS/portal reposition — a follow-up for the doc-site owner. */
+/* each JSDoc tag on its own line, with a space between the tag name and its value
+   (`@category layers`, `@since 4.0.0`) instead of running together. */
+.twoslash-popup-docs-tag { display: block; }
+.twoslash-popup-docs-tag-name { color: var(--primary); margin-right: 0.4em; }
+/* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
+   background with a border and rounded corners. Strip it so it blends into the description instead of
+   being a boxed chip. (The main type code, .twoslash-popup-code, is already handled above.) */
+.twoslash-popup-container code:not(.twoslash-popup-code) {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+/* Long lines scroll horizontally. Caveat: overflow-x: auto makes this a scroll container, which
+   clips both axes at the box — so the twoslash hover popup is cut off at the top. Escaping the popup
+   while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
+   or a JS reposition). Tracked for the doc-site owner. */
 .twoslash { overflow-x: auto; }
 
 /* rule severity — a section carrying one metadata class from Djot.

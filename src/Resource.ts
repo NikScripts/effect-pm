@@ -3211,6 +3211,17 @@ export const distributed: {
 );
 
 /**
+ * Read a tag's {@link distributed} fleet — the nodes it was declared on, or `[]` when undeclared.
+ * Factories that hash-partition across the pack use this instead of reaching through private symbols.
+ *
+ * @public
+ * @since 1.0.0
+ */
+export const distributedOf = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
+
+/**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
  * {@link combineStream}). Unlike {@link buildClientService} it never resolves `constant`s or subscribes
  * `value` fields at build: those open a connection and (for a `value`) block on the initial push, so a

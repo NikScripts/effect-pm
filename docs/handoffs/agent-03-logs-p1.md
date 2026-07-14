@@ -1,180 +1,132 @@
-# Agent 3 — Logs P1 (platform completion)
+# Agent 3 — Logs store followers (owner intent — REPEAT BACK FIRST)
 
-**Status:** **PLAN-FIRST** — owner 2026-07-13. Expand the unfinished half of the logs platform (Agent 2 shipped Phases 1–5 consumer break + closeout; **P1 never started**).  
-**Agent:** **3** (new — Agent 2 retired).  
-**Branch from:** **`integration`** (tip includes #30 Phase 5 + #33 `NodeLogs` removal + substrate retirement).  
-**Working branch (after owner unlocks a slice):** `cursor/logs-p1-<slice>-a009`
+**Status:** **REPEAT-BACK THEN PLAN** — owner 2026-07-14.  
+**Agent:** **3**  
+**Branch from:** **`integration`**  
+**Working branch:** only after owner accepts your repeat-back — `cursor/logs-store-followers-a3ad`
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) §P1 · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) · [`docs/LOGS.md`](../LOGS.md) · [`whats-changed-2026-07-13.md`](./whats-changed-2026-07-13.md)
+**Docs bus:** [`agent-status.md`](./agent-status.md) · this file · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) §Store integration · [`store-and-logs-design.md`](./store-and-logs-design.md) §Single capture · [`docs/LOGS.md`](../LOGS.md)
 
 ---
 
-## What this is (and is not)
+## Your first message (mandatory)
 
-| | |
-|--|--|
-| **Is** | Finish the **product-facing** half of the Agent 2 plan: level gates, how durable writes attach to store registrations, and how remote clients read per-resource logs without the old handle `logs` group. |
-| **Is not** | Re-do Phase 5. `captureLogs`, handle/spec `logs`, HistoryStore `${tag.key}/logs`, `NodeLogs`, and the facet substrate are **gone**. Do not resurrect them. |
-| **Is not** | Named handles / Agent D work. Stay out of handle-renaming. |
-| **Is not** | `main` release / version bump. |
+Before any plan options, checklist inventiveness, or code: **repeat the owner model back in your own words.**
 
-**Today’s working model (shipped):**
+Paste something like:
+
+> ### Repeat-back — store followers
+> 1. Capture …
+> 2. Relay …
+> 3. Store …
+> 4. What Agent 2 left unfinished …
+> 5. What I must build …
+
+**Then stop.** Do not implement. Do not propose alternate write policies that undo this model. Wait for the owner to say the repeat-back is correct.
+
+If you cannot restate it without hedging into “B1 node-primary forever,” you have not understood the job.
+
+---
+
+## What the owner wanted (locked)
+
+This is **not** optional, and it is **not** “keep `Logs.persistLayer` + standalone `LogStore` and call it done.”
+
+### One capture, many tails, store writes via **followers on registrations**
 
 ```
-node runtime
-  Logs.layer              → one LogRelay + one merged capture Logger
-  Logs.withScope(tag)     → lineage stamps at materialize (queue/process)
-  Logs.persistLayer(node) → ONE node-wide follower → LogStore (bucket = Node.key)
-  Resource.logs(tag)      → { stream: unfiltered bus, query: lineageContains filter }
-  Remote dashboard        → NodeStatus.logs + LogEntry.hasKey(tag.key)
+ runtime root (node)                         resource fibers
+        │                                           │
+        ▼                                           ▼
+  Logs.layer  (ONE capture Logger)           Logs.withScope(tag)  → lineage
+        │                                           │
+        └──────────────► LogRelay (PubSub + tail) ◄─┘
+                              │
+                              ├─ live tails (NodeStatus.logs / Resource.logs.stream + hasKey)
+                              │
+                              └─ STORE FOLLOWERS (this is the product job)
+                                    │
+                         each Store.register / *.store(tag) / Node.logs
+                         forks a follower on the relay that:
+                           1. gates with logStoreLevel for that registration
+                           2. matches rows with LogEntry.hasKey(scopeKey)
+                              (node registration matches everything / atRoot)
+                           3. memo (scopeKey, lineId) — no double-append for that scope
+                           4. appends via implicit appendLog on the registration
 ```
 
-**P1 gap in one sentence:** we can capture and store everything for a node, and filter locally — but we lack **per-channel level control**, **store-registration-native followers**, and a **first-class remote per-resource logs surface**.
+**Design rules (owner-locked):**
+
+1. **Capture once** at the node — `Logs.layer`. Never a second logger for durability.
+2. **Live** and **durable** are different channels. Levels gate them separately (`logStreamLevel` vs `logStoreLevel`).
+3. **Durable storage follows the bus** — subscribers (“followers”) on `LogRelay`, owned by **store registrations**, not by a one-off `persistLayer` side channel forever.
+4. **Implicit store shapes** on registrations: `appendLog` + `logQuery` (see Agent 2 plan). Toolkit `QueueResource.store(tag)` / `Process.store(tag)` / node registration gain these; engines do not invent their own log tables.
+5. **Node-wide bucket** is also a registration — sketch `Node.logs` / `Logs.registerNode` on a `Store.Service` — same follower factory as resource scopes. `groupId` / bucket = node key.
+6. **Single durable append per (scope, line)** via memo. Do not invent two writers that both persist the same scoped line. Prefer clear primary: registrations that are active followers write for their scope; do not stack a separate global `LogStore` *and* every resource registration writing duplicates.
+
+Canonical sources:
+
+- [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
+- [`store-and-logs-design.md`](./store-and-logs-design.md) — **Single capture, single store write** (overrides table in Agent 2 plan wins on naming; the follower diagram is still the intent)
+
+### What “`LogStore`” was doing in the interim
+
+`LogStore` (`@nikscripts/effect-pm/store/Log`) is the **interim node journal sink** Agent 2 left behind after migrating the old facet off `ProcessStore`. It is **not** the end-state product API the owner asked for.
+
+End state: durability hangs off **`Store.Service` registrations** (node + resources) with a shared follower factory — not “apps must remember `Logs.persistLayer(node)` + compose a special `LogStore` class forever” as the story.
+
+Agent 2’s `internal/logs/storeFollower.ts` is the **seed** of that factory (subscribe → batch → append). It is currently wired **only** as `Logs.persistLayer(node)` → standalone `LogStore`. **That wiring is incomplete relative to the locked model.** Your job is to finish the model, not to defend the interim as final.
 
 ---
 
-## Three workstreams (clarify before coding)
+## What Agent 2 actually shipped (so you are not confused)
 
-Treat these as **separable slices**. Owner picks order and which ones to approve. Agent 3’s first deliverable is a **plan that states options + a decision checklist** — then stop.
+| Piece | Done? | Notes |
+|-------|-------|--------|
+| One capture + `LogRelay` | **Yes** | `Logs.layer` |
+| Lineage via `withScope` | **Partial** | Engines stamp; reducer depth may still be thin |
+| Remove `captureLogs` / handle `logs` | **Yes** | Phase 5 |
+| Remove `NodeLogs` | **Yes** | #33 |
+| Node-wide follower → `LogStore` | **Yes — interim only** | `Logs.persistLayer` → `storeFollower.ts` |
+| Per-registration followers | **No** | **This is the missing job** |
+| Implicit `appendLog` / `logQuery` on `*.store(tag)` | **No** | |
+| `Node.logs` registration replacing special-case `LogStore` story | **No** | |
+| Level pipes (`logStoreLevel` / `logStreamLevel` / …) | **No** | |
+| Follower memo conformance tests | **No** | |
+| Remote first-class `Resource.logs` | **No** | Dashboard filters `NodeStatus.logs` today |
 
-### Workstream A — Level pipes (tag + layer)
-
-**Intent (from Agent 2 plan):** three independent channels + umbrella.
-
-| Combinator | Channel | What it gates |
-|------------|---------|---------------|
-| `Resource.logOutputLevel(level)` | Output | Merged Effect `Logger` on resource fibers (console / existing loggers) |
-| `Resource.logStreamLevel(level)` | Stream | Whether a line is eligible for the **live relay** (publish path) — or only for filtered tails? **Owner decides.** |
-| `Resource.logStoreLevel(level)` | Store | Whether a line is eligible for **durable append** |
-| `Resource.logExportLevel(level)` | Stream + store | Shorthand for both export channels |
-| `Resource.logLevel(level)` | All three | Output + stream + store |
-
-Levels: align with Effect `LogLevel` / existing `Store.logLevel*` vocabulary (`"All" | "Debug" | "Info" | "Warn" | "Error" | "None"` — confirm exact casing vs lowercase `"all"` in old design doc; prefer **one** system, match `Store`).
-
-**Exists today:** `Store.logLevel*` / `logLevel*Default` on **registrations** — not on Resource tags, not wired into `Logs.persistLayer` or relay publish.
-
-**Open design choices (do not invent without owner):**
-
-1. **Where does stream gating happen?** (a) before relay publish (line never enters bus), (b) only when building `Resource.logs` / filtered tails (bus stays full-fidelity), (c) both with independent knobs.  
-2. **Layer vs tag:** plan said “layer overrides tag; levels never affect types.” Confirm.  
-3. **Defaults:** export on when? (`"All"` / `"Info"` / inherit Store registration / off until `withLogExport`?)  
-4. **Node-wide levels:** mirror on `Logs.persistLayer` / node registration, or resource-only first?
-
-**Done when:** pipes exist, documented in `LOGS.md`, tests prove a Warn-only stream/store drop Info lines for that resource, types unchanged by level alone.
+**Do not** “re-do Phase 5.” **Do** finish store followers + the registration shape. Levels and remote can be ordered by the owner **after** you correctly restate the store model — but do not invent a “B1 keep node-primary forever” escape that abandons registration followers unless the owner explicitly says so in this session.
 
 ---
 
-### Workstream B — Store followers + registration shape
+## Failed previous Agent 3 brief (superseded)
 
-**Intent (from Agent 2 plan):** each store registration can follow the relay and append matching lines; memo `(scopeKey, lineId)` so the same scope never double-writes.
+An earlier `agent-03-logs-p1.md` framed write policy as **open menu B1/B2/B3** and suggested “smallest P1 = keep one writer.” That framing **misled** you: it treated Agent 2’s unfinished interim as an owner-approved permanent design.
 
-**Exists today:**
+**This document supersedes that.** The owner’s intended write model is **registration followers** (plan B2 / design-doc follower diagram). Node registration is part of that model — not a substitute that cancels resource followers by default.
 
-- Single follower: `internal/logs/storeFollower.ts` → `Logs.persistLayer(node)` → appends **every** bus line into **node** `LogStore` bucket.
-- `LogStore` is a standalone `Store.Service` with a built-in contract (`internal/store/logStoreSpec.ts`).
-- `Store.logLevel*` on registrations is mostly unused by the logs pipeline.
-- No implicit `appendLog` / `logQuery` facets on `QueueResource.store(tag)` / `Process.store(tag)` / `Resource.withStore`.
-
-**The product question (owner must pick a write policy):**
-
-| Option | Behavior | Fit |
-|--------|----------|-----|
-| **B1 — Keep node-primary (shipped direction)** | One durable writer (`persistLayer`). Resource `query` always filters the node journal by lineage. “Followers” = optional **level/filter** knobs on that one writer, not N writers. | Simplest; matches Phase 5 dashboard (`NodeStatus.logs` + filter). P1 shrinks to levels + docs + maybe memo on the one writer. |
-| **B2 — Registration followers** | Each `Store.register` / toolkit `*.store(tag)` forks a follower that appends to that scope when `LogEntry.hasKey(scopeKey)` + `logStoreLevel`. Node registration optional/separate. | Matches original plan; risk of duplicate rows if both node + resource writers enabled. Needs **single-write rule** (node-primary vs resource-primary vs mutual exclusion). |
-| **B3 — Hybrid** | Node writer always; resource registrations get **query-only** implicit `logQuery` that reads the node journal (no second append). | Middle ground; still no per-resource SQLite partition. |
-
-**Also clarify:**
-
-- Where does `lineId` / `entryId` come from? (monotonic node counter today in `persistLayer`; plan mentioned hash alternative.)
-- Does `Node.logs` become a real `Store.Service` pipe (`WnbaNodeStore.pipe(Logs.registerNode(WnbaNode))`) replacing the standalone `LogStore` class, or keep `LogStore` as the node bucket API?
-- Follower conformance: `test/logs-follower.test.ts` — match, memo, level gate.
-
-**Done when:** owner-picked policy is implemented, single-write invariant tested, `LOGS.md` write-path diagram matches code.
+If the owner later picks “node-journal only, query filters for resources,” that will be an **explicit unlock**. Until then, plan and build toward registration-native followers.
 
 ---
 
-### Workstream C — Remote per-resource logs
+## After repeat-back is accepted — plan rules
 
-**Intent:** remote clients get a first-class way to follow/query one resource’s logs without inventing filters at every dashboard.
-
-**Exists today:**
-
-- Local: `Resource.logs(tag)` (and `Tag.logs` after `withLogExport`).
-- Remote: **no** RPC `logs` on queue/process specs (removed Phase 5). Dashboard uses `NodeStatus.logs.stream/query` + `LogEntry.hasKey(resourceKey)` (`src/web/data.ts`).
-
-**Options:**
-
-| Option | Wire | Client UX |
-|--------|------|-----------|
-| **C1 — Keep NodeStatus + filter (document as permanent)** | No new RPC. Harden docs + helpers (`Logs.forResource(tag)` stream filter convenience). | Dashboard stays as today; less platform surface. |
-| **C2 — Platform-inject on served tags** | Auto-expose `logs.stream` / `logs.query` on every served resource when log export enabled — not authored in user contracts (Phase 5 removed them from specs). | Restores remote `yield* q.logs`-ish remotely without putting `logs` back in control specs. |
-| **C3 — Reserved RPC group** | e.g. under NodeStatus: `logs.byResource({ key, limit })` / dedicated stream. | One RPC home; queue/process stay clean. |
-
-**Footgun to resolve with C (P2 from review):** `Resource.logs().stream` is **unfiltered** while `query` is lineage-scoped. Either pre-filter the handle’s `stream` with `hasKey(tag.key)`, or document + add a named helper and tests. **Do not leave ambiguous.**
-
-**Done when:** remote path is documented, tested over HTTP (extend `host-status` / queue remote patterns), and `web/data.ts` either stays on C1 with helpers or migrates to C2/C3.
-
----
-
-## Supporting cleanups (bundle with whichever slice touches the file)
-
-- `LogQuery`: prefer `lineageContains` / `atRoot` / `atLeaf`; deprecate `processId`/`queueId` filters on `Logs.byResource` (one release shim OK).
-- Child-runtime rule: document whether child processes inherit parent `LogRelay` or must `provideMerge(Logs.layer)`.
-- `withLogExport` vs always-on `Resource.logs`: type-level story (`Tag.logs` absent without pipe) — keep; confirm `.test-d.ts`.
-
----
-
-## Suggested slice order (recommendation for plan text — owner overrides)
-
-1. **Decide write policy (B1/B2/B3)** and **remote policy (C1/C2/C3)** — blocks architecture.  
-2. **A (levels)** — useful under any B/C choice; smaller.  
-3. **B implementation** per choice.  
-4. **C implementation** + stream filter footgun.  
-5. Docs (`LOGS.md`) + changeset(s).
-
-If owner wants the **smallest useful P1:** **A + C1 + pre-filter `Resource.logs` stream** — no second durable writers.
-
----
-
-## Inputs (read before planning)
-
-| Path | Why |
-|------|-----|
-| `docs/LOGS.md` | Shipped SSOT |
-| `docs/handoffs/agent-02-logs-platform-plan.md` | Target model + open details |
-| `docs/handoffs/phase5-logs-migration-review.md` §P1 | Gap table |
-| `docs/handoffs/store-and-logs-design.md` | Older draft — **overrides** in Agent 2 plan win |
-| `src/Logs.ts`, `src/internal/logs/{relay,storeFollower,resourceLogs,scope}.ts` | Current impl |
-| `src/store/log.ts`, `src/internal/store/logStoreSpec.ts` | Durable contract |
-| `src/Store.ts` (`logLevel*`) | Existing registration levels |
-| `src/web/data.ts` | Remote filter pattern |
-| `test/logs-resource.test.ts`, `test/logs-relay.test.ts`, `test/fixtures/logsEnv.ts` | Baseline tests |
+1. Describe how you will turn `storeFollower.ts` into the **shared factory** used by node + each scope registration.  
+2. Describe where `appendLog` / `logQuery` appear on contracts and how `LogStore` / `persistLayer` shrink or become thin wrappers.  
+3. State the single-write / memo rule and the tests you will add (`test/logs-follower.test.ts`).  
+4. Level pipes and remote logs: list as ordered follow-ups; **do not** expand into them until the owner unlocks that slice.  
+5. Stop for unlock before code.
 
 ---
 
 ## Rules
 
-- **Plan first** — post the plan (workstream options, recommended order, owner checklist). **Stop.**  
-- No code until owner unlocks a named slice (`A`, `B1`, `C2`, …).  
 - Branch from **`integration`**.  
-- No `as any` / `as unknown as` — fix types structurally (Agent 2 cleaned these; keep pristine).  
-- Effect platform services only; match Effect-true module layout.  
-- Changeset for every public API / behavior change.  
-- Verify: `pnpm typecheck && pnpm test && pnpm lint`.
-
----
-
-## Owner decision checklist (Agent 3’s plan must end with these)
-
-1. Which workstreams this session? (`A` / `B` / `C` / combinations)  
-2. Write policy: **B1** node-primary / **B2** registration followers / **B3** hybrid  
-3. If B2: single-write rule when node + resource both enabled  
-4. Stream level gate: before publish vs filter-at-tail  
-5. Remote policy: **C1** / **C2** / **C3**  
-6. `Resource.logs().stream`: pre-filter by `hasKey` or keep unfiltered + helpers  
-7. Replace standalone `LogStore` class with `Node.logs` on `Store.Service`?  
-8. Retire `byResource({ processId, queueId })` timing  
-9. Ship smallest P1 (A + C1 + stream filter) vs full plan?
+- No named-handles work (Agent D).  
+- No resurrecting `captureLogs`, spec `logs`, `NodeLogs`, or ProcessStorage.  
+- No `as any` / `as unknown as`.  
+- `pnpm typecheck && pnpm test && pnpm lint` before claiming done.  
+- Changeset for public API / behavior.
 
 ---
 
@@ -184,8 +136,20 @@ If owner wants the **smallest useful P1:** **A + C1 + pre-filter `Resource.logs`
 Checkout integration and pull:
   git fetch origin integration && git checkout integration && git pull
 
-Read docs/handoffs/agent-03-logs-p1.md and the Inputs table.
-You are Agent 3 — Logs P1. PLAN FIRST. Named handles are owned by other agents — do not touch that work.
+Read docs/handoffs/agent-03-logs-p1.md carefully.
 
-Deliver a plan that clarifies workstreams A (level pipes), B (store followers / write policy), and C (remote per-resource logs). Present options (B1/B2/B3, C1/C2/C3). End with the owner decision checklist — do not pick winners. Then stop.
+You are Agent 3. Agent 2 shipped capture + relay + an interim node-wide
+Logs.persistLayer → LogStore follower. That is NOT the finished product.
+
+The owner wanted STORE FOLLOWERS on Store registrations:
+  - one capture (Logs.layer)
+  - LogRelay bus
+  - each Store.register / *.store(tag) / Node.logs forks a follower
+  - match LogEntry.hasKey(scopeKey), logStoreLevel gate, memo (scopeKey, lineId)
+  - implicit appendLog + logQuery on those registrations
+
+FIRST REPLY: repeat that model back in your own words (capture, relay, store,
+what is interim vs end-state, what you must build). Then STOP.
+Do not write code. Do not propose keeping "node LogStore only" as the end state
+unless you are quoting an owner unlock.
 ```

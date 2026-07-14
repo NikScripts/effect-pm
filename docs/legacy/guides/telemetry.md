@@ -78,13 +78,27 @@ type MetricDatum =
 type MetricsSnapshot = { ts: number; metrics: ReadonlyArray<MetricDatum> };
 ```
 
-### Fleet fan-out
+### Fleet glass (elevated)
 
-Because each host serves its own `FleetTelemetry`, the **host axis is free** — it's *which* host you
-connected to. `client(FleetTelemetry, host)` per host, stamp each snapshot with the host, then group/sum
-by `{ host, id, labels }` — **overall** (sum across hosts), **per-host** (by connection), **per-label**
-(by `client` / `status`). Configure the cadence via `Telemetry.layer(tag, { interval })` (default ~1s;
-sliding buffer so a slow reader can't backpressure the sampler).
+When Telemetry is meshed (`Resource.peersLayer` / `peersFrom` + `selfNode`), fleet fields fold leaf
+snapshots across the pack:
+
+- `inFlightByNode` — `queue_in_flight` gauge per node key
+- `fleetInFlight` — sum across self + peers
+
+Single-node (no peers): discharge with `Telemetry.alone(tag)`.
+
+```ts
+Telemetry.serve(FleetMetrics).pipe(
+  Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)),
+)
+const glass = yield* FleetMetrics
+const columns = yield* glass.inFlightByNode
+const total = yield* glass.fleetInFlight
+```
+
+Legacy client fan-out (`client(tag, node)` per node, stamp yourself) still works; fleet fields are the
+built-in fold for a meshed tag.
 
 ## Cardinality — keep labels cheap
 

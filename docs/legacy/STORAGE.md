@@ -87,6 +87,10 @@ Tag wire is SSOT — layer config must not override `payload` / `success` / `err
 merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
 `Resource.builtResource` + `grantLocal` where applicable.
 
+**ShardMap** does **not** use the Store bridge for shard state. Local keys are SQLite SSOT
+(`effect_pm_shard_map`) opened by the toolkit layer (`:memory:` by default, or `{ filename }`).
+Boot `SELECT`s live rows; mutations `UPSERT` / `DELETE` — no event replay, no `ShardMap.store`.
+
 **Future (not shipped):** queue write-path buffer off the worker hot path — see
 [`handoffs/store-cutover-queue.md`](./handoffs/store-cutover-queue.md) §Future.
 
@@ -147,6 +151,15 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 - **Registration:** `RunResource.store(tag)`.
 - **Handoff:** [`handoffs/store-cutover-runresource.md`](./handoffs/store-cutover-runresource.md).
 
+### ShardMap
+
+- **No Store bridge.** Local shard rows are SQLite SSOT (`effect_pm_shard_map` in
+  `src/internal/shardMapSql.ts`), opened by `ShardMap.layer` / `serve` / `serveRemote`.
+- **Default:** `:memory:` (always on — an in-memory default carries value). Pass
+  `{ filename }` for a durable file.
+- **Engine:** boot `SELECT` by `scope_key` (= tag key); `putLocal` → `UPSERT`; `deleteLocal` →
+  `DELETE`. Hot `Ref<Map>` cache only.
+
 ---
 
 ## Wire events (Store bridge)
@@ -171,6 +184,9 @@ Optional `success` / `error` on persisted terminal rows follow tag presence
 ### RunResource
 
 Gate run facts appended to `RunResource.store(tag)` when a gate executes.
+
+**Not on the Store bridge:** ShardMap local keys — SQLite table `effect_pm_shard_map` (see
+ShardMap section above).
 
 ---
 
