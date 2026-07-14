@@ -6,6 +6,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Agent 3 next: Process live `events` (supervisor; await owner YES)
+
+- **Owner said:** Need work for Agent 3 (Logs P1 / followers / `persistLayer` removal done; store-layer memo not worth it).
+- **Chose (supervisor assign):** [`agent-03-process-events.md`](./agent-03-process-events.md) — Process live `events` stream (closed [#20](https://github.com/NikScripts/effect-pm/pull/20) follow-on). **Recommended failure surface:** persist == stream (`events` + Process.store); keep typed `run` RPC (#26); do **not** rebuild `start`/`stop` RPC errors. Backup if parked: lineage append reducer in `Logs.withScope`.
+- **Rejected for this assign:** Reopening store-layer memo; new Logs redesign; Agent D handle work; docs-site UI.
+- **Awaiting owner:** Reply **YES** (or alternate surface) before Agent 3 codes. Plan-first may start immediately.
+- **Supervisor impact:** Agent 3 active on Process observation; close stale draft [#35](https://github.com/NikScripts/effect-pm/pull/35) when convenient.
+
+---
+
 ## 2026-07-11 — Queue wire erase + Process live `events` (retroactive — from PR #19/#20 handoff)
 
 *Logged by supervisor from Agent 2 session-4 handoff + owner relay. Agent should have written this before PRs opened.*

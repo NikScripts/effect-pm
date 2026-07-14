@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | from `integration` | [docs corpus](./agent-01-docs-corpus.md) | **plan-first (Phase 1)** | — | — | Handoffs cleanup inventory — UI/site reserved for lettered agents | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | **merged → `integration`** | [Logs store followers](./agent-03-logs-p1.md) · [plan](./agent-03-logs-store-followers-plan.md) | **persistLayer/LogStore removed** | [#43](https://github.com/NikScripts/effect-pm/pull/43) | typecheck / 444 tests | Store-layer memo deferred | 2026-07-14 |
+| **3** | from `integration` | [Process live `events`](./agent-03-process-events.md) | **plan-first** (await failure-surface YES) | — | — | Logs P1 done (#40/#43); memo deferred; close stale [#35](https://github.com/NikScripts/effect-pm/pull/35) | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -19,14 +19,15 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — handoffs cleanup (**Phase 1 plan-first**); then plans refactor; then legacy port + Draft label (later unlocks). **No UI / `docs/site` chrome.**
-2. **Agent 3:** [#43](https://github.com/NikScripts/effect-pm/pull/43) hard-removes interim `Logs.persistLayer` / `LogStore` (followers already on `integration`; store-layer `lineId` memo deferred).
-3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+1. **Agent 1:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — handoffs cleanup (**Phase 1 plan-first** / [#44](https://github.com/NikScripts/effect-pm/pull/44)); then plans; then legacy + Draft. **No UI / `docs/site` chrome.** Also [#45](https://github.com/NikScripts/effect-pm/pull/45) `monitoredDependency` stack.
+2. **Agent 3:** [`agent-03-process-events.md`](./agent-03-process-events.md) — Process live `events` (**plan-first**; unlock = failure surface YES). Logs P1 closed.
+3. **Agent D (+ peers):** named handles Stage 2 largely on tip (M2/M4–M6); do not reassign handle work to Agent 3.
 
 ### Ready / owner calls
-4. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
-5. `main` merge + `pnpm run version` — still deferred
-6. Process live `events` (#20) — needs failure-surface decision
+4. Process live `events` failure surface — **recommend:** `events` + store SSOT; keep `run` typed RPC; no `start`/`stop` error rebuild (see Agent 3 brief)
+5. Store-layer `(scopeKey, lineId)` memo — **deferred** (not worth it for live followers)
+6. `main` merge + `pnpm run version` — still deferred
+7. Close stale Agent 3 plan [#35](https://github.com/NikScripts/effect-pm/pull/35)
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.

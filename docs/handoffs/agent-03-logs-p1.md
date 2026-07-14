@@ -1,9 +1,8 @@
 # Agent 3 — Logs store followers (owner intent — REPEAT BACK FIRST)
 
-**Status:** **FOLLOWERS CUTOVER SHIPPED** — [#40](https://github.com/NikScripts/effect-pm/pull/40) / [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md).  
-**Agent:** **3**  
-**Branch:** `cursor/logs-store-followers-906e` (landing on `integration`)  
-**Deferred:** store-layer `lineId` memo. **In flight:** hard-remove interim `persistLayer` / `LogStore`.
+**Status:** **DONE** — followers [#40](https://github.com/NikScripts/effect-pm/pull/40); `persistLayer`/`LogStore` removed [#43](https://github.com/NikScripts/effect-pm/pull/43).  
+**Next for Agent 3:** [`agent-03-process-events.md`](./agent-03-process-events.md) (Process live `events`).  
+**Deferred forever unless unlocked:** store-layer `lineId` memo.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · this file · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) §Store integration · [`store-and-logs-design.md`](./store-and-logs-design.md) §Single capture · [`docs/LOGS.md`](../LOGS.md)
 
