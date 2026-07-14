@@ -338,11 +338,10 @@ pre.shiki { background: transparent; }
   width: max-content;
   max-width: min(88vw, 42rem);
   padding: 0;               /* no gutter — the type fills the popup */
-  overflow: hidden;         /* so the full-bleed type respects the rounded corners */
   background: var(--panel) !important;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.4);
+  border: none;             /* no frame border */
+  border-radius: 0;         /* no rounded corners */
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.5);
   white-space: pre-wrap;
   font-size: 0.82rem;
   line-height: 1.5;
@@ -353,7 +352,7 @@ pre.shiki { background: transparent; }
    it reads as the popup's content, filling the width, not a boxed chip inside the popup. */
 .twoslash-popup-code {
   display: block;
-  padding: 0.5rem 0.7rem;
+  padding: 0;              /* the type fills the preview, no inset */
   font-family: var(--font-mono);
   background: transparent !important;
   border: none;
