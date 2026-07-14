@@ -155,7 +155,7 @@ const smokeWireSlots = (
  * @internal
  */
 export const assertQueueInstanceSpec = <Spec extends Record<string, unknown>>(
-  wired: Spec,
+  wired: Record<string, unknown>,
   baseline: Spec,
   wire?: QueueWire,
 ): Spec => {
@@ -167,7 +167,11 @@ export const assertQueueInstanceSpec = <Spec extends Record<string, unknown>>(
     recoverItemSchema(wired as unknown as { readonly add: AnyMethod }),
     wire,
   );
-  return wired;
+  // Boundary cast (this module's stated purpose): `wired` carries the tag's real event-schema
+  // success/error slots, but the tag's *type* is the erased `baseline` (`QueueInstanceSpec<F>`),
+  // where events resolve to the default `void`/`unknown`. The invariant — every method key/kind
+  // matches, only the events element differs — is enforced at runtime just above, so this is sound.
+  return wired as unknown as Spec;
 };
 
 /**

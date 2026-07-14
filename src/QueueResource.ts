@@ -511,9 +511,13 @@ export const queueControlSpec = {
  *
  * @public
  */
-export const queueSpec = <F extends Schema.Struct.Fields>(
+export const queueSpec = <
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Unknown,
+>(
   itemSchema: Schema.Struct<F>,
-  wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
+  wire?: { readonly success?: Success; readonly error?: Error },
 ) => {
   // `add`/`prioritize`/`defer` take the item **directly**, and also accept a **batch** (the
   // engine's `QueueEnqueue<T>` is `(item) | (items)`), so one call enqueues many — no N round
@@ -722,7 +726,7 @@ const materializeQueueTag = <Self, F extends Schema.Struct.Fields>(
  */
 export interface QueueResource<
   Payload,
-  Success = unknown,
+  Success = void,
   Error = unknown,
   Requirements = never,
 > {
