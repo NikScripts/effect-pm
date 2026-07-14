@@ -85,7 +85,9 @@ const withSqlite = <A, E, R>(
 ): Layer.Layer<A, E, R> => {
   const filename = options?.filename ?? ":memory:";
   const install = Layer.effectDiscard(
-    Effect.flatMap(SqlClient, shardMapSql.install),
+    Effect.flatMap(SqlClient, (sql) =>
+      shardMapSql.install(sql).pipe(Effect.orDie),
+    ),
   );
   return layer.pipe(
     Layer.provide(install),

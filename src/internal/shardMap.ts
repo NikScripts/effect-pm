@@ -6,7 +6,7 @@
  *
  * @internal
  */
-import { Effect, Hash, Option, Ref, Schema, Scope } from "effect";
+import { Effect, Hash, Option, Ref, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { Combine, combineQuery } from "../MultiNode";
 import * as Resource from "../Resource";
@@ -89,14 +89,14 @@ export const buildImpl = (
 ): Effect.Effect<
   Record<string, unknown>,
   never,
-  Scope.Scope | PeersId<unknown> | SelfNodeId<unknown> | SqlClient
+  PeersId<unknown> | SelfNodeId<unknown> | SqlClient
 > =>
   Effect.gen(function* () {
     const keyOf = tag[keyOfSym] as (value: unknown) => unknown;
     const partition: PartitionFn = options?.partition ?? consistentHash;
     const scopeKey = tag.key;
     const sql = yield* SqlClient;
-    const seeded = yield* shardMapSql.loadScope(sql, scopeKey);
+    const seeded = yield* shardMapSql.loadScope(sql, scopeKey).pipe(Effect.orDie);
     const store = yield* Ref.make(seeded);
     const peers = yield* Resource.peers(tag as ResourceTag<unknown, Resource.Spec>);
     const self = yield* Resource.selfNode(tag as ResourceTag<unknown, Resource.Spec>);
@@ -130,7 +130,7 @@ export const buildImpl = (
     const putLocal = (value: unknown) =>
       Effect.gen(function* () {
         const wire = keyWire(keyOf(value));
-        yield* shardMapSql.upsert(sql, scopeKey, wire, value);
+        yield* shardMapSql.upsert(sql, scopeKey, wire, value).pipe(Effect.orDie);
         yield* Ref.update(store, (m) => {
           const next = new Map(m);
           next.set(wire, value);
@@ -145,7 +145,7 @@ export const buildImpl = (
         if (!had) {
           return false;
         }
-        yield* shardMapSql.deleteKey(sql, scopeKey, wire);
+        yield* shardMapSql.deleteKey(sql, scopeKey, wire).pipe(Effect.orDie);
         yield* Ref.update(store, (m) => {
           const next = new Map(m);
           next.delete(wire);
