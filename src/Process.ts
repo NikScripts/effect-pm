@@ -568,6 +568,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   // Sliding PubSub: publishing never blocks the driver (drops oldest when a subscriber lags).
   // Guaranteed delivery stays on the durable store — persist == stream at the source (Queue pattern).
+  //
+  // `Process.make` is sync (unlike Queue's Effect-scoped `make`), so we allocate the hub with
+  // `Effect.runSync`. In Effect v4, `PubSub.sliding` is an `Effect.sync` constructor with **no**
+  // Scope requirement — this is not a scoped leak. Prefer this over making `Process.make`
+  // Effect-returning solely for hub allocation.
   const eventsHub = Effect.runSync(PubSub.sliding<ProcessLiveEvent>(1024));
 
   const terminalRow = (input: ProcessStoreTerminalInput) => ({
