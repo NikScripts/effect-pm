@@ -2001,6 +2001,14 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
   return undefined;
 };
 
+/** A structural bound matching any resource tag (bare or node-bound) by its spec brand — deliberately
+ *  WITHOUT the tag's `Svc` type param. A data-last combinator (`.pipe(withReadiness(...))`,
+ *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
+ *  node-bound self-referential class's service default (`ServiceOf<S, Self>`), which stock tsc caps
+ *  out on as "excessively deep" (tsgo tolerates it). `T` is still inferred as the full concrete tag,
+ *  so the `(tag: T) => T` return preserves it exactly. @internal */
+type PipeableTag = { readonly [specSym]: FlatSpec };
+
 /**
  * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and `NodeStatus`
  * aggregate over. Each contract applies it from its own status (so readiness can't drift from
@@ -2026,7 +2034,7 @@ export const withReadiness: {
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
   //
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
-  <T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(
+  <T extends PipeableTag>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
@@ -3398,7 +3406,7 @@ export const distributed: {
   // data-last (pipe): mirrors `withReadiness` — the data-first overloads (which infer `Self`/`S` and
   // return the *specific* tag) are what let a class `extends … .pipe(distributed(...))` resolve without
   // recursing on its own type, so `distributed` is `Fn.dual` too (not a bare curry).
-  <T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(
+  <T extends PipeableTag>(
     nodes: ReadonlyArray<AnyNode>,
   ): (tag: T) => T;
   <Self, S extends Spec, HSelf>(
