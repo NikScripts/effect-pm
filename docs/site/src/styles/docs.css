@@ -376,6 +376,30 @@ pre.shiki { background: transparent; }
   font-family: var(--font-sans);
   font-size: 0.78rem;
 }
+/* The "dual preview" expanded-declaration box: a distinct code panel below the compact type, with a
+   little "expanded" label. Rendered by our custom renderMarkdown as `.twoslash-popup-expand`. */
+.twoslash-popup-docs:has(> .twoslash-popup-expand) { padding: 0; }
+.twoslash-popup-expand {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.twoslash-popup-expand::before {
+  content: "expanded";
+  display: block;
+  padding: 0.3rem 0.7rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+}
+.twoslash-popup-expand pre {
+  margin: 0;
+  padding: 0.35rem 0.7rem 0.5rem;
+  border: none;
+  border-radius: 0;
+}
 /* each JSDoc tag on its own line, with a space between the tag name and its value
    (`@category layers`, `@since 4.0.0`) instead of running together. */
 .twoslash-popup-docs-tag { display: block; }

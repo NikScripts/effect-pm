@@ -23,7 +23,10 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
   let version = 0;
   const host: ts.LanguageServiceHost = {
     getScriptFileNames: () => [FILE],
-    getScriptVersion: () => String(version),
+    // Only OUR file changes between blocks; imported files (`effect`, `src`) are stable, so give them
+    // a constant version — otherwise the registry re-parses the entire library on every block (the
+    // slowdown that hung handle-heavy pages).
+    getScriptVersion: (f) => (f === FILE ? String(version) : "1"),
     getScriptSnapshot: (f) =>
       f === FILE
         ? ts.ScriptSnapshot.fromString(current)
@@ -59,6 +62,29 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
     ts.TypeFormatFlags.UseSingleQuotesForStringLiteralType |
     ts.TypeFormatFlags.WriteArrayAsGenericType;
 
+  const MAX_PROPS = 60; // don't dump enormous library shapes
+  const MAX_MEMBER_LEN = 240; // cap a single member's rendered type
+
+  // Worth expanding? A non-primitive OBJECT type with a handful of members and no call surface, whose
+  // OWN declaration is in the user's source (not a library / built-in). This expands user handles /
+  // interfaces / anonymous objects but skips `string`→String-methods, `Effect`/`Stream` internals, etc.
+  const isExpandable = (type: ts.Type): boolean => {
+    if (!(type.flags & ts.TypeFlags.Object)) return false;
+    if (type.getCallSignatures().length > 0) return false;
+    const props = type.getProperties();
+    if (props.length === 0 || props.length > MAX_PROPS) return false;
+    const sym = type.aliasSymbol ?? type.getSymbol();
+    const decls = sym?.getDeclarations();
+    if (decls && decls.length > 0) {
+      // named type: only expand when it's declared in the user's source, not a dependency / lib.d.ts
+      const inUserSrc = decls.some(
+        (d) => !d.getSourceFile().fileName.includes("/node_modules/"),
+      );
+      if (!inUserSrc) return false;
+    }
+    return true;
+  };
+
   /**
    * Given the block's full code and a set of full-code offsets, return offset → expanded member
    * block (or undefined when the type isn't an object worth expanding). The result is code-like text
@@ -77,18 +103,15 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
       const node = nodeAt(sf, offset);
       if (!node) continue;
       const type = checker.getTypeAtLocation(node);
-      const props = type.getProperties();
-      // Only expand object-ish types with members and no call surface at the top level that already
-      // reads fine; skip primitives / unions / functions where a member dump adds nothing.
-      if (props.length === 0) continue;
-      if (type.getCallSignatures().length > 0) continue;
+      if (!isExpandable(type)) continue;
       const lines: string[] = [];
-      for (const sym of props) {
+      for (const sym of type.getProperties()) {
         const mt = checker.getTypeOfSymbolAtLocation(sym, node);
-        const rendered = checker
+        let rendered = checker
           .typeToString(mt, node, FLAGS)
           .replace(/import\("[^"]*"\)\./g, "")
           .replace(/\s*\n\s*/g, " ");
+        if (rendered.length > MAX_MEMBER_LEN) rendered = `${rendered.slice(0, MAX_MEMBER_LEN - 1)}…`;
         lines.push(`  ${sym.getName()}: ${rendered};`);
       }
       out.set(offset, `{\n${lines.join("\n")}\n}`);
