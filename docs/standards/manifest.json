@@ -770,7 +770,7 @@
             "src",
             "examples"
           ],
-          "title": "Correct by construction — no `as`, no `satisfies`"
+          "title": "Correct by construction — verify, never assert"
         },
         {
           "id": "types-and-naming.boundary-cast-last-resort",
@@ -885,6 +885,15 @@
             "src"
           ],
           "title": "Public API shapes are hand-written `export interface`"
+        },
+        {
+          "id": "types-and-naming.config-carries-a-named-type",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "A config carries a named type in its namespace"
         },
         {
           "id": "types-and-naming.schema-data-derives",
@@ -1034,5 +1043,5 @@
       ]
     }
   ],
-  "ruleCount": 112
+  "ruleCount": 113
 }
