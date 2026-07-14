@@ -1,9 +1,9 @@
 # Agent 3 — Store followers implementation plan
 
-**Status:** plan — awaiting owner unlock before code.  
-**Branch:** `cursor/logs-store-followers-plan-906e` (from `integration`).  
+**Status:** plan + **unlocked focus `store-read-0`** (unified Store read / RQB `where`). Followers slices still gated.  
+**Plan branch:** `cursor/logs-store-followers-plan-906e`. **Impl branch:** `cursor/store-read-rqb-where-906e`.  
 **Brief:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) (owner-locked registration-follower model).  
-**Out of scope this slice:** named handles (Agent D); level pipes; remote `Resource.logs` RPC; resurrecting Phase 5 surfaces.
+**Out of scope this slice:** named handles (Agent D); level pipes; remote `Resource.logs` RPC; resurrecting Phase 5 surfaces; follower fork wiring (until `followers-*` unlock).
 
 ---
 
@@ -112,9 +112,10 @@ Landing registration followers on a clean `log` shape requires this Store change
 
 1. `Store.shape(row)` — drop overload with read schema; migrate all call sites (`queue`/`process`/`run`/`logStore` specs, tests, guides).
 2. Bake one read-payload type into shape `.read` (shared windowing + `where`).
-3. Type `where` from `Schema.Schema.Type<Row>` with nested paths.
-4. Runtime: decode system payload → apply `limit`/`before`/`after` → apply nested `where` equality/ops on decoded rows.
+3. Type `where` from `Schema.Schema.Type<Row>` with nested paths + full RQB operator objects / `AND`/`OR`/`NOT`.
+4. Runtime: decode system payload → apply `limit`/`before`/`after` → evaluate nested `where` (full operator set) on decoded rows.
 5. Changeset — public Store API break.
+6. Conformance tests against Drizzle RQB filter examples (equality, nested, AND/OR/NOT, comparisons, `in`).
 
 ### What a registration-native write looks like (internals, not app code)
 
@@ -484,12 +485,11 @@ pnpm typecheck && pnpm test && pnpm lint
 
 ## Owner unlock checklist
 
-1. ~~Read style~~ — **locked:** remove per-shape payload arg; one baked-in payload; Drizzle RQB nested `where` in v1; composable `eq`/`and` later.  
-2. Confirm **v1 operator set** on `where` values: equality shorthand only, or also `{ eq, ne, gt, gte, lt, lte, in, … }` in v1.  
-3. Confirm node registration API: **`Resource.store(WnbaNode)`** vs log-only sugar (`WnbaNode.logs`) vs both.  
-4. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
-5. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
-6. Unlock named slice: `store-read-0` / `followers-0` / …  
-7. Levels + remote remain parked until a later unlock.
+1. ~~Read style~~ — **locked:** remove per-shape payload arg; one baked-in payload; Drizzle RQB `where` **fully featured + nested** in v1; composable column-ref API later.  
+2. Confirm node registration API: **`Resource.store(WnbaNode)`** vs log-only sugar (`WnbaNode.logs`) vs both.  
+3. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
+4. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
+5. Unlock named slice: `store-read-0` / `followers-0` / …  
+6. Levels + remote remain parked until a later unlock.
 
 **Stop — no code until unlock.**
