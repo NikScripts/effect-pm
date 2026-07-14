@@ -1,9 +1,10 @@
 import "../styles/docs.css";
 import type { ReactNode } from "react";
-import { navGroups } from "../lib/docs-content.js";
+import { navGroups, glossaryEntries } from "../lib/docs-content.js";
 import { NavBar } from "../components/NavBar.js";
 import { GroupedNav } from "../components/GroupedNav.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
+import { GlossaryHover } from "../islands/GlossaryHover.js";
 
 // Root layout — owns all chrome. Nav is generated from the content manifest,
 // so adding a `.dj` file updates the nav with no edit here.
@@ -26,6 +27,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <main>{children}</main>
       </div>
       <TwoslashHover />
+      <GlossaryHover data={glossaryEntries()} />
     </>
   );
 }

@@ -2,13 +2,13 @@
 # Core Concepts
 
 Every program depends on capabilities it does not build itself — a clock, a database, somewhere to send
-email. Effect models each of these as a **service**, and effect-pm's resources build directly on that
-model. This page starts with services and adds one idea at a time.
+email. Effect models each of these as a [**service**](/docs/glossary#service), and effect-pm's resources
+build directly on that model. This page starts with services and adds one idea at a time.
 
 ## Services and tags
 
 A service is a capability your program depends on. Rather than thread it through function after
-function, you refer to it through a **tag**: a typed name that stands for the service everywhere it is
+function, you refer to it through a [**tag**](/docs/glossary#tag): a typed name that stands for the service everywhere it is
 used. Your code declares what it needs, and the type system keeps track of it for you.
 
 Working with a service is three steps — define it, use it, and provide it:
@@ -32,7 +32,7 @@ depends on it.
 ## From services to contracts
 
 effect-pm starts where Effect's services leave off. A resource is a service, but its tag declares a
-**contract**: the resource's methods, together with a schema for every value that passes through them.
+[**contract**](/docs/glossary#contract): the resource's methods, together with a schema for every value that passes through them.
 
 {.twoslash}
 ``` ts
@@ -92,7 +92,7 @@ A contract's methods take a small number of forms:
 
 ## Nodes
 
-When a program spans more than one runtime, each runtime is a **node**. A node carries the address at
+When a program spans more than one runtime, each runtime is a [**node**](/docs/glossary#node). A node carries the address at
 which its resources can be reached, and served resources find one another through the nodes they share.
 You reach for nodes only when a resource is served or distributed; a single-runtime program needs none.
 **[Fleets & Peers](/docs/fleets-and-peers)** covers them in full.

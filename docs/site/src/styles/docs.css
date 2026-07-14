@@ -733,3 +733,32 @@ td:first-child code { display: block; width: fit-content; margin-bottom: 0.15rem
 .draft-banner summary::-webkit-details-marker { display: none; }
 .draft-banner[open] summary { margin-bottom: 0.7rem; }
 .draft-banner-label { color: var(--fg); }
+
+/* ===== glossary term links + hover-preview popup ===== */
+/* a link into the glossary reads as a defined term, not a nav link: a dotted accent underline, help cursor */
+a[href*="/docs/glossary#"] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
+
+.glossary-popup {
+  position: fixed;
+  z-index: 60;
+  display: none;
+  max-width: min(88vw, 22rem);
+  padding: 0.65rem 0.8rem;
+  background: var(--popup-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+.glossary-popup-term { font-weight: 650; margin-bottom: 0.2rem; }
+.glossary-popup-def { color: var(--muted-fg); }

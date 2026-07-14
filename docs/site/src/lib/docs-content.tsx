@@ -216,6 +216,39 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   return groups;
 };
 
+export interface GlossaryEntry {
+  readonly term: string;
+  readonly def: string;
+}
+// Parse the glossary page into a { slug -> { term, def } } map for the hover-preview island. Each
+// `## Term` heading opens an entry; the paragraph text beneath it (inline markdown stripped) is the
+// definition. The glossary Djot page is the single source — this only reads it.
+export const glossaryEntries = (): Record<string, GlossaryEntry> => {
+  const c = chapterBySlug("glossary");
+  if (c === undefined) return {};
+  const out: Record<string, GlossaryEntry> = {};
+  let term: string | null = null;
+  let buf: Array<string> = [];
+  const flush = (): void => {
+    if (term !== null) {
+      const def = buf.join(" ").trim().replace(/[`*]/g, "");
+      if (def) out[slugify(term)] = { term, def };
+    }
+    buf = [];
+  };
+  for (const line of c.raw.split("\n")) {
+    const m = /^##\s+(.+)$/.exec(line);
+    if (m) {
+      flush();
+      term = m[1].trim();
+    } else if (term !== null && line.trim() && !line.startsWith("{")) {
+      buf.push(line.trim());
+    }
+  }
+  flush();
+  return out;
+};
+
 // The flat book order (groups concatenated) — the sequence prev/next walks.
 export const navItems = async (): Promise<ReadonlyArray<NavItem>> =>
   (await navGroups()).flatMap((g) => g.items);
