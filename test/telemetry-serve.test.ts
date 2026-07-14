@@ -53,8 +53,8 @@ it("serves the Metric registry — a labeled counter round-trips via snapshot ov
       );
 
       const probe = snap.metrics.find((m) => m.id === "test_telemetry_total");
-      expect(probe?._tag).toBe("counter");
-      if (probe?._tag === "counter") {
+      expect(probe?._tag).toBe("Counter");
+      if (probe?._tag === "Counter") {
         expect(probe.count).toBe(3);
         expect(probe.labels.probe).toBe("roster");
       }

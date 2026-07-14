@@ -48,34 +48,34 @@ import {
 // Public types (explicit interfaces — the schema below is checked against them)
 // ============================================================================
 
-/** A metric's label set (from Effect `Metric` attributes). @public @since 1.0.0 */
+/** A metric's label set (from Effect `Metric` attributes). @public */
 export type MetricLabels = Readonly<Record<string, string>>;
 
-/** A counter reading. @public @since 1.0.0 */
+/** A counter reading. @public */
 export interface CounterDatum {
-  readonly _tag: "counter";
+  readonly _tag: "Counter";
   readonly id: string;
   readonly labels: MetricLabels;
   readonly count: number;
 }
 
-/** A gauge reading. @public @since 1.0.0 */
+/** A gauge reading. @public */
 export interface GaugeDatum {
-  readonly _tag: "gauge";
+  readonly _tag: "Gauge";
   readonly id: string;
   readonly labels: MetricLabels;
   readonly value: number;
 }
 
-/** One cumulative histogram bucket: observations `<= le`. @public @since 1.0.0 */
+/** One cumulative histogram bucket: observations `<= le`. @public */
 export interface HistogramBucket {
   readonly le: number;
   readonly count: number;
 }
 
-/** A histogram reading (cumulative buckets). @public @since 1.0.0 */
+/** A histogram reading (cumulative buckets). @public */
 export interface HistogramDatum {
-  readonly _tag: "histogram";
+  readonly _tag: "Histogram";
   readonly id: string;
   readonly labels: MetricLabels;
   readonly buckets: ReadonlyArray<HistogramBucket>;
@@ -83,10 +83,10 @@ export interface HistogramDatum {
   readonly sum: number;
 }
 
-/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public @since 1.0.0 */
+/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
 export type MetricDatum = CounterDatum | GaugeDatum | HistogramDatum;
 
-/** A node's whole `Metric` registry, point-in-time. @public @since 1.0.0 */
+/** A node's whole `Metric` registry, point-in-time. @public */
 export interface MetricsSnapshot {
   readonly ts: number;
   readonly metrics: ReadonlyArray<MetricDatum>;
@@ -99,13 +99,13 @@ export interface MetricsSnapshot {
 
 const metricLabels = Schema.Record(Schema.String, Schema.String);
 
-const counterDatum = Schema.TaggedStruct("counter", {
+const counterDatum = Schema.TaggedStruct("Counter", {
   id: Schema.String,
   labels: metricLabels,
   count: Schema.Number,
 });
 
-const gaugeDatum = Schema.TaggedStruct("gauge", {
+const gaugeDatum = Schema.TaggedStruct("Gauge", {
   id: Schema.String,
   labels: metricLabels,
   value: Schema.Number,
@@ -116,7 +116,7 @@ const histogramBucket = Schema.Struct({
   count: Schema.Number,
 });
 
-const histogramDatum = Schema.TaggedStruct("histogram", {
+const histogramDatum = Schema.TaggedStruct("Histogram", {
   id: Schema.String,
   labels: metricLabels,
   buckets: Schema.Array(histogramBucket),
@@ -124,14 +124,14 @@ const histogramDatum = Schema.TaggedStruct("histogram", {
   sum: Schema.Number,
 });
 
-/** Schema for {@link MetricDatum}. @public @since 1.0.0 */
+/** Schema for {@link MetricDatum}. @public */
 export const metricDatum: Schema.Codec<MetricDatum> = Schema.Union([
   counterDatum,
   gaugeDatum,
   histogramDatum,
 ]);
 
-/** Schema for {@link MetricsSnapshot} — the served wire envelope. @public @since 1.0.0 */
+/** Schema for {@link MetricsSnapshot} — the served wire envelope. @public */
 export const metricsSnapshot: Schema.Codec<MetricsSnapshot> = Schema.Struct({
   ts: Schema.Number,
   metrics: Schema.Array(metricDatum),
@@ -167,13 +167,13 @@ const encodeDatum = (s: MetricSnapshotElem): ReadonlyArray<MetricDatum> => {
   const labels = labelsOf(s.attributes);
   switch (s.type) {
     case "Counter":
-      return [{ _tag: "counter", id, labels, count: Number(s.state.count) }];
+      return [{ _tag: "Counter", id, labels, count: Number(s.state.count) }];
     case "Gauge":
-      return [{ _tag: "gauge", id, labels, value: Number(s.state.value) }];
+      return [{ _tag: "Gauge", id, labels, value: Number(s.state.value) }];
     case "Histogram":
       return [
         {
-          _tag: "histogram",
+          _tag: "Histogram",
           id,
           labels,
           buckets: s.state.buckets.map(toBucket),
@@ -197,29 +197,27 @@ const encodeSnapshot = (
  * `snapshot` query and the `live` sampler both use it). Usable locally, without the resource.
  *
  * @public
- * @since 1.0.0
  */
-export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.map(
-  Effect.all([Clock.currentTimeMillis, Metric.snapshot]),
-  ([ts, raw]) => encodeSnapshot(raw, ts),
-);
+export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.all([
+  Clock.currentTimeMillis,
+  Metric.snapshot,
+]).pipe(Effect.map(([ts, raw]) => encodeSnapshot(raw, ts)));
 
 // ============================================================================
 // Contract (Tag)
 // ============================================================================
 
-/** Gauge id folded by {@link inFlightOf} / fleet fields — queue engines emit this. @public @since 1.0.0 */
+/** Gauge id folded by {@link inFlightOf} / fleet fields — queue engines emit this. @public */
 export const inFlightMetricId = "queue_in_flight";
 
 /**
  * Read {@link inFlightMetricId} from a snapshot (missing ⇒ `0`). Used by fleet folds and demos.
  *
  * @public
- * @since 1.0.0
  */
 export const inFlightOf = (snap: MetricsSnapshot): number => {
   const hit = snap.metrics.find(
-    (m): m is GaugeDatum => m._tag === "gauge" && m.id === inFlightMetricId,
+    (m): m is GaugeDatum => m._tag === "Gauge" && m.id === inFlightMetricId,
   );
   return hit?.value ?? 0;
 };
@@ -245,16 +243,16 @@ const telemetrySpec = {
 /** @internal */
 export type TelemetrySpec = typeof telemetrySpec;
 
-/** This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`). @public @since 1.0.0 */
+/** This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`). @public */
 export const kind = "@nikscripts/effect-pm/Telemetry";
 
-/** A Telemetry instance tag. @public @since 1.0.0 */
+/** A Telemetry instance tag. @public */
 export type TelemetryTag<Self> = ResourceTag<Self, TelemetrySpec>;
 
-/** A node-bound {@link TelemetryTag} — served + reached on that node. @public @since 1.0.0 */
+/** A node-bound {@link TelemetryTag} — served + reached on that node. @public */
 export type TelemetryNodeTag<Self, HSelf> = NodeBoundTag<Self, TelemetrySpec, HSelf>;
 
-/** Tag-construction options for {@link Tag}. @public @since 1.0.0 */
+/** Tag-construction options for {@link Tag}. @public */
 export interface TelemetryConstructOptions<HSelf = never> {
   readonly node?: NodeKey<HSelf>;
   readonly description?: string;
@@ -270,7 +268,6 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  * `…Tag<FleetTelemetry>()({ node: MiniNode })` to bind + serve it on a specific node.
  *
  * @public
- * @since 1.0.0
  */
 export const Tag = <Self>() => {
   function build(): TelemetryTag<Self>;
@@ -301,7 +298,7 @@ export const Tag = <Self>() => {
 // Engine (sampler + layer + serve/serveRemote)
 // ============================================================================
 
-/** Options for {@link layer} / {@link serve} / {@link serveRemote}. @public @since 1.0.0 */
+/** Options for {@link layer} / {@link serve} / {@link serveRemote}. @public */
 export interface TelemetryOptions {
   /** Live-stream sampling cadence. @default 1 second */
   readonly interval?: Duration.Duration;
@@ -332,7 +329,6 @@ class TelemetryAloneNode extends Resource.Node<TelemetryAloneNode>(
  * For a fleet, provide {@link Resource.peersLayer} instead (bundled selfNode + peers).
  *
  * @public
- * @since 1.0.0
  */
 export const alone = <Self>(
   tag: TelemetryTag<Self>,
@@ -407,7 +403,6 @@ const buildImpl = <Self>(
  * Requires the mesh capability ({@link alone} or {@link Resource.peersLayer}).
  *
  * @public
- * @since 1.0.0
  */
 export const layer = <Self>(
   tag: TelemetryTag<Self>,
@@ -417,8 +412,9 @@ export const layer = <Self>(
   never,
   PeersId<Self> | SelfNodeId<Self>
 > =>
-  Layer.unwrap(
-    Effect.map(buildImpl(tag, options), (impl) => resourceLayer(tag, impl)),
+  buildImpl(tag, options).pipe(
+    Effect.map((impl) => resourceLayer(tag, impl)),
+    Layer.unwrap,
   );
 
 /**
@@ -427,14 +423,14 @@ export const layer = <Self>(
  * instance. Requires the mesh capability ({@link alone} or {@link Resource.peersLayer}).
  *
  * @public
- * @since 1.0.0
  */
 export const serveRemote = <Self>(
   tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
 ): Layer.Layer<never, never, PeersId<Self> | SelfNodeId<Self>> =>
-  Layer.unwrap(
-    Effect.map(buildImpl(tag, options), (impl) => resourceServeRemote(tag, impl)),
+  buildImpl(tag, options).pipe(
+    Effect.map((impl) => resourceServeRemote(tag, impl)),
+    Layer.unwrap,
   );
 
 /**
@@ -450,7 +446,6 @@ export const serveRemote = <Self>(
  * ```
  *
  * @public
- * @since 1.0.0
  */
 export const serve = <Self>(
   tag: TelemetryTag<Self>,
