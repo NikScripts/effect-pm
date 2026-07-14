@@ -18,8 +18,9 @@ was built from.
 
 ## Your first queue
 
-A queue has two halves: a **tag** (what the queue *is* — its item type and name)
-and a **layer** (how it *runs* — the worker). Here is the whole thing:
+A queue has two halves: a [**Tag**](/docs/glossary#tag) (what the queue *is* — its
+item type and name) and a **layer** (how it *runs* — the worker). Here is the whole
+thing:
 
 {.twoslash}
 ``` ts
@@ -309,7 +310,8 @@ The handle types as `QueueResource<{ id: string }, number, never, never>`, and
 
 `Tag` + `layer` keeps the contract and the worker separate — which is what makes a
 queue location-transparent (the same tag, a different layer, and it runs remotely).
-When you don't need that split, `QueueResource.Service` fuses both into one class:
+When you don't need that split, `QueueResource.Service` fuses both into one class — a
+self-contained [**Service**](/docs/glossary#service):
 
 {.twoslash}
 ``` ts
