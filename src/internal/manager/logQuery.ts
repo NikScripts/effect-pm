@@ -18,20 +18,16 @@ export type LogSort = "asc" | "desc";
  * Storage-backed log history query (operator `pm logs`).
  *
  * Flags map to predicates like a database query: optional group filter, optional
- * date bounds, cursor bounds, limit, and sort. With no filters, all stored rows
- * match subject to limit/sort.
+ * resource **key**, date bounds, cursor bounds, limit, and sort. With no filters, all stored
+ * rows match subject to limit/sort.
  *
  * @public
  */
 export interface LogQuery {
-  /** When set, restrict to this process group id. */
+  /** When set, restrict to this RPC group id (`groupId` wire prefix). */
   readonly groupId?: string;
-  /** When set, restrict to logs annotated with this process id. */
-  readonly processId?: string;
-  /** When set, restrict to logs annotated with this queue id. */
-  readonly queueId?: string;
-  /** When set, restrict to logs whose lineage contains this `tag.key`. */
-  readonly lineageContains?: string;
+  /** When set, restrict to logs whose lineage contains this resource **key** (`Tag.key`). */
+  readonly key?: string;
   readonly from?: Date;
   readonly to?: Date;
   /** Exclusive lower bound (`entryId` or ISO date per storage adapter). */
@@ -104,16 +100,15 @@ const validateRange = (
  */
 const scopeToQueryFields = (
   scope: LogScope,
-): Pick<LogQuery, "groupId" | "processId" | "queueId"> => {
+): Pick<LogQuery, "groupId" | "key"> => {
   switch (scope._tag) {
     case "all":
       return {};
     case "group":
       return { groupId: scope.groupId };
     case "process":
-      return { groupId: scope.groupId, processId: scope.processId };
     case "queue":
-      return { groupId: scope.groupId, queueId: scope.queueId };
+      return { groupId: scope.groupId, key: scope.key };
   }
 };
 

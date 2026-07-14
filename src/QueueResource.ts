@@ -293,7 +293,7 @@ export const buildQueueEvent = <
   const entries = Schema.Array(entry);
   const cause = Schema.Cause(errorSchema, Schema.Unknown);
   return Schema.Union([
-    Schema.TaggedStruct("Start", { queueId: Schema.String }),
+    Schema.TaggedStruct("Start", { key: Schema.String }),
     Schema.TaggedStruct("Enqueued", {
       entries,
       priority: queuePriority,
@@ -318,39 +318,39 @@ export const buildQueueEvent = <
     }),
     Schema.TaggedStruct("RetryExhausted", { entry, cause }),
     Schema.TaggedStruct("Drained", {
-      queueId: Schema.String,
+      key: Schema.String,
       completed: Schema.Number,
     }),
     Schema.TaggedStruct("Cleared", {
-      queueId: Schema.String,
+      key: Schema.String,
       count: Schema.Number,
     }),
     Schema.TaggedStruct("ShutdownRequested", {
-      queueId: Schema.String,
+      key: Schema.String,
       mode: Schema.Literals(["drain", "finishActive"]),
       pending: Schema.Number,
     }),
     Schema.TaggedStruct("ShutdownComplete", {
-      queueId: Schema.String,
+      key: Schema.String,
       completed: Schema.Number,
     }),
     Schema.TaggedStruct("Released", {
-      queueId: Schema.String,
+      key: Schema.String,
       releaseId: Schema.String,
       entries,
     }),
     Schema.TaggedStruct("DeadLettered", {
-      queueId: Schema.String,
+      key: Schema.String,
       entries,
       reason: Schema.String,
     }),
     Schema.TaggedStruct("Dropped", {
-      queueId: Schema.String,
+      key: Schema.String,
       entries,
       reason: Schema.String,
     }),
     Schema.TaggedStruct("RateLimitExceeded", {
-      queueId: Schema.String,
+      key: Schema.String,
       entry,
       limitKey: Schema.String,
       algorithm: Schema.Literals(["fixed-window", "token-bucket"]),

@@ -242,9 +242,7 @@ const logStorageDemo = Layer.effectDiscard(
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.seconds(8));
       const onNode = yield* Logs.byNode(LiveNode, { limit: 500 });
-      const fromPoller = yield* Logs.byResource({
-        processId: "wnba/LiveScorePoller",
-      });
+      const fromPoller = yield* Logs.byResource("wnba/LiveScorePoller");
       yield* Console.log(
         `[logs] durable storage — live node holds ${onNode.length} lines; ` +
           `${fromPoller.length} are LiveScorePoller's (by resource)`,

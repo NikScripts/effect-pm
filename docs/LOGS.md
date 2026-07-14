@@ -70,8 +70,6 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Symbol | Key kind | Field name (value) | Holds | Package import | Source |
 |--------|----------|-------------------|-------|----------------|--------|
 | `LogAnnotationKeys.node` | annotation key | `"node"` | **node log key** value | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
-| `LogAnnotationKeys.processId` | annotation key | `"processId"` | **resource key** (process) | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
-| `LogAnnotationKeys.queueId` | annotation key | `"queueId"` | **resource key** (queue) | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
 | `LogAnnotationKeys.lineage` | annotation key | `"@nikscripts/effect-pm/lineage"` | JSON array of **lineage segment keys** | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
 
 ### Store / query parameters
@@ -80,8 +78,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 |-----------|----------|---------|-----|--------|
 | `Node.logs` / `Resource.store(Node)` | node log key | `Node.key` | store registration | `src/Resource.ts` |
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
-| `byResource({ processId })` | resource key filter | `Process.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
-| `byResource({ queueId })` | resource key filter | `QueueResource.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
+| `byResource(tag \| key)` | resource key / scope tag | `Tag.key` | `Logs.byResource` | `src/Logs.ts` |
 | `Logs.byResource` / `Resource.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
@@ -136,7 +133,7 @@ const resourceKey = LiveScorePoller.key;
 
 Logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 
-yield* Logs.byResource({ processId: resourceKey });
+yield* Logs.byResource(resourceKey);
 
 const { stream, query } = yield* Resource.logs(LiveScorePoller);
 ```
@@ -200,7 +197,7 @@ import * as Logs from "@nikscripts/effect-pm/Logs";
 yield* Logs.byNode(WnbaNode, { limit: 500 });
 
 // resource scope — durable journal for that registration (same as Resource.logs().query locally)
-yield* Logs.byResource({ processId: LiveScorePoller.key }, { limit: 100 });
+yield* Logs.byResource(LiveScorePoller, { limit: 100 });
 
 const { query } = yield* Resource.logs(LiveScorePoller);
 yield* query({ limit: 100 });
@@ -242,7 +239,7 @@ LogEntry.atRoot(nodeLogKey)(entry);              // lineage[0]
 LogEntry.atLeaf(resourceKey)(entry);             // last segment
 ```
 
-Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Legacy `processId` / `queueId` annotation keys still populate lineage for old rows.
+Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Resource kind is `Resource.kindOf(tag)` — there are no `processId` / `queueId` log annotations.
 
 ## Multi-node fixture (`resource-web`)
 

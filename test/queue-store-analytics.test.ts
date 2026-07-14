@@ -173,7 +173,7 @@ describe("QueueResource.store — analytics read-extension", () => {
       );
       yield* Effect.sleep(Duration.millis(50));
 
-      yield* store.record({ _tag: "Start", queueId: Jobs.key });
+      yield* store.record({ _tag: "Start", key: Jobs.key });
       yield* store.record({
         _tag: "Completed",
         entry: entry("live-1", t0),

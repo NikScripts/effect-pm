@@ -48,8 +48,8 @@ const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
 type MailQueueHandle = Store.HandleOf<typeof mailQueueContract>;
 
 declare const _queueHandle: MailQueueHandle;
-void _queueHandle.record({ _tag: "Start", queueId: MailQueue.key });
-void _queueHandle.record({ _tag: "Cleared", queueId: MailQueue.key, count: 3 });
+void _queueHandle.record({ _tag: "Start", key: MailQueue.key });
+void _queueHandle.record({ _tag: "Cleared", key: MailQueue.key, count: 3 });
 void _queueHandle.events();
 
 type QueueEvent = QueueEventOf<typeof MailQueue>;
@@ -124,7 +124,7 @@ type DropletRegs = RegsOfStoreInput<
 type QueueAtHandle = StoreHandleAtKey<DropletRegs, typeof MailQueue>;
 
 declare const _queueAtHandle: QueueAtHandle;
-void _queueAtHandle.record({ _tag: "Start", queueId: MailQueue.key });
+void _queueAtHandle.record({ _tag: "Start", key: MailQueue.key });
 void _queueAtHandle.events();
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
@@ -143,8 +143,8 @@ type FacetQueueAtHandle = StoreHandleAtKey<FacetQueueRegs, typeof MailQueue>;
 
 // `record` accepts the shared QueueEvent union (the item is typed through its entry-bearing variants).
 declare const _facetRecord: FacetQueueAtHandle["record"];
-void _facetRecord({ _tag: "Start", queueId: "q" });
-void _facetRecord({ _tag: "Cleared", queueId: "q", count: 0 });
+void _facetRecord({ _tag: "Start", key: "q" });
+void _facetRecord({ _tag: "Cleared", key: "q", count: 0 });
 
 type FacetCampaignAuditRow = Parameters<FacetQueueAtHandle["campaignAudit"]["append"]>[0] extends infer R
   ? R extends ReadonlyArray<unknown>
@@ -183,7 +183,7 @@ void Effect.gen(function* () {
   const tagStore = yield* LabThermometer.store;
   yield* mail.readings.append({ value: 1 });
   yield* custom.listReadings();
-  yield* queue.record({ _tag: "Start", queueId: MailQueue.key });
+  yield* queue.record({ _tag: "Start", key: MailQueue.key });
   return { stores, mail, custom, queue, tagStore };
 });
 
