@@ -1,6 +1,6 @@
 import { Duration, Effect, Schema } from "effect";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiNode";
+import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 
 // Regression: a `value` (stream-backed) field on a distributed resource used to DEADLOCK the serve at build —
@@ -40,7 +40,7 @@ it("folding a value across peers drops an unreachable one (one-shot read, per-pe
       const total = yield* combineQuery(
         peers,
         (p) => p.n.pipe(Effect.timeout(Duration.seconds(2))),
-        Combine.sum,
+        combineSum,
       ).pipe(Effect.map((others) => 42 + others));
       expect(total).toBe(42);
     }).pipe(

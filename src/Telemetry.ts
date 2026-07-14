@@ -27,7 +27,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { Combine, combineQuery } from "./MultiNode";
+import { combineByNode, combineQuery, combineSum } from "./MultiNode";
 import * as Resource from "./Resource";
 import {
   Tag as resourceTag,
@@ -336,7 +336,7 @@ const buildImpl = <Self>(
         const byNode = yield* combineQuery(
           peers,
           (peer) => peer.snapshot.pipe(Effect.map(inFlightOf)),
-          Combine.byNode,
+          combineByNode,
         );
         const own = yield* ownInFlight;
         return { ...byNode, [self]: own };
@@ -345,7 +345,7 @@ const buildImpl = <Self>(
         const others = yield* combineQuery(
           peers,
           (peer) => peer.snapshot.pipe(Effect.map(inFlightOf)),
-          Combine.sum,
+          combineSum,
         );
         return others + (yield* ownInFlight);
       }),

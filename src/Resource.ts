@@ -39,6 +39,10 @@
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
  *
+ * For a repeated dependency-monitor shape (`status` + `changes` + readiness from
+ * status), {@link monitoredDependency} builds the spec and readiness together —
+ * still a plain tag, not a new kind. Attach readiness with {@link withReadiness}.
+ *
  * @module Resource
  */
 import {
@@ -69,7 +73,7 @@ import {
   RpcSerialization,
   RpcServer,
 } from "effect/unstable/rpc";
-import { Combine, combineQuery } from "./MultiNode";
+import { combineByNode, combineQuery } from "./MultiNode";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import { builtInNodeStoreContract } from "./internal/store/nodeStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
@@ -1951,6 +1955,14 @@ export declare namespace Resource {
     E,
     T | R
   >;
+
+  /** @inheritdoc */
+  export type {
+    MonitoredDependencyOptions,
+    MonitoredDependency,
+    MonitoredDependencySpec,
+    MonitoredDependencyService,
+  };
 }
 
 /**
@@ -2119,6 +2131,111 @@ export const allReady = <R>(
     const notReady = results.find((r) => !r.ready);
     return notReady ?? { ready: true };
   });
+
+// ── monitored dependency: shared status + changes + readiness shape ──
+
+/**
+ * Wire spec for a {@link monitoredDependency} — `status` effect + `changes` stream.
+ *
+ * @public
+ */
+export type MonitoredDependencySpec<
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+> = {
+  readonly status: Method<undefined, Status, Schema.Never>;
+  readonly changes: Method<undefined, Change, Schema.Never, true>;
+};
+
+/**
+ * The service slice {@link monitoredDependency} readiness reads — `status` only.
+ * Assignable into {@link withReadiness} for a full {@link MonitoredDependencySpec}
+ * tag (extra `changes` is ignored).
+ *
+ * @public
+ */
+export interface MonitoredDependencyService<Status extends Schema.Top> {
+  readonly status: Effect.Effect<Schema.Schema.Type<Status>>;
+}
+
+/**
+ * Authoring options for {@link monitoredDependency}. Field names match the
+ * produced {@link MonitoredDependencySpec} (`status` / `changes`); `changes` is the
+ * **element** schema of the live stream.
+ *
+ * @public
+ */
+export interface MonitoredDependencyOptions<
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+> {
+  readonly status: Status;
+  readonly changes: Change;
+  readonly readyWhen: (status: Schema.Schema.Type<Status>) => boolean;
+  readonly detail?: (status: Schema.Schema.Type<Status>) => string | undefined;
+}
+
+/**
+ * Spec + readiness from {@link monitoredDependency}. Pass `spec` to
+ * {@link Resource.Tag}; attach `readiness` with {@link withReadiness}.
+ *
+ * @public
+ */
+export interface MonitoredDependency<
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+> {
+  readonly spec: MonitoredDependencySpec<Status, Change>;
+  readonly readiness: ReadinessOf<MonitoredDependencyService<Status>>;
+}
+
+/**
+ * Build the common **monitored dependency** contract: `status` (one-shot read),
+ * `changes` (live snapshot stream), and readiness derived from `status`. Still a
+ * plain {@link Resource.Tag} shape — **not** a new resource kind.
+ *
+ * Compose behaviour the usual way: tag + {@link withReadiness} (see
+ * *Resources → behaviour via piped combinators*).
+ *
+ * @example
+ * ```ts
+ * const DbStatus = Schema.Struct({
+ *   connected: Schema.Boolean,
+ *   latencyMs: Schema.Number,
+ * })
+ *
+ * const { spec, readiness } = Resource.monitoredDependency({
+ *   status: DbStatus,
+ *   changes: DbStatus,
+ *   readyWhen: (s) => s.connected,
+ *   detail: (s) => `${s.latencyMs}ms`,
+ * })
+ *
+ * export class WnbaDatabase extends Resource.withReadiness(
+ *   Resource.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
+ *   readiness,
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export const monitoredDependency = <
+  Status extends Schema.Top,
+  Change extends Schema.Top,
+>(
+  options: MonitoredDependencyOptions<Status, Change>,
+): MonitoredDependency<Status, Change> => ({
+  spec: contract({
+    status: effect(options.status),
+    changes: stream(options.changes),
+  }),
+  readiness: (svc, _base) =>
+    Effect.map(svc.status, (status): Readiness => {
+      const ready = options.readyWhen(status);
+      const detail = options.detail?.(status);
+      return detail === undefined ? { ready } : { ready, detail };
+    }),
+});
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedKeys = new Set<string>();
@@ -3382,7 +3499,7 @@ const buildPeerClient = <Self, S extends Spec>(
  * `combineQuery`/`combineStream` (or iterate) and add your own value:
  *
  * ```ts
- * totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+ * totalConnections: combineQuery(peers, (p) => p.connections, combineSum).pipe(
  *   Effect.map((others) => pool.activeCount() + others), // self + peers — you write self in
  * )
  * ```
@@ -3400,14 +3517,14 @@ export const peers = <Self, S extends Spec>(
 
 /**
  * The node key this instance runs as — the **same key** its {@link peers} are keyed by. For folds that
- * key per node (`Combine.byNode`), so a resource's own logic can name its **own** row without
+ * key per node (`combineByNode`), so a resource's own logic can name its **own** row without
  * hand-threading the node key. Requires the {@link selfNodeLayer} / {@link peersLayer} capability:
  *
  * ```ts
  * fleetStatus: Effect.gen(function* () {
  *   const self = yield* Resource.selfNode(FleetDatabase); // the node key I am
  *   const peers = yield* Resource.peers(FleetDatabase);
- *   const byNode = yield* combineQuery(peers, (p) => p.status, Combine.byNode);
+ *   const byNode = yield* combineQuery(peers, (p) => p.status, combineByNode);
  *   return { ...byNode, [self]: yield* ownStatus }; // key my own row, consistently
  * })
  * ```
@@ -3504,7 +3621,7 @@ export const peersFrom = <Self, S extends Spec>(
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**
- * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by node** (`Combine.byNode`),
+ * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by node** (`combineByNode`),
  * and add **this** node's own value keyed by {@link selfNode}. The canned form of the recurring
  * droplet-health-table pattern, on the {@link peers} + {@link selfNode} + `/MultiNode` primitives:
  *
@@ -3531,7 +3648,7 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
   Effect.gen(function* () {
     const self = yield* selfNode(tag);
     const peerClients = yield* peers(tag);
-    const byNode = yield* combineQuery(peerClients, pick, Combine.byNode);
+    const byNode = yield* combineQuery(peerClients, pick, combineByNode);
     const ownValue = yield* own;
     return { ...byNode, [self]: ownValue };
   });

@@ -169,6 +169,4 @@ One further consumer finding is tracked for **beta.18** (not a blocker at league
 per-resource sources can't hoist to `serveAllHttp`'s single shared provide without double-enqueue, so
 consumers self-provide per tick and trip `strictEffectProvide`. The design is settled (per-resource `Layer.provide`
 on a `Resource.serve` layer + `Resource.httpServer` — no config-embedded layer, no branding):
-`docs/handoffs/per-resource-dependency-serve-design.md`, built from the report in
-`docs/handoffs/2026-07-01-per-resource-source-provide.md`. (The multi-host findings in
-`2026-07-01-wow-sports-multi-host-findings.md` are all resolved in this release.)
+`docs/handoffs/per-resource-dependency-serve-design.md`.

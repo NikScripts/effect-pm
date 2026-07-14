@@ -20,6 +20,14 @@
  * the app root with `Layer.provideMerge(AppStore.layerMemory)` or `AppStore.layer({ filename })` when
  * you register {@link store}.
  *
+ * ## Live `events` (persist == stream)
+ *
+ * Every engine lifecycle write (`Started` / `Completed` / `Failed` / `Interrupted`) is published to a
+ * sliding PubSub **and** appended to the store when one is wired — the same union as
+ * {@link processExecutionEvent} / {@link Process.store}. Consume with `yield* proc.events` (Queue-shaped).
+ * Fan-out may drop under load; the store remains the durable source of truth. Tick / run-body failures
+ * emit `Failed` on the stream; manual {@link run} stays the typed RPC failure path.
+ *
  * ## Two surfaces, one namespace
  *
  * This module is consumed as an Effect **module namespace** (`export * as Process`), so member
@@ -50,6 +58,7 @@ import {
   Layer,
   MutableRef,
   Option,
+  PubSub,
   Ref,
   Schema,
   Scope,
@@ -107,6 +116,7 @@ import * as Store from "./Store";
 import {
   builtInProcessStoreContract,
   makeProcessStoreAnalyticsContract,
+  processStoreEventSchema,
   type ProcessStoreAnalyticsContract,
   type ProcessStoreEvent,
   type ProcessStoreStartedInput,
@@ -177,6 +187,12 @@ export interface Process<out R> {
    * forked {@link Process.effect}.
    */
   readonly snapshot: Effect.Effect<ProcessSnapshot>;
+  /**
+   * Live fan-out of execution lifecycle facts (`Started` / `Completed` / `Failed` / `Interrupted`).
+   * Same union as the durable {@link Process.store} journal — every publish also records when a
+   * store is wired. Sliding buffer: subscribe before runs you care about; the store is durable SSOT.
+   */
+  readonly events: Stream.Stream<ProcessLiveEvent>;
 }
 
 /**
@@ -363,6 +379,15 @@ interface ProcessStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
   readonly hasPriorExecutions: () => Effect.Effect<boolean>;
 }
 
+/**
+ * One process execution lifecycle fact — shared by live {@link Process.events} and durable store
+ * rows (`Started` | `Completed` | `Failed` | `Interrupted`). Tag-stamped `success` / `error`
+ * ride `Completed.success?` / `Failed.error` the same way on both surfaces.
+ *
+ * @public
+ */
+export type ProcessLiveEvent = ProcessStoreEvent;
+
 interface ProcessBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
@@ -541,6 +566,10 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const processId = storeScopeTag?.key ?? name;
 
+  // Sliding PubSub: publishing never blocks the driver (drops oldest when a subscriber lags).
+  // Guaranteed delivery stays on the durable store — persist == stream at the source (Queue pattern).
+  const eventsHub = Effect.runSync(PubSub.sliding<ProcessLiveEvent>(1024));
+
   const terminalRow = (input: ProcessStoreTerminalInput) => ({
     processId,
     scheduleKey: input.scheduleKey,
@@ -550,27 +579,30 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     isStartupRun: input.isStartupRun,
   });
 
+  /** Publish to live `events` and append to the store when wired — one path, one union. */
+  const publishExecutionEvent = (event: ProcessLiveEvent): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      yield* PubSub.publish(eventsHub, event);
+      yield* whenStore((recorder) => recorder.record(event));
+    });
+
   const recordStoreStarted = (args: ProcessStoreStartedInput): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Started",
-        processId,
-        scheduleKey: args.scheduleKey,
-        startedAt: args.startedAt,
-        isStartupRun: args.isStartupRun,
-      }),
-    );
+    publishExecutionEvent({
+      _tag: "Started",
+      processId,
+      scheduleKey: args.scheduleKey,
+      startedAt: args.startedAt,
+      isStartupRun: args.isStartupRun,
+    });
 
   const recordStoreCompleted = (
     args: ProcessStoreTerminalInput & { readonly success?: unknown },
   ): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Completed",
-        ...terminalRow(args),
-        ...(args.success !== undefined ? { success: args.success } : {}),
-      }),
-    );
+    publishExecutionEvent({
+      _tag: "Completed",
+      ...terminalRow(args),
+      ...(args.success !== undefined ? { success: args.success } : {}),
+    });
 
   const recordStoreFailed = (args: {
     readonly scheduleKey: string | null;
@@ -579,24 +611,20 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     readonly isStartupRun: boolean;
     readonly error: unknown;
   }): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Failed",
-        ...terminalRow(args),
-        error:
-          storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
-            ? args.error
-            : String(args.error),
-      }),
-    );
+    publishExecutionEvent({
+      _tag: "Failed",
+      ...terminalRow(args),
+      error:
+        storeScopeTag !== undefined && errorOf(storeScopeTag) !== undefined
+          ? args.error
+          : String(args.error),
+    });
 
   const recordStoreInterrupted = (args: ProcessStoreTerminalInput): Effect.Effect<void> =>
-    whenStore((recorder) =>
-      recorder.record({
-        _tag: "Interrupted",
-        ...terminalRow(args),
-      }),
-    );
+    publishExecutionEvent({
+      _tag: "Interrupted",
+      ...terminalRow(args),
+    });
 
   const readHasPriorExecutions = (): Effect.Effect<boolean> =>
     store !== undefined
@@ -1028,11 +1056,14 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     lastRunDurationMillis: MutableRef.get(mirror.lastRunDurationMillis),
   }));
 
+  const events: Stream.Stream<ProcessLiveEvent> = Stream.fromPubSub(eventsHub);
+
   const base = {
     name,
     type: "managed" as const,
     run,
     snapshot,
+    events,
   };
 
   const annotateProcessLogs = (
@@ -1550,7 +1581,9 @@ export const processControlSpec = {
 };
 
 /**
- * Build a process **instance** spec — control surface plus a typed manual {@link run} RPC.
+ * Build a process **instance** spec — control surface, live {@link events} stream, and a typed
+ * manual {@link run} RPC. Event element schema matches the durable store union
+ * ({@link processExecutionEventFor} with the tag's optional `success` / `error`).
  *
  * @public
  */
@@ -1560,16 +1593,25 @@ export const buildProcessSpec = <
 >(wire?: {
   readonly success?: A;
   readonly error?: E;
-}) => ({
-  ...processControlSpec,
-  run: (wire?.error !== undefined
-    ? Resource.effect(wire?.success ?? Schema.Void, wire.error)
-    : Resource.effect(wire?.success ?? Schema.Void)
-  ).annotate({
-    description:
-      "Run the process worker effect once, tracked — returns success; failures typed on error.",
-  }),
-});
+}) => {
+  // Same schema helper as the durable store (`processStoreEventSchema`) so persist == stream on the wire.
+  const eventSchema = processStoreEventSchema(wire?.success, wire?.error);
+  return {
+    ...processControlSpec,
+    events: Resource.stream(eventSchema).annotate({
+      description:
+        "Live execution lifecycle (Started / Completed / Failed / Interrupted). Same union as the " +
+        "durable Process.store journal — persist == stream.",
+    }),
+    run: (wire?.error !== undefined
+      ? Resource.effect(wire?.success ?? Schema.Void, wire.error)
+      : Resource.effect(wire?.success ?? Schema.Void)
+    ).annotate({
+      description:
+        "Run the process worker effect once, tracked — returns success; failures typed on error.",
+    }),
+  };
+};
 
 /** Erased baseline process spec (`Void` success, `Never` error). @public */
 export const processSpec = buildProcessSpec();
@@ -1692,7 +1734,7 @@ type ResultField<A extends Schema.Top> = RefField<
 type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> };
 
 /**
- * Per-tag process spec — control surface plus stamped `run` success/error on the wire.
+ * Per-tag process spec — control surface, live `events`, plus stamped `run` success/error on the wire.
  *
  * @public
  */
@@ -1700,6 +1742,7 @@ export type ProcessInstanceSpec<
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > = typeof processControlSpec & {
+  readonly events: ReturnType<typeof buildProcessSpec<A, E>>["events"];
   readonly run: Resource.Method<undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
@@ -2340,10 +2383,12 @@ const buildProcessImpl = <A, E, R>(
       resultRef !== undefined ? { result: Resource.subscribable(resultRef) } : {};
 
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
-    const impl: WithRequirement<ImplOf<ProcessSpec>, R> = {
+    // Erased to the base `ProcessSpec` here (same as `run`) — stamped event schemas live on the tag wire.
+    const impl = {
       status: { get: readStatus, changes: statusChanges },
       start,
       stop,
+      events: handle.events,
       run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
       ...scheduleMembers,
       ...resultMembers,

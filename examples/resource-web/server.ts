@@ -24,7 +24,7 @@ import * as QueueResource from "../../src/QueueResource";
 import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
-import { Combine, combineQuery } from "../../src/MultiNode";
+import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
 
 const WNBA_PORT = HOST_PORTS.wnba;
 const LIVE_PORT = HOST_PORTS.live;
@@ -39,12 +39,12 @@ const workerPoolImpl = (own: number) =>
     const self = yield* Resource.selfNode(WorkerPool); // which node am I — no hand-threaded key
     return {
       active: Effect.succeed(own),
-      fleetActive: combineQuery(peers, (p) => p.active, Combine.sum).pipe(
+      fleetActive: combineQuery(peers, (p) => p.active, combineSum).pipe(
         Effect.map((others) => own + others),
       ),
       // a per-node map: peers folded by node + this instance's own row, keyed by `self`
       activeByNode: Effect.gen(function* () {
-        const byNode = yield* combineQuery(peers, (p) => p.active, Combine.byNode);
+        const byNode = yield* combineQuery(peers, (p) => p.active, combineByNode);
         return { ...byNode, [self]: own };
       }),
     };

@@ -1,6 +1,6 @@
 # Tag wire schemas (`payload` / `success` / `error`) + RPC validation
 
-> **Per-module agent reports:** [`reports/README.md`](./reports/README.md) · **Rename checklist:** [`2026-07-07-rpc-schema-names-payload-success-error.md`](./2026-07-07-rpc-schema-names-payload-success-error.md)
+> **Per-module agent reports:** [`reports/README.md`](./reports/README.md)
 
 **Status:** Design locked (2026-07-07). Tag factories use **Effect `Resource.Method` slot names** —
 `payload`, `success`, `error` — with **no `Schema` suffix**.
@@ -13,8 +13,7 @@ Queue/CQR full triplet on tag, Process `error` wiring + engine store tap, Store 
 backing, engine cutover off legacy facets, docs/changesets sweep.
 
 Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
-[`queue-persistence-design.md`](./queue-persistence-design.md),
-[`2026-07-06-processstore-removal.md`](./2026-07-06-processstore-removal.md).
+[`queue-persistence-design.md`](./queue-persistence-design.md).
 
 ---
 

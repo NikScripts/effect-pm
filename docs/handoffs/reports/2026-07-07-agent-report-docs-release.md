@@ -62,7 +62,7 @@ rg 'inputSchema|successSchema|resultSchema|itemSchema|errorSchema|RunGate|gate\(
 | File | Status |
 |------|--------|
 | `docs/CODEBASE-INVENTORY.md` | ✅ Store bridge + subpaths (no `store/QueueResource`) |
-| `docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md` | ✅ Queue/CQR rename **done** on `integration/storage` |
+| ~~`docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md`~~ | ✅ Queue/CQR rename **done**; handoff **deleted** (complete) |
 | `docs/handoffs/result-schema-and-rpc-validation.md` | Keep fingerprint design; status table |
 | `CHANGELOG.md` | Historical — unreleased note may need refresh at release |
 | `.changeset/process-toolkit-namespace.md` | Historical — do not duplicate |
@@ -116,7 +116,7 @@ rg 'itemSchema|QueueResourceStore|ProcessExecutionStore' docs/guides/store.md do
 |------|--------|
 | `package.json` + `tsup` stale `store/QueueResource` export | ✅ **Removed** — facet file deleted; use `QueueResource.store(tag)` |
 | `AGENTS.md` + `docs/AGENTS.md` integration pointer | ✅ Points to `integration/storage` + `handoffs/reports/README.md` |
-| `2026-07-07-rpc-schema-names-payload-success-error.md` Queue status | ✅ Marked **done** on `integration/storage` |
+| `2026-07-07-rpc-schema-names-payload-success-error.md` Queue status | ✅ Done; handoff **deleted** (complete) |
 | `store.md` / `PACKAGE-GUIDE.md` grep | ✅ Clean (re-verified) |
 | `.cursor/rules/module-layout.mdc` + `docs/plans/15-runtime-storage-hybrid.md` | ✅ Removed stale `store/QueueResource` facet claim |
 

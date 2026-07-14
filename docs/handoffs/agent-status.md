@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | from `integration` | [docs corpus](./agent-01-docs-corpus.md) | **plan-first (Phase 1)** | — | — | Handoffs cleanup inventory — UI/site reserved for lettered agents | 2026-07-14 |
+| **1** | **merged → `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) · [readiness](../resources/readiness.md) | **monitoredDependency + readiness draft + date-stack deletes landed** | `integration` tip | typecheck / monitoredDependency tests | Walk next unfinished handoffs / open-asks §1 still open | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **merged → `integration`** | [Logs store followers](./agent-03-logs-p1.md) · [plan](./agent-03-logs-store-followers-plan.md) | **persistLayer/LogStore removed** | [#43](https://github.com/NikScripts/effect-pm/pull/43) | typecheck / 444 tests | Store-layer memo deferred | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — handoffs cleanup (**Phase 1 plan-first**); then plans refactor; then legacy port + Draft label (later unlocks). **No UI / `docs/site` chrome.**
+1. **Agent 1:** Landed on `integration` — `Resource.monitoredDependency`, readiness draft, date-stamped deletes, `open-asks.md`. Next: walk remaining unfinished handoffs / open-asks §1 (widget seam). No UI / `docs/site` chrome.
 2. **Agent 3:** [#43](https://github.com/NikScripts/effect-pm/pull/43) hard-removes interim `Logs.persistLayer` / `LogStore` (followers already on `integration`; store-layer `lineId` memo deferred).
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 

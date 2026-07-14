@@ -49,8 +49,6 @@ Fleet/peer machinery already shipped (`Resource.distributed`, `Resource.peers`, 
 | `src/MultiNode.ts` | Combine folds |
 | `docs/handoffs/multi-host-instances-decisions.md` | SSOT (names may say Host/MultiHost — code is Node/MultiNode) |
 | `docs/standards/resources.md` | Locked peer/fleet rules |
-| `docs/handoffs/2026-07-01-wow-sports-multi-host-findings.md` | Consumer FleetDatabase findings |
-| `docs/handoffs/2026-07-02-peerslayer-eager-stream-connect-deadlock.md` | Lazy peers lesson |
 | `examples/resource-web/hub.ts`, `server.ts` | WorkerPool dogfood |
 | `examples/web-dashboard/fleet.ts` | “Fleet” UI = Group tree, **not** peers mesh — don’t conflate |
 | `src/Telemetry.ts`, `docs/handoffs/telemetry-resource.md` | Adjacent observability candidate |

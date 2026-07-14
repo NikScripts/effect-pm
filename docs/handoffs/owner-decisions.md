@@ -42,6 +42,46 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Build `Resource.monitoredDependency`
+
+- **Owner said:** Show the idea → agreed to build it; first merge with `integration` to get latest.
+- **Chose:** Merge `origin/integration` into `cursor/docs-corpus-date-stack-ce05`, then add `Resource.monitoredDependency` (`status` + `changes` + `readyWhen`/`detail` readiness). Still a plain Tag shape. Delete the emptied widgets date handoff.
+- **Rejected:** Pre-abstracting a new resource kind; shipping without merge.
+- **Supervisor impact:** Public API + changeset on Agent 1 branch; walk next unfinished handoff after green.
+
+---
+
+## 2026-07-14 — Open asks priority queue
+
+- **Owner said:** For unfinished items like the dashboard widget plug-in seam — create a new doc that lists and organizes them; **priority at the top**. Walk one issue at a time in chat.
+- **Chose:** [`open-asks.md`](./open-asks.md) — owner-ordered priority queue for unfinished product/DX/consumer asks. First entry = dashboard widget plug-in seam (moved out of the date-stamped widgets handoff).
+- **Rejected:** Leaving open polish forever as date-stamped one-offs; burying the walk only in docs.
+- **Supervisor impact:** Agent 1 migrates unfinished asks into `open-asks.md` as they are walked; complete/declined rows leave the queue.
+
+---
+
+## 2026-07-14 — Date-stamped handoffs: complete → delete
+
+- **Owner said:** One stack at a time. If a doc is **implemented / complete → delete**; if not finished → **defer to owner**. Do the first stack, then bring back whatever was never finished.
+- **Chose:** First stack = `docs/handoffs/2026-*.md`. Delete completed ones in-place (no archive for this batch). Leave unfinished four for owner call. Update inbound links in the same change.
+- **Rejected:** Archive-first for this stack; continuing to next stacks before owner answers the deferred list.
+- **Supervisor impact:** Agent 1 executes deletes on `cursor/docs-corpus-date-stack-ce05`; waits on deferred docs before next stack.
+
+---
+
+## 2026-07-14 — Agent 1 Phase 1 handoffs: thorough / archive-first / defer to owner
+
+- **Owner said:** Yes (to the Phase 1 plan) — be **thorough and precautionary**, and **defer to** the owner on calls.
+- **Chose:** Phase 1 execution posture:
+  1. **Archive over delete** by default; **no deletes** unless owner ticks specific rows.
+  2. **No ambiguous moves** without owner OK (SSOT docs, anything linked from `AGENTS.md` / legacy STORAGE/guides / `docs/site/README`, open agent briefs, Agent 3 plans, `store-layer-query`, `decisions/` layout).
+  3. Live bus + historical SSOT stay at `handoffs/` root until owner unlocks a move.
+  4. Execution only in **owner-approved batches** (Agent 1 proposes; owner green-lights).
+- **Rejected:** Aggressive deletes; freelancing `decisions/` subdirectory or bulk root reshuffles; touching `docs/site` UI.
+- **Supervisor impact:** Agent 1 updates plan locking these rules; waits for batch unlock before `git mv`.
+
+---
+
 ## 2026-07-14 — Agent 1 → docs corpus (UI stays with lettered agents)
 
 - **Owner said:** Save UI / Tailscale-facing site work for lettered (local) agents. Give Agent 1 the docs corpus instead: **handoffs cleanup first**, then plans refactor/migration, then port legacy docs with a **Draft** page label (owner will refine Draft UX after assign).

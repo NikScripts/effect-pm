@@ -1,9 +1,10 @@
 # Agent 1 — Docs corpus: handoffs → plans → legacy (Draft)
 
-**Status:** **PHASE 1 PLAN-FIRST** — owner 2026-07-14.  
+**Status:** **PHASE 1 POSTURE LOCKED — batch execution deferred to owner** (2026-07-14).  
+**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md). Owner: thorough · archive-first · defer edge cases/deletes. **No mass moves until a named batch is unlocked.**  
 **Agent:** **1** (free — headlining research / ShardMap+Telemetry **already shipped**; this is the next assignment).  
 **Branch from:** **`integration`**.  
-**Working branches:** `cursor/docs-handoffs-cleanup-a009` → later `cursor/docs-plans-…` / `cursor/docs-legacy-…` after each phase unlock.
+**Working branches:** `cursor/docs-corpus-phase1-plan-ce05` (plan) → execute branches only after batch unlock → Phases 2–3 later.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/standards/documentation.md`](../standards/documentation.md) · [`docs/nav.ts`](../nav.ts) · [`docs/site/src/lib/content.ts`](../site/src/lib/content.ts)
 
