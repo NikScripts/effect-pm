@@ -1,9 +1,10 @@
 # Agent 1 — Docs corpus: handoffs → plans → legacy (Draft)
 
-**Status:** **PHASE 1 PLAN-FIRST** — owner 2026-07-14.  
+**Status:** **PHASE 1 PLAN POSTED — awaiting owner approval** (2026-07-14).  
+**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md) (inventory · tree · keep-forever · ripples). **No mass deletes yet.**  
 **Agent:** **1** (free — headlining research / ShardMap+Telemetry **already shipped**; this is the next assignment).  
 **Branch from:** **`integration`**.  
-**Working branches:** `cursor/docs-handoffs-cleanup-a009` → later `cursor/docs-plans-…` / `cursor/docs-legacy-…` after each phase unlock.
+**Working branches:** `cursor/docs-corpus-phase1-plan-ce05` (plan) → later execute `cursor/docs-handoffs-cleanup-…` after unlock → Phases 2–3 later.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/standards/documentation.md`](../standards/documentation.md) · [`docs/nav.ts`](../nav.ts) · [`docs/site/src/lib/content.ts`](../site/src/lib/content.ts)
 
