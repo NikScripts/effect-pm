@@ -347,9 +347,14 @@ pre.shiki { background: transparent; }
   overflow: auto;
   overscroll-behavior: contain;
   background: var(--panel) !important;
-  border: 1px solid var(--border);
+  /* A transparent border is a HOVER BRIDGE: it extends the popup's hit-area toward the token (the token
+     end touches it via GAP 0 in TwoslashHover), while `background-clip: padding-box` keeps the visible
+     panel inset — so the panel doesn't sit on the highlighted code, yet the pointer can still travel
+     onto it. (The border is outside the padding box, so `overflow` never clips it.) */
+  border: 8px solid transparent;
+  background-clip: padding-box;
   border-radius: 0.5rem;
-  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
+  filter: drop-shadow(0 4px 14px rgb(0 0 0 / 0.35));
   white-space: pre;         /* no wrapping — lines extend and the container scrolls horizontally */
   font-size: 0.82rem;
   line-height: 1.5;
@@ -419,6 +424,12 @@ pre.shiki { background: transparent; }
   width: max-content;
   min-width: 100%;
   box-sizing: border-box;
+}
+/* Shiki gives each `.line` its own background in some paths; keep them transparent so the section
+   (zebra) colour reads cleanly instead of a per-line block. */
+.twoslash .line,
+.twoslash-popup-container .line {
+  background: transparent !important;
 }
 /* each JSDoc tag on its own line, with a space between the tag name and its value
    (`@category layers`, `@since 4.0.0`) instead of running together. */
