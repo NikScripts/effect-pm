@@ -22,3 +22,19 @@ Custom `Resource.Tag`s (`Database`, `Import`, `EventManager`, …) with no known
 Generic introspection is rejected. Widgets stay hand-crafted per type; the seam is how a consumer plugs theirs in.
 
 **Not a blocker** for wow — the generic card already renders. Prerequisite shipped: `Resource.client(tag, host)` (beta.17).
+
+---
+
+## 2. Docs: when NOT to hoist `Effect.provide` to `serve`
+
+**Area:** guides / `strictEffectProvide` / serve migration  
+**Source:** wow-sports engine-serve adoption (was `2026-07-01-engine-serve-adoption-feedback.md`)  
+**Status:** open — docs only (no package helper)
+
+Blanket advice “move every in-body `Effect.provide` to the serve” is wrong for **sub-effect-scoped** deps. Hoisting to the resource edge widens `R` for the whole body and can change behavior without a type error (live-score poller: outer windowing must not capture; inner tick must).
+
+**Wanted copy (one paragraph is enough):**
+- **Whole-resource** dependency → satisfy at `serve` / edge provide
+- **Sub-effect** dependency → keep a scoping combinator in the app (e.g. their `withImport(handlers, effect)`); do not hoist
+
+Not a blocker. Do **not** ship a package `locally`/`withImport` for this — consumer handlers aren’t our types.

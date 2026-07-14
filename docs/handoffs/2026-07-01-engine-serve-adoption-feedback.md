@@ -2,7 +2,10 @@
 
 **Consumer:** wow-sports services-hub. Migrating our 9 in-body `Effect.provide` sites so we can set
 `strictEffectProvide: "error"`. This is field feedback from _doing_ the migration — what worked, one
-guidance gap, one ergonomic downside, and a couple of small asks. Nothing here is a blocker.
+ergonomic downside, and a couple of small asks. Nothing here is a blocker.
+
+> **Guidance gap (“when NOT to hoist”)** moved to the priority queue:
+> [`open-asks.md`](./open-asks.md) §2.
 
 ## What worked well
 
@@ -13,31 +16,6 @@ guidance gap, one ergonomic downside, and a couple of small asks. Nothing here i
   loop is working really well — thank you.
 - `ScheduledProcess.serve(tag, config)` **preserves `R`** and runs the engine as advertised; verified it
   typechecks against our real configs.
-
-## Guidance gap (the big one): not every `strictEffectProvide` site wants per-resource `serve`
-
-The beta.18 note-back framed the migration as _"for each of the N sites, move the `Effect.provide` to
-the serve."_ Doing it, we found that's only right for a **subset**. Of our 9 sites:
-
-- **2** genuinely need per-resource `serve` — mutually-exclusive implementations of the _same_ tag
-  (a _hooked_ `ImportSource` for the phased importer vs an _empty-hook_ one for the workers). This is
-  exactly the case `serve`/`httpServer` exists for.
-- **7** self-provide a **shared** handler layer. For those, moving the provide "to the serve/resource"
-  is the _wrong_ move, because it **broadens the scope**. Concretely: our live-score poller has an
-  **inner** per-match tick that must capture, wrapped in an **outer** body whose `getSeasonMatches`
-  (used only for windowing) must **not** capture. The self-provide is deliberately scoped to the inner
-  effect. Hoisting it to the resource/serve level would silently make the outer body capture too — in
-  our case importing _stale schedule scores over fresher live scores mid-game_. A real behavior
-  regression the type system won't catch.
-
-The correct fix for those 7 was a **scoping combinator** (`withImport(handlers, effect)` in our stack),
-not provide-at-the-edge — it keeps the exact scope, makes the dependency explicit in `R`, and satisfies
-`strictEffectProvide` because it isn't a raw `Effect.provide`.
-
-**Ask:** the migration guide (and the `strictEffectProvide` rule docs) should distinguish
-**whole-resource** dependencies (→ `serve` / edge provide) from **sub-effect-scoped** dependencies
-(→ a scoping combinator). "Move it to the serve" as blanket advice will cause consumers to silently
-broaden scope. A one-paragraph "when NOT to hoist" would prevent a foot-gun.
 
 ## Ergonomic downside: one per-resource-dep resource forces the _whole_ serve off `serveAllHttp`
 
