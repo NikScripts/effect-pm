@@ -12,6 +12,11 @@
   --fg: oklch(0.24 0.01 260);
   --muted-fg: oklch(0.5 0.01 260);
   --card: oklch(0.955 0.006 260);
+  /* twoslash preview popup bg — lighter than --panel (the popup should read brighter than the page),
+     but kept just below --zebra-even so the zebra sections still show. */
+  --popup-bg: oklch(0.985 0.004 260);
+  /* zebra "even" section bg — deliberately LIGHTER than --panel (almost white); --card is darker. */
+  --zebra-even: oklch(0.995 0.003 260);
   --border: oklch(0.9 0.008 260);
   --primary: oklch(0.55 0.16 250);
   --must: oklch(0.55 0.2 25);
@@ -27,6 +32,8 @@
     --fg: oklch(0.92 0.01 260);
     --muted-fg: oklch(0.64 0.01 260);
     --card: oklch(0.21 0.014 260);
+    --popup-bg: oklch(0.23 0.014 260);
+    --zebra-even: oklch(0.245 0.014 260);
     --border: oklch(0.3 0.01 260);
     --primary: oklch(0.74 0.14 250);
     --must: oklch(0.7 0.19 25);
@@ -41,6 +48,11 @@
 html {
   background: var(--bg);
   min-height: 100%;
+  /* Disable iOS Safari text auto-inflation ("font boosting"), which enlarges large text blocks —
+     it was doubling the multi-line expanded-type box in twoslash popups while leaving the 1-line
+     compact type and short comments alone. Keep every block at its authored size. */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
@@ -269,9 +281,14 @@ pre code { background: none; border: none; padding: 0; font-size: 0.86rem; }
    Shiki paints its own code background, so drop our --card background on highlighted pre. */
 pre.shiki { background: transparent; }
 @media (prefers-color-scheme: dark) {
+  /* Shiki dual-theme, done the correct way: the dark token COLOR goes on every span, but the dark
+     BACKGROUND only on the `.shiki` root <pre>. Shiki's docs snippet puts the bg on `.shiki span`
+     too, which paints each token / `.line` its own block (the per-line background bug). */
   .shiki,
   .shiki span {
     color: var(--shiki-dark) !important;
+  }
+  .shiki {
     background-color: var(--shiki-dark-bg) !important;
   }
 }
@@ -335,20 +352,30 @@ pre.shiki { background: transparent; }
   left: 0;
   z-index: 30;
   display: none;
-  width: max-content;
-  max-width: min(88vw, 42rem);
+  width: max-content;      /* shrink-wrap to the widest section, capped by max-width below */
   padding: 0;               /* no gutter — the type fills the popup */
-  overflow: hidden;         /* full-bleed type respects the rounded frame */
-  background: var(--panel) !important;
+  /* ONE VERTICAL scroll container: the whole popup (type + expanded + comments) scrolls up/down
+     together, capped, so the tall expanded box doesn't y-scroll on its own. Horizontally, each code
+     section scrolls itself (overflow-x below) so sections stay equal width. */
+  max-height: min(70vh, 32rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--popup-bg) !important;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
-  white-space: pre-wrap;
+  /* Bounded width. The popup shrink-wraps its content up to this cap. Every section fills the popup
+     (width: 100% below), so all sections are the SAME width — a long type can no longer leave the
+     comment box short. Past the cap: prose (comments) WRAPS; code (type / expanded) does NOT wrap —
+     it scrolls horizontally within its own section, since a type broken mid-line is unreadable. */
+  max-width: min(92vw, 42rem);
   font-size: 0.82rem;
   line-height: 1.5;
   text-align: left;
 }
-.twoslash-hover:hover > .twoslash-popup-container { display: block; }
+/* Visibility is JS-managed (a `.is-open` class with a small close-delay) so the pointer can cross the
+   external gap between the token and the popup without it vanishing. See TwoslashHover.tsx. */
+.twoslash-hover.is-open > .twoslash-popup-container { display: block; }
 /* The type is a <code>, so it inherited the base code chrome (border/radius/padding). Strip it so
    it reads as the popup's content, filling the width, not a boxed chip inside the popup. */
 .twoslash-popup-code {
@@ -358,6 +385,8 @@ pre.shiki { background: transparent; }
   background: transparent !important;
   border: none;
   border-radius: 0;
+  white-space: pre;        /* code never wraps */
+  overflow-x: auto;        /* a too-wide type scrolls within its own section, not the whole popup */
 }
 /* Rich popups render the type as a nested shiki <pre>, which carries the base `pre {}` border, radius,
    and padding — a boxed chip. Drop only the border + radius (and reset margin); keep shiki's own inline
@@ -368,18 +397,119 @@ pre.shiki { background: transparent; }
   border: none;
   border-radius: 0;
 }
+/* Short single-line types render INLINE (no nested <pre>), so the pre-padding above doesn't apply and
+   they'd touch the popup edges. Give those the same inset directly on the code box. */
+.twoslash-popup-code:not(:has(pre)) { padding: 0.5rem 0.7rem; }
 .twoslash-popup-docs {
   margin: 0;
   padding: 0.45rem 0.7rem 0.5rem;
-  border-top: 1px solid var(--border);
   color: var(--muted-fg);
   font-family: var(--font-sans);
   font-size: 0.78rem;
+  white-space: normal;       /* prose wraps to the popup width */
+  overflow-wrap: break-word;
 }
+/* The "dual preview" expanded-declaration box — its own panel wedged BETWEEN the compact type box and
+   the JSDoc comments box. */
+.twoslash-popup-expand {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  white-space: pre;        /* expanded type never wraps */
+  overflow-x: auto;        /* scrolls within its own section when wide */
+}
+.twoslash-popup-expand pre {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 0;
+}
+/* Single scroll container: inner panels never scroll on their own, and their shiki <pre> backgrounds
+   are cleared so the zebra section colour below shows through. The popup container (overflow: auto)
+   is the one scroller for both axes. */
+.twoslash-popup-container pre {
+  overflow: visible;
+  background: transparent !important;
+}
+/* Zebra sections, anchored at the END: the last section is always transparent and it alternates
+   backward — [transparent] · [white, transparent] · [transparent, white, transparent]. `nth-last-child`
+   counts the query popup's arrow LAST, so it never shifts the content parity; the arrow is forced
+   transparent. "even" = --zebra-even (almost white — lighter than the popup panel; --card is darker). */
+.twoslash-popup-arrow { background: transparent !important; }
+.twoslash-popup-container > :nth-last-child(odd) { background: transparent !important; }
+.twoslash-popup-container > :nth-last-child(even) { background: var(--zebra-even) !important; }
+/* Every section fills the popup exactly, so all sections are the SAME width and the zebra bg spans the
+   full line. The popup shrink-wraps to its widest content (capped by max-width); wide code scrolls
+   inside its own section (overflow-x above) rather than stretching the section past its siblings. */
+.twoslash-popup-code,
+.twoslash-popup-expand,
+.twoslash-popup-docs {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* each JSDoc tag on its own line, with a space between the tag name and its value
    (`@category layers`, `@since 4.0.0`) instead of running together. */
 .twoslash-popup-docs-tag { display: block; }
 .twoslash-popup-docs-tag-name { color: var(--primary); margin-right: 0.4em; }
+/* JSDoc markdown in the comments box: paragraph spacing + highlighted fenced code blocks
+   (`renderJsdocMarkdown` in highlight.ts renders these — the default just dumped raw ``` text). */
+.twoslash-popup-docs p { margin: 0.15rem 0; }
+.twoslash-popup-docs p:first-child { margin-top: 0; }
+.twoslash-popup-docs p:last-child { margin-bottom: 0; }
+/* Markdown block elements now emitted by the mdast rewrite (lists / headings / links / emphasis /
+   quotes), sized compact for the narrow popup so they don't tower over the prose. */
+.twoslash-popup-docs ul,
+.twoslash-popup-docs ol {
+  margin: 0.2rem 0;
+  padding-left: 1.1rem;
+}
+.twoslash-popup-docs li { margin: 0.1rem 0; }
+.twoslash-popup-docs h1,
+.twoslash-popup-docs h2,
+.twoslash-popup-docs h3,
+.twoslash-popup-docs h4,
+.twoslash-popup-docs h5,
+.twoslash-popup-docs h6 {
+  margin: 0.4rem 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+.twoslash-popup-docs a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* `{@link …}` reference — blue like a link, but non-navigating (target isn't resolved to a URL). */
+.twoslash-jsdoc-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: default;
+}
+.twoslash-popup-docs strong { color: var(--fg); font-weight: 600; }
+.twoslash-popup-docs em { font-style: italic; }
+.twoslash-popup-docs blockquote {
+  margin: 0.3rem 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--border);
+  color: var(--muted-fg);
+}
+.twoslash-popup-docs-code { margin: 0.4rem 0; }
+.twoslash-popup-docs-code:last-child { margin-bottom: 0; }
+.twoslash-popup-docs-code pre {
+  padding: 0.45rem 0.6rem !important;
+  border-radius: 0.35rem;
+  background: color-mix(in oklab, var(--fg) 7%, transparent) !important;
+  overflow-x: auto;
+}
+/* match the comment prose size so code fences don't tower over it — force it on the <code>/tokens
+   themselves (the earlier rule on `pre` was overridden by shiki's own sizing). */
+.twoslash-popup-docs code,
+.twoslash-popup-docs code span {
+  font-size: 0.73rem !important;
+}
 /* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
    background with a border and rounded corners. Strip it so it blends into the description instead of
    being a boxed chip. (The main type code, .twoslash-popup-code, is already handled above.) */
@@ -394,6 +524,13 @@ pre.shiki { background: transparent; }
    while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
    or a JS reposition). Tracked for the doc-site owner. */
 .twoslash { overflow-x: auto; }
+
+/* Inline type-error display is DISABLED. Twoslash under this repo's compiler config doesn't surface
+   type diagnostics (a plain `const x: number = "s"` yields zero error nodes, with or without an
+   `// @errors:` marker), so there's nothing to style. The build guardrail that keeps doc snippets
+   honest is `scripts/verify-twoslash-guides.ts` (it checks `result.errors`), not inline squiggles.
+   If error display is wanted later, it needs a diagnostics/handbookOptions fix in the twoslasher, then
+   `.twoslash-error` (token squiggle) + `.twoslash-error-line` (message) rules here. */
 
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */

@@ -124,7 +124,8 @@ export const parseChapter = (raw: string) =>
         new MissingPageBlock({ detail: "no `{#id title=… }` page block above the H1" }),
       );
     }
-    const rules = yield* Effect.forEach(rawRules, decodeRule);
+    // wrap so forEach's index isn't passed as decode's ParseOptions arg (breaks the overload)
+    const rules = yield* Effect.forEach(rawRules, (r) => decodeRule(r));
     const seen = new Set<string>();
     for (const r of rules) {
       if (seen.has(r.id)) return yield* Effect.fail(new DuplicateRuleId({ id: r.id }));

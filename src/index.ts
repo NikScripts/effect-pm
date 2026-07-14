@@ -128,6 +128,18 @@ export {
 } from "./ApiUsageSchema";
 export * as Telemetry from "./Telemetry";
 export * as ShardMap from "./ShardMap";
+export * as DynamicConfig from "./DynamicConfig";
+export {
+  ConfigKeyNotSwappable,
+  DynamicConfigStore,
+} from "./DynamicConfig";
+export type {
+  AllConfig,
+  ConfigBag,
+  ConfigField,
+  FixedField,
+  SwappableField,
+} from "./DynamicConfig";
 export {
   DuplicateGroupId,
   DuplicateInstance,

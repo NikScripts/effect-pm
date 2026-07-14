@@ -1,13 +1,18 @@
 # ShardMap — type-safety remediation (for the ShardMap author)
 
-**Owner of the code:** Cursor Agent (authored `src/ShardMap.ts` + `src/internal/shardMap*`; active on
-`cursor/intro-shardmap-trio`, `cursor/shardmap-store`).
+**Owner of the code:** Cursor Agent (authored `src/ShardMap.ts` + `src/internal/shardMap*`).
 **Found by:** Agent C standards audit. This doc is the complete spec — you shouldn't need the audit chat.
-**Branch:** your ShardMap working branch; fix these before the next merge to `integration`.
+**Branch:** done — type-safety [#39](https://github.com/NikScripts/effect-pm/pull/39) + corpus [#41](https://github.com/NikScripts/effect-pm/pull/41) merged to `integration` @ `f269a9ce`; work branches deleted.
+
+**Status (2026-07-14):** **Complete on `integration`.** Generic `buildImpl` in `src/ShardMap.ts` (Telemetry
+posture). `EngineTag` / `Record<string, unknown>` erasure removed. All `@since 1.0.0` dropped.
+Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf, ImplOf / ServeImplOf) each carry a
+`// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`. Four-file corpus sweep (naming / TSDoc /
+`@module` / resource-pattern) also merged.
 
 ---
 
-## Verdict
+## Verdict (original)
 
 `ShardMap` isn't wrong, it's **undisciplined**. It's a fully-generic public facade
 (`layer`/`serve`/`serveRemote` over `<Self, Key, Value, Error>`) bolted onto a **deliberately erased
@@ -65,7 +70,6 @@ src/internal/shardMap.ts:122,214,223   peer as unknown as PeerLeaf
 
 ## Not yet covered
 
-Agent C's pass focused on the cast pattern + `@since` (what makes ShardMap differ from the clean
-`Telemetry`). A full naming / doc-comment / resource-pattern sweep of all four files
-(`ShardMap.ts`, `internal/shardMap.ts`, `internal/shardMapSql.ts`, `internal/shardMapSymbols.ts`)
-has **not** been done — do it (or ask Agent C to) before calling ShardMap corpus-complete.
+~~Agent C's pass focused on the cast pattern + `@since`…~~ **Done** and merged (`f269a9ce`).
+Naming / TSDoc / `@module` markers, Telemetry-parity serve/layer docs, no `!` non-null, stale
+store-era stamp comments removed. ShardMap is corpus-complete for the Agent C remit.
