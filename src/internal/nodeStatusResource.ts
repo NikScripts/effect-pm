@@ -24,7 +24,6 @@ import * as Resource from "../Resource";
 import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
-import { LogStore } from "../store/log";
 import { queryDurableNode } from "./logs/durableRead";
 
 /** The reserved group id (wire prefix) for the node status resource. */
@@ -86,8 +85,8 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
     }),
     query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
-        "Replay persisted node logs (newest `limit`). Prefers `Resource.store(Node)` / " +
-        "`Node.logs` registration Storage; falls back to interim LogStore when composed.",
+        "Replay persisted node logs (newest `limit`) from `Resource.store(Node)` / `Node.logs` " +
+        "registration Storage. Empty when the node journal is not registered (or `nodeLogKey` unknown).",
     }),
   },
 }) {}
@@ -102,7 +101,7 @@ export const buildNodeStatusImpl = (options: {
   readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
   /**
    * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
-   * When omitted, query falls back to interim LogStore (or empty).
+   * When omitted, query returns `[]`.
    */
   readonly nodeLogKey?: string;
 }) => {
@@ -138,22 +137,10 @@ export const buildNodeStatusImpl = (options: {
     ping: Clock.currentTimeMillis,
     logs: {
       stream: logsLive,
-      // Prefers `Node.logs` Storage when `nodeLogKey` is known; else interim LogStore; else `[]`.
       query: (payload: { readonly limit: number }) =>
-        Effect.gen(function* () {
-          if (options.nodeLogKey !== undefined) {
-            return yield* queryDurableNode(options.nodeLogKey, {
-              limit: payload.limit,
-            });
-          }
-          const store = yield* Effect.serviceOption(LogStore);
-          if (Option.isNone(store)) {
-            return [] as ReadonlyArray<LogEntry>;
-          }
-          return yield* store.value
-            .load({ limit: payload.limit, sort: "desc" })
-            .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([])));
-        }),
+        options.nodeLogKey !== undefined
+          ? queryDurableNode(options.nodeLogKey, { limit: payload.limit })
+          : Effect.succeed([] as ReadonlyArray<LogEntry>),
     },
   };
 };

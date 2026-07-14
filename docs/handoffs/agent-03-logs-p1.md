@@ -3,7 +3,7 @@
 **Status:** **FOLLOWERS CUTOVER SHIPPED** — [#40](https://github.com/NikScripts/effect-pm/pull/40) / [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md).  
 **Agent:** **3**  
 **Branch:** `cursor/logs-store-followers-906e` (landing on `integration`)  
-**Deferred:** store-layer `lineId` memo. **Next:** hard-remove interim `persistLayer` / `LogStore` (owner unlock).
+**Deferred:** store-layer `lineId` memo. **In flight:** hard-remove interim `persistLayer` / `LogStore`.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · this file · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) §Store integration · [`store-and-logs-design.md`](./store-and-logs-design.md) §Single capture · [`docs/LOGS.md`](../LOGS.md)
 

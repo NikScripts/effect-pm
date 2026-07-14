@@ -12,7 +12,7 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 | Log annotations | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
 | Log entry + predicates | `@nikscripts/effect-pm/LogEntry` | `src/LogEntry.ts` |
 | Resource foundation | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` |
-| Log storage facet | `@nikscripts/effect-pm/store/Log` | `src/store/log.ts` |
+| Store (registrations) | `@nikscripts/effect-pm/Store` | `src/Store.ts` |
 | Process tags | `@nikscripts/effect-pm/Process` | `src/Process.ts` |
 | Queue tags | `@nikscripts/effect-pm/QueueResource` | `src/QueueResource.ts` |
 
@@ -28,12 +28,12 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
-| **Node log key** | One OS process / runtime host (durable bucket) | `Resource.Node` constructor arg → `.key` | `LogStore` `groupId`; `annotations.node` |
-| **Resource key** | One queue, process, or custom tag | `Resource.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | `annotations.processId` / `queueId`; lineage JSON |
+| **Node log key** | One OS process / runtime host (durable bucket) | `Resource.Node` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
+| **Resource key** | One queue, process, or custom tag | `Resource.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
-| **Store bucket key** | SQLite / journal partition for logs | Same value as **node log key** | `LogStore.record(groupId, …)` / `LogQuery.groupId` |
+| **Store scope key** | Journal partition for a registration | Same as node or resource key | `handle.log.append` / `handle.log.read` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
-| **RPC `groupId`** | Wire routing prefix for multi-host RPC | Tag `groupId` when set | **Not** a log key — do not pass to `persistLayer` |
+| **RPC `groupId`** | Wire routing prefix for multi-host RPC | Tag `groupId` when set | **Not** a log key |
 | **Group catalog key** | Dashboard / CLI grouping | `Group.Tag` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
 
 ## Key catalog
@@ -80,12 +80,9 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 |-----------|----------|---------|-----|--------|
 | `Node.logs` / `Resource.store(Node)` | node log key | `Node.key` | store registration | `src/Resource.ts` |
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
-| `persistLayer(node)` (**deprecated**) | node log key | `Node.key` | `Logs.persistLayer` | `src/Logs.ts` |
-| `record(groupId, …)` | store bucket key | node log key | `LogStore.record` (interim) | `src/store/log.ts` |
-| `load({ groupId })` | store bucket key | node log key | `LogStore.load` (interim) | `src/store/log.ts` |
 | `byResource({ processId })` | resource key filter | `Process.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
 | `byResource({ queueId })` | resource key filter | `QueueResource.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
-| `handle.log.read` | scope key | node or resource key | store handle | registration `log` shape |
+| `handle.log.read` | store scope key | node or resource key | store handle | registration `log` shape |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
 | `LogEntry.atLeaf(key)` | lineage segment key | usually **resource key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
@@ -287,7 +284,7 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 
 | Old | New |
 |-----|-----|
-| `Logs.persistLayer` + `LogStore` | `Node.logs` + toolkit `.store` on `Store.Service` |
+| `Logs.persistLayer` + `@nikscripts/effect-pm/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `@nikscripts/effect-pm/Logs` |
 | `ProcessStore` log facet | implicit `log` shape on toolkit store registrations |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |

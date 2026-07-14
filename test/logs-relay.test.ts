@@ -1,8 +1,14 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Fiber, Layer, Stream } from "effect";
+import { Duration, Effect, Fiber, Stream } from "effect";
 import * as Logs from "../src/Logs";
-import { LogStore } from "../src/store/log";
+import * as Resource from "../src/Resource";
+import * as Store from "../src/Store";
 import { testRelayNodeKey } from "./fixtures/logKeys";
+
+class RelayNode extends Resource.Node<RelayNode>(testRelayNodeKey) {}
+class RelayStore extends Store.Service<RelayStore>("@test/logs-relay/Store")(
+  RelayNode.logs,
+) {}
 
 describe("Logs relay", () => {
   it.live("layer captures one relay entry per log line", () =>
@@ -22,27 +28,16 @@ describe("Logs relay", () => {
     }).pipe(Effect.provide(Logs.layer), Effect.scoped),
   );
 
-  it.live("persistLayer uses relay subscription (one capture path)", () =>
+  it.live("Node.logs durable tail follows the same capture path", () =>
     Effect.gen(function* () {
-      const collected = yield* Effect.forkChild(
-        Stream.runCollect(
-          Stream.take(
-            Stream.filter(Logs.stream, (e) => e.message === "persist-subscriber"),
-            1,
-          ),
-        ),
-      );
-      yield* Effect.sleep(Duration.millis(20));
       yield* Effect.logInfo("persist-subscriber");
-      const entry = Array.from(yield* Fiber.join(collected))[0];
-      expect(entry?.message).toBe("persist-subscriber");
-    }).pipe(
-      Effect.provide(
-        Logs.persistLayer(testRelayNodeKey).pipe(
-          Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
-        ),
-      ),
-      Effect.scoped,
-    ),
+      yield* Effect.gen(function* () {
+        while ((yield* Logs.byNode(RelayNode)).length === 0) {
+          yield* Effect.sleep(Duration.millis(20));
+        }
+      }).pipe(Effect.timeout(Duration.seconds(3)));
+      const rows = yield* Logs.byNode(RelayNode);
+      expect(rows.some((row) => row.message === "persist-subscriber")).toBe(true);
+    }).pipe(Effect.provide(RelayStore.layerMemory), Effect.scoped),
   );
 });

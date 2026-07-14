@@ -4,10 +4,10 @@
  * @remarks
  * ## Node log key (durable bucket)
  *
- * The argument to {@link byNode} (and interim {@link persistLayer}) is the **node log key** — it
- * **must** equal the {@link Resource.Node} `.key` for that OS process (the same string
- * {@link Resource.selfNode} returns). Prefer registering `Node.logs` on a {@link Store.Service};
- * the durable tail stamps `annotations.node`. Use slash-separated paths (`billing/scores`).
+ * The argument to {@link byNode} is the **node log key** — it **must** equal the
+ * {@link Resource.Node} `.key` for that OS process (the same string {@link Resource.selfNode}
+ * returns). Register `Node.logs` on a {@link Store.Service}; the durable tail stamps
+ * `annotations.node`. Use slash-separated paths (`billing/scores`).
  *
  * See `docs/LOGS.md` for the full **key catalog** (key kind, package path, source, example path).
  *
@@ -19,8 +19,7 @@
  * - **Durable tails** — each store registration with an implicit `log` shape forks a Stream
  *   follower (`Node.logs`, `Process.store`, …) → `handle.log.append`.
  * - **`withScope`** — lineage annotation at resource materialize.
- * - **`byNode`** / **`byResource`** — durable reads (Storage first; interim LogStore fallback).
- * - **`persistLayer`** — **deprecated** interim LogStore writer (do not dual-compose with `Node.logs`).
+ * - **`byNode`** / **`byResource`** — durable reads from registration Storage.
  *
  * Per-resource live + durable export: {@link Resource.logs} / {@link Resource.withLogExport}.
  *
@@ -52,11 +51,10 @@ import type { LogSort } from "./internal/manager/logQuery";
 import { queryDurableNode, queryDurableScope } from "./internal/logs/durableRead";
 import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
-import { persistLayer as persistFollowerLayer } from "./internal/logs/storeFollower";
 
 /**
  * **Node log key** — durable bucket id for one runtime host. Must equal {@link Resource.Node} `.key`
- * (same string as {@link Resource.selfNode}). Stored as `annotations.node` (and interim LogStore `groupId`).
+ * (same string as {@link Resource.selfNode}). Stored as `annotations.node` on node-journal lines.
  *
  * @see `docs/LOGS.md` — Key catalog → Node log keys
  *
@@ -111,19 +109,6 @@ export const replay = relay.replayLogEntry;
 /** Append `tag.key` to fiber lineage at materialize. @public */
 export const withScope = withLogScope;
 
-/**
- * Interim durable writer into standalone LogStore (`@nikscripts/effect-pm/store/Log`).
- *
- * @deprecated Prefer {@link Resource.store}`(Node)` / `Node.logs` on a {@link Store.Service}
- * (`AppStore.layerMemory` already includes capture). Do not compose this **and**
- * `Resource.store(node)` for the same node (double writers).
- *
- * @public
- */
-export const persistLayer = (
-  node: NodeLogKey | NodeLogKeySource,
-): ReturnType<typeof persistFollowerLayer> => persistFollowerLayer(resolveNodeLogKey(node));
-
 const queryLimitDefault = 200;
 
 /** Options shared by {@link byNode} / {@link byResource}. @public */
@@ -137,8 +122,7 @@ export interface LogReadOptions {
 /**
  * Read durable logs for a **whole node** (every resource on that process).
  *
- * Prefers `Resource.store(Node)` / `Node.logs` registration `log.read`; falls back to interim
- * LogStore `groupId` when that layer is still composed.
+ * Requires `Resource.store(Node)` / `Node.logs` on the ambient {@link Store.Service} Storage.
  *
  * @public
  */
@@ -153,8 +137,7 @@ export const byNode = (
 /**
  * Read durable logs for a **specific resource** (filter by **resource key**).
  *
- * Prefers that resource's store registration `log.read`; falls back to interim LogStore
- * lineage filter.
+ * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …).
  *
  * @remarks
  * Prefer {@link Resource.logs} for new code. See `docs/LOGS.md` — Store / query parameters.

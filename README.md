@@ -81,25 +81,26 @@ const layer = Process.layer(LiveScores, {
 ### Remote (the dashboard path)
 
 ```ts
-import * as Logs from "@nikscripts/effect-pm/Logs";
-import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
 import * as Resource from "@nikscripts/effect-pm/Resource";
-import { LogStore } from "@nikscripts/effect-pm/store/Log";
+import * as Store from "@nikscripts/effect-pm/Store";
+import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
 
 class Droplet extends Resource.Node<Droplet>("hub/droplet") {}
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Droplet.logs,
+  QueueResource.store(RosterQueue),
+) {}
 
-// host — node logs stack + serve resources
+// host — registration journals + serve resources (`AppStore` bakes in Logs.layer)
 Resource.httpServer([QueueResource.serve(RosterQueue, { effect })])
   .pipe(
-    Layer.provide(Logs.layer),
-    Layer.provide(Logs.persistLayer(Droplet)),
-    Layer.provide(LogStore.layerMemory),
+    Layer.provide(AppStore.layerMemory),
     Layer.provide(HistoryStore.layerMemory()),
   );
 
 // dashboard — same Tag over RPC; per-resource logs via NodeStatus + lineage filter
 // (see docs/LOGS.md — Remote dashboard)
-const { stream, query } = yield* Resource.logs(RosterQueue); // local only
+const { stream, query } = yield* Resource.logs(RosterQueue); // local Storage / remote NodeStatus
 ```
 
 ## Persistence
@@ -109,13 +110,10 @@ Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
 - **Durability** — `DurableQueueStore` (priority-native, at-least-once + dedup). Enable with
   `persist` on the queue; a restart recovers in-flight work.
 - **Observability history** — `HistoryStore` backs `metrics.query` window backfill; runtime-wide logs
-  are durably stored by `Logs.persistLayer(node)` (into `LogStore`) and read back with
-  `Logs.byNode` / `Logs.byResource` / `Resource.logs(tag)`. `SQLiteHistoryStore.layer` /
-  `SQLiteDurableQueueStore.layer` from `@nikscripts/effect-pm/storage/sqlite` make these durable
-  across restarts.
-
-Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStorage`
-(`@nikscripts/effect-pm/storage/{sqlite,redis}`).
+  use `Node.logs` / toolkit `*.store` on a `Store.Service` and read back with `Logs.byNode` /
+  `Logs.byResource` / `Resource.logs(tag)`. Persist the store with `AppStore.layer({ filename })`.
+  `SQLiteHistoryStore.layer` / `SQLiteDurableQueueStore.layer` from
+  `@nikscripts/effect-pm/storage/sqlite` cover queue/history separately.
 
 ## Docs
 

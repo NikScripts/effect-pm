@@ -69,7 +69,7 @@ Start here for execution history. **`Process.make`** does not auto-append.
 Storage:
 
 - **`Store.Service` + `Process.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Process.layer`** only.
-- **`LogStore`** (`@nikscripts/effect-pm/store/Log`) — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay.
+- **Durable logs** — `Node.logs` / toolkit `*.store` on a `Store.Service`; `@nikscripts/effect-pm/Logs` handles capture/relay + `byNode` / `byResource`.
 
 ### Schedule
 

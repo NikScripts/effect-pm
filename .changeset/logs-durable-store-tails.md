@@ -20,4 +20,4 @@ const rows = yield* Logs.byNode(BillingNode)
 - `NodeStatus.logs.query` prefers registration Storage (node key inferred from served tags / `httpServer({ node })`).
 - Capture logger closes over `LogRelay` at layer build (queue workers forked during acquisition still publish).
 - Compose store into resource layers: `Queue.layer(...).pipe(Layer.provideMerge(AppStore.layerMemory))` so Logs is installed before auto-start workers fork.
-- Interim `Logs.persistLayer` / `LogStore` remain as a deprecated fallback — do not dual-compose with `Node.logs` for the same node.
+- (Superseded: interim `Logs.persistLayer` / `LogStore` removed in a follow-up changeset.)
