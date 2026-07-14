@@ -657,4 +657,4 @@ th { font-weight: 650; }
 table code { white-space: nowrap; }
 
 /* first-column code reads as a term: the code on its own line, the label dropping below it. */
-td:first-child code { display: block; margin-bottom: 0.15rem; }
+td:first-child code { display: block; width: fit-content; margin-bottom: 0.15rem; }
