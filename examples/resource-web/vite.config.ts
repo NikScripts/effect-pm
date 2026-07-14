@@ -8,6 +8,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "is-in-ci": fileURLToPath(new URL("./shims/is-in-ci.js", import.meta.url)),
+      // Node-only SQLite storage — stubbed out of the browser bundle (this demo is in-memory).
+      "@effect/sql-sqlite-node/SqliteClient": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),
+      "@effect/sql-sqlite-node": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),
     },
   },
   server: {
