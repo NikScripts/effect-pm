@@ -5,10 +5,12 @@
 **Found by:** Agent C standards audit. This doc is the complete spec — you shouldn't need the audit chat.
 **Branch:** `cursor/shardmap-typesafety-ce05` → PR [#39](https://github.com/NikScripts/effect-pm/pull/39) (merge to `integration` when green).
 
-**Status (2026-07-14):** **Remediated.** Generic `buildImpl` lives in `src/ShardMap.ts` (Telemetry
-posture). `EngineTag` / `Record<string, unknown>` erasure removed. All `@since 1.0.0` dropped.
-Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf, ImplOf / ServeImplOf) each carry a
-`// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`.
+**Status (2026-07-14):** **Remediated** (merged to `integration` @ `b5286474`). Generic `buildImpl`
+lives in `src/ShardMap.ts` (Telemetry posture). `EngineTag` / `Record<string, unknown>` erasure
+removed. All `@since 1.0.0` dropped. Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf,
+ImplOf / ServeImplOf) each carry a `// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`.
+
+**Corpus sweep:** **PR [#41](https://github.com/NikScripts/effect-pm/pull/41)** on `cursor/shardmap-corpus-ce05` — naming / TSDoc / resource-pattern pass over the four ShardMap files.
 
 ---
 
@@ -70,7 +72,7 @@ src/internal/shardMap.ts:122,214,223   peer as unknown as PeerLeaf
 
 ## Not yet covered
 
-Agent C's pass focused on the cast pattern + `@since` (what makes ShardMap differ from the clean
-`Telemetry`). A full naming / doc-comment / resource-pattern sweep of all four files
-(`ShardMap.ts`, `internal/shardMap.ts`, `internal/shardMapSql.ts`, `internal/shardMapSymbols.ts`)
-has **not** been done — do it (or ask Agent C to) before calling ShardMap corpus-complete.
+~~Agent C's pass focused on the cast pattern + `@since`…~~ **Done** on
+`cursor/shardmap-corpus-ce05`: naming / TSDoc / `@module` markers, stale store-era comments on
+stamp symbols removed, no `!` non-null, Telemetry-parity serve/layer docs, `rowRecord` rename.
+ShardMap is corpus-complete for the Agent C remit (casts + `@since` + four-file sweep).

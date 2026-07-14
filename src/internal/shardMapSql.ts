@@ -4,7 +4,7 @@
  * One table, keyed by `(scope_key, entry_key)`. No store port, no event journal: the engine
  * talks to {@link SqlClient} directly. Default client is in-memory SQLite (`:memory:`).
  *
- * @module internal/shardMapSql
+ * @module shardMapSql
  * @internal
  */
 import { Data, Effect, Schema } from "effect";
@@ -26,8 +26,8 @@ const ddl = `CREATE TABLE IF NOT EXISTS ${TABLE} (
  * SQLite / codec failure for shard-map persistence.
  *
  * Resource wire methods stay `never` in `E` (boolean / void success), so the engine turns this into
- * a defect at the boundary — same posture as journal write defects after `catchWriteErrors` is not
- * an option for SSOT rows (we must not update the hot Map if SQL failed).
+ * a defect at the boundary — SSOT rows must not update the hot Map if SQL failed (`Effect.orDie` at
+ * the Resource wire edge).
  *
  * @internal
  */
@@ -40,8 +40,8 @@ export class ShardMapSqlError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-/** Narrow an unknown SELECT row. @internal */
-const asRecord = (row: unknown): Record<string, unknown> => {
+/** Narrow an unknown SELECT row into a plain record. @internal */
+const rowRecord = (row: unknown): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   if (typeof row === "object" && row !== null) {
     for (const [key, value] of Object.entries(row)) out[key] = value;
@@ -70,7 +70,7 @@ export const install = (
     Effect.mapError(fail("install")),
   );
 
-/** Load every live row for a scope into a Map. @internal */
+/** Load every live row for a scope into a Map (JSON values still opaque). @internal */
 export const loadScope = (
   sql: SqlClient,
   scopeKey: string,
@@ -82,7 +82,7 @@ export const loadScope = (
         try: () => {
           const map = new Map<string, unknown>();
           for (const row of rows) {
-            const rec = asRecord(row);
+            const rec = rowRecord(row);
             map.set(
               String(rec["entry_key"]),
               decodeValue(String(rec["value_json"])),

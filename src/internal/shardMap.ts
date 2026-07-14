@@ -4,6 +4,7 @@
  * The RPC engine (`buildImpl`) lives in `ShardMap.ts` (Telemetry posture): generic over the
  * public Tag so `Resource.peers` / `selfNode` stay typed. This module stays tag-agnostic.
  *
+ * @module shardMap
  * @internal
  */
 import { Hash, Schema } from "effect";
@@ -15,13 +16,13 @@ import {
 
 export { keyOfSym, keySchemaSym, valueSchemaSym };
 
-/** Partition function — maps a wire key string onto a node key. */
+/** Partition function — maps a wire key string onto a node key. @internal */
 export type PartitionFn = (
   key: string,
   nodes: ReadonlyArray<string>,
 ) => string;
 
-/** Options for layer / serve / serveRemote. */
+/** Options for layer / serve / serveRemote. @internal */
 export interface ShardMapOptions {
   /** Owner pick for a key. @default {@link consistentHash} */
   readonly partition?: PartitionFn;
@@ -35,6 +36,8 @@ export interface ShardMapOptions {
 /**
  * Stable owner pick for a **fixed** node set — sort keys, then `Hash.string` modulo.
  * Remapping when membership changes is intentional / explicit (v1 = fixed fleet).
+ *
+ * @internal
  */
 export const consistentHash = (
   key: string,
@@ -46,10 +49,11 @@ export const consistentHash = (
   const sorted = [...nodes].sort();
   const h = Hash.string(key);
   const idx = ((h % sorted.length) + sorted.length) % sorted.length;
-  return sorted[idx]!;
+  const owner = sorted[idx];
+  return owner === undefined ? "" : owner;
 };
 
-/** Encode a decoded key to a stable string for Map storage + partition. */
+/** Encode a decoded key to a stable string for Map storage + partition. @internal */
 export const keyWire = (key: unknown): string => {
   if (typeof key === "string") {
     return key;

@@ -30,7 +30,7 @@
 7. Process live `events` (#20) — needs failure-surface decision
 
 ### Deferred / parked
-- **ShardMap author (Cursor):** type-safety remediation — [`agent-cursor-shardmap-typesafety.md`](./agent-cursor-shardmap-typesafety.md) — **PR [#39](https://github.com/NikScripts/effect-pm/pull/39)** on `cursor/shardmap-typesafety-ce05` (generic `buildImpl`, `@since` removed, residual casts carry `// SAFE:`; `test/shardmap.test-d.ts`). Awaiting merge to `integration`.
+- **ShardMap author (Cursor):** type-safety **merged** to `integration` (`b5286474`, was [#39](https://github.com/NikScripts/effect-pm/pull/39)). Corpus sweep **PR [#41](https://github.com/NikScripts/effect-pm/pull/41)** on `cursor/shardmap-corpus-ce05`.
 - Agent B dashboard type-safety (plan-first)
 - Agent C standards audit (plan-first)
 - `Store.layerQuery` (not approved)
