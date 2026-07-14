@@ -33,7 +33,7 @@
  *
  * @module QueueResource
  */
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
 import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
@@ -70,9 +70,18 @@ import {
 } from "./internal/store/queueStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
+  QueueEnqueue,
   QueueEnqueueErrors,
+  QueueEntry,
+  QueueEntrySelector,
+  QueueEvent,
   QueueHandle,
+  QueueMetrics,
+  QueueReleaseEncodingError,
+  QueueReleaseOptions,
   QueueResourceConfigWithItemSchema,
+  QueueRouteOptions,
+  QueueStatus,
 } from "./internal/queueResource";
 import type { JsonValue } from "./internal/json";
 import { LogEntrySchema } from "./LogEntry";
@@ -696,6 +705,87 @@ const materializeQueueTag = <Self, F extends Schema.Struct.Fields>(
     error: resolved.error,
   });
 };
+
+/**
+ * A queue handle — the value `yield* MyQueue` produces. The **named** compact form of a queue's
+ * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so
+ * it hovers as `QueueResource<EmailJob>` instead of an expanded member wall; prettify-ts / the docs
+ * D3 popover expand it to the full shape on demand.
+ *
+ * @typeParam Payload - the decoded item type (`add(item)` etc.)
+ * @typeParam Success - the worker success value (`Completed.success` on {@link QueueResource.events})
+ * @typeParam Error - the worker failure channel (`Failed.cause`)
+ * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol`
+ *   for a remote {@link Resource.client})
+ *
+ * @public
+ */
+export interface QueueResource<
+  Payload,
+  Success = unknown,
+  Error = unknown,
+  Requirements = never,
+> {
+  /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
+  readonly status: Resource.Subscribable<QueueStatus>;
+  /** Total pending items across all priority levels. */
+  readonly size: Resource.Subscribable<number>;
+  /** Whether all priority queues are empty. */
+  readonly isEmpty: Resource.Subscribable<boolean>;
+  /** Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown). */
+  readonly start: Effect.Effect<void, never, Requirements>;
+  /** Pause processing; items can still be enqueued and accumulate. */
+  readonly pause: Effect.Effect<void>;
+  /** Resume processing after a pause. */
+  readonly resume: Effect.Effect<void>;
+  /** Permanently stop the queue (graceful drain). */
+  readonly shutdown: Effect.Effect<void>;
+  /** Drain all pending items and reset the completed counter; returns the count cleared. */
+  readonly clear: Effect.Effect<number, never, Requirements>;
+  /** Windowed metrics: the live `stream` plus a historical `query` (needs a HistoryStore). */
+  readonly metrics: {
+    readonly stream: Stream.Stream<QueueMetrics>;
+    readonly query: (input: {
+      readonly limit?: number;
+      readonly since?: DateTime.Utc;
+      readonly until?: DateTime.Utc;
+    }) => Effect.Effect<ReadonlyArray<QueueMetrics>, never, Requirements>;
+  };
+  /** Enqueue an item (or a batch) at normal priority. */
+  readonly add: QueueEnqueue<Payload, never, Requirements>;
+  /** Enqueue at high priority (processed before normal and low). */
+  readonly prioritize: QueueEnqueue<Payload, never, Requirements>;
+  /** Enqueue at low priority (processed after high and normal). */
+  readonly defer: QueueEnqueue<Payload, never, Requirements>;
+  /** Re-inject existing entries (each re-enters at its own priority with attempts preserved). */
+  readonly enqueue: (
+    entries: ReadonlyArray<QueueEntry<Payload>>,
+  ) => Effect.Effect<void, never, Requirements>;
+  /** Export pending entries for handoff and remove them; returns them decoded. */
+  readonly release: (input: {
+    readonly options?: QueueReleaseOptions;
+  }) => Effect.Effect<ReadonlyArray<QueueEntry<Payload>>, never, Requirements>;
+  /** Export pending entries in encoded/wire form for remote handoff (requires an itemSchema). */
+  readonly releaseEncoded: (input: {
+    readonly options?: QueueReleaseOptions;
+  }) => Effect.Effect<
+    ReadonlyArray<Resource.Decoded<typeof queueEncodedEntry>>,
+    QueueReleaseEncodingError,
+    Requirements
+  >;
+  /** Remove pending entries matching the selector and route them to a dead letter. */
+  readonly deadLetter: (input: {
+    readonly selector: QueueEntrySelector<Payload> | QueueEntry<Payload>;
+    readonly options: QueueRouteOptions;
+  }) => Effect.Effect<ReadonlyArray<QueueEntry<Payload>>, never, Requirements>;
+  /** Remove pending entries matching the selector without preserving them. */
+  readonly drop: (input: {
+    readonly selector: QueueEntrySelector<Payload> | QueueEntry<Payload>;
+    readonly options: QueueRouteOptions;
+  }) => Effect.Effect<ReadonlyArray<QueueEntry<Payload>>, never, Requirements>;
+  /** Discrete entry / worker / queue lifecycle events. */
+  readonly events: Stream.Stream<QueueEvent<Payload, Error, Success>>;
+}
 
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(

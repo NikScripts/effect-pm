@@ -306,6 +306,32 @@ the `metrics.query` input struct), not type drift. M3 reconciliation = fix `Queu
 (narrow-side) + type the handle's effectFn-input members (`metrics.query`, `release`/`deadLetter`/`drop`
 inputs) against the actual decoded schema inputs rather than guesses. Small, low blast radius.
 
+### M3 seam blocker (measured) — the prettify asymmetry, and the fork
+
+The named `QueueResource<Payload, Success, Error, Requirements>` interface is authored and **proven
+bidirectionally equal to the Tag contract** for concrete `F` (harness green). But wiring the tag's
+`Service` to it **generically** fails on one member: `add`/`prioritize`/`defer` project the item
+**prettified** (`Resource.Decoded` = `PrettifyPayload<…>`), while `enqueue`/`release`/`deadLetter`/
+`drop`/`events` carry the entry with a **raw** `item` (`queueEntry(itemSchema).Type`). `PrettifyPayload`
+is deliberately **shallow** (agent-a) — it prettifies a top-level payload but not the nested
+`entry.item`. So one `Payload` param can't be both prettified (for `add`) and raw (for entries)
+generically. This is the documented **"nested entry `item`" payload-prettify backlog** — the contract
+is internally inconsistent. It is **not** a cast wall; no `as` needed either way.
+
+**Fork (owner):**
+- **(A) Fix the entry-item prettify (clean, SSOT, deeper).** Make the entry's `item` prettified so all
+  item-carrying members match `add`. Then `QueueResource<Payload>` is **symmetric** and hovers clean
+  (`QueueResource<{ to: string }>`). Cost: `PrettifyPayload` is shallow by design — deepening it (even
+  just for the `item` key) touches a widely-used projection; needs care + full typecheck. Fixes the
+  backlog for every resource.
+- **(B) Mirror the asymmetry (works now, less clean).** Export `PrettifyPayload`; author
+  `add` as `QueueEnqueue<PrettifyPayload<Payload>>` and entries as `QueueEntry<Payload>`; seam passes
+  the **raw** payload. Compiles generically, cast-free, verifiable immediately — but the `QueueResource`
+  type is internally asymmetric and hovers as `QueueResource<{ readonly to: string }>` (raw `readonly`).
+
+Recommend **(A)** — it matches the retain-narrower / SSOT bar and produces the clean handle; (B) trades
+the member-wall wart for an asymmetry/`readonly` wart. Naming is one wiring step away once chosen.
+
 ### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
 
 - **M4 — derive the engine handle type from the spec** (delete the hand-authored `EngineQueueHandle`
