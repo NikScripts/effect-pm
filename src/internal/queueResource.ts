@@ -498,13 +498,26 @@ export interface QueueHandleApi<
  *
  * @public
  */
-export type QueueHandle<
+export type EngineQueueHandle<
   T,
   E = never,
   EEnqueue = never,
   R = never,
   A = void,
 > = QueueHandleApi<T, E, EEnqueue, R, A> & QueueHandlePhantomWorkerFailures<E>;
+
+/**
+ * TEMP (M1a): keep the public `QueueHandle` name resolving to the engine handle so the rename lands
+ * green. M1b replaces this with the canonical contract handle `QueueHandle<Payload, Success, Error,
+ * Requirements>` (the named projection of `ServiceOf<QueueInstanceSpec<F>>`). @internal
+ */
+export type QueueHandle<
+  T,
+  E = never,
+  EEnqueue = never,
+  R = never,
+  A = void,
+> = EngineQueueHandle<T, E, EEnqueue, R, A>;
 
 /**
  * Engine handle — includes custom-queue hooks used by {@link CustomQueueResource}.
@@ -517,7 +530,7 @@ export interface QueueEngineHandle<
   EEnqueue = never,
   R = never,
   A = void,
-> extends QueueHandle<T, E, EEnqueue, R, A> {
+> extends EngineQueueHandle<T, E, EEnqueue, R, A> {
   /** Enqueue at an explicit lane index (custom queues). */
   readonly enqueueAtLevel: (
     items: T | ReadonlyArray<T>,
@@ -775,7 +788,7 @@ export interface QueueResourceMetadata<
 > {
   readonly id: Id;
   readonly kind: "queue";
-  readonly tag: Context.Service<Id, QueueHandle<T, E, EEnqueue, R>>;
+  readonly tag: Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link QueueResourceConfig.itemSchema}
    * was provided on {@link QueueResource.Service}. Used by typed the process manager
@@ -795,7 +808,7 @@ export type QueueResourceDefinition<
   E = never,
   EEnqueue = never,
   R = never,
-> = Context.Service<Id, QueueHandle<T, E, EEnqueue, R>> &
+> = Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>> &
   QueueResourceMetadata<Id, T, E, EEnqueue, R>;
 
 /**
@@ -810,9 +823,9 @@ export interface QueueResourceServiceDefinition<
   E = never,
   EEnqueue = never,
   R = never,
-> extends Context.ServiceClass<Self, Id, QueueHandle<T, E, EEnqueue, R>>,
+> extends Context.ServiceClass<Self, Id, EngineQueueHandle<T, E, EEnqueue, R>>,
     Omit<QueueResourceMetadata<Id, T, E, EEnqueue, R>, "tag"> {
-  readonly tag: Context.Key<Self, QueueHandle<T, E, EEnqueue, R>>;
+  readonly tag: Context.Key<Self, EngineQueueHandle<T, E, EEnqueue, R>>;
   readonly layer: Layer.Layer<Self, never, R>;
   /** Factory defaults before configure layers (`ResourceConfigure` module). */
   readonly defaultSpec: QueueResourceConfig<T, E, R>;
@@ -1023,7 +1036,7 @@ export interface QueueRefill<T, E, EEnqueue, R, A = void> {
   /** Run `load` each time the queue drains to empty (re-poll the source). @default false */
   readonly onDrained?: boolean;
   /** Load + enqueue work. Handle its own errors (best-effort). */
-  readonly load: (queue: QueueHandle<T, E, EEnqueue, R, A>) => Effect.Effect<void, never, R>;
+  readonly load: (queue: EngineQueueHandle<T, E, EEnqueue, R, A>) => Effect.Effect<void, never, R>;
 }
 
 /**
@@ -1547,14 +1560,14 @@ function buildQueueEngine<T, E, EEnqueue, R, A = void>(
 
 type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any, any>> =
   [C] extends [QueueResourceConfigWithItemSchema<any, any, any, any>]
-    ? QueueHandle<
+    ? EngineQueueHandle<
         InferQueueItem<C>,
         InferQueueWorkerError<C>,
         QueueEnqueueErrors,
         InferQueueWorkerRequirements<C>,
         InferQueueWorkerSuccess<C>
       >
-    : QueueHandle<
+    : EngineQueueHandle<
         InferQueueItem<C>,
         InferQueueWorkerError<C>,
         never,
@@ -1567,7 +1580,7 @@ const makeQueueEffectWithoutSchema = <
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
-  QueueHandle<
+  EngineQueueHandle<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     never,
@@ -1588,7 +1601,7 @@ const makeQueueEffectWithSchema = <
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
-  QueueHandle<
+  EngineQueueHandle<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     QueueEnqueueErrors,
@@ -1648,7 +1661,7 @@ const makeQueueEffectWithSchema = <
 const makeQueueEffectFromConfig = (
   config: QueueResourceConfig<any, any, any, any>,
 ): Effect.Effect<
-  QueueHandle<unknown, unknown, unknown, unknown, unknown>,
+  EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
   // Internal erased boundary: the worker's requirement is `any` here (the config is
   // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
@@ -1685,7 +1698,7 @@ function makeQueueEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any, any>,
   options?: QueueResourceOptionsWithoutItemSchema<any, any, any> | QueueResourceOptionsWithItemSchema<any, any, any>,
 ): Effect.Effect<
-  QueueHandle<unknown, unknown, unknown, unknown, unknown>,
+  EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
   // Erased overload-impl boundary — the precise `R` (`Scope.Scope |
   // InferQueueWorkerRequirements<...>`) is on the overloads above; here the worker
@@ -2222,7 +2235,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // Managed fiber collections. Scope close interrupts all fibers automatically.
     const workerFibers = yield* FiberSet.make<void>();
     /** Set before workers process items (autoStart or manual `start`). */
-    const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R, A> } = {};
+    const queueHandleSlot: { current?: EngineQueueHandle<T, E, EEnqueue, R, A> } = {};
 
     const rateLimitLog =
       config.rateLimit === undefined
@@ -2832,7 +2845,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // Self-refill (optional): load work from a source on start / drain — best-effort (logged).
     const refillConfig = config.refill;
     const runRefill = (
-      handle: QueueHandle<T, E, EEnqueue, R, A>,
+      handle: EngineQueueHandle<T, E, EEnqueue, R, A>,
     ): Effect.Effect<void, never, R> =>
       refillConfig === undefined ? Effect.void : refillConfig.load(handle);
 
@@ -3279,7 +3292,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 // ============================================================================
 
 const queueResourceLayerFromConfig = (
-  tag: Context.Key<any, QueueHandle<any, any, any, any, any>>,
+  tag: Context.Key<any, EngineQueueHandle<any, any, any, any, any>>,
   config: QueueResourceConfig<any, any, any, any>,
 ): Layer.Layer<any, never, any> => {
   const resourceId = config.name ?? "anonymous";
@@ -3302,14 +3315,14 @@ function queueResourceLayer<
     | QueueResourceOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 >(
-  tag: Context.Key<Self, QueueHandle<any, any, any, any>>,
+  tag: Context.Key<Self, EngineQueueHandle<any, any, any, any>>,
   effect: F,
   options?: O,
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>;
 function queueResourceLayer<Self, const C extends QueueResourceConfig<any, any, any>>(
   tag: Context.Key<
     Self,
-    QueueHandle<
+    EngineQueueHandle<
       InferQueueItem<C>,
       InferQueueWorkerError<C>,
       InferQueueEnqueueError<C>,
@@ -3319,7 +3332,7 @@ function queueResourceLayer<Self, const C extends QueueResourceConfig<any, any, 
   config: C,
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>>;
 function queueResourceLayer(
-  tag: Context.Key<any, QueueHandle<any, any, any, any>>,
+  tag: Context.Key<any, EngineQueueHandle<any, any, any, any>>,
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any>,
   options?: QueueResourceOptionsWithoutItemSchema<any, any, any> | QueueResourceOptionsWithItemSchema<any, any, any>,
 ): Layer.Layer<any, never, any> {
@@ -3372,7 +3385,7 @@ const queueResourceServiceWithoutSchema = <
   const named = { ...config, name } satisfies C & { readonly name: Name };
   const base = Context.Service<
     Self,
-    QueueHandle<
+    EngineQueueHandle<
       InferQueueItem<C>,
       InferQueueWorkerError<C>,
       never,
@@ -3430,7 +3443,7 @@ const queueResourceServiceWithSchema = <
   const named = { ...config, name } satisfies C & { readonly name: Name };
   const base = Context.Service<
     Self,
-    QueueHandle<
+    EngineQueueHandle<
       InferQueueItem<C>,
       InferQueueWorkerError<C>,
       QueueEnqueueErrors,
@@ -3561,7 +3574,7 @@ export const Service = <Self, T, E = never>() => {
  */
 export const Tag = <Self, T, E = never, R = never>() =>
 <const Name extends string>(name: Name) => {
-  const base = Context.Service<Self, QueueHandle<T, E, never, R>>()(name);
+  const base = Context.Service<Self, EngineQueueHandle<T, E, never, R>>()(name);
   return Object.assign(base, {
     id: name,
     kind: queueResourceKind,
