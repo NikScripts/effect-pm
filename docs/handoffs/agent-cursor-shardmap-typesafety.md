@@ -1,16 +1,14 @@
 # ShardMap — type-safety remediation (for the ShardMap author)
 
-**Owner of the code:** Cursor Agent (authored `src/ShardMap.ts` + `src/internal/shardMap*`; active on
-`cursor/intro-shardmap-trio`, `cursor/shardmap-store`).
+**Owner of the code:** Cursor Agent (authored `src/ShardMap.ts` + `src/internal/shardMap*`).
 **Found by:** Agent C standards audit. This doc is the complete spec — you shouldn't need the audit chat.
-**Branch:** `cursor/shardmap-typesafety-ce05` → PR [#39](https://github.com/NikScripts/effect-pm/pull/39) (merge to `integration` when green).
+**Branch:** done — type-safety [#39](https://github.com/NikScripts/effect-pm/pull/39) + corpus [#41](https://github.com/NikScripts/effect-pm/pull/41) merged to `integration` @ `f269a9ce`; work branches deleted.
 
-**Status (2026-07-14):** **Remediated** (merged to `integration` @ `b5286474`). Generic `buildImpl`
-lives in `src/ShardMap.ts` (Telemetry posture). `EngineTag` / `Record<string, unknown>` erasure
-removed. All `@since 1.0.0` dropped. Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf,
-ImplOf / ServeImplOf) each carry a `// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`.
-
-**Corpus sweep:** **PR [#41](https://github.com/NikScripts/effect-pm/pull/41)** on `cursor/shardmap-corpus-ce05` — naming / TSDoc / resource-pattern pass over the four ShardMap files.
+**Status (2026-07-14):** **Complete on `integration`.** Generic `buildImpl` in `src/ShardMap.ts` (Telemetry
+posture). `EngineTag` / `Record<string, unknown>` erasure removed. All `@since 1.0.0` dropped.
+Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf, ImplOf / ServeImplOf) each carry a
+`// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`. Four-file corpus sweep (naming / TSDoc /
+`@module` / resource-pattern) also merged.
 
 ---
 
@@ -72,7 +70,6 @@ src/internal/shardMap.ts:122,214,223   peer as unknown as PeerLeaf
 
 ## Not yet covered
 
-~~Agent C's pass focused on the cast pattern + `@since`…~~ **Done** on
-`cursor/shardmap-corpus-ce05`: naming / TSDoc / `@module` markers, stale store-era comments on
-stamp symbols removed, no `!` non-null, Telemetry-parity serve/layer docs, `rowRecord` rename.
-ShardMap is corpus-complete for the Agent C remit (casts + `@since` + four-file sweep).
+~~Agent C's pass focused on the cast pattern + `@since`…~~ **Done** and merged (`f269a9ce`).
+Naming / TSDoc / `@module` markers, Telemetry-parity serve/layer docs, no `!` non-null, stale
+store-era stamp comments removed. ShardMap is corpus-complete for the Agent C remit.
