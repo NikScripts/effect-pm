@@ -21,7 +21,7 @@ void ({} as ReturnType<typeof builtInProcessStoreContract<typeof PricedProc>> sa
 
 void _handle.record({
   _tag: "Completed",
-  processId: PricedProc.key,
+  key: PricedProc.key,
   scheduleKey: null,
   startedAt: 1,
   completedAt: 2,

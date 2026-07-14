@@ -130,21 +130,12 @@ const parseLineageJson = (raw: string | undefined): ReadonlyArray<string> => {
 /**
  * Decode **lineage segment keys** from a captured entry's annotations.
  *
- * Reads annotation key {@link LogAnnotationKeys.lineage}; falls back to `processId` / `queueId`
- * **resource keys** for legacy rows.
+ * Reads annotation key {@link LogAnnotationKeys.lineage} only (JSON array of `Tag.key` segments).
  *
  * @public
  */
-export const lineage = (entry: LogEntry): ReadonlyArray<string> => {
-  const fromLineage = parseLineageJson(entry.annotations[LogAnnotationKeys.lineage]);
-  if (fromLineage.length > 0) return fromLineage;
-  const legacy: string[] = [];
-  const processId = entry.annotations[LogAnnotationKeys.processId];
-  const queueId = entry.annotations[LogAnnotationKeys.queueId];
-  if (processId !== undefined) legacy.push(processId);
-  if (queueId !== undefined) legacy.push(queueId);
-  return legacy;
-};
+export const lineage = (entry: LogEntry): ReadonlyArray<string> =>
+  parseLineageJson(entry.annotations[LogAnnotationKeys.lineage]);
 
 /**
  * `true` when the **lineage segment key** appears anywhere in {@link lineage}.

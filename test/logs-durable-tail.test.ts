@@ -77,8 +77,8 @@ describe("durable log store tail", () => {
       yield* relay.publish(entry("b", { lineage: [ProcB.key] }));
       yield* TestClock.adjust(Duration.millis(300));
 
-      const a = yield* Logs.byResource({ processId: ProcA.key });
-      const b = yield* Logs.byResource({ processId: ProcB.key });
+      const a = yield* Logs.byResource(ProcA.key);
+      const b = yield* Logs.byResource(ProcB.key);
       expect(a.map((row) => row.message)).toEqual(["a"]);
       expect(a.every(LogEntry.hasKey(ProcA.key))).toBe(true);
       // Warn floor on ProcB drops Info
@@ -95,7 +95,7 @@ describe("durable log store tail", () => {
       yield* relay.publish(duplicated);
       yield* TestClock.adjust(Duration.millis(300));
 
-      const rows = yield* Logs.byResource({ processId: ProcA.key });
+      const rows = yield* Logs.byResource(ProcA.key);
       expect(rows.filter((row) => row.message === "dup")).toHaveLength(1);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
@@ -108,17 +108,17 @@ describe("durable log store tail", () => {
       yield* relay.publish(entry("warn", { lineage: [ProcB.key], level: "Warn" }));
       yield* TestClock.adjust(Duration.millis(300));
 
-      const rows = yield* Logs.byResource({ processId: ProcB.key });
+      const rows = yield* Logs.byResource(ProcB.key);
       expect(rows.map((row) => row.message)).toEqual(["warn"]);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
 
   it.effect("AppStore.layerMemory includes Logs capture + empty log until publish", () =>
     Effect.gen(function* () {
-      expect(yield* Logs.byResource({ processId: ProcA.key })).toEqual([]);
+      expect(yield* Logs.byResource(ProcA.key)).toEqual([]);
       yield* Effect.logInfo("captured-by-store-layer");
       yield* TestClock.adjust(Duration.millis(300));
-      const rows = yield* Logs.byResource({ processId: ProcA.key });
+      const rows = yield* Logs.byResource(ProcA.key);
       // No lineage scope on bare Effect.log — resource match drops it.
       expect(rows).toEqual([]);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),

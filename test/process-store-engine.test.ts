@@ -70,7 +70,7 @@ describe("Process.layer — Process.store auto-write", () => {
         expect(events.some((row) => row._tag === "Started")).toBe(true);
         const completed = events.find((row) => row._tag === "Completed");
         expect(completed).toMatchObject({
-          processId: VoidExec.key,
+          key: VoidExec.key,
           isStartupRun: true,
         });
         expect(yield* store.hasPriorExecutions()).toBe(true);
@@ -148,7 +148,7 @@ describe("Process.layer — Process.store auto-write", () => {
         const events = yield* store.events();
         const interrupted = events.find((row) => row._tag === "Interrupted");
         expect(interrupted).toMatchObject({
-          processId: InterruptExec.key,
+          key: InterruptExec.key,
           isStartupRun: true,
         });
       }).pipe(Effect.provide(live), Effect.scoped);

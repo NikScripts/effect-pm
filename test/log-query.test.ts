@@ -42,7 +42,7 @@ describe("logQuery", () => {
         scope: {
           _tag: "process",
           groupId: testBillingNodeKey,
-          processId: testSyncProcessKey,
+          key: testSyncProcessKey,
         },
         from: Option.none(),
         to: Option.none(),
@@ -51,7 +51,7 @@ describe("logQuery", () => {
         limit: 10,
         sort: "desc",
       });
-      assert.strictEqual(query.processId, testSyncProcessKey);
+      assert.strictEqual(query.key, testSyncProcessKey);
       assert.strictEqual(query.groupId, testBillingNodeKey);
     }));
 });

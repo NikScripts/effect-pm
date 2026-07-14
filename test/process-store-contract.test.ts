@@ -35,7 +35,7 @@ describe("Process store contract", () => {
       const store = yield* ProcessStore.at(VoidProc);
       yield* store.record({
         _tag: "Completed",
-        processId: VoidProc.key,
+        key: VoidProc.key,
         scheduleKey: null,
         startedAt: 1,
         completedAt: 2,
@@ -54,7 +54,7 @@ describe("Process store contract", () => {
       const store = yield* ProcessStore.at(PricedProc);
       yield* store.record({
         _tag: "Completed",
-        processId: PricedProc.key,
+        key: PricedProc.key,
         scheduleKey: null,
         startedAt: 10,
         completedAt: 20,
@@ -81,7 +81,7 @@ describe("Process store contract", () => {
       const store = yield* ProcessStore.at(PricedErrProc);
       yield* store.record({
         _tag: "Failed",
-        processId: PricedErrProc.key,
+        key: PricedErrProc.key,
         scheduleKey: null,
         startedAt: 1,
         completedAt: 2,

@@ -141,8 +141,19 @@ export const byNode = (
     limit: options?.limit ?? queryLimitDefault,
   });
 
+/** Source carrying a **resource key** (`Resource.Tag.key` / store registration key). @public */
+export type ResourceLogKeySource = { readonly key: ResourceLogKey };
+
+const resolveResourceLogKey = (
+  resource: ResourceLogKey | ResourceLogKeySource,
+): ResourceLogKey => (typeof resource === "string" ? resource : resource.key);
+
 /**
- * Read durable logs for a **specific resource** (filter by **resource key**).
+ * Read durable logs for a **specific resource** by **full key** (same string as
+ * {@link Resource.logs}`(tag)` / store registration / lineage segment).
+ *
+ * Pass a scope tag (`Process.Tag` / `QueueResource.Tag` / …) or its `.key` string.
+ * Resource kind is {@link Resource.kindOf} on the tag — not a separate query argument.
  *
  * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …).
  *
@@ -152,15 +163,12 @@ export const byNode = (
  * @public
  */
 export const byResource = (
-  resource: { readonly processId?: ResourceLogKey; readonly queueId?: ResourceLogKey },
+  resource: ResourceLogKey | ResourceLogKeySource,
   options?: LogReadOptions,
-): Effect.Effect<ReadonlyArray<LogEntry>> => {
-  const key = resource.processId ?? resource.queueId;
-  if (key === undefined) {
-    return Effect.succeed([]);
-  }
-  return queryDurableScope(key, { limit: options?.limit ?? queryLimitDefault });
-};
+): Effect.Effect<ReadonlyArray<LogEntry>> =>
+  queryDurableScope(resolveResourceLogKey(resource), {
+    limit: options?.limit ?? queryLimitDefault,
+  });
 
 /** @deprecated Use {@link layer}. @public */
 export const relayWithCaptureLoggerLayer = layer;

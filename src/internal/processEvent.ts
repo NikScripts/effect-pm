@@ -17,7 +17,7 @@ export const processEventReadPayload = Schema.Struct({
 });
 
 const runFinishedBase = {
-  processId: Schema.String,
+  key: Schema.String,
   scheduleKey: Schema.NullOr(Schema.String),
   startedAt: Schema.Number,
   completedAt: Schema.Number,
@@ -26,7 +26,7 @@ const runFinishedBase = {
 } as const;
 
 const runStartedFields = {
-  processId: Schema.String,
+  key: Schema.String,
   scheduleKey: Schema.NullOr(Schema.String),
   startedAt: Schema.Number,
   isStartupRun: Schema.Boolean,

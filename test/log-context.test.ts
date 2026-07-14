@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
+import { LogAnnotationKeys } from "../src/LogContext";
 import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/logScope";
 import type { LogEntry } from "../src/LogEntry";
 
@@ -16,17 +17,16 @@ const entry = (
 });
 
 describe("logContext", () => {
-  it("matches process scope by annotation", () => {
+  it("matches process scope by lineage key", () => {
     const scope = {
       _tag: "process" as const,
       groupId: testBillingNodeKey,
-      processId: testSyncProcessKey,
+      key: testSyncProcessKey,
     };
     assert.strictEqual(
       logEntryMatchesScope(
         entry({
-          groupId: testBillingNodeKey,
-          processId: testSyncProcessKey,
+          [LogAnnotationKeys.lineage]: JSON.stringify([testSyncProcessKey]),
         }),
         scope,
       ),
@@ -34,7 +34,9 @@ describe("logContext", () => {
     );
     assert.strictEqual(
       logEntryMatchesScope(
-        entry({ groupId: testBillingNodeKey, processId: "billing/OtherWorker" }),
+        entry({
+          [LogAnnotationKeys.lineage]: JSON.stringify(["billing/OtherWorker"]),
+        }),
         scope,
       ),
       false,
@@ -58,7 +60,7 @@ describe("logContext", () => {
       assert.strictEqual(scope._tag, "process");
       if (scope._tag === "process") {
         assert.strictEqual(scope.groupId, testBillingNodeKey);
-        assert.strictEqual(scope.processId, testSyncProcessKey);
+        assert.strictEqual(scope.key, testSyncProcessKey);
       }
     }));
 });

@@ -60,7 +60,7 @@ describe("Process.layer — durable SQLite store", () => {
           const store = yield* SqliteStore.at(SqliteExec);
           yield* store.record({
             _tag: "Completed",
-            processId: SqliteExec.key,
+            key: SqliteExec.key,
             scheduleKey: null,
             startedAt: 1,
             completedAt: 2,
@@ -77,7 +77,7 @@ describe("Process.layer — durable SQLite store", () => {
           expect(events).toHaveLength(1);
           expect(events[0]).toMatchObject({
             _tag: "Completed",
-            processId: SqliteExec.key,
+            key: SqliteExec.key,
             isStartupRun: true,
           });
         }).pipe(Effect.provide(SqliteStore.layer({ filename }))),
@@ -105,7 +105,7 @@ describe("Process.layer — durable SQLite store", () => {
           const store = yield* SqliteStore.at(SqliteTypedFailExec);
           yield* store.record({
             _tag: "Failed",
-            processId: SqliteTypedFailExec.key,
+            key: SqliteTypedFailExec.key,
             scheduleKey: null,
             startedAt: 1,
             completedAt: 2,

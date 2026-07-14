@@ -35,7 +35,7 @@ type Regs = RegsOfStoreInput<[ReturnType<typeof CustomQueueResource.store<typeof
 type Handle = StoreHandleAtKey<Regs, typeof Jobs>;
 
 declare const _handle: Handle;
-void _handle.record({ _tag: "Start", queueId: "q" });
+void _handle.record({ _tag: "Start", key: "q" });
 void _handle.events();
 
 expectExact<Equals<Handle["failures"], () => Effect.Effect<ReadonlyArray<Failed>>>>();

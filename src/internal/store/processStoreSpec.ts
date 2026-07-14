@@ -195,7 +195,7 @@ export const builtInProcessStoreContract = <const Tag extends StoreScopeTag>(
 ): BuiltInProcessContract<Tag> =>
   makeProcessStoreBaseContract(successOf(tag), errorOf(tag));
 
-/** Narrow write inputs — engine supplies `processId` when building rows. @internal */
+/** Narrow write inputs — engine supplies resource `key` when building rows. @internal */
 export type ProcessStoreStartedInput = {
   readonly scheduleKey: string | null;
   readonly startedAt: number;

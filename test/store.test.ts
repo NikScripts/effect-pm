@@ -203,13 +203,13 @@ describe("Store.Service", () => {
       expect(keys).toContain("events");
       expect(keys).toContain("campaignAudit");
 
-      yield* store.record({ _tag: "Start", queueId: MailQueue.key });
-      yield* store.record({ _tag: "Cleared", queueId: MailQueue.key, count: 3 });
+      yield* store.record({ _tag: "Start", key: MailQueue.key });
+      yield* store.record({ _tag: "Cleared", key: MailQueue.key, count: 3 });
 
       const events = yield* store.events();
       expect(events.map((e) => e._tag)).toEqual(["Start", "Cleared"]);
       const cleared = events.find((e) => e._tag === "Cleared");
-      expect(cleared).toMatchObject({ queueId: MailQueue.key, count: 3 });
+      expect(cleared).toMatchObject({ key: MailQueue.key, count: 3 });
     }).pipe(Effect.provide(QueueStore.layerMemory), Effect.scoped),
   );
 
