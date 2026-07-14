@@ -107,9 +107,9 @@ it("the factory/base check still applies — a stopped worker is not ready even 
   Effect.runPromise(checkWorker(true, false)).then((r) =>
     expect(r).toEqual({ ready: false, detail: "stopped" })));
 
-// Regression: a node-bound tag must be able to extend readiness via `.pipe`. A `NodeBoundTag` is a
-// distinct interface, so `.pipe`'s `this` assignment to a bare `ResourceTag<any, any>` used to fail
-// on its invariant `[groupSym]` map; the data-last `withReadiness` overload now names NodeBoundTag.
+// Regression: a node-bound tag must be able to extend readiness via `.pipe`. Data-last duals
+// constrain `T` with a shallow `PipeableTag` brand (spec symbol only) so stock tsc does not expand
+// `ServiceOf<S, Self>` on the still-declaring class (TS2589). See `resource-withreadiness-pipe.test-d.ts`.
 class DepNode extends Resource.Node<DepNode>("dep/node") {}
 class NodeWorker extends Resource.Tag<NodeWorker>()(
   "dep/NodeWorker",

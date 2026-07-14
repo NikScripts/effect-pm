@@ -64,6 +64,24 @@ class Ingest extends Process.Tag<Ingest>()("app/Ingest", { success: Report })
   ) {}
 ```
 
+{#data-last-tag-duals-shallow .must appliesTo=src}
+## Data-last tag duals must not constrain `Svc`-bearing tag unions
+
+A combinator meant for `class X extends Tag<X>()(…).pipe(combinator(…))` must not constrain its
+data-last `T` as `ResourceTag | NodeBoundTag`. Those types carry a default `Svc = ServiceOf<S, Self>`;
+stock tsc expands that while `Self` is still being declared and hits **TS2589** (tsgo often stays
+quiet — gate with **both**). Constrain `T` with a shallow brand that only needs the spec (the package
+uses `PipeableTag = { readonly [specSym]: FlatSpec }` for `withReadiness` / `distributed`). `T` is
+still inferred as the concrete tag, so `(tag: T) => T` preserves it.
+
+``` ts
+// ✅ shallow — PipeableTag / equivalent
+<T extends PipeableTag>(…): (tag: T) => T
+
+// ❌ deep — reopens TS2589 on node-bound class .pipe under stock tsc
+<T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(…): (tag: T) => T
+```
+
 {#polling-vs-schedule .must appliesTo="src examples"}
 ## Polling and schedule are different questions — never conflate
 

@@ -13,7 +13,13 @@ Acquisition vs readiness: get hard dependencies ready by acquiring them eagerly 
 
 ## Attach readiness to a tag
 
-`Resource.withReadiness` is dual — data-first or `.pipe` — so it reads naturally on a class `extends`. The derivation reads the **materialized service** and returns `{ ready, detail? }`. A tag with no derivation is **ready by default**, so unaware resources never falsely fail a gate.
+`Resource.withReadiness` is dual — **data-first** `withReadiness(tag, fn)` or **data-last**
+`.pipe(withReadiness(fn))`. Both are supported on node-bound tags (including many sites in one
+program); prefer whichever reads cleaner. The derivation reads the **materialized service** and
+returns `{ ready, detail? }`. Prefer an **inferred** `svc` (or a minimal structural type of the
+fields you read) over annotating `Resource.ServiceOf<typeof spec>` — the tag already carries the
+spec. A tag with no derivation is **ready by default**, so unaware resources never falsely fail a
+gate.
 
 ``` ts
 import { Effect, Schema } from "effect"

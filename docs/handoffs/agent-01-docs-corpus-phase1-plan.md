@@ -155,9 +155,8 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 
 | Path | Fate |
 |------|------|
-| 15+ completed date-stamped handoffs; widgets + engine-serve-adoption deleted (asks absorbed/shipped) | **deleted** |
-| [`open-asks.md`](./open-asks.md) | **active** — §1 widget seam · §2 when-not-to-hoist · §3 layerNoop; monitoredDependency shipped |
-| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **left to walk** |
+| Date-stamped `2026-*.md` stack | **closed** — deletes + open-asks absorbs; beta22 handoff deleted (PipeableTag fix + type hygiene) |
+| [`open-asks.md`](./open-asks.md) | **active** — §1 widget seam · §2 when-not-to-hoist · §3 layerNoop |
 
 ### F. Feature handoffs superseded by shipped API — **archive** (default)
 
