@@ -42,6 +42,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Agent 1 → docs corpus (UI stays with lettered agents)
+
+- **Owner said:** Save UI / Tailscale-facing site work for lettered (local) agents. Give Agent 1 the docs corpus instead: **handoffs cleanup first**, then plans refactor/migration, then port legacy docs with a **Draft** page label (owner will refine Draft UX after assign).
+- **Chose:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — Phase 1 plan-first inventory of `docs/handoffs/`. No `docs/site` UI. Draft label = content-side proposal only until B/owner specify site chrome.
+- **Rejected:** Agent 1 on dashboard/web/Tailscale UX; starting legacy port before handoffs/plans hygiene.
+- **Supervisor impact:** Agent 1 docs track; lettered agents keep site/UI.
+
+---
+
 ## 2026-07-14 — Logs P1 → Agent 3 (Agent 2 retired)
 
 - **Owner said:** Handles are owned by other agents for now. Focus next engine work on **Logs P1** (former “option 2”): level pipes / store followers / remote per-resource logs. Expand and clarify that brief for a **new Agent 3**.

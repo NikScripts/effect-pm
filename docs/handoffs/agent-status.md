@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | from `integration` | [next headlining resource](./agent-01-next-headlining-resource.md) · [#32 prototype](https://github.com/NikScripts/effect-pm/pull/32) | **plan-first** | — | — | Research / Telemetry+ShardMap prototype — owner picks; **no impl until then** | 2026-07-14 |
+| **1** | from `integration` | [docs corpus](./agent-01-docs-corpus.md) | **plan-first (Phase 1)** | — | — | Handoffs cleanup inventory — UI/site reserved for lettered agents | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **merged → `integration`** | [Logs store followers](./agent-03-logs-p1.md) · [plan](./agent-03-logs-store-followers-plan.md) | **followers cutover merged** | `501c3c3a` | typecheck / tests green | Store-layer memo **deferred**; next unlock: hard-remove interim `persistLayer`/`LogStore` | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
@@ -19,8 +19,8 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 3:** [#40](https://github.com/NikScripts/effect-pm/pull/40) **merged** to `integration` (`501c3c3a`) — next unlock **hard-remove** interim `Logs.persistLayer` / standalone `LogStore` (store-layer `lineId` memo deferred).
-2. **Agent 1:** next headlining resource research / [#32](https://github.com/NikScripts/effect-pm/pull/32) prototype — owner picks direction.
+1. **Agent 1:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — handoffs cleanup (**Phase 1 plan-first**); then plans refactor; then legacy port + Draft label (later unlocks). **No UI / `docs/site` chrome.**
+2. **Agent 3:** [#40](https://github.com/NikScripts/effect-pm/pull/40) **merged** to `integration` (`501c3c3a`) — next unlock **hard-remove** interim `Logs.persistLayer` / standalone `LogStore` (store-layer `lineId` memo deferred).
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
@@ -31,10 +31,9 @@
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.
-- Agent B dashboard type-safety (plan-first)
+- Headlining resource research — **shipped** as Telemetry fleet + ShardMap (#32/#39/#41); Agent 1 moved to docs corpus
+- Agent B dashboard type-safety (plan-first) — **UI reserved for lettered agents**
 - Agent C standards audit (plan-first)
-- `Store.layerQuery` (not approved)
-- Headlining resource **implementation** (after Agent 1 + owner pick)
 
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. **Kept while landing:** Agent 3 [#40](https://github.com/NikScripts/effect-pm/pull/40) / [#35](https://github.com/NikScripts/effect-pm/pull/35). DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
