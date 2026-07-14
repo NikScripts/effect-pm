@@ -26,10 +26,7 @@ import * as Schema from "effect/Schema";
 import { Effect } from "effect";
 
 const contract = Store.contract({
-  readings: Store.shape(
-    Schema.Struct({ value: Schema.Number }),
-    Schema.Struct({ limit: Schema.optional(Schema.Number) }),
-  ),
+  readings: Store.shape(Schema.Struct({ value: Schema.Number })),
 });
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -59,12 +56,13 @@ Each key in the shapes record becomes a namespace on the handle:
 
 - `store.<shape>.append(payload)` — decode with the row schema, append one row (or an array batch —
   the payload is `row | ReadonlyArray<row>`).
-- `store.<shape>.read(payload?)` — query appended rows; optional read payload schema (defaults to `{}`).
+- `store.<shape>.read(payload?)` — query appended rows with the **baked-in** read payload
+  (`limit` / `before` / `after` / nested Drizzle-RQB `where`).
 
 A shape value may be:
 
-- a bare `Schema.Schema` — row schema, empty read payload;
-- `Store.shape(row)` / `Store.shape(row, readPayload)` — explicit read filter;
+- a bare `Schema.Schema` — row schema;
+- `Store.shape(row)` — same, explicit;
 - a **nested record** of the above — see below.
 
 ### Nested shapes

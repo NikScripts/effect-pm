@@ -129,7 +129,19 @@ export const windowOpts = (
   const out: { -readonly [K in keyof QueryOpts]: QueryOpts[K] } = {};
   if (opts.before !== undefined) out.before = opts.before;
   if (opts.after !== undefined) out.after = opts.after;
-  return out;
+  return Object.keys(out).length === 0 ? undefined : out;
+};
+
+/**
+ * Keep only `limit` from {@link QueryOpts}.
+ *
+ * @internal
+ */
+export const limitOpts = (
+  opts: QueryOpts | undefined,
+): QueryOpts | undefined => {
+  if (opts?.limit === undefined) return undefined;
+  return { limit: opts.limit };
 };
 
 /**

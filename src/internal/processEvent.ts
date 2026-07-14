@@ -7,7 +7,11 @@
 
 import { Schema } from "effect";
 
-/** Read payload for the built-in `events` query. @internal */
+/**
+ * @deprecated Prefer the baked-in Store read payload (`limit` / nested `where`).
+ * Kept as a thin `{ limit? }` schema for one-release compat on the public Process export.
+ * @internal
+ */
 export const processEventReadPayload = Schema.Struct({
   limit: Schema.optional(Schema.Number),
 });

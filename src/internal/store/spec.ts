@@ -63,8 +63,8 @@ export type AsStoreSpec<S> = S extends StoreContractValue
 
 /** Append / read namespace for one normalized shape. @internal */
 export type ShapeNamespace<
-  N extends { readonly row: Schema.Schema<unknown>; readonly read: Schema.Schema<unknown> },
-> = Simplify<ShapeNamespaceMembers<N["row"], N["read"]>>;
+  N extends { readonly row: Schema.Schema<unknown> },
+> = Simplify<ShapeNamespaceMembers<N["row"]>>;
 
 /**
  * Reconstruct a leaf shape's `{ append, read }` members. The leaf's row/read schemas are recovered by
@@ -105,17 +105,14 @@ type CustomMethodOf<
       readonly shapeKey: infer SK extends string;
     }
     ? SK extends keyof C["normalized"] & string
-      ? ShapeNamespaceMembers<
-          C["normalized"][SK]["row"],
-          C["normalized"][SK]["read"]
-        >["read"]
+      ? ShapeNamespaceMembers<C["normalized"][SK]["row"]>["read"]
       : never
     : C["customEntries"][K] extends {
           readonly _tag: typeof CUSTOM_APPEND_ALIAS;
           readonly shapeKey: infer SK extends string;
         }
       ? SK extends keyof C["normalized"] & string
-        ? ShapeNamespaceMembers<C["normalized"][SK]["row"], C["normalized"][SK]["read"]>["append"]
+        ? ShapeNamespaceMembers<C["normalized"][SK]["row"]>["append"]
         : never
       : C["customEntries"][K] extends {
             readonly _tag: typeof CUSTOM_EFFECT;

@@ -207,13 +207,16 @@ void pipedStore.shapes.readings;
 void pipedStore.shapes.audit;
 
 const _shapedContract = Store.contract({
-  readings: Store.shape(readingSchema, Schema.Struct({ limit: Schema.optional(Schema.Number) })),
+  readings: Store.shape(readingSchema),
 });
 type ShapedHandle = Store.HandleOf<typeof _shapedContract>;
 
 declare const _shaped: ShapedHandle;
 void _shaped.readings.read({ limit: 5 });
+void _shaped.readings.read({ where: { value: { gte: 1 } } });
 void _shaped.readings.read();
+// @ts-expect-error — unknown where field
+void _shaped.readings.read({ where: { nope: 1 } });
 
 void Effect.gen(function* () {
   const queue = yield* DropletStore.at(MailQueue);

@@ -154,13 +154,18 @@ const toPayload = (query: LogQuery): LogQueryPayload => ({
 export const builtInLogStoreContract = () =>
   Store.contract(
     {
-      log: Store.shape(logRowSchema, logQueryPayloadSchema),
+      log: Store.shape(logRowSchema),
     },
     ({ log }) => {
       const load = (query: LogQuery) =>
         Effect.gen(function* () {
           const payload = toPayload(query);
-          const raw = yield* log.read(payload);
+          const raw = yield* log.read({
+            limit: payload.limit,
+            ...(payload.from === undefined ? {} : { after: payload.from }),
+            ...(payload.to === undefined ? {} : { before: payload.to }),
+            ...(payload.groupId === undefined ? {} : { where: { groupId: payload.groupId } }),
+          });
           const rows = Array.isArray(raw) ? (raw as ReadonlyArray<LogRow>) : [];
           const entries = rowsToEntries(rows, { ...payload, limit: query.limit });
           if (entries.length === 0) {

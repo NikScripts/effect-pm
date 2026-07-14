@@ -71,7 +71,7 @@ describe("RunResource.store — analytics read-extension", () => {
       const history = yield* store.history("r2");
       expect(history.map((row) => row._tag)).toEqual(["Started", "Failed"]);
 
-      const factsForR2 = yield* store.facts({ runId: "r2" });
+      const factsForR2 = yield* store.facts({ where: { runId: "r2" } });
       expect(factsForR2.map((row) => row._tag)).toEqual(["Started", "Failed"]);
 
       const recent = yield* store.recent(2);

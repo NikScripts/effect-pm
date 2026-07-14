@@ -92,11 +92,6 @@ export type QueueEventOf<Tag extends QueueStoreTag> = QueueEvent<
   unknown
 >;
 
-/** Read payload for the built-in `events` query. @internal */
-export const queueEventReadPayload = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
-});
-
 /**
  * The `success` / `error` wire schemas for the store event schema — kept **erased** to `Schema.Top`
  * at the schema level (typed success rides `QueueStoreCompleted` at the decoded level, see
@@ -116,15 +111,12 @@ const queueWireFromTag = (tag: QueueStoreTag): QueueWireSchemas => ({
 /** Built-in queue store contract for a tag — one `event` shape over the shared event schema. @internal */
 export type BuiltInQueueContract<Tag extends QueueStoreTag> = StoreContractValue<
   {
-    readonly event: StoreShapeDef<
-      QueueEventSchemaOf<Tag>,
-      typeof queueEventReadPayload
-    >;
+    readonly event: StoreShapeDef<QueueEventSchemaOf<Tag>>;
   },
   {
     readonly record: (event: QueueEventOf<Tag>) => Effect.Effect<void, StoreWriteError>;
     readonly events: (
-      payload?: { readonly limit?: number },
+      payload?: Store.StoreReadPayload<QueueEventOf<Tag>>,
     ) => Effect.Effect<ReadonlyArray<QueueEventOf<Tag>>>;
   }
 >;
@@ -168,7 +160,6 @@ export const makeQueueStoreContract = <Item extends Schema.Top>(
           wire?.success ?? Schema.Void,
           wire?.error ?? Schema.Unknown,
         ),
-        queueEventReadPayload,
       ),
     },
     ({ event }) => ({
@@ -258,7 +249,7 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
   >["cause"];
   const base = Store.contract(
     {
-      event: Store.shape(eventSchema, queueEventReadPayload),
+      event: Store.shape(eventSchema),
     },
     ({ event }) => ({
       record: event.append,

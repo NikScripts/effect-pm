@@ -54,7 +54,7 @@ rebuild the base with `Store.contract` to add a tier.
 ```ts
 // TIER 1 — lean base: one event shape + record/events aliases
 const base = Store.contract(
-  { event: Store.shape(myEventSchema, Schema.Struct({ limit: Schema.optional(Schema.Number) })) },
+  { event: Store.shape(myEventSchema) },
   ({ event }) => ({
     record: event.append,
     events: event.read,
