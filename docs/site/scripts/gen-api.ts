@@ -33,8 +33,9 @@ const ApiTag = Schema.Struct({
   text: Schema.String,
 });
 const ApiSymbol = Schema.Struct({
-  entry: Schema.String,
-  name: Schema.String,
+  entry: Schema.String, // the namespace this symbol is grouped under ("(top-level)" for bare exports)
+  name: Schema.String, // the bare export name
+  qualifiedName: Schema.String, // how you reach it: `Namespace.name`, or just `name` at top level
   url: Schema.String,
   kind: Schema.String,
   signatures: Schema.Array(Schema.String), // one per overload (empty for non-callables)
@@ -164,7 +165,9 @@ const makeExtractor = (checker: ts.TypeChecker) => {
     return jsdoc.length > 0 ? jsdoc[jsdoc.length - 1].getText() : "";
   };
 
-  const toApi = (entry: Entry, exportSym: ts.Symbol): ReadonlyArray<ApiSymbol> => {
+  // `ns` is the namespace the symbol is reached through (subpath `import * as ns`, or a barrel
+  // `export * as ns`); undefined means a bare top-level export, shown unprefixed.
+  const toApi = (ns: string | undefined, exportSym: ts.Symbol): ReadonlyArray<ApiSymbol> => {
     const sym = resolve(exportSym);
     const decl = sym.getDeclarations()?.[0];
     if (decl === undefined) return [];
@@ -199,12 +202,15 @@ const makeExtractor = (checker: ts.TypeChecker) => {
       }));
     const rawComment = rawCommentOf(decl);
     const source = decl.getSourceFile();
+    const name = exportSym.getName();
+    const qualifiedName = ns === undefined ? name : `${ns}.${name}`;
 
     return [
       {
-        entry: entry.name,
-        name: exportSym.getName(),
-        url: `/api/${entry.name}/${exportSym.getName()}`,
+        entry: ns ?? "(top-level)",
+        name,
+        qualifiedName,
+        url: `/api/${ns ?? "top-level"}/${name}`,
         kind: kindOf(sym),
         signatures,
         typeText,
@@ -221,8 +227,12 @@ const makeExtractor = (checker: ts.TypeChecker) => {
     ];
   };
 
-  return toApi;
+  return { toApi, resolve };
 };
+
+// `export * as X` / a subpath module resolves to a symbol whose declaration IS a source file.
+const isModuleSym = (sym: ts.Symbol): boolean =>
+  (sym.getDeclarations() ?? []).some((d) => ts.isSourceFile(d));
 
 const program = Effect.gen(function* () {
   const outPath = yield* Config.string("API_OUT").pipe(Config.withDefault(defaultOutPath));
@@ -237,23 +247,62 @@ const program = Effect.gen(function* () {
     ),
   );
   const checker = tsProgram.getTypeChecker();
-  const toApi = makeExtractor(checker);
+  const { toApi, resolve } = makeExtractor(checker);
+  const moduleOf = (file: string): ts.Symbol | undefined => {
+    const sf = tsProgram.getSourceFile(file);
+    return sf === undefined ? undefined : checker.getSymbolAtLocation(sf);
+  };
 
-  const model: ReadonlyArray<ApiEntry> = yield* Effect.forEach(entries, (entry) =>
-    Effect.gen(function* () {
-      const sf = tsProgram.getSourceFile(entry.file);
-      const moduleSym = sf !== undefined ? checker.getSymbolAtLocation(sf) : undefined;
-      if (moduleSym === undefined) {
-        yield* Console.warn(`! no module symbol for ${entry.name}`);
-        return { entry: entry.name, symbols: [] };
+  // Namespace groups = every subpath entry (its own `import * as` namespace) PLUS any barrel
+  // `export * as NS` whose module has no subpath of its own (e.g. RunResource, LogEntry).
+  const barrel = entries.find((e) => e.name === "index");
+  const barrelMod = barrel === undefined ? undefined : moduleOf(barrel.file);
+  const subpathFiles = new Set(entries.map((e) => e.file));
+  const groups: Array<{ ns: string; module: ts.Symbol }> = [];
+  for (const e of entries) {
+    if (e.name === "index") continue;
+    const mod = moduleOf(e.file);
+    if (mod !== undefined) groups.push({ ns: e.name, module: mod });
+  }
+  if (barrelMod !== undefined) {
+    for (const ex of checker.getExportsOfModule(barrelMod)) {
+      const r = resolve(ex);
+      const d = r.getDeclarations()?.[0];
+      if (d !== undefined && ts.isSourceFile(d) && !subpathFiles.has(d.fileName)) {
+        groups.push({ ns: ex.getName(), module: r });
       }
-      const symbols = checker
-        .getExportsOfModule(moduleSym)
-        .flatMap((s) => toApi(entry, s))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      return { entry: entry.name, symbols };
-    }),
-  );
+    }
+  }
+
+  // Every symbol reachable through a namespace — so the barrel's bare re-exports of them are dropped
+  // (shown once, under their namespace) and only genuinely top-level bare exports remain.
+  const namespaced = new Set<ts.Symbol>();
+  for (const g of groups) {
+    for (const m of checker.getExportsOfModule(g.module)) namespaced.add(resolve(m));
+  }
+
+  const nsEntries: Array<ApiEntry> = groups.map((g) => ({
+    entry: g.ns,
+    symbols: checker
+      .getExportsOfModule(g.module)
+      .flatMap((m) => toApi(g.ns, m))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  }));
+  const topLevel =
+    barrelMod === undefined
+      ? []
+      : checker
+          .getExportsOfModule(barrelMod)
+          .filter((ex) => !isModuleSym(resolve(ex)) && !namespaced.has(resolve(ex)))
+          .flatMap((ex) => toApi(undefined, ex))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+  const model: ReadonlyArray<ApiEntry> = [
+    ...nsEntries,
+    { entry: "(top-level)", symbols: topLevel },
+  ]
+    .filter((e) => e.symbols.length > 0)
+    .sort((a, b) => b.symbols.length - a.symbols.length);
 
   const generated = DateTime.formatIso(yield* DateTime.now);
   const json = yield* Schema.encodeEffect(Schema.fromJsonString(ApiModel))({
