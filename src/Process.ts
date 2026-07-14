@@ -1866,12 +1866,12 @@ const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
 
 /** Graft `result` ref + stamp wire schemas on a process tag. @internal */
 const applyProcessTagSchemas = (
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   schemas: {
     readonly success?: Schema.Top;
     readonly error?: Schema.Top;
   },
-): ResourceTag<any, any> => {
+): ResourceTag<any, any, any> => {
   let next = tag;
   const stamp: Partial<Record<typeof successSym | typeof errorSym, Schema.Top>> =
     {};
@@ -1915,17 +1915,17 @@ const buildProcessTag = <Self>(
     readonly success?: Schema.Top;
     readonly error?: Schema.Top;
   } = {},
-): ResourceTag<any, any> | NodeBoundTag<any, any, unknown> => {
+): ResourceTag<any, any, any> | NodeBoundTag<any, any, unknown, any> => {
   const node = options?.node;
   const tagOptions = { description: options?.description, kind };
   const success = positional.success ?? options?.success;
   const error = positional.error ?? options?.error;
   const spec = buildProcessSpec({ success, error });
-  const base: ResourceTag<any, any> =
+  const base: ResourceTag<any, any, any> =
     node === undefined
       ? Resource.Tag<Self>()(key, spec, tagOptions)
       : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
-  const stamped: ResourceTag<any, any> =
+  const stamped: ResourceTag<any, any, any> =
     success === undefined && error === undefined
       ? base
       : applyProcessTagSchemas(base, { success, error });
@@ -1952,10 +1952,10 @@ const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
  * the same (mutated) tag — so `class X extends Tag(...).pipe(combinator) {}` extends it. @internal
  */
 const augmentTag = (
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   flatAddition: FlatSpec,
   stamp: object,
-): ResourceTag<any, any> => {
+): ResourceTag<any, any, any> => {
   const nextFlat: FlatSpec = { ...tag[specSym], ...flatAddition };
   return Object.assign(
     tag,
@@ -2003,12 +2003,12 @@ export function schedule(
   source: ResourceTag<any, ScheduleResourceSpec>,
 ): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S>;
 export function schedule(
-  windowsOrSource: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any>,
-): (tag: ResourceTag<any, any>) => ResourceTag<any, any> {
+  windowsOrSource: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any, any>,
+): (tag: ResourceTag<any, any, any>) => ResourceTag<any, any, any> {
   // A type-guard (not bare `Array.isArray`) so the else-branch narrows to the tag: `Array.isArray`
   // alone won't remove a `ReadonlyArray` from the union.
   const isWindows = (
-    x: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any>,
+    x: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any, any>,
   ): x is ReadonlyArray<ScheduleWindow> => Array.isArray(x);
   if (isWindows(windowsOrSource)) {
     const mode: ScheduleMode = { _tag: "inline", windows: windowsOrSource };
@@ -2244,7 +2244,7 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
  * tag's flat spec, so extra members are simply present when the spec declares them.
  */
 const buildProcessImpl = <A, E, R>(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   baseConfig: ProcessLayerConfig<A, E, R>,
 ): Effect.Effect<Resource.BuiltResource<ProcessSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
@@ -2360,7 +2360,7 @@ const buildProcessImpl = <A, E, R>(
 
 // The public layers are **overloaded**: the visible signature is generic over the tag's composed spec
 // `S` (so a `+ schedule` / `+ result` tag is accepted and `Self` — the composed service — is granted),
-// while the implementation signature is loose (`ResourceTag<any, any>` + a loose impl) so the
+// while the implementation signature is loose (`ResourceTag<any, any, any>` + a loose impl) so the
 // dynamically-shaped `buildProcessImpl` record fits. Two deliberate choices keep the types shallow:
 //   1. the visible **return** names `HandlerContextOf<ProcessSpec>` (the concrete base), not
 //      `HandlerContextOf<S>` — walking that over an open `S` blows the instantiation depth, and the
@@ -2387,7 +2387,7 @@ export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 export function layer(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
@@ -2414,7 +2414,7 @@ export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   R
 >;
 export function serve(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
@@ -2439,7 +2439,7 @@ export function serveRemote<Self, S extends Spec, A = void, E = never, R = never
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
 export function serveRemote(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
@@ -2460,7 +2460,7 @@ export function serveRemote(
  * @public
  */
 export const configure = <A = void, E = never, R = never>(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   patch: ConfigPatch<ProcessLayerConfig<A, E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 

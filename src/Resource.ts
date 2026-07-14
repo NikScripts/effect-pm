@@ -1723,8 +1723,8 @@ const selfNodeSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/se
  *
  * @public
  */
-export interface ResourceTag<Self, S extends Spec>
-  extends Context.ServiceClass<Self, string, ServiceOf<S, Self>> {
+export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
+  extends Context.ServiceClass<Self, string, Svc> {
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
   readonly groupId: string;
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
@@ -1910,8 +1910,8 @@ export declare namespace Resource {
  *
  * @public
  */
-export interface NodeBoundTag<Self, S extends Spec, HSelf>
-  extends ResourceTag<Self, S> {
+export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Self>>
+  extends ResourceTag<Self, S, Svc> {
   readonly [nodeSym]: NodeKey<HSelf>;
 }
 
@@ -1957,13 +1957,13 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
  */
 export const withReadiness: {
   // The input is "any resource tag, node-bound or not" — `NodeBoundTag` is a distinct interface, so
-  // it isn't structurally assignable to a bare `ResourceTag<any, any>` (its one invariant member,
+  // it isn't structurally assignable to a bare `ResourceTag<any, any, any>` (its one invariant member,
   // `[groupSym]`); naming both arms is the honest type for "accepts either variant" (`client` does the
   // same). `Self` is widened to `any` on the data-last form so it works in a class `extends` position
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
   //
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
-  <T extends ResourceTag<any, any> | NodeBoundTag<any, any, any>>(
+  <T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
@@ -1982,7 +1982,7 @@ export const withReadiness: {
   ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any>>(tag: T, readiness: ReadinessOf<unknown>): T => {
+  <T extends ResourceTag<any, any, any>>(tag: T, readiness: ReadinessOf<unknown>): T => {
     // Stack onto any readiness already on the tag (e.g. a contract factory's own check): the new
     // derivation receives the prior one (applied to the same service) as `base`, so it can extend
     // it (`yield* base`) or replace it (ignore `base`). `base` flows down the chain from the root.
@@ -3193,7 +3193,7 @@ export const distributed: {
   // data-last (pipe): mirrors `withReadiness` — the data-first overloads (which infer `Self`/`S` and
   // return the *specific* tag) are what let a class `extends … .pipe(distributed(...))` resolve without
   // recursing on its own type, so `distributed` is `Fn.dual` too (not a bare curry).
-  <T extends ResourceTag<any, any> | NodeBoundTag<any, any, any>>(
+  <T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(
     nodes: ReadonlyArray<AnyNode>,
   ): (tag: T) => T;
   <Self, S extends Spec, HSelf>(
@@ -3206,7 +3206,7 @@ export const distributed: {
   ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T =>
+  <T extends ResourceTag<any, any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T =>
     Object.assign(tag, { [nodesSym]: nodes }),
 );
 

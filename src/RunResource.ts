@@ -658,7 +658,7 @@ export function serveRemote<
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemote(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
   return withDefaultStoreBridge(
@@ -692,7 +692,7 @@ export function serve<
   R
 >;
 export function serve(
-  tag: ResourceTag<any, any>,
+  tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
   return withDefaultStoreBridge(
@@ -770,11 +770,11 @@ export const Service = <Self>() => {
       layer: withDefaultStoreBridge(
         Layer.unwrap(
           Effect.map(
-            buildRunImpl(tag as ResourceTag<any, any>, layerConfig),
+            buildRunImpl(tag as ResourceTag<any, any, any>, layerConfig),
             (built) =>
               Resource.layer(
-                tag as ResourceTag<any, any>,
-                Resource.grantLocal(tag as ResourceTag<any, any>, built),
+                tag as ResourceTag<any, any, any>,
+                Resource.grantLocal(tag as ResourceTag<any, any, any>, built),
               ),
           ),
         ) as Layer.Layer<Self, never, R | Store.Storage>,

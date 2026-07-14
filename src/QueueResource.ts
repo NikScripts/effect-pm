@@ -787,37 +787,71 @@ export interface QueueResource<
   readonly events: Stream.Stream<QueueEvent<Payload, Error, Success>>;
 }
 
+/** This queue's decoded item type — the `Payload` of its {@link QueueResource} handle. @internal */
+type QueueItemOf<F extends Schema.Struct.Fields> = Resource.Decoded<Schema.Struct<F>>;
+
+/**
+ * The queue's {@link Resource.Tag} whose service value is the **named** {@link QueueResource} handle
+ * (via the `Svc` seam on {@link ResourceTag}), so `yield* MyQueue` hovers as
+ * `QueueResource<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
+ */
+export type QueueTag<Self, F extends Schema.Struct.Fields> = ResourceTag<
+  Self,
+  QueueInstanceSpec<F>,
+  QueueResource<QueueItemOf<F>>
+>;
+
+/** {@link QueueTag} for a node-bound queue (its own transport). @public */
+export type QueueNodeBoundTag<Self, F extends Schema.Struct.Fields, HSelf> = NodeBoundTag<
+  Self,
+  QueueInstanceSpec<F>,
+  HSelf,
+  QueueResource<QueueItemOf<F>>
+>;
+
+/**
+ * Name the built queue tag's service as {@link QueueResource}. The single, deliberate cast in this
+ * module: `ServiceOf<QueueInstanceSpec<F>>` and `QueueResource<QueueItemOf<F>>` are **mutually
+ * assignable** — proven bidirectionally in `test/queue-handle.test-d.ts` — but TS can't verify that
+ * equality for *generic* `F` at the invariant service-`Shape` position, so the generic factory needs
+ * one assertion here. Owner-approved (the alternative was a schema-field hover, not `EmailJob`). The
+ * `.test-d.ts` is the soundness guard: if the shapes ever diverge, it fails the build.
+ */
+const nameQueueService = <Self, F extends Schema.Struct.Fields>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+): QueueTag<Self, F> => tag as unknown as QueueTag<Self, F>;
+
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     payload: Schema.Struct<F>,
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
+  ): QueueNodeBoundTag<Self, F, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
   function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
     key: string,
     payload: Schema.Struct<F>,
     success: Success,
     error?: Schema.Top,
-  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
+  ): QueueTag<Self, F> & QueueSuccessCarrier<Success>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     payload: Schema.Struct<F>,
     options?: { readonly description?: string },
-  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<typeof Schema.Void>;
+  ): QueueTag<Self, F> & QueueSuccessCarrier<typeof Schema.Void>;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, QueueInstanceSpec<F>, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
+  ): QueueNodeBoundTag<Self, F, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
   function build<F extends Schema.Struct.Fields, Success extends Schema.Top = typeof Schema.Void>(
     key: string,
     config: QueueTagConfig<F, Success>,
-  ): ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
+  ): QueueTag<Self, F> & QueueSuccessCarrier<Success>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     second: Schema.Struct<F> | QueueTagConfig<F>,
     third?: Schema.Top | QueueTagPositionalOptions,
     fourth?: Schema.Top,
-  ): ResourceTag<Self, QueueInstanceSpec<F>> {
+  ): QueueTag<Self, F> {
     const resolved = isQueueTagConfig(second)
       ? {
           payload: second.payload,
@@ -841,7 +875,7 @@ const queueTag = <Self>() => {
             description: third?.description,
             node: third?.node,
           };
-    return materializeQueueTag<Self, F>(key, resolved);
+    return nameQueueService(materializeQueueTag<Self, F>(key, resolved));
   }
   return build;
 };
