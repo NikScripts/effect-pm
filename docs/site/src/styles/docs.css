@@ -453,6 +453,38 @@ pre.shiki { background: transparent; }
 .twoslash-popup-docs p { margin: 0.15rem 0; }
 .twoslash-popup-docs p:first-child { margin-top: 0; }
 .twoslash-popup-docs p:last-child { margin-bottom: 0; }
+/* Markdown block elements now emitted by the mdast rewrite (lists / headings / links / emphasis /
+   quotes), sized compact for the narrow popup so they don't tower over the prose. */
+.twoslash-popup-docs ul,
+.twoslash-popup-docs ol {
+  margin: 0.2rem 0;
+  padding-left: 1.1rem;
+}
+.twoslash-popup-docs li { margin: 0.1rem 0; }
+.twoslash-popup-docs h1,
+.twoslash-popup-docs h2,
+.twoslash-popup-docs h3,
+.twoslash-popup-docs h4,
+.twoslash-popup-docs h5,
+.twoslash-popup-docs h6 {
+  margin: 0.4rem 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+.twoslash-popup-docs a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.twoslash-popup-docs strong { color: var(--fg); font-weight: 600; }
+.twoslash-popup-docs em { font-style: italic; }
+.twoslash-popup-docs blockquote {
+  margin: 0.3rem 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--border);
+  color: var(--muted-fg);
+}
 .twoslash-popup-docs-code { margin: 0.4rem 0; }
 .twoslash-popup-docs-code:last-child { margin-bottom: 0; }
 .twoslash-popup-docs-code pre {
