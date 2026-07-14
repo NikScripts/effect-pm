@@ -271,6 +271,26 @@ it is **not browser-safe** — that's expected); `.Tag` is the **light, browser-
 adopt, so it comes **before** the `.Service` runtime adoption. Build `QueueHandle` first, prove the
 `.Tag` naming, then have `.Service` produce the same handle with `A`/`E` from inference.
 
+### M3 authoring breakdown (measured)
+
+The skeleton's members split three ways:
+- **13 members already match** the contract using the existing hand-authored interfaces (proven by the
+  scratchpad harness): `status`, `size`, `isEmpty`, `start`, `pause`, `resume`, `shutdown`, `clear`,
+  `add`, `prioritize`, `defer`, `enqueue`, `deadLetter`, `drop`.
+- **`metrics` + `release`/`releaseEncoded`** diverge only because `QueueMetrics` / `QueueReleaseOptions`
+  don't equal their schemas' `.Type`. Item-independent (result carries `Payload`, which the skeleton
+  has) → typeable via `Resource.Decoded<typeof queueMetrics>` / `Decoded<typeof queueReleaseOptions>`.
+- **`events`** is the crux: `Decoded<buildQueueEvent(itemSchema, successSchema, errorSchema)>` — a
+  15-variant rich union (`Duration`, `Cause`, `DateTime`, optional keys). Hand-authoring a generic to
+  bit-match is fragile throwaway.
+
+**Decision (recommend): fold the M6 drifted-type fix into M3.** Make the hand-authored public types
+`QueueEvent<T, E, A>` / `QueueMetrics` / `QueueReleaseOptions` **structurally equal their schemas'
+`.Type`** (they are meant to be — this is the latent drift). Then the skeleton references them directly
+and matches with no throwaway generics, and the drift is *fixed*, not quarantined. Blast radius: these
+are public types other code uses — verify with full `typecheck` + `test` + the harness. This is more
+SSOT and less throwaway than authoring parallel decoded generics.
+
 ### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
 
 - **M4 — derive the engine handle type from the spec** (delete the hand-authored `EngineQueueHandle`
