@@ -164,7 +164,7 @@ describe("Process.events — live stream", () => {
     ),
   );
 
-  it.live("emits Interrupted when a run is stopped mid-effect", () =>
+  it.live("emits Interrupted when a manual run fiber is interrupted", () =>
     Effect.gen(function* () {
       const entered = yield* Deferred.make<void, never>();
       const hold = yield* Deferred.make<void, never>();
@@ -184,10 +184,10 @@ describe("Process.events — live stream", () => {
           ),
         );
         yield* Effect.sleep(Duration.millis(20));
+        // Manual `run` is independent of the supervisor — interrupt that fiber (stop only kills the driver).
         const runFiber = yield* Effect.forkChild(proc.run);
         yield* Deferred.await(entered);
-        yield* proc.stop;
-        yield* Fiber.join(runFiber).pipe(Effect.exit);
+        yield* Fiber.interrupt(runFiber);
         const events = Array.from(yield* Fiber.join(collected));
         expect(events.some((e) => e._tag === "Interrupted")).toBe(true);
         expect(events.some((e) => e._tag === "Started")).toBe(true);
