@@ -41,8 +41,7 @@ Work on **`integration/storage`**.
 
 ## Naming & RPC policy
 
-- [`../2026-07-07-rpc-schema-names-payload-success-error.md`](../2026-07-07-rpc-schema-names-payload-success-error.md) — locked `payload` / `success` / `error`
-- [`../result-schema-and-rpc-validation.md`](../result-schema-and-rpc-validation.md) — RPC fingerprint (deferred)
+- [`../result-schema-and-rpc-validation.md`](../result-schema-and-rpc-validation.md) — locked `payload` / `success` / `error`; RPC fingerprint (deferred)
 
 **Verify (all agents):**
 

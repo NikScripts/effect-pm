@@ -16,7 +16,7 @@
 |--------|----------------|---------|
 | `4597ee1` | **Store** | Generic `bridge.at<Input>` → precise `StoreHandleOf<Input>`; `Tag.store` typed; consumer casts removed |
 | `1c76643` | **Queue** | **Store cutover** handoffs (`store-cutover-00` … `store-cutover-customqueue.md`) — Stage 1 default store **done**, declared-dependency engine policy |
-| `997a89d` | **RunResource** | RPC naming handoff (`2026-07-07-rpc-schema-names-payload-success-error.md`) |
+| `997a89d` | **RunResource** | RPC naming handoff (completed; date-stamped checklist removed) |
 | `4d45702` | **RunResource** | **Agent reports** under `docs/handoffs/reports/` (Process, Queue, RunResource, Store, docs-release) |
 | `ef914ab` | **Integration** | Merge of run-resource reports + store-cutover docs on one branch |
 
@@ -31,10 +31,8 @@ Two report sets exist — use **both**, for different layers:
 | Layer | Path | Use when |
 |-------|------|----------|
 | **Naming + RPC policy** | [`result-schema-and-rpc-validation.md`](./result-schema-and-rpc-validation.md) | Tag factory shapes, no layer overrides, fingerprint deferred |
-| **Rename execution** | [`2026-07-07-rpc-schema-names-payload-success-error.md`](./2026-07-07-rpc-schema-names-payload-success-error.md) | File checklist, breaking symbol renames |
 | **Agent reports (review)** | [`reports/README.md`](./reports/README.md) | Blind spots, shipped vs open, per-owner priorities |
 | **Store cutover (engine)** | [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) + module `store-cutover-*.md` | **Authoritative for Store Stage 1 + engine wiring** — supersedes stale lines in agent reports |
-| **ProcessStore removal** | [`2026-07-06-processstore-removal.md`](./2026-07-06-processstore-removal.md) | End-state migration stages, facet deletion |
 
 **Supersedes / corrections (read before trusting older agent report lines):**
 
@@ -171,6 +169,4 @@ docs/handoffs/reports/README.md                  ← agent reports index
 docs/handoffs/store-cutover-00-store-core.md     ← store engine policy (authoritative)
 docs/handoffs/store-cutover-{process,queue,runresource,customqueue}.md
 docs/handoffs/result-schema-and-rpc-validation.md
-docs/handoffs/2026-07-07-rpc-schema-names-payload-success-error.md
-docs/handoffs/2026-07-06-processstore-removal.md
 ```

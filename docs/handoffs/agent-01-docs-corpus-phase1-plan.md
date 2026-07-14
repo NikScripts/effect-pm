@@ -149,17 +149,17 @@ Default bias: **archive over delete** for anything that might explain a past PR.
 | `process-store-cutover-review.md` | Process cutover review | **archive** | Done |
 | `run-resource-hardening-review.md` | RunResource review | **archive** | Done |
 
-### E. Date-stamped findings / wow-sports / beta audits — **archive**
+### E. Date-stamped findings / wow-sports / beta audits — **first stack**
+
+Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinished → **defer**.
 
 | Path | Fate |
 |------|------|
-| `2026-06-29-wow-sports-findings.md` | **archive** → `archive/2026-06/` |
-| `2026-07-01-*.md` (8 files) | **archive** → `archive/2026-07/` |
-| `2026-07-02-*.md` (2) | **archive** |
-| `2026-07-03-*.md` (3) — *except see SSOT note* | **archive**; `2026-07-03-contract-serve-reform.md` is locked decisions → prefer **historical SSOT** or archive with stub |
-| `2026-07-04-*.md` (2) | **archive** |
-| `2026-07-06-processstore-removal.md` | **archive** (historical migration plan) |
-| `2026-07-07-rpc-schema-names-payload-success-error.md` | **archive** or fold pointer into `result-schema-and-rpc-validation.md` |
+| 14 completed `2026-07-0{1–7}-*.md` (serve gaps, peers deadlock, serve reform, beta26 audit, ProcessStore removal, RPC rename checklist, multi-host findings, …) | **deleted** (complete) on `cursor/docs-corpus-date-stack-ce05` |
+| `2026-06-29-wow-sports-findings.md` | **deferred** — mixed findings index; linked detail handoffs still live |
+| `2026-07-01-dashboard-custom-resource-widgets.md` | **deferred** — Status: open |
+| `2026-07-01-engine-serve-adoption-feedback.md` | **deferred** — residual soft asks / guidance |
+| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **deferred** — soft ask (data-last test / migration note) |
 
 ### F. Feature handoffs superseded by shipped API — **archive** (default)
 

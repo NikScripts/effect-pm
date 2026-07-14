@@ -7,9 +7,8 @@ clean, 375 tests. The **ordering held** (registry populated before the server re
 `/health` listing both resources in `test/multi-resource-http-server.test.ts`. Remaining, optional:
 re-basing `serveAllHttp` as sugar over `serve`/`httpServer` (§5.3) — the existing `serveAllHttp` is
 untouched and still the right tool for the shared-dependency case. Target release beta.18.
-**Problem report:** [`2026-07-01-per-resource-source-provide.md`](./2026-07-01-per-resource-source-provide.md)
-(the consumer statement; note "source" there is a wow `EventManager` term — **it is not used in this
-design or in any effect-pm surface**; the general concept is a resource's requirement `R`).
+(The original consumer problem report used “source” as a wow `EventManager` term — **that term is not
+used in this design or in any effect-pm surface**; the general concept is a resource's requirement `R`.)
 
 ---
 

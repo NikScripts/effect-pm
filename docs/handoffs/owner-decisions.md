@@ -42,6 +42,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Date-stamped handoffs: complete → delete
+
+- **Owner said:** One stack at a time. If a doc is **implemented / complete → delete**; if not finished → **defer to owner**. Do the first stack, then bring back whatever was never finished.
+- **Chose:** First stack = `docs/handoffs/2026-*.md`. Delete completed ones in-place (no archive for this batch). Leave unfinished four for owner call. Update inbound links in the same change.
+- **Rejected:** Archive-first for this stack; continuing to next stacks before owner answers the deferred list.
+- **Supervisor impact:** Agent 1 executes deletes on `cursor/docs-corpus-date-stack-ce05`; waits on deferred docs before next stack.
+
+---
+
 ## 2026-07-14 — Agent 1 Phase 1 handoffs: thorough / archive-first / defer to owner
 
 - **Owner said:** Yes (to the Phase 1 plan) — be **thorough and precautionary**, and **defer to** the owner on calls.
