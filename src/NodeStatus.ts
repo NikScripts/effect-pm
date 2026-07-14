@@ -31,20 +31,24 @@ import {
 
 /** Live node status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
  *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.
- */export const status = nodeStatus;
+ *  @public */
+export const status = nodeStatus;
 
-/** Live node status. */
+/** Live node status. @public */
 export type Status = NodeStatusType;
 
 /** One served resource's readiness as reported by its node — the element of `status.resources`.
- */export const resourceReadiness = nodeResourceReadiness;
+ *  @public */
+export const resourceReadiness = nodeResourceReadiness;
 
-/** A served resource's readiness as reported by its node. */
+/** A served resource's readiness as reported by its node. @public */
 export type ResourceReadiness = NodeResourceReadinessType;
 
 /**
  * The reserved node status resource tag — nodeless. Drive it with {@link NodeStatus.clientHttp}
  * (or any `RpcClient.Protocol` layer) pointed at a node's `/rpc`.
+ *
+ * @public
  */
 export const Tag = NodeStatusResource;
 
@@ -52,6 +56,8 @@ export const Tag = NodeStatusResource;
  * A client layer for the node status resource pointed at a node's `/rpc` `url` (ndjson over http,
  * matching `Resource.httpServer`'s default). Provide it to a program that reads
  * {@link NodeStatus.Tag}.
+ *
+ * @public
  */
 export const clientHttp = (url: string): Layer.Layer<NodeStatusResource> =>
   Resource.client(NodeStatusResource).pipe(
