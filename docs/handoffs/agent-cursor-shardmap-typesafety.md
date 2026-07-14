@@ -3,11 +3,16 @@
 **Owner of the code:** Cursor Agent (authored `src/ShardMap.ts` + `src/internal/shardMap*`; active on
 `cursor/intro-shardmap-trio`, `cursor/shardmap-store`).
 **Found by:** Agent C standards audit. This doc is the complete spec — you shouldn't need the audit chat.
-**Branch:** your ShardMap working branch; fix these before the next merge to `integration`.
+**Branch:** `cursor/shardmap-store-ce05` (fix landed; merge to `integration` when green).
+
+**Status (2026-07-14):** **Remediated.** Generic `buildImpl` lives in `src/ShardMap.ts` (Telemetry
+posture). `EngineTag` / `Record<string, unknown>` erasure removed. All `@since 1.0.0` dropped.
+Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf, ImplOf / ServeImplOf) each carry a
+`// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`.
 
 ---
 
-## Verdict
+## Verdict (original)
 
 `ShardMap` isn't wrong, it's **undisciplined**. It's a fully-generic public facade
 (`layer`/`serve`/`serveRemote` over `<Self, Key, Value, Error>`) bolted onto a **deliberately erased
