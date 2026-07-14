@@ -31,7 +31,6 @@ point** — nothing here is needed for core resources:
 | Serving over HTTP | `@effect/platform-node` (bundled for Node; swap `@effect/platform-bun` / `-deno` per runtime) |
 | Web dashboard — `/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
 | Terminal dashboard — `/tui` | `react`, `ink` |
-| CLI — `/cli` | *nothing* — uses Effect's own CLI |
 
 Install them the same way — for the full web dashboard:
 
