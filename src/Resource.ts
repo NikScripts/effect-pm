@@ -69,7 +69,7 @@ import {
   RpcSerialization,
   RpcServer,
 } from "effect/unstable/rpc";
-import { Combine, combineQuery } from "./MultiNode";
+import { combineByNode, combineQuery } from "./MultiNode";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import { builtInNodeStoreContract } from "./internal/store/nodeStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
@@ -3382,7 +3382,7 @@ const buildPeerClient = <Self, S extends Spec>(
  * `combineQuery`/`combineStream` (or iterate) and add your own value:
  *
  * ```ts
- * totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+ * totalConnections: combineQuery(peers, (p) => p.connections, combineSum).pipe(
  *   Effect.map((others) => pool.activeCount() + others), // self + peers — you write self in
  * )
  * ```
@@ -3400,14 +3400,14 @@ export const peers = <Self, S extends Spec>(
 
 /**
  * The node key this instance runs as — the **same key** its {@link peers} are keyed by. For folds that
- * key per node (`Combine.byNode`), so a resource's own logic can name its **own** row without
+ * key per node (`combineByNode`), so a resource's own logic can name its **own** row without
  * hand-threading the node key. Requires the {@link selfNodeLayer} / {@link peersLayer} capability:
  *
  * ```ts
  * fleetStatus: Effect.gen(function* () {
  *   const self = yield* Resource.selfNode(FleetDatabase); // the node key I am
  *   const peers = yield* Resource.peers(FleetDatabase);
- *   const byNode = yield* combineQuery(peers, (p) => p.status, Combine.byNode);
+ *   const byNode = yield* combineQuery(peers, (p) => p.status, combineByNode);
  *   return { ...byNode, [self]: yield* ownStatus }; // key my own row, consistently
  * })
  * ```
@@ -3504,7 +3504,7 @@ export const peersFrom = <Self, S extends Spec>(
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**
- * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by node** (`Combine.byNode`),
+ * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by node** (`combineByNode`),
  * and add **this** node's own value keyed by {@link selfNode}. The canned form of the recurring
  * droplet-health-table pattern, on the {@link peers} + {@link selfNode} + `/MultiNode` primitives:
  *
@@ -3531,7 +3531,7 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
   Effect.gen(function* () {
     const self = yield* selfNode(tag);
     const peerClients = yield* peers(tag);
-    const byNode = yield* combineQuery(peerClients, pick, Combine.byNode);
+    const byNode = yield* combineQuery(peerClients, pick, combineByNode);
     const ownValue = yield* own;
     return { ...byNode, [self]: ownValue };
   });

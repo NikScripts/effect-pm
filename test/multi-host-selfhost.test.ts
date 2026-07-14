@@ -1,11 +1,11 @@
 import { Effect, Layer, Schema } from "effect";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiNode";
+import { combineByNode, combineQuery } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 
 class NwslNode extends Resource.Node<NwslNode>("selfnode/NwslNode") {}
 
-// a fleet health view: `status` per instance, `fleetStatus` a per-node map (Combine.byNode)
+// a fleet health view: `status` per instance, `fleetStatus` a per-node map (combineByNode)
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("selfnode/FleetDatabase", {
   status: Resource.effect(Schema.Boolean),
   fleetStatus: Resource.effect(Schema.Record(Schema.String, Schema.Boolean)).pipe(Resource.fleet),
@@ -20,7 +20,7 @@ const database = Resource.layer(
     return {
       status: Effect.succeed(true),
       fleetStatus: Effect.gen(function* () {
-        const byNode = yield* combineQuery(peers, (peer) => peer.status, Combine.byNode);
+        const byNode = yield* combineQuery(peers, (peer) => peer.status, combineByNode);
         return { ...byNode, [self]: true }; // self keyed the same way peers are
       }),
     };
