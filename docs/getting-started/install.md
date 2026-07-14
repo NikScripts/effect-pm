@@ -28,7 +28,6 @@ point** — nothing here is needed for core resources:
 
 | Using | Also install |
 |-------|--------------|
-| Core — `/Resource`, `/QueueResource`, `/Process`, `/ShardMap`, `/Store` | *nothing beyond `effect`* |
 | Serving over HTTP | `@effect/platform-node` (bundled for Node; swap `@effect/platform-bun` / `-deno` per runtime) |
 | Web dashboard — `/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
 | Terminal dashboard — `/tui` | `react`, `ink` |
