@@ -298,6 +298,14 @@ Enforcement: (1) the bidirectional `.test-d.ts` proves `QueueHandle ⇄ ServiceO
 (catch any accidental widening); (3) full `typecheck` + `test`. Blast radius: these are public types —
 land as its own reviewed commit.
 
+**MEASURED (drift-map probe): the drift is essentially ONE type.** Comparing each hand-authored public
+type to its schema `.Type`: **`QueueEvent`, `QueueEntry`, `QueueMetrics`, `QueueReleaseOptions`,
+`QueueRouteOptions`, `QueueStatus` all already MATCH.** Only **`QueueEncodedEntry`** drifts. So the
+earlier harness "events/metrics/release" mismatches were my *draft's* wrong input-type guesses (e.g.
+the `metrics.query` input struct), not type drift. M3 reconciliation = fix `QueueEncodedEntry`
+(narrow-side) + type the handle's effectFn-input members (`metrics.query`, `release`/`deadLetter`/`drop`
+inputs) against the actual decoded schema inputs rather than guesses. Small, low blast radius.
+
 ### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
 
 - **M4 — derive the engine handle type from the spec** (delete the hand-authored `EngineQueueHandle`
