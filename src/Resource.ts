@@ -2973,12 +2973,20 @@ const mergeLayers = (
  *
  * ```ts
  * const Node = Resource.httpServer([
- *   Resource.serve(A, implA).pipe(Layer.provide(depA)),
- *   Resource.serve(B, implB).pipe(Layer.provide(depB)),
+ *   // homogeneous majority — one shared dependency, stated once
+ *   Resource.provide(ImportHandlers.plain, [
+ *     Resource.serve(SeasonMatches, seasonMatchesImpl),
+ *     Resource.serve(LiveScorePoller, pollerImpl),
+ *   ]),
+ *   // outlier — private dependency, isolated on its own serve layer
+ *   Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(ImportHandlers.hooked)),
  * ], { health: { path: "/health" } }).pipe(
  *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
  * );
  * ```
+ *
+ * Prefer this shape over rewriting around a retired bag API: one {@link httpServer}, mixed
+ * shared + isolated deps, no second port.
  *
  * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
  * not pruned) + {@link servedResourcesLayer} yourself. Either way the handlers ride the context the
@@ -3049,6 +3057,10 @@ export function httpServer(
  *
  * It's plain `Layer.provide` underneath — no config-embedded layer — so sharing stays governed by
  * memoization (same `dependency` value → one instance; `Layer.fresh` to isolate).
+ *
+ * Compose next to isolated {@link serve} layers in the same {@link httpServer} list when **one**
+ * resource needs a private dependency and the rest share theirs — that is the escape hatch for the
+ * old "rewrite the whole host off the bag API" cliff.
  *
  * @public
  */
