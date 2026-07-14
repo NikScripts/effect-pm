@@ -715,12 +715,12 @@
       "slug": "storage",
       "rules": [
         {
-          "id": "storage.two-kinds-of-store",
+          "id": "storage.three-kinds-of-store",
           "severity": "must",
           "appliesTo": [
             "src"
           ],
-          "title": "Two kinds of store — append/read, or custom"
+          "title": "Three kinds of persistence — append/read, custom store, or engine-owned keyed SQL"
         },
         {
           "id": "storage.default-or-serviceoption",
