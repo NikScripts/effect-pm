@@ -39,7 +39,7 @@ The queue is the finished reference. The patterns every module adopts:
 ## Module inventory (tick as landed)
 
 ### Claude lane — local (critical / shared / design)
-- [x] **Logs** (`src/store/log.ts` `LogStore`) — merged via [#30](https://github.com/NikScripts/effect-pm/pull/30). `Store.contract`/`Store.Service`; `Logs.persistLayer` is a relay subscriber; Phase 5 broke `captureLogs` / handle `logs`. **`NodeLogs` shim removed.** **P1:** Agent 3 — [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) (levels / followers / remote); owner unlocks slices.
+- [x] **Logs** — [#30](https://github.com/NikScripts/effect-pm/pull/30) platform + Phase 5; [#40](https://github.com/NikScripts/effect-pm/pull/40) registration followers; [#43](https://github.com/NikScripts/effect-pm/pull/43) hard-remove interim `LogStore`/`persistLayer`; [#48](https://github.com/NikScripts/effect-pm/pull/48) lineage append. Agent 3 Logs P1 **closed** ([`agent-03-logs-p1.md`](./agent-03-logs-p1.md)). Deferred: store-layer `(scopeKey, lineId)` memo.
 - [x] **Delete `ProcessLifecycleStore`** — done (folded into `integration` with #30 tip).
 - [x] **Retire the facet substrate** — done (`RuntimeStorage`, `ProcessStore`, `ProcessStorage`,
       `ProcessStoreEvent`, `Query`, RuntimeStorage redis/sqlite halves, related subpaths).

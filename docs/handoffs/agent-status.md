@@ -41,6 +41,8 @@
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
 
+**Agent 3 ready-perfection pass:** deleted remotes `cursor/logs-store-followers-906e`, `cursor/remove-persist-layer-906e` (merged), `cursor/logs-p1-plan-906e`, `cursor/agent-03-process-events-brief-a009` (closed superseded). Left open: this PR + [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide.
+
 ---
 
 ## Completed

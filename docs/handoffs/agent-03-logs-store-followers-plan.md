@@ -1,10 +1,10 @@
 # Agent 3 — Store followers implementation plan
 
-**Status:** **followers cutover shipped** on [#40](https://github.com/NikScripts/effect-pm/pull/40) (`cursor/logs-store-followers-906e`).  
-**Brief:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) (owner-locked registration-follower model).  
-**Done:** `store-read-0` + `followers-0`…`3` + level pipes + remote NodeStatus/`Resource.logs` fallback; examples/docs on `Node.logs`.  
+**Status:** **CLOSED** — followers + interim hard-remove on `integration`.  
+**Shipped:** [#40](https://github.com/NikScripts/effect-pm/pull/40) followers · [#43](https://github.com/NikScripts/effect-pm/pull/43) remove `persistLayer` / `LogStore` / `storeFollower.ts`.  
+**Brief:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) (closed).  
 **Deferred:** store-layer durable `(scopeKey, lineId)` memo (tail claim remains).  
-**In flight:** hard-remove interim `Logs.persistLayer` / standalone `LogStore` / `storeFollower.ts` (`cursor/remove-persist-layer-906e`).
+**Historical plan below** — do not treat “In flight” / Phase checklists as open work.
 
 ---
 

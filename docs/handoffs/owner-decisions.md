@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Process live `events` + Agent 3 ready perfection (close-out)
+
+- **Owner said:** Ship Process live `events` (persist == stream); then Logs lineage append; then remote proof; then “go once ready perfection.”
+- **Chose:** Failure surface = store union on the live stream (`Started` | `Completed` | `Failed` | `Interrupted`); PubSub-then-store publish order; remote HTTP proof (#51) over lazy-PubSub / Effect-returning `Process.make`; close superseded plan/brief PRs (#35/#46).
+- **Rejected / deferred:** named handles (Agent D); `docs/site` UI; store-layer `(scopeKey, lineId)` memo; wire-level persist==stream dual-reader tests; further Process.events Eng this track.
+- **Supervisor impact:** Agent 3 Eng tracks closed on `integration` (#47/#48/#51). Optional docs merge: Logs guide #50. Handoff status: [`agent-status.md`](./agent-status.md).
+
+---
+
 ## 2026-07-11 — Queue wire erase + Process live `events` (retroactive — from PR #19/#20 handoff)
 
 *Logged by supervisor from Agent 2 session-4 handoff + owner relay. Agent should have written this before PRs opened.*
