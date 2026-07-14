@@ -45,6 +45,10 @@ export interface ChapterMeta {
   readonly id: string;
   readonly title: string;
   readonly order?: number;
+  /** Migration state, from the page block: "draft" shows the draft note + checklist. */
+  readonly status?: string;
+  /** Space-separated checklist keys that are complete (e.g. "api types"). */
+  readonly done?: ReadonlyArray<string>;
   readonly rules: ReadonlyArray<Rule>;
 }
 
@@ -81,7 +85,9 @@ const headingText = (n: any): string => {
 // carries a severity class + id; the page section carries id + title. The rule title is
 // read from the section's own heading (SSOT — the heading IS the title).
 export const collect = (doc: djot.Doc) => {
-  let page: { id: string; title: string; order?: string } | undefined;
+  let page:
+    | { id: string; title: string; order?: string; status?: string; done?: string }
+    | undefined;
   const raw: Array<{
     id: string;
     severity: string;
@@ -105,6 +111,8 @@ export const collect = (doc: djot.Doc) => {
           id: a.id,
           title: a.title,
           order: a.order,
+          status: a.status,
+          done: a.done,
         };
       }
     }
@@ -135,6 +143,8 @@ export const parseChapter = (raw: string) =>
       id: page.id,
       title: page.title,
       order: page.order === undefined ? undefined : Number(page.order),
+      status: page.status,
+      done: page.done === undefined ? undefined : page.done.trim().split(/\s+/).filter(Boolean),
       rules,
     };
     return { doc, meta };

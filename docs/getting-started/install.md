@@ -1,4 +1,4 @@
-{#install title="Installation" appliesTo=all}
+{#install title="Installation" status="draft" done="api previews types" appliesTo=all}
 # Installation
 
 effect-pm is published as **`@nikscripts/effect-pm`**. It builds on Effect, so you bring your own

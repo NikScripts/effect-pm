@@ -35,6 +35,33 @@ const visibleCode = (text: string): string => {
 // --- render layer: Djot AST -> React elements (no dangerouslySetInnerHTML) ---
 let keySeq = 0;
 const kids = (n: any) => (n.children ?? []).map(toReact);
+
+// plain text of an inline tree (for heading ids + the on-this-page TOC).
+const plainText = (n: any): string =>
+  n.tag === "str" || n.tag === "verbatim"
+    ? (n.text ?? "")
+    : (n.children ?? []).map(plainText).join("");
+const slugify = (s: string): string =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+export interface TocEntry {
+  readonly id: string;
+  readonly text: string;
+  readonly level: number;
+}
+// the page's h2/h3 headings, in order — the on-this-page nav.
+const buildToc = (doc: any): ReadonlyArray<TocEntry> => {
+  const out: Array<TocEntry> = [];
+  const walk = (n: any): void => {
+    if (n?.tag === "heading" && (n.level === 2 || n.level === 3)) {
+      const text = plainText(n).trim();
+      if (text) out.push({ id: slugify(text), text, level: n.level });
+    }
+    (n?.children ?? []).forEach(walk);
+  };
+  walk(doc);
+  return out;
+};
 const toReact = (n: any): React.ReactNode => {
   const h = React.createElement;
   switch (n.tag) {
@@ -66,7 +93,11 @@ const toReact = (n: any): React.ReactNode => {
       }
       return h("section", { key: keySeq++, id: a.id, className: a.class }, children);
     }
-    case "heading": return h(`h${n.level ?? 2}`, { key: keySeq++ }, kids(n));
+    case "heading": {
+      const level = n.level ?? 2;
+      const id = level === 2 || level === 3 ? slugify(plainText(n).trim()) : undefined;
+      return h(`h${level}`, { key: keySeq++, id }, kids(n));
+    }
     case "para": return h("p", { key: keySeq++, className: n.attributes?.class }, kids(n));
     case "str": return n.text;
     case "soft_break": case "softbreak": return " ";
@@ -110,14 +141,15 @@ const toReact = (n: any): React.ReactNode => {
 export interface RenderedChapter {
   readonly element: React.ReactNode;
   readonly meta: ChapterMeta;
+  readonly toc: ReadonlyArray<TocEntry>;
 }
 
-// Server entry: run the Effect pipeline (RuntimeServer) and return React + meta.
+// Server entry: run the Effect pipeline (RuntimeServer) and return React + meta + on-this-page TOC.
 export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
   const { doc, meta } = await runServer(parseChapter(raw));
   await loadHighlighter(); // ready the (sync) highlighter before the walk
   keySeq = 0;
-  return { element: toReact(doc), meta };
+  return { element: toReact(doc), meta, toc: buildToc(doc) };
 };
 
 // Lightweight: just the title/meta (for nav), no render.
