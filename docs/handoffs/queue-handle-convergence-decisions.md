@@ -41,7 +41,12 @@ elidable-trailing-`never` optimization (my `<Payload, Error, Success, …>` rec 
 | 1 | `Payload` | always present | — |
 | 2 | `Success` | usually `void` | `void` |
 | 3 | `Error` | often a real `SendError` | `never` |
-| 4 | `Requirements` | `never` on Tag always; real only on a dep-carrying Service | `never` |
+| 4 | `Requirements` | **transport** requirement — `never` for local `yield*`, the `Protocol` for a remote `Resource.client` | `never` |
+
+**Requirements corrected (2026-07-13):** it is **not** the worker's `R`. The worker's deps are a
+**layer** concern (`.layer: Layer<Self, never, R>`) — the layer *provides* them into the service, so
+they never appear on the yielded handle. Under unification (below) both `.Tag` and typed `.Service`
+yield `QueueHandle<…, never>` locally; `Requirements` is the transport requirement (remote clients).
 
 | worker | hover |
 |--------|-------|
@@ -214,33 +219,39 @@ radius — other consumers) **vs** type the skeleton's 3 members via `Resource.D
 locally (isolated; leaves the latent drift for a later cleanup). Recommend the SSOT fix, verified by
 the same harness.
 
-### Stage 1 — converge (safe checkpoint)
+### RE-SEQUENCED (owner, 2026-07-13): unify first, then name.
 
-- **M1 — canonical name + Tag naming (additive).** Define
-  `QueueHandle<Payload, Success, Error, Requirements = never>` as the named projection of
-  `ServiceOf<QueueInstanceSpec<F>>` (Payload = `Decoded<Schema.Struct<F>>`; Success/Error from the
-  tag's success/error schema slots). Resolve the **name collision** with the existing 5-param
-  `QueueHandle` by renaming the engine's hand-authored one to `QueueEngineHandleApi` (internal) — pure
-  rename, no runtime change. Point `QueueResource.Tag`'s `Service` at the new `QueueHandle`. Add the
-  bidirectional `test/queue-handle.test-d.ts` (`ServiceOf<spec> ⇄ QueueHandle<…>`). Probe: `yield*
-  Emails` → `QueueHandle<EmailJob, void, SendError>`. `.Tag` consumers untouched.
-- **M2 — `.Service` conforms via the adapter.** Re-express `QueueResource.Service` (typed path) to
-  build through the same `buildQueueImpl` composition it already has the config for, and yield the
-  contract `QueueHandle`. Its surface changes (`size`→`Subscribable`, nested `metrics.{stream,query}`,
-  drop `sizes`/`completed`, add `logs`). Update `docs/guides/queues.md` (`yield* queue.size` →
-  `queue.size.get`). Untyped `.Service` unchanged (custom bucket).
-- **M3 — invariant lock + drop `EEnqueue`.** `Tag ≡ Service` bidirectional type test (Requirements
-  held equal). Remove the `EEnqueue` param everywhere (enqueue is `orDie`'d on contract). Green:
-  `typecheck 0 / lint 0 / test`, probe on both paths, prettify-ts confirm.
+Owner: "Why are we not replacing `.Service` to be built directly from `.Tag` combined with `.layer`?"
+Right — unification is the SSOT foundation and it **erases** the invariant test and the 3-member
+reconciliation (they only mattered while `.Service` had a separate hand-authored handle). Do it first.
+`.Service` is already a tag + baked `.layer` (`QueueResourceServiceDefinition`); today its layer builds
+the engine directly and types the tag as `EngineQueueHandle`. The unification just routes it through
+the contract.
 
-### Stage 2 — de-duplicate to SSOT (standards payoff; own review)
+- **M1 (done, kept) — rename** engine `QueueHandle → EngineQueueHandle` (internal). ✓ committed.
+- **M2 — unify typed `.Service` = `.Tag` + `.layer`.** Route `queueResourceServiceWithSchema`'s layer
+  through `QueueResource.layer` (the `buildQueueImpl` contract adapter) and type its tag as the contract
+  service `ServiceOf<QueueInstanceSpec<F>>` (same as `.Tag`). Engine handle becomes internal-only.
+  `.Service`'s `.layer`/`.configure`/`.wrapWorker` ergonomics preserved. Boundary: **untyped**
+  `.Service` (`queueResourceServiceWithoutSchema`) stays on the engine/custom path. Surface change on
+  typed `.Service` (`size`→`Subscribable`, nested metrics, `logs`); update `docs/guides/queues.md`.
+  After this, `.Tag ≡ .Service` **by construction** — no test needed for it.
+- **M3 — name the one contract handle.** Define
+  `QueueHandle<Payload, Success, Error, Requirements = never>` and point the queue tag's `Service` at
+  it; bidirectional `test/queue-handle.test-d.ts` proves `QueueHandle<Decoded<F>, A, E, never> ⇄
+  ServiceOf<QueueInstanceSpec<F>>`. **Type the 3 schema-typed members (`events`/`metrics`/`release`)
+  via `Resource.Decoded<typeof schema>`** so the drifted hand-authored interfaces are irrelevant to the
+  handle. Drop `EEnqueue`. Probe both paths → `QueueHandle<EmailJob, void, SendError>`; prettify-ts
+  confirm. Green: `typecheck 0 / lint 0 / test`.
 
-- **M4 — derive the engine handle type from the spec.** Replace hand-authored `QueueEngineHandleApi`
-  members with a spec-derived projection (the engine-native subset). Delete the parallel list.
-- **M5 — additive adapter.** Push `size`/`isEmpty` Subscribable derivation + `metrics.stream` to be the
-  engine's native shape; reduce `buildQueueImpl` to additive-only (`metrics.query`, `logs`, RPC).
-- **M6 — collapse typed `.Service` into `.Tag` + inline-worker layer.** One construction path;
-  `Tag ≡ Service` becomes true by construction; the M3 test becomes a guard, not the mechanism.
+### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
+
+- **M4 — derive the engine handle type from the spec** (delete the hand-authored `EngineQueueHandle`
+  member list; the engine-native subset is a spec projection).
+- **M5 — additive adapter** — push `size`/`isEmpty` Subscribable + `metrics.stream` to be the engine's
+  native shape; reduce `buildQueueImpl` to additive-only (`metrics.query`, `logs`, RPC).
+- **M6 (optional) — fix the drifted public types** `QueueEvent`/`QueueMetrics`/`QueueReleaseOptions` to
+  equal their schemas, retiring the quarantined drift from M3.
 
 ### M7 — fan-out template (later, per owner "every resource and process")
 
