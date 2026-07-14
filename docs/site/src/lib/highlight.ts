@@ -12,6 +12,8 @@ import * as ts from "typescript";
 import { createHighlighter, type Highlighter } from "shiki";
 import { createTransformerFactory, rendererRich } from "@shikijs/twoslash";
 import { createTwoslasher } from "twoslash";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { toHast } from "mdast-util-to-hast";
 import { makeTypeExpander } from "./expandType";
 
 const THEMES = { light: "github-light", dark: "github-dark" } as const;
@@ -165,58 +167,49 @@ function splitExpand(info: any): string | undefined {
 // Minimal JSDoc-markdown renderer for the comments box: fenced code blocks are syntax-highlighted,
 // inline `code` becomes <code>, and blank lines split paragraphs. (rendererRich's default dumps the
 // raw markdown text, so ``` fences and `code` showed as literal characters.)
-function mdInline(text: string): any[] {
-  const nodes: any[] = [];
-  const re = /`([^`]+)`/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) nodes.push({ type: "text", value: text.slice(last, m.index) });
-    nodes.push({ type: "element", tagName: "code", properties: {}, children: [{ type: "text", value: m[1] }] });
-    last = re.lastIndex;
-  }
-  if (last < text.length) nodes.push({ type: "text", value: text.slice(last) });
-  return nodes;
+// JSDoc comments ARE markdown. Parse them properly (bold / italic / lists / headings / links / code)
+// with mdast, and hand fenced code to shiki so it stays highlighted (mdast alone leaves it plain).
+// `{@link Target}` / `{@link Target text}` — which mdast doesn't understand — are pre-rewritten to
+// inline code so they render as a styled reference (we can't resolve targets to URLs in the popup).
+function preprocessJsdoc(md: string): string {
+  return md
+    .replace(/\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)([^}]+)\}/g, (_m, _t, text) => `\`${String(text).trim()}\``)
+    .replace(/\{@link\s+([^}\s]+)\}/g, (_m, t) => `\`${t}\``);
 }
-function renderJsdocMarkdown(this: any, docs: string): any[] {
-  const out: any[] = [];
-  // split on fenced code blocks -> [prose, lang, code, prose, lang, code, ...]
-  const parts = docs.split(/```(\w*)\r?\n?([\s\S]*?)```/g);
-  for (let i = 0; i < parts.length; i += 3) {
-    const prose = parts[i];
-    if (prose && prose.trim()) {
-      for (const para of prose.split(/\n{2,}/)) {
-        const t = para.trim();
-        if (t) out.push({ type: "element", tagName: "p", properties: {}, children: mdInline(t) });
-      }
-    }
-    const lang = parts[i + 1];
-    const code = parts[i + 2];
-    if (code != null) {
-      const resolved = (lang && ALIAS[lang.toLowerCase()]) || "typescript";
-      try {
-        out.push({
-          type: "element",
-          tagName: "div",
-          properties: { class: "twoslash-popup-docs-code" },
-          children: this.codeToHast(code.replace(/\r?\n$/, ""), {
-            ...this.options,
+function jsdocToHast(this: any, docs: string): any[] {
+  const tree = fromMarkdown(preprocessJsdoc(docs));
+  const root: any = toHast(tree, {
+    handlers: {
+      // fenced code block -> shiki-highlighted, wrapped in our styled container
+      code: (_state: any, node: any) => {
+        const lang = (node.lang && ALIAS[String(node.lang).toLowerCase()]) || "typescript";
+        let children: any[];
+        try {
+          children = (this as any).codeToHast(String(node.value), {
+            ...(this as any).options,
             meta: {},
             transformers: [],
-            lang: resolved,
+            lang,
             structure: "classic",
-          }).children,
-        });
-      } catch {
-        out.push({ type: "element", tagName: "pre", properties: { class: "twoslash-popup-docs-code" }, children: [{ type: "text", value: code }] });
-      }
-    }
-  }
-  return out;
+          }).children;
+        } catch {
+          children = [{ type: "element", tagName: "pre", properties: {}, children: [{ type: "text", value: String(node.value) }] }];
+        }
+        return { type: "element", tagName: "div", properties: { className: ["twoslash-popup-docs-code"] }, children };
+      },
+    },
+  });
+  return root?.children ?? [];
 }
+function renderJsdocMarkdown(this: any, docs: string): any[] {
+  return jsdocToHast.call(this, docs);
+}
+// Inline context (JSDoc @tag values): parse the same way, but unwrap a lone paragraph so a one-line
+// value (e.g. `@since 4.0.0`) doesn't become a block.
 function renderJsdocInline(this: any, text: string): any[] {
-  if (text.includes("```")) return renderJsdocMarkdown.call(this, text);
-  return mdInline(text);
+  const hast = jsdocToHast.call(this, text);
+  if (hast.length === 1 && hast[0]?.tagName === "p") return hast[0].children;
+  return hast;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST renderer plumbing
 const baseRenderer: any = rendererRich({

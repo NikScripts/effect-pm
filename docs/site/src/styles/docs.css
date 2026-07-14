@@ -272,9 +272,12 @@ pre code { background: none; border: none; padding: 0; font-size: 0.86rem; }
    Shiki paints its own code background, so drop our --card background on highlighted pre. */
 pre.shiki { background: transparent; }
 @media (prefers-color-scheme: dark) {
+  /* Dark tokens on every span, but the dark BACKGROUND only on the container — putting it on every
+     span gave each token / `.line` its own background block. */
   .shiki,
   .shiki span {
     color: var(--shiki-dark) !important;
+  
     background-color: var(--shiki-dark-bg) !important;
   }
 }
@@ -422,12 +425,7 @@ pre.shiki { background: transparent; }
   min-width: 100%;
   box-sizing: border-box;
 }
-/* Shiki gives each `.line` its own background in some paths; keep them transparent so the section
-   (zebra) colour reads cleanly instead of a per-line block. */
-.twoslash .line,
-.twoslash-popup-container .line {
-  background: transparent !important;
-}
+
 /* each JSDoc tag on its own line, with a space between the tag name and its value
    (`@category layers`, `@since 4.0.0`) instead of running together. */
 .twoslash-popup-docs-tag { display: block; }
@@ -449,7 +447,7 @@ pre.shiki { background: transparent; }
    themselves (the earlier rule on `pre` was overridden by shiki's own sizing). */
 .twoslash-popup-docs code,
 .twoslash-popup-docs code span {
-  font-size: 0.78rem !important;
+  font-size: 0.73rem !important;
 }
 /* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
    background with a border and rounded corners. Strip it so it blends into the description instead of
