@@ -371,6 +371,15 @@ pre.shiki { background: transparent; }
    (`@category layers`, `@since 4.0.0`) instead of running together. */
 .twoslash-popup-docs-tag { display: block; }
 .twoslash-popup-docs-tag-name { color: var(--primary); margin-right: 0.4em; }
+/* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
+   background with a border and rounded corners. Strip it so it blends into the description instead of
+   being a boxed chip. (The main type code, .twoslash-popup-code, is already handled above.) */
+.twoslash-popup-container code:not(.twoslash-popup-code) {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
 /* Long lines scroll horizontally. Caveat: overflow-x: auto makes this a scroll container, which
    clips both axes at the box — so the twoslash hover popup is cut off at the top. Escaping the popup
    while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
