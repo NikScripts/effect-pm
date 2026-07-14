@@ -1,23 +1,16 @@
 # Agent instructions
 
-Start with [`docs/legacy/AGENTS.md`](./docs/legacy/AGENTS.md) for this package's architecture, invariants, and verification commands.
+Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) for the supervisor bus, [`docs/standards/`](./docs/standards/) for invariants, and the live book under [`docs/index.md`](./docs/index.md).
 
-**Persistence:** [`docs/legacy/STORAGE.md`](./docs/legacy/STORAGE.md) only.
+**Persistence:** Store cutover decisions — [`docs/handoffs/store-cutover-00-store-core.md`](./docs/handoffs/store-cutover-00-store-core.md). Prefer live store / logs guides under `docs/guides/` when present.
 
-**Integration branch:** `integration/storage` — store cutover + tag wire renames land here before `main`. Active handoffs index: [`docs/handoffs/reports/README.md`](./docs/handoffs/reports/README.md).
+**Integration branch:** **`integration`**. Active handoffs index: [`docs/handoffs/reports/README.md`](./docs/handoffs/reports/README.md).
 
-**Branches:** `<type>/<description>` (e.g. `integration/storage`, `feature/store-release-hygiene`). Policy: [`docs/AGENTS.md`](./docs/AGENTS.md#branch-policy).
+**Roadmap (future only):** [`docs/plans/README.md`](./docs/plans/README.md).
 
-**Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat. Policy: [`docs/AGENTS.md`](./docs/AGENTS.md#changeset-policy).
+**Branches:** `<type>/<description>` (e.g. `feature/store-release-hygiene`, `cursor/…`). Agent work branches may commit and push freely; merge into **`integration`** when green and directed. Do not commit or push on `main` / `develop` / release / user-owned branches without approval. **`integration`** pushes require owner direction (or explicit handoff/supervisor OK).
 
-## Git commit policy
-
-- Do not commit or push directly on major or user-owned branches such as `main`,
-  `develop`, release branches, or a branch the user created unless the user
-  approves that operation.
-- Agent work branches (`feature/*`, `fix/*`, legacy `cursor/*`) may commit and push
-  freely; merge into the handoff's **`integration/<stream>`** when green and directed.
-- **`integration/*`** pushes require owner direction (or explicit handoff/supervisor OK).
+**Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat.
 
 ## Effect platform policy
 

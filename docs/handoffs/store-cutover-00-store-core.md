@@ -121,5 +121,5 @@ for subscribers; the **store row** follows the rule above.
 ## Proposals (informational — owner approval required)
 
 - **Layer query / bulk read** — draft design for multi-scope and whole-layer reads on EventJournal
-  `Store`. **Not approved for implementation.** See [`store-layer-query.md`](./store-layer-query.md).
+  `Store`. **Not approved for implementation.** See [`store-layer-query.md`](./archive/2026-07/designs/store-layer-query.md).
   Store agent: refine or replace; do not ship public API without owner sign-off.

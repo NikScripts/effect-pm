@@ -254,4 +254,4 @@ See [history-and-persistence.md](./history-and-persistence.md).
 ---
 
 Reference: [toolkit-by-example.md](./toolkit-by-example.md) (every pattern by example),
-[docs/RESOURCE-API.md](../RESOURCE-API.md), [docs/handoffs/ui-serve-all-http.md](../handoffs/ui-serve-all-http.md).
+[docs/RESOURCE-API.md](../RESOURCE-API.md), [docs/handoffs/archive/2026-07/features/ui-serve-all-http.md](../../handoffs/archive/2026-07/features/ui-serve-all-http.md).

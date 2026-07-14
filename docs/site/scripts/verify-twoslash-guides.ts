@@ -30,6 +30,7 @@ const pages = [
   "docs/index.md",
   "docs/getting-started/core-concepts.md",
   "docs/guides/queues.md",
+  "docs/guides/logs.md",
   "docs/guides/telemetry.md",
   "docs/guides/shardmap.md",
 ];

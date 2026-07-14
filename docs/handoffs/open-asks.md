@@ -6,19 +6,28 @@
 
 ---
 
-## 1. Dashboard widget plug-in seam for custom resources
+## 1. Test doubles (`layerNoop`) for package-owned deps
 
-**Area:** `@nikscripts/effect-pm/web`  
-**Source:** wow-sports services-hub (was `2026-07-01-dashboard-custom-resource-widgets.md` ask #1)  
-**Status:** open — design before code
+**Area:** test DX for served stacks  
+**Source:** wow-sports engine-serve adoption (was `2026-07-01-engine-serve-adoption-feedback.md`)  
+**Status:** open — ship with the service, not a free-floating kit
 
-Custom `Resource.Tag`s (`Database`, `Import`, `EventManager`, …) with no known `Resource.kindOf` fall back to the **generic status card** (status fields + streams). That works. Rich per-type cards (queue / process / ApiMetrics) do not exist for consumer-defined shapes.
+Once deps are explicit in `R` (`serve` / edge provide), unit tests must supply a `Layer` for every ambient tag. Live layers are too heavy; consumers invent noops (they already have `ImportFlush.layerNoop` for *their* services).
 
-**Missing:** how `/web` picks a widget for a tag it does not statically know:
-- by `kindOf`
-- by spec-shape match
-- by a consumer-registered widget map
+**Ask:** where **effect-pm** owns the service, ship a matching `layerNoop` (or equivalent inert layer) so consumers don’t hand-stub package deps.
 
-Generic introspection is rejected. Widgets stay hand-crafted per type; the seam is how a consumer plugs theirs in.
+**Rule:** a `layerNoop` lands **beside the service it stubs** when that service exists — not a generic “noop any Tag” helper. Consumer-owned tags stay consumer-owned stubs. Optional later: a fatter “test serve” kit is out of scope until a concrete owned service needs it.
 
-**Not a blocker** for wow — the generic card already renders. Prerequisite shipped: `Resource.client(tag, host)` (beta.17).
+**Inventory note (2026-07-14):** No package-owned ambient Tag today lacks a usable test layer (`Store.Service.layerMemory`, engine `layer` / `serve`, etc.). Leave this row until a concrete package service appears that needs an inert double.
+
+Not a blocker. No `layerNoop` under `src/` today.
+
+---
+
+## Closed this pass
+
+| Ask | Fate |
+|-----|------|
+| Dashboard widget plug-in seam | **Shipped** — `src/web/widget-registry.ts` (`forKind` / `forKey` / `withEntries` onto `base`; Agent C on `integration`) |
+| Docs: when NOT to hoist `Effect.provide` to `serve` | **Shipped** — standards *Resources* (declare-don’t-provide) + the “when not to hoist” guidance in that rule |
+| beta.22 `withReadiness` pipe TS2589 | **Fixed** — `PipeableTag` + type-hygiene [#54](https://github.com/NikScripts/effect-pm/pull/54) on `integration` |

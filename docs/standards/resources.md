@@ -64,6 +64,24 @@ class Ingest extends Process.Tag<Ingest>()("app/Ingest", { success: Report })
   ) {}
 ```
 
+{#data-last-tag-duals-shallow .must appliesTo=src}
+## Data-last tag duals must not constrain `Svc`-bearing tag unions
+
+A combinator meant for `class X extends Tag<X>()(…).pipe(combinator(…))` must not constrain its
+data-last `T` as `ResourceTag | NodeBoundTag`. Those types carry a default `Svc = ServiceOf<S, Self>`;
+stock tsc expands that while `Self` is still being declared and hits **TS2589** (tsgo often stays
+quiet — gate with **both**). Constrain `T` with a shallow brand that only needs the spec (the package
+uses `PipeableTag = { readonly [specSym]: FlatSpec }` for `withReadiness` / `distributed`). `T` is
+still inferred as the concrete tag, so `(tag: T) => T` preserves it.
+
+``` ts
+// ✅ shallow — PipeableTag / equivalent
+<T extends PipeableTag>(…): (tag: T) => T
+
+// ❌ deep — reopens TS2589 on node-bound class .pipe under stock tsc
+<T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(…): (tag: T) => T
+```
+
 {#polling-vs-schedule .must appliesTo="src examples"}
 ## Polling and schedule are different questions — never conflate
 
@@ -158,8 +176,10 @@ program.pipe(Layer.provide(Counter.serve))
 ## Declare dependencies in the worker; provide at the serve boundary
 
 A worker or tick body **declares** its dependencies with `yield* Tag` — it never `Effect.provide`s
-them inline. Provide them once, at the serve/layer boundary, so `strictEffectProvide` stays clean and
-the same body works local or served.
+them inline. Provide **whole-resource** deps once, at the serve/layer boundary, so
+`strictEffectProvide` stays clean and the same body works local or served. Do **not** hoist a
+**sub-effect-scoped** dep to `serve` — that widens `R` for the whole body; keep an app-local
+scoping combinator beside the handler service — do not look for a package `locally` helper.
 
 {#one-instance-one-materialization .must appliesTo="src examples"}
 ## One instance, one materialization

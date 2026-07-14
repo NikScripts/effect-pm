@@ -31,7 +31,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
 | `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
-| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](./handoffs/reports/README.md); integration branch **`integration`**. |
+| `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](../handoffs/reports/README.md); archive: [`handoffs/archive/`](../handoffs/archive/); integration branch **`integration`**. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
@@ -118,7 +118,7 @@ impact — same bar as before.
 
 **Content:** no `@deprecated` shims in migration notes — snippets only. Consolidate related
 breaking notes into one coherent changeset when possible (see
-[`handoffs/reports/2026-07-07-agent-report-docs-release.md`](./handoffs/reports/2026-07-07-agent-report-docs-release.md)).
+[`handoffs/archive/2026-07/reports/2026-07-07-agent-report-docs-release.md`](../handoffs/archive/2026-07/reports/2026-07-07-agent-report-docs-release.md)).
 
 ---
 
@@ -154,9 +154,9 @@ breaking notes into one coherent changeset when possible (see
 | Add a public export | Add the symbol to the module **namespace** object, export the same binding at the module top level (short name), then re-export namespace + short name from `src/index.ts`. Add a `tsup` entry and `package.json` `exports` subpath when the module is a standalone import surface. |
 | Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
 | Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
-| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"` (re-enabling it is on the [roadmap](./plans/README.md)). |
+| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"` (re-enabling it is on the [roadmap](../plans/README.md)). |
 | Run tests | `pnpm test` |
-| Pick up future work | [`STORAGE.md`](./STORAGE.md) for the persistence model; [`docs/plans/README.md`](./plans/README.md) for the reviewed roadmap. |
+| Pick up future work | [`STORAGE.md`](./STORAGE.md) for the persistence model; [`docs/plans/README.md`](../plans/README.md) for the reviewed roadmap. |
 
 ---
 

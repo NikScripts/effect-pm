@@ -12,7 +12,7 @@ import { DateTime, Duration, Effect, Layer, Option, type Schema, Stream } from "
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as resourceKindOf, specSym, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, type NodeKey, type Subscribable } from "../Resource";
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
@@ -234,20 +234,14 @@ export const leafByKey = (group: unknown, key: string): unknown => {
   return walk(group);
 };
 
-/** A tag carries its flattened contract spec under `specSym` — narrow to it before reading. */
-const hasSpec = (m: unknown): m is { readonly [specSym]: FlatSpec } =>
-  typeof m === "object" && m !== null && specSym in m;
-
-/** Which kind of leaf a tag is — by the contract's stamped kind. */
-export const kindOf = (member: unknown): "queue" | "process" | "api" => {
-  // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
-  // for a bare `Resource.Tag` (or an older tag without a stamped kind).
+/** Which kind of leaf a tag is — purely by its **stamped** kind (every tag carries one; a bare
+ *  `Resource.Tag` is `"resource"`). No spec-sniffing: the kind key is the single source of truth. */
+export const kindOf = (member: unknown): "queue" | "process" | "api" | "resource" => {
   const stamped = resourceKindOf(member);
   if (stamped === queueKind) return "queue";
   if (stamped === processKind) return "process";
   if (stamped === apiKind) return "api";
-  const spec: FlatSpec = hasSpec(member) ? member[specSym] : {};
-  return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
+  return "resource";
 };
 
 /** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */

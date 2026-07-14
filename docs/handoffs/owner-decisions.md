@@ -6,6 +6,43 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks
+
+- **Owner said:** Scrub living cites of anything under `docs/legacy/**`. Confirm fleet health as the health roadmap item; Resource-RPC auth = README-only (A). Agree `docs/plans/` home, archive hybrid, refresh treeshaking.
+- **Chose:** Create `docs/plans/` (README + treeshaking refresh + weighted-middle + non-serializable items). Delete `docs/legacy/plans/`. Archive hybrid RuntimeStorage design. Roadmap: **fleet health** (per-node shipped; fleet aggregate open); **auth** stays a bullet with no stub file.
+- **Rejected:** Host health wording; rewriting hybrid under Store; auth stub file; leaving a “see legacy” stub.
+- **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`. Phase 3 still owner-gated.
+
+---
+
+## 2026-07-14 — Phase 1 Batch E design-lock + Phase 2 plan unlock
+
+- **Owner said:** “Next” after #54/#55 land — continue corpus.
+- **Chose (Batch E):** Keep `*-decisions.md` + store-cutover SSOTs **flat at handoffs root** (no `decisions/` folder). Archive closed Agent 3 followers/tail plans + not-approved `store-layer-query` under `archive/2026-07/`. `queue-persistence-design` stays as historical SSOT; `queue-nonserializable-items` waits for Phase 2 move to `docs/plans/`.
+- **Chose (Phase 2):** Plan-first only — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md). Proposed home = **`docs/plans/`**; no mass moves until owner unlocks P1–P4.
+- **Rejected / deferred:** Batch Z deletes; relocating STORAGE-cited cutover files; implementing roadmap features.
+- **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`.
+
+---
+
+## 2026-07-14 — Phase 1 handoffs archive batches A–D (“do it all”)
+
+- **Owner said:** Unlock Phase 1 execution — do the archive batches (archive-first). Close what we can from open-asks in the same pass.
+- **Chose:** `git mv` batches **B/C/D** → `docs/handoffs/archive/2026-07/{agents,features,reports}/`; keep `reports/README` as index; rewrite legacy/AGENTS/status ripples. Date stack **A** already closed (complete→delete); leftover beta22 handoff deleted. Type hygiene [#54](https://github.com/NikScripts/effect-pm/pull/54) landed with archive [#55](https://github.com/NikScripts/effect-pm/pull/55). Open-asks: widget seam closed (Agent C registry on `integration`); hoist docs shipped in `per-resource-dependencies` + standards; `layerNoop` stays parked until a concrete package-owned ambient needs it.
+- **Rejected / deferred:** Batch **E** (`decisions/` / moving store-cutover SSOTs); batch **Z** deletes; Phases 2–3.
+- **Supervisor impact:** Both PRs on `integration`. Root handoffs ≈ live bus + SSOTs + deferred edge cases only.
+
+---
+
+## 2026-07-14 — Process live `events` + Agent 3 ready perfection (close-out)
+
+- **Owner said:** Ship Process live `events` (persist == stream); then Logs lineage append; then remote proof; then “go once ready perfection.”
+- **Chose:** Failure surface = store union on the live stream (`Started` | `Completed` | `Failed` | `Interrupted`); PubSub-then-store publish order; remote HTTP proof (#51) over lazy-PubSub / Effect-returning `Process.make`; close superseded plan/brief PRs (#35/#46).
+- **Rejected / deferred:** named handles (Agent D); `docs/site` UI; store-layer `(scopeKey, lineId)` memo; wire-level persist==stream dual-reader tests; further Process.events Eng this track.
+- **Supervisor impact:** Agent 3 Eng tracks closed on `integration` (#47/#48/#51). Optional docs merge: Logs guide #50. Handoff status: [`agent-status.md`](./agent-status.md).
+
+---
+
 ## 2026-07-11 — Queue wire erase + Process live `events` (retroactive — from PR #19/#20 handoff)
 
 *Logged by supervisor from Agent 2 session-4 handoff + owner relay. Agent should have written this before PRs opened.*
@@ -23,7 +60,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose:** **Phase 1a** — mirror **CustomQueueResource**: `queueSpec(payload, { success?, error? })`, runtime-correct `buildQueueEvent`, single **`assertQueueInstanceSpec`** boundary cast (not inner `as unknown as Success`). **Validation:** structural `flattenSpec` key/kind match + wire schema smoke; contract RPC round-trip test.
 - **Rejected:** PR **#19** (generic `queueSpec` + inner casts), PR **#20** merge until Phase 1a lands; claiming `StreamElement<events>` typing in Phase 1a.
 - **Deferred:** Process live `events` — separate session after Queue Phase 1a; owner still picks failure surface (`events` vs store-only vs RPC rebuild).
-- **Supervisor impact:** Do **not** merge #19/#20. Agent 2 → [`agent-02-queue-wire-phase-1a.md`](./agent-02-queue-wire-phase-1a.md). #17 rebase after Queue wire settled.
+- **Supervisor impact:** Do **not** merge #19/#20. Agent 2 → [`agent-02-queue-wire-phase-1a.md`](archive/2026-07/agents/agent-02-queue-wire-phase-1a.md). #17 rebase after Queue wire settled.
 
 ---
 
@@ -103,7 +140,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-13 — Next headlining resource research (Agent 1)
 
 - **Owner said:** Agent 1 is free. Process + QueueResource are the top two; RunResource is lackluster as a product headline. Explore leaning into **fleet / peer** features — ideally first resource with mesh from day one.
-- **Chose:** Plan-first research only — [`agent-01-next-headlining-resource.md`](./agent-01-next-headlining-resource.md). Options: upgrade Run, productize WorkerPool, FleetStatus, Telemetry, or new work router. Owner picks direction before any implementation. **Base branch:** Agent 2’s `cursor/phase5-logs-migration-a3ad` (not bare `integration/storage`).
+- **Chose:** Plan-first research only — [`agent-01-next-headlining-resource.md`](archive/2026-07/agents/agent-01-next-headlining-resource.md). Options: upgrade Run, productize WorkerPool, FleetStatus, Telemetry, or new work router. Owner picks direction before any implementation. **Base branch:** Agent 2’s `cursor/phase5-logs-migration-a3ad` (not bare `integration/storage`).
 - **Rejected:** Immediate RunResource polish without research; treating Run store cutover as “headlining done.”
 - **Supervisor impact:** Agent 1 research session on Agent 2 tip; Agent 2 continues Logs PR #30.
 
@@ -121,7 +158,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-12 — Logs before release (owner)
 
 - **Owner said:** Wait on `main` merge / version bump. Finish **Logs** store migration first. Use **Cursor** (3 Claude agents busy).
-- **Chose:** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md) on `cursor/logs-store-cutover-a009`.
+- **Chose:** [`agent-cursor-logs-store-cutover.md`](archive/2026-07/agents/agent-cursor-logs-store-cutover.md) on `cursor/logs-store-cutover-a009`.
 - **Rejected:** `main` release before Logs; full platform-logs redesign in the same session.
 - **Supervisor impact:** Agent 3 (Cursor) active.
 
@@ -151,5 +188,5 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** Remote Process RPC must use tag **`error`** / **`success`** on the manual run path. Replace **`runImmediately`** with spec member **`effect`** = **`Resource.effect(success, { error })`** — **no input** (`Effect`, not `effectFn`). Failures must fail the RPC, not store-only.
 - **Rejected:** Equating **`effect`** with **`query`**; putting **payload** on `Resource.effect` (input → **`effectFn`** only). Session 3 RPC defer. `runImmediately` as void `effectFn`.
-- **Toolkit rule (owner):** `Resource.effect` → `Effect<S,E>` no args; `Resource.effectFn` → `(In) => Effect<S,E>`; `query`/`mutate` = `MethodKind` for tools only — see [`agent-a-phase1-inventory.md`](./agent-a-phase1-inventory.md) C5.
-- **Chose (withdrawn):** [`agent-02-process-run-rpc.md`](./agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (RunResource `run` is `effectFn`+payload).
+- **Toolkit rule (owner):** `Resource.effect` → `Effect<S,E>` no args; `Resource.effectFn` → `(In) => Effect<S,E>`; `query`/`mutate` = `MethodKind` for tools only — see [`agent-a-phase1-inventory.md`](archive/2026-07/agents/agent-a-phase1-inventory.md) C5.
+- **Chose (withdrawn):** [`agent-02-process-run-rpc.md`](archive/2026-07/agents/agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (RunResource `run` is `effectFn`+payload).

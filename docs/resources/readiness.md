@@ -13,7 +13,13 @@ Acquisition vs readiness: get hard dependencies ready by acquiring them eagerly 
 
 ## Attach readiness to a tag
 
-`Resource.withReadiness` is dual — data-first or `.pipe` — so it reads naturally on a class `extends`. The derivation reads the **materialized service** and returns `{ ready, detail? }`. A tag with no derivation is **ready by default**, so unaware resources never falsely fail a gate.
+`Resource.withReadiness` is dual — **data-first** `withReadiness(tag, fn)` or **data-last**
+`.pipe(withReadiness(fn))`. Both are supported on node-bound tags (including many sites in one
+program); prefer whichever reads cleaner. The derivation reads the **materialized service** and
+returns `{ ready, detail? }`. Prefer an **inferred** `svc` (or a minimal structural type of the
+fields you read) over annotating `Resource.ServiceOf<typeof spec>` — the tag already carries the
+spec. A tag with no derivation is **ready by default**, so unaware resources never falsely fail a
+gate.
 
 ``` ts
 import { Effect, Schema } from "effect"
@@ -80,3 +86,22 @@ export class WnbaDatabase extends Resource.withReadiness(
 ```
 
 Options field names match the produced spec (`status` / `changes`). `changes` is the **element** schema of the stream. Serve an impl with those fields as usual (`Resource.serve` / `Resource.httpServer`); `/health` picks up the attached readiness automatically.
+
+## Shared majority + one outlier on one port
+
+`serveAllHttp` is retired — every host is `Resource.httpServer([...serve layers])`. When **most** resources share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Resource.provide`, isolate the outlier on its own `serve`:
+
+``` ts
+import { Layer } from "effect"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+
+const Host = Resource.httpServer([
+  Resource.provide(SharedHandlers.layer, [
+    Resource.serve(Database, dbImpl),
+    Resource.serve(Workers, workersImpl),
+  ]),
+  Resource.serve(Outlier, outlierImpl).pipe(Layer.provide(HookedHandlers.layer)),
+])
+```
+
+One `/rpc`, one `/health`, no second port, no rewrite onto a second host API.

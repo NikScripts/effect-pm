@@ -77,10 +77,8 @@ describe("durable log store tail", () => {
       yield* relay.publish(entry("b", { lineage: [ProcB.key] }));
       yield* TestClock.adjust(Duration.millis(300));
 
-      const aHandle = yield* AppStore.at(ProcA);
-      const bHandle = yield* AppStore.at(ProcB);
-      const a = yield* aHandle.log.read();
-      const b = yield* bHandle.log.read();
+      const a = yield* Logs.byResource({ processId: ProcA.key });
+      const b = yield* Logs.byResource({ processId: ProcB.key });
       expect(a.map((row) => row.message)).toEqual(["a"]);
       expect(a.every(LogEntry.hasKey(ProcA.key))).toBe(true);
       // Warn floor on ProcB drops Info
@@ -97,8 +95,7 @@ describe("durable log store tail", () => {
       yield* relay.publish(duplicated);
       yield* TestClock.adjust(Duration.millis(300));
 
-      const handle = yield* AppStore.at(ProcA);
-      const rows = yield* handle.log.read();
+      const rows = yield* Logs.byResource({ processId: ProcA.key });
       expect(rows.filter((row) => row.message === "dup")).toHaveLength(1);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
@@ -111,19 +108,17 @@ describe("durable log store tail", () => {
       yield* relay.publish(entry("warn", { lineage: [ProcB.key], level: "Warn" }));
       yield* TestClock.adjust(Duration.millis(300));
 
-      const handle = yield* AppStore.at(ProcB);
-      const rows = yield* handle.log.read();
+      const rows = yield* Logs.byResource({ processId: ProcB.key });
       expect(rows.map((row) => row.message)).toEqual(["warn"]);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
 
   it.effect("AppStore.layerMemory includes Logs capture + empty log until publish", () =>
     Effect.gen(function* () {
-      const handle = yield* AppStore.at(ProcA);
-      expect(yield* handle.log.read()).toEqual([]);
+      expect(yield* Logs.byResource({ processId: ProcA.key })).toEqual([]);
       yield* Effect.logInfo("captured-by-store-layer");
       yield* TestClock.adjust(Duration.millis(300));
-      const rows = yield* handle.log.read();
+      const rows = yield* Logs.byResource({ processId: ProcA.key });
       // No lineage scope on bare Effect.log — resource match drops it.
       expect(rows).toEqual([]);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),

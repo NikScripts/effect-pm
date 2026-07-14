@@ -1,11 +1,12 @@
 # Agent 3 — Logs store followers (owner intent — REPEAT BACK FIRST)
 
-**Status:** **FOLLOWERS CUTOVER SHIPPED** — [#40](https://github.com/NikScripts/effect-pm/pull/40) / [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md).  
-**Agent:** **3**  
-**Branch:** `cursor/logs-store-followers-906e` (landing on `integration`)  
-**Deferred:** store-layer `lineId` memo. **In flight:** hard-remove interim `persistLayer` / `LogStore`.
+**Status:** **CLOSED** — Eng track complete on `integration`.  
+**Shipped:** followers [#40](https://github.com/NikScripts/effect-pm/pull/40) · `persistLayer`/`LogStore` hard-remove [#43](https://github.com/NikScripts/effect-pm/pull/43) · lineage append [#48](https://github.com/NikScripts/effect-pm/pull/48).  
+**Also shipped (same Agent 3 session):** Process live `events` [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51).  
+**Deferred (parked):** store-layer `(scopeKey, lineId)` memo.  
+**Do not reopen** for Eng unless owner unlocks a new slice. Superseded plan PRs [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed; branches deleted.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · this file · [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) §Store integration · [`store-and-logs-design.md`](./store-and-logs-design.md) §Single capture · [`docs/LOGS.md`](../LOGS.md)
+**Docs bus:** [`agent-status.md`](./agent-status.md) · [`agent-03-logs-store-followers-plan.md`](./archive/2026-07/agents/agent-03-logs-store-followers-plan.md) · [`docs/LOGS.md`](../LOGS.md) · optional guide [#50](https://github.com/NikScripts/effect-pm/pull/50)
 
 ---
 
@@ -66,7 +67,7 @@ This is **not** optional, and it is **not** “keep `Logs.persistLayer` + standa
 
 Canonical sources:
 
-- [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
+- [`agent-02-logs-platform-plan.md`](archive/2026-07/agents/agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
 - [`store-and-logs-design.md`](./store-and-logs-design.md) — **Single capture, single store write** (overrides table in Agent 2 plan wins on naming; the follower diagram is still the intent)
 
 ### What “`LogStore`” was doing in the interim

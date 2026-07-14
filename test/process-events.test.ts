@@ -40,6 +40,13 @@ class InterruptProc extends Process.Tag<InterruptProc>()(
   "test/process-events/Interrupt",
 ).pipe(Process.schedule([])) {}
 
+const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
+
+class SuccessEventsProc extends Process.Tag<SuccessEventsProc>()(
+  "test/process-events/Success",
+  { success: Price },
+).pipe(Process.schedule([])) {}
+
 class Boom extends Data.TaggedError("Boom")<{ readonly code: number }> {}
 
 class EventsStore extends Store.Service<EventsStore>("@test/ProcessEventsStore")(
@@ -47,6 +54,7 @@ class EventsStore extends Store.Service<EventsStore>("@test/ProcessEventsStore")
   Store.register(TypedFailProc, builtInProcessStoreContract(TypedFailProc)),
   Store.register(StringFailProc, builtInProcessStoreContract(StringFailProc)),
   Store.register(InterruptProc, builtInProcessStoreContract(InterruptProc)),
+  Store.register(SuccessEventsProc, builtInProcessStoreContract(SuccessEventsProc)),
 ) {}
 
 const withStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
@@ -136,6 +144,32 @@ describe("Process.events — live stream", () => {
       Effect.provide(
         Process.layer(TypedFailProc, {
           effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
+        }),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.live("Completed.success carries the stamped success value on events", () =>
+    Effect.gen(function* () {
+      const proc = yield* SuccessEventsProc;
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(proc.events, (e) => e._tag === "Completed"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      const result = yield* proc.run;
+      expect(result).toEqual({ symbol: "AAPL", usd: 42 });
+      const events = Array.from(yield* Fiber.join(collected));
+      expect(events.find((e) => e._tag === "Completed")).toMatchObject({
+        _tag: "Completed",
+        success: { symbol: "AAPL", usd: 42 },
+      });
+    }).pipe(
+      Effect.provide(
+        Process.layer(SuccessEventsProc, {
+          effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
         }),
       ),
       Effect.scoped,

@@ -18,7 +18,7 @@ Execution history for processes, queues, and run gates lives on the **Store brid
 `ProcessExecutionStore`, `QueueResourceStore`, and `RunResourceStore` **facet classes are deleted**
 from `src/` — engines no longer dual-write to facet emitters.
 
-Deep design: [`handoffs/store-cutover-00-store-core.md`](./handoffs/store-cutover-00-store-core.md) ·
+Deep design: [`handoffs/store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) ·
 guides: [`guides/store.md`](./guides/store.md), [`guides/store-backing.md`](./guides/store-backing.md).
 
 ---
@@ -79,7 +79,7 @@ override.
 | **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueResource.store`, `Process.store` |
 
 Tag wire is SSOT — layer config must not override `payload` / `success` / `error`
-([`result-schema-and-rpc-validation.md`](./handoffs/result-schema-and-rpc-validation.md)).
+([`result-schema-and-rpc-validation.md`](../handoffs/result-schema-and-rpc-validation.md)).
 
 ### Toolkit layers
 
@@ -92,7 +92,7 @@ merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resou
 Boot `SELECT`s live rows; mutations `UPSERT` / `DELETE` — no event replay, no `ShardMap.store`.
 
 **Future (not shipped):** queue write-path buffer off the worker hot path — see
-[`handoffs/store-cutover-queue.md`](./handoffs/store-cutover-queue.md) §Future.
+[`handoffs/store-cutover-queue.md`](../handoffs/store-cutover-queue.md) §Future.
 
 ---
 
@@ -126,7 +126,7 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 ### QueueResource + CustomQueueResource
 
 - **Contract:** `builtInQueueStoreContract(tag)` — cast-free; full `QueueEvent<T>` lifecycle union
-  (persisted == streamed). See [`handoffs/store-cutover-queue.md`](./handoffs/store-cutover-queue.md).
+  (persisted == streamed). See [`handoffs/store-cutover-queue.md`](../handoffs/store-cutover-queue.md).
 - **Engine:** `materializeEngineQueueStoreForTag` / `materializeEngineQueueStoreForItem` in
   `buildQueueImpl` / `buildCustomQueueImpl`; `publishEvent` → `recordToStore` at source
   (`src/internal/queueResource.ts`).
@@ -142,14 +142,14 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
   otherwise the engine stringifies the cause (store-core §5). Manual **`effect`** RPC uses the same
   schemas when stamped (`buildProcessSpec`); scheduled/polling ticks still record failures to the store
   without failing the supervisor loop.
-- **Handoff:** [`handoffs/store-cutover-process.md`](./handoffs/store-cutover-process.md).
+- **Handoff:** [`handoffs/store-cutover-process.md`](../handoffs/store-cutover-process.md).
 
 ### RunResource
 
 - **Contract:** `builtInRunResourceStoreContract(tag)` — fact/state union.
 - **Engine:** declared `Storage` + contract in `src/internal/runResource.ts`.
 - **Registration:** `RunResource.store(tag)`.
-- **Handoff:** [`handoffs/store-cutover-runresource.md`](./handoffs/store-cutover-runresource.md).
+- **Handoff:** [`handoffs/store-cutover-runresource.md`](../handoffs/store-cutover-runresource.md).
 
 ### ShardMap
 
@@ -171,7 +171,7 @@ stream carries (`Enqueued`, `Started`, `Completed`, `Failed`, lifecycle, `RateLi
 Lane is on the entry, not a separate event union (CQR shares the same union).
 
 Optional `success` / `error` on persisted terminal rows follow tag presence
-([`store-cutover-00-store-core.md`](./handoffs/store-cutover-00-store-core.md) §5).
+([`store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) §5).
 
 **Not written anymore:** legacy `queue.entry.*`, `queue.lifecycle.*`, `queue.dedupe-key.*`,
 `queue.ratelimit.exceeded` **RuntimeStorage** facet types — those were the old facet plane.
@@ -297,6 +297,6 @@ const live = Layer.provideMerge(
 
 ## Pending work
 
-Future items: [`plans/README.md`](./plans/README.md) — hybrid `RuntimeStorage`, Postgres adapters,
+Future items: [`plans/README.md`](../plans/README.md) — Postgres adapters,
 queue write-buffer, richer history vocabulary. Implemented Store-bridge behavior belongs in this file
 and toolkit handoffs, not `docs/plans/`.

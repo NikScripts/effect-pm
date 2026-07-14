@@ -16,8 +16,9 @@
  * - **`layer`** — {@link Relay} bus + exactly one merged capture {@link Logger}
  *   (also baked into {@link Store.Service} `layerMemory` / `layer`).
  * - **`stream`** / **`snapshot`** — unfiltered live bus (+ bounded tail).
- * - **Durable tails** — each store registration with an implicit `log` shape forks a Stream
- *   follower (`Node.logs`, `Process.store`, …) → `handle.log.append`.
+ * - **Durable tails** — each store registration with an implicit `_logs` shape forks a Stream
+ *   follower (`Node.logs`, `Process.store`, …). The shape is Effect-style private (omitted from
+ *   public handle types); read via {@link Resource.logs} / {@link byNode} / {@link byResource}.
  * - **`withScope`** — lineage annotation at resource materialize.
  * - **`byNode`** / **`byResource`** — durable reads from registration Storage.
  *

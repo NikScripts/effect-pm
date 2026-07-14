@@ -1,6 +1,6 @@
 # effect-pm — package guide (humans & tooling)
 
-This document is the **narrative companion** to the API tables in [PROCESS-API.md](./PROCESS-API.md) and the **future backlog** in [plans/README.md](./plans/README.md). Read it when you need *why* things exist and *how* pieces connect, not just signature-level *what*.
+This document is the **narrative companion** to the API tables in [PROCESS-API.md](./PROCESS-API.md) and the **future backlog** in [plans/README.md](../plans/README.md). Read it when you need *why* things exist and *how* pieces connect, not just signature-level *what*.
 
 ---
 
@@ -124,7 +124,7 @@ See [examples/README.md](../examples/README.md) for commands, learning paths, an
 
 ## Architecture plans (`docs/plans/`)
 
-These files are **future work only**. Shipped behavior lives in **`docs/*.md`**, **`docs/guides/`**, and TSDoc. [plans/README.md](./plans/README.md) lists priority order and topics.
+These files are **future work only**. Shipped behavior lives in **`docs/*.md`**, **`docs/guides/`**, and TSDoc. [plans/README.md](../plans/README.md) lists priority order and topics.
 
 ---
 

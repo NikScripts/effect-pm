@@ -1,12 +1,12 @@
 # Agent 1 — Phase 1 plan: handoffs cleanup inventory
 
-**Status:** **PLAN LOCKED (posture) — batch execution deferred to owner** (2026-07-14).  
+**Status:** **BATCHES A–D EXECUTED** (2026-07-14) — owner unlock “do it all” / archive-first.  
 **Owner steer:** thorough · precautionary · **defer edge cases / deletes / ambiguous moves to owner**.  
 **Assignment:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) Phase 1.  
-**Branch:** `cursor/docs-corpus-phase1-plan-ce05`.  
-**Scope:** `docs/handoffs/**` only. **Out of scope:** `docs/site/**`, Twoslash/UI chrome, `src/web` / `src/ui`, Phases 2–3.
+**Branch:** `cursor/docs-corpus-phase1-archive-ce05`.  
+**Scope:** `docs/handoffs/**` (+ link ripples in legacy / standards). **Out of scope:** `docs/site/**` UI, `src/web` / `src/ui`, Phases 2–3, batch **E** (SSOT layout), batch **Z** (deletes).
 
-Inventory below stands. **No mass moves until owner unlocks a named batch.**
+Inventory below remains the fate table. Soft asks → [`open-asks.md`](./open-asks.md).
 
 ---
 
@@ -25,25 +25,26 @@ Inventory below stands. **No mass moves until owner unlocks a named batch.**
 
 | Batch | What | Risk | Status |
 |-------|------|------|--------|
-| **0 — posture only** | This plan + owner-decisions steer | None | **done in docs** |
-| **A — date-stamped orphans** | `2026-06-29-*`, `2026-07-01-*` … `2026-07-07-*` with **zero external inbound** → `archive/YYYY-MM/` | Low | **blocked on owner** |
-| **B — merged agent closeouts** | Done Agent 1/2 / cursor closeouts with no legacy/AGENTS links | Low–med | **blocked on owner** |
-| **C — shipped feature handoffs** | ApiMetrics, CQR, telemetry design, etc. (still no/legacy-only links) | Med | **blocked on owner** |
-| **D — reports bodies** | Archive five `reports/2026-07-07-*`; keep `reports/README`; rewrite AGENTS/legacy links | Higher ripple | **blocked on owner** |
-| **E — SSOT / store-cutover / decisions** | Relocate or `decisions/` layout | High | **owner design first** |
-| **Z — deletes** | Only ticked rows | Irreversible (git recoverable) | **owner ticks required** |
+| **0 — posture only** | This plan + owner-decisions steer | None | **done** |
+| **A — date-stamped orphans** | Complete → delete (owner stack rule); unfinished → open-asks | Low | **done** — no `2026-*.md` left at root |
+| **B — merged agent closeouts** | → `archive/2026-07/agents/` | Low–med | **done** |
+| **C — shipped feature handoffs** | → `archive/2026-07/features/` (+ link rewrites) | Med | **done** |
+| **D — reports bodies** | → `archive/2026-07/reports/`; keep `reports/README` | Higher ripple | **done** |
+| **E — SSOT / store-cutover / decisions** | Design-lock: decisions stay flat; cutover SSOTs stay; archive closed Agent 3 plans + not-approved `store-layer-query` | High if moved wrong | **done (design-lock + small archive)** — 2026-07-14 |
+| **Z — deletes** | Only ticked rows | Irreversible (git recoverable) | **still deferred** — archive-first holds |
 
 ---
 
 ## Deferred for owner (do not move without you)
 
-- Whether to use a root `decisions/` folder (alt B) vs keep decisions flat  
-- `store-cutover-*.md` + `store-and-logs-design.md` while STORAGE/legacy still cite them  
-- `agent-03-logs-store-followers-plan.md` / `agent-03-log-store-tail-plan.md` (active vs archive-now)  
-- `store-layer-query.md` (parked not-approved at root vs archive+banner)  
-- `queue-persistence-design.md`, `queue-nonserializable-items.md`  
-- Any **delete** candidates  
-- Letter-agent docs (`agent-b-plan`, docs-platform decision) linked from `docs/site/README.md`
+- ~~Whether to use a root `decisions/` folder~~ → **locked flat** (alt A) 2026-07-14  
+- ~~`store-cutover-*.md` + `store-and-logs-design.md` while STORAGE cites them~~ → **stay at root** until Phase 3  
+- ~~`agent-03-logs-store-followers-plan.md` / `agent-03-log-store-tail-plan.md`~~ → **archived** 2026-07-14  
+- ~~`store-layer-query.md`~~ → **archived** under `archive/2026-07/designs/` (banner kept)  
+- `queue-persistence-design.md` — **historical SSOT** at root (cited by DurableQueueStore)  
+- `queue-nonserializable-items.md` — Phase 2 candidate → `docs/plans/` when P3 unlocked  
+- Any **delete** candidates (Batch Z)  
+- Letter-agent docs (`agent-b-plan`, docs-platform decision) linked from `docs/site/README.md`  
 
 ---
 
@@ -155,10 +156,8 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 
 | Path | Fate |
 |------|------|
-| 15+ completed date-stamped handoffs; widgets handoff deleted (asks absorbed) | **deleted** on `cursor/docs-corpus-date-stack-ce05` |
-| [`open-asks.md`](./open-asks.md) | **active** — §1 widget plug-in seam; monitoredDependency **implemented** (not queued) |
-| `2026-07-01-engine-serve-adoption-feedback.md` | **pending chat walk** |
-| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **pending chat walk** |
+| Date-stamped `2026-*.md` stack | **closed** — deletes + open-asks absorbs; beta22 handoff deleted (PipeableTag fix + type hygiene) |
+| [`open-asks.md`](./open-asks.md) | **active** — §1 widget seam · §2 when-not-to-hoist · §3 layerNoop |
 
 ### F. Feature handoffs superseded by shipped API — **archive** (default)
 
@@ -294,7 +293,7 @@ Everything else is eligible for archive once:
 
 - `docs/site/**` UI, CSS, Twoslash popover, dual-preview, Vite globs, Draft badge chrome  
 - `src/web`, `src/ui`, dashboard widgets  
-- Phase 2 (`docs/legacy/plans/`, plans refactor)  
+- Phase 2 (`docs/plans/`, plans refactor)  
 - Phase 3 (legacy → live book + Draft content convention)  
 - Engine / Logs / handles product code  
 - Mass delete in this plan turn  
@@ -328,7 +327,6 @@ Exact counts will be locked when you annotate the tables.
 
 ## Stop
 
-**Posture locked** (thorough · archive-first · defer to owner).  
-**No archive/delete `git mv` until you unlock a batch** (A / B / C / D / E / Z above).
-
-Say which batch to run (or edit the deferred list).
+**Batches A–E done** (archive-first; E = design-lock + closed/not-approved archive).  
+**Z** still needs per-row delete ticks.  
+Next: Phase 2 — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md).

@@ -77,7 +77,7 @@ class PricesE extends Process.Tag<PricesE>()("app/Prices", {
 responses today — lifecycle RPC methods remain void with no typed failure channel. Failures from poll
 ticks are persisted via `Process.store`; remote clients observe them through store reads or logs, not
 through an RPC `error` slot. See
-[agent report § RPC error wire blocker](../../handoffs/reports/2026-07-07-agent-report-process.md#rpc-error-wire-blocker).
+[agent report § RPC error wire blocker](../../handoffs/archive/2026-07/reports/2026-07-07-agent-report-process.md#rpc-error-wire-blocker).
 
 ### Schedule (pipeable)
 
@@ -204,9 +204,9 @@ the toolkit path (armed/disarmed, polling cadence, `run`).
 
 ## See also
 
-- [../../handoffs/reports/2026-07-07-agent-report-process.md](../../handoffs/reports/2026-07-07-agent-report-process.md) — RPC `error` wire blocker (owner decision)
+- [../../handoffs/archive/2026-07/reports/2026-07-07-agent-report-process.md](../../handoffs/archive/2026-07/reports/2026-07-07-agent-report-process.md) — RPC `error` wire blocker (owner decision)
 
-- [../handoffs/store-cutover-process.md](../handoffs/store-cutover-process.md) — store cutover status (authoritative)
+- [../../handoffs/store-cutover-process.md](../../handoffs/store-cutover-process.md) — store cutover status (authoritative)
 - [toolkit-by-example.md](./toolkit-by-example.md) — location-transparent resources
 - [store.md](./store.md) — `Store.Service`, contracts, SQLite backing
 - [history-and-persistence.md](./history-and-persistence.md) — log/metrics history (`HistoryStore`)

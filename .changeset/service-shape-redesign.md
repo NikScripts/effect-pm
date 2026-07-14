@@ -29,4 +29,4 @@ expands beyond Effects, payloads match Effect's `Rpc.make`, and specs can nest.
   (`effect`/`effectFn`/`stream`/`constant`/`value`/local).
 
 Next (staged): single merged value-stream + optional `initial`. See
-`docs/handoffs/service-shape-redesign.md`.
+`docs/handoffs/archive/2026-07/features/service-shape-redesign.md`.

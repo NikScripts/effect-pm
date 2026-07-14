@@ -763,7 +763,7 @@ const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * Define a **`constant`** field — a value resolved **once** when the resource is acquired, surfaced as a
  * **plain** property (`p.x: A`, no `yield*`), identical local and remote. For values fixed after startup.
  * The impl supplies the value as an `Effect<A>` (run once at acquire; use `Effect.succeed` for a literal).
- * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/service-shape-redesign.md`.
+ * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/archive/2026-07/features/service-shape-redesign.md`.
  *
  * @public
  */
@@ -785,7 +785,7 @@ const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * uniform local and remote. The impl **owns** a `SubscriptionRef` (writes it) and provides it via
  * {@link subscribable}; consumers **read** (`yield* svc.x.get`) and **observe** (`svc.x.changes`) — a read
  * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use `constant`; for on-demand
- * calls use `effect`. See `docs/handoffs/2026-07-03-contract-serve-reform.md`.
+ * calls use `effect`.
  *
  * @public
  */
@@ -1438,7 +1438,7 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
 // type whenever those schemas contain a free type parameter (e.g. inside a factory generic over
 // the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
 // keeps the result identical for every concrete spec while letting it reduce under a generic
-// spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
+// spec too.
 export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
@@ -1978,9 +1978,17 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
   readonly [nodeSym]: NodeKey<HSelf>;
 }
 
-/** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
- *  `undefined` for a bare {@link Resource.Tag} or any non-tag. The robust replacement for sniffing
- *  a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
+/** The kind stamped on a bare {@link Resource.Tag} that declares none — every resource tag carries a
+ *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
+ *  `@nikscripts/effect-pm/QueueResource`); a bare tag defaults to this so nothing is ever kind-less.
+ *
+ * @public
+ */
+export const kind = "@nikscripts/effect-pm/Resource";
+
+/** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`, or {@link kind}
+ *  for a bare {@link Resource.Tag}); `undefined` only for a non-tag. The robust replacement for
+ *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
   // A resource tag is a class (so `typeof` is "function"), with the kind stamped as a static.
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && kindSym in tag) {
@@ -2006,7 +2014,13 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
  *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
  *  node-bound self-referential class's service default (`ServiceOf<S, Self>`), which stock tsc caps
  *  out on as "excessively deep" (tsgo tolerates it). `T` is still inferred as the full concrete tag,
- *  so the `(tag: T) => T` return preserves it exactly. @internal */
+ *  so the `(tag: T) => T` return preserves it exactly.
+ *
+ *  **Rule:** any new `Fn.dual` data-last combinator that accepts a resource tag in a class
+ *  `extends … .pipe(…)` position must constrain `T` with this brand (or an equivalent non-`Svc`
+ *  shape) — never `ResourceTag | NodeBoundTag`, which reopens TS2589 under stock tsc.
+ *
+ *  @internal */
 type PipeableTag = { readonly [specSym]: FlatSpec };
 
 /**
@@ -2027,11 +2041,10 @@ type PipeableTag = { readonly [specSym]: FlatSpec };
  * @public
  */
 export const withReadiness: {
-  // The input is "any resource tag, node-bound or not" — `NodeBoundTag` is a distinct interface, so
-  // it isn't structurally assignable to a bare `ResourceTag<any, any, any>` (its one invariant member,
-  // `[groupSym]`); naming both arms is the honest type for "accepts either variant" (`client` does the
-  // same). `Self` is widened to `any` on the data-last form so it works in a class `extends` position
-  // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
+  // Data-last: `T extends PipeableTag` (shallow) — do not constrain against ResourceTag|NodeBoundTag
+  // or stock tsc TS2589s on node-bound `class extends Tag(…).pipe(withReadiness(…))` (expands Svc).
+  // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
+  // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
   //
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
   <T extends PipeableTag>(
@@ -2270,7 +2283,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   group: RpcGroupOf<S>,
   description: string | undefined,
   node: NodeKey<unknown> | undefined,
-  kind: string | undefined,
+  kindOverride: string | undefined,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateResourceKey({ key });
@@ -2297,7 +2310,8 @@ const buildInstanceTag = <Self, S extends Spec>(
     [groupSym]: group,
     [localCapSym]: localCap,
     [nodeSym]: node,
-    [kindSym]: kind,
+    // Every tag carries a kind: the typed factories pass their own; a bare tag defaults to `kind`.
+    [kindSym]: kindOverride ?? kind,
     [readinessSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
@@ -2973,12 +2987,20 @@ const mergeLayers = (
  *
  * ```ts
  * const Node = Resource.httpServer([
- *   Resource.serve(A, implA).pipe(Layer.provide(depA)),
- *   Resource.serve(B, implB).pipe(Layer.provide(depB)),
+ *   // homogeneous majority — one shared dependency, stated once
+ *   Resource.provide(ImportHandlers.plain, [
+ *     Resource.serve(SeasonMatches, seasonMatchesImpl),
+ *     Resource.serve(LiveScorePoller, pollerImpl),
+ *   ]),
+ *   // outlier — private dependency, isolated on its own serve layer
+ *   Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(ImportHandlers.hooked)),
  * ], { health: { path: "/health" } }).pipe(
  *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
  * );
  * ```
+ *
+ * Prefer this shape over rewriting around a retired bag API: one {@link httpServer}, mixed
+ * shared + isolated deps, no second port.
  *
  * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
  * not pruned) + {@link servedResourcesLayer} yourself. Either way the handlers ride the context the
@@ -3049,6 +3071,10 @@ export function httpServer(
  *
  * It's plain `Layer.provide` underneath — no config-embedded layer — so sharing stays governed by
  * memoization (same `dependency` value → one instance; `Layer.fresh` to isolate).
+ *
+ * Compose next to isolated {@link serve} layers in the same {@link httpServer} list when **one**
+ * resource needs a private dependency and the rest share theirs — that is the escape hatch for the
+ * old "rewrite the whole host off the bag API" cliff.
  *
  * @public
  */

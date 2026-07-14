@@ -126,12 +126,24 @@ export type ShapeHandle<N extends NormalizedShape> = {
 };
 
 /**
+ * Drop Effect-style private fields (`_…`) from a shape / handle key map.
+ *
+ * @internal
+ */
+export type PublicShapeKey<K extends string> = K extends `_${string}` ? never : K;
+
+/**
  * Recursive handle tree passed to a contract's methods function: a leaf shape → its
  * {@link ShapeHandle} (`{ schema, readPayload, append, read }`), a sub-tree → nested
- * {@link ShapeHandles}. So `shapes.sensors.temperature.append` navigates the tree. @internal
+ * {@link ShapeHandles}. So `shapes.sensors.temperature.append` navigates the tree.
+ *
+ * Underscore-prefixed shapes (e.g. platform `_logs`) are omitted — same privacy as Effect
+ * `_`-fields.
+ *
+ * @internal
  */
 export type ShapeHandles<Shapes extends StoreShapes> = {
-  readonly [K in keyof Shapes & string]: Shapes[K] extends StoreShapeInputLeaf
+  readonly [K in keyof Shapes & string as PublicShapeKey<K>]: Shapes[K] extends StoreShapeInputLeaf
     ? ShapeHandle<NormalizeShape<Shapes[K]>>
     : Shapes[K] extends StoreShapeTree
       ? ShapeHandles<Shapes[K]>
@@ -153,7 +165,7 @@ export interface ShapeRef<Row extends Schema.Schema<unknown>> {
 
 /** The shape tree exposed as selectable {@link ShapeRef}s — leaves are refs, sub-trees recurse. @internal */
 export type ShapeRefs<Shapes extends StoreShapes> = {
-  readonly [K in keyof Shapes & string]: Shapes[K] extends StoreShapeInputLeaf
+  readonly [K in keyof Shapes & string as PublicShapeKey<K>]: Shapes[K] extends StoreShapeInputLeaf
     ? ShapeRef<RowSchemaOf<Shapes[K]>>
     : Shapes[K] extends StoreShapeTree
       ? ShapeRefs<Shapes[K]>
@@ -162,12 +174,12 @@ export type ShapeRefs<Shapes extends StoreShapes> = {
 
 /** Union of every leaf's decoded row across a (possibly nested) shape tree. @internal */
 export type AllShapeRows<Shapes extends StoreShapes> = {
-  [K in keyof Shapes & string]: Shapes[K] extends StoreShapeInputLeaf
+  [K in PublicShapeKey<keyof Shapes & string>]: Shapes[K] extends StoreShapeInputLeaf
     ? SchemaDecoded<RowSchemaOf<Shapes[K]>>
     : Shapes[K] extends StoreShapeTree
       ? AllShapeRows<Shapes[K]>
       : never;
-}[keyof Shapes & string];
+}[PublicShapeKey<keyof Shapes & string>];
 
 /** A store class exposing a single scope's contract — the `store` argument to {@link Store.changes}. @internal */
 export interface StoreClassWithShapes<C extends StoreContractValue = StoreContractValue> {
