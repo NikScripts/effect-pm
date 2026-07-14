@@ -334,13 +334,13 @@ export const buildQueueEvent = <
 export type QueueEventSchema<
   Sch extends Schema.Top,
   Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Unknown,
+  Error extends Schema.Top = typeof Schema.Never,
 > = ReturnType<typeof buildQueueEvent<Sch, Success, Error>>;
 
 export const queueEvent = <
   Sch extends Schema.Top,
   Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Unknown,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
   itemSchema: Sch,
   wire?: {
@@ -351,7 +351,7 @@ export const queueEvent = <
   buildQueueEvent(
     itemSchema,
     wire?.success ?? Schema.Void,
-    wire?.error ?? Schema.Unknown,
+    wire?.error ?? Schema.Never,
   );
 
 /**
@@ -514,7 +514,7 @@ export const queueControlSpec = {
 export const queueSpec = <
   F extends Schema.Struct.Fields,
   Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Unknown,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
   itemSchema: Schema.Struct<F>,
   wire?: { readonly success?: Success; readonly error?: Error },
@@ -527,7 +527,7 @@ export const queueSpec = <
   const eventSchema = buildQueueEvent(
     itemSchema,
     wire?.success ?? Schema.Void,
-    wire?.error ?? Schema.Unknown,
+    wire?.error ?? Schema.Never,
   );
   return {
   ...queueControlSpec,
@@ -619,10 +619,33 @@ export type QueueSuccessSchemaOf<Tag> = Tag extends QueueSuccessCarrier<infer Su
   ? Success
   : typeof Schema.Void;
 
-/** The spec of a queue instance whose item is `Schema.Struct<F>` — control surface + data plane. */
-type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
-  typeof queueSpec<F>
->;
+/**
+ * A phantom marker intersected onto a {@link Tag} to carry the worker `error` **schema** (`E`'s
+ * schema) at the type level — the mirror of {@link QueueSuccessCarrier}. The `layer` / `serve` config
+ * constrains the worker's failure channel to this (default {@link Schema.Never}: no declared error →
+ * the worker must be infallible, or defect). Type-only — no runtime field; the runtime `error` schema
+ * rides the wire stamp. @public
+ */
+export interface QueueErrorCarrier<Error extends Schema.Top = typeof Schema.Never> {
+  readonly [queueErrorCarrierSym]?: Error;
+}
+
+declare const queueErrorCarrierSym: unique symbol;
+
+/** The worker `error` **schema** carried on a tag (via {@link QueueErrorCarrier}). @internal */
+export type QueueErrorSchemaOf<Tag> = Tag extends QueueErrorCarrier<infer Error>
+  ? Error
+  : typeof Schema.Never;
+
+/** The spec of a queue instance whose item is `Schema.Struct<F>` — control surface + data plane.
+ *  `Success`/`Error` are the tag's declared wire slots (default `Void`/`Never`), threaded so the
+ *  contract's `events` carry the real `Cause<E>` / `Completed.success` rather than erasing to the
+ *  loose default. */
+type QueueInstanceSpec<
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+> = ReturnType<typeof queueSpec<F, Success, Error>>;
 
 /**
  * Define a queue **instance** in the designed form — its own RPC group (model B), item
@@ -727,7 +750,7 @@ const materializeQueueTag = <Self, F extends Schema.Struct.Fields>(
 export interface QueueResource<
   Payload,
   Success = void,
-  Error = unknown,
+  Error = never,
   Requirements = never,
 > {
   /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
@@ -925,6 +948,13 @@ export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
 type QueueSuccessValueOf<Success extends Schema.Top> = Success["Type"];
 
 /**
+ * The worker `error` value type (`E`) carried on a queue instance spec's `Error` wire schema — the
+ * decoded type of the tag's `error` slot (default `never`). The layer/serve config's worker failure
+ * channel is constrained to this. @internal
+ */
+type QueueErrorValueOf<Error extends Schema.Top> = Error["Type"];
+
+/**
  * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
  * tag's contract. It builds the engine handle in a scope and maps it onto the toolkit service
  * (location-transparent — the same `yield* Tag` then drives the queue locally, or remotely via
@@ -950,8 +980,14 @@ type QueueItemFields = Record<
 /** The `tag:` param shape shared by every queue verb ({@link buildQueueImpl} / {@link layer} /
  *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link ResourceTag}
  *  intersected with its worker-`success` carrier. @internal */
-type QueueTagFor<Self, F extends QueueItemFields, Success extends Schema.Top> =
-  ResourceTag<Self, QueueInstanceSpec<F>> & QueueSuccessCarrier<Success>;
+type QueueTagFor<
+  Self,
+  F extends QueueItemFields,
+  Success extends Schema.Top,
+  Error extends Schema.Top,
+> = ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
+  QueueSuccessCarrier<Success> &
+  QueueErrorCarrier<Error>;
 
 /** The worker-`config:` param shape shared by every queue verb — {@link QueueLayerConfig} with the
  *  instance item type + worker-`success` value recovered from `F` / `Success`. @internal */
@@ -971,13 +1007,13 @@ type QueueVerbConfig<F extends QueueItemFields, E, R, RR, Success extends Schema
 const buildQueueImpl = <
   Self,
   F extends QueueItemFields,
-  E,
   R,
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: QueueTagFor<Self, F, Success>,
-  config: QueueVerbConfig<F, E, R, RR, Success>,
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ) =>
   Effect.gen(function* () {
     // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member. `specSym`
@@ -1001,7 +1037,7 @@ const buildQueueImpl = <
       QueueLayerConfig<
         Schema.Struct<F>["Type"],
         QueueSuccessValueOf<Success>,
-        E,
+        QueueErrorValueOf<Error>,
         R,
         RR
       >
@@ -1024,14 +1060,21 @@ const buildQueueImpl = <
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
-    const handle = yield* makeQueueEffect({
+    const handle = yield* makeQueueEffect<
+      QueueResourceConfigWithItemSchema<
+        Schema.Struct<F>["Type"],
+        QueueErrorValueOf<Error>,
+        R | RR,
+        QueueSuccessValueOf<Success>
+      >
+    >({
       name: tag.key,
       ...effectiveConfig,
       itemSchema,
       store,
     } as QueueResourceConfigWithItemSchema<
       Schema.Struct<F>["Type"],
-      E,
+      QueueErrorValueOf<Error>,
       R | RR,
       QueueSuccessValueOf<Success>
     >);
@@ -1090,7 +1133,7 @@ const buildQueueImpl = <
     // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
     // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
     const impl: Resource.WithRequirement<
-      ImplOf<QueueInstanceSpec<F>>,
+      ImplOf<QueueInstanceSpec<F, Success, Error>>,
       R | RR
     > = {
       status: handle.status,
@@ -1137,13 +1180,13 @@ const buildQueueImpl = <
 export const layer = <
   Self,
   F extends QueueItemFields = QueueItemFields,
-  E = never,
   R = never,
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: QueueTagFor<Self, F, Success>,
-  config: QueueVerbConfig<F, E, R, RR, Success>,
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (built) =>
@@ -1175,13 +1218,13 @@ export const layer = <
 export const serveRemote = <
   Self,
   F extends QueueItemFields = QueueItemFields,
-  E = never,
   R = never,
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: QueueTagFor<Self, F, Success>,
-  config: QueueVerbConfig<F, E, R, RR, Success>,
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ) =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (built) =>
@@ -1209,13 +1252,13 @@ export const serveRemote = <
 export const serve = <
   Self,
   F extends QueueItemFields = QueueItemFields,
-  E = never,
   R = never,
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: QueueTagFor<Self, F, Success>,
-  config: QueueVerbConfig<F, E, R, RR, Success>,
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
@@ -1252,13 +1295,13 @@ export const serve = <
 export const configure = <
   Self,
   F extends QueueItemFields = QueueItemFields,
-  E = never,
   R = never,
   RR = never,
   Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: QueueTagFor<Self, F, Success>,
-  patch: ConfigPatch<QueueVerbConfig<F, E, R, RR, Success>>,
+  tag: QueueTagFor<Self, F, Success, Error>,
+  patch: ConfigPatch<QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 /**
