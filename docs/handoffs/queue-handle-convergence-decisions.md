@@ -244,6 +244,28 @@ the contract.
   handle. Drop `EEnqueue`. Probe both paths → `QueueHandle<EmailJob, void, SendError>`; prettify-ts
   confirm. Green: `typecheck 0 / lint 0 / test`.
 
+### M2 wrinkle (measured) — `.Service` has no wire schemas
+
+The contract path (`materializeQueueTag` + `layer`) is schema-driven: it needs `success`/`error`
+**schemas** (`Schema.Top`) to validate/encode on the wire and to type `Completed.success` /
+`Failed.cause` on the `events` stream. But `QueueResource.Service`'s config
+(`QueueResourceConfigWithItemSchema`, `:1077`) has **only** `itemSchema` — it infers `A`/`E` from the
+worker `effect`'s *types*, with no `success`/`error` schema. Confirmed by the doc at `:1080`: `A` "is
+driven by the tag's `success` wire schema (default `void`)."
+
+`materializeQueueTag` defaults missing `success`→`Void`, `error`→`Unknown`. So unifying `.Service`
+onto the contract **without** those schemas would degrade value-returning / typed-error queues —
+e.g. the docs example's `SendError` would surface on the handle's `events` as `Unknown`, and a
+non-void worker return would erase to `void`. **Decision needed (owner):**
+
+- **(A) Add optional `success`/`error` schema fields to `.Service`'s config** — preserves `A`/`E` on
+  the unified contract handle + wire; a small public API addition; default `Void`/`Unknown` when
+  omitted (matches today's inferred-void behaviour for the common case).
+- **(B) Default `Void`/`Unknown` always** — no API change, but typed-error / value-returning
+  `.Service` queues lose that typing on the handle's `events`. Simpler, lossy.
+
+Recommend **A** (keeps the handle honest; opt-in, non-breaking for the void case). Blocks M2.
+
 ### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
 
 - **M4 — derive the engine handle type from the spec** (delete the hand-authored `EngineQueueHandle`
