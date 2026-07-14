@@ -1,11 +1,13 @@
 # Adoption feedback: migrating off `strictEffectProvide` with beta.19/20 engine-serve
 
 **Consumer:** wow-sports services-hub. Migrating our 9 in-body `Effect.provide` sites so we can set
-`strictEffectProvide: "error"`. This is field feedback from _doing_ the migration — what worked, one
-ergonomic downside, and a couple of small asks. Nothing here is a blocker.
+`strictEffectProvide: "error"`. This is field feedback from _doing_ the migration — what worked and a
+couple of small asks. Nothing here is a blocker.
 
-> **Guidance gap (“when NOT to hoist”)** moved to the priority queue:
-> [`open-asks.md`](./open-asks.md) §2.
+> **Guidance gap (“when NOT to hoist”)** → [`open-asks.md`](./open-asks.md) §2.  
+> **Shared majority + outlier on one port** → **shipped**: `Resource.provide` + isolated `serve` in
+> the same `Resource.httpServer([...])` (`test/http-server-shared-and-isolated.test.ts`; readiness
+> page). `serveAllHttp` retired — there is no second host API to mix into.
 
 ## What worked well
 
@@ -16,21 +18,6 @@ ergonomic downside, and a couple of small asks. Nothing here is a blocker.
   loop is working really well — thank you.
 - `ScheduledProcess.serve(tag, config)` **preserves `R`** and runs the engine as advertised; verified it
   typechecks against our real configs.
-
-## Ergonomic downside: one per-resource-dep resource forces the _whole_ serve off `serveAllHttp`
-
-`serveAllHttp` and `httpServer` can't share a port (one `RpcServer`). So a serve that has **one**
-resource needing per-resource deps has to convert **all** of its resources to `serve` layers under
-`httpServer` — including the homogeneous majority (DB monitor, import monitor, ApiMetrics, the shared
-workers) that were fine on `serveAllHttp`. `Resource.provide(sharedDep, [serve(a), serve(b), …])`
-softens it (keeps the shared group together), but it's still a full rewrite of a working serve for the
-sake of one outlier resource.
-
-**Feature idea:** a `serveAllHttp` escape hatch — allow one (or a few) per-resource `serve` layer(s) to
-be mixed into an otherwise-`serveAllHttp` host, so consumers don't rewrite a whole working serve to
-isolate a single resource. If that's fundamentally impossible (one server, one registry), then explicit
-guidance that "`httpServer` + `Resource.provide` groups is the migration target for the _entire_ serve"
-would set expectations.
 
 ## Small asks
 
