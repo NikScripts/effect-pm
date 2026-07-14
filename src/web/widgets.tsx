@@ -6,7 +6,6 @@
  * `useQueueBundle` / `useProcessBundle` over the context runtime); the tree is a `Group.Tag`
  * walked with `Group.members` / `Group.isGroup`.
  *
- * @since 1.0.0
  */
 import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -64,9 +63,9 @@ import {
   DialogTitle,
 } from "./components/ui/dialog";
 
-/** Last path segment of a tag/group id. @since 1.0.0 */
+/** Last path segment of a tag/group id. */
 export const displayName = (key: string): string => key.split("/").pop() ?? key;
-/** Format milliseconds as seconds. @since 1.0.0 */
+/** Format milliseconds as seconds. */
 export const fmtMs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 /** A short label for an AsyncResult, for debug logging. */
@@ -79,14 +78,14 @@ const asyncTag = (r: AsyncResult.AsyncResult<unknown, unknown>): string =>
         ? "Waiting"
         : "Initial";
 
-/** Phase → label + colour. @since 1.0.0 */
+/** Phase → label + colour. */
 export const STATUS: Record<string, { label: string; color: string }> = {
   running: { label: "running", color: "#22c55e" },
   paused: { label: "paused", color: "#eab308" },
   draining: { label: "draining", color: "#06b6d4" },
   off: { label: "off", color: "#ef4444" },
 };
-/** Resolve the status key from phase + paused. @since 1.0.0 */
+/** Resolve the status key from phase + paused. */
 export const statusKey = (phase: string, paused: boolean): string =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
 
@@ -98,7 +97,7 @@ const LEVEL: Record<string, string> = {
   Fatal: "#ef4444",
 };
 
-/** A coloured status pill. @since 1.0.0 */
+/** A coloured status pill. */
 export const StatusBadge = (props: { readonly phase: string; readonly paused: boolean }): React.ReactElement => {
   const s = STATUS[statusKey(props.phase, props.paused)] ?? STATUS.running!;
   return <Badge color={s.color}>{s.label}</Badge>;
@@ -121,7 +120,7 @@ const PrioRow = (props: { readonly p: keyof typeof PRIO; readonly count: number;
   </div>
 );
 
-/** A queue as a grid card. Reads its own status straight from the tag. @since 1.0.0 */
+/** A queue as a grid card. Reads its own status straight from the tag. */
 export const QueueCard = (props: {
   readonly tag: QueueTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -178,7 +177,7 @@ const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): Re
   );
 };
 
-/** A subgroup as a grid widget — tap opens it as its own page (drill-down). @since 1.0.0 */
+/** A subgroup as a grid widget — tap opens it as its own page (drill-down). */
 export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
@@ -213,7 +212,7 @@ export const GroupCard = (props: {
   );
 };
 
-/** Dispatch a group member to its card (group / queue / process / api). @since 1.0.0 */
+/** Dispatch a group member to its card (group / queue / process / api). */
 export const Cell = (props: {
   readonly member: unknown;
   /** Display name — the member key under which the current group holds this member. */
@@ -235,7 +234,7 @@ export const Cell = (props: {
   );
 };
 
-/** A labelled stat card. @since 1.0.0 */
+/** A labelled stat card. */
 export const Stat = (props: { readonly label: string; readonly value: string }): React.ReactElement => (
   <Card className="flex-1">
     <CardContent className="p-3">
@@ -245,7 +244,7 @@ export const Stat = (props: { readonly label: string; readonly value: string }):
   </Card>
 );
 
-/** Stat cards from the live status + metrics. @since 1.0.0 */
+/** Stat cards from the live status + metrics. */
 export const QueueStats = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
@@ -299,7 +298,7 @@ const availableWindows = (spanMs: number, hasData: boolean): ReadonlyArray<Windo
 };
 
 /** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
- *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). @since 1.0.0 */
+ *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). */
 export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
   // Selection is kept by duration (not index) so it survives as more windows unlock with data.
@@ -384,7 +383,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   );
 };
 
-/** A modal confirmation dialog — for destructive / guarded actions. @since 1.0.0 */
+/** A modal confirmation dialog — for destructive / guarded actions. */
 export const ConfirmDialog = (props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -421,7 +420,7 @@ export const ConfirmDialog = (props: {
 
 /** A control button whose icon stays constant — the command's round-trip shows as motion /
  *  colour, never an icon swap: pulse while in-flight, a green ring on success, red on failure.
- *  `confirm` opens a modal dialog before firing; `disabled` for the lock. @since 1.0.0 */
+ *  `confirm` opens a modal dialog before firing; `disabled` for the lock. */
 export const ActionButton = (props: {
   readonly atom: CommandAtom;
   readonly label: string;
@@ -513,7 +512,7 @@ export const ActionButton = (props: {
 };
 
 /** Lock toggle for a control row — guards against accidental taps. Locking is immediate;
- *  unlocking opens a confirm dialog so the guard isn't fat-fingered off. @since 1.0.0 */
+ *  unlocking opens a confirm dialog so the guard isn't fat-fingered off. */
 export const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => void }): React.ReactElement => {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const onClick = (): void => {
@@ -549,7 +548,7 @@ export const LockToggle = (props: { readonly locked: boolean; readonly onToggle:
 };
 
 /** Queue controls: icon buttons, pause/resume folded into one toggle on the live `paused`
- *  state, a lock (locked by default), and confirm on the destructive actions. @since 1.0.0 */
+ *  state, a lock (locked by default), and confirm on the destructive actions. */
 export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
@@ -569,7 +568,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
   );
 };
 
-/** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. @since 1.0.0 */
+/** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
   readonly className?: string;
@@ -597,7 +596,7 @@ export const LogStream = (props: {
 
 // ── process widgets ──────────────────────────────────────────────────────────
 
-/** A process as a grid card — supervision state + active instances. @since 1.0.0 */
+/** A process as a grid card — supervision state + active instances. */
 export const ProcessCard = (props: {
   readonly tag: ProcessTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -629,7 +628,7 @@ export const ProcessCard = (props: {
   );
 };
 
-/** Stat cards from a process's live status. @since 1.0.0 */
+/** Stat cards from a process's live status. */
 export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
@@ -644,7 +643,7 @@ export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.R
 
 /** Process controls: icon buttons, start/stop folded into one toggle on the live `supervising`
  *  state, a lock, and confirm on stop. The lock is hoisted (one lock guards both these controls
- *  and the {@link ScheduleEditor}), so the caller owns `locked` / `onToggleLock`. @since 1.0.0 */
+ *  and the {@link ScheduleEditor}), so the caller owns `locked` / `onToggleLock`. */
 export const ProcessControls = (props: {
   readonly bundle: ProcessBundle;
   readonly locked: boolean;
@@ -694,7 +693,7 @@ const ScheduleRow = (props: { readonly entry: ScheduleEntry }): React.ReactEleme
 );
 
 /** The popup to add **or edit** one run window — start (required) + optional stop. When `initial`
- *  is given it's an edit (fields pre-filled, `onDelete` shown); otherwise it adds. @since 1.0.0 */
+ *  is given it's an edit (fields pre-filled, `onDelete` shown); otherwise it adds. */
 export const WindowDialog = (props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -783,10 +782,10 @@ export const WindowDialog = (props: {
 /** View + edit a process's schedule (the run windows that arm it). Reads the current entries, then
  *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so
  *  one lock guards both the controls and the schedule. Edits apply optimistically (the schedule is
- *  read once on open); adding a window is a popup. @since 1.0.0 */
+ *  read once on open); adding a window is a popup. */
 /** The shared edit state for a process schedule — the current entries plus add/remove/clear, applied
  *  optimistically (the schedule reads once on open). Used by both the inline {@link ScheduleEditor}
- *  and the fullscreen week view. @since 1.0.0 */
+ *  and the fullscreen week view. */
 export const useScheduleEdit = (
   bundle: ProcessBundle,
 ): {
@@ -826,7 +825,7 @@ const DAY_MS = 86_400_000;
 
 /** A weekly calendar grid of the run windows — 7 day columns × 24 hours, each window drawn as a
  *  block at its real position, with a "now" line. Multi-day windows are clipped per day; open-ended
- *  windows fill to the end of each day from their start. @since 1.0.0 */
+ *  windows fill to the end of each day from their start. */
 export const WeekSchedule = (props: {
   readonly entries: ReadonlyArray<ScheduleEntry>;
   readonly weekStart: number;
@@ -902,7 +901,7 @@ export const WeekSchedule = (props: {
 
 /** A read-only summary of a process's schedule (the run windows that arm it) — the count, the list,
  *  and an expand button to the fullscreen week view, which is where editing (add / remove / clear)
- *  happens. @since 1.0.0 */
+ *  happens. */
 export const ScheduleEditor = (props: {
   readonly bundle: ProcessBundle;
   readonly onOpenFull?: () => void;
@@ -942,7 +941,7 @@ export const ScheduleEditor = (props: {
 // ── api widgets ───────────────────────────────────────────────────────────────
 
 /** Error-rate → health label + colour (green / amber / red). Shared by the API card badge and
- *  {@link ApiStats}. @since 1.0.0 */
+ *  {@link ApiStats}. */
 export const apiHealth = (requests: number, errors: number): { readonly label: string; readonly color: string } => {
   const rate = requests > 0 ? errors / requests : 0;
   if (rate >= 0.1) return { label: "errors", color: "#ef4444" };
@@ -969,7 +968,7 @@ const Sparkline = (props: { readonly points: ReadonlyArray<number>; readonly col
 
 /** A reusable iOS-home-screen-style **paged card**: horizontal scroll-snap track + dot indicators.
  *  Presentational. Tap fires `onOpen` (a swipe scrolls instead and the click is suppressed); the
- *  root is a `div role="button"` so a horizontal scroller can nest cleanly. @since 1.0.0 */
+ *  root is a `div role="button"` so a horizontal scroller can nest cleanly. */
 export const PagedCard = (props: {
   readonly pages: ReadonlyArray<React.ReactNode>;
   readonly onOpen?: () => void;
@@ -1045,7 +1044,7 @@ const topEndpoints = (
   [...bundle].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
 /** An API-metrics resource as a grid card — a {@link PagedCard}: page 1 is throughput + health,
- *  page 2 is the busiest endpoints. Read-only. @since 1.0.0 */
+ *  page 2 is the busiest endpoints. Read-only. */
 export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -1098,7 +1097,7 @@ export const ApiCard = (props: {
   return <PagedCard onOpen={() => props.onOpen(props.tag)} style={vt} pages={[page1, page2]} />;
 };
 
-/** Stat cards from an API resource's snapshot + latest window. @since 1.0.0 */
+/** Stat cards from an API resource's snapshot + latest window. */
 export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
@@ -1126,7 +1125,7 @@ const API_SERIES = {
 type ApiSeriesKey = keyof typeof API_SERIES;
 
 /** An API usage chart — a dropdown switches throughput / errors / in-flight, fed from the
- *  accumulated metrics history. @since 1.0.0 */
+ *  accumulated metrics history. */
 export const ApiMetricChart = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const [series, setSeries] = React.useState<ApiSeriesKey>("throughput");
   // Selection is kept by duration (not index) so it survives as more windows unlock with data.
@@ -1220,7 +1219,7 @@ const SORT_GLYPH: Record<string, string> = { asc: " ▲", desc: " ▼" };
 
 /** The per-endpoint table — `group · endpoint` with requests / errors / avg-ms, in a sortable
  *  TanStack table (tap a header to sort; default busiest-first). Error rows are tinted. The
- *  distinctive API widget. @since 1.0.0 */
+ *  distinctive API widget. */
 export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.metrics);
   const m = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
@@ -1292,11 +1291,11 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 // Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
 // to. Each dot's colour + popover come from that node's `NodeStatus` (over its own transport).
 
-/** A node's overall colour: grey while connecting, red down, amber degraded, green ok. @since 1.0.0 */
+/** A node's overall colour: grey while connecting, red down, amber degraded, green ok. */
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
-/** Format an uptime span (ms) compactly. @since 1.0.0 */
+/** Format an uptime span (ms) compactly. */
 const fmtUptime = (ms: number): string => {
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600);
@@ -1304,11 +1303,10 @@ const fmtUptime = (ms: number): string => {
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 };
 
-/** One node indicator dot + tap-for-info popover (tap again, or "view node", for the full screen).
- *  @since 1.0.0 */
+/** One node indicator dot + tap-for-info popover (tap again, or "view node", for the full screen). */
 /** Compact "barrel stack" pip layout: dots in bottom-heavy, centered rows (≤3 rows) — upper rows
  *  nestle over the gaps below, so 3 → 1 over 2, 4 → 2-on-2, etc. Dots are sized **larger when there
- *  are fewer** nodes; beyond 9 the rows just keep widening. @since 1.0.0 */
+ *  are fewer** nodes; beyond 9 the rows just keep widening. */
 const pipLayout = (
   n: number,
 ): {
@@ -1346,7 +1344,7 @@ const pipLayout = (
   return { ...size, rows };
 };
 
-/** Slice items into the layout's bottom-heavy rows (top → bottom). @since 1.0.0 */
+/** Slice items into the layout's bottom-heavy rows (top → bottom). */
 const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): ReadonlyArray<ReadonlyArray<A>> => {
   let cursor = 0;
   return rows.map((count) => {
@@ -1356,7 +1354,7 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One node's pip — a coloured dot, colour from its NodeStatus. @since 1.0.0 */
+/** One node's pip — a coloured dot, colour from its NodeStatus. */
 const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
@@ -1376,7 +1374,7 @@ const NodePip = (props: {
 };
 
 /** Static preview of the node die at a given count — the barrel-stack pip pattern only (no live
- *  status), for examples/docs that want to show the 1..9 shapes. @since 1.0.0 */
+ *  status), for examples/docs that want to show the 1..9 shapes. */
 export const NodeDots = (props: { readonly count: number }): React.ReactElement => {
   const layout = pipLayout(props.count);
   const rows = pipRows(
@@ -1400,7 +1398,7 @@ export const NodeDots = (props: { readonly count: number }): React.ReactElement 
   );
 };
 
-/** A labelled summary number for the health board's top stat strip. @since 1.0.0 */
+/** A labelled summary number for the health board's top stat strip. */
 const HealthStat = (props: {
   readonly label: string;
   readonly value: string;
@@ -1415,7 +1413,7 @@ const HealthStat = (props: {
 );
 
 /** One resource's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
- *  root-cause detail when degraded. Tap to open that resource's detail page. @since 1.0.0 */
+ *  root-cause detail when degraded. Tap to open that resource's detail page. */
 const ResourceReadinessRow = (props: {
   readonly res: NodeStatusValue["resources"][number];
   readonly node: NodeRef;
@@ -1457,7 +1455,7 @@ const ResourceReadinessRow = (props: {
 
 /** One node's card on the health board — status dot + name + stats (uptime · ready/total · resource
  *  count), then its full resource roster (each tappable). Tap the header for the node's full screen.
- *  Pure: the status value is read once by {@link HealthBoard} and passed in. @since 1.0.0 */
+ *  Pure: the status value is read once by {@link HealthBoard} and passed in. */
 const NodeHealthCard = (props: {
   readonly node: NodeRef;
   readonly s: NodeStatusValue | undefined;
@@ -1515,7 +1513,7 @@ const NodeHealthCard = (props: {
 
 /** The single node-status **die** button (top-right): one pip per node, coloured by its status — a die
  *  face for 1–9 nodes, then 3 rows + more columns. Tap to open the **health board** (full screen).
- *  Renders nothing for a nodeless (local) group. @since 1.0.0 */
+ *  Renders nothing for a nodeless (local) group. */
 export const NodeBar = (props: {
   readonly group: GroupNode;
   readonly onOpen: () => void;
@@ -1552,7 +1550,7 @@ export const NodeBar = (props: {
  *  across **every** node first (with their root-cause detail — tap → that resource's detail), then a
  *  card per node (status · uptime · ready/total · resource count, tap → its full screen) with its full
  *  resource roster. Reads each node's `NodeStatus` once (the node list is stable for a group, so the
- *  per-node reads keep a constant hook order; bundles are cached per runtime+node). @since 1.0.0 */
+ *  per-node reads keep a constant hook order; bundles are cached per runtime+node). */
 export const HealthBoard = (props: {
   readonly group: GroupNode;
   readonly onBack: () => void;
@@ -1638,7 +1636,7 @@ export const HealthBoard = (props: {
 
 /** Reads one resource's readiness from its node's `NodeStatus` (the node computes it — SSOT). Always
  *  has a node (the public wrapper renders nothing for a nodeless tag). Shows **only when degraded** —
- *  nothing while ready/connecting, so the banner only takes space when there's a problem. @since 1.0.0 */
+ *  nothing while ready/connecting, so the banner only takes space when there's a problem. */
 const ReadinessBannerInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
@@ -1667,8 +1665,7 @@ const ReadinessBannerInner = (props: {
 
 /** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
  *  read from its node's `NodeStatus` (the same SSOT the health board uses). Renders nothing while the
- *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem.
- *  @since 1.0.0 */
+ *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem. */
 export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = resourceNodeRef(props.tag);
   if (node === undefined) return null;
@@ -1676,7 +1673,7 @@ export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React
 };
 
 /** Fullscreen node view: header + each served resource's readiness (tap → that resource's page).
- *  Graphs land with node metrics. @since 1.0.0 */
+ *  Graphs land with node metrics. */
 export const NodeDetail = (props: {
   readonly node: NodeRef;
   readonly onBack: () => void;
