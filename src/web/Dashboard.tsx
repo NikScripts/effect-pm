@@ -11,7 +11,6 @@
  * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` with the
  * providers yourself (see the exports).
  *
- * @since 1.0.0
  */
 import * as React from "react";
 import { Option } from "effect";
@@ -236,7 +235,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
   );
 };
 
-/** The drill-down view (runtime comes from `RuntimeProvider` above). @since 1.0.0 */
+/** The drill-down view (runtime comes from `RuntimeProvider` above). */
 const DashboardInner = (props: {
   readonly group: GroupNode;
   readonly onOpenHealth: () => void;
@@ -327,7 +326,7 @@ const DashboardInner = (props: {
 
 /** A resource's detail opened **from a node** — rendered on the node axis (so "back" returns to the
  *  node, not the group), with logs/schedule as local sub-views. Reuses the same detail widgets the
- *  group route uses. @since 1.0.0 */
+ *  group route uses. */
 const NodeResourceView = (props: {
   readonly tag: unknown;
   readonly onBack: () => void;
@@ -360,7 +359,7 @@ const NodeResourceView = (props: {
 /** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
  *  yourself, or use `<Dashboard>` which wires all three. The node-status die lives in the header
  *  (see `DashboardInner`); opening a node swaps in its full screen, and opening a resource from a
- *  node stays on the node axis so "back" returns there. @since 1.0.0 */
+ *  node stays on the node axis so "back" returns there. */
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
@@ -404,7 +403,7 @@ export const DashboardView = <R, ER>(props: {
 };
 
 /** Batteries-included dashboard: providers + the responsive view + the (opt-in) debug console.
- *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`. @since 1.0.0 */
+ *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`. */
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;

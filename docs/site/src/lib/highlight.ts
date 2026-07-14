@@ -185,6 +185,7 @@ function preprocessJsdoc(md: string): string {
     (_m, target, text) => label(String(target), String(text ?? "")),
   );
 }
+
 function jsdocToHast(this: any, docs: string): any[] {
   const tree = fromMarkdown(preprocessJsdoc(docs));
   const root: any = toHast(tree, {

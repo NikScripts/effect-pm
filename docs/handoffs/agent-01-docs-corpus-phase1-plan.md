@@ -155,10 +155,9 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 
 | Path | Fate |
 |------|------|
-| 15+ completed date-stamped handoffs; widgets handoff deleted (asks absorbed) | **deleted** on `cursor/docs-corpus-date-stack-ce05` |
-| [`open-asks.md`](./open-asks.md) | **active** — §1 widget plug-in seam; monitoredDependency **implemented** (not queued) |
-| `2026-07-01-engine-serve-adoption-feedback.md` | **pending chat walk** |
-| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **pending chat walk** |
+| 15+ completed date-stamped handoffs; widgets + engine-serve-adoption deleted (asks absorbed/shipped) | **deleted** |
+| [`open-asks.md`](./open-asks.md) | **active** — §1 widget seam · §2 when-not-to-hoist · §3 layerNoop; monitoredDependency shipped |
+| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **left to walk** |
 
 ### F. Feature handoffs superseded by shipped API — **archive** (default)
 

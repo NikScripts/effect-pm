@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | **merged → `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) · [readiness](../resources/readiness.md) | **monitoredDependency + readiness draft + date-stack deletes landed** | `integration` tip | typecheck / monitoredDependency tests | Walk next unfinished handoffs / open-asks §1 still open | 2026-07-14 |
+| **1** | **on `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) | **date stack nearly done** — next: walk beta22 handoff or next Phase-1 stack | `integration` tip | shared+isolated test / readiness | `2026-07-02-beta22-…` left; open-asks §1–3 | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **merged → `integration`** | [Logs store followers](./agent-03-logs-p1.md) · [plan](./agent-03-logs-store-followers-plan.md) | **persistLayer/LogStore removed** | [#43](https://github.com/NikScripts/effect-pm/pull/43) | typecheck / 444 tests | Store-layer memo deferred | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
