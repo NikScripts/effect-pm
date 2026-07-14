@@ -156,7 +156,7 @@ const toReact = (n: any): React.ReactNode => {
       suppress++;
       const inner = kids(n);
       suppress--;
-      return h(`h${level}`, { key: keySeq++, id }, inner);
+      return h(`h${level}`, { key: keySeq++, id, className: n.attributes?.class }, inner);
     }
     case "para": return h("p", { key: keySeq++, className: n.attributes?.class }, kids(n));
     case "str": return linkifyText(n.text);
