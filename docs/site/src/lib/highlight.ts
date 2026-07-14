@@ -175,11 +175,15 @@ function splitExpand(info: any): string | undefined {
 // URLs in the popup, so it's styled, not clickable). The visible label is just the target (or custom
 // text) — NO `@link` prefix, else references inside `@see` tags read as "@see @link Foo".
 function preprocessJsdoc(md: string): string {
-  const label = (target: string, text?: string) =>
-    `[${(text ?? target).trim()}](@link:${target.trim()})`;
-  return md
-    .replace(/\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)([^}]+)\}/g, (_m, target, text) => label(String(target), String(text)))
-    .replace(/\{@link\s+([^}\s]+)\}/g, (_m, target) => label(String(target)));
+  const label = (target: string, text: string) =>
+    `[${text.trim() || target.trim()}](@link:${target.trim()})`;
+  // One tolerant matcher for {@link Target}, {@link Target text}, {@link Target|text}, and any of
+  // those with stray inner whitespace (e.g. `{@link httpServer }`) — the separator and trailing
+  // space are optional, so a bare target with a trailing space no longer leaks raw.
+  return md.replace(
+    /\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)?([^}]*?)\s*\}/g,
+    (_m, target, text) => label(String(target), String(text ?? "")),
+  );
 }
 function jsdocToHast(this: any, docs: string): any[] {
   const tree = fromMarkdown(preprocessJsdoc(docs));
