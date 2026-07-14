@@ -347,20 +347,17 @@ pre.shiki { background: transparent; }
   overflow: auto;
   overscroll-behavior: contain;
   background: var(--panel) !important;
-  /* A transparent border is a HOVER BRIDGE: it extends the popup's hit-area toward the token (the token
-     end touches it via GAP 0 in TwoslashHover), while `background-clip: padding-box` keeps the visible
-     panel inset — so the panel doesn't sit on the highlighted code, yet the pointer can still travel
-     onto it. (The border is outside the padding box, so `overflow` never clips it.) */
-  border: 8px solid transparent;
-  background-clip: padding-box;
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
-  filter: drop-shadow(0 4px 14px rgb(0 0 0 / 0.35));
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
   white-space: pre;         /* no wrapping — lines extend and the container scrolls horizontally */
   font-size: 0.82rem;
   line-height: 1.5;
   text-align: left;
 }
-.twoslash-hover:hover > .twoslash-popup-container { display: block; }
+/* Visibility is JS-managed (a `.is-open` class with a small close-delay) so the pointer can cross the
+   external gap between the token and the popup without it vanishing. See TwoslashHover.tsx. */
+.twoslash-hover.is-open > .twoslash-popup-container { display: block; }
 /* The type is a <code>, so it inherited the base code chrome (border/radius/padding). Strip it so
    it reads as the popup's content, filling the width, not a boxed chip inside the popup. */
 .twoslash-popup-code {
@@ -447,8 +444,12 @@ pre.shiki { background: transparent; }
   border-radius: 0.35rem;
   background: color-mix(in oklab, var(--fg) 7%, transparent) !important;
   overflow-x: auto;
-  /* match the comment font size (.twoslash-popup-docs) so the code blocks don't tower over the prose */
-  font-size: 0.78rem;
+}
+/* match the comment prose size so code fences don't tower over it — force it on the <code>/tokens
+   themselves (the earlier rule on `pre` was overridden by shiki's own sizing). */
+.twoslash-popup-docs code,
+.twoslash-popup-docs code span {
+  font-size: 0.78rem !important;
 }
 /* inline code inside the popup (JSDoc description) inherits the base `code` chip — a white --card
    background with a border and rounded corners. Strip it so it blends into the description instead of
