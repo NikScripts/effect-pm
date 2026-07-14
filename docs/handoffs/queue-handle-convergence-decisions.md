@@ -1,11 +1,12 @@
 # QueueHandle convergence — decisions
 
-**Status:** locked design, pre-implementation. Build from this doc; do not regenerate the API shape from memory.
+**Status:** locked design, **approved to build** (owner: "go for best outcome"). Build from this doc; do not regenerate the API shape from memory.
 **Branch:** `feat/named-handles` (from `integration`).
 **Owner-approved on:** 2026-07-13.
 
-> Supersedes the additive-only framing in `agent-d-named-handles.md`. The named-handle goal stands;
-> the mechanism is now **convergence** (one canonical handle both paths yield), not a queue-local alias.
+> Supersedes the additive-only framing in `agent-d-named-handles.md`. The mechanism is not a
+> queue-local alias and not a mere re-point of the duplication — the target is **the spec as single
+> source of truth** (SSOT), reached in two stages (see "SSOT design" + "Staged plan" below).
 
 ---
 
@@ -108,16 +109,48 @@ otherwise, as the Tag contract already is). No flattening; no spec change.
 
 - The Tag's value type is the tag's `Service`/`Shape` = 3rd arg of `Context.ServiceClass`
   (`Resource.ts:1727`, via `ResourceTag`). Today it is the raw mapped `ServiceOf<S, Self>` → expands.
-- Point the queue tag's `Service` at the **named** `QueueHandle<Payload, Error, Success, never>`.
-  Empty-`extends`/named interfaces hover by name; the members stay recoverable via prettify-ts (editor)
-  and D3 (docs).
+- Point the queue tag's `Service` at the **named** `QueueHandle<Payload, Success, Error, never>`, which
+  is itself a named projection of `ServiceOf<QueueInstanceSpec<F>>` (see SSOT design). Named interfaces
+  hover by name; members stay recoverable via prettify-ts (editor) and D3 (docs).
 - **No `Resource.ts` edit if avoidable** — apply the naming in a queue-specific tag return type
   (`QueueResource.ts`). If a shared seam is unavoidable, land the smallest generic, defaulted opt-in on
   `ResourceTag` **once**, then freeze `Resource.ts` for the fan-out. (A prior handoff,
   `agent-engine-handle-display-types.md`, sketched a defaulted 3rd `Svc` param on `ResourceTag` — that
   is the fallback shape if a shared seam is needed.)
-- **No `as` casts.** The name must be structurally identical to the shape it aliases — proven by the
+- **No `as` casts.** The name must be structurally identical to the shape it projects — proven by the
   invariant test, which is what makes the cast unnecessary.
+
+---
+
+## SSOT design (the target — highest standard)
+
+The queue surface is currently written in **three** parallel places that must agree, plus a 4th
+divergence:
+
+1. **The spec** — `queueControlSpec` + `queueSpec` (descriptors) → generates the contract type via `ServiceOf`.
+2. **The engine `QueueHandleApi`** (`internal/queueResource.ts:377`) — a hand-authored interface listing the same members as `Effect`/`Stream`.
+3. **The adapter `buildQueueImpl`** (`QueueResource.ts:961–1003`) — a hand-written member map from (2)→(1).
+4. **`.Service` exits through (2), `.Tag` through (1)** — same queue, two shapes.
+
+Merely routing `.Service` through the adapter (the pragmatic "B") fixes only #4 — it renames the
+duplication. **SSOT removes it at the root:**
+
+- **Spec is the one source.** `QueueHandle<Payload, Success, Error, Requirements>` = the **named
+  projection of `ServiceOf<QueueInstanceSpec<F>>`**. Derived, not hand-authored.
+- **Delete the parallel hand-authored `QueueHandleApi`.** The engine's handle *type* becomes a
+  **derivation of the spec** (the subset it natively backs), so it structurally cannot drift.
+- **Adapter becomes purely *additive*, not reshaping.** The engine natively produces the contract
+  member shapes it owns — `size`/`isEmpty` as `Subscribable` mapped off its `status` SubscriptionRef
+  (SSOT for those already), `metrics.stream`, `events`, lifecycle. The adapter only *adds* what the
+  engine legitimately doesn't own: `metrics.query` (HistoryStore), `logs`, RPC transport. One seam,
+  nothing reshaped.
+- **Typed `.Service` = `.Tag` + an inline-worker layer.** One construction path. `Tag ≡ Service` then
+  holds **by construction**, not by a drift-catching test. `Requirements` is the only axis that
+  differs (never on Tag, real on Service) — same handle, one type-arg.
+
+**Boundary (honest):** full unification holds for **typed** queues (a payload schema drives the spec +
+RPC). Untyped `.Service` (`queueResourceServiceWithoutSchema`) can't join the spec path — that is the
+`CustomQueueResource` bucket (deferred). SSOT for typed queues; untyped is a named, separate surface.
 
 ---
 
@@ -125,8 +158,8 @@ otherwise, as the Tag contract already is). No flattening; no spec change.
 
 In `test/queue-handle.test-d.ts` (type-level, cast-free), for a representative `F`:
 
-1. `ServiceOf<QueueInstanceSpec<F>>` **⇄** `QueueHandle<Decoded<Schema.Struct<F>>, E, A, never>`
-   (both directions) — the Tag naming is structural identity.
+1. `ServiceOf<QueueInstanceSpec<F>>` **⇄** `QueueHandle<Decoded<Schema.Struct<F>>, A, E, never>`
+   (both directions; `<Payload, Success, Error, Requirements>`) — the Tag naming is structural identity.
 2. `Shape<typeof aServiceQueue>` **⇄** `Shape<typeof aTagQueue>` with `Requirements` held equal —
    the `Tag ≡ Service` invariant.
 3. Consumer guard: `src/web/data.ts` + widgets typecheck unchanged.
@@ -164,13 +197,43 @@ Any drift fails the build.
 
 ---
 
-## Phasing
+## Staged plan (approved — build in order; each milestone builds + `test` green + commit + push)
 
-- **P1 — queue (this branch, serial):** reshape the canonical `QueueHandle`; conform `Service`; name
-  the `Tag` handle; land any shared `Resource.ts` seam **once**; invariant test; probe; template.
-- **P2 — fan-out (later, per owner "every resource and process"):** apply the same canonical-handle +
-  `Tag ≡ Service` pattern to Process, RunResource, Store, ApiMetrics — one file each, `Resource.ts`
-  frozen. The queue is the reusable template.
+Two stages so we are never mid-air: Stage 1 is the reversible, visible convergence; Stage 2 is the
+standards payoff that removes the duplication. Same destination — spec-as-SSOT.
+
+### Stage 1 — converge (safe checkpoint)
+
+- **M1 — canonical name + Tag naming (additive).** Define
+  `QueueHandle<Payload, Success, Error, Requirements = never>` as the named projection of
+  `ServiceOf<QueueInstanceSpec<F>>` (Payload = `Decoded<Schema.Struct<F>>`; Success/Error from the
+  tag's success/error schema slots). Resolve the **name collision** with the existing 5-param
+  `QueueHandle` by renaming the engine's hand-authored one to `QueueEngineHandleApi` (internal) — pure
+  rename, no runtime change. Point `QueueResource.Tag`'s `Service` at the new `QueueHandle`. Add the
+  bidirectional `test/queue-handle.test-d.ts` (`ServiceOf<spec> ⇄ QueueHandle<…>`). Probe: `yield*
+  Emails` → `QueueHandle<EmailJob, void, SendError>`. `.Tag` consumers untouched.
+- **M2 — `.Service` conforms via the adapter.** Re-express `QueueResource.Service` (typed path) to
+  build through the same `buildQueueImpl` composition it already has the config for, and yield the
+  contract `QueueHandle`. Its surface changes (`size`→`Subscribable`, nested `metrics.{stream,query}`,
+  drop `sizes`/`completed`, add `logs`). Update `docs/guides/queues.md` (`yield* queue.size` →
+  `queue.size.get`). Untyped `.Service` unchanged (custom bucket).
+- **M3 — invariant lock + drop `EEnqueue`.** `Tag ≡ Service` bidirectional type test (Requirements
+  held equal). Remove the `EEnqueue` param everywhere (enqueue is `orDie`'d on contract). Green:
+  `typecheck 0 / lint 0 / test`, probe on both paths, prettify-ts confirm.
+
+### Stage 2 — de-duplicate to SSOT (standards payoff; own review)
+
+- **M4 — derive the engine handle type from the spec.** Replace hand-authored `QueueEngineHandleApi`
+  members with a spec-derived projection (the engine-native subset). Delete the parallel list.
+- **M5 — additive adapter.** Push `size`/`isEmpty` Subscribable derivation + `metrics.stream` to be the
+  engine's native shape; reduce `buildQueueImpl` to additive-only (`metrics.query`, `logs`, RPC).
+- **M6 — collapse typed `.Service` into `.Tag` + inline-worker layer.** One construction path;
+  `Tag ≡ Service` becomes true by construction; the M3 test becomes a guard, not the mechanism.
+
+### M7 — fan-out template (later, per owner "every resource and process")
+
+Write the reusable recipe (spec-projected named handle + `Tag ≡ Service` by construction) for Process,
+RunResource, Store, ApiMetrics — one file each, `Resource.ts` frozen. Queue is the template.
 
 ---
 
