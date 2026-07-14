@@ -33,10 +33,11 @@ const clientHttp = (port: number) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const withProcessHttp = <Self, A, E, Out, OutE>(
-  tag: Resource.ResourceTag<Self, any, any>,
-  config: Process.ProcessLayerConfig<A, E, never>,
-  use: () => Effect.Effect<Out, OutE, Self>,
+/** Test harness — concrete Tags are not assignable under Process.serve's overloaded erasure. */
+const withProcessHttp = (
+  tag: any,
+  config: Process.ProcessLayerConfig<any, any, any>,
+  use: (port: number) => Effect.Effect<any, any, any>,
 ) => {
   const server = Resource.httpServer([Process.serve(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
@@ -46,7 +47,7 @@ const withProcessHttp = <Self, A, E, Out, OutE>(
       Effect.map((s) => s.address),
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
-    return yield* use().pipe(
+    return yield* use(port).pipe(
       Effect.provide(Resource.client(tag).pipe(Layer.provide(clientHttp(port)))),
       Effect.scoped,
     );
@@ -55,7 +56,7 @@ const withProcessHttp = <Self, A, E, Out, OutE>(
 
 describe("Process.events — remote HTTP", () => {
   it.live("Started → Completed over Resource.client after remote run", () =>
-    withProcessHttp(RemoteEventsProc, { effect: Effect.void }, () =>
+    withProcessHttp(RemoteEventsProc, { effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
         const proc = yield* RemoteEventsProc;
         const collected = yield* Effect.forkChild(
@@ -73,7 +74,7 @@ describe("Process.events — remote HTTP", () => {
     withProcessHttp(
       RemoteFailProc,
       { effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }) },
-      () =>
+      (_port) =>
         Effect.gen(function* () {
           const proc = yield* RemoteFailProc;
           const collected = yield* Effect.forkChild(
@@ -103,7 +104,7 @@ describe("Process.events — remote HTTP", () => {
     withProcessHttp(
       RemoteSuccessProc,
       { effect: Effect.succeed({ symbol: "AAPL", usd: 42 }) },
-      () =>
+      (_port) =>
         Effect.gen(function* () {
           const proc = yield* RemoteSuccessProc;
           const collected = yield* Effect.forkChild(
