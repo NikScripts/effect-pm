@@ -231,7 +231,7 @@ export const glossaryEntries = (): Record<string, GlossaryEntry> => {
   let buf: Array<string> = [];
   const flush = (): void => {
     if (term !== null) {
-      const def = buf.join(" ").trim().replace(/[`*]/g, "");
+      const def = buf.join(" ").trim().replace(/`/g, "").replace(/\*\*/g, "");
       if (def) out[slugify(term)] = { term, def };
     }
     buf = [];
