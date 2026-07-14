@@ -42,6 +42,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Build `Resource.monitoredDependency`
+
+- **Owner said:** Show the idea → agreed to build it; first merge with `integration` to get latest.
+- **Chose:** Merge `origin/integration` into `cursor/docs-corpus-date-stack-ce05`, then add `Resource.monitoredDependency` (`status` + `changes` + `readyWhen`/`detail` readiness). Still a plain Tag shape. Delete the emptied widgets date handoff.
+- **Rejected:** Pre-abstracting a new resource kind; shipping without merge.
+- **Supervisor impact:** Public API + changeset on Agent 1 branch; walk next unfinished handoff after green.
+
+---
+
 ## 2026-07-14 — Open asks priority queue
 
 - **Owner said:** For unfinished items like the dashboard widget plug-in seam — create a new doc that lists and organizes them; **priority at the top**. Walk one issue at a time in chat.

@@ -155,9 +155,8 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 
 | Path | Fate |
 |------|------|
-| 15 completed date-stamped handoffs (incl. wow-sports findings index) | **deleted** on `cursor/docs-corpus-date-stack-ce05` |
-| [`open-asks.md`](./open-asks.md) | **active** — owner priority queue for unfinished product/DX asks |
-| `2026-07-01-dashboard-custom-resource-widgets.md` | ask #1 → `open-asks.md`; ask #2 still walking |
+| 15+ completed date-stamped handoffs; widgets handoff deleted (asks absorbed) | **deleted** on `cursor/docs-corpus-date-stack-ce05` |
+| [`open-asks.md`](./open-asks.md) | **active** — §1 widget plug-in seam; monitoredDependency **implemented** (not queued) |
 | `2026-07-01-engine-serve-adoption-feedback.md` | **pending chat walk** |
 | `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **pending chat walk** |
 
