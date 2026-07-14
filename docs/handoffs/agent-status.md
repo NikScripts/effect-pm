@@ -37,7 +37,7 @@
 - Headlining resource **implementation** (after Agent 1 + owner pick)
 
 ### Branch hygiene (2026-07-14)
-Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. **Kept:** open Agent 3 PRs [#40](https://github.com/NikScripts/effect-pm/pull/40) / [#35](https://github.com/NikScripts/effect-pm/pull/35), plus `feat/dual-type-preview`, `feat/dynamic-config`.
+Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. **Kept:** open Agent 3 PRs [#40](https://github.com/NikScripts/effect-pm/pull/40) / [#35](https://github.com/NikScripts/effect-pm/pull/35), plus `feat/dual-type-preview`. (`feat/dynamic-config` revived → `cursor/dynamic-config-land-ce05`.)
 
 ---
 
