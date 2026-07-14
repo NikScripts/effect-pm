@@ -18,9 +18,10 @@ import { serve as queueEntry } from "../../src/QueueResource";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
-import { LogStore } from "../../src/store/log";
 import { Polling } from "../../src/Polling";
 import * as Store from "../../src/Store";
+import * as QueueResource from "../../src/QueueResource";
+import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { Combine, combineQuery } from "../../src/MultiNode";
@@ -193,9 +194,23 @@ const scoresDbImpl = {
   connected: Effect.map(Clock.currentTimeMillis, (now) => now % 180_000 > 10_000),
 };
 
-// Dogfood the durable log storage: after the live-score poller has logged a few times, read its logs
-// back out of LogStore two ways — every line on the live node, and just the poller's lines (by
-// resource). Proves the persist → query round-trip. (Provided into liveNode, which has the LogStore.)
+class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaStore")(
+  WnbaNode.logs,
+  QueueResource.store(BoxScoreQueue),
+) {}
+
+class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
+  LiveNode.logs,
+  Process.store(LiveScorePoller),
+) {}
+
+class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
+  StatsNode.logs,
+  QueueResource.store(PlayByPlayQueue),
+) {}
+
+// Dogfood durable registration journals: after the live-score poller has logged a few times, read
+// node-wide + resource-scoped lines via Logs.byNode / byResource.
 const logStorageDemo = Layer.effectDiscard(
   Effect.forkScoped(
     Effect.gen(function* () {
@@ -204,7 +219,6 @@ const logStorageDemo = Layer.effectDiscard(
       const fromPoller = yield* Logs.byResource({
         processId: "wnba/LiveScorePoller",
       });
-      // Console.log (direct stdout) so the demo is visible regardless of the serve's logger routing
       yield* Console.log(
         `[logs] durable storage — live node holds ${onNode.length} lines; ` +
           `${fromPoller.length} are LiveScorePoller's (by resource)`,
@@ -240,11 +254,7 @@ const wnbaNode = Resource.httpServer([
   // the served entry above re-exposes this same service over RPC.
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
-  // live relay (dashboard log stream) + durable storage: persistLayer(WnbaNode) batches every captured
-  // line into LogStore bucketed by node key (`wnba/scores`). Queryable via Logs.byNode(WnbaNode).
-  Layer.provide(Logs.layer),
-  Layer.provide(Logs.persistLayer(WnbaNode)),
-  Layer.provide(LogStore.layerMemory),
+  Layer.provide(WnbaStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
@@ -257,13 +267,8 @@ const liveNode = Resource.httpServer([
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(Logs.layer),
-  // provideMerge (not provide): these install a logger / fork a fiber and provide no service, so a
-  // bare provide would be pruned as unused — merging forces the build.
-  Layer.provideMerge(Logs.persistLayer(LiveNode)),
+  Layer.provide(LiveStore.layerMemory),
   Layer.provideMerge(logStorageDemo),
-  Layer.provide(LogStore.layerMemory),
-  Layer.provide(Store.layerDefaultMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
@@ -276,9 +281,7 @@ const statsNode = Resource.httpServer([
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(Logs.layer),
-  Layer.provide(Logs.persistLayer(StatsNode)),
-  Layer.provide(LogStore.layerMemory),
+  Layer.provide(StatsStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
 );
 

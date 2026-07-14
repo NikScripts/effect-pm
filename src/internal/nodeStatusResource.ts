@@ -25,6 +25,7 @@ import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
 import { LogStore } from "../store/log";
+import { queryDurableNode } from "./logs/durableRead";
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
@@ -85,7 +86,8 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
     }),
     query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
-        "Replay persisted node logs (newest `limit`). Empty unless a LogStore is provided.",
+        "Replay persisted node logs (newest `limit`). Prefers `Resource.store(Node)` / " +
+        "`Node.logs` registration Storage; falls back to interim LogStore when composed.",
     }),
   },
 }) {}
@@ -98,6 +100,11 @@ export const buildNodeStatusImpl = (options: {
   readonly resourceCount: number;
   /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
   readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
+  /**
+   * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
+   * When omitted, query falls back to interim LogStore (or empty).
+   */
+  readonly nodeLogKey?: string;
 }) => {
   const readiness = options.readiness ?? Effect.succeed([]);
   const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
@@ -131,20 +138,22 @@ export const buildNodeStatusImpl = (options: {
     ping: Clock.currentTimeMillis,
     logs: {
       stream: logsLive,
-      // this node's durable logs (its own LogStore holds only its lines). Optional — `[]` when no
-      // LogStore is composed. Newest first.
+      // Prefers `Node.logs` Storage when `nodeLogKey` is known; else interim LogStore; else `[]`.
       query: (payload: { readonly limit: number }) =>
-        Effect.serviceOption(LogStore).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
-              onSome: (store) =>
-                store
-                  .load({ limit: payload.limit, sort: "desc" })
-                  .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([]))),
-            }),
-          ),
-        ),
+        Effect.gen(function* () {
+          if (options.nodeLogKey !== undefined) {
+            return yield* queryDurableNode(options.nodeLogKey, {
+              limit: payload.limit,
+            });
+          }
+          const store = yield* Effect.serviceOption(LogStore);
+          if (Option.isNone(store)) {
+            return [] as ReadonlyArray<LogEntry>;
+          }
+          return yield* store.value
+            .load({ limit: payload.limit, sort: "desc" })
+            .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([])));
+        }),
     },
   };
 };
@@ -158,6 +167,7 @@ export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
   readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
+  readonly nodeLogKey?: string;
 }): {
   readonly tag: typeof NodeStatusResource;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;

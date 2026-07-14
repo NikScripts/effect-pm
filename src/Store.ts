@@ -125,6 +125,7 @@ import {
   type StoreScopeTag,
   withRegistrationLogLevel,
   withRegistrationRetention,
+  withRegistrationStreamLevel,
 } from "./internal/store/registration";
 import {
   isStoreContractValue,
@@ -856,6 +857,30 @@ export const logLevelNone = <R extends StoreRegistrationAny>(registration: R): R
 
 /** @public */
 export const logLevel = logLevelAll;
+
+/** Per-registration live stream floor for {@link Resource.logs} (distinct from durable {@link logLevel}). @public */
+export const streamLevelAll = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "All");
+
+/** @public */
+export const streamLevelDebug = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Debug");
+
+/** @public */
+export const streamLevelInfo = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Info");
+
+/** @public */
+export const streamLevelWarn = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Warn");
+
+/** @public */
+export const streamLevelError = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "Error");
+
+/** @public */
+export const streamLevelNone = <R extends StoreRegistrationAny>(registration: R): R =>
+  withRegistrationStreamLevel(registration, "None");
 
 // ============================================================================
 // Retention pipe modifiers

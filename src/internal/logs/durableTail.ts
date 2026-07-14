@@ -13,6 +13,7 @@ import {
   Stream,
 } from "effect";
 import type { Predicate } from "effect";
+import { LogAnnotationKeys } from "../../LogContext";
 import * as LogEntry from "../../LogEntry";
 import type { LogEntry as LogEntryT } from "../../LogEntry";
 import type { NormalizedStoreRegistration } from "../store/registrationNormalize";
@@ -21,6 +22,18 @@ import type { StoreLogLevel } from "../store/types";
 import { LogRelay, type LogRelayService } from "./relay";
 import { durableTailPolicy } from "./durableTailPolicy";
 import { lineIdFromEntry, makeLineIdClaim } from "./lineId";
+import { logStreamLevelSym } from "./streamLevel";
+
+const stampNodeKey = (entry: LogEntryT, nodeKey: string): LogEntryT =>
+  entry.annotations[LogAnnotationKeys.node] !== undefined
+    ? entry
+    : {
+        ...entry,
+        annotations: {
+          ...entry.annotations,
+          [LogAnnotationKeys.node]: nodeKey,
+        },
+      };
 
 /** @internal */
 export interface DurableTail {
@@ -64,8 +77,12 @@ const runDurableTail = (
     const policy = durableTailPolicy(options);
     const batchSize = options.batchSize ?? 64;
     const batchWindow = options.batchWindow ?? "250 millis";
+    // Snapshot prefix + live bus — same shape as public `Logs.stream`, so lines published
+    // before the subscriber attaches are not dropped.
+    const tail = yield* relay.snapshot;
+    const source = Stream.concat(Stream.fromIterable(tail), relay.stream);
 
-    yield* relay.stream.pipe(
+    yield* source.pipe(
       Stream.filter(policy),
       Stream.filterEffect((entry) => claim(lineIdFromEntry(entry))),
       Stream.groupedWithin(batchSize, batchWindow),
@@ -98,7 +115,12 @@ export const layerFromRelay = (
   options: DurableTail,
 ): Layer.Layer<never> =>
   Layer.effectDiscard(
-    Effect.forkScoped(runDurableTail(relay, options)).pipe(Effect.asVoid),
+    Effect.gen(function* () {
+      yield* Effect.forkScoped(runDurableTail(relay, options));
+      // Let the forked drain pull once so PubSub subscribe is attached before the
+      // app's first Effect.log publish (scheduleTask) races past an empty subscriber set.
+      yield* Effect.yieldNow;
+    }).pipe(Effect.asVoid),
   );
 
 /**
@@ -145,13 +167,25 @@ export const layersForRegistrations = (
       continue;
     }
     const log = handle.log;
+    const isNode = registration.journal === "node";
+    const match = isNode ? (): boolean => true : LogEntry.hasKey(registration.scopeKey);
+    const scopeKey = registration.scopeKey;
+    // Registration `Store.streamLevel*` stamps the tag so {@link Resource.logs} can read it.
+    if (registration.streamLevel !== undefined && registration.tag !== undefined) {
+      Object.assign(registration.tag, {
+        [logStreamLevelSym]: registration.streamLevel,
+      });
+    }
     merged = Layer.mergeAll(
       merged,
       layerFromRelay(service, {
-        scopeKey: registration.scopeKey,
+        scopeKey,
         storeLevel: registration.logLevel ?? "All",
-        match: LogEntry.hasKey(registration.scopeKey),
-        append: (entry) => log.append(entry).pipe(Effect.asVoid, Effect.orDie),
+        match,
+        append: (entry) =>
+          log
+            .append(isNode ? stampNodeKey(entry, scopeKey) : entry)
+            .pipe(Effect.asVoid, Effect.orDie),
       }),
     );
   }

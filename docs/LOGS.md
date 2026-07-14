@@ -19,9 +19,9 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 | Example | Short path | Role |
 |---------|------------|------|
 | WNBA hub fixture | `resource-web/hub.ts` | Node + resource tag definitions |
-| WNBA servers | `resource-web/server.ts` | `persistLayer` wiring per node |
+| WNBA servers | `resource-web/server.ts` | `Store.Service` + `Node.logs` / toolkit `.store` per node |
 | Test key constants | `test/fixtures/logKeys.ts` | Canonical keys for unit tests |
-| Logs env helper | `test/fixtures/logsEnv.ts` | `Logs.layer` + `persistLayer` + `LogStore` stack for tests |
+| Logs env helper | `test/fixtures/logsEnv.ts` | `EnvNode.logs` on `Store.Service.layerMemory` for tests |
 | Resource.logs integration | `test/logs-resource.test.ts` | Runtime `Resource.logs` stream + query |
 
 ## Key kinds (vocabulary)
@@ -78,13 +78,14 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 
 | Parameter | Key kind | Must be | API | Source |
 |-----------|----------|---------|-----|--------|
-| `persistLayer(node)` | node log key | `Node.key` | `Logs.persistLayer` | `src/Logs.ts` |
+| `Node.logs` / `Resource.store(Node)` | node log key | `Node.key` | store registration | `src/Resource.ts` |
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
-| `record(groupId, …)` | store bucket key | node log key | `LogStore.record` | `src/store/log.ts` |
-| `load({ groupId })` | store bucket key | node log key | `LogStore.load` / `Logs.byNode` | `src/store/log.ts` |
+| `persistLayer(node)` (**deprecated**) | node log key | `Node.key` | `Logs.persistLayer` | `src/Logs.ts` |
+| `record(groupId, …)` | store bucket key | node log key | `LogStore.record` (interim) | `src/store/log.ts` |
+| `load({ groupId })` | store bucket key | node log key | `LogStore.load` (interim) | `src/store/log.ts` |
 | `byResource({ processId })` | resource key filter | `Process.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
 | `byResource({ queueId })` | resource key filter | `QueueResource.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
-| `load({ lineageContains })` | lineage segment key | any `Tag.key` in ancestry | `LogStore.load` | `src/internal/manager/logQuery.ts` |
+| `handle.log.read` | scope key | node or resource key | store handle | registration `log` shape |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
 | `LogEntry.atLeaf(key)` | lineage segment key | usually **resource key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
@@ -92,36 +93,33 @@ One module (`Logs`) for runtime-wide capture, live relay, and durable history. P
 ## Node log key rules
 
 1. **Must equal** the `Resource.Node` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
-2. **Same node log key** in `Logs.persistLayer(node)` and `Logs.byNode(node)` (or pass the `Node` class).
-3. **Stamped** on every persisted line as annotation key `LogAnnotationKeys.node` → node log key value.
-4. **Stored** in `LogStore` as store bucket key `groupId`.
+2. **Register** `Node.logs` (or `Resource.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
+3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
+4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same `lineId` can land in both scopes (memo is per scope).
 5. Use **slash-separated** paths (`domain/role`), not placeholders (`my-node`, `node-a`, bare `wnba`).
 
 ```ts
 import * as Resource from "@nikscripts/effect-pm/Resource";
 import * as Logs from "@nikscripts/effect-pm/Logs";
-import { LogStore } from "@nikscripts/effect-pm/store/Log";
+import * as Process from "@nikscripts/effect-pm/Process";
+import * as Store from "@nikscripts/effect-pm/Store";
 
 class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
-// node log key — BillingNode.key
-const nodeLogKey = BillingNode.key; // "billing/scores"
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  BillingNode.logs,
+  Process.store(Daily),
+) {}
 
-Logs.persistLayer(nodeLogKey).pipe(
-  Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
-);
-
-const rows = yield* Logs.byNode(nodeLogKey, { limit: 200 });
-
-// also accepts the Node class (resolves .key)
-Logs.persistLayer(BillingNode);
-yield* Logs.byNode(BillingNode);
+Effect.provide(program, AppStore.layerMemory)
+const rows = yield* Logs.byNode(BillingNode, { limit: 200 })
 ```
 
 ```ts
 // ❌ wrong — invented node log key, drifts from Resource.Node
-Logs.persistLayer("my-node");
-Logs.persistLayer("wnba"); // WnbaNode.key is "wnba/scores", not "wnba"
+Logs.byNode("my-node")
+Logs.byNode("wnba") // WnbaNode.key is "wnba/scores", not "wnba"
 ```
 
 ## Resource keys (per-resource logs)
@@ -150,16 +148,17 @@ const { stream, query } = yield* Resource.logs(LiveScorePoller);
 
 ```
 BillingNode process (node log key: billing/scores)
-  Logs.layer                    → LogRelay + one merged capture Logger
-  Logs.persistLayer(nodeLogKey) → relay subscriber → LogStore (no second logger)
+  AppStore.layerMemory          → Logs.layer (baked in) + Storage + durable tails
+  BillingNode.logs              → match-all follower → handle.log.append (node journal)
+  Process.store(Daily)          → lineage follower → handle.log.append (resource scope)
   Logs.withScope(tag)           → stamps resource key into lineage
-  Resource.logs(tag)            → { stream, query } when export piped on tag
+  Resource.logs(tag)            → { stream, query } (live + durable)
 ```
 
-- **Capture:** exactly one merged capture logger per node (`Logs.layer`).
+- **Capture:** exactly one merged capture logger per node (`Logs.layer`, baked into `Store.Service`).
 - **Bus:** one `LogRelay` (PubSub + bounded tail).
-- **Stream:** unfiltered; filter with `Stream.filter` + `LogEntry.hasKey(resourceKey)` / `atRoot(nodeLogKey)` / `atLeaf(resourceKey)`.
-- **Store:** `LogStore` on the Store bridge (`Store.contract`), not `ProcessStore`.
+- **Durable tails:** Stream pipeline per registration — level ∧ match → `(scopeKey, lineId)` memo → batch append.
+- **Stream:** unfiltered on `Logs.stream`; `Resource.logs` applies lineage + optional `logStreamLevel`.
 
 ## Node runtime
 
@@ -174,48 +173,35 @@ const tail = yield* Logs.snapshot;
 const live = yield* Logs.stream;
 ```
 
-### Live + durable
-
-`persistLayer` must be **wrapped** around the layers that provide `LogRelay` and `LogStore`:
+### Live + durable (registration followers)
 
 ```ts
 import * as Logs from "@nikscripts/effect-pm/Logs";
-import { LogStore } from "@nikscripts/effect-pm/store/Log";
+import * as Process from "@nikscripts/effect-pm/Process";
+import * as Store from "@nikscripts/effect-pm/Store";
 // example: resource-web/server.ts
 
-const nodeLogKey = WnbaNode.key; // "wnba/scores"
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  WnbaNode.logs,
+  Process.store(LiveScorePoller),
+) {}
 
-const logStack = Logs.persistLayer(nodeLogKey).pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(
-      Logs.layer,
-      LogStore.layer({ filename: ".effect-pm/logs.sqlite" }),
-    ),
-  ),
-);
-
-Effect.provide(program, logStack);
+Effect.provide(program, Layer.provideMerge(AppStore.layerMemory, Process.layer(...)))
 ```
 
 ### Query durable history
 
 ```ts
 import * as Logs from "@nikscripts/effect-pm/Logs";
-import { LogStore } from "@nikscripts/effect-pm/store/Log";
-import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
 
-// node log key — everything this node captured
-yield* Logs.byNode(WnbaNode, { limit: 500, sort: "desc" });
+// node journal — everything this node's match-all follower captured
+yield* Logs.byNode(WnbaNode, { limit: 500 });
 
-// resource key — one process across nodes
+// resource scope — that registration's handle.log.read
 yield* Logs.byResource({ processId: LiveScorePoller.key }, { limit: 100 });
 
-// lineage segment key — store query
-yield* LogStore.load({
-  lineageContains: LiveScorePoller.key,
-  limit: 100,
-  sort: "desc",
-});
+const handle = yield* AppStore.at(LiveScorePoller);
+yield* handle.log.read({ limit: 100 });
 ```
 
 ## Per-resource export
@@ -270,20 +256,18 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Legacy `processId`
 | `PlayByPlayQueue` | resource key | `wnba/PlayByPlayQueue` | `resource-web/hub.ts` |
 | `WorkerPool` | resource key | `wnba/WorkerPool` | `resource-web/hub.ts` |
 
-`resource-web/server.ts` calls `Logs.persistLayer(WnbaNode | LiveNode | StatsNode)` — each stack uses the matching **node log key**.
+`resource-web/server.ts` registers `WnbaNode.logs` / `LiveNode.logs` / `StatsNode.logs` on per-node `Store.Service` classes (plus toolkit `.store` registrations).
 
 ## Remote dashboard (browser → node)
 
-When the dashboard reaches resources over RPC, per-resource logs are **not** on the queue/process spec. Read node-wide logs and filter by **resource key**:
+When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal (`NodeStatus.logs.query`) filtered by **resource key**. Locally, `Resource.logs(tag).query` prefers registration Storage and falls back to NodeStatus when remote.
 
 ```ts
 import * as NodeStatus from "@nikscripts/effect-pm/NodeStatus";
 import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
-import * as Resource from "@nikscripts/effect-pm/Resource";
 
 const resourceKey = LiveScorePoller.key;
 
-// live tail + durable backfill — filter relay/store to one resource
 NodeStatus.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 
 const rows = yield* NodeStatus.logs.query({ limit: 300 });
@@ -292,22 +276,23 @@ const scoped = rows.filter(LogEntry.hasKey(resourceKey));
 
 Example: `src/web/data.ts` (`resourceLogsAtom`), `examples/web-dashboard/queue-data.ts` (`resourceLogsAccumulator`).
 
-Server must provide `Logs.layer` + `Logs.persistLayer(node)` on the node stack (`examples/web-dashboard/queue-server.ts`).
+Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for `NodeStatus.logs.query`.
 
 ## Migration
 
 | Old | New |
 |-----|-----|
+| `Logs.persistLayer` + `LogStore` | `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `@nikscripts/effect-pm/Logs` |
-| `ProcessStore` log facet | `LogStore` + `Store.contract` |
-| `captureLogs` on engines | **Removed** — `Logs.layer` + `Logs.withScope(tag)` at materialize |
-| `queue.logs` / `proc.logs` on handle | `Resource.logs(tag)` locally; `NodeStatus.logs` + `LogEntry.hasKey` remotely |
-| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via `LogStore` + lineage |
+| `ProcessStore` log facet | implicit `log` shape on toolkit store registrations |
+| `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
+| `queue.logs` / `proc.logs` on handle | `Resource.logs(tag)` (local Storage / remote NodeStatus) |
+| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `handle.log` |
 | `HostLogs` (docs) | `Logs` |
 
 ## Verification
 
 ```bash
 pnpm typecheck
-pnpm test test/logs-resource.test.ts test/logs-relay.test.ts test/log-pipeline.test.ts test/host-logs-history.test.ts test/process-log-history.test.ts
+pnpm test test/logs-resource.test.ts test/logs-durable-tail.test.ts test/host-logs-history.test.ts test/logs-two-copies-stream-level.test.ts test/process-log-history.test.ts
 ```

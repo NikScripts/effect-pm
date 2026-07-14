@@ -41,7 +41,7 @@ export const LogAnnotationKeys = {
 
 /**
  * Annotate every log line with a **node log key** value under annotation key {@link LogAnnotationKeys.node}.
- * Applied at the node runtime root (`Logs.persistLayer(nodeLogKey)` in `resource-web/server.ts`).
+ * Applied by node durable tails (`Node.logs` / `Resource.store(Node)` in `resource-web/server.ts`).
  *
  * @param node - **Node log key** value (`Resource.Node.key`).
  *

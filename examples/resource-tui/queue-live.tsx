@@ -20,9 +20,8 @@ import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
-import * as Logs from "../../src/Logs";
-import { LogStore } from "../../src/store/log";
 import * as Resource from "../../src/Resource";
+import * as Store from "../../src/Store";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
   BLANK_BORDER,
@@ -37,6 +36,11 @@ import {
 const NAME = "@acme/queues/MailQueue";
 const Job = Schema.Struct({ id: Schema.String });
 class MailQueue extends QueueResource.Tag<MailQueue>()(NAME, { payload: Job }) {}
+class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
+class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/queue-live/Store")(
+  TuiNode.logs,
+  QueueResource.store(MailQueue),
+) {}
 
 class WorkerError extends Data.TaggedError("WorkerError")<{
   readonly id: string;
@@ -71,11 +75,7 @@ const QueueLayer = QueueResource.layer(MailQueue, {
     }),
   concurrency: 3,
   attempts: 2,
-}).pipe(
-  Layer.provide(Logs.layer),
-  Layer.provide(Logs.persistLayer(TuiNode)),
-  Layer.provide(LogStore.layerMemory),
-);
+}).pipe(Layer.provide(TuiStore.layerMemory));
 
 // producer daemon: items arrive on their own, mixed priority
 const Producer = Layer.effectDiscard(

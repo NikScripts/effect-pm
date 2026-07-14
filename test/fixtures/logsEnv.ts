@@ -1,16 +1,18 @@
 /**
- * Shared logs stack for tests — runtime capture + durable memory store.
+ * Shared logs stack for tests — capture + node durable journal via {@link Resource.store}.
  *
  * @internal test fixture only
  */
 
-import { Layer } from "effect";
-import * as Logs from "../../src/Logs";
-import { LogStore } from "../../src/store/log";
+import * as Resource from "../../src/Resource";
+import * as Store from "../../src/Store";
 import { testBillingNodeKey } from "./logKeys";
 
-/** `Logs.layer` + `persistLayer(node)` + in-memory `LogStore`. */
-export const testLogsEnv = (nodeKey: string = testBillingNodeKey) =>
-  Logs.persistLayer(nodeKey).pipe(
-    Layer.provideMerge(Layer.mergeAll(Logs.layer, LogStore.layerMemory)),
-  );
+/** `Store.Service` with node journal — bakes in Logs.layer + durable tail. */
+export const testLogsEnv = (nodeKey: string = testBillingNodeKey) => {
+  class EnvNode extends Resource.Node<EnvNode>(nodeKey) {}
+  class EnvStore extends Store.Service<EnvStore>(`@test/LogsEnv/${nodeKey}`)(
+    EnvNode.logs,
+  ) {}
+  return EnvStore.layerMemory;
+};

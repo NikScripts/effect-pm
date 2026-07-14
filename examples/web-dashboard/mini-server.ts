@@ -12,14 +12,19 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as processEntry } from "../../src/Process";
-import * as Logs from "../../src/Logs";
-import { LogStore } from "../../src/store/log";
+import * as Process from "../../src/Process";
 import * as Resource from "../../src/Resource";
+import * as Store from "../../src/Store";
 import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";
 import { KeyRotation, MiniNode } from "./fleet";
 
 const PORT = 7778;
+
+class MiniStore extends Store.Service<MiniStore>("@examples/web-dashboard/MiniStore")(
+  MiniNode.logs,
+  Process.store(KeyRotation),
+) {}
 
 const serveLayer = Resource.httpServer([
   processEntry(KeyRotation, {
@@ -28,9 +33,7 @@ const serveLayer = Resource.httpServer([
   }),
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(Logs.layer),
-  Layer.provide(Logs.persistLayer(MiniNode)),
-  Layer.provide(LogStore.layerMemory),
+  Layer.provide(MiniStore.layerMemory),
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })),
 );

@@ -5,55 +5,116 @@
  * @internal
  */
 
-import { Effect, Stream } from "effect";
+import { Effect, Option, Stream } from "effect";
 import type { LogEntry } from "../../LogEntry";
-import * as Logs from "../../Logs";
-import { LogQueryError } from "../manager/logQuery";
+import * as LogEntryModule from "../../LogEntry";
+import { Storage } from "../../Store";
+import { meetsStoreLevel } from "./durableTailPolicy";
+import { queryDurableScope, readScopeLog } from "./durableRead";
 import type { StoreScopeTag } from "../store/registration";
-import { LogStore } from "../../store/log";
-import type { LogRelay } from "./relay";
+import { LogRelay } from "./relay";
+import type { StoreLogLevel } from "../store/types";
+import { streamLevelOf, type StreamLevelCarrier } from "./streamLevel";
 
 /** Live + durable log export for one resource tag. @internal */
 export interface LogsExportHandle {
-  readonly stream: Stream.Stream<LogEntry, never, LogRelay>;
+  readonly stream: Stream.Stream<LogEntry, never, never>;
   readonly query: (
     options?: { readonly limit?: number },
-  ) => Effect.Effect<ReadonlyArray<LogEntry>, never, LogStore>;
+  ) => Effect.Effect<ReadonlyArray<LogEntry>>;
 }
 
+const applyStreamGates = (
+  source: Stream.Stream<LogEntry>,
+  tagKey: string,
+  floor: StoreLogLevel,
+): Stream.Stream<LogEntry> => {
+  const scoped = Stream.filter(source, LogEntryModule.hasKey(tagKey));
+  return floor === "All" ? scoped : Stream.filter(scoped, meetsStoreLevel(floor));
+};
+
 /**
- * Unfiltered relay stream + durable query scoped to `tag.key` lineage.
+ * Durable rows for a resource. Prefers local registration Storage; on a remote client
+ * (no local scope), falls back to {@link NodeStatus} `logs.query` filtered by lineage.
  *
  * @internal
  */
-export const logs = <Tag extends StoreScopeTag>(
-  tag: Tag,
-): Effect.Effect<LogsExportHandle, never, LogRelay | LogStore> =>
-  Effect.succeed({
-    stream: Logs.stream,
-    query: (options) =>
-      Effect.flatMap(LogStore, (store) =>
-        store.load({
-          lineageContains: tag.key,
-          limit: options?.limit ?? 200,
-          sort: "desc",
-        }),
-      ).pipe(
-        Effect.catchIf(
-          (error): error is LogQueryError => error instanceof LogQueryError,
-          () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
-        ),
-        Effect.orDie,
-      ),
+const queryResourceLogs = (
+  tagKey: string,
+  options?: { readonly limit?: number },
+): Effect.Effect<ReadonlyArray<LogEntry>> => {
+  const limit = options?.limit ?? 200;
+  return Effect.gen(function* () {
+    const local = yield* queryDurableScope(tagKey, { limit });
+    const storage = yield* Effect.serviceOption(Storage);
+    if (Option.isSome(storage)) {
+      const registered = yield* readScopeLog(tagKey, limit).pipe(
+        Effect.provideService(Storage, storage.value),
+      );
+      if (Option.isSome(registered)) {
+        return local;
+      }
+    } else if (local.length > 0) {
+      return local;
+    }
+    const { NodeStatusResource } = yield* Effect.promise(
+      () => import("../nodeStatusResource"),
+    );
+    const status = yield* Effect.serviceOption(NodeStatusResource);
+    if (Option.isNone(status)) {
+      return local;
+    }
+    const rows = yield* status.value.logs.query({ limit });
+    return rows.filter(LogEntryModule.hasKey(tagKey));
   });
+};
+
+/**
+ * Live stream: lineage + optional {@link Resource.logStreamLevel} gate.
+ * Local {@link LogRelay} when present; otherwise NodeStatus.logs (remote client).
+ * Durable `query` prefers registration Storage, else NodeStatus (remote).
+ *
+ * @internal
+ */
+export const logs = <Tag extends StoreScopeTag & StreamLevelCarrier>(
+  tag: Tag,
+): Effect.Effect<LogsExportHandle, never, never> => {
+  const floor = streamLevelOf(tag);
+  const stream = Stream.unwrap(
+    Effect.gen(function* () {
+      const relay = yield* Effect.serviceOption(LogRelay);
+      if (Option.isSome(relay)) {
+        const tail = yield* relay.value.snapshot;
+        return applyStreamGates(
+          Stream.concat(Stream.fromIterable(tail), relay.value.stream),
+          tag.key,
+          floor,
+        );
+      }
+      const { NodeStatusResource } = yield* Effect.promise(
+        () => import("../nodeStatusResource"),
+      );
+      const status = yield* Effect.serviceOption(NodeStatusResource);
+      if (Option.isNone(status)) {
+        return Stream.empty;
+      }
+      return applyStreamGates(status.value.logs.stream, tag.key, floor);
+    }),
+  );
+  return Effect.succeed({
+    stream,
+    query: (options) => queryResourceLogs(tag.key, options),
+  });
+};
 
 /**
  * Tag pipe combinator — adds `yield* Tag.logs` when export is enabled.
  *
  * @internal
  */
-export const withLogExport =
-  <Tag extends StoreScopeTag>(tag: Tag): Tag & { readonly logs: Effect.Effect<LogsExportHandle, never, LogRelay | LogStore> } =>
-    Object.assign(tag, { logs: logs(tag) }) as Tag & {
-      readonly logs: Effect.Effect<LogsExportHandle, never, LogRelay | LogStore>;
-    };
+export const withLogExport = <Tag extends StoreScopeTag & StreamLevelCarrier>(
+  tag: Tag,
+): Tag & { readonly logs: Effect.Effect<LogsExportHandle, never, never> } =>
+  Object.assign(tag, { logs: logs(tag) }) as Tag & {
+    readonly logs: Effect.Effect<LogsExportHandle, never, never>;
+  };
