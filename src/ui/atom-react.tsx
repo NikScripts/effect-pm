@@ -6,7 +6,6 @@
  * hooks. No external `@effect-atom`. Used by both the `web` and `tui` renderers (Ink is
  * React too); atoms (runtime, reads, streams, commands) are plain Effect values.
  *
- * @since 1.0.0
  */
 import * as React from "react";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
@@ -16,7 +15,6 @@ const RegistryContext = React.createContext<AtomRegistry.AtomRegistry | null>(nu
 /**
  * Provide an `AtomRegistry` (a fresh one by default) to the React tree.
  *
- * @since 1.0.0
  */
 export const RegistryProvider = (props: {
   readonly registry?: AtomRegistry.AtomRegistry;
@@ -40,7 +38,6 @@ const useRegistry = (): AtomRegistry.AtomRegistry => {
 /**
  * Subscribe to an atom; re-renders on change. The registry ref-counts it.
  *
- * @since 1.0.0
  */
 export const useAtomValue = <A,>(atom: Atom.Atom<A>): A => {
   const registry = useRegistry();
@@ -68,7 +65,6 @@ export const useAtomValue = <A,>(atom: Atom.Atom<A>): A => {
 /**
  * Get a writer for a writable atom (e.g. a command `fn` atom).
  *
- * @since 1.0.0
  */
 export const useAtomSet = <Read, Write>(
   atom: Atom.Writable<Read, Write>,
@@ -86,7 +82,6 @@ export const useAtomSet = <Read, Write>(
  * built across navigation; otherwise tearing the last atom down between views disconnects
  * it and the next view's cold streams start blank.
  *
- * @since 1.0.0
  */
 export const useAtomMount = <A,>(atom: Atom.Atom<A>): void => {
   const registry = useRegistry();
@@ -96,7 +91,6 @@ export const useAtomMount = <A,>(atom: Atom.Atom<A>): void => {
 /**
  * Force-refresh an atom (re-run its effect/stream).
  *
- * @since 1.0.0
  */
 export const useAtomRefresh = <A,>(atom: Atom.Atom<A>): (() => void) => {
   const registry = useRegistry();
