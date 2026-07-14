@@ -536,7 +536,8 @@ pre.shiki { background: transparent; }
    Severity is signalled solely by the chip after the heading (below); no left bar. */
 section[class~="must"] > h2::after,
 section[class~="should"] > h2::after,
-section[class~="may"] > h2::after {
+section[class~="may"] > h2::after,
+h2[class~="draft"]::after {
   font-family: var(--font-mono);
   font-size: 0.58rem;
   font-weight: 600;
@@ -551,6 +552,8 @@ section[class~="may"] > h2::after {
 section[class~="must"] > h2::after { content: "MUST"; color: var(--must); }
 section[class~="should"] > h2::after { content: "SHOULD"; color: var(--should); }
 section[class~="may"] > h2::after { content: "MAY"; color: var(--may); }
+/* a glossary term still to be made exemplary (examples etc.); remove the `{.draft}` when done. */
+h2[class~="draft"]::after { content: "DRAFT"; color: var(--should); }
 
 /* appliesTo — the scopes a rule governs, shown as muted pills under the heading. */
 .applies-to {
