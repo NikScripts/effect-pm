@@ -34,28 +34,31 @@ const item = yield* Schema.decodeUnknown(WorkItem)(raw)
 ```
 
 {#correct-by-construction .must appliesTo="src examples"}
-## Correct by construction — no `as`, no `satisfies`
+## Correct by construction — verify, never assert
 
-A value's type comes from a typed constructor, decoder, or contract helper — never from an
-annotation bolted on afterward. Reaching for `satisfies` (like `as`) means the value was divorced
-from the API that should have typed it; the fix is a stricter API, not a stricter annotation. The
-contract helpers exist for exactly this: `Resource.contract` / `Store.contract` are
-`<const S extends Spec>(s: S) => S` — the constraint checks the shape, `const` preserves the exact
-type, so the contract is correct by construction and shareable. Use them; never pin a literal.
+A value's type comes from a typed constructor, a decoder, a contract helper, or a named type it is
+*checked against* — never from an assertion that can lie. `as` and `satisfies` are opposites, not a
+pair: `as` **forces** a type regardless of the value, so a wrong `as` compiles and fails at runtime —
+it stays banned (one exception — *A boundary cast is a last resort*). `satisfies` **verifies** a
+value against a type *without widening it*, so a mismatch is a compile error and the narrow types
+survive. `satisfies` is therefore allowed — but only against a **named** type, never an inline shape:
+a `satisfies { … }` on an anonymous type means the contract has no home (*A config carries a named
+type in its namespace*). For a shape that is shared or reused, reach for its constructor —
+`Resource.contract` / `Store.contract` are `<const S extends Spec>(s: S) => S`, so the spec is
+checked, kept narrow, and shareable in one move.
 
 ``` ts
-// ❌ bad — a literal pinned with satisfies, divorced from any API
-const spec = {
-  add: Resource.effectFn(Schema.Void, { payload: item }),
-} satisfies Resource.Spec
+// ❌ as — forces the shape; a wrong value compiles and breaks at runtime
+const lanes = value as CustomQueueResource.Config
 
-// ✅ good — the helper checks and preserves it; correct by construction, shareable
-const spec = Resource.contract({
-  add: Resource.effectFn(Schema.Void, { payload: item }),
-})
+// ✅ satisfies a named type — verified, and the narrow literals survive
+const lanes = {
+  levelCount: 4,
+  namedLevels: { interactive: 0, batch: 3 },
+} satisfies CustomQueueResource.Config
 ```
 
-`as const` is unaffected — it's literal narrowing, not validation, and is always fine.
+`as const` is unaffected — it is literal narrowing, not an assertion, and is always fine.
 
 {#boundary-cast-last-resort .must appliesTo="src examples"}
 ## A boundary cast is a last resort — provably safe and justified
@@ -243,6 +246,33 @@ export interface Disconnected { readonly _tag: "Disconnected"; readonly reason: 
 This holds right up to the framework's own primitives: Effect's `Layer`, `Queue`, and `Cache` are
 each `export interface`, and `Option` is an `export type` union of `Some` and `None` — never derived
 types.
+
+{#config-carries-a-named-type .must appliesTo="src examples"}
+## A config carries a named type in its namespace
+
+Every config, options, or input shape a consumer authors has a named type **exported from the
+namespace it belongs to** — `CustomQueueResource.Config`, `Process.Options` — a hand-written
+`interface` (*Public API shapes are hand-written `export interface`*) attached in the same file with
+`export declare namespace` (*Associated types attach in the same file*). The consumer builds the
+value against it with `satisfies`: the named type is the contract, the shape is checked, and the
+narrow types survive — and the type hovers as named fields, not `Schema.Struct<…>` machinery. Effect
+names its configs the same way — `Pool.Config`, `Effect.Retry.Options`, `Logger.Options`.
+
+``` ts
+// src/CustomQueueResource.ts — the type lives beside the namespace it configures
+export declare namespace CustomQueueResource {
+  export interface Config {
+    readonly levelCount: number
+    readonly namedLevels: Record<string, number>
+  }
+}
+
+// a consumer authors the config against the named type — no inline shape, no cast
+const lanes = {
+  levelCount: 4,
+  namedLevels: { interactive: 0, batch: 3 },
+} satisfies CustomQueueResource.Config
+```
 
 {#schema-data-derives .must appliesTo="src examples"}
 ## Schema-backed data derives its type from the schema
