@@ -8,10 +8,33 @@
 import { Effect, Option } from "effect";
 import type { LogEntry } from "../../LogEntry";
 import { Storage } from "../../Store";
-import { withImplicitLogShape } from "../store/logShapes";
+import { IMPLICIT_LOGS_SHAPE_KEY, withImplicitLogShape } from "../store/logShapes";
 import { makeStoreContractValue } from "../store/contractDef";
 
 const logOnlyContract = withImplicitLogShape(makeStoreContractValue({}));
+
+/** Runtime handle fragment for the private `_logs` journal (omitted from public handle types). */
+interface ImplicitLogsReadHandle {
+  readonly [IMPLICIT_LOGS_SHAPE_KEY]: {
+    readonly read: (
+      payload?: { readonly limit?: number },
+    ) => Effect.Effect<ReadonlyArray<LogEntry>>;
+  };
+}
+
+const isImplicitLogsReadHandle = (handle: unknown): handle is ImplicitLogsReadHandle => {
+  if (typeof handle !== "object" || handle === null) {
+    return false;
+  }
+  if (!(IMPLICIT_LOGS_SHAPE_KEY in handle)) {
+    return false;
+  }
+  const logs: unknown = handle[IMPLICIT_LOGS_SHAPE_KEY];
+  if (typeof logs !== "object" || logs === null || !("read" in logs)) {
+    return false;
+  }
+  return typeof logs.read === "function";
+};
 
 /** @internal */
 export const readScopeLog = (
@@ -24,12 +47,15 @@ export const readScopeLog = (
     if (handleExit._tag === "Failure") {
       return Option.none();
     }
-    const rows = yield* handleExit.value.log.read({ limit });
-    return Option.some(rows as ReadonlyArray<LogEntry>);
+    if (!isImplicitLogsReadHandle(handleExit.value)) {
+      return Option.none();
+    }
+    const rows = yield* handleExit.value[IMPLICIT_LOGS_SHAPE_KEY].read({ limit });
+    return Option.some(rows);
   });
 
 /**
- * Durable rows for a resource registration scope (`handle.log.read`), or `[]` when unregistered.
+ * Durable rows for a resource registration scope (private `_logs` shape), or `[]` when unregistered.
  *
  * @internal
  */

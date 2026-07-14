@@ -31,7 +31,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | **Node log key** | One OS process / runtime host (durable bucket) | `Resource.Node` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
 | **Resource key** | One queue, process, or custom tag | `Resource.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
-| **Store scope key** | Journal partition for a registration | Same as node or resource key | `handle.log.append` / `handle.log.read` |
+| **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Resource.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **RPC `groupId`** | Wire routing prefix for multi-host RPC | Tag `groupId` when set | **Not** a log key |
 | **Group catalog key** | Dashboard / CLI grouping | `Group.Tag` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
@@ -82,7 +82,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
 | `byResource({ processId })` | resource key filter | `Process.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
 | `byResource({ queueId })` | resource key filter | `QueueResource.Tag.key` | `Logs.byResource` | `src/Logs.ts` |
-| `handle.log.read` | store scope key | node or resource key | store handle | registration `log` shape |
+| `Logs.byResource` / `Resource.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
 | `LogEntry.atLeaf(key)` | lineage segment key | usually **resource key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
@@ -146,8 +146,8 @@ const { stream, query } = yield* Resource.logs(LiveScorePoller);
 ```
 BillingNode process (node log key: billing/scores)
   AppStore.layerMemory          → Logs.layer (baked in) + Storage + durable tails
-  BillingNode.logs              → match-all follower → handle.log.append (node journal)
-  Process.store(Daily)          → lineage follower → handle.log.append (resource scope)
+  BillingNode.logs              → match-all follower → private `_logs` journal (node)
+  Process.store(Daily)          → lineage follower → private `_logs` journal (resource)
   Logs.withScope(tag)           → appends resource key onto fiber lineage path
   Resource.logs(tag)            → { stream, query } (live + durable)
 ```
@@ -199,11 +199,11 @@ import * as Logs from "@nikscripts/effect-pm/Logs";
 // node journal — everything this node's match-all follower captured
 yield* Logs.byNode(WnbaNode, { limit: 500 });
 
-// resource scope — that registration's handle.log.read
+// resource scope — durable journal for that registration (same as Resource.logs().query locally)
 yield* Logs.byResource({ processId: LiveScorePoller.key }, { limit: 100 });
 
-const handle = yield* AppStore.at(LiveScorePoller);
-yield* handle.log.read({ limit: 100 });
+const { query } = yield* Resource.logs(LiveScorePoller);
+yield* query({ limit: 100 });
 ```
 
 ## Per-resource export
@@ -286,10 +286,10 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 |-----|-----|
 | `Logs.persistLayer` + `@nikscripts/effect-pm/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `@nikscripts/effect-pm/Logs` |
-| `ProcessStore` log facet | implicit `log` shape on toolkit store registrations |
+| `ProcessStore` log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
 | `queue.logs` / `proc.logs` on handle | `Resource.logs(tag)` (local Storage / remote NodeStatus) |
-| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `handle.log` |
+| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Resource.logs` / `Logs.by*` |
 | `HostLogs` (docs) | `Logs` |
 
 ## Verification
