@@ -1059,11 +1059,12 @@ type QueueItemFields = Record<
 >;
 
 /** The `tag:` param shape shared by every queue verb ({@link buildQueueImpl} / {@link layer} /
- *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link ResourceTag}
- *  intersected with its worker-`success`/`error` carriers. The spec stays the **baseline**
- *  {@link QueueInstanceSpec} (location-transparent, its `events` element the concrete `Void`/`Never`
- *  wire form — the real worker `Success`/`Error` are recovered from the carriers, not re-threaded
- *  into the invariant RPC spec position). @internal */
+ *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link ResourceTag} over
+ *  the **threaded** {@link QueueInstanceSpec}`<F, Success, Error>` (so `events` carries the real
+ *  `Cause<Error>` / `Completed.success`, matching {@link materializeQueueTag}), **plus** the
+ *  worker-`success`/`error` carriers. Both are needed: the spec sits at `ResourceTag`'s invariant
+ *  Shape position (unreliable for inference), so the covariant carriers give the verbs a stable
+ *  surface to infer `Success`/`Error` from the passed tag. @internal */
 type QueueTagFor<
   Self,
   F extends QueueItemFields,
