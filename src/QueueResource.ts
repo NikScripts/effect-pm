@@ -369,6 +369,11 @@ export type QueueEventSchema<
   Error extends Schema.Top = typeof Schema.Never,
 > = ReturnType<typeof buildQueueEvent<Sch, Success, Error>>;
 
+/**
+ * Build the `events` union **schema** for a queue item schema `Sch` with optional `success`/`error`
+ * wire slots (default {@link Schema.Void} / {@link Schema.Never}) — the runtime schema behind
+ * {@link QueueResource.events}, whose decoded type is {@link QueueEventSchema}. @public
+ */
 export const queueEvent = <
   Sch extends Schema.Top,
   Success extends Schema.Top = typeof Schema.Void,
@@ -698,7 +703,7 @@ type QueueInstanceSpec<
  * @public
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. */
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @public */
 export const kind = "@nikscripts/effect-pm/QueueResource";
 
 /**
@@ -1035,23 +1040,6 @@ type QueueSuccessValueOf<Success extends Schema.Top> = Success["Type"];
  */
 type QueueErrorValueOf<Error extends Schema.Top> = Error["Type"];
 
-/**
- * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
- * tag's contract. It builds the engine handle in a scope and maps it onto the toolkit service
- * (location-transparent — the same `yield* Tag` then drives the queue locally, or remotely via
- * {@link Resource.client} when served).
- *
- * The tag carries the `itemSchema` (recovered from its spec), so the config only supplies the
- * worker (`effect`, `concurrency`, `attempts`, `onFailure`, …). The worker `R` is captured at
- * layer-build time and provided to each method, so the resulting service requires nothing
- * beyond `R` (which the layer itself requires).
- *
- * The enqueue verbs (`add`/`prioritize`/`defer`) re-validate the item in the engine; over RPC
- * the payload was already validated against `itemSchema`, so that re-validation cannot fail —
- * its error is therefore `orDie`d to match the contract's no-error enqueue channel.
- *
- * @public
- */
 /** The item-schema constraint shared by {@link layer} / {@link serve} / {@link serveRemote}. */
 type QueueItemFields = Record<
   string,
@@ -1269,6 +1257,23 @@ const buildQueueImpl = <
     return Resource.builtResource(tag, impl, context);
   });
 
+/**
+ * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
+ * tag's contract. It builds the engine handle in a scope and maps it onto the toolkit service
+ * (location-transparent — the same `yield* Tag` then drives the queue locally, or remotely via
+ * {@link Resource.client} when served).
+ *
+ * The tag carries the `itemSchema` (recovered from its spec), so the config only supplies the
+ * worker (`effect`, `concurrency`, `attempts`, `onFailure`, …). The worker `R` is captured at
+ * layer-build time and provided to each method, so the resulting service requires nothing
+ * beyond `R` (which the layer itself requires).
+ *
+ * The enqueue verbs (`add`/`prioritize`/`defer`) re-validate the item in the engine; over RPC
+ * the payload was already validated against `itemSchema`, so that re-validation cannot fail —
+ * its error is therefore `orDie`d to match the contract's no-error enqueue channel.
+ *
+ * @public
+ */
 export const layer = <
   Self,
   F extends QueueItemFields = QueueItemFields,
@@ -1320,7 +1325,7 @@ export const serveRemote = <
 ) =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (built) =>
-      Resource.serveRemote(tag, built as any),
+      Resource.serveRemote(tag, built),
     ),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
@@ -1357,7 +1362,7 @@ export const serve = <
   R | RR
 > =>
   Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built as any)),
+    Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
   ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 /**
