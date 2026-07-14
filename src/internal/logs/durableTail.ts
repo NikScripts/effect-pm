@@ -17,7 +17,7 @@ import { LogAnnotationKeys } from "../../LogContext";
 import * as LogEntry from "../../LogEntry";
 import type { LogEntry as LogEntryT } from "../../LogEntry";
 import type { NormalizedStoreRegistration } from "../store/registrationNormalize";
-import { hasImplicitLogShape } from "../store/logShapes";
+import { hasImplicitLogShape, IMPLICIT_LOGS_SHAPE_KEY } from "../store/logShapes";
 import type { StoreLogLevel } from "../store/types";
 import { LogRelay, type LogRelayService } from "./relay";
 import { durableTailPolicy } from "./durableTailPolicy";
@@ -45,9 +45,9 @@ export interface DurableTail {
   readonly batchWindow?: Duration.Input;
 }
 
-/** Handle fragment needed to append durable log rows. @internal */
+/** Handle fragment needed to append durable log rows (`_logs` — not on public handle types). @internal */
 export interface LogShapeHandle {
-  readonly log: {
+  readonly [IMPLICIT_LOGS_SHAPE_KEY]: {
     readonly append: (
       row: LogEntryT | ReadonlyArray<LogEntryT>,
     ) => Effect.Effect<void, unknown>;
@@ -56,15 +56,15 @@ export interface LogShapeHandle {
 
 /** @internal */
 export const isLogShapeHandle = (handle: unknown): handle is LogShapeHandle => {
-  if (typeof handle !== "object" || handle === null || !("log" in handle)) {
+  if (typeof handle !== "object" || handle === null || !(IMPLICIT_LOGS_SHAPE_KEY in handle)) {
     return false;
   }
-  const log = handle.log;
+  const logs = handle[IMPLICIT_LOGS_SHAPE_KEY];
   return (
-    typeof log === "object" &&
-    log !== null &&
-    "append" in log &&
-    typeof log.append === "function"
+    typeof logs === "object" &&
+    logs !== null &&
+    "append" in logs &&
+    typeof logs.append === "function"
   );
 };
 
@@ -141,7 +141,7 @@ export const layerOptional = (options: DurableTail): Layer.Layer<never> =>
   );
 
 /**
- * Durable tails for registrations that carry the implicit {@link LogEntry} `log` shape.
+ * Durable tails for registrations that carry the implicit {@link LogEntry} `_logs` shape.
  *
  * Pass the {@link LogRelay} resolved in the same store-layer unwrap that builds the bundle.
  * When `relay` is `None`, returns {@link Layer.empty}. Resource scopes match {@link LogEntry.hasKey}.
@@ -166,7 +166,7 @@ export const layersForRegistrations = (
     if (!isLogShapeHandle(handle)) {
       continue;
     }
-    const log = handle.log;
+    const logs = handle[IMPLICIT_LOGS_SHAPE_KEY];
     const isNode = registration.journal === "node";
     const match = isNode ? (): boolean => true : LogEntry.hasKey(registration.scopeKey);
     const scopeKey = registration.scopeKey;
@@ -183,7 +183,7 @@ export const layersForRegistrations = (
         storeLevel: registration.logLevel ?? "All",
         match,
         append: (entry) =>
-          log
+          logs
             .append(isNode ? stampNodeKey(entry, scopeKey) : entry)
             .pipe(Effect.asVoid, Effect.orDie),
       }),

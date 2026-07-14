@@ -108,7 +108,6 @@ import type {
   ResourceTag,
   Spec,
   Subscribable,
-  WithRequirement,
 } from "./Resource";
 import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
@@ -400,6 +399,7 @@ interface ProcessBuildStateBase<E, RUser> {
   readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
 }
 
+/** User-facing controls for a process's schedule — enumerate, set, add, and clear entries. @public */
 export interface ProcessScheduleControls {
   readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
   readonly set: (
@@ -411,6 +411,7 @@ export interface ProcessScheduleControls {
   readonly clear: Effect.Effect<void, never, never>;
 }
 
+/** A function that seeds a process's schedule via its {@link ProcessScheduleControls}. @public */
 export type ProcessScheduleInitializer<R = never> = (
   controls: ProcessScheduleControls,
 ) => Effect.Effect<void, never, R>;
@@ -463,6 +464,10 @@ const provideWithLayer = <A, E, RIn, ROut>(
   step: Effect.Effect<A, E, RIn>,
   layer: Layer.Layer<ROut, E, never>,
 ): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
+  // `R` is deliberately FORWARDED to the caller (`Exclude<RIn, ROut>`), not left unprovided;
+  // `missingEffectContext` can't distinguish requirement-forwarding from a leak on a generic
+  // helper, so it false-positives here (the code is type-correct — tsc is clean).
+  // @effect-diagnostics-next-line missingEffectContext:off
   Effect.scoped(
     Effect.gen(function* () {
       const context = yield* Layer.build(layer);
@@ -502,16 +507,22 @@ function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
   state: Pick<AnyProcessBuildState<never, never>, "pollingLayer" | "scheduleLayer">,
 ) {
+  // Each branch forwards the caller's residual `R` (the overload signatures above type it exactly);
+  // `missingEffectContext` false-positives on the forwarding, same as {@link provideWithLayer}.
   const { pollingLayer, scheduleLayer } = state;
   if (pollingLayer !== undefined && scheduleLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, Layer.mergeAll(pollingLayer, scheduleLayer));
   }
   if (pollingLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, pollingLayer);
   }
   if (scheduleLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, scheduleLayer);
   }
+  // @effect-diagnostics-next-line missingEffectContext:off
   return step;
 }
 
@@ -1986,11 +1997,18 @@ type ScheduleMode =
   | { readonly _tag: "inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
   | { readonly _tag: "reference"; readonly source: ResourceTag<unknown, ScheduleResourceSpec> };
 
+/** Runtime guard for a stamped {@link ScheduleMode} — its `_tag` discriminant. @internal */
+const isScheduleMode = (value: unknown): value is ScheduleMode =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  (value._tag === "inline" || value._tag === "reference");
+
 /** Read a process tag's {@link ScheduleMode}, if any (set by {@link schedule}). @internal */
 const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && scheduleModeSym in tag) {
-    const value = (tag as { readonly [scheduleModeSym]?: unknown })[scheduleModeSym];
-    return value as ScheduleMode | undefined;
+    const value = tag[scheduleModeSym];
+    return isScheduleMode(value) ? value : undefined;
   }
   return undefined;
 };
@@ -2149,6 +2167,11 @@ export const Tag = <Self>() => {
     }
     return buildProcessTag<Self>(key, undefined);
   }
+  // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
+  // call-signature *object* type (`ProcessTagBuild<Self>`) even when it implements exactly those
+  // overloads — a known TS limitation (the same class as QueueResource's `nameQueueService` cast).
+  // It's soundness-guarded: `process-built-resource` / `process-contract-shape` .test-d.ts exercise
+  // `Process.Tag()` in every form, so a drift between `build` and `ProcessTagBuild` fails the build.
   return build as ProcessTagBuild<Self>;
 };
 
@@ -2322,7 +2345,7 @@ const buildProcessImpl = <A, E, R>(
         : Effect.asVoid(config.effect);
 
     const tapLogs = <A2, E2, R2>(effect: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
-      withLogScope(tag as StoreScopeTag)(effect);
+      withLogScope(tag)(effect);
 
     // ── schedule: inline windows own an in-memory store; otherwise always-armed ──
     const baseScheduleLayer =
@@ -2394,13 +2417,13 @@ const buildProcessImpl = <A, E, R>(
       start,
       stop,
       events: handle.events,
-      run: handle.run().pipe(tapLogs) as ImplOf<ProcessSpec>["run"],
+      run: handle.run().pipe(tapLogs),
       ...scheduleMembers,
       ...resultMembers,
     };
     return Resource.builtResource(
       tag,
-      impl as WithRequirement<ImplOf<ProcessSpec>, R>,
+      impl,
       context,
     );
   });

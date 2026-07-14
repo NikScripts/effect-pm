@@ -4,7 +4,7 @@
 Logs in effect-pm are one pipeline: every `Effect.log` on a [Node](/docs/glossary#node) lands on a
 single live bus, and — when you register journals on your [Store](/docs/stores) — durable followers
 persist those lines into scoped history. You consume the same lines live (`Logs.stream`,
-`Resource.logs`) or from Storage (`Logs.byNode`, `Logs.byResource`, `handle.log.read`).
+`Resource.logs`) or from Storage (`Logs.byNode`, `Logs.byResource`).
 
 There is no separate “process log API” and “queue log API.” Capture is central. Scopes are how you
 carve the bus into journals and Handle-facing exports.
@@ -31,10 +31,11 @@ Your Node (key: billing/scores)
   `Store.Service`).
 - **Bus** — one `LogRelay`: PubSub plus a bounded in-memory snapshot for late subscribers.
 - **Durable tails** — one Stream follower per store registration: level gate → match → append to that
-  registration’s implicit `log` shape.
+  registration’s private `_logs` journal (Effect-style underscore field — not on public handle types).
 - **Lineage** — a JSON array of segment keys on each line (`Logs.withScope`), so filters can select by
   Resource or by ancestry.
-- **Export** — `Resource.logs(tag)` for `{ stream, query }` on a Resource Handle surface.
+- **Export** — `Resource.logs(tag)` for `{ stream, query }` on a Resource Handle surface. Prefer this
+  for app reads; apps may freely declare their own Store shape named `log`.
 
 {.note}
 **Two copies are intentional.** If both `Node.logs` and `Process.store(Daily)` are registered, the
@@ -73,8 +74,9 @@ Live-only is enough for ephemeral UIs. History needs Storage.
 
 Register journals on a `Store.Service`. Node-wide history uses `Node.logs` (or
 `Resource.store(Node)`). Per-Resource history uses the toolkit store registration —
-`Process.store(tag)`, `QueueResource.store(tag)`, and friends — which carry an implicit `log` shape
-(`handle.log.append` / `handle.log.read`).
+`Process.store(tag)`, `QueueResource.store(tag)`, and friends — which carry a private `_logs`
+journal. Read durable history with `Logs.byNode` / `Logs.byResource` / `Resource.logs(tag).query`
+(not a public `handle.log` surface).
 
 {.twoslash}
 ``` ts
@@ -99,10 +101,11 @@ const program = Effect.gen(function* () {
     { limit: 100 },
   )
 
-  const handle = yield* AppStore.at(Daily)
-  const fromHandle = yield* handle.log.read({ limit: 100 })
+  // Preferred: live + durable product export for the tag.
+  const { query } = yield* Resource.logs(Daily)
+  const fromExport = yield* query({ limit: 100 })
 
-  return { nodeRows, resourceRows, fromHandle }
+  return { nodeRows, resourceRows, fromExport }
 })
 ```
 
@@ -294,7 +297,7 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 | `Logs.persistLayer` + `store/Log` | `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` | `Logs.*` |
 | Engine `captureLogs` / handle `.logs` | `Logs.layer` + `Logs.withScope` + `Resource.logs` |
-| `HistoryStore` `` `${tag.key}/logs` `` | Registration `handle.log` |
+| `HistoryStore` `` `${tag.key}/logs` `` | Registration `_logs` + `Resource.logs` / `Logs.by*` |
 
 ## See also
 

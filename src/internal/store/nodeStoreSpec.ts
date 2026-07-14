@@ -9,7 +9,7 @@ import { makeStoreContractValue } from "./contractDef";
 import { withImplicitLogShape } from "./logShapes";
 
 /**
- * Empty shapes + implicit {@link LogEntry} `log` — node-wide durable journal.
+ * Empty shapes + implicit {@link LogEntry} `_logs` — node-wide durable journal.
  *
  * @internal
  */

@@ -15,6 +15,7 @@ import {
   CUSTOM_READ_ALIAS,
   type NormalizedShapes,
   type NormalizeShape,
+  type PublicShapeKey,
   type ShapeNamespaceMembers,
   type StoreContractValue,
   type StoreShapeInputLeaf,
@@ -78,10 +79,15 @@ export type AsShape<T extends StoreShapeInputLeaf> = ShapeNamespace<NormalizeSha
 /**
  * The materialized handle's **shape tree** — recurses the contract's shape tree exactly like
  * `ShapeHandles` in `contractDef`: a leaf → its {@link AsShape} members, a sub-tree → nested handles.
- * A flat contract is the depth-1 case, so its handle type is byte-identical to before. @internal
+ * A flat contract is the depth-1 case, so its handle type is byte-identical to before.
+ *
+ * Underscore-prefixed shapes (platform `_logs`, …) are omitted from the public handle type —
+ * Effect-style private fields. They remain on the runtime object for internal followers.
+ *
+ * @internal
  */
 export type StoreShapeHandleTree<Shapes extends StoreShapes> = {
-  readonly [K in keyof Shapes & string]: Shapes[K] extends StoreShapeInputLeaf
+  readonly [K in keyof Shapes & string as PublicShapeKey<K>]: Shapes[K] extends StoreShapeInputLeaf
     ? AsShape<Shapes[K]>
     : Shapes[K] extends StoreShapeTree
       ? StoreShapeHandleTree<Shapes[K]>
