@@ -169,12 +169,17 @@ function splitExpand(info: any): string | undefined {
 // raw markdown text, so ``` fences and `code` showed as literal characters.)
 // JSDoc comments ARE markdown. Parse them properly (bold / italic / lists / headings / links / code)
 // with mdast, and hand fenced code to shiki so it stays highlighted (mdast alone leaves it plain).
-// `{@link Target}` / `{@link Target text}` — which mdast doesn't understand — are pre-rewritten to
-// inline code so they render as a styled reference (we can't resolve targets to URLs in the popup).
+// `{@link Target}` / `{@link Target text}` — which mdast doesn't understand — are pre-rewritten to a
+// markdown link with a sentinel `@link:` URL, so mdast parses them as inline links; the `link` handler
+// below turns that sentinel into a non-navigating blue `@link …` reference (we can't resolve targets
+// to real URLs in the popup, so it's styled, not clickable). The visible label keeps the `@link`
+// prefix so it reads like the other `@`-tags (@since, @category).
 function preprocessJsdoc(md: string): string {
+  const label = (target: string, text?: string) =>
+    `[@link ${(text ?? target).trim()}](@link:${target.trim()})`;
   return md
-    .replace(/\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)([^}]+)\}/g, (_m, _t, text) => `\`${String(text).trim()}\``)
-    .replace(/\{@link\s+([^}\s]+)\}/g, (_m, t) => `\`${t}\``);
+    .replace(/\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)([^}]+)\}/g, (_m, target, text) => label(String(target), String(text)))
+    .replace(/\{@link\s+([^}\s]+)\}/g, (_m, target) => label(String(target)));
 }
 function jsdocToHast(this: any, docs: string): any[] {
   const tree = fromMarkdown(preprocessJsdoc(docs));
@@ -196,6 +201,15 @@ function jsdocToHast(this: any, docs: string): any[] {
           children = [{ type: "element", tagName: "pre", properties: {}, children: [{ type: "text", value: String(node.value) }] }];
         }
         return { type: "element", tagName: "div", properties: { className: ["twoslash-popup-docs-code"] }, children };
+      },
+      // `{@link …}` (rewritten to an `@link:` sentinel URL above) -> a styled, non-navigating
+      // reference. Real markdown links keep their <a> and open in a new tab.
+      link: (state: any, node: any) => {
+        const children = state.all(node);
+        const url = typeof node.url === "string" ? node.url : "";
+        return url.startsWith("@link:")
+          ? { type: "element", tagName: "span", properties: { className: ["twoslash-jsdoc-link"] }, children }
+          : { type: "element", tagName: "a", properties: { href: url, target: "_blank", rel: ["noreferrer"] }, children };
       },
     },
   });

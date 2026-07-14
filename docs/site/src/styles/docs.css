@@ -477,6 +477,13 @@ pre.shiki { background: transparent; }
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* `{@link …}` reference — blue like a link, but non-navigating (target isn't resolved to a URL). */
+.twoslash-jsdoc-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: default;
+}
 .twoslash-popup-docs strong { color: var(--fg); font-weight: 600; }
 .twoslash-popup-docs em { font-style: italic; }
 .twoslash-popup-docs blockquote {
