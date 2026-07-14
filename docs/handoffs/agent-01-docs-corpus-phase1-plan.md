@@ -293,7 +293,7 @@ Everything else is eligible for archive once:
 
 - `docs/site/**` UI, CSS, Twoslash popover, dual-preview, Vite globs, Draft badge chrome  
 - `src/web`, `src/ui`, dashboard widgets  
-- Phase 2 (`docs/legacy/plans/`, plans refactor)  
+- Phase 2 (`docs/plans/`, plans refactor)  
 - Phase 3 (legacy → live book + Draft content convention)  
 - Engine / Logs / handles product code  
 - Mass delete in this plan turn  

@@ -179,7 +179,7 @@ A worker or tick body **declares** its dependencies with `yield* Tag` — it nev
 them inline. Provide **whole-resource** deps once, at the serve/layer boundary, so
 `strictEffectProvide` stays clean and the same body works local or served. Do **not** hoist a
 **sub-effect-scoped** dep to `serve` — that widens `R` for the whole body; keep an app-local
-scoping combinator (see `docs/legacy/guides/per-resource-dependencies.md`).
+scoping combinator beside the handler service — do not look for a package `locally` helper.
 
 {#one-instance-one-materialization .must appliesTo="src examples"}
 ## One instance, one materialization

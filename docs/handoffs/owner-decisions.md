@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks
+
+- **Owner said:** Scrub living cites of anything under `docs/legacy/**`. Confirm fleet health as the health roadmap item; Resource-RPC auth = README-only (A). Agree `docs/plans/` home, archive hybrid, refresh treeshaking.
+- **Chose:** Create `docs/plans/` (README + treeshaking refresh + weighted-middle + non-serializable items). Delete `docs/legacy/plans/`. Archive hybrid RuntimeStorage design. Roadmap: **fleet health** (per-node shipped; fleet aggregate open); **auth** stays a bullet with no stub file.
+- **Rejected:** Host health wording; rewriting hybrid under Store; auth stub file; leaving a “see legacy” stub.
+- **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`. Phase 3 still owner-gated.
+
+---
+
 ## 2026-07-14 — Phase 1 Batch E design-lock + Phase 2 plan unlock
 
 - **Owner said:** “Next” after #54/#55 land — continue corpus.

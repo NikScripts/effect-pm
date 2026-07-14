@@ -23,7 +23,7 @@ Make "non-serializable items" a simple, safe, explicit mode:
   you can't pair `persist` with a non-serializable item type.
 - **Everything else still works over the wire**: `status` / lifecycle (`start`/`pause`/…) / `metrics` /
   `events` / `logs` — the worker runs locally, the control + observability surface stays served. So a
-  non-serializable queue is safe to `serveAllHttp` alongside serializable ones; only its item-carrying
+  non-serializable queue is safe to `serve` / `httpServer` alongside serializable ones; only its item-carrying
   methods are local.
 
 Net: a local, in-memory queue that processes `Effect`/function items, fully observable + controllable

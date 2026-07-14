@@ -1,8 +1,7 @@
-# 15 — Hybrid `RuntimeStorage` (design spec)
+# 15 — Hybrid `RuntimeStorage` (archived design)
 
-**Status:** Target production adapter (not shipped). See the roadmap entry in
-[README.md](./README.md) (Persistence & storage). Builds on the shipped `RuntimeStorage` +
-`src/store/*` facet model ([STORAGE.md](../STORAGE.md)).
+**Status:** **ARCHIVED** — substrate (`RuntimeStorage` / facet layers) retired for `Store.Service`.  
+Not a living roadmap item. See [`docs/plans/README.md`](../../../../plans/README.md) for current future work (Postgres backends, etc.). Historical body below.
 
 ---
 
