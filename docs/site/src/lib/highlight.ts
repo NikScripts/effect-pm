@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url";
 import * as React from "react";
 import * as ts from "typescript";
 import { createHighlighter, type Highlighter } from "shiki";
-import { transformerTwoslash } from "@shikijs/twoslash";
+import { createTransformerFactory, rendererRich } from "@shikijs/twoslash";
+import { createTwoslasher } from "twoslash";
+import { makeTypeExpander } from "./expandType";
 
 const THEMES = { light: "github-light", dark: "github-dark" } as const;
 const LOAD_LANGS = ["typescript", "tsx", "bash", "json"] as const;
@@ -28,24 +30,67 @@ const ALIAS: Record<string, string> = {
 // real filesystem (rooted at the repo), so `effect` resolves from node_modules; `paths` maps the
 // package name to its source so `@nikscripts/effect-pm/*` → `src/*`.
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
-const twoslash = transformerTwoslash({
-  twoslashOptions: {
-    vfsRoot: repoRoot,
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      strict: true,
-      skipLibCheck: true,
-      types: [],
-      baseUrl: repoRoot,
-      paths: {
-        "@nikscripts/effect-pm": ["src/index.ts"],
-        "@nikscripts/effect-pm/*": ["src/*"],
-      },
-    },
+const compilerOptions: ts.CompilerOptions = {
+  module: ts.ModuleKind.ESNext,
+  target: ts.ScriptTarget.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  strict: true,
+  skipLibCheck: true,
+  types: [],
+  baseUrl: repoRoot,
+  paths: {
+    "@nikscripts/effect-pm": ["src/index.ts"],
+    "@nikscripts/effect-pm/*": ["src/*"],
   },
-});
+};
+
+// Map a twoslash node offset (in the trimmed/visible code) back to the full-code offset (the code
+// twoslash was given, `---cut---` preamble included), so our expander's checker points at the right
+// node. `removals` are ranges removed from the full code to produce the visible output.
+const toFullOffset = (
+  visible: number,
+  removals: ReadonlyArray<readonly [number, number]>,
+): number => {
+  let full = visible;
+  for (const [s, e] of [...removals].sort((a, b) => a[0] - b[0])) {
+    if (s <= full) full += e - s;
+  }
+  return full;
+};
+
+// The "dual preview": wrap twoslash so each hover popover carries BOTH the compact named type
+// (twoslash's `node.text`) AND the compiler-API-expanded member shape, appended as a comment.
+const baseTwoslasher = createTwoslasher({ vfsRoot: repoRoot, compilerOptions });
+const expandTypes = makeTypeExpander({ compilerOptions, vfsRoot: repoRoot });
+const twoslasher = Object.assign(
+  (
+    code: string,
+    extension: Parameters<typeof baseTwoslasher>[1],
+    options: Parameters<typeof baseTwoslasher>[2],
+  ): ReturnType<typeof baseTwoslasher> => {
+    const result = baseTwoslasher(code, extension, options);
+  const hovers = result.nodes.filter(
+    (n): n is typeof n & { text: string; start: number } =>
+      n.type === "hover" || n.type === "query",
+  );
+  if (hovers.length === 0) return result;
+  const removals = result.meta.removals as ReadonlyArray<readonly [number, number]>;
+  const offsets = hovers.map((h) => toFullOffset(h.start, removals));
+  const expansions = expandTypes(code, offsets);
+    hovers.forEach((h, i) => {
+      const expanded = expansions.get(offsets[i]);
+      // Only when expanding actually reveals more than the compact form already shows.
+      if (expanded && !h.text.includes(expanded)) {
+        h.text = `${h.text}\n\n// Expands to:\n${expanded}`;
+      }
+    });
+    return result;
+  },
+  // A `TwoslashInstance` is callable + carries a `getCacheMap`; reuse the base instance's.
+  { getCacheMap: baseTwoslasher.getCacheMap },
+);
+
+const twoslash = createTransformerFactory(twoslasher, rendererRich())({});
 
 let hl: Highlighter | undefined;
 
