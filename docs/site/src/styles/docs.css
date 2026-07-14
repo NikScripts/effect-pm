@@ -44,6 +44,11 @@
 html {
   background: var(--bg);
   min-height: 100%;
+  /* Disable iOS Safari text auto-inflation ("font boosting"), which enlarges large text blocks —
+     it was doubling the multi-line expanded-type box in twoslash popups while leaving the 1-line
+     compact type and short comments alone. Keep every block at its authored size. */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
