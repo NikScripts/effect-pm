@@ -749,6 +749,13 @@ a[href*="/docs/glossary#"] {
   cursor: help;
 }
 a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
+/* Glossary term inside a twoslash hover popup: a real, clickable link (no preview) — so it reads as
+   a link, not the help-cursor term marker of prose. */
+.twoslash-glossary-link {
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration-color: color-mix(in oklab, var(--primary) 70%, transparent);
+}
 
 .glossary-popup {
   position: fixed;

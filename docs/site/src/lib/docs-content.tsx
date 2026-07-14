@@ -18,6 +18,10 @@ import { CounterIsland } from "../islands/CounterIsland.js";
 import { PackageInstall } from "../islands/PackageInstall.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
+import { buildTermIndex, slugify } from "./glossary.js";
+
+// Re-exported for back-compat: the glossary data now lives in ./glossary (shared with highlight.ts).
+export { glossaryEntries, type GlossaryEntry } from "./glossary.js";
 
 // The copy button copies the *visible* code: twoslash preambles are hidden behind `// ---cut---`
 // markers, so strip everything up to a cut and after a cut-after — mirroring what the reader sees.
@@ -41,8 +45,6 @@ const plainText = (n: any): string =>
   n.tag === "str" || n.tag === "verbatim"
     ? (n.text ?? "")
     : (n.children ?? []).map(plainText).join("");
-const slugify = (s: string): string =>
-  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 export interface TocEntry {
   readonly id: string;
@@ -72,23 +74,7 @@ let autoLink = false;
 let suppress = 0;
 let linkedSlugs = new Set<string>();
 let termRegex: RegExp | null = null;
-const termToSlug = new Map<string, string>();
-
-// Rebuild the term index from the glossary each render (SSOT; cheap, and never stale in dev).
-const buildTermIndex = (): void => {
-  termToSlug.clear();
-  termRegex = null;
-  const words: Array<string> = [];
-  for (const [slug, { term }] of Object.entries(glossaryEntries())) {
-    if (term.includes(" ")) continue; // single-word terms only (v1)
-    termToSlug.set(term, slug);
-    words.push(term);
-  }
-  if (words.length === 0) return;
-  words.sort((a, b) => b.length - a.length);
-  const alt = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  termRegex = new RegExp(`\\b(${alt})(s?)\\b`, "g");
-};
+let termToSlug: ReadonlyMap<string, string> = new Map();
 
 // Manual links win: pre-seed every glossary term the author already linked by hand.
 const glossaryHref = /\/docs\/glossary#([a-z0-9-]+)/;
@@ -216,7 +202,9 @@ export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
   keySeq = 0;
   suppress = 0;
   linkedSlugs = new Set();
-  buildTermIndex();
+  const idx = buildTermIndex();
+  termRegex = idx.regex;
+  termToSlug = idx.termToSlug;
   autoLink = meta.id !== "glossary"; // the glossary never links its own terms
   seedManualLinks(doc);
   return { element: toReact(doc), meta, toc: buildToc(doc) };
@@ -284,39 +272,6 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   }
   if (extras.length > 0) groups.push({ label: "More", items: extras });
   return groups;
-};
-
-export interface GlossaryEntry {
-  readonly term: string;
-  readonly def: string;
-}
-// Parse the glossary page into a { slug -> { term, def } } map for the hover-preview island. Each
-// `## Term` heading opens an entry; the paragraph text beneath it (inline markdown stripped) is the
-// definition. The glossary Djot page is the single source — this only reads it.
-export const glossaryEntries = (): Record<string, GlossaryEntry> => {
-  const c = chapterBySlug("glossary");
-  if (c === undefined) return {};
-  const out: Record<string, GlossaryEntry> = {};
-  let term: string | null = null;
-  let buf: Array<string> = [];
-  const flush = (): void => {
-    if (term !== null) {
-      const def = buf.join(" ").trim().replace(/`/g, "").replace(/\*\*/g, "");
-      if (def) out[slugify(term)] = { term, def };
-    }
-    buf = [];
-  };
-  for (const line of c.raw.split("\n")) {
-    const m = /^##\s+(.+)$/.exec(line);
-    if (m) {
-      flush();
-      term = m[1].trim();
-    } else if (term !== null && line.trim() && !line.startsWith("{")) {
-      buf.push(line.trim());
-    }
-  }
-  flush();
-  return out;
 };
 
 // The flat book order (groups concatenated) — the sequence prev/next walks.
