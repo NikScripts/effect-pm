@@ -1978,9 +1978,17 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
   readonly [nodeSym]: NodeKey<HSelf>;
 }
 
-/** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
- *  `undefined` for a bare {@link Resource.Tag} or any non-tag. The robust replacement for sniffing
- *  a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
+/** The kind stamped on a bare {@link Resource.Tag} that declares none — every resource tag carries a
+ *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
+ *  `@nikscripts/effect-pm/QueueResource`); a bare tag defaults to this so nothing is ever kind-less.
+ *
+ * @public
+ */
+export const kind = "@nikscripts/effect-pm/Resource";
+
+/** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`, or {@link kind}
+ *  for a bare {@link Resource.Tag}); `undefined` only for a non-tag. The robust replacement for
+ *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
   // A resource tag is a class (so `typeof` is "function"), with the kind stamped as a static.
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && kindSym in tag) {
@@ -2270,7 +2278,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   group: RpcGroupOf<S>,
   description: string | undefined,
   node: NodeKey<unknown> | undefined,
-  kind: string | undefined,
+  kindOverride: string | undefined,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateResourceKey({ key });
@@ -2297,7 +2305,8 @@ const buildInstanceTag = <Self, S extends Spec>(
     [groupSym]: group,
     [localCapSym]: localCap,
     [nodeSym]: node,
-    [kindSym]: kind,
+    // Every tag carries a kind: the typed factories pass their own; a bare tag defaults to `kind`.
+    [kindSym]: kindOverride ?? kind,
     [readinessSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
