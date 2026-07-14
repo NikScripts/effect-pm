@@ -284,12 +284,19 @@ The skeleton's members split three ways:
   15-variant rich union (`Duration`, `Cause`, `DateTime`, optional keys). Hand-authoring a generic to
   bit-match is fragile throwaway.
 
-**Decision (recommend): fold the M6 drifted-type fix into M3.** Make the hand-authored public types
-`QueueEvent<T, E, A>` / `QueueMetrics` / `QueueReleaseOptions` **structurally equal their schemas'
-`.Type`** (they are meant to be — this is the latent drift). Then the skeleton references them directly
-and matches with no throwaway generics, and the drift is *fixed*, not quarantined. Blast radius: these
-are public types other code uses — verify with full `typecheck` + `test` + the harness. This is more
-SSOT and less throwaway than authoring parallel decoded generics.
+**Decision (owner): fold the M6 drifted-type fix into M3 — SSOT, but RETAIN THE NARROWER TYPE.** Make
+the hand-authored public types `QueueEvent<T, E, A>` / `QueueMetrics` / `QueueReleaseOptions`
+**structurally equal their schemas' `.Type`** (fixing the latent drift), **converging on the *narrower*
+(more precise) side — never widening a public type to match a looser schema.** Where the schema is
+looser (e.g. `Schema.Cause(errorSchema, Schema.Unknown)` → `Cause<E, unknown>` vs a narrower
+`Cause<E>`), **tighten the schema** so both meet at the narrow type. The handle's `Success`/`Error`
+must retain the **effect-inferred `A`/`E`** (`SendError`, the real value), never the schemaless-
+`.Service` default `Void`/`Unknown`.
+
+Enforcement: (1) the bidirectional `.test-d.ts` proves `QueueHandle ⇄ ServiceOf<spec>`; (2) an explicit
+**no-widening guard** — each reconciled type must still be assignable *from* today's hand-authored type
+(catch any accidental widening); (3) full `typecheck` + `test`. Blast radius: these are public types —
+land as its own reviewed commit.
 
 ### Stage 2 — de-duplicate the engine internals to SSOT (standards payoff; own review)
 
