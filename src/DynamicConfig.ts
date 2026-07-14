@@ -194,14 +194,33 @@ export class DynamicConfigStore extends Context.Service<
     ) => Effect.Effect<void>;
     readonly unsetRaw: (keys: ReadonlyArray<string>) => Effect.Effect<void>;
     readonly changedKeys: Stream.Stream<ReadonlyArray<string>>;
-    /** Per-runtime snapshot: env key → its Config, for declared-swappable keys. */
-    readonly allowed: ReadonlyMap<string, Config.Config<unknown>>;
   }
 >()("@nikscripts/effect-pm/DynamicConfig/DynamicConfigStore") {}
 
-// Module registry: every swappable field's env key → its Config, recorded as
-// configs are defined. `layer` snapshots this per runtime.
-const swappableRegistry = new Map<string, Config.Config<unknown>>();
+const SwappableRegistryKey =
+  "@nikscripts/effect-pm/DynamicConfig/SwappableRegistry";
+
+/**
+ * The process-wide allowlist of declared-swappable env keys → their `Config`, held the way
+ * Effect holds its own registries (`Metric.MetricRegistry`): a `Context.Reference` whose
+ * cached default *is* the global — declare {@link swappable} anywhere, no wiring — while a
+ * test or isolated program can substitute its own allowlist with
+ * `Effect.provideService(SwappableRegistry, new Map())`.
+ *
+ * @public
+ */
+export const SwappableRegistry = Context.Reference<
+  Map<string, Config.Config<unknown>>
+>(SwappableRegistryKey, { defaultValue: () => new Map() });
+
+// The one write into the registry. Runs at declaration time (sync, module scope), so it
+// reaches the cached default — the process-wide allowlist — not any per-context override.
+const registerSwappable = (
+  key: string,
+  config: Config.Config<unknown>,
+): void => {
+  Context.get(Context.empty(), SwappableRegistry).set(key, config);
+};
 
 const constProvider = (raw: string) =>
   ConfigProvider.make(() => Effect.succeed(ConfigProvider.makeValue(raw)));
@@ -212,6 +231,8 @@ const recordKeys = (config: Config.Config<unknown>): ReadonlyArray<string> => {
     keys.push(path.join("_"));
     return Effect.succeed(ConfigProvider.makeValue("probe"));
   });
+  // Pure, deterministic key-probe: parse against an in-memory provider that records the
+  // paths the Config reads. No I/O, so runSync at declaration is safe.
   Effect.runSync(Effect.ignore(config.parse(probe)));
   return keys;
 };
@@ -237,9 +258,9 @@ const recordKeys = (config: Config.Config<unknown>): ReadonlyArray<string> => {
  */
 export const swappable = <A>(config: Config.Config<A>): SwappableField<A> => {
   const envKeys = recordKeys(config);
-  // "any time you add swappable, its key joins the allowlist registry"
+  // declaring swappable joins its key(s) to the global allowlist registry
   for (const key of envKeys) {
-    swappableRegistry.set(key, config);
+    registerSwappable(key, config);
   }
   return makeSwappableField(config, envKeys);
 };
@@ -428,7 +449,7 @@ export const setByKey = (
 > =>
   Effect.gen(function* () {
     const store = yield* DynamicConfigStore;
-    const config = store.allowed.get(key);
+    const config = (yield* SwappableRegistry).get(key);
     if (config === undefined) {
       return yield* new ConfigKeyNotSwappable({ key });
     }
@@ -589,8 +610,6 @@ export const layer: Layer.Layer<DynamicConfigStore> = Layer.unwrap(
       changedKeys: Stream.map(SubscriptionRef.changes(overrides), (map) =>
         Array.from(map.keys()),
       ),
-      // per-runtime snapshot of declared-swappable keys
-      allowed: new Map(swappableRegistry),
     });
 
     return Layer.merge(
