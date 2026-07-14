@@ -1230,15 +1230,13 @@ const buildQueueImpl = <
       ImplOf<QueueInstanceSpec<F, Success, Error>>,
       R | RR
     > = {
+      // Additive-only adapter (M5): the engine natively exposes the contract shape — `status`,
+      // `size`/`isEmpty` (reactive Subscribables), events, enqueue verbs — so they pass straight
+      // through. The adapter only *adds* cross-cutting concerns: `metrics.query` (history),
+      // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
-      size: Resource.mapSubscribable(
-        handle.status,
-        (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
-      ),
-      isEmpty: Resource.mapSubscribable(
-        handle.status,
-        (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
-      ),
+      size: handle.size,
+      isEmpty: handle.isEmpty,
       start: handle.start,
       pause: handle.pause,
       resume: handle.resume,

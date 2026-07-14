@@ -37,7 +37,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         });
         yield* queue.add([1, 2, 3]);
         yield* waitUntil(Effect.map(queue.completed, (c) => c >= 3));
-        expect(yield* queue.size).toBe(0); // store drained on completion
+        expect(yield* queue.size.get).toBe(0); // store drained on completion
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
       expect((yield* Ref.get(results)).sort()).toEqual([1, 2, 3]);
     }),
@@ -56,7 +56,7 @@ describe("QueueResource persist (SQLite durability)", () => {
           autoStart: false,
         });
         yield* queue.add([10, 20, 30]);
-        expect(yield* queue.size).toBe(3); // persisted, pending
+        expect(yield* queue.size.get).toBe(3); // persisted, pending
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
       // Instance 2: same store, fresh runtime — recovers + processes the leftover work.
@@ -91,7 +91,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         yield* queue.add(1);
         yield* waitUntil(Effect.map(Ref.get(runs), (n) => n >= 2));
         // after dead-lettering, no pending work remains
-        yield* waitUntil(Effect.map(queue.size, (s) => s === 0));
+        yield* waitUntil(Effect.map(queue.size.get, (s) => s === 0));
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
       expect(yield* Ref.get(runs)).toBe(2); // tried twice, then dead-lettered
     }),
@@ -110,7 +110,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         yield* queue.add([1, 2, 3]);
         const released = yield* queue.release({});
         expect(released.map((e) => e.item).sort()).toEqual([1, 2, 3]);
-        expect(yield* queue.size).toBe(0); // store drained
+        expect(yield* queue.size.get).toBe(0); // store drained
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
     }),
   );
@@ -129,7 +129,7 @@ describe("QueueResource persist (SQLite durability)", () => {
         yield* queue.add([1, 2, 3]);
         yield* queue.deadLetter({ key: "1" }, { reason: "test" });
         yield* queue.drop({ key: "2" }, { reason: "test" });
-        expect(yield* queue.size).toBe(1); // only item 3 remains in the store
+        expect(yield* queue.size.get).toBe(1); // only item 3 remains in the store
         const left = yield* queue.release({});
         expect(left.map((e) => e.item)).toEqual([3]);
       }).pipe(Effect.provide(storeLayer), Effect.scoped);

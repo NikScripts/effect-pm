@@ -421,7 +421,7 @@ describe("QueueResource.make — size and status", () => {
       });
       yield* queue.add([1, 2, 3, 4, 5]);
       yield* Effect.sleep(Duration.millis(10));
-      const s = yield* queue.size;
+      const s = yield* queue.size.get;
       expect(s).toBeGreaterThan(0);
     }).pipe(Effect.scoped),
   );
@@ -474,7 +474,7 @@ describe("QueueResource.make — size and status", () => {
       expect(released.map((entry) => entry.item.id)).toEqual(["a", "b"]);
       expect(released.map((entry) => entry.releaseId)).toEqual(["release-1", "release-1"]);
       expect(released.map((entry) => entry.key)).toEqual(["a", "b"]);
-      expect(yield* queue.size).toBe(0);
+      expect(yield* queue.size.get).toBe(0);
 
       yield* queue.add({ id: "a" });
       yield* queue.resume;
@@ -496,7 +496,7 @@ describe("QueueResource.make — size and status", () => {
       const error = yield* Effect.flip(queue.releaseEncoded());
 
       expect(error).toBeInstanceOf(QueueMissingItemSchemaError);
-      expect(yield* queue.size).toBe(1);
+      expect(yield* queue.size.get).toBe(1);
     }).pipe(Effect.scoped),
   );
 
@@ -517,7 +517,7 @@ describe("QueueResource.make — size and status", () => {
 
       expect(droppedEntries.map((entry) => entry.key)).toEqual(["drop-me"]);
       expect(deadLetteredEntries.map((entry) => entry.key)).toEqual(["dead-letter-me"]);
-      expect(yield* queue.size).toBe(1);
+      expect(yield* queue.size.get).toBe(1);
     }).pipe(Effect.scoped),
   );
 });
@@ -834,7 +834,7 @@ describe("QueueResource.make — autoStart", () => {
       expect(ev).toContain("ShutdownComplete");
       // adds after shutdown are rejected (queue is off)
       yield* queue.add([5]);
-      expect(yield* queue.size).toBe(0);
+      expect(yield* queue.size.get).toBe(0);
     }).pipe(Effect.scoped),
   );
 
@@ -859,7 +859,7 @@ describe("QueueResource.make — autoStart", () => {
       );
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add([1, 2, 3]);
-      expect(yield* queue.size).toBe(3);
+      expect(yield* queue.size.get).toBe(3);
       yield* queue.shutdown;
       while ((yield* queue.status.get).phase !== "off") {
         yield* Effect.sleep(Duration.millis(5));
@@ -1087,7 +1087,7 @@ describe("QueueResource.make — itemSchema", () => {
         queue.add({ id: 1, subject: "hello" }),
       );
       expect(error).toBeInstanceOf(QueueItemValidationError);
-      expect(yield* queue.size).toBe(0);
+      expect(yield* queue.size.get).toBe(0);
     }).pipe(Effect.scoped),
   );
 
@@ -1106,7 +1106,7 @@ describe("QueueResource.make — itemSchema", () => {
         ]),
       );
       expect(error).toBeInstanceOf(QueueBatchValidationError);
-      expect(yield* queue.size).toBe(0);
+      expect(yield* queue.size.get).toBe(0);
     }).pipe(Effect.scoped),
   );
 
@@ -1186,7 +1186,7 @@ describe("QueueResource.make — itemSchema", () => {
       expect(released[0]?.payload).toEqual({ id: "email-1", subject: "hello" });
       expect(released[0]?.releaseId).toBe("encoded-release-1");
       expect(released[0]?.item.id).toBe("test-release-encoded/item@v1");
-      expect(yield* queue.size).toBe(0);
+      expect(yield* queue.size.get).toBe(0);
     }).pipe(Effect.scoped),
   );
 });
