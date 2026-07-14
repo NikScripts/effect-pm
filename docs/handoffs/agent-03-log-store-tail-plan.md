@@ -1,9 +1,10 @@
 # Agent 3 — Durable log store tail (Effect-true redesign)
 
-**Branch:** `cursor/logs-store-followers-906e`  
-**Bar:** Effect v4 headliner quality — pipe-first, `Filter`/`Predicate`, one Stream, no ad-hoc Queue loops, no public junk names.
+**Status:** **CLOSED / design archive** — Stream-tail design landed via [#40](https://github.com/NikScripts/effect-pm/pull/40); interim `persistLayer` / `LogStore` removed in [#43](https://github.com/NikScripts/effect-pm/pull/43).  
+**Deferred (still parked):** store-layer durable `(scopeKey, lineId)` memo.  
+**Bar (kept as reference):** Effect v4 headliner quality — pipe-first, `Filter`/`Predicate`, one Stream, no ad-hoc Queue loops, no public junk names.
 
-`persistLayer` / `LogStore` stay until a later revisit.
+Historical design notes below.
 
 ---
 

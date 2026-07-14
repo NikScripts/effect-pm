@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | **on `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) | **date stack nearly done** — next: walk beta22 handoff or next Phase-1 stack | `integration` tip | shared+isolated test / readiness | `2026-07-02-beta22-…` left; open-asks §1–3 | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | **merged → `integration`** | [Logs store followers](./agent-03-logs-p1.md) · [plan](./agent-03-logs-store-followers-plan.md) | **persistLayer/LogStore removed** | [#43](https://github.com/NikScripts/effect-pm/pull/43) | typecheck / 444 tests | Store-layer memo deferred | 2026-07-14 |
+| **3** | **ready perfection / closed** | [Logs store followers](./agent-03-logs-p1.md) · Process.events | **tracks done** — [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#48](https://github.com/NikScripts/effect-pm/pull/48)/[#51](https://github.com/NikScripts/effect-pm/pull/51) on `integration` | `integration` tip | typecheck / suite green at #51 | Superseded [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed. Optional docs [#50](https://github.com/NikScripts/effect-pm/pull/50). Out of scope: D handles, site UI, store memo, Logs followers/`LogStore`/`persistLayer`. No further Process.events Eng. | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -20,13 +20,17 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** Landed on `integration` — `Resource.monitoredDependency`, readiness draft, date-stamped deletes, `open-asks.md`. Next: walk remaining unfinished handoffs / open-asks §1 (widget seam). No UI / `docs/site` chrome.
-2. **Agent 3:** [#43](https://github.com/NikScripts/effect-pm/pull/43) hard-removes interim `Logs.persistLayer` / `LogStore` (followers already on `integration`; store-layer `lineId` memo deferred).
-3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
-5. `main` merge + `pnpm run version` — still deferred
-6. Process live `events` (#20) — needs failure-surface decision
+3. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
+4. `main` merge + `pnpm run version` — still deferred
+5. [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide — optional docs merge (Agent 3 Eng tracks closed)
+
+### Done this session (Agent 3)
+- Process live `events` — [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51) (failure surface: `Failed` + stamped `Completed`; persist == stream)
+- Logs lineage append — [#48](https://github.com/NikScripts/effect-pm/pull/48)
+- Closed superseded plan/brief PRs [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46)
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.
@@ -37,10 +41,15 @@
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
 
+**Agent 3 ready-perfection pass:** deleted remotes `cursor/logs-store-followers-906e`, `cursor/remove-persist-layer-906e` (merged), `cursor/logs-p1-plan-906e`, `cursor/agent-03-process-events-brief-a009` (closed superseded). Left open: this PR + [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide.
+
 ---
 
 ## Completed
 
+- [#51](https://github.com/NikScripts/effect-pm/pull/51) Process.events remote proof (A+B+C1) + Completed.success coverage
+- [#48](https://github.com/NikScripts/effect-pm/pull/48) Logs lineage append in `withScope` (idempotent leaf)
+- [#47](https://github.com/NikScripts/effect-pm/pull/47) Process live `events` stream (persist == stream)
 - [#43](https://github.com/NikScripts/effect-pm/pull/43) Remove interim `Logs.persistLayer` + standalone `LogStore` / `store/Log` subpath
 - [#40](https://github.com/NikScripts/effect-pm/pull/40) Durable store tails — `Node.logs`, registration followers, Storage-first reads, stream levels, remote NodeStatus path
 - [#33](https://github.com/NikScripts/effect-pm/pull/33) Logs closeout — `NodeLogs` shim removed; Agent 2 retired

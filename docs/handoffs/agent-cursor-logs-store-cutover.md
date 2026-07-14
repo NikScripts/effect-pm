@@ -1,6 +1,6 @@
 # Agent (Cursor) — Logs store cutover
 
-**Status:** **READY** — owner 2026-07-12: Logs before `main` release; use **Cursor** (Claude agents busy).  
+**Status:** **SUPERSEDED** — do not execute. Superseded by Agent 3 Logs P1 / followers ([#40](https://github.com/NikScripts/effect-pm/pull/40), [#43](https://github.com/NikScripts/effect-pm/pull/43)); see [`agent-03-logs-p1.md`](./agent-03-logs-p1.md).  
 **Base:** `integration/storage` (`39c75d7`+)  
 **Branch:** `cursor/logs-store-cutover-a009` (new)
 
