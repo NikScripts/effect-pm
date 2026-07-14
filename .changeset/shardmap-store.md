@@ -2,11 +2,9 @@
 "@nikscripts/effect-pm": minor
 ---
 
-**ShardMap.store** — event-sourced local shards on the Store bridge.
+**ShardMap** local shards are SQLite SSOT (not the Store bridge).
 
-`ShardMap.store(tag)` registers a Put/Delete `event` shape (value schema from the tag) with
-analytics reads (`current`, `puts`, `deletes`, `recent`, `stats`, `changes`).
-
-`ShardMap.layer` / `serve` / `serveRemote` merge `Store.layerDefaultMemory`. On build the engine
-replays `events()` into the in-memory Map; every `putLocal` / `deleteLocal` appends then updates.
-Each droplet's store scope holds **that node's** shard history.
+`ShardMap.layer` / `serve` / `serveRemote` open an in-memory SQLite client by default
+(`:memory:`). Pass `{ filename }` for a durable file. Table `effect_pm_shard_map` holds one
+row per live `(scope_key, entry_key)` — boot `SELECT`s, mutations `UPSERT` / `DELETE`. Hot path
+keeps a `Ref<Map>` cache. No `ShardMap.store`, no event replay.

@@ -1,27 +1,22 @@
 /**
- * ShardMap engine — in-memory shard, partition helpers, and routed/fleet members.
+ * ShardMap engine — SQL-backed local shard + routed/fleet members.
  *
- * When {@link Storage} is in context (toolkit layers merge {@link Store.layerDefaultMemory}),
- * the shard is hydrated from persisted Put/Delete events and every local mutation appends.
+ * Local keys live in SQLite (`effect_pm_shard_map`, scoped by tag key) and a hot `Ref<Map>` cache.
+ * Boot loads rows once; mutations UPSERT/DELETE. No Store bridge, no event replay.
  *
  * @internal
  */
-import { Clock, Effect, Hash, Option, Ref, Schema, Scope } from "effect";
+import { Effect, Hash, Option, Ref, Schema, Scope } from "effect";
+import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { Combine, combineQuery } from "../MultiNode";
 import * as Resource from "../Resource";
 import type { PeersId, ResourceTag, SelfNodeId } from "../Resource";
-import type { Storage } from "../Store";
-import {
-  foldShardMapEntries,
-  materializeEngineShardMapStore,
-  type ShardMapEntryEvent,
-  type ShardMapStoreTag,
-} from "./store/shardMapStoreSpec";
 import {
   keyOfSym,
   keySchemaSym,
   valueSchemaSym,
 } from "./shardMapSymbols";
+import * as shardMapSql from "./shardMapSql";
 
 export { keyOfSym, keySchemaSym, valueSchemaSym };
 
@@ -35,6 +30,11 @@ export type PartitionFn = (
 export interface ShardMapOptions {
   /** Owner pick for a key. @default {@link consistentHash} */
   readonly partition?: PartitionFn;
+  /**
+   * SQLite filename for this shard's SSOT. Default `:memory:` (in-process, always on).
+   * Pass a path for crash-surviving durability.
+   */
+  readonly filename?: string;
 }
 
 /**
@@ -73,13 +73,12 @@ export const keyWire = (key: unknown): string => {
 export type EngineTag = {
   readonly [keyOfSym]: (value: never) => unknown;
   readonly [valueSchemaSym]: Schema.Top;
-} & ResourceTag<unknown, Resource.Spec> &
-  ShardMapStoreTag;
+} & ResourceTag<unknown, Resource.Spec>;
 
 /**
- * Build the in-memory shard + routed/fleet members. Requires {@link Resource.peers} /
- * {@link Resource.selfNode} (discharge with {@link Resource.peersLayer}) and {@link Storage}
- * (toolkit layers merge the default memory bridge).
+ * Build the SQL-backed shard + routed/fleet members. Requires {@link Resource.peers} /
+ * {@link Resource.selfNode} and {@link SqlClient} (toolkit layers install schema + provide a
+ * default `:memory:` client).
  *
  * Impl typing is erased here (boundary with the public {@link Resource.ImplOf} generics);
  * {@link Resource.layer} / {@link Resource.serve} re-constrain at the call site.
@@ -90,20 +89,18 @@ export const buildImpl = (
 ): Effect.Effect<
   Record<string, unknown>,
   never,
-  Scope.Scope | PeersId<unknown> | SelfNodeId<unknown> | Storage
+  Scope.Scope | PeersId<unknown> | SelfNodeId<unknown> | SqlClient
 > =>
   Effect.gen(function* () {
     const keyOf = tag[keyOfSym] as (value: unknown) => unknown;
     const partition: PartitionFn = options?.partition ?? consistentHash;
-    const persistence = yield* materializeEngineShardMapStore(tag);
-    const seeded = foldShardMapEntries(
-      (yield* persistence.events()) as ReadonlyArray<ShardMapEntryEvent>,
-    );
+    const scopeKey = tag.key;
+    const sql = yield* SqlClient;
+    const seeded = yield* shardMapSql.loadScope(sql, scopeKey);
     const store = yield* Ref.make(seeded);
     const peers = yield* Resource.peers(tag as ResourceTag<unknown, Resource.Spec>);
     const self = yield* Resource.selfNode(tag as ResourceTag<unknown, Resource.Spec>);
 
-    // Prefer the tag's declared fleet (fixed membership); fall back to live mesh keys.
     const nodeKeys = (): ReadonlyArray<string> => {
       const declared = Resource.distributedOf(
         tag as ResourceTag<unknown, Resource.Spec>,
@@ -133,13 +130,7 @@ export const buildImpl = (
     const putLocal = (value: unknown) =>
       Effect.gen(function* () {
         const wire = keyWire(keyOf(value));
-        const at = yield* Clock.currentTimeMillis;
-        yield* persistence.record({
-          _tag: "Put",
-          key: wire,
-          value,
-          at,
-        });
+        yield* shardMapSql.upsert(sql, scopeKey, wire, value);
         yield* Ref.update(store, (m) => {
           const next = new Map(m);
           next.set(wire, value);
@@ -154,12 +145,7 @@ export const buildImpl = (
         if (!had) {
           return false;
         }
-        const at = yield* Clock.currentTimeMillis;
-        yield* persistence.record({
-          _tag: "Delete",
-          key: wire,
-          at,
-        });
+        yield* shardMapSql.deleteKey(sql, scopeKey, wire);
         yield* Ref.update(store, (m) => {
           const next = new Map(m);
           next.delete(wire);

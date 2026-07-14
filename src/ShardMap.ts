@@ -6,9 +6,10 @@
  * shard via {@link Resource.peers}. Leaf `*Local` ops stay on this node. Fleet folds report
  * shard sizes. An unreachable owner degrades to a miss — not a cascading health failure.
  *
- * Persistence: {@link store} registers Put/Delete events on the Store bridge.
- * {@link layer}, {@link serve}, and {@link serveRemote} merge {@link Store.layerDefaultMemory}
- * — the local shard hydrates from the event log on start and appends on every local mutation.
+ * Persistence: the local shard is **SQLite SSOT** (table `effect_pm_shard_map`).
+ * {@link layer} / {@link serve} / {@link serveRemote} open an in-memory SQLite client by
+ * default (`:memory:`); pass `{ filename }` for a durable file. Boot `SELECT`s live rows;
+ * mutations `UPSERT` / `DELETE`. No Store bridge, no event replay.
  *
  * @example
  * class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
@@ -19,7 +20,9 @@
  *
  * @module ShardMap
  */
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Effect, Layer, Schema } from "effect";
+import { SqlClient } from "effect/unstable/sql/SqlClient";
 import * as Resource from "./Resource";
 import {
   Tag as resourceTag,
@@ -30,15 +33,8 @@ import {
   type ResourceTag,
   type SelfNodeId,
 } from "./Resource";
-import * as Store from "./Store";
 import * as internal from "./internal/shardMap";
-import { facetStoreRegistration } from "./internal/store/facetStore";
-import {
-  makeShardMapStoreAnalyticsContract,
-  type ShardMapStoreAnalyticsContract,
-  type ShardMapStoreTag,
-} from "./internal/store/shardMapStoreSpec";
-import type { StoreShapes } from "./internal/store/contractDef";
+import * as shardMapSql from "./internal/shardMapSql";
 
 // ============================================================================
 // Public constants + partition
@@ -77,11 +73,25 @@ export type PartitionFn = internal.PartitionFn;
  */
 export type ShardMapOptions = internal.ShardMapOptions;
 
-/** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
-const withDefaultStoreBridge = <A, E, R>(
-  layer: Layer.Layer<A, E, R | Store.Storage>,
-): Layer.Layer<A | Store.Storage, E, R> =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+/**
+ * Provide {@link SqlClient} (default `:memory:`) and install the shard-map schema before the
+ * resource layer builds.
+ *
+ * @internal
+ */
+const withSqlite = <A, E, R>(
+  options: ShardMapOptions | undefined,
+  layer: Layer.Layer<A, E, R | SqlClient>,
+): Layer.Layer<A, E, R> => {
+  const filename = options?.filename ?? ":memory:";
+  const install = Layer.effectDiscard(
+    Effect.flatMap(SqlClient, shardMapSql.install),
+  );
+  return layer.pipe(
+    Layer.provide(install),
+    Layer.provide(SqliteClient.layer({ filename })),
+  );
+};
 
 // ============================================================================
 // Spec builder
@@ -293,8 +303,8 @@ export const Tag =
 // ============================================================================
 
 /**
- * Local layer — event-sourced shard + routed/fleet members. Merges
- * {@link Store.layerDefaultMemory}. Requires mesh discharge
+ * Local layer — SQL-backed shard + routed/fleet members. Opens SQLite (`:memory:` by default;
+ * override with `{ filename }`). Requires mesh discharge
  * ({@link Resource.peersLayer} or peersFrom + selfNodeLayer).
  *
  * @public
@@ -308,12 +318,9 @@ export const layer = <
 >(
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
-): Layer.Layer<
-  Self | Local<Self> | Store.Storage,
-  never,
-  PeersId<Self> | SelfNodeId<Self>
-> =>
-  withDefaultStoreBridge(
+): Layer.Layer<Self | Local<Self>, never, PeersId<Self> | SelfNodeId<Self>> =>
+  withSqlite(
+    options,
     Layer.unwrap(
       Effect.map(
         internal.buildImpl(tag as unknown as internal.EngineTag, options),
@@ -326,12 +333,12 @@ export const layer = <
     ) as Layer.Layer<
       Self | Local<Self>,
       never,
-      PeersId<Self> | SelfNodeId<Self> | Store.Storage
+      PeersId<Self> | SelfNodeId<Self> | SqlClient
     >,
   );
 
 /**
- * Serve remotely (handlers only). Merges {@link Store.layerDefaultMemory}. Requires mesh discharge.
+ * Serve remotely (handlers only). Opens SQLite (`:memory:` by default). Requires mesh discharge.
  *
  * @public
  * @since 1.0.0
@@ -345,7 +352,8 @@ export const serveRemote = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ) =>
-  withDefaultStoreBridge(
+  withSqlite(
+    options,
     Layer.unwrap(
       Effect.map(
         internal.buildImpl(tag as unknown as internal.EngineTag, options),
@@ -362,13 +370,15 @@ export const serveRemote = <
   );
 
 /**
- * Serve + grant local instance from one materialization. Merges
- * {@link Store.layerDefaultMemory}.
+ * Serve + grant local instance from one materialization. Opens SQLite (`:memory:` by default).
  *
  * @example
  * ShardMap.serve(Sessions).pipe(
  *   Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
  * )
+ *
+ * // Durable file:
+ * ShardMap.serve(Sessions, { filename: ".effect-pm/sessions.sqlite" })
  *
  * @public
  * @since 1.0.0
@@ -382,50 +392,14 @@ export const serve = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ) =>
-  withDefaultStoreBridge(
+  withSqlite(
+    options,
     Resource.serve(
       tag,
       internal.buildImpl(tag as unknown as internal.EngineTag, options) as Effect.Effect<
         Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
         never,
-        PeersId<Self> | SelfNodeId<Self> | Store.Storage
+        PeersId<Self> | SelfNodeId<Self> | SqlClient
       >,
     ),
   );
-
-// ============================================================================
-// Store registration
-// ============================================================================
-
-/**
- * Register this ShardMap on an app {@link Store.Service} — Put/Delete entry events with
- * analytics reads (`current`, `puts`, `deletes`, `recent`, `stats`, `changes`). Pass a bare
- * shapes object to add app-specific methods:
- *
- * ```ts
- * ShardMap.store(Sessions)
- * ShardMap.store(Sessions, {
- *   audit: auditSchema,
- * }, ({ audit, event }) => ({
- *   appendAudit: audit.append,
- * }))
- * ```
- *
- * @public
- * @since 1.0.0
- */
-export function store<const Tag extends ShardMapStoreTag>(tag: Tag): ReturnType<
-  typeof facetStoreRegistration<Tag, ShardMapStoreAnalyticsContract<Tag>>
->;
-export function store<
-  const Tag extends ShardMapStoreTag,
-  const Shapes extends StoreShapes,
->(tag: Tag, extended: Shapes): ReturnType<
-  typeof facetStoreRegistration<Tag, ShardMapStoreAnalyticsContract<Tag>, Shapes>
->;
-export function store(tag: ShardMapStoreTag, extended?: StoreShapes) {
-  const contract = makeShardMapStoreAnalyticsContract(tag);
-  return extended === undefined
-    ? facetStoreRegistration(tag, contract)
-    : facetStoreRegistration(tag, contract, extended);
-}
