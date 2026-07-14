@@ -15,6 +15,7 @@ import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cause, Config, Console, Data, Effect, Exit, Schema } from "effect";
+import prettier from "prettier";
 import ts from "typescript";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -137,6 +138,36 @@ const formatFlags =
 const strip = (text: string): string =>
   text.replace(/import\("[^"]*"\)\./g, "").replace(/\s*\n\s*/g, " ");
 
+// Display formatting via Prettier: signatures/types from the checker are one long line, so wrap each
+// in a valid TS construct, format, and strip the wrapper — long overloads break across lines instead
+// of scrolling. Best-effort: an unparseable fragment is shown as-is.
+const prettierOpts = { parser: "typescript" as const, printWidth: 76, semi: false };
+const formatSignature = (sig: string): string => {
+  try {
+    return prettier
+      .format(`interface _ {\n${sig}\n}`, prettierOpts)
+      .trim()
+      .replace(/^interface _ \{\n?/, "")
+      .replace(/\n?\}$/, "")
+      .replace(/^ {2}/gm, "")
+      .trim();
+  } catch {
+    return sig;
+  }
+};
+const formatType = (t: string): string => {
+  try {
+    return prettier
+      .format(`type _ = ${t}\n`, prettierOpts)
+      .trim()
+      .replace(/^type _ =\s*/, "")
+      .replace(/;\s*$/, "")
+      .trim();
+  } catch {
+    return t;
+  }
+};
+
 // --- pure extraction: everything below is a function of the checker, no IO ---
 const srcDir = `${nodePath.join(repoRoot, "src")}/`;
 const makeExtractor = (checker: ts.TypeChecker) => {
@@ -184,14 +215,11 @@ const makeExtractor = (checker: ts.TypeChecker) => {
 
     const signatures = type
       .getCallSignatures()
-      .map((sig) => strip(checker.signatureToString(sig, decl, formatFlags, ts.SignatureKind.Call)));
+      .map((sig) =>
+        formatSignature(strip(checker.signatureToString(sig, decl, formatFlags, ts.SignatureKind.Call))),
+      );
     const fullType = strip(checker.typeToString(type, decl, formatFlags));
-    const typeText =
-      signatures.length > 0
-        ? undefined
-        : fullType.length > 400
-          ? `${fullType.slice(0, 399)}…`
-          : fullType;
+    const typeText = signatures.length > 0 ? undefined : formatType(fullType);
 
     const tags = sym
       .getJsDocTags(checker)
