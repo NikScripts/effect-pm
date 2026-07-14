@@ -35,7 +35,6 @@
  */
 import { DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
-import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 import type {
@@ -58,6 +57,9 @@ import {
   successOf,
   errorOf,
   stampQueueWireSchemas,
+  stampQueueItemSchema,
+  itemSchemaSym,
+  type QueueItemSchemaCarrier,
 } from "./internal/queueTagSchemas";
 import { assertQueueInstanceSpec } from "./internal/queueSpecAssert";
 import * as Store from "./Store";
@@ -750,7 +752,8 @@ const materializeQueueTag = <
     readonly description?: string;
     readonly node?: NodeKey<unknown>;
   },
-): ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> => {
+): ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
+  QueueItemSchemaCarrier<F> => {
   const wire = { success: resolved.success, error: resolved.error };
   // The wired spec carries the tag's real `success`/`error` wire slots; its type
   // (`QueueInstanceSpec<F, Success, Error>`) *is* the tag's contract, so it drives the tag type
@@ -772,10 +775,13 @@ const materializeQueueTag = <
         : { detail: `phase: ${status.phase}` }),
     })),
   );
-  return stampQueueWireSchemas(ready, {
-    success: resolved.success,
-    error: resolved.error,
-  });
+  return stampQueueItemSchema(
+    stampQueueWireSchemas(ready, {
+      success: resolved.success,
+      error: resolved.error,
+    }),
+    resolved.payload,
+  );
 };
 
 /**
@@ -907,9 +913,10 @@ const nameQueueService = <
   Success extends Schema.Top = typeof Schema.Void,
   Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F, Success, Error>>,
-): QueueTag<Self, F, Success, Error> =>
-  tag as unknown as QueueTag<Self, F, Success, Error>;
+  tag: ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
+    QueueItemSchemaCarrier<F>,
+): QueueTag<Self, F, Success, Error> & QueueItemSchemaCarrier<F> =>
+  tag as unknown as QueueTag<Self, F, Success, Error> & QueueItemSchemaCarrier<F>;
 
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
@@ -918,7 +925,8 @@ const queueTag = <Self>() => {
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
   ): QueueNodeBoundTag<Self, F, HSelf> &
     QueueSuccessCarrier<typeof Schema.Void> &
-    QueueErrorCarrier<typeof Schema.Never>;
+    QueueErrorCarrier<typeof Schema.Never> &
+    QueueItemSchemaCarrier<F>;
   function build<
     F extends Schema.Struct.Fields,
     Success extends Schema.Top,
@@ -930,20 +938,23 @@ const queueTag = <Self>() => {
     error?: Error,
   ): QueueTag<Self, F, Success, Error> &
     QueueSuccessCarrier<Success> &
-    QueueErrorCarrier<Error>;
+    QueueErrorCarrier<Error> &
+    QueueItemSchemaCarrier<F>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     payload: Schema.Struct<F>,
     options?: { readonly description?: string },
   ): QueueTag<Self, F> &
     QueueSuccessCarrier<typeof Schema.Void> &
-    QueueErrorCarrier<typeof Schema.Never>;
+    QueueErrorCarrier<typeof Schema.Never> &
+    QueueItemSchemaCarrier<F>;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
   ): QueueNodeBoundTag<Self, F, HSelf> &
     QueueSuccessCarrier<typeof Schema.Void> &
-    QueueErrorCarrier<typeof Schema.Never>;
+    QueueErrorCarrier<typeof Schema.Never> &
+    QueueItemSchemaCarrier<F>;
   function build<
     F extends Schema.Struct.Fields,
     Success extends Schema.Top = typeof Schema.Void,
@@ -953,7 +964,8 @@ const queueTag = <Self>() => {
     config: QueueTagConfig<F, Success, Error>,
   ): QueueTag<Self, F, Success, Error> &
     QueueSuccessCarrier<Success> &
-    QueueErrorCarrier<Error>;
+    QueueErrorCarrier<Error> &
+    QueueItemSchemaCarrier<F>;
   // Implementation signature — intentionally loose (`any` wire slots): the tag's real `Success`/
   // `Error` are fixed by the overload selected above. The runtime resolves them from the config /
   // positional args below; the phantom carriers are type-only.
@@ -964,7 +976,8 @@ const queueTag = <Self>() => {
     fourth?: Schema.Top,
   ): QueueTag<Self, F, any, any> &
     QueueSuccessCarrier<any> &
-    QueueErrorCarrier<any> {
+    QueueErrorCarrier<any> &
+    QueueItemSchemaCarrier<F> {
     const resolved = isQueueTagConfig(second)
       ? {
           payload: second.payload,
@@ -1060,7 +1073,8 @@ type QueueTagFor<
   Error extends Schema.Top,
 > = ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
   QueueSuccessCarrier<Success> &
-  QueueErrorCarrier<Error>;
+  QueueErrorCarrier<Error> &
+  QueueItemSchemaCarrier<F>;
 
 /** The worker-`config:` param shape shared by every queue verb — {@link QueueLayerConfig} with the
  *  instance item type + worker-`success` value recovered from `F` / `Success`. @internal */
@@ -1089,18 +1103,9 @@ const buildQueueImpl = <
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ) =>
   Effect.gen(function* () {
-    // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member. `specSym`
-    // holds the *flat* spec (opaque leaf types) at runtime — recover the precise item schema at this
-    // introspection boundary.
-    const addMethod = tag[specSym].add as unknown as {
-      readonly payload: {
-        readonly members: readonly [
-          Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never>,
-        ];
-      };
-    };
-    const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
-      addMethod.payload.members[0];
+    // Item schema recovered TYPED from the tag's item-schema carrier (stamped by
+    // `materializeQueueTag`) — no spec introspection, no cast.
+    const itemSchema: Schema.Struct<F> = tag[itemSchemaSym];
     // Capture the FULL ambient context (worker `R` + refill `RR`): the worker effect and the
     // refill loader both run ambiently, so the captured context must cover their union.
     const context = yield* Effect.context<R | RR>();

@@ -20,6 +20,29 @@ export const errorSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Queue/error",
 );
 
+export const itemSchemaSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Queue/itemSchema",
+);
+
+/**
+ * Type-level marker: a queue tag carries its item schema (`payload`) under {@link itemSchemaSym}, so
+ * the runtime verbs recover it **typed** without introspecting the runtime-flat spec. Required (every
+ * queue tag has a payload), unlike the optional `success`/`error` phantom carriers. @internal
+ */
+export interface QueueItemSchemaCarrier<F extends Schema.Struct.Fields> {
+  readonly [itemSchemaSym]: Schema.Struct<F>;
+}
+
+/**
+ * Stamp the item schema (`payload`) onto a queue tag, typed. `Object.assign`'s `T & U` return carries
+ * the {@link QueueItemSchemaCarrier} marker with no cast. @internal
+ */
+export const stampQueueItemSchema = <T extends object, F extends Schema.Struct.Fields>(
+  tag: T,
+  itemSchema: Schema.Struct<F>,
+): T & QueueItemSchemaCarrier<F> =>
+  Object.assign(tag, { [itemSchemaSym]: itemSchema });
+
 /** Read the `success` schema stamped on a queue tag, if any. @internal */
 export const successOf = (tag: unknown): Schema.Top | undefined => {
   if (
