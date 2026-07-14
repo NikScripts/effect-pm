@@ -148,7 +148,7 @@ BillingNode process (node log key: billing/scores)
   AppStore.layerMemory          → Logs.layer (baked in) + Storage + durable tails
   BillingNode.logs              → match-all follower → handle.log.append (node journal)
   Process.store(Daily)          → lineage follower → handle.log.append (resource scope)
-  Logs.withScope(tag)           → stamps resource key into lineage
+  Logs.withScope(tag)           → appends resource key onto fiber lineage path
   Resource.logs(tag)            → { stream, query } (live + durable)
 ```
 
