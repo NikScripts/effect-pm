@@ -37,8 +37,8 @@ point** — nothing here is needed for core resources.
 
 | Using | Also install |
 |-------|--------------|
-| Web dashboard — `/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
-| Terminal dashboard — `/tui` | `react`, `ink` |
+| `/web` Web dashboard | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
+| `/tui` Terminal dashboard | `react`, `ink` |
 
 Install them the same way — for the full web dashboard:
 

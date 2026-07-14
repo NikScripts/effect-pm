@@ -653,3 +653,6 @@ th, td {
 thead th, tr:first-child th { border-bottom: 2px solid var(--border); }
 th { font-weight: 650; }
 table code { white-space: nowrap; }
+
+/* first-column code reads as a term: the code on its own line, the label dropping below it. */
+td:first-child code { display: block; margin-bottom: 0.15rem; }
