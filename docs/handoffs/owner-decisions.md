@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Agent 3: `byResource` full scope-tag key + `_logs` private
+
+- **Owner said:** Scope identity for durable resource logs should be a **full key** (scope tag / `Tag.key`), not a `processId`|`queueId` bag. Free the Store shape name `log` — platform journal should be Effect-style private (`_logs`) and hidden from the public handle API.
+- **Chose:** Supervisor shipped [`#57`](https://github.com/NikScripts/effect-pm/pull/57) (`_logs` + omit `_…` from handle types). Next Agent 3 Eng: [`agent-03-byresource-full-key.md`](./agent-03-byresource-full-key.md) — reshape `Logs.byResource` to tag/full-key (**plan-first**, tell-everything-first, wait for go). Recommended defaults in brief: hard-break the bag; include CLI `hasKey` match; leave annotation dual-stamp alone.
+- **Rejected / deferred:** store-layer memo; further Process.events Eng; assigning handles/site to Agent 3.
+- **Supervisor impact:** Agent 3 active again on Logs query API; merge #57 onto `integration` before or with the byResource PR.
+
+---
+
 ## 2026-07-14 — Phase 1 handoffs archive batches A–D (“do it all”)
 
 - **Owner said:** Unlock Phase 1 execution — do the archive batches (archive-first). Close what we can from open-asks in the same pass.

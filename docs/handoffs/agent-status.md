@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | **on `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) | **#54 + #55 landed** — Phase 1 A–D archived; withReadiness type hygiene; open-asks §1–2 closed | `integration` tip | tsgo + tsc / link ripples | Batch E/Z + Phase 2 deferred; `layerNoop` parked | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | **ready perfection / closed** | [Logs store followers](./agent-03-logs-p1.md) · Process.events | **tracks done** — [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#48](https://github.com/NikScripts/effect-pm/pull/48)/[#51](https://github.com/NikScripts/effect-pm/pull/51) on `integration` | `integration` tip | typecheck / suite green at #51 | Superseded [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed. [#52](https://github.com/NikScripts/effect-pm/pull/52)/[#50](https://github.com/NikScripts/effect-pm/pull/50) landed. Out of scope: D handles, site UI, store memo, Logs followers/`LogStore`/`persistLayer`. No further Process.events Eng. | 2026-07-14 |
+| **3** | from `integration` | [`byResource` full key](./agent-03-byresource-full-key.md) | **plan-first** (await go) | — | — | Prior tracks closed (#47/#48/#51/#52). Prerequisite: [#57](https://github.com/NikScripts/effect-pm/pull/57) `_logs` private. Out of scope: D handles, site, store memo | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -20,17 +20,19 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** [#54](https://github.com/NikScripts/effect-pm/pull/54) + [#55](https://github.com/NikScripts/effect-pm/pull/55) **on `integration`**. Phase 1 A–D archived; open-asks §1–2 closed; `layerNoop` parked. Next unlock: batch E / Z or Phase 2. No UI / `docs/site` chrome.
-2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+2. **Agent 3:** [`agent-03-byresource-full-key.md`](./agent-03-byresource-full-key.md) — `Logs.byResource` takes full scope-tag key (**plan-first**; wait for go). Land/ff [#57](https://github.com/NikScripts/effect-pm/pull/57) (`_logs` private) first when possible.
+3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-3. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
-4. `main` merge + `pnpm run version` — still deferred
-5. ~~[#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide~~ — **merged**
+4. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
+5. `main` merge + `pnpm run version` — still deferred
+6. ~~[#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide~~ — **merged**
+7. [#57](https://github.com/NikScripts/effect-pm/pull/57) private `_logs` journal — **open** (Manager); merge before / with Agent 3 byResource work
 
-### Done this session (Agent 3)
-- Process live `events` — [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51) (failure surface: `Failed` + stamped `Completed`; persist == stream)
+### Done prior (Agent 3)
+- Process live `events` — [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51)
 - Logs lineage append — [#48](https://github.com/NikScripts/effect-pm/pull/48)
-- Closed superseded plan/brief PRs [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46)
+- Ready-perfection + Logs guide — [#52](https://github.com/NikScripts/effect-pm/pull/52)/[#50](https://github.com/NikScripts/effect-pm/pull/50); closed [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46)
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.
@@ -41,7 +43,7 @@
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
 
-**Agent 3 ready-perfection pass:** remotes cleaned; [#52](https://github.com/NikScripts/effect-pm/pull/52) close-out + [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide **merged** to `integration`. Agent 3 idle pending new owner assignment.
+**Agent 3:** reassigned — [`agent-03-byresource-full-key.md`](./agent-03-byresource-full-key.md). Prior Process/Logs tracks closed.
 
 ---
 
