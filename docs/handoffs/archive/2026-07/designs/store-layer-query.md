@@ -9,7 +9,7 @@
 | **Owner** | Nik (package owner) |
 | **Approval** | **All public APIs, names, and behavior changes described here require explicit owner approval before shipping.** Treat every signature, export, and semantic choice in this doc as a draft. |
 | **Implementation** | **Do not land public API or changeset entries from this doc without sign-off.** Internal spike / prototype behind `@internal` is fine if it helps evaluation — do not export or document as shipped. |
-| **Companion docs** | [`store-backing.md`](../guides/store-backing.md) (journal mapping), [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) (Storage as defaulted service), [`store.md`](../guides/store.md) (current user guide) |
+| **Companion docs** | [`store-backing.md`](../../../legacy/guides/store-backing.md) (journal mapping), [`store-cutover-00-store-core.md`](../../store-cutover-00-store-core.md) (Storage as defaulted service), [`store.md`](../../../legacy/guides/store.md) (current user guide) |
 
 ---
 

@@ -30,20 +30,21 @@ Inventory below remains the fate table. Soft asks → [`open-asks.md`](./open-as
 | **B — merged agent closeouts** | → `archive/2026-07/agents/` | Low–med | **done** |
 | **C — shipped feature handoffs** | → `archive/2026-07/features/` (+ link rewrites) | Med | **done** |
 | **D — reports bodies** | → `archive/2026-07/reports/`; keep `reports/README` | Higher ripple | **done** |
-| **E — SSOT / store-cutover / decisions** | Relocate or `decisions/` layout | High | **still deferred** — owner design first |
+| **E — SSOT / store-cutover / decisions** | Design-lock: decisions stay flat; cutover SSOTs stay; archive closed Agent 3 plans + not-approved `store-layer-query` | High if moved wrong | **done (design-lock + small archive)** — 2026-07-14 |
 | **Z — deletes** | Only ticked rows | Irreversible (git recoverable) | **still deferred** — archive-first holds |
 
 ---
 
 ## Deferred for owner (do not move without you)
 
-- Whether to use a root `decisions/` folder (alt B) vs keep decisions flat  
-- `store-cutover-*.md` + `store-and-logs-design.md` while STORAGE/legacy still cite them  
-- `agent-03-logs-store-followers-plan.md` / `agent-03-log-store-tail-plan.md` (active vs archive-now)  
-- `store-layer-query.md` (parked not-approved at root vs archive+banner)  
-- `queue-persistence-design.md`, `queue-nonserializable-items.md`  
-- Any **delete** candidates  
-- Letter-agent docs (`agent-b-plan`, docs-platform decision) linked from `docs/site/README.md`
+- ~~Whether to use a root `decisions/` folder~~ → **locked flat** (alt A) 2026-07-14  
+- ~~`store-cutover-*.md` + `store-and-logs-design.md` while STORAGE cites them~~ → **stay at root** until Phase 3  
+- ~~`agent-03-logs-store-followers-plan.md` / `agent-03-log-store-tail-plan.md`~~ → **archived** 2026-07-14  
+- ~~`store-layer-query.md`~~ → **archived** under `archive/2026-07/designs/` (banner kept)  
+- `queue-persistence-design.md` — **historical SSOT** at root (cited by DurableQueueStore)  
+- `queue-nonserializable-items.md` — Phase 2 candidate → `docs/plans/` when P3 unlocked  
+- Any **delete** candidates (Batch Z)  
+- Letter-agent docs (`agent-b-plan`, docs-platform decision) linked from `docs/site/README.md`  
 
 ---
 
@@ -326,5 +327,6 @@ Exact counts will be locked when you annotate the tables.
 
 ## Stop
 
-**Batches A–D done** (archive-first). Root holds bus + SSOTs + deferred edge cases (E/Z).  
-Next unlocks: **E** (decisions/layout), **Z** (ticked deletes), or Phase 2 plans migration.
+**Batches A–E done** (archive-first; E = design-lock + closed/not-approved archive).  
+**Z** still needs per-row delete ticks.  
+Next: Phase 2 — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md).

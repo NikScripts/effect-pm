@@ -1,10 +1,11 @@
 # Agent 1 — Docs corpus: handoffs → plans → legacy (Draft)
 
-**Status:** **PHASE 1 BATCHES A–D LANDED** (2026-07-14) — archive under `handoffs/archive/2026-07/`; SSOTs + deferred rows still at root.  
-**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md). Still awaiting owner for batch **E** (SSOT layout) / **Z** (deletes) / Phases 2–3.  
+**Status:** **PHASE 1 A–E DONE** · **PHASE 2 PLAN READY** (2026-07-14).  
+**Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md).  
+**Phase 2 plan:** [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md) — inventory only until owner unlocks P1–P4.  
 **Agent:** **1**.  
 **Branch from:** **`integration`**.  
-**Working branch:** landed on **`integration`** via [#54](https://github.com/NikScripts/effect-pm/pull/54) + [#55](https://github.com/NikScripts/effect-pm/pull/55).
+**Working branch:** `cursor/docs-corpus-phase2-plan-ce05` (Phase 2 inventory + Batch E close-out).
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/standards/documentation.md`](../standards/documentation.md) · [`docs/nav.ts`](../nav.ts) · [`docs/site/src/lib/content.ts`](../site/src/lib/content.ts)
 

@@ -8,4 +8,4 @@ Finished agent closeouts, shipped feature notes, and point-in-time review report
 
 | Month folder | Contents |
 |--------------|----------|
-| [`2026-07/`](./2026-07/) | Store-cutover era agent closeouts, feature handoffs, review reports |
+| [`2026-07/`](./2026-07/) | Store-cutover era agent closeouts, feature handoffs, review reports, not-approved designs |
