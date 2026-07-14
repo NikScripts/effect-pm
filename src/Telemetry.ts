@@ -45,97 +45,54 @@ import {
 } from "./Resource";
 
 // ============================================================================
-// Public types (explicit interfaces — the schema below is checked against them)
+// Wire schema — the served contract, shared with the dashboard/TUI. Each datum is one
+// `Schema.TaggedClass`: value and type under a single name, so there is no interface /
+// schema pair to keep in sync (Types & Naming → *Prefer a class schema*).
 // ============================================================================
 
 /** A metric's label set (from Effect `Metric` attributes). @public */
 export type MetricLabels = Readonly<Record<string, string>>;
-
-/** A counter reading. @public */
-export interface CounterDatum {
-  readonly _tag: "Counter";
-  readonly id: string;
-  readonly labels: MetricLabels;
-  readonly count: number;
-}
-
-/** A gauge reading. @public */
-export interface GaugeDatum {
-  readonly _tag: "Gauge";
-  readonly id: string;
-  readonly labels: MetricLabels;
-  readonly value: number;
-}
-
-/** One cumulative histogram bucket: observations `<= le`. @public */
-export interface HistogramBucket {
-  readonly le: number;
-  readonly count: number;
-}
-
-/** A histogram reading (cumulative buckets). @public */
-export interface HistogramDatum {
-  readonly _tag: "Histogram";
-  readonly id: string;
-  readonly labels: MetricLabels;
-  readonly buckets: ReadonlyArray<HistogramBucket>;
-  readonly count: number;
-  readonly sum: number;
-}
-
-/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
-export type MetricDatum = CounterDatum | GaugeDatum | HistogramDatum;
-
-/** A node's whole `Metric` registry, point-in-time. @public */
-export interface MetricsSnapshot {
-  readonly ts: number;
-  readonly metrics: ReadonlyArray<MetricDatum>;
-}
-
-// ============================================================================
-// Wire schema (THE contract — shared with the dashboard/TUI). The `Schema.Codec<T>`
-// annotations fail to compile if the schema and the public interfaces above ever drift.
-// ============================================================================
-
 const metricLabels = Schema.Record(Schema.String, Schema.String);
 
-const counterDatum = Schema.TaggedStruct("Counter", {
+/** A counter reading. @public */
+export class CounterDatum extends Schema.TaggedClass<CounterDatum>()("Counter", {
   id: Schema.String,
   labels: metricLabels,
   count: Schema.Number,
-});
+}) {}
 
-const gaugeDatum = Schema.TaggedStruct("Gauge", {
+/** A gauge reading. @public */
+export class GaugeDatum extends Schema.TaggedClass<GaugeDatum>()("Gauge", {
   id: Schema.String,
   labels: metricLabels,
   value: Schema.Number,
-});
+}) {}
 
-const histogramBucket = Schema.Struct({
+/** One cumulative histogram bucket: observations `<= le`. @public */
+export class HistogramBucket extends Schema.Class<HistogramBucket>("HistogramBucket")({
   le: Schema.Number,
   count: Schema.Number,
-});
+}) {}
 
-const histogramDatum = Schema.TaggedStruct("Histogram", {
+/** A histogram reading (cumulative buckets). @public */
+export class HistogramDatum extends Schema.TaggedClass<HistogramDatum>()("Histogram", {
   id: Schema.String,
   labels: metricLabels,
-  buckets: Schema.Array(histogramBucket),
+  buckets: Schema.Array(HistogramBucket),
   count: Schema.Number,
   sum: Schema.Number,
-});
+}) {}
 
-/** Schema for {@link MetricDatum}. @public */
-export const metricDatum: Schema.Codec<MetricDatum> = Schema.Union([
-  counterDatum,
-  gaugeDatum,
-  histogramDatum,
-]);
+/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
+export const metricDatum = Schema.Union([CounterDatum, GaugeDatum, HistogramDatum]);
+/** The type of a single {@link metricDatum}. @public */
+export type MetricDatum = typeof metricDatum.Type;
 
-/** Schema for {@link MetricsSnapshot} — the served wire envelope. @public */
-export const metricsSnapshot: Schema.Codec<MetricsSnapshot> = Schema.Struct({
+/** A node's whole `Metric` registry, point-in-time — the served wire envelope. @public */
+export class MetricsSnapshot extends Schema.Class<MetricsSnapshot>("MetricsSnapshot")({
   ts: Schema.Number,
   metrics: Schema.Array(metricDatum),
-});
+}) {}
 
 // ============================================================================
 // Encode: Effect `Metric.snapshot` → the wire envelope
@@ -151,10 +108,8 @@ const labelsOf = (attributes: MetricLabels | undefined): MetricLabels =>
   attributes ?? {};
 
 /** One raw `[boundary, count]` histogram bucket → the wire shape. @internal */
-const toBucket = ([le, count]: readonly [number, number]): HistogramBucket => ({
-  le,
-  count,
-});
+const toBucket = ([le, count]: readonly [number, number]): HistogramBucket =>
+  HistogramBucket.make({ le, count });
 
 /**
  * Encode one registry metric → zero-or-one {@link MetricDatum} — `Frequency`/`Summary` encode to none
@@ -167,19 +122,18 @@ const encodeDatum = (s: MetricSnapshotElem): ReadonlyArray<MetricDatum> => {
   const labels = labelsOf(s.attributes);
   switch (s.type) {
     case "Counter":
-      return [{ _tag: "Counter", id, labels, count: Number(s.state.count) }];
+      return [CounterDatum.make({ id, labels, count: Number(s.state.count) })];
     case "Gauge":
-      return [{ _tag: "Gauge", id, labels, value: Number(s.state.value) }];
+      return [GaugeDatum.make({ id, labels, value: Number(s.state.value) })];
     case "Histogram":
       return [
-        {
-          _tag: "Histogram",
+        HistogramDatum.make({
           id,
           labels,
           buckets: s.state.buckets.map(toBucket),
           count: s.state.count,
           sum: s.state.sum,
-        },
+        }),
       ];
     default:
       return [];
@@ -190,7 +144,7 @@ const encodeDatum = (s: MetricSnapshotElem): ReadonlyArray<MetricDatum> => {
 const encodeSnapshot = (
   raw: ReadonlyArray<MetricSnapshotElem>,
   ts: number,
-): MetricsSnapshot => ({ ts, metrics: raw.flatMap(encodeDatum) });
+): MetricsSnapshot => MetricsSnapshot.make({ ts, metrics: raw.flatMap(encodeDatum) });
 
 /**
  * The current registry snapshot, encoded — the **single source** of "take a snapshot" (the served
@@ -225,10 +179,10 @@ export const inFlightOf = (snap: MetricsSnapshot): number => {
 const byNodeSchema = Schema.Record(Schema.String, Schema.Number);
 
 const telemetrySpec = {
-  snapshot: effect(metricsSnapshot).annotate({
+  snapshot: effect(MetricsSnapshot).annotate({
     description: "Point-in-time snapshot of this node's whole Metric registry.",
   }),
-  live: stream(metricsSnapshot).annotate({
+  live: stream(MetricsSnapshot).annotate({
     description: "Periodic push (~1s) of this node's Metric registry.",
   }),
   inFlightByNode: effect(byNodeSchema).pipe(fleet).annotate({
