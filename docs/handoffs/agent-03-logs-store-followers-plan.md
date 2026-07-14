@@ -53,38 +53,67 @@ const nodeStack = Resource.httpServer([/* … */]).pipe(
 );
 ```
 
-### Shape naming (locked correction)
+### Shape naming + read payload (owner-locked 2026-07-14)
 
-Not top-level `appendLog` / `logQuery`. Use a normal Store **shape** named `log` — same pattern as every other shape (`readings.append`, `event.append`, …).
+Not top-level `appendLog` / `logQuery`. Use a normal Store **shape** named `log`.
 
-`Store.shape` takes the **row** schema; the read payload is **optional** and defaults to `{}` (`emptyPayloadSchema`). Shared journal helpers already understand common options (`limit` / `since` / `until`) when a payload schema includes them. Domain filters (lineage, atRoot, …) are **custom methods**, not a second fat schema jammed into `Store.shape`.
+**Remove** the per-shape read-payload argument from `Store.shape`. One system payload for every shape; per-shape variance is typed **field filters** only.
+
+| Locked | Choice |
+|--------|--------|
+| Shape API | `Store.shape(row)` only — no second schema arg |
+| Query style | Drizzle **relational query API** object `where` |
+| Nesting | **Required in v1** (nested row fields / nested `where`) |
+| Composable ops (`eq(col, v)` + `and`/`or`) | **Later** — not v1 |
 
 ```ts
-// implicit on each registration that follows logs — row only (or row + small shared defaults)
+// Before (delete)
+Store.shape(readingSchema, Schema.Struct({ limit: Schema.optional(Schema.Number) }))
+
+// After
+Store.shape(readingSchema)
+
+// Shared baked-in payload + typed nested where (inspired by Drizzle RQB)
+yield* handle.readings.read({
+  limit: 50,
+  // after / before — shared time window (names TBD; today helpers use after/before ms)
+  where: {
+    value: 72,                              // shorthand eq
+    meta: {
+      source: { eq: "probe" },              // nested field
+      // missing: 1,                        // type error — not on meta
+    },
+    // unknownTop: 1,                       // type error
+  },
+});
+
+// Implicit logs shape — same system
 {
   log: Store.shape(LogEntrySchema),
-  // optional, if we want shape.read({ limit }) without customs:
-  // log: Store.shape(LogEntrySchema, Schema.Struct({ limit: Schema.optional(Schema.Number) })),
 }
-
-// richer reads = contract part 2 customs, e.g.
-Store.contract(
-  { log: Store.shape(LogEntrySchema) },
-  ({ log }) => ({
-    // name TBD — lineage / byResource helpers, not a parallel persistence API
-    recentLogs: ({ limit }: { limit?: number }) => log.read(/* … */),
-  }),
-);
-```
-
-Follower write / default durable read:
-
-```ts
 yield* handle.log.append(entry);
-const rows = yield* handle.log.read(); // default payload
+yield* handle.log.read({
+  limit: 200,
+  where: {
+    level: "Warn",
+    annotations: { /* nested if row exposes nested structure */ },
+  },
+});
 ```
 
-Do **not** copy the interim `LogStore`’s fat `logQueryPayloadSchema` (processId / queueId / lineageContains / …) onto the implicit shape. That was cutover scaffolding; lineage filters belong in customs or in `Resource.logs().query` wiring.
+`where` keys are inferred from the **row schema** (including nested structs). Operator object form mirrors Drizzle RQB (`eq` / `gt` / `in` / … as needed for v1; bare value = equality). Shared options (`limit`, time window, …) live on the baked-in payload — identical for every shape.
+
+Do **not** copy the interim `LogStore` fat `logQueryPayloadSchema` onto the shape. Lineage helpers may still be thin customs/`Resource.logs().query` facades over `log.read({ where: … })`.
+
+### Prerequisite: Store unified read payload (blocks followers-1)
+
+Landing registration followers on a clean `log` shape requires this Store change first (or in the same unlock as `followers-1`):
+
+1. `Store.shape(row)` — drop overload with read schema; migrate all call sites (`queue`/`process`/`run`/`logStore` specs, tests, guides).
+2. Bake one read-payload type into shape `.read` (shared windowing + `where`).
+3. Type `where` from `Schema.Schema.Type<Row>` with nested paths.
+4. Runtime: decode system payload → apply `limit`/`before`/`after` → apply nested `where` equality/ops on decoded rows.
+5. Changeset — public Store API break.
 
 ### What a registration-native write looks like (internals, not app code)
 
