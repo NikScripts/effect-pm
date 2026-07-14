@@ -338,7 +338,11 @@ pre.shiki { background: transparent; }
   width: max-content;
   max-width: min(88vw, 42rem);
   padding: 0;               /* no gutter — the type fills the popup */
-  overflow: hidden;         /* full-bleed type respects the rounded frame */
+  /* ONE scroll container: the whole popup (type + expanded + comments) scrolls together, capped, so
+     the tall expanded box doesn't scroll on its own. Inner panels overflow visible (rule below). */
+  max-height: min(70vh, 32rem);
+  overflow: auto;
+  overscroll-behavior: contain;
   background: var(--panel) !important;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -368,6 +372,9 @@ pre.shiki { background: transparent; }
   border: none;
   border-radius: 0;
 }
+/* Short single-line types render INLINE (no nested <pre>), so the pre-padding above doesn't apply and
+   they'd touch the popup edges. Give those the same inset directly on the code box. */
+.twoslash-popup-code:not(:has(pre)) { padding: 0.5rem 0.7rem; }
 .twoslash-popup-docs {
   margin: 0;
   padding: 0.45rem 0.7rem 0.5rem;
@@ -376,14 +383,17 @@ pre.shiki { background: transparent; }
   font-family: var(--font-sans);
   font-size: 0.78rem;
 }
-/* The "dual preview" expanded-declaration box: a distinct code panel below the compact type, with a
-   little "expanded" label. Rendered by our custom renderMarkdown as `.twoslash-popup-expand`. */
-.twoslash-popup-docs:has(> .twoslash-popup-expand) { padding: 0; }
+/* The "dual preview" expanded-declaration box: its own code panel wedged BETWEEN the compact type and
+   the JSDoc comments, separated by a rule, with a small "expanded" label. */
 .twoslash-popup-expand {
   display: block;
+  border-top: 1px solid var(--border);
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
+/* Single scroll container: inner panels never scroll on their own — the popup container
+   (overflow: auto) is the one scroller for both axes. */
+.twoslash-popup-container pre { overflow: visible; }
 .twoslash-popup-expand::before {
   content: "expanded";
   display: block;
@@ -418,6 +428,28 @@ pre.shiki { background: transparent; }
    while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
    or a JS reposition). Tracked for the doc-site owner. */
 .twoslash { overflow-x: auto; }
+
+/* Inline type errors — blocks opt in with `// @errors: <code>`. A red wavy squiggle under the
+   offending token, and the message line twoslash emits below it. */
+.twoslash-error {
+  text-decoration: underline wavy #e5484d;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.twoslash-error-line,
+.twoslash-meta-line.twoslash-error-line {
+  display: block;
+  margin: 0.15rem 0;
+  padding: 0.2rem 0.6rem;
+  border-left: 2px solid #e5484d;
+  background: color-mix(in oklab, #e5484d 12%, transparent);
+  color: #c0393d;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+@media (prefers-color-scheme: dark) {
+  .twoslash-error-line, .twoslash-meta-line.twoslash-error-line { color: #ff9ea0; }
+}
 
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */
