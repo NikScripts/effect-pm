@@ -358,15 +358,11 @@ pre.shiki { background: transparent; }
   font-size: 0.78rem;
 }
 .twoslash-popup-docs-tag-name { color: var(--primary); }
-/* Long lines scroll horizontally, AND the hover popup still escapes the box vertically. The trick:
-   overflow-y: `clip` (not `auto`) is a valid pair with overflow-x: auto (no coercion to auto), so we
-   keep horizontal scroll while overflow-clip-margin extends the vertical paint region — the popup
-   paints above the block instead of being cut off. */
-.twoslash {
-  overflow-x: auto;
-  overflow-y: clip;
-  overflow-clip-margin: 22rem;
-}
+/* Long lines scroll horizontally. Caveat: overflow-x: auto makes this a scroll container, which
+   clips both axes at the box — so the twoslash hover popup is cut off at the top. Escaping the popup
+   while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
+   or a JS reposition). Tracked for the doc-site owner. */
+.twoslash { overflow-x: auto; }
 
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */
