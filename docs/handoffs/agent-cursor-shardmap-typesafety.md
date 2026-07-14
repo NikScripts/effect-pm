@@ -10,8 +10,7 @@ lives in `src/ShardMap.ts` (Telemetry posture). `EngineTag` / `Record<string, un
 removed. All `@since 1.0.0` dropped. Surviving casts (Tag stamp, SQL hydrate, PeerServiceOf leaf,
 ImplOf / ServeImplOf) each carry a `// SAFE:` one-liner. Pins in `test/shardmap.test-d.ts`.
 
-**Corpus sweep:** follow-up on `cursor/shardmap-corpus-ce05` — naming / TSDoc / resource-pattern
-pass over the four ShardMap files (this handoff's "Not yet covered").
+**Corpus sweep:** **PR [#41](https://github.com/NikScripts/effect-pm/pull/41)** on `cursor/shardmap-corpus-ce05` — naming / TSDoc / resource-pattern pass over the four ShardMap files.
 
 ---
 
