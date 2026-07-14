@@ -62,9 +62,10 @@ Not top-level `appendLog` / `logQuery`. Use a normal Store **shape** named `log`
 | Locked | Choice |
 |--------|--------|
 | Shape API | `Store.shape(row)` only — no second schema arg |
-| Query style | Drizzle **relational query API** object `where` |
+| Query style | Drizzle **relational query API** object `where` — **fully featured / basically identical** |
 | Nesting | **Required in v1** (nested row fields / nested `where`) |
-| Composable ops (`eq(col, v)` + `and`/`or`) | **Later** — not v1 |
+| Operators in v1 | Full RQB set: bare eq shorthand, `{ eq, ne, gt, gte, lt, lte, in, notIn, like, ilike, … }`, `AND` / `OR` / `NOT` |
+| Composable column-ref API (`eq(col, v)` imports) | **Later** — object `where` is v1; SQL-builder style can wait |
 
 ```ts
 // Before (delete)
@@ -73,16 +74,16 @@ Store.shape(readingSchema, Schema.Struct({ limit: Schema.optional(Schema.Number)
 // After
 Store.shape(readingSchema)
 
-// Shared baked-in payload + typed nested where (inspired by Drizzle RQB)
+// Shared baked-in payload + Drizzle-RQB-identical nested where
 yield* handle.readings.read({
   limit: 50,
-  // after / before — shared time window (names TBD; today helpers use after/before ms)
   where: {
     value: 72,                              // shorthand eq
     meta: {
-      source: { eq: "probe" },              // nested field
-      // missing: 1,                        // type error — not on meta
+      source: { eq: "probe" },
+      count: { gte: 1, lt: 10 },
     },
+    OR: [{ value: { gt: 100 } }, { value: { lt: 0 } }],
     // unknownTop: 1,                       // type error
   },
 });
@@ -95,13 +96,13 @@ yield* handle.log.append(entry);
 yield* handle.log.read({
   limit: 200,
   where: {
-    level: "Warn",
+    level: { in: ["Warn", "Error"] },
     annotations: { /* nested if row exposes nested structure */ },
   },
 });
 ```
 
-`where` keys are inferred from the **row schema** (including nested structs). Operator object form mirrors Drizzle RQB (`eq` / `gt` / `in` / … as needed for v1; bare value = equality). Shared options (`limit`, time window, …) live on the baked-in payload — identical for every shape.
+`where` is typed from the **row schema** (nested structs included). Mirror Drizzle RQB operator surface as closely as the in-memory/EventJournal engine can honor (document any SQL-only ops like `arrayContains` if skipped or stubbed). Shared options (`limit`, time window, …) live on the baked-in payload — identical for every shape.
 
 Do **not** copy the interim `LogStore` fat `logQueryPayloadSchema` onto the shape. Lineage helpers may still be thin customs/`Resource.logs().query` facades over `log.read({ where: … })`.
 
@@ -471,22 +472,24 @@ pnpm typecheck && pnpm test && pnpm lint
 
 | Unlock name | Delivers |
 |-------------|----------|
+| **`store-read-0`** | Unified baked-in read payload + nested RQB `where`; remove `Store.shape` payload arg; migrate call sites |
 | **`followers-0`** | Shared `followRelayLayer` + `persistLayer` wrapper + lineId decision |
 | **`followers-1`** | Implicit `log` shape on `*.store(tag)` + `Resource.store(node)` (or chosen node API) |
 | **`followers-2`** | Fork followers from store layer build + `test/logs-follower.test.ts` |
 | **`followers-3`** | Example + `LOGS.md` + `Resource.logs`/`byNode` reader wiring + changeset |
 
-Owner may unlock `followers-0` alone or `followers-0..2` as one PR if preferred.
+`store-read-0` before (or merged with) `followers-1`. Owner may unlock slices individually.
 
 ---
 
 ## Owner unlock checklist
 
-1. Implicit `log` shape: **row-only** `Store.shape(LogEntrySchema)` vs row + small shared defaults (`limit` / `since` / `until`). Fat lineage filters stay in customs — locked.  
-2. Confirm node registration API: **`Resource.store(WnbaNode)`** (general node store; logs = implicit `log` shape) vs log-only sugar (`WnbaNode.logs`) vs both.  
-3. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
-4. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
-5. Unlock named slice: `followers-0` / `0–2` / `0–3`.  
-6. Levels + remote remain parked until a later unlock.
+1. ~~Read style~~ — **locked:** remove per-shape payload arg; one baked-in payload; Drizzle RQB nested `where` in v1; composable `eq`/`and` later.  
+2. Confirm **v1 operator set** on `where` values: equality shorthand only, or also `{ eq, ne, gt, gte, lt, lte, in, … }` in v1.  
+3. Confirm node registration API: **`Resource.store(WnbaNode)`** vs log-only sugar (`WnbaNode.logs`) vs both.  
+4. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
+5. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
+6. Unlock named slice: `store-read-0` / `followers-0` / …  
+7. Levels + remote remain parked until a later unlock.
 
 **Stop — no code until unlock.**
