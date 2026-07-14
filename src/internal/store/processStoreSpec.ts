@@ -16,7 +16,6 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import {
   makeProcessExecutionEvent,
-  processEventReadPayload,
   processExecutionEventVoid,
   type ProcessExecutionEventVoid,
 } from "../processEvent";
@@ -144,10 +143,7 @@ const runKey = (startedAt: number, scheduleKey: string | null): string =>
 // ============================================================================
 
 type ProcessEventHandles = ShapeHandles<{
-  readonly event: ReturnType<typeof Store.shape<
-    ReturnType<typeof processEventSchema>,
-    typeof processEventReadPayload
-  >>;
+  readonly event: ReturnType<typeof Store.shape<ReturnType<typeof processEventSchema>>>;
 }>;
 
 /** Shared base methods — extensions close over the same `event.append` / `event.read`. @internal */
@@ -161,17 +157,14 @@ const processStoreBaseMethods = ({ event }: ProcessEventHandles) => ({
 /** Built-in process store contract for a tag — one `event` shape (mirrors {@link BuiltInQueueContract}). @internal */
 export type BuiltInProcessContract<Tag extends StoreScopeTag> = StoreContractValue<
   {
-    readonly event: StoreShapeDef<
-      ProcessEventSchemaOf<Tag>,
-      typeof processEventReadPayload
-    >;
+    readonly event: StoreShapeDef<ProcessEventSchemaOf<Tag>>;
   },
   {
     readonly record: (
       event: ProcessStoreEvent<Tag>,
     ) => Effect.Effect<void, StoreWriteError>;
     readonly events: (
-      payload?: { readonly limit?: number },
+      payload?: Store.StoreReadPayload<ProcessStoreEvent<Tag>>,
     ) => Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>>;
     readonly hasPriorExecutions: () => Effect.Effect<boolean>;
   }
@@ -190,7 +183,7 @@ export const makeProcessStoreBaseContract = (
 ) =>
   Store.contract(
     {
-      event: Store.shape(processEventSchema(success, error), processEventReadPayload),
+      event: Store.shape(processEventSchema(success, error)),
     },
     processStoreBaseMethods,
   );

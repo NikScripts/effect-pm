@@ -4,8 +4,9 @@
  * @remarks
  * ## Mental model
  *
- * A **contract** declares named **shapes** (row schema + optional read payload). Each shape becomes
- * `store.<shape>.append` and `store.<shape>.read` on the materialized handle. Part 2 of
+ * A **contract** declares named **shapes** (row schema). Each shape becomes
+ * `store.<shape>.append` and `store.<shape>.read` on the materialized handle. Every `.read` shares
+ * one baked-in payload (`limit` / time window / Drizzle-RQB nested `where`). Part 2 of
  * {@link contract} may add flat aliases, bare {@link Effect}s, or effect functions — never raw
  * `readWith` helpers.
  *
@@ -50,10 +51,7 @@
  * import * as Schema from "effect/Schema";
  *
  * const thermometerContract = Store.contract({
- *   readings: Store.shape(
- *     Schema.Struct({ value: Schema.Number }),
- *     Schema.Struct({ limit: Schema.optional(Schema.Number) }),
- *   ),
+ *   readings: Store.shape(Schema.Struct({ value: Schema.Number })),
  * });
  *
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -63,7 +61,10 @@
  * const program = Effect.gen(function* () {
  *   const handle = yield* AppStore.at("thermometer");
  *   yield* handle.readings.append({ value: 72 });
- *   const rows = yield* handle.readings.read({ limit: 10 });
+ *   const rows = yield* handle.readings.read({
+ *     limit: 10,
+ *     where: { value: { gte: 70 } },
+ *   });
  * });
  *
  * Effect.provide(program, AppStore.layerMemory);
@@ -123,7 +124,6 @@ import {
   withRegistrationRetention,
 } from "./internal/store/registration";
 import {
-  emptyPayloadSchema,
   isStoreContractValue,
   makeShapeRefs,
   makeStoreContractValue,
@@ -155,6 +155,7 @@ import type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreLayerOptions, StoreLogLevel } from "./internal/store/types";
 export type { StoreHandleFromContract } from "./internal/store/spec";
 export type { ExtendCustom, MergedCustom, MethodsReturn, StoreContractValue, StoreMethodsFn, StoreShapeDef, StoreShapeInput, StoreShapes } from "./internal/store/contract";
+export type { StoreReadPayload, WhereFilter, WhereOperators, WhereField } from "./internal/store/where";
 
 export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, StoreWriteError } from "./internal/store/errors";
 
@@ -596,32 +597,21 @@ export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
   : never;
 
 /**
- * Row shape with an optional read-query payload schema (defaults to empty struct).
+ * Declare a row shape. Every shape shares the baked-in read payload
+ * (`limit` / `before` / `after` / nested RQB `where`).
  *
  * @public
  */
-export function shape<Row extends Schema.Schema<unknown>>(
-  row: Row,
-): StoreShapeDef<Row, typeof emptyPayloadSchema>;
-export function shape<
-  Row extends Schema.Schema<unknown>,
-  Read extends Schema.Schema<unknown>,
->(
-  row: Row,
-  read: Read,
-): StoreShapeDef<Row, Read>;
-export function shape(
-  row: Schema.Schema<unknown>,
-  read?: Schema.Schema<unknown>,
-): StoreShapeDef {
-  return makeStoreShape(row, read);
+export function shape<Row extends Schema.Schema<unknown>>(row: Row): StoreShapeDef<Row> {
+  return makeStoreShape(row);
 }
 
 /**
  * Declare store shapes and optional custom methods.
  *
- * Part 1 declares row shapes (each becomes `store.<shape>.append` / `.read`).
- * Part 2 optionally adds flat aliases, bare Effects, or effect functions — not `readWith` helpers.
+ * Part 1 declares row shapes (each becomes `store.<shape>.append` / `.read` with the
+ * baked-in read payload). Part 2 optionally adds flat aliases, bare Effects, or effect
+ * functions — not `readWith` helpers.
  *
  * @example Part 1 only
  * ```ts

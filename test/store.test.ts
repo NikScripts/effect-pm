@@ -9,12 +9,8 @@ const readingSchema = Schema.Struct({
   value: Schema.Number,
 });
 
-const listReadingsPayload = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
-});
-
 const shapedThermometerContract = Store.contract({
-  readings: Store.shape(readingSchema, listReadingsPayload),
+  readings: Store.shape(readingSchema),
 });
 
 const thermometerContract = Store.contract(

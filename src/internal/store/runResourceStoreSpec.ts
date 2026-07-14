@@ -16,7 +16,7 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import * as Store from "../../Store";
 import { failureRate, recent } from "./analytics";
-import { makeRunResourceFactEvent, runFactReadPayload } from "../runResourceEvent";
+import { makeRunResourceFactEvent } from "../runResourceEvent";
 import { errorOf, successOf } from "../runTagSchemas";
 import { runGateStatus } from "../runResourceSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
@@ -46,11 +46,6 @@ export const runStateChangeSchema = Schema.Struct({
   reason: Schema.String,
   previous: Schema.NullOr(runStateSchema),
   current: runStateSchema,
-});
-
-/** Read payload for built-in `stateHistory`. @internal */
-export const runStateReadPayload = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
 });
 
 /** Persisted run fact for the default void contract. @internal */
@@ -106,41 +101,29 @@ export interface RunStoreStats {
   readonly failed: number;
 }
 
-/** Read payload for built-in `facts`. @internal */
-export type RunFactReadPayload = {
-  readonly limit?: number;
-  readonly runId?: string;
-};
+/** @deprecated Prefer `Store.StoreReadPayload<FactRow>` with `where: { runId }`. @internal */
+export type RunFactReadPayload = Store.StoreReadPayload<RunFact>;
 
 /** Shared write surface for tier-1 contracts. @internal */
 type RunResourceStoreWrites = {
   readonly record: (fact: RunFact) => Effect.Effect<void, StoreWriteError>;
   readonly facts: (
-    payload?: RunFactReadPayload,
+    payload?: Store.StoreReadPayload<RunFact>,
   ) => Effect.Effect<ReadonlyArray<RunFact>>;
   readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void, StoreWriteError>;
   readonly stateHistory: (
-    payload?: { readonly limit?: number },
+    payload?: Store.StoreReadPayload<RunStateChange>,
   ) => Effect.Effect<ReadonlyArray<RunStateChange>>;
 };
 
 /** Built-in run-resource store contract (tier 1). @internal */
 export type BuiltInRunResourceContract = StoreContractValue<
   {
-    readonly fact: StoreShapeDef<typeof runFactSchema, typeof runFactReadPayload>;
-    readonly state: StoreShapeDef<typeof runStateChangeSchema, typeof runStateReadPayload>;
+    readonly fact: StoreShapeDef<typeof runFactSchema>;
+    readonly state: StoreShapeDef<typeof runStateChangeSchema>;
   },
   RunResourceStoreWrites
 >;
-
-/** Post-filter `fact.read` when `runId` is present on the read payload. @internal */
-const factsRead = <Row extends { readonly runId: string }>(
-  read: (payload?: RunFactReadPayload) => Effect.Effect<ReadonlyArray<Row>>,
-) =>
-  (payload?: RunFactReadPayload): Effect.Effect<ReadonlyArray<Row>> =>
-    payload?.runId === undefined
-      ? read(payload)
-      : Effect.map(read(payload), (rows) => rows.filter((row) => row.runId === payload.runId));
 
 /** Tier-1 custom methods over `fact` + `state` shape handles. @internal */
 const runResourceTier1Methods = <FactRow extends { readonly runId: string }>({
@@ -149,15 +132,20 @@ const runResourceTier1Methods = <FactRow extends { readonly runId: string }>({
 }: {
   readonly fact: {
     readonly append: (row: FactRow | ReadonlyArray<FactRow>) => Effect.Effect<void, StoreWriteError>;
-    readonly read: (payload?: RunFactReadPayload) => Effect.Effect<ReadonlyArray<FactRow>>;
+    readonly read: (
+      payload?: Store.StoreReadPayload<FactRow>,
+    ) => Effect.Effect<ReadonlyArray<FactRow>>;
   };
   readonly state: {
     readonly append: (row: RunStateChange) => Effect.Effect<void, StoreWriteError>;
-    readonly read: (payload?: { readonly limit?: number }) => Effect.Effect<ReadonlyArray<RunStateChange>>;
+    readonly read: (
+      payload?: Store.StoreReadPayload<RunStateChange>,
+    ) => Effect.Effect<ReadonlyArray<RunStateChange>>;
   };
 }) => ({
   record: fact.append,
-  facts: factsRead(fact.read),
+  // Prefer `facts({ where: { runId } })` — system `where` replaces the old runId payload field.
+  facts: fact.read,
   recordStateChange: state.append,
   stateHistory: state.read,
 });
@@ -171,8 +159,8 @@ export const makeRunResourceStoreContract = (
   type FactRow = Schema.Schema.Type<typeof factSchema>;
   return Store.contract(
     {
-      fact: Store.shape(factSchema, runFactReadPayload),
-      state: Store.shape(runStateChangeSchema, runStateReadPayload),
+      fact: Store.shape(factSchema),
+      state: Store.shape(runStateChangeSchema),
     },
     (handles) => runResourceTier1Methods<FactRow>(handles),
   );
@@ -323,4 +311,5 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
 export const builtInRunResourceStoreSpec = (tag: StoreScopeTag) =>
   builtInRunResourceStoreContract(tag).spec;
 
-export { runFactReadPayload };
+/** @deprecated Use {@link Store.StoreReadPayload}. @internal */
+export { runFactReadPayload } from "../runResourceEvent";

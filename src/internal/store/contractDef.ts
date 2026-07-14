@@ -13,37 +13,24 @@ import type { StoreWriteError } from "./errors";
 import { makeScopeHandle } from "./memoryScope";
 import type { AppendSideEffects } from "./memoryScope";
 import type { StoreSpec } from "./spec";
+import {
+  storeReadPayloadSchema,
+  type StoreReadPayload,
+} from "./where";
 
 export const storeContractSym = Symbol.for("@nikscripts/effect-pm/Store/contractDef");
 export const storeShapeSym = Symbol.for("@nikscripts/effect-pm/Store/shape");
 export const shapeRefSym = Symbol.for("@nikscripts/effect-pm/Store/shapeRef");
 
+/** @deprecated Empty read payload — reads now use {@link storeReadPayloadSchema}. @internal */
 export const emptyPayloadSchema = Schema.Struct({});
-/** @internal */
+/** @deprecated @internal */
 export type EmptyReadPayload = typeof emptyPayloadSchema.Type;
 
-/** True when the read payload is an empty struct schema. @internal */
-export const isEmptyReadSchema = (schema: Schema.Schema<unknown>): boolean =>
-  schema === emptyPayloadSchema ||
-  (Schema.isSchema(schema) &&
-    "fields" in schema &&
-    typeof schema.fields === "object" &&
-    schema.fields !== null &&
-    Object.keys(schema.fields).length === 0);
-
-/** Normalize empty read schemas to {@link emptyPayloadSchema}. @internal */
-export const normalizeReadSchema = (
-  schema: Schema.Schema<unknown>,
-): Schema.Schema<unknown> => (isEmptyReadSchema(schema) ? emptyPayloadSchema : schema);
-
-/** Row + read-query payload for one shape. @internal */
-export interface StoreShapeDef<
-  Row extends Schema.Schema<unknown> = Schema.Schema<unknown>,
-  Read extends Schema.Schema<unknown> = typeof emptyPayloadSchema,
-> {
+/** Row shape definition — system read payload is baked in (not per-shape). @internal */
+export interface StoreShapeDef<Row extends Schema.Schema<unknown> = Schema.Schema<unknown>> {
   readonly [storeShapeSym]: typeof storeShapeSym;
   readonly row: Row;
-  readonly read: Read;
 }
 
 /** A leaf shape value — row schema or {@link StoreShapeDef}. @internal */
@@ -59,7 +46,8 @@ export type StoreShapeInput = StoreShapeInputLeaf | StoreShapeTree;
 /** @internal */
 export type NormalizedShape = {
   readonly row: Schema.Schema<unknown>;
-  readonly read: Schema.Schema<unknown>;
+  /** Always the baked-in system read payload schema. */
+  readonly read: typeof storeReadPayloadSchema;
 };
 
 /** @internal */
@@ -77,13 +65,10 @@ export type NormalizedShapes<Shapes extends StoreShapes> = {
 };
 
 /** @internal */
-export type NormalizeShape<S extends StoreShapeInput> = S extends StoreShapeDef<
-  infer Row,
-  infer Read
->
-  ? { readonly row: Row; readonly read: Read }
+export type NormalizeShape<S extends StoreShapeInput> = S extends StoreShapeDef<infer Row>
+  ? { readonly row: Row; readonly read: typeof storeReadPayloadSchema }
   : S extends Schema.Schema<infer _A>
-    ? { readonly row: S; readonly read: typeof emptyPayloadSchema }
+    ? { readonly row: S; readonly read: typeof storeReadPayloadSchema }
     : never;
 
 export const CUSTOM_READ_ALIAS = "Store/customReadAlias" as const;
@@ -115,47 +100,29 @@ export type SchemaDecoded<S extends Schema.Schema<unknown>> = S extends Schema.S
   ? Simplify<Schema.Struct.Type<F>>
   : Simplify<Schema.Schema.Type<S>>;
 
-/** True when every key in `P` is optional (or `P` is empty). @internal */
-/** True when every key in `P` is optional (or `P` is empty). @internal */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- `{}` is the standard optional-key probe
-type AllKeysOptional<P> = { [K in keyof P]-?: {} extends Pick<P, K> ? true : false }[keyof P];
-
-/** Optional read payload for empty structs or structs whose fields are all optional. @internal */
-export type IsOptionalReadPayload<P> = keyof P extends never
-  ? true
-  : AllKeysOptional<P> extends true
-    ? true
-    : false;
-
 /** Inlined append/read members — expanded for readable hovers (not alias names). @internal */
-export type ShapeNamespaceMembers<
-  Row extends Schema.Schema<unknown>,
-  Read extends Schema.Schema<unknown>,
-> = {
+export type ShapeNamespaceMembers<Row extends Schema.Schema<unknown>> = {
   readonly append: (
     row: SchemaDecoded<Row> | ReadonlyArray<SchemaDecoded<Row>>,
   ) => Effect.Effect<void, StoreWriteError>;
-  readonly read: IsOptionalReadPayload<Schema.Schema.Type<Read>> extends true
-    ? (payload?: SchemaDecoded<Read>) => Effect.Effect<ReadonlyArray<SchemaDecoded<Row>>>
-    : (payload: SchemaDecoded<Read>) => Effect.Effect<ReadonlyArray<SchemaDecoded<Row>>>;
+  readonly read: (
+    payload?: StoreReadPayload<SchemaDecoded<Row>>,
+  ) => Effect.Effect<ReadonlyArray<SchemaDecoded<Row>>>;
 };
 
 /** @internal */
-export type ShapeReadFn<
-  Row extends Schema.Schema<unknown>,
-  Read extends Schema.Schema<unknown>,
-> = ShapeNamespaceMembers<Row, Read>["read"];
+export type ShapeReadFn<Row extends Schema.Schema<unknown>> = ShapeNamespaceMembers<Row>["read"];
 
 /** @internal */
 export type ShapeAppendFn<Row extends Schema.Schema<unknown>> =
-  ShapeNamespaceMembers<Row, typeof emptyPayloadSchema>["append"];
+  ShapeNamespaceMembers<Row>["append"];
 
 /** @internal */
 export type ShapeHandle<N extends NormalizedShape> = {
   readonly schema: N["row"];
-  readonly readPayload: N["read"];
+  readonly readPayload: typeof storeReadPayloadSchema;
   readonly append: ShapeAppendFn<N["row"]>;
-  readonly read: ShapeReadFn<N["row"], N["read"]>;
+  readonly read: ShapeReadFn<N["row"]>;
 };
 
 /**
@@ -275,19 +242,15 @@ export const isStoreShapeInput = (value: unknown): value is StoreShapeInput =>
 /** @internal */
 export const normalizeShapeInput = (input: StoreShapeInputLeaf): NormalizedShape =>
   isStoreShapeDef(input)
-    ? { row: input.row, read: normalizeReadSchema(input.read) }
-    : { row: input, read: emptyPayloadSchema };
+    ? { row: input.row, read: storeReadPayloadSchema }
+    : { row: input, read: storeReadPayloadSchema };
 
 /** @internal */
-export function makeStoreShape(
-  row: Schema.Schema<unknown>,
-  read?: Schema.Schema<unknown>,
-): StoreShapeDef {
+export function makeStoreShape<Row extends Schema.Schema<unknown>>(row: Row): StoreShapeDef<Row> {
   return {
     [storeShapeSym]: storeShapeSym,
     row,
-    read: read === undefined ? emptyPayloadSchema : normalizeReadSchema(read),
-  } as StoreShapeDef;
+  };
 }
 
 /** @internal */
@@ -545,7 +508,7 @@ const compileStoreContractBody = <
     spec[shapeKey] = storeAppend(shape.row);
     spec[readSpecKey(shapeKey)] = storeQuery({
       from: shapeKey,
-      payload: shape.read,
+      payload: storeReadPayloadSchema,
       result: Schema.Array(shape.row),
     });
   }
@@ -704,7 +667,7 @@ export const mergeStoreContractsBody = <
     spec[shapeKey] = storeAppend(shape.row);
     spec[readSpecKey(shapeKey)] = storeQuery({
       from: shapeKey,
-      payload: shape.read,
+      payload: storeReadPayloadSchema,
       result: Schema.Array(shape.row),
     });
   }

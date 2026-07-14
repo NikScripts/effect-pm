@@ -486,10 +486,8 @@ pnpm typecheck && pnpm test && pnpm lint
 ## Owner unlock checklist
 
 1. ~~Read style~~ — **locked:** remove per-shape payload arg; one baked-in payload; Drizzle RQB `where` **fully featured + nested** in v1; composable column-ref API later.  
-2. Confirm node registration API: **`Resource.store(WnbaNode)`** vs log-only sugar (`WnbaNode.logs`) vs both.  
+2. ~~Node registration~~ — **locked: both** `Resource.store(WnbaNode)` (general) **and** `WnbaNode.logs` sugar.  
 3. Confirm **node + resource both active** ⇒ two buckets (copies OK) vs nest resource writes under node only. Plan assumes **copies OK, memo per scope**.  
 4. Confirm **`lineId`**: relay-assigned annotation (recommended) vs hash fallback.  
-5. Unlock named slice: `store-read-0` / `followers-0` / …  
+5. ~~Focus~~ — **build `store-read-0` now** (query filters). Followers after.  
 6. Levels + remote remain parked until a later unlock.
-
-**Stop — no code until unlock.**

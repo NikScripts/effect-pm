@@ -14,12 +14,13 @@ import {
   materializeContractHandle,
   type StoreContractValue,
 } from "./contractDef";
-import { applyQueryOpts, queryOptsFromReadPayload } from "./helpers";
+import { applyQueryOpts, isRecord, limitOpts, queryOptsFromReadPayload, windowOpts } from "./helpers";
 import type { StoreChangeEvent, StoreJournalDecodeError } from "./errors";
 import { StoreChangeEvent as StoreChangeEventClass } from "./errors";
 import { decodeJournalPayload, encodeJournalPayload } from "./journalCodec";
 import { trimScopeRetention } from "./journalRetention";
 import { APPEND_TAG, QUERY_TAG, type FlatStoreHandleOf, type StoreHandleOf, type StoreSpec } from "./spec";
+import { filterRowsByWhere } from "./where";
 
 /** @internal */
 export interface StoredRow {
@@ -174,9 +175,21 @@ export const makeScopeHandle = <S extends StoreSpec>(
             [...rows].sort((a, b) => a.occurredAtMillis - b.occurredAtMillis),
             sideEffects.maxRows,
           );
-          const matched = applyQueryOpts(
+          const where =
+            isRecord(decodedPayload) && "where" in decodedPayload
+              ? decodedPayload.where
+              : undefined;
+          // Window first, then field filters, then limit — so `limit` counts matching rows.
+          const queryOpts = queryOptsFromReadPayload(decodedPayload);
+          const windowed = applyQueryOpts(
             capped,
-            queryOptsFromReadPayload(decodedPayload),
+            windowOpts(queryOpts),
+            (row) => row.occurredAtMillis,
+          );
+          const filtered = filterRowsByWhere(windowed, where, (row) => row.payload);
+          const matched = applyQueryOpts(
+            filtered,
+            limitOpts(queryOpts),
             (row) => row.occurredAtMillis,
           ).map((row) => row.payload);
           return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(entry.result))(matched);

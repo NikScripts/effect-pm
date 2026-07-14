@@ -1480,6 +1480,7 @@ export const processLogEntry = LogEntrySchema;
 /**
  * Read payload for process store `events` queries.
  *
+ * @deprecated Shape reads use the baked-in Store read payload (`limit` / nested `where`).
  * @public
  */
 export { processEventReadPayload };
