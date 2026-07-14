@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Layer } from "effect";
+import { Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { LogAnnotationKeys } from "../src/LogContext";
 import * as LogEntry from "../src/LogEntry";
@@ -39,9 +39,6 @@ const entry = (
   },
   spans: [],
 });
-
-/** LogRelay must be a provide parent so tails see it at store layer build. */
-const env = AppStore.layerMemory.pipe(Layer.provideMerge(Logs.layer));
 
 describe("durable log store tail", () => {
   it("meetsStoreLevel gates on Effect LogLevel order", () => {
@@ -88,7 +85,7 @@ describe("durable log store tail", () => {
       expect(a.every(LogEntry.hasKey(ProcA.key))).toBe(true);
       // Warn floor on ProcB drops Info
       expect(b).toEqual([]);
-    }).pipe(Effect.provide(env), Effect.scoped),
+    }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
 
   it.effect("memo appends once for the same lineId", () =>
@@ -103,7 +100,7 @@ describe("durable log store tail", () => {
       const handle = yield* AppStore.at(ProcA);
       const rows = yield* handle.log.read();
       expect(rows.filter((row) => row.message === "dup")).toHaveLength(1);
-    }).pipe(Effect.provide(env), Effect.scoped),
+    }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
 
   it.effect("Warn floor drops Info on that registration", () =>
@@ -117,13 +114,17 @@ describe("durable log store tail", () => {
       const handle = yield* AppStore.at(ProcB);
       const rows = yield* handle.log.read();
       expect(rows.map((row) => row.message)).toEqual(["warn"]);
-    }).pipe(Effect.provide(env), Effect.scoped),
+    }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("store builds with empty log.read when LogRelay is absent", () =>
+  it.effect("AppStore.layerMemory includes Logs capture + empty log until publish", () =>
     Effect.gen(function* () {
       const handle = yield* AppStore.at(ProcA);
+      expect(yield* handle.log.read()).toEqual([]);
+      yield* Effect.logInfo("captured-by-store-layer");
+      yield* TestClock.adjust(Duration.millis(300));
       const rows = yield* handle.log.read();
+      // No lineage scope on bare Effect.log — resource match drops it.
       expect(rows).toEqual([]);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
@@ -135,6 +136,6 @@ describe("durable log store tail", () => {
       const snap = yield* relay.snapshot;
       const last = snap[snap.length - 1];
       expect(last?.annotations[LogAnnotationKeys.lineId]).toBeDefined();
-    }).pipe(Effect.provide(Logs.layer), Effect.scoped),
+    }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   );
 });

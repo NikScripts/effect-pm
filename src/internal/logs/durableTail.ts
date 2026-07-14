@@ -102,9 +102,8 @@ export const layerFromRelay = (
   );
 
 /**
- * Store builds whether or not {@link Logs.layer} is present. When {@link LogRelay} is in the
- * **parent** context at layer build time (e.g. `AppStore.layerMemory.pipe(Layer.provideMerge(Logs.layer))`),
- * the tail starts; otherwise this is {@link Layer.empty}.
+ * When {@link LogRelay} is already in context, fork a closed tail; else {@link Layer.empty}.
+ * {@link Store} `layerMemory` / `layer` bake in the logs layer, so tails normally start.
  *
  * Prefer {@link layersForRegistrations} at the store unwrap site (captures relay once).
  *
@@ -120,12 +119,10 @@ export const layerOptional = (options: DurableTail): Layer.Layer<never> =>
   );
 
 /**
- * Optional durable tails for registrations that carry the implicit {@link LogEntry} `log` shape.
+ * Durable tails for registrations that carry the implicit {@link LogEntry} `log` shape.
  *
- * Pass the {@link LogRelay} resolved in the same store-layer unwrap that builds the bundle so
- * nested `Layer.provide` does not lose the service. When `relay` is `None`, returns {@link Layer.empty}.
- *
- * Resource scopes match {@link LogEntry.hasKey}.
+ * Pass the {@link LogRelay} resolved in the same store-layer unwrap that builds the bundle.
+ * When `relay` is `None`, returns {@link Layer.empty}. Resource scopes match {@link LogEntry.hasKey}.
  *
  * @internal
  */
