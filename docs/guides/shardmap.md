@@ -1,24 +1,23 @@
 {#shardmap title="ShardMap" appliesTo=all}
 # ShardMap
 
-A partitioned key/value Resource factory. Declare `key` / `value` schemas, distribute
-across nodes, and every routed `get` / `put` / `delete` forwards to the owning shard via
-`Resource.peers`. Leaf `*Local` ops stay on this node. Fleet folds report shard sizes.
-An unreachable owner degrades to a miss — never a silent write on the wrong shard.
-
-This is the toolkit noun for the intro's "Working with peers" Sessions beat.
+The intro's Sessions beat — a key lives on *someone's* node; `get` forwards to the owner via
+`Resource.peers` — is a pattern every multi-droplet app reinvents. **ShardMap** is that pattern as a
+Resource factory: declare `key` / `value`, distribute across `app/Droplet*` nodes, and every routed
+`get` / `put` / `delete` finds the owner. Leaf `*Local` ops stay on this shard. Fleet folds report
+sizes. An unreachable owner degrades to a miss — never a silent write on the wrong droplet.
 
 ## Declare the map
 
-Schemas live on the Tag. `keyOf` extracts the partition key from a value (routed `put`).
-Partition strategy is a runtime option on `layer` / `serve` (default: `consistentHash`).
+Schemas on the Tag. `keyOf` extracts the partition key from a value (routed `put`). Partition strategy
+is a runtime option on `serve` / `layer` (default: `ShardMap.consistentHash`).
 
 {.twoslash}
 ``` ts
 import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
 import * as Resource from "@nikscripts/effect-pm/Resource"
 import { Schema } from "effect"
-
+// ---cut---
 class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
 class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
@@ -39,70 +38,91 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 ) {}
 ```
 
-## Serve on a node
+## Bring a droplet online
 
-`.pipe(Layer.provide(Resource.peersLayer(...)))` is the mesh discharge — same recipe as
-Telemetry / any fleet-aware Resource.
+One materialization — local shard + RPC handlers + peer clients. Swap `DropletEast` for West /
+Central on the other machines; the caller's program does not change.
 
 {.twoslash}
 ``` ts
 import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
 import * as Resource from "@nikscripts/effect-pm/Resource"
 import { Layer, Schema } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
 class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
 const SessionId = Schema.String
-const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
+const Session = Schema.Struct({
+  id: SessionId,
+  userId: Schema.String,
+  seat: Schema.optionalKey(Schema.String),
+})
 class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([DropletEast, DropletWest])) {}
+}).pipe(
+  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+) {}
+const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
+  Resource.httpServer(resource).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
 // ---cut---
-const onEast = ShardMap.serve(Sessions, {
-  partition: ShardMap.consistentHash, // default
-}).pipe(Layer.provide(Resource.peersLayer(Sessions, DropletEast)))
+const east = ShardMap.serve(Sessions).pipe(
+  Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
+  nodeServer(3001),
+)
+// east: Layer — this droplet owns its shard and forwards the rest through peers
 ```
 
-## Routed ops
+## Put and get from anywhere
 
-From any node in the pack, callers use the same handle — routing stays inside the Resource.
+From East's HTTP edge or West's poller — same handle. Ownership + the hop stay inside the Resource.
 
 {.twoslash}
 ``` ts
 import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Schema } from "effect"
 const SessionId = Schema.String
-const Session = Schema.Struct({ id: SessionId, userId: Schema.String, seat: Schema.optionalKey(Schema.String) })
+const Session = Schema.Struct({
+  id: SessionId,
+  userId: Schema.String,
+  seat: Schema.optionalKey(Schema.String),
+})
 class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
 }) {}
 const program = Effect.gen(function* () {
-  const sessions = yield* Sessions
-  // ---cut---
-  const wrote = yield* sessions.put({
-    id: "fan-90210",
-    userId: "u_nik",
-    seat: "124-A",
-  })
-  // true when the owning node accepted the write; false if that owner is unreachable
+// ---cut---
+const sessions = yield* Sessions
 
-  const seat = yield* sessions.get("fan-90210")
-  // Option<Session> — from whoever owns the key; none on miss
+const wrote = yield* sessions.put({
+  id: "fan-90210",
+  userId: "u_nik",
+  seat: "124-A",
+})
+// wrote: boolean — true when the owning node accepted the write
 
-  const dropped = yield* sessions.delete("fan-90210")
-  // ---cut-after---
+const session = yield* sessions.get("fan-90210")
+// session: Option<Session> — from whoever owns the key; none on miss
+
+const dropped = yield* sessions.delete("fan-90210")
+// dropped: boolean — true when an entry was removed on the owner
+// ---cut-after---
 })
 ```
 
-## Leaves and fleet folds
+Leaf ops (`getLocal` / `putLocal` / `deleteLocal` / `sizeLocal`) stay on **this** shard — that is what
+peers fold and what routed ops forward to.
 
-- **Routed** — `get` / `put` / `delete` — ownership forward (or local when you own the key)
-- **Leaf** — `getLocal` / `putLocal` / `deleteLocal` / `sizeLocal` — this node's shard only;
-  peers fold these
-- **Fleet** — `sizeByNode` / `size` — per-node counts and their sum
+## Fleet sizes
+
+Ops across the pack without inventing a second dashboard tag:
 
 {.twoslash}
 ``` ts
@@ -116,19 +136,23 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   keyOf: (s) => s.id,
 }) {}
 const program = Effect.gen(function* () {
-  const sessions = yield* Sessions
-  // ---cut---
-  const shards = yield* sessions.sizeByNode
-  // { "app/DropletEast": 14_202, "app/DropletWest": 13_880, … }
-  const fleet = yield* sessions.size
-  // ---cut-after---
+// ---cut---
+const sessions = yield* Sessions
+
+const shards = yield* sessions.sizeByNode
+// shards: Record<string, number> — e.g. { "app/DropletEast": 14202, "app/DropletWest": 13880 }
+
+const fleet = yield* sessions.size
+// fleet: number — sum across self + peers
+// ---cut-after---
 })
 ```
 
 ## Partition ethic (v1)
 
-`ShardMap.consistentHash` sorts the node keys and picks with `Hash.string` modulo — stable for a
-**fixed** node set. Membership change remaps keys; treat that as intentional. Hot keys and
-rebalance are not reinvented here yet — v1 prioritizes loud miss over silent wrong answer.
+`ShardMap.consistentHash` sorts node keys and picks with `Hash.string` modulo — stable for a
+**fixed** fleet. Membership change remaps keys; treat that as intentional. Unreachable owner →
+`get` is `none`, `put` returns `false` — miss beats silent wrong answer.
 
-See also [Fleets & Peers](/docs/fleets-and-peers) and `pnpm run example:shardmap-sessions`.
+Runnable form: `pnpm run example:shardmap-sessions`. See also
+[Fleets & Peers](/docs/fleets-and-peers).

@@ -1,32 +1,62 @@
 {#telemetry title="Telemetry" appliesTo=all}
 # Telemetry
 
-Serve a node's Effect `Metric` registry as a Resource — leaf snapshots for this
-runtime, fleet folds when the tag is meshed. The thin counterpart to OTEL export:
-same source (the per-node registry), different sink. Use Telemetry for in-app
-glass (dashboards, TUIs, a `pm metrics` command); use `@effect/opentelemetry` when
-you want Grafana / Sentry / Honeycomb.
+Every effect-pm node already writes into Effect's `Metric` registry — queues, processes, HTTP
+clients, runtime gauges. **Telemetry** serves that registry as a Resource: leaf fields for this
+node, fleet folds when the tag is meshed. OTEL stays the professional sink; Telemetry is for custom
+glass (CLI, TUI, web) over the same tags.
 
-## Declare and serve
+## Declare the glass
+
+One tag. Distribute it across the droplets you actually run — Context service keys, not nicknames.
+
+{.twoslash}
+``` ts
+import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+// ---cut---
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
+
+class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+) {}
+```
+
+## Serve it on a droplet
+
+`Telemetry.serve` forks the sampler and mounts leaf + fleet handlers. Discharge the mesh with
+`Resource.peersLayer` so fleet fields can fold the other nodes' leaf `snapshot`s.
 
 {.twoslash}
 ``` ts
 import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
 import * as Resource from "@nikscripts/effect-pm/Resource"
 import { Duration, Layer } from "effect"
-
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
 class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
-
+class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([DropletEast, DropletWest]),
+  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
-
-const onEast = Telemetry.serve(FleetMetrics, {
+const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
+  Resource.httpServer(resource).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
+// ---cut---
+const east = Telemetry.serve(FleetMetrics, {
   interval: Duration.seconds(1),
-}).pipe(Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)))
+}).pipe(
+  Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)),
+  nodeServer(3001),
+)
+// east: Layer — this droplet samples its registry and reaches West + Central for fleet folds
 ```
-Leaf-only (no peers): discharge the mesh with `Telemetry.alone`.
+
+A single-node app with no peers uses `Telemetry.alone` instead of `peersLayer`:
 
 {.twoslash}
 ``` ts
@@ -37,35 +67,12 @@ class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
 const local = Telemetry.layer(FleetTelemetry).pipe(
   Layer.provide(Telemetry.alone(FleetTelemetry)),
 )
+// local: Layer — leaf snapshot/live + fleet fields that only see this node
 ```
 
-## Leaf fields
+## Read this node's registry
 
-`snapshot` is a point-in-time reading of this node's registry.
-`live` is a ~1s push of the same envelope (cadence via `{ interval }`).
-
-{.twoslash}
-``` ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
-import { Effect } from "effect"
-class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
-const program = Effect.gen(function* () {
-  const t = yield* FleetTelemetry
-  // ---cut---
-  const snap = yield* t.snapshot
-  // MetricsSnapshot { ts, metrics: counter | gauge | histogram }
-  const probe = snap.metrics.find((m) => m.id === "queue_enqueued_total")
-  // ---cut-after---
-})
-```
-
-## Fleet glass
-
-When peers are provided, fleet fields fold each peer's **leaf** `snapshot`
-(fleet fields are excluded from `Resource.peers`, so a fold cannot recurse):
-
-- `inFlightByNode` — `queue_in_flight` gauge per node key
-- `fleetInFlight` — sum across self + peers
+`snapshot` is point-in-time. `live` is a ~1s push of the same envelope. Same handle, local or remote.
 
 {.twoslash}
 ``` ts
@@ -73,23 +80,45 @@ import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
 import { Effect } from "effect"
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()() {}
 const program = Effect.gen(function* () {
-  const glass = yield* FleetMetrics
-  // ---cut---
-  const columns = yield* glass.inFlightByNode
-  // { "app/DropletEast": 5, "app/DropletWest": 3, … }
-  const total = yield* glass.fleetInFlight
-  // ---cut-after---
+// ---cut---
+const glass = yield* FleetMetrics
+const snap = yield* glass.snapshot       // MetricsSnapshot { ts, metrics }
+const probe = snap.metrics.find((m) => m.id === "queue_enqueued_total")
+const mine = Telemetry.inFlightOf(snap)  // number — queue_in_flight on this node (0 if absent)
+// ---cut-after---
 })
 ```
 
-Helpers: `Telemetry.inFlightMetricId` (`"queue_in_flight"`) and
-`Telemetry.inFlightOf(snap)`.
+## Show the fleet
+
+Fleet fields fold each peer's **leaf** `snapshot` (peers never expose fleet fields, so a fold can't
+recurse). One yield, columns + total:
+
+{.twoslash}
+``` ts
+import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
+import { Effect } from "effect"
+class FleetMetrics extends Telemetry.Tag<FleetMetrics>()() {}
+const program = Effect.gen(function* () {
+// ---cut---
+const glass = yield* FleetMetrics
+
+const columns = yield* glass.inFlightByNode
+// columns: Record<string, number> — e.g. { "app/DropletEast": 5, "app/DropletWest": 3 }
+
+const total = yield* glass.fleetInFlight
+// total: number — sum of queue_in_flight across self + peers
+// ---cut-after---
+})
+```
+
+`Telemetry.inFlightMetricId` is `"queue_in_flight"` — the gauge queue engines already emit.
 
 ## OTEL stays the grown-up sink
 
-Telemetry does not retain, alert, or query history — that is OTEL's job. Wire
-`@effect/opentelemetry` when you need collectors; keep Telemetry when you want the
-same registry on a Resource tag your CLI / TUI / web already speak.
+Telemetry does not retain, alert, or query history. Wire `@effect/opentelemetry` when you need
+collectors; keep Telemetry when you want the registry on a Resource tag your CLI / TUI / web already
+speak.
 
-See also [Fleets & Peers](/docs/fleets-and-peers) and the runnable form
-`pnpm run example:telemetry-fleet-glass`.
+Runnable form: `pnpm run example:telemetry-fleet-glass`. See also
+[Fleets & Peers](/docs/fleets-and-peers).
