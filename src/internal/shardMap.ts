@@ -1,22 +1,29 @@
 /**
  * ShardMap engine — in-memory shard, partition helpers, and routed/fleet members.
  *
+ * When {@link Storage} is in context (toolkit layers merge {@link Store.layerDefaultMemory}),
+ * the shard is hydrated from persisted Put/Delete events and every local mutation appends.
+ *
  * @internal
  */
-import { Effect, Hash, Option, Ref, Schema, Scope } from "effect";
+import { Clock, Effect, Hash, Option, Ref, Schema, Scope } from "effect";
 import { Combine, combineQuery } from "../MultiNode";
 import * as Resource from "../Resource";
 import type { PeersId, ResourceTag, SelfNodeId } from "../Resource";
+import type { Storage } from "../Store";
+import {
+  foldShardMapEntries,
+  materializeEngineShardMapStore,
+  type ShardMapEntryEvent,
+  type ShardMapStoreTag,
+} from "./store/shardMapStoreSpec";
+import {
+  keyOfSym,
+  keySchemaSym,
+  valueSchemaSym,
+} from "./shardMapSymbols";
 
-/** Stamped on every ShardMap tag — the key schema. */
-export const keySchemaSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/ShardMap/keySchema",
-);
-
-/** Stamped on every ShardMap tag — extract partition key from a value. */
-export const keyOfSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/ShardMap/keyOf",
-);
+export { keyOfSym, keySchemaSym, valueSchemaSym };
 
 /** Partition function — maps a wire key string onto a node key. */
 export type PartitionFn = (
@@ -65,11 +72,14 @@ export const keyWire = (key: unknown): string => {
 /** Tag surface the engine needs — structural only; Spec depth erased at the boundary. */
 export type EngineTag = {
   readonly [keyOfSym]: (value: never) => unknown;
-} & ResourceTag<unknown, Resource.Spec>;
+  readonly [valueSchemaSym]: Schema.Top;
+} & ResourceTag<unknown, Resource.Spec> &
+  ShardMapStoreTag;
 
 /**
  * Build the in-memory shard + routed/fleet members. Requires {@link Resource.peers} /
- * {@link Resource.selfNode} (discharge with {@link Resource.peersLayer}).
+ * {@link Resource.selfNode} (discharge with {@link Resource.peersLayer}) and {@link Storage}
+ * (toolkit layers merge the default memory bridge).
  *
  * Impl typing is erased here (boundary with the public {@link Resource.ImplOf} generics);
  * {@link Resource.layer} / {@link Resource.serve} re-constrain at the call site.
@@ -80,12 +90,16 @@ export const buildImpl = (
 ): Effect.Effect<
   Record<string, unknown>,
   never,
-  Scope.Scope | PeersId<unknown> | SelfNodeId<unknown>
+  Scope.Scope | PeersId<unknown> | SelfNodeId<unknown> | Storage
 > =>
   Effect.gen(function* () {
     const keyOf = tag[keyOfSym] as (value: unknown) => unknown;
     const partition: PartitionFn = options?.partition ?? consistentHash;
-    const store = yield* Ref.make(new Map<string, unknown>());
+    const persistence = yield* materializeEngineShardMapStore(tag);
+    const seeded = foldShardMapEntries(
+      (yield* persistence.events()) as ReadonlyArray<ShardMapEntryEvent>,
+    );
+    const store = yield* Ref.make(seeded);
     const peers = yield* Resource.peers(tag as ResourceTag<unknown, Resource.Spec>);
     const self = yield* Resource.selfNode(tag as ResourceTag<unknown, Resource.Spec>);
 
@@ -117,22 +131,41 @@ export const buildImpl = (
       );
 
     const putLocal = (value: unknown) =>
-      Ref.update(store, (m) => {
-        const next = new Map(m);
-        next.set(keyWire(keyOf(value)), value);
-        return next;
+      Effect.gen(function* () {
+        const wire = keyWire(keyOf(value));
+        const at = yield* Clock.currentTimeMillis;
+        yield* persistence.record({
+          _tag: "Put",
+          key: wire,
+          value,
+          at,
+        });
+        yield* Ref.update(store, (m) => {
+          const next = new Map(m);
+          next.set(wire, value);
+          return next;
+        });
       });
 
     const deleteLocal = (key: unknown) =>
-      Ref.modify(store, (m) => {
+      Effect.gen(function* () {
         const wire = keyWire(key);
-        const had = m.has(wire);
+        const had = yield* Ref.get(store).pipe(Effect.map((m) => m.has(wire)));
         if (!had) {
-          return [false, m] as const;
+          return false;
         }
-        const next = new Map(m);
-        next.delete(wire);
-        return [true, next] as const;
+        const at = yield* Clock.currentTimeMillis;
+        yield* persistence.record({
+          _tag: "Delete",
+          key: wire,
+          at,
+        });
+        yield* Ref.update(store, (m) => {
+          const next = new Map(m);
+          next.delete(wire);
+          return next;
+        });
+        return true;
       });
 
     const sizeLocal = Ref.get(store).pipe(Effect.map((m) => m.size));

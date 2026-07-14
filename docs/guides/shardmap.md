@@ -148,6 +148,34 @@ const fleet = yield* sessions.size
 })
 ```
 
+## Persist the shard
+
+Local mutations (`putLocal` / `deleteLocal`, and routed writes that land here) append `Put` /
+`Delete` events on the Store bridge. `ShardMap.layer` / `serve` merge `Store.layerDefaultMemory`
+so history lands even without an app store; override with `Layer.provideMerge(AppStore.layer(...))`.
+On materialization the engine replays `events()` into the in-memory Map — **this node's** shard only.
+
+{.twoslash}
+``` ts
+import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
+import * as Store from "@nikscripts/effect-pm/Store"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Schema } from "effect"
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+const SessionId = Schema.String
+const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
+class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+  key: SessionId,
+  value: Session,
+  keyOf: (s) => s.id,
+}).pipe(Resource.distributed([DropletEast])) {}
+// ---cut---
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  ShardMap.store(Sessions),
+) {}
+// AppStore.at(Sessions) → events / current / puts / deletes / recent / stats
+```
+
 ## Partition ethic (v1)
 
 `ShardMap.consistentHash` sorts node keys and picks with `Hash.string` modulo — stable for a

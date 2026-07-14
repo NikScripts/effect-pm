@@ -11,7 +11,7 @@ Verify: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm build`
 
 | Plane | API | Backing | Who writes |
 |-------|-----|---------|------------|
-| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Process, Queue, CustomQueue, RunResource |
+| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Process, Queue, CustomQueue, RunResource, ShardMap |
 | **RuntimeStorage facets (legacy observability)** | `ProcessStorage`, `LogStore`, `ProcessLifecycleStore` | `RuntimeStorage` rows (`layerProcessStore`, in-memory adapter) | Log relay, lifecycle hooks — **not** toolkit execution history |
 
 Execution history for processes, queues, and run gates lives on the **Store bridge only**. The old
@@ -76,15 +76,15 @@ override.
 |------|------|---------|
 | **1 — lean base** | One `event` shape → `record` + `events` | `builtInQueueStoreContract(tag)` |
 | **2 — engine writes** | Narrow semantic methods (`completed`, `failed`, …) funnel to `event.append` | `makeEngineQueueStoreContract` / materialized writer |
-| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueResource.store`, `Process.store` |
+| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueResource.store`, `Process.store`, `ShardMap.store` |
 
 Tag wire is SSOT — layer config must not override `payload` / `success` / `error`
 ([`result-schema-and-rpc-validation.md`](./handoffs/result-schema-and-rpc-validation.md)).
 
 ### Toolkit layers
 
-`layer` / `serve` / `serveRemote` on Process, QueueResource, CustomQueueResource, and RunResource all
-merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
+`layer` / `serve` / `serveRemote` on Process, QueueResource, CustomQueueResource, RunResource, and
+ShardMap all merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
 `Resource.builtResource` + `grantLocal` where applicable.
 
 **Future (not shipped):** queue write-path buffer off the worker hot path — see
@@ -147,6 +147,15 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 - **Registration:** `RunResource.store(tag)`.
 - **Handoff:** [`handoffs/store-cutover-runresource.md`](./handoffs/store-cutover-runresource.md).
 
+### ShardMap
+
+- **Contract:** `builtInShardMapStoreContract(tag)` — one `event` shape over `Put` / `Delete`
+  (value schema from the tag).
+- **Engine:** declared `Storage` in `src/internal/shardMap.ts` — hydrate Map from `events()` on
+  build; append on every `putLocal` / `deleteLocal`. Layers merge `Store.layerDefaultMemory`.
+- **Registration:** `ShardMap.store(tag)` (analytics: `current`, `puts`, `deletes`, `recent`,
+  `stats`, `changes`).
+
 ---
 
 ## Wire events (Store bridge)
@@ -171,6 +180,12 @@ Optional `success` / `error` on persisted terminal rows follow tag presence
 ### RunResource
 
 Gate run facts appended to `RunResource.store(tag)` when a gate executes.
+
+### ShardMap
+
+`Put` / `Delete` rows on `ShardMap.store(tag)` when the owning node mutates its local shard
+(`putLocal` / `deleteLocal`, including via routed `put` / `delete`). Each droplet's store scope
+holds **that node's** shard history; restart hydrate rebuilds the in-memory Map from the log.
 
 ---
 

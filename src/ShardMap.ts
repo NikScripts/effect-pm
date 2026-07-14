@@ -6,6 +6,10 @@
  * shard via {@link Resource.peers}. Leaf `*Local` ops stay on this node. Fleet folds report
  * shard sizes. An unreachable owner degrades to a miss — not a cascading health failure.
  *
+ * Persistence: {@link store} registers Put/Delete events on the Store bridge.
+ * {@link layer}, {@link serve}, and {@link serveRemote} merge {@link Store.layerDefaultMemory}
+ * — the local shard hydrates from the event log on start and appends on every local mutation.
+ *
  * @example
  * class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
  *   key: Schema.String,
@@ -26,7 +30,15 @@ import {
   type ResourceTag,
   type SelfNodeId,
 } from "./Resource";
+import * as Store from "./Store";
 import * as internal from "./internal/shardMap";
+import { facetStoreRegistration } from "./internal/store/facetStore";
+import {
+  makeShardMapStoreAnalyticsContract,
+  type ShardMapStoreAnalyticsContract,
+  type ShardMapStoreTag,
+} from "./internal/store/shardMapStoreSpec";
+import type { StoreShapes } from "./internal/store/contractDef";
 
 // ============================================================================
 // Public constants + partition
@@ -64,6 +76,12 @@ export type PartitionFn = internal.PartitionFn;
  * @since 1.0.0
  */
 export type ShardMapOptions = internal.ShardMapOptions;
+
+/** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
+const withDefaultStoreBridge = <A, E, R>(
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> =>
+  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
 
 // ============================================================================
 // Spec builder
@@ -174,6 +192,7 @@ export type ShardMapTag<
   Error extends Schema.Top = typeof Schema.Never,
 > = ResourceTag<Self, ShardMapSpecOf<Key, Value, Error>> & {
   readonly [internal.keySchemaSym]: Key;
+  readonly [internal.valueSchemaSym]: Value;
   readonly [internal.keyOfSym]: (
     value: Schema.Schema.Type<Value>,
   ) => Schema.Schema.Type<Key>;
@@ -193,6 +212,7 @@ export type ShardMapNodeTag<
   Error extends Schema.Top = typeof Schema.Never,
 > = NodeBoundTag<Self, ShardMapSpecOf<Key, Value, Error>, HSelf> & {
   readonly [internal.keySchemaSym]: Key;
+  readonly [internal.valueSchemaSym]: Value;
   readonly [internal.keyOfSym]: (
     value: Schema.Schema.Type<Value>,
   ) => Schema.Schema.Type<Key>;
@@ -263,6 +283,7 @@ export const Tag =
     ) as ShardMapTag<Self, Key, Value, Error>;
     return Object.assign(tag, {
       [internal.keySchemaSym]: schemas.key,
+      [internal.valueSchemaSym]: schemas.value,
       [internal.keyOfSym]: schemas.keyOf,
     });
   };
@@ -272,7 +293,8 @@ export const Tag =
 // ============================================================================
 
 /**
- * Local layer — in-memory shard + routed/fleet members. Requires mesh discharge
+ * Local layer — event-sourced shard + routed/fleet members. Merges
+ * {@link Store.layerDefaultMemory}. Requires mesh discharge
  * ({@link Resource.peersLayer} or peersFrom + selfNodeLayer).
  *
  * @public
@@ -286,20 +308,30 @@ export const layer = <
 >(
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
-): Layer.Layer<Self | Local<Self>, never, PeersId<Self> | SelfNodeId<Self>> =>
-  Layer.unwrap(
-    Effect.map(
-      internal.buildImpl(tag as unknown as internal.EngineTag, options),
-      (impl) =>
-        Resource.layer(
-          tag,
-          impl as unknown as Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
-        ),
-    ),
-  ) as Layer.Layer<Self | Local<Self>, never, PeersId<Self> | SelfNodeId<Self>>;
+): Layer.Layer<
+  Self | Local<Self> | Store.Storage,
+  never,
+  PeersId<Self> | SelfNodeId<Self>
+> =>
+  withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(
+        internal.buildImpl(tag as unknown as internal.EngineTag, options),
+        (impl) =>
+          Resource.layer(
+            tag,
+            impl as unknown as Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
+          ),
+      ),
+    ) as Layer.Layer<
+      Self | Local<Self>,
+      never,
+      PeersId<Self> | SelfNodeId<Self> | Store.Storage
+    >,
+  );
 
 /**
- * Serve remotely (handlers only). Requires mesh discharge.
+ * Serve remotely (handlers only). Merges {@link Store.layerDefaultMemory}. Requires mesh discharge.
  *
  * @public
  * @since 1.0.0
@@ -313,22 +345,25 @@ export const serveRemote = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ) =>
-  Layer.unwrap(
-    Effect.map(
-      internal.buildImpl(tag as unknown as internal.EngineTag, options),
-      (impl) =>
-        Resource.serveRemote(
-          tag,
-          impl as unknown as Resource.ServeImplOf<
-            ShardMapSpecOf<Key, Value, Error>,
-            never
-          >,
-        ),
+  withDefaultStoreBridge(
+    Layer.unwrap(
+      Effect.map(
+        internal.buildImpl(tag as unknown as internal.EngineTag, options),
+        (impl) =>
+          Resource.serveRemote(
+            tag,
+            impl as unknown as Resource.ServeImplOf<
+              ShardMapSpecOf<Key, Value, Error>,
+              never
+            >,
+          ),
+      ),
     ),
   );
 
 /**
- * Serve + grant local instance from one materialization.
+ * Serve + grant local instance from one materialization. Merges
+ * {@link Store.layerDefaultMemory}.
  *
  * @example
  * ShardMap.serve(Sessions).pipe(
@@ -347,11 +382,50 @@ export const serve = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ) =>
-  Resource.serve(
-    tag,
-    internal.buildImpl(tag as unknown as internal.EngineTag, options) as Effect.Effect<
-      Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
-      never,
-      PeersId<Self> | SelfNodeId<Self>
-    >,
+  withDefaultStoreBridge(
+    Resource.serve(
+      tag,
+      internal.buildImpl(tag as unknown as internal.EngineTag, options) as Effect.Effect<
+        Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
+        never,
+        PeersId<Self> | SelfNodeId<Self> | Store.Storage
+      >,
+    ),
   );
+
+// ============================================================================
+// Store registration
+// ============================================================================
+
+/**
+ * Register this ShardMap on an app {@link Store.Service} — Put/Delete entry events with
+ * analytics reads (`current`, `puts`, `deletes`, `recent`, `stats`, `changes`). Pass a bare
+ * shapes object to add app-specific methods:
+ *
+ * ```ts
+ * ShardMap.store(Sessions)
+ * ShardMap.store(Sessions, {
+ *   audit: auditSchema,
+ * }, ({ audit, event }) => ({
+ *   appendAudit: audit.append,
+ * }))
+ * ```
+ *
+ * @public
+ * @since 1.0.0
+ */
+export function store<const Tag extends ShardMapStoreTag>(tag: Tag): ReturnType<
+  typeof facetStoreRegistration<Tag, ShardMapStoreAnalyticsContract<Tag>>
+>;
+export function store<
+  const Tag extends ShardMapStoreTag,
+  const Shapes extends StoreShapes,
+>(tag: Tag, extended: Shapes): ReturnType<
+  typeof facetStoreRegistration<Tag, ShardMapStoreAnalyticsContract<Tag>, Shapes>
+>;
+export function store(tag: ShardMapStoreTag, extended?: StoreShapes) {
+  const contract = makeShardMapStoreAnalyticsContract(tag);
+  return extended === undefined
+    ? facetStoreRegistration(tag, contract)
+    : facetStoreRegistration(tag, contract, extended);
+}

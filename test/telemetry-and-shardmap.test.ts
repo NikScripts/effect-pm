@@ -1,8 +1,12 @@
-import { Effect, Layer, Metric, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Metric, Option, Schema, Stream, pipe } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as Resource from "../src/Resource";
 import * as ShardMap from "../src/ShardMap";
+import * as Store from "../src/Store";
+import { Storage } from "../src/Store";
 import * as Telemetry from "../src/Telemetry";
+import * as internal from "../src/internal/shardMap";
+import { builtInShardMapStoreContract, makeShardMapStoreAnalyticsContract } from "../src/internal/store/shardMapStoreSpec";
 
 class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
@@ -133,5 +137,133 @@ describe("ShardMap", () => {
     const b = ShardMap.consistentHash("fan-90210", nodes);
     expect(a).toBe(b);
     expect(nodes).toContain(a);
+  });
+
+  it.effect("auto-writes Put/Delete on layerDefaultMemory without AppStore", () => {
+    class PersistSessions extends ShardMap.Tag<PersistSessions>()(
+      "@test/PersistSessions",
+      {
+        key: SessionId,
+        value: Session,
+        keyOf: (s) => s.id,
+      },
+    ).pipe(Resource.distributed([DropletEast])) {}
+
+    const live = ShardMap.layer(PersistSessions).pipe(
+      Layer.provide(Resource.peersLayer(PersistSessions, DropletEast)),
+    );
+
+    return Effect.gen(function* () {
+      const sessions = yield* PersistSessions;
+      yield* sessions.put({ id: "e-1", userId: "east" });
+      yield* sessions.delete("e-1");
+
+      const bridge = yield* Storage;
+      const store = yield* bridge.at(
+        PersistSessions.key,
+        builtInShardMapStoreContract(PersistSessions),
+      );
+      const events = yield* store.events();
+      expect(events.map((row) => row._tag)).toEqual(["Put", "Delete"]);
+      expect(events[0]).toMatchObject({
+        _tag: "Put",
+        key: "e-1",
+        value: { id: "e-1", userId: "east" },
+      });
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("hydrates the Map from persisted Put/Delete events on build", () => {
+    const hydrateTag = pipe(
+      ShardMap.Tag()("@test/HydrateSessions", {
+        key: SessionId,
+        value: Session,
+        keyOf: (s: Schema.Schema.Type<typeof Session>) => s.id,
+      }),
+      Resource.distributed([DropletEast]),
+    );
+    class HydrateSessions extends hydrateTag {}
+
+    return Effect.gen(function* () {
+      const store = yield* Store.resolveOrDie(
+        HydrateSessions.key,
+        builtInShardMapStoreContract(HydrateSessions),
+      );
+      yield* store.record({
+        _tag: "Put",
+        key: "kept",
+        value: { id: "kept", userId: "u1" },
+        at: 1,
+      });
+      yield* store.record({
+        _tag: "Put",
+        key: "gone",
+        value: { id: "gone", userId: "u2" },
+        at: 2,
+      });
+      yield* store.record({
+        _tag: "Delete",
+        key: "gone",
+        at: 3,
+      });
+
+      const impl = yield* internal.buildImpl(
+        HydrateSessions as unknown as internal.EngineTag,
+      );
+      const getLocal = impl["getLocal"] as (
+        key: string,
+      ) => Effect.Effect<Option.Option<{ id: string; userId: string }>>;
+      const sizeLocal = impl["sizeLocal"] as Effect.Effect<number>;
+
+      const kept = yield* getLocal("kept");
+      expect(Option.isSome(kept) && kept.value.userId).toBe("u1");
+      expect(Option.isNone(yield* getLocal("gone"))).toBe(true);
+      expect(yield* sizeLocal).toBe(1);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Store.layerDefaultMemory,
+          Resource.peersLayer(HydrateSessions, DropletEast),
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("ShardMap.store analytics reconstruct current from the event log", () => {
+    const analyticsTag = pipe(
+      ShardMap.Tag()("@test/AnalyticsSessions", {
+        key: SessionId,
+        value: Session,
+        keyOf: (s: Schema.Schema.Type<typeof Session>) => s.id,
+      }),
+      Resource.distributed([DropletEast]),
+    );
+    class AnalyticsSessions extends analyticsTag {}
+
+    const live = pipe(
+      ShardMap.layer(AnalyticsSessions),
+      Layer.provide(Resource.peersLayer(AnalyticsSessions, DropletEast)),
+    );
+
+    return Effect.gen(function* () {
+      const sessions = yield* AnalyticsSessions;
+      yield* sessions.put({ id: "a", userId: "u" });
+      yield* sessions.put({ id: "b", userId: "v" });
+      yield* sessions.delete("a");
+
+      const store = yield* Store.resolveOrDie(
+        AnalyticsSessions.key,
+        makeShardMapStoreAnalyticsContract(AnalyticsSessions),
+      );
+      expect(yield* store.current()).toEqual([{ id: "b", userId: "v" }]);
+      expect(yield* store.stats()).toEqual({
+        puts: 2,
+        deletes: 1,
+        currentSize: 1,
+      });
+      expect((yield* store.puts()).length).toBe(2);
+      expect((yield* store.deletes()).length).toBe(1);
+    }).pipe(Effect.provide(live));
   });
 });
