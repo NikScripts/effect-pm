@@ -12,6 +12,9 @@
   --fg: oklch(0.24 0.01 260);
   --muted-fg: oklch(0.5 0.01 260);
   --card: oklch(0.955 0.006 260);
+  /* twoslash preview popup bg — lighter than --panel (the popup should read brighter than the page),
+     but kept just below --zebra-even so the zebra sections still show. */
+  --popup-bg: oklch(0.985 0.004 260);
   /* zebra "even" section bg — deliberately LIGHTER than --panel (almost white); --card is darker. */
   --zebra-even: oklch(0.995 0.003 260);
   --border: oklch(0.9 0.008 260);
@@ -29,6 +32,7 @@
     --fg: oklch(0.92 0.01 260);
     --muted-fg: oklch(0.64 0.01 260);
     --card: oklch(0.21 0.014 260);
+    --popup-bg: oklch(0.23 0.014 260);
     --zebra-even: oklch(0.245 0.014 260);
     --border: oklch(0.3 0.01 260);
     --primary: oklch(0.74 0.14 250);
@@ -356,7 +360,7 @@ pre.shiki { background: transparent; }
   max-height: min(70vh, 32rem);
   overflow: auto;
   overscroll-behavior: contain;
-  background: var(--panel) !important;
+  background: var(--popup-bg) !important;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
