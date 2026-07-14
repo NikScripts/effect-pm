@@ -141,7 +141,7 @@
     "test:watch": "vitest",
     "lint": "eslint . --ignore-pattern repos/**",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
+    "prepublishOnly": "npm run clean && npm run build && npm run typecheck && npm run check:markers",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
