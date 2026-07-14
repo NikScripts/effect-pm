@@ -246,6 +246,33 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
  * @public
  */
 /**
+ * Resolve an optional wire **success** schema to its {@link Schema.Void} default while keeping the
+ * decoded type **clean**: the public overload returns the caller's `Success` (not the
+ * `Success | typeof Schema.Void` union a bare `?? Schema.Void` yields, whose `["Type"]` is a deferred
+ * indexed access that stops `buildQueueEvent`'s `Completed.success` from reducing under a generic
+ * `Success`). Sound: a caller whose `Success` is not `typeof Schema.Void` always supplies the schema
+ * (the type param is inferred from it), so the `?? Schema.Void` branch only runs when `Success` really
+ * is `typeof Schema.Void`. A function-overload narrowing — no cast. @internal
+ */
+function withVoidDefault<Success extends Schema.Top>(
+  schema: Success | undefined,
+): Success;
+function withVoidDefault(schema: Schema.Top | undefined): Schema.Top {
+  return schema ?? Schema.Void;
+}
+
+/** Mirror of {@link withVoidDefault} for the wire **error** schema (default {@link Schema.Never}). The
+ *  `Error | typeof Schema.Never` union's `["Type"]` would fold `never` away, but the *schema-value*
+ *  union still defers, so the same clean-narrowing keeps `Failed.cause` a concrete `Cause<Error>`.
+ *  @internal */
+function withNeverDefault<Error extends Schema.Top>(
+  schema: Error | undefined,
+): Error;
+function withNeverDefault(schema: Schema.Top | undefined): Schema.Top {
+  return schema ?? Schema.Never;
+}
+
+/**
  * Build the `events` union schema with **concrete** `success` / `error` wire schemas (no defaulting
  * `??`, so `Completed.success` is exactly `Success`, no `| void` widening). This is the concrete
  * builder the spec / store / engine consume so their decoded `.Type` reduces; the defaulting
@@ -273,7 +300,12 @@ export const buildQueueEvent = <
     Schema.TaggedStruct("Started", { entry }),
     Schema.TaggedStruct("Completed", {
       entry,
-      success: successSchema,
+      // Pin the (clean but possibly generic) `Success` field's optionality with a single-member union
+      // — an encode/decode identity (`Union([S]).Type === S["Type"]`, same wire form) whose optionality
+      // is concrete. Without it a generic `Success extends Schema.Top` leaves this struct's optional-key
+      // computation deferred, so the decoded union can't discriminate `Completed` member-by-member.
+      // (`withVoidDefault` already kept `Success` un-widened, so this yields exactly `Success["Type"]`.)
+      success: Schema.Union([successSchema]),
       elapsed: Schema.Duration,
     }),
     Schema.TaggedStruct("Failed", { entry, cause, elapsed: Schema.Duration }),
@@ -350,8 +382,8 @@ export const queueEvent = <
 ) =>
   buildQueueEvent(
     itemSchema,
-    wire?.success ?? Schema.Void,
-    wire?.error ?? Schema.Never,
+    withVoidDefault(wire?.success),
+    withNeverDefault(wire?.error),
   );
 
 /**
@@ -526,8 +558,8 @@ export const queueSpec = <
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
   const eventSchema = buildQueueEvent(
     itemSchema,
-    wire?.success ?? Schema.Void,
-    wire?.error ?? Schema.Never,
+    withVoidDefault(wire?.success),
+    withNeverDefault(wire?.error),
   );
   return {
   ...queueControlSpec,
@@ -679,10 +711,11 @@ export const kind = "@nikscripts/effect-pm/QueueResource";
 export interface QueueTagConfig<
   F extends Schema.Struct.Fields,
   Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
 > {
   readonly payload: Schema.Struct<F>;
   readonly success?: Success;
-  readonly error?: Schema.Top;
+  readonly error?: Error;
   readonly description?: string;
   readonly node?: NodeKey<unknown>;
 }
@@ -695,25 +728,32 @@ interface QueueTagPositionalOptions {
 
 /** The 2nd arg is the config-object form (not a payload schema). @internal */
 const isQueueTagConfig = <F extends Schema.Struct.Fields>(
-  value: Schema.Struct<F> | QueueTagConfig<F>,
-): value is QueueTagConfig<F> => !Schema.isSchema(value);
+  value: Schema.Struct<F> | QueueTagConfig<F, Schema.Top, Schema.Top>,
+): value is QueueTagConfig<F, Schema.Top, Schema.Top> => !Schema.isSchema(value);
 
-const materializeQueueTag = <Self, F extends Schema.Struct.Fields>(
+const materializeQueueTag = <
+  Self,
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
   key: string,
   resolved: {
     readonly payload: Schema.Struct<F>;
-    readonly success?: Schema.Top;
-    readonly error?: Schema.Top;
+    readonly success?: Success;
+    readonly error?: Error;
     readonly description?: string;
     readonly node?: NodeKey<unknown>;
   },
-): ResourceTag<Self, QueueInstanceSpec<F>> => {
+): ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> => {
   const wire = { success: resolved.success, error: resolved.error };
-  const spec = assertQueueInstanceSpec(
-    queueSpec(resolved.payload, wire),
-    queueSpec(resolved.payload),
-    wire,
-  );
+  // The wired spec carries the tag's real `success`/`error` wire slots; its type
+  // (`QueueInstanceSpec<F, Success, Error>`) *is* the tag's contract, so it drives the tag type
+  // directly. `assertQueueInstanceSpec` runs the runtime shape/round-trip validation (only the
+  // `events` element may differ from the erased baseline) as a side effect — no boundary cast is
+  // needed now that the wired type and the tag type coincide.
+  const spec: QueueInstanceSpec<F, Success, Error> = queueSpec(resolved.payload, wire);
+  assertQueueInstanceSpec(spec, queueSpec(resolved.payload), wire);
   const tagOptions = { description: resolved.description, kind };
   const base =
     resolved.node === undefined
@@ -822,63 +862,104 @@ type QueueItemOf<F extends Schema.Struct.Fields> = Resource.Decoded<Schema.Struc
  * (via the `Svc` seam on {@link ResourceTag}), so `yield* MyQueue` hovers as
  * `QueueResource<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
  */
-export type QueueTag<Self, F extends Schema.Struct.Fields> = ResourceTag<
+export type QueueTag<
   Self,
-  QueueInstanceSpec<F>,
-  QueueResource<QueueItemOf<F>>
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+> = ResourceTag<
+  Self,
+  QueueInstanceSpec<F, Success, Error>,
+  QueueResource<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
 /** {@link QueueTag} for a node-bound queue (its own transport). @public */
-export type QueueNodeBoundTag<Self, F extends Schema.Struct.Fields, HSelf> = NodeBoundTag<
+export type QueueNodeBoundTag<
   Self,
-  QueueInstanceSpec<F>,
+  F extends Schema.Struct.Fields,
   HSelf,
-  QueueResource<QueueItemOf<F>>
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+> = NodeBoundTag<
+  Self,
+  QueueInstanceSpec<F, Success, Error>,
+  HSelf,
+  QueueResource<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
 /**
  * Name the built queue tag's service as {@link QueueResource}. The single, deliberate cast in this
- * module: `ServiceOf<QueueInstanceSpec<F>>` and `QueueResource<QueueItemOf<F>>` are **mutually
- * assignable** — proven bidirectionally in `test/queue-handle.test-d.ts` — but TS can't verify that
- * equality for *generic* `F` at the invariant service-`Shape` position, so the generic factory needs
- * one assertion here. Owner-approved (the alternative was a schema-field hover, not `EmailJob`). The
- * `.test-d.ts` is the soundness guard: if the shapes ever diverge, it fails the build.
+ * module: `ServiceOf<QueueInstanceSpec<F, Success, Error>>` and
+ * `QueueResource<QueueItemOf<F>, Success["Type"], Error["Type"]>` are **mutually assignable** — proven
+ * bidirectionally in `test/queue-handle.test-d.ts` — but TS can't verify that equality for *generic*
+ * `F` at the invariant service-`Shape` position, so the generic factory needs one assertion here.
+ * Owner-approved (the alternative was a schema-field hover, not `EmailJob`). The `.test-d.ts` is the
+ * soundness guard: if the shapes ever diverge, it fails the build.
  */
-const nameQueueService = <Self, F extends Schema.Struct.Fields>(
-  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-): QueueTag<Self, F> => tag as unknown as QueueTag<Self, F>;
+const nameQueueService = <
+  Self,
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F, Success, Error>>,
+): QueueTag<Self, F, Success, Error> =>
+  tag as unknown as QueueTag<Self, F, Success, Error>;
 
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     payload: Schema.Struct<F>,
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
-  ): QueueNodeBoundTag<Self, F, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
-  function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
+  ): QueueNodeBoundTag<Self, F, HSelf> &
+    QueueSuccessCarrier<typeof Schema.Void> &
+    QueueErrorCarrier<typeof Schema.Never>;
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top,
+    Error extends Schema.Top = typeof Schema.Never,
+  >(
     key: string,
     payload: Schema.Struct<F>,
     success: Success,
-    error?: Schema.Top,
-  ): QueueTag<Self, F> & QueueSuccessCarrier<Success>;
+    error?: Error,
+  ): QueueTag<Self, F, Success, Error> &
+    QueueSuccessCarrier<Success> &
+    QueueErrorCarrier<Error>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     payload: Schema.Struct<F>,
     options?: { readonly description?: string },
-  ): QueueTag<Self, F> & QueueSuccessCarrier<typeof Schema.Void>;
+  ): QueueTag<Self, F> &
+    QueueSuccessCarrier<typeof Schema.Void> &
+    QueueErrorCarrier<typeof Schema.Never>;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
-  ): QueueNodeBoundTag<Self, F, HSelf> & QueueSuccessCarrier<typeof Schema.Void>;
-  function build<F extends Schema.Struct.Fields, Success extends Schema.Top = typeof Schema.Void>(
+  ): QueueNodeBoundTag<Self, F, HSelf> &
+    QueueSuccessCarrier<typeof Schema.Void> &
+    QueueErrorCarrier<typeof Schema.Never>;
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top = typeof Schema.Void,
+    Error extends Schema.Top = typeof Schema.Never,
+  >(
     key: string,
-    config: QueueTagConfig<F, Success>,
-  ): QueueTag<Self, F> & QueueSuccessCarrier<Success>;
+    config: QueueTagConfig<F, Success, Error>,
+  ): QueueTag<Self, F, Success, Error> &
+    QueueSuccessCarrier<Success> &
+    QueueErrorCarrier<Error>;
+  // Implementation signature — intentionally loose (`any` wire slots): the tag's real `Success`/
+  // `Error` are fixed by the overload selected above. The runtime resolves them from the config /
+  // positional args below; the phantom carriers are type-only.
   function build<F extends Schema.Struct.Fields>(
     key: string,
-    second: Schema.Struct<F> | QueueTagConfig<F>,
+    second: Schema.Struct<F> | QueueTagConfig<F, Schema.Top, Schema.Top>,
     third?: Schema.Top | QueueTagPositionalOptions,
     fourth?: Schema.Top,
-  ): QueueTag<Self, F> {
+  ): QueueTag<Self, F, any, any> &
+    QueueSuccessCarrier<any> &
+    QueueErrorCarrier<any> {
     const resolved = isQueueTagConfig(second)
       ? {
           payload: second.payload,
@@ -902,7 +983,7 @@ const queueTag = <Self>() => {
             description: third?.description,
             node: third?.node,
           };
-    return nameQueueService(materializeQueueTag<Self, F>(key, resolved));
+    return nameQueueService(materializeQueueTag<Self, F, Schema.Top, Schema.Top>(key, resolved));
   }
   return build;
 };
@@ -979,7 +1060,10 @@ type QueueItemFields = Record<
 
 /** The `tag:` param shape shared by every queue verb ({@link buildQueueImpl} / {@link layer} /
  *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link ResourceTag}
- *  intersected with its worker-`success` carrier. @internal */
+ *  intersected with its worker-`success`/`error` carriers. The spec stays the **baseline**
+ *  {@link QueueInstanceSpec} (location-transparent, its `events` element the concrete `Void`/`Never`
+ *  wire form — the real worker `Success`/`Error` are recovered from the carriers, not re-threaded
+ *  into the invariant RPC spec position). @internal */
 type QueueTagFor<
   Self,
   F extends QueueItemFields,
@@ -1060,9 +1144,18 @@ const buildQueueImpl = <
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
+    // The engine handle is erased at this boundary — the deliberate, both-ways-assignable `any`
+    // erasure the engine itself uses (`makeQueueEffectFromConfig` returns
+    // `EngineQueueHandle<any, …>`; see its note on why `any`, not `unknown`). The engine is a pure
+    // runtime detail: its members flow to/from the schema-decoded contract (`ImplOf` over the
+    // location-transparent `QueueInstanceSpec<F>` baseline) without a raw↔prettified `View` mismatch
+    // on the enqueue payloads, nor a generic discriminated-union reduction wall on `events`. The
+    // declared worker `Success`/`Error` ride the tag's carriers and surface on the named
+    // `QueueResource` handle (what `yield* Tag` reads); the worker `effect`'s own signature (via the
+    // config's `QueueErrorValueOf`/`QueueSuccessValueOf`) is what constrains them at build.
     const handle = yield* makeQueueEffect<
       QueueResourceConfigWithItemSchema<
-        Schema.Struct<F>["Type"],
+        any,
         QueueErrorValueOf<Error>,
         R | RR,
         QueueSuccessValueOf<Success>
@@ -1073,7 +1166,7 @@ const buildQueueImpl = <
       itemSchema,
       store,
     } as QueueResourceConfigWithItemSchema<
-      Schema.Struct<F>["Type"],
+      any,
       QueueErrorValueOf<Error>,
       R | RR,
       QueueSuccessValueOf<Success>
