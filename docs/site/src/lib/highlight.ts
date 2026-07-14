@@ -60,8 +60,15 @@ const toFullOffset = (
 
 // The "dual preview": wrap twoslash so each hover popover carries BOTH the compact named type
 // (twoslash's `node.text`) AND the compiler-API-expanded member shape, appended as a comment.
+//
+// PERF: expanding runs a second checker pass, so we only do it for hovers whose type is a **named
+// resource handle** (`*Resource` / `*Handle`) — that's the whole point of the dual preview, and it
+// means a block with no such hover pays nothing (no extra program is built). It's also wrapped so a
+// failure only drops the expansion, never the page.
 const baseTwoslasher = createTwoslasher({ vfsRoot: repoRoot, compilerOptions });
 const expandTypes = makeTypeExpander({ compilerOptions, vfsRoot: repoRoot });
+// e.g. `: QueueResource<…>` / `: X.SomethingHandle<…>` — a named handle worth expanding.
+const HANDLE_RE = /:\s*(?:\w+\.)?\w*(?:Resource|Handle)</;
 const twoslasher = Object.assign(
   (
     code: string,
@@ -69,21 +76,25 @@ const twoslasher = Object.assign(
     options: Parameters<typeof baseTwoslasher>[2],
   ): ReturnType<typeof baseTwoslasher> => {
     const result = baseTwoslasher(code, extension, options);
-  const hovers = result.nodes.filter(
-    (n): n is typeof n & { text: string; start: number } =>
-      n.type === "hover" || n.type === "query",
-  );
-  if (hovers.length === 0) return result;
-  const removals = result.meta.removals as ReadonlyArray<readonly [number, number]>;
-  const offsets = hovers.map((h) => toFullOffset(h.start, removals));
-  const expansions = expandTypes(code, offsets);
-    hovers.forEach((h, i) => {
-      const expanded = expansions.get(offsets[i]);
-      // Only when expanding actually reveals more than the compact form already shows.
-      if (expanded && !h.text.includes(expanded)) {
-        h.text = `${h.text}\n\n// Expands to:\n${expanded}`;
-      }
-    });
+    try {
+      const hovers = result.nodes.filter(
+        (n): n is typeof n & { text: string; start: number } =>
+          (n.type === "hover" || n.type === "query") && HANDLE_RE.test(n.text),
+      );
+      if (hovers.length === 0) return result;
+      const removals = result.meta.removals as ReadonlyArray<readonly [number, number]>;
+      const offsets = hovers.map((h) => toFullOffset(h.start, removals));
+      const expansions = expandTypes(code, offsets);
+      hovers.forEach((h, i) => {
+        const expanded = expansions.get(offsets[i]);
+        // Only when expanding actually reveals more than the compact form already shows.
+        if (expanded && !h.text.includes(expanded)) {
+          h.text = `${h.text}\n\n// Expands to:\n${expanded}`;
+        }
+      });
+    } catch {
+      // Expansion is best-effort: on any failure keep the plain (compact) twoslash hovers.
+    }
     return result;
   },
   // A `TwoslashInstance` is callable + carries a `getCacheMap`; reuse the base instance's.
