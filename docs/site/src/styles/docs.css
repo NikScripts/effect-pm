@@ -536,7 +536,8 @@ pre.shiki { background: transparent; }
    Severity is signalled solely by the chip after the heading (below); no left bar. */
 section[class~="must"] > h2::after,
 section[class~="should"] > h2::after,
-section[class~="may"] > h2::after {
+section[class~="may"] > h2::after,
+h2[class~="draft"]::after {
   font-family: var(--font-mono);
   font-size: 0.58rem;
   font-weight: 600;
@@ -551,6 +552,8 @@ section[class~="may"] > h2::after {
 section[class~="must"] > h2::after { content: "MUST"; color: var(--must); }
 section[class~="should"] > h2::after { content: "SHOULD"; color: var(--should); }
 section[class~="may"] > h2::after { content: "MAY"; color: var(--may); }
+/* a glossary term still to be made exemplary (examples etc.); remove the `{.draft}` when done. */
+h2[class~="draft"]::after { content: "DRAFT"; color: var(--should); }
 
 /* appliesTo — the scopes a rule governs, shown as muted pills under the heading. */
 .applies-to {
@@ -733,3 +736,32 @@ td:first-child code { display: block; width: fit-content; margin-bottom: 0.15rem
 .draft-banner summary::-webkit-details-marker { display: none; }
 .draft-banner[open] summary { margin-bottom: 0.7rem; }
 .draft-banner-label { color: var(--fg); }
+
+/* ===== glossary term links + hover-preview popup ===== */
+/* a link into the glossary reads as a defined term, not a nav link: a dotted accent underline, help cursor */
+a[href*="/docs/glossary#"] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
+
+.glossary-popup {
+  position: fixed;
+  z-index: 60;
+  display: none;
+  max-width: min(88vw, 22rem);
+  padding: 0.65rem 0.8rem;
+  background: var(--popup-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+.glossary-popup-term { font-weight: 650; margin-bottom: 0.2rem; }
+.glossary-popup-def { color: var(--muted-fg); }

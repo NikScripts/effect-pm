@@ -79,6 +79,22 @@
             "docs"
           ],
           "title": "A handoff is self-contained requirements for its reader"
+        },
+        {
+          "id": "documentation.glossary-defines-concepts",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "The glossary defines what the API docs can't"
+        },
+        {
+          "id": "documentation.capitalize-domain-terms",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Capitalize the domain terms"
         }
       ]
     },
@@ -1043,5 +1059,5 @@
       ]
     }
   ],
-  "ruleCount": 113
+  "ruleCount": 115
 }

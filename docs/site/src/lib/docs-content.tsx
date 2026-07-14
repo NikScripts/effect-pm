@@ -62,6 +62,63 @@ const buildToc = (doc: any): ReadonlyArray<TocEntry> => {
   walk(doc);
   return out;
 };
+
+// --- auto-linking: the first capitalized mention of a glossary term on a page becomes a
+// link to its glossary entry. Capitalized whole-word match only, so the capitalization rule
+// is the concept signal — a lowercase (generic) use never links. Manual links win: any term
+// the author linked by hand is seeded as already-linked, so it stays the only link and auto
+// never doubles it. Suppressed inside headings, inline code, and existing links.
+let autoLink = false;
+let suppress = 0;
+let linkedSlugs = new Set<string>();
+let termRegex: RegExp | null = null;
+const termToSlug = new Map<string, string>();
+
+// Rebuild the term index from the glossary each render (SSOT; cheap, and never stale in dev).
+const buildTermIndex = (): void => {
+  termToSlug.clear();
+  termRegex = null;
+  const words: Array<string> = [];
+  for (const [slug, { term }] of Object.entries(glossaryEntries())) {
+    if (term.includes(" ")) continue; // single-word terms only (v1)
+    termToSlug.set(term, slug);
+    words.push(term);
+  }
+  if (words.length === 0) return;
+  words.sort((a, b) => b.length - a.length);
+  const alt = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  termRegex = new RegExp(`\\b(${alt})(s?)\\b`, "g");
+};
+
+// Manual links win: pre-seed every glossary term the author already linked by hand.
+const glossaryHref = /\/docs\/glossary#([a-z0-9-]+)/;
+const seedManualLinks = (n: any): void => {
+  if (n?.tag === "link" && typeof n.destination === "string") {
+    const m = glossaryHref.exec(n.destination);
+    if (m !== null) linkedSlugs.add(m[1]);
+  }
+  (n?.children ?? []).forEach(seedManualLinks);
+};
+
+const linkifyText = (text: string): React.ReactNode => {
+  if (!autoLink || suppress > 0 || termRegex === null) return text;
+  termRegex.lastIndex = 0;
+  const parts: Array<React.ReactNode> = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = termRegex.exec(text)) !== null) {
+    const slug = termToSlug.get(m[1]);
+    if (slug === undefined || linkedSlugs.has(slug)) continue; // already linked → leave as text
+    linkedSlugs.add(slug);
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(React.createElement("a", { key: keySeq++, href: `/docs/glossary#${slug}` }, m[0]));
+    last = m.index + m[0].length;
+  }
+  if (parts.length === 0) return text;
+  if (last < text.length) parts.push(text.slice(last));
+  return React.createElement(React.Fragment, { key: keySeq++ }, parts);
+};
+
 const toReact = (n: any): React.ReactNode => {
   const h = React.createElement;
   switch (n.tag) {
@@ -96,16 +153,24 @@ const toReact = (n: any): React.ReactNode => {
     case "heading": {
       const level = n.level ?? 2;
       const id = level === 2 || level === 3 ? slugify(plainText(n).trim()) : undefined;
-      return h(`h${level}`, { key: keySeq++, id }, kids(n));
+      suppress++;
+      const inner = kids(n);
+      suppress--;
+      return h(`h${level}`, { key: keySeq++, id, className: n.attributes?.class }, inner);
     }
     case "para": return h("p", { key: keySeq++, className: n.attributes?.class }, kids(n));
-    case "str": return n.text;
+    case "str": return linkifyText(n.text);
     case "soft_break": case "softbreak": return " ";
     case "hard_break": case "hardbreak": return h("br", { key: keySeq++ });
     case "verbatim": return h("code", { key: keySeq++ }, n.text);
     case "strong": return h("strong", { key: keySeq++ }, kids(n));
     case "emph": return h("em", { key: keySeq++ }, kids(n));
-    case "link": return h("a", { key: keySeq++, href: n.destination }, kids(n));
+    case "link": {
+      suppress++;
+      const inner = kids(n);
+      suppress--;
+      return h("a", { key: keySeq++, href: n.destination }, inner);
+    }
     case "bullet_list": return h("ul", { key: keySeq++ }, kids(n));
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
     case "list_item": return h("li", { key: keySeq++ }, kids(n));
@@ -149,6 +214,11 @@ export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
   const { doc, meta } = await runServer(parseChapter(raw));
   await loadHighlighter(); // ready the (sync) highlighter before the walk
   keySeq = 0;
+  suppress = 0;
+  linkedSlugs = new Set();
+  buildTermIndex();
+  autoLink = meta.id !== "glossary"; // the glossary never links its own terms
+  seedManualLinks(doc);
   return { element: toReact(doc), meta, toc: buildToc(doc) };
 };
 
@@ -214,6 +284,39 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   }
   if (extras.length > 0) groups.push({ label: "More", items: extras });
   return groups;
+};
+
+export interface GlossaryEntry {
+  readonly term: string;
+  readonly def: string;
+}
+// Parse the glossary page into a { slug -> { term, def } } map for the hover-preview island. Each
+// `## Term` heading opens an entry; the paragraph text beneath it (inline markdown stripped) is the
+// definition. The glossary Djot page is the single source — this only reads it.
+export const glossaryEntries = (): Record<string, GlossaryEntry> => {
+  const c = chapterBySlug("glossary");
+  if (c === undefined) return {};
+  const out: Record<string, GlossaryEntry> = {};
+  let term: string | null = null;
+  let buf: Array<string> = [];
+  const flush = (): void => {
+    if (term !== null) {
+      const def = buf.join(" ").trim().replace(/`/g, "").replace(/\*\*/g, "");
+      if (def) out[slugify(term)] = { term, def };
+    }
+    buf = [];
+  };
+  for (const line of c.raw.split("\n")) {
+    const m = /^##\s+(.+)$/.exec(line);
+    if (m) {
+      flush();
+      term = m[1].trim();
+    } else if (term !== null && line.trim() && !line.startsWith("{")) {
+      buf.push(line.trim());
+    }
+  }
+  flush();
+  return out;
 };
 
 // The flat book order (groups concatenated) — the sequence prev/next walks.

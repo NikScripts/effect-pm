@@ -176,6 +176,13 @@ export const layer = <Self>(
     ),
   );
 
+/**
+ * Like {@link layer}, but takes the outbound client's Service class as a witness so the compiler
+ * proves the metrics tag's `clientId` matches that client's Context key (correct by construction).
+ * `_client` is type-only — erased at runtime; the layer is exactly `layer(tag, options)`.
+ *
+ * @public
+ */
 export const layerFor = <
   Self,
   const ClientId extends string,

@@ -146,6 +146,23 @@ did. State what they must build and know — paths, constraints, the real gotcha
 so they never have to reconstruct your session to act. If it only makes sense to someone who was there,
 it isn't a handoff.
 
+{#glossary-defines-concepts .should appliesTo=docs}
+## The glossary defines what the API docs can't
+
+The API reference documents *symbols* — every exported function and type. The **glossary** documents
+*concepts*: Tag, Service, Contract, cross-runtime service — the vocabulary a reader needs that no single
+export names. Define each such term once, in the glossary, and link to it (`/docs/glossary#term`) the
+first time it matters on a page. A term a doc comment already defines belongs in the API docs, not here.
+
+{#capitalize-domain-terms .should appliesTo=docs}
+## Capitalize the domain terms
+
+The toolkit's concepts are proper terms — **Tag**, **Service**, **Contract**, **Resource**, **Layer**,
+**Handle**, **Node**, **Implementation** — and read as such: capitalized, so *a Tag* (the concept) is
+distinct from the ordinary word. The glossary is the list of what counts; a lowercase `tag` in prose
+reads as a mistake. Where a word is genuinely generic — "reach it through an HTTP client" — leave it be;
+capitalize the term when it names the concept, not every time the letters appear.
+
 ## Authoring Djot (prototype)
 
 {.note}
