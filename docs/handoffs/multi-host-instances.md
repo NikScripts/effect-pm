@@ -134,7 +134,6 @@ of the above: one definition + a fan-out. See `apps/services-hub/docs/MONITORABL
 
 ## Related
 
-- `2026-06-29-wow-sports-findings.md` — the index of shipped fixes (#3/#4/#5).
 - `withreadiness-host-bound-tags.md` — host-bound readiness (shipped); the per-host readiness this needs.
 - `resource-serverentry-for-custom-resources.md` — typed `serverEntry` (shipped beta.15); the serve
   primitive a fan-out helper would build on.

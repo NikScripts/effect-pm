@@ -155,11 +155,10 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 
 | Path | Fate |
 |------|------|
-| 14 completed `2026-07-0{1–7}-*.md` (serve gaps, peers deadlock, serve reform, beta26 audit, ProcessStore removal, RPC rename checklist, multi-host findings, …) | **deleted** (complete) on `cursor/docs-corpus-date-stack-ce05` |
-| `2026-06-29-wow-sports-findings.md` | **deferred** — mixed findings index; linked detail handoffs still live |
-| `2026-07-01-dashboard-custom-resource-widgets.md` | **deferred** — Status: open |
-| `2026-07-01-engine-serve-adoption-feedback.md` | **deferred** — residual soft asks / guidance |
-| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **deferred** — soft ask (data-last test / migration note) |
+| 15 completed date-stamped handoffs (incl. `2026-06-29-wow-sports-findings.md` index — all linked findings already shipped) | **deleted** on `cursor/docs-corpus-date-stack-ce05` |
+| `2026-07-01-dashboard-custom-resource-widgets.md` | **walking with owner in chat** — Status: open |
+| `2026-07-01-engine-serve-adoption-feedback.md` | **pending chat walk** |
+| `2026-07-02-beta22-withreadiness-datalast-ts2589.md` | **pending chat walk** |
 
 ### F. Feature handoffs superseded by shipped API — **archive** (default)
 
