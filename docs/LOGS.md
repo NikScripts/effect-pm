@@ -92,7 +92,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 1. **Must equal** the `Resource.Node` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
 2. **Register** `Node.logs` (or `Resource.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
 3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
-4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same `lineId` can land in both scopes (memo is per scope).
+4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same live line can land in both scopes (one append per active registration). Store-layer `(scopeKey, lineId)` memo is deferred; live followers keep an in-memory tail claim.
 5. Use **slash-separated** paths (`domain/role`), not placeholders (`my-node`, `node-a`, bare `wnba`).
 
 ```ts
@@ -154,7 +154,7 @@ BillingNode process (node log key: billing/scores)
 
 - **Capture:** exactly one merged capture logger per node (`Logs.layer`, baked into `Store.Service`).
 - **Bus:** one `LogRelay` (PubSub + bounded tail).
-- **Durable tails:** Stream pipeline per registration — level ∧ match → `(scopeKey, lineId)` memo → batch append.
+- **Durable tails:** Stream pipeline per registration — level ∧ match → batch append (in-memory tail claim today; durable `(scopeKey, lineId)` memo deferred).
 - **Stream:** unfiltered on `Logs.stream`; `Resource.logs` applies lineage + optional `logStreamLevel`.
 
 ## Node runtime
