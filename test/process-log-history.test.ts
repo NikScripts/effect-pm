@@ -34,12 +34,9 @@ it("Resource.logs reads back process worker logs", () =>
       expect(rows.some((r) => r.message.includes("process tick"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Layer.provideMerge(
-          AppStore.layerMemory,
-          Process.layer(LogProc, {
-            effect: Effect.logInfo("process tick"),
-          }),
-        ),
+        Process.layer(LogProc, {
+          effect: Effect.logInfo("process tick"),
+        }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
     ),

@@ -25,7 +25,12 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
       yield* Effect.logInfo("worker line").pipe(Logs.withScope(SyncProc));
 
       yield* Effect.gen(function* () {
-        while ((yield* Logs.byNode(BillingNode)).length < 2) {
+        while (
+          (yield* Logs.byNode(BillingNode)).length < 2 ||
+          !(yield* Logs.byResource({ processId: testSyncProcessKey })).some(
+            (row) => row.message === "worker line",
+          )
+        ) {
           yield* Effect.sleep(Duration.millis(20));
         }
       }).pipe(Effect.timeout(Duration.seconds(3)));

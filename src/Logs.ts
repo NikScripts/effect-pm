@@ -53,11 +53,10 @@ import { queryDurableNode, queryDurableScope } from "./internal/logs/durableRead
 import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
 import { persistLayer as persistFollowerLayer } from "./internal/logs/storeFollower";
-import { LogStore } from "./store/log";
 
 /**
  * **Node log key** — durable bucket id for one runtime host. Must equal {@link Resource.Node} `.key`
- * (same string as {@link Resource.selfNode}). Stored as `LogStore` `groupId` and `annotations.node`.
+ * (same string as {@link Resource.selfNode}). Stored as `annotations.node` (and interim LogStore `groupId`).
  *
  * @see `docs/LOGS.md` — Key catalog → Node log keys
  *
@@ -113,7 +112,7 @@ export const replay = relay.replayLogEntry;
 export const withScope = withLogScope;
 
 /**
- * Interim durable writer into standalone {@link LogStore}.
+ * Interim durable writer into standalone LogStore (`@nikscripts/effect-pm/store/Log`).
  *
  * @deprecated Prefer {@link Resource.store}`(Node)` / `Node.logs` on a {@link Store.Service}
  * (`AppStore.layerMemory` already includes capture). Do not compose this **and**
@@ -139,7 +138,7 @@ export interface LogReadOptions {
  * Read durable logs for a **whole node** (every resource on that process).
  *
  * Prefers `Resource.store(Node)` / `Node.logs` registration `log.read`; falls back to interim
- * {@link LogStore} `groupId` when that layer is still composed.
+ * LogStore `groupId` when that layer is still composed.
  *
  * @public
  */
@@ -154,7 +153,7 @@ export const byNode = (
 /**
  * Read durable logs for a **specific resource** (filter by **resource key**).
  *
- * Prefers that resource's store registration `log.read`; falls back to interim {@link LogStore}
+ * Prefers that resource's store registration `log.read`; falls back to interim LogStore
  * lineage filter.
  *
  * @remarks

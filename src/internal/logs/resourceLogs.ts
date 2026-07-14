@@ -76,10 +76,10 @@ const queryResourceLogs = (
  *
  * @internal
  */
-export const logs = <Tag extends StoreScopeTag & StreamLevelCarrier>(
+export const logs = <Tag extends StoreScopeTag>(
   tag: Tag,
 ): Effect.Effect<LogsExportHandle, never, never> => {
-  const floor = streamLevelOf(tag);
+  const floor = streamLevelOf(tag as Tag & StreamLevelCarrier);
   const stream = Stream.unwrap(
     Effect.gen(function* () {
       const relay = yield* Effect.serviceOption(LogRelay);
@@ -112,7 +112,7 @@ export const logs = <Tag extends StoreScopeTag & StreamLevelCarrier>(
  *
  * @internal
  */
-export const withLogExport = <Tag extends StoreScopeTag & StreamLevelCarrier>(
+export const withLogExport = <Tag extends StoreScopeTag>(
   tag: Tag,
 ): Tag & { readonly logs: Effect.Effect<LogsExportHandle, never, never> } =>
   Object.assign(tag, { logs: logs(tag) }) as Tag & {

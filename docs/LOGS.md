@@ -186,7 +186,12 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(LiveScorePoller),
 ) {}
 
-Effect.provide(program, Layer.provideMerge(AppStore.layerMemory, Process.layer(...)))
+// Provide the store *into* the resource layer so Logs.layer is installed before
+// auto-started queue workers fork (Process can use either order — workers start on `run`).
+Effect.provide(
+  program,
+  Process.layer(...).pipe(Layer.provideMerge(AppStore.layerMemory)),
+)
 ```
 
 ### Query durable history

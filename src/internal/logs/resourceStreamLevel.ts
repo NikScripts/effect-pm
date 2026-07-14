@@ -11,8 +11,8 @@ import { logStreamLevelSym, type StreamLevelCarrier } from "./streamLevel";
 /** Stamp `level` onto a tag for {@link Resource.logs} stream filtering. @public */
 export const logStreamLevel =
   (level: StoreLogLevel) =>
-  <Tag extends StreamLevelCarrier>(tag: Tag): Tag =>
-    Object.assign(tag, { [logStreamLevelSym]: level });
+  <Tag extends object>(tag: Tag): Tag & StreamLevelCarrier =>
+    Object.assign(tag, { [logStreamLevelSym]: level }) as Tag & StreamLevelCarrier;
 
 /** @public */
 export const logStreamLevelAll = logStreamLevel("All");

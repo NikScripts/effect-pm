@@ -54,13 +54,11 @@ it("Resource.logs surfaces queue worker lines on stream + query", () =>
       expect(rows.some((r) => r.message.includes("handling 7"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Layer.provideMerge(
-          AppStore.layerMemory,
-          QueueResource.layer(LogQueue, {
-            effect: (item) => Effect.logInfo(`handling ${String(item.n)}`),
-            concurrency: 1,
-          }),
-        ),
+        // AppStore (Logs.layer + Storage) must build before auto-started queue workers fork.
+        QueueResource.layer(LogQueue, {
+          effect: (item) => Effect.logInfo(`handling ${String(item.n)}`),
+          concurrency: 1,
+        }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
     ),
@@ -81,12 +79,9 @@ it("Resource.logs surfaces process worker lines on query", () =>
       expect(rows.some((r) => r.message.includes("process tick"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Layer.provideMerge(
-          AppStore.layerMemory,
-          Process.layer(LogProc, {
-            effect: Effect.logInfo("process tick"),
-          }),
-        ),
+        Process.layer(LogProc, {
+          effect: Effect.logInfo("process tick"),
+        }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
     ),
