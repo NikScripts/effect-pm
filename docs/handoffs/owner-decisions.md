@@ -42,6 +42,19 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Agent 1 Phase 1 handoffs: thorough / archive-first / defer to owner
+
+- **Owner said:** Yes (to the Phase 1 plan) — be **thorough and precautionary**, and **defer to** the owner on calls.
+- **Chose:** Phase 1 execution posture:
+  1. **Archive over delete** by default; **no deletes** unless owner ticks specific rows.
+  2. **No ambiguous moves** without owner OK (SSOT docs, anything linked from `AGENTS.md` / legacy STORAGE/guides / `docs/site/README`, open agent briefs, Agent 3 plans, `store-layer-query`, `decisions/` layout).
+  3. Live bus + historical SSOT stay at `handoffs/` root until owner unlocks a move.
+  4. Execution only in **owner-approved batches** (Agent 1 proposes; owner green-lights).
+- **Rejected:** Aggressive deletes; freelancing `decisions/` subdirectory or bulk root reshuffles; touching `docs/site` UI.
+- **Supervisor impact:** Agent 1 updates plan locking these rules; waits for batch unlock before `git mv`.
+
+---
+
 ## 2026-07-14 — Agent 1 → docs corpus (UI stays with lettered agents)
 
 - **Owner said:** Save UI / Tailscale-facing site work for lettered (local) agents. Give Agent 1 the docs corpus instead: **handoffs cleanup first**, then plans refactor/migration, then port legacy docs with a **Draft** page label (owner will refine Draft UX after assign).

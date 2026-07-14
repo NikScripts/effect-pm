@@ -1,11 +1,49 @@
 # Agent 1 — Phase 1 plan: handoffs cleanup inventory
 
-**Status:** **PLAN ONLY — awaiting owner approval** (2026-07-14).  
+**Status:** **PLAN LOCKED (posture) — batch execution deferred to owner** (2026-07-14).  
+**Owner steer:** thorough · precautionary · **defer edge cases / deletes / ambiguous moves to owner**.  
 **Assignment:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) Phase 1.  
-**Branch:** `cursor/docs-corpus-phase1-plan-ce05` (off `integration` @ `2d8b494a`).  
+**Branch:** `cursor/docs-corpus-phase1-plan-ce05`.  
 **Scope:** `docs/handoffs/**` only. **Out of scope:** `docs/site/**`, Twoslash/UI chrome, `src/web` / `src/ui`, Phases 2–3.
 
-No files deleted or moved in this turn. This document is the deliverable.
+Inventory below stands. **No mass moves until owner unlocks a named batch.**
+
+---
+
+## Locked execution rules (owner 2026-07-14)
+
+1. **Archive ≫ delete.** First pass(es) = archive only. Deletes need per-row owner ticks.
+2. **When unsure → leave in place** and list under **Deferred for owner** (do not invent fates).
+3. **External citations block casual moves** — anything linked from `AGENTS.md`, `docs/legacy/**`, or `docs/site/README.md` stays put until a move PR also fixes those links **and** owner OK’d that batch.
+4. **Active bus + open briefs** stay at root (`agent-status`, `owner-decisions`, `supervisor-protocol`, `local-agents`, live Agent 1/3/B/C/D files).
+5. **Historical SSOT** (`*-decisions.md`, store-cutover set cited by STORAGE, etc.) stay at root until Phase 3 / explicit unlock.
+6. Propose work as **batches**; owner says which batch to run.
+
+---
+
+## Proposed batches (awaiting unlock)
+
+| Batch | What | Risk | Status |
+|-------|------|------|--------|
+| **0 — posture only** | This plan + owner-decisions steer | None | **done in docs** |
+| **A — date-stamped orphans** | `2026-06-29-*`, `2026-07-01-*` … `2026-07-07-*` with **zero external inbound** → `archive/YYYY-MM/` | Low | **blocked on owner** |
+| **B — merged agent closeouts** | Done Agent 1/2 / cursor closeouts with no legacy/AGENTS links | Low–med | **blocked on owner** |
+| **C — shipped feature handoffs** | ApiMetrics, CQR, telemetry design, etc. (still no/legacy-only links) | Med | **blocked on owner** |
+| **D — reports bodies** | Archive five `reports/2026-07-07-*`; keep `reports/README`; rewrite AGENTS/legacy links | Higher ripple | **blocked on owner** |
+| **E — SSOT / store-cutover / decisions** | Relocate or `decisions/` layout | High | **owner design first** |
+| **Z — deletes** | Only ticked rows | Irreversible (git recoverable) | **owner ticks required** |
+
+---
+
+## Deferred for owner (do not move without you)
+
+- Whether to use a root `decisions/` folder (alt B) vs keep decisions flat  
+- `store-cutover-*.md` + `store-and-logs-design.md` while STORAGE/legacy still cite them  
+- `agent-03-logs-store-followers-plan.md` / `agent-03-log-store-tail-plan.md` (active vs archive-now)  
+- `store-layer-query.md` (parked not-approved at root vs archive+banner)  
+- `queue-persistence-design.md`, `queue-nonserializable-items.md`  
+- Any **delete** candidates  
+- Letter-agent docs (`agent-b-plan`, docs-platform decision) linked from `docs/site/README.md`
 
 ---
 
@@ -13,8 +51,7 @@ No files deleted or moved in this turn. This document is the deliverable.
 
 - Enumerated **94** markdown files under `docs/handoffs/` (88 root + 6 under `reports/`).
 - Cross-checked **inbound links** from `AGENTS.md`, `docs/legacy/**`, `docs/standards/**`, live book roots, and in-handoffs refs.
-- Classifications are **proposals**. Anything marked **delete** still needs an explicit owner OK before execution.
-- “Historical SSOT” = still the place people (or legacy docs) look for a locked decision — keep at a stable path or leave a stub pointer after move.
+- Classifications below remain **proposals** until a batch is unlocked.
 
 ---
 
@@ -292,6 +329,7 @@ Exact counts will be locked when you annotate the tables.
 
 ## Stop
 
-Phase 1 plan delivered. **No mass moves/deletes performed.**
+**Posture locked** (thorough · archive-first · defer to owner).  
+**No archive/delete `git mv` until you unlock a batch** (A / B / C / D / E / Z above).
 
-Awaiting owner approval / edits before an execution PR.
+Say which batch to run (or edit the deferred list).
