@@ -62,8 +62,10 @@
  * **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
  *
- * Structured log persistence: **`@nikscripts/effect-pm/store/Log`** (`LogStore.layerMemory` /
- * `LogStore.layer({ filename })`). Capture/relay pipeline: `@nikscripts/effect-pm/Logs`.
+ * Durable logs: register `Node.logs` / toolkit `*.store(tag)` on a {@link Store.Service}
+ * (`layerMemory` / `layer` bake in capture + per-registration tails). Capture/relay:
+ * `@nikscripts/effect-pm/Logs`. Interim `@nikscripts/effect-pm/store/Log` (`LogStore`) remains
+ * only for deprecated `Logs.persistLayer` compat.
  *
  * Durable adapters: **`@nikscripts/effect-pm/storage/sqlite`**
  * (`SQLiteDurableQueueStore`, `SQLiteHistoryStore`).
