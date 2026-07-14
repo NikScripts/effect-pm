@@ -138,6 +138,7 @@ const strip = (text: string): string =>
   text.replace(/import\("[^"]*"\)\./g, "").replace(/\s*\n\s*/g, " ");
 
 // --- pure extraction: everything below is a function of the checker, no IO ---
+const srcDir = `${nodePath.join(repoRoot, "src")}/`;
 const makeExtractor = (checker: ts.TypeChecker) => {
   // Re-exports (`export { x } from "./y"`) arrive as Alias symbols carrying no docs of their own —
   // resolve to the real symbol before reading anything.
@@ -166,7 +167,11 @@ const makeExtractor = (checker: ts.TypeChecker) => {
   const toApi = (entry: Entry, exportSym: ts.Symbol): ReadonlyArray<ApiSymbol> => {
     const sym = resolve(exportSym);
     const decl = sym.getDeclarations()?.[0];
-    if (!isPublic(sym) || decl === undefined) return [];
+    if (decl === undefined) return [];
+    // Only document what THIS package defines. A re-export whose definition resolves into a dependency
+    // (e.g. `export type { ConsumeResult } from "effect/…"`) belongs in that package's docs, not ours.
+    if (!decl.getSourceFile().fileName.startsWith(srcDir)) return [];
+    if (!isPublic(sym)) return [];
 
     // Value symbols → getTypeOfSymbolAtLocation; type/interface/class → getDeclaredTypeOfSymbol.
     const isType =
