@@ -46,31 +46,15 @@ Install them the same way — for the full web dashboard:
 react react-dom recharts @tanstack/react-table
 ```
 
-## Verify it works
-
-A ten-second check that everything resolved — run it with `tsx` (or your runner); it logs and exits:
-
-{.twoslash}
-``` ts
-import { NodeRuntime } from "@effect/platform-node"
-import { Effect } from "effect"
-
-NodeRuntime.runMain(Effect.log("effect-pm is installed"))
-```
-
 ## The package surface
 
-Each area is its own tree-shakeable subpath — import only what you use:
+Each area is a tree-shakeable subpath under `@nikscripts/effect-pm/*` — import only what you use:
 
-- **`@nikscripts/effect-pm/Resource`** — build your own cross-runtime resource
-- **`.../QueueResource`** (and `/CustomQueueResource`) — a priority work queue
-- **`.../Process`** — scheduled and long-running processes
-- **`.../ShardMap`** — keyed state, sharded across a fleet
-- **`.../Store`** — durable storage
-- **`.../web`, `/tui`, `/cli`** — dashboards over any resource
-- **`@nikscripts/effect-pm`** — the barrel: everything above under short names
-
-Plus more for advanced use — `/Group`, `/Telemetry`, `/ApiMetrics`, `/DynamicConfig`, `/HttpApiResource`, and others.
+- **`/Resource`** — build your own resource
+- **`/QueueResource`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
+- **`/Store`** — durable storage
+- **`/web`**, **`/tui`**, **`/cli`** — dashboards
+- **`@nikscripts/effect-pm`** — the barrel: everything under short names
 
 ## TypeScript
 
