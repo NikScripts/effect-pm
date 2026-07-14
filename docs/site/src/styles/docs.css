@@ -596,3 +596,43 @@ section[class~="may"] > h2::after { content: "MAY"; color: var(--may); }
   color: var(--primary);
   background: color-mix(in oklab, var(--primary) 8%, transparent);
 }
+
+/* package-manager toggle — the `​```install` block (PackageInstall island). Tabs on top, the resolved
+   command below with a copy button. Selection persists + syncs across blocks. */
+.pm-install {
+  margin: 1.1rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.pm-tabs {
+  display: flex;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.pm-tab {
+  padding: 0.4rem 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted-fg);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.pm-tab:hover { color: var(--fg); }
+.pm-tab[data-active] { color: var(--fg); border-bottom-color: var(--primary); }
+.pm-command {
+  position: relative;
+  padding: 0.8rem 1.1rem;
+  background: var(--card);
+  overflow-x: auto;
+}
+.pm-command code {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+}

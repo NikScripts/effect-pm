@@ -15,6 +15,7 @@ import { highlightToReact, loadHighlighter } from "./highlight.js";
 import { QueueIsland } from "../islands/QueueIsland.js";
 import { RunResourceIsland } from "../islands/RunResourceIsland.js";
 import { CounterIsland } from "../islands/CounterIsland.js";
+import { PackageInstall } from "../islands/PackageInstall.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 
@@ -81,6 +82,7 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
       if (n.lang === "run-resource") return h(RunResourceIsland, { key: keySeq++ });
       if (n.lang === "resource") return h(CounterIsland, { key: keySeq++ });
+      if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
       // attribute above the fence opts the block into TS-language-service hover types. Wrapped in a
       // `.code-block` container carrying the copy button; line numbers are pure CSS on `.line`.
