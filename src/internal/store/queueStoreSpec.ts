@@ -40,15 +40,25 @@ export interface QueueStoreTag extends StoreScopeTag {
   readonly [specSym]: Record<string, unknown>;
 }
 
-/** Spec of a queue instance whose item is `Schema.Struct<F>`. @internal */
-type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<typeof queueSpec<F>>;
+/** Spec of a queue instance whose item is `Schema.Struct<F>` (its `success`/`error` wire slots are
+ *  irrelevant to item extraction, so they stay defaulted here). @internal */
+type QueueInstanceSpec<
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+> = ReturnType<typeof queueSpec<F, Success, Error>>;
 
 /** Nested spec recovered from a queue tag class. @internal */
 type QueueSpecFromTag<Tag extends QueueStoreTag> = SpecOf<Tag & ResourceTag<unknown, Spec>>;
 
-/** Struct fields of the queue item from a tag. @internal */
+/** Struct fields of the queue item from a tag — matched independently of the tag's `success`/`error`
+ *  wire slots (a threaded `QueueInstanceSpec<F, Success, Error>` still yields `F`). @internal */
 type QueueItemFields<Tag extends QueueStoreTag> =
-  QueueSpecFromTag<Tag> extends QueueInstanceSpec<infer F extends Schema.Struct.Fields>
+  QueueSpecFromTag<Tag> extends QueueInstanceSpec<
+    infer F extends Schema.Struct.Fields,
+    infer _Success extends Schema.Top,
+    infer _Error extends Schema.Top
+  >
     ? F
     : never;
 

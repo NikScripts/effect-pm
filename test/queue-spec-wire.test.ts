@@ -59,10 +59,7 @@ describe("queueSpec wire — structural validation", () => {
       extra: QueueResource.queueSpec(jobSchema).add,
     };
     expect(() =>
-      assertQueueInstanceSpec(
-        wired as ReturnType<typeof QueueResource.queueSpec>,
-        QueueResource.queueSpec(jobSchema),
-      ),
+      assertQueueInstanceSpec(wired, QueueResource.queueSpec(jobSchema)),
     ).toThrow(QueueSpecShapeError);
   });
 });
