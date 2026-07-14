@@ -171,12 +171,12 @@ function splitExpand(info: any): string | undefined {
 // with mdast, and hand fenced code to shiki so it stays highlighted (mdast alone leaves it plain).
 // `{@link Target}` / `{@link Target text}` — which mdast doesn't understand — are pre-rewritten to a
 // markdown link with a sentinel `@link:` URL, so mdast parses them as inline links; the `link` handler
-// below turns that sentinel into a non-navigating blue `@link …` reference (we can't resolve targets
-// to real URLs in the popup, so it's styled, not clickable). The visible label keeps the `@link`
-// prefix so it reads like the other `@`-tags (@since, @category).
+// below turns that sentinel into a non-navigating blue reference (we can't resolve targets to real
+// URLs in the popup, so it's styled, not clickable). The visible label is just the target (or custom
+// text) — NO `@link` prefix, else references inside `@see` tags read as "@see @link Foo".
 function preprocessJsdoc(md: string): string {
   const label = (target: string, text?: string) =>
-    `[@link ${(text ?? target).trim()}](@link:${target.trim()})`;
+    `[${(text ?? target).trim()}](@link:${target.trim()})`;
   return md
     .replace(/\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)([^}]+)\}/g, (_m, target, text) => label(String(target), String(text)))
     .replace(/\{@link\s+([^}\s]+)\}/g, (_m, target) => label(String(target)));
