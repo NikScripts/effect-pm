@@ -106,7 +106,13 @@ export const snapshot = relay.snapshot;
 /** Replay one captured line through the ambient Logger. @public */
 export const replay = relay.replayLogEntry;
 
-/** Append `tag.key` to fiber lineage at materialize. @public */
+/**
+ * Append `tag.key` onto the fiber lineage at materialize (nested scopes combine into a path).
+ *
+ * Idempotent when `tag.key` is already the last segment. Does not auto-inject a node root.
+ *
+ * @public
+ */
 export const withScope = withLogScope;
 
 const queryLimitDefault = 200;
