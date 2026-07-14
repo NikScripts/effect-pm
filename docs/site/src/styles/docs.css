@@ -358,10 +358,15 @@ pre.shiki { background: transparent; }
   font-size: 0.78rem;
 }
 .twoslash-popup-docs-tag-name { color: var(--primary); }
-/* twoslash blocks scroll horizontally like any code block. Trade-off: a scroll box clips vertical
-   overflow, so a hover popup on the very top row can be cut off (rows with space above are fine).
-   A fully-escaping popup would need a JS/portal reposition — a follow-up for the doc-site owner. */
-.twoslash { overflow-x: auto; }
+/* Long lines scroll horizontally, AND the hover popup still escapes the box vertically. The trick:
+   overflow-y: `clip` (not `auto`) is a valid pair with overflow-x: auto (no coercion to auto), so we
+   keep horizontal scroll while overflow-clip-margin extends the vertical paint region — the popup
+   paints above the block instead of being cut off. */
+.twoslash {
+  overflow-x: auto;
+  overflow-y: clip;
+  overflow-clip-margin: 22rem;
+}
 
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */
