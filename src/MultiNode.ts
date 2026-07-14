@@ -7,7 +7,7 @@
  * aggregator), or a CLI. Each node's outcome is captured, so the combine decides how to treat a node
  * that's down — sum the survivors, fail hard, or report "2/3 reporting". The toolkit imposes no policy.
  *
- * This is slice 1 of the multi-node design (see `docs/handoffs/multi-node-instances-decisions.md`): the
+ * This is slice 1 of the multi-node design (see `docs/handoffs/multi-host-instances-decisions.md`): the
  * contract field-kinds (`multiQuery` / `multiStream`) and the serve/peer wiring build on these.
  *
  */

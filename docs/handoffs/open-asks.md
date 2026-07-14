@@ -6,42 +6,7 @@
 
 ---
 
-## 1. Dashboard widget plug-in seam for custom resources
-
-**Area:** `@nikscripts/effect-pm/web`  
-**Source:** wow-sports services-hub (was `2026-07-01-dashboard-custom-resource-widgets.md` ask #1)  
-**Status:** open — design before code
-
-Custom `Resource.Tag`s (`Database`, `Import`, `EventManager`, …) with no known `Resource.kindOf` fall back to the **generic status card** (status fields + streams). That works. Rich per-type cards (queue / process / ApiMetrics) do not exist for consumer-defined shapes.
-
-**Missing:** how `/web` picks a widget for a tag it does not statically know:
-- by `kindOf`
-- by spec-shape match
-- by a consumer-registered widget map
-
-Generic introspection is rejected. Widgets stay hand-crafted per type; the seam is how a consumer plugs theirs in.
-
-**Not a blocker** for wow — the generic card already renders. Prerequisite shipped: `Resource.client(tag, host)` (beta.17).
-
----
-
-## 2. Docs: when NOT to hoist `Effect.provide` to `serve`
-
-**Area:** guides / `strictEffectProvide` / serve migration  
-**Source:** wow-sports engine-serve adoption (was `2026-07-01-engine-serve-adoption-feedback.md`)  
-**Status:** open — docs only (no package helper)
-
-Blanket advice “move every in-body `Effect.provide` to the serve” is wrong for **sub-effect-scoped** deps. Hoisting to the resource edge widens `R` for the whole body and can change behavior without a type error (live-score poller: outer windowing must not capture; inner tick must).
-
-**Wanted copy (one paragraph is enough):**
-- **Whole-resource** dependency → satisfy at `serve` / edge provide
-- **Sub-effect** dependency → keep a scoping combinator in the app (e.g. their `withImport(handlers, effect)`); do not hoist
-
-Not a blocker. Do **not** ship a package `locally`/`withImport` for this — consumer handlers aren’t our types.
-
----
-
-## 3. Test doubles (`layerNoop`) for package-owned deps
+## 1. Test doubles (`layerNoop`) for package-owned deps
 
 **Area:** test DX for served stacks  
 **Source:** wow-sports engine-serve adoption (was `2026-07-01-engine-serve-adoption-feedback.md`)  
@@ -53,4 +18,16 @@ Once deps are explicit in `R` (`serve` / edge provide), unit tests must supply a
 
 **Rule:** a `layerNoop` lands **beside the service it stubs** when that service exists — not a generic “noop any Tag” helper. Consumer-owned tags stay consumer-owned stubs. Optional later: a fatter “test serve” kit is out of scope until a concrete owned service needs it.
 
+**Inventory note (2026-07-14):** No package-owned ambient Tag today lacks a usable test layer (`Store.Service.layerMemory`, engine `layer` / `serve`, etc.). Leave this row until a concrete package service appears that needs an inert double.
+
 Not a blocker. No `layerNoop` under `src/` today.
+
+---
+
+## Closed this pass
+
+| Ask | Fate |
+|-----|------|
+| Dashboard widget plug-in seam | **Shipped** — `src/web/widget-registry.ts` (`forKind` / `forKey` / `withEntries` onto `base`; Agent C on `integration`) |
+| Docs: when NOT to hoist `Effect.provide` to `serve` | **Shipped** — section in [`docs/legacy/guides/per-resource-dependencies.md`](../legacy/guides/per-resource-dependencies.md) |
+| beta.22 `withReadiness` pipe TS2589 | **Fixed** — `PipeableTag` + type-hygiene [#54](https://github.com/NikScripts/effect-pm/pull/54) on `integration` |

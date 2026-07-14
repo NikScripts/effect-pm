@@ -176,8 +176,10 @@ program.pipe(Layer.provide(Counter.serve))
 ## Declare dependencies in the worker; provide at the serve boundary
 
 A worker or tick body **declares** its dependencies with `yield* Tag` — it never `Effect.provide`s
-them inline. Provide them once, at the serve/layer boundary, so `strictEffectProvide` stays clean and
-the same body works local or served.
+them inline. Provide **whole-resource** deps once, at the serve/layer boundary, so
+`strictEffectProvide` stays clean and the same body works local or served. Do **not** hoist a
+**sub-effect-scoped** dep to `serve` — that widens `R` for the whole body; keep an app-local
+scoping combinator (see `docs/legacy/guides/per-resource-dependencies.md`).
 
 {#one-instance-one-materialization .must appliesTo="src examples"}
 ## One instance, one materialization

@@ -119,8 +119,8 @@ When the owner steers scope, architecture, or defer/ship choices **in chat**, th
 
 | Agent | Handoff |
 |-------|---------|
-| **1** | [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md) |
-| **2** | [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md) |
+| **1** | [`agent-01-session-2-storage-docs.md`](archive/2026-07/agents/agent-01-session-2-storage-docs.md) |
+| **2** | [`agent-02-session-2-process-platform.md`](archive/2026-07/agents/agent-02-session-2-process-platform.md) |
 
 ### Local Claude — B → A → C
 

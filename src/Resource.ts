@@ -763,7 +763,7 @@ const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * Define a **`constant`** field — a value resolved **once** when the resource is acquired, surfaced as a
  * **plain** property (`p.x: A`, no `yield*`), identical local and remote. For values fixed after startup.
  * The impl supplies the value as an `Effect<A>` (run once at acquire; use `Effect.succeed` for a literal).
- * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/service-shape-redesign.md`.
+ * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/archive/2026-07/features/service-shape-redesign.md`.
  *
  * @public
  */
@@ -785,7 +785,7 @@ const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * uniform local and remote. The impl **owns** a `SubscriptionRef` (writes it) and provides it via
  * {@link subscribable}; consumers **read** (`yield* svc.x.get`) and **observe** (`svc.x.changes`) — a read
  * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use `constant`; for on-demand
- * calls use `effect`. See `docs/handoffs/2026-07-03-contract-serve-reform.md`.
+ * calls use `effect`.
  *
  * @public
  */
@@ -1438,7 +1438,7 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
 // type whenever those schemas contain a free type parameter (e.g. inside a factory generic over
 // the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
 // keeps the result identical for every concrete spec while letting it reduce under a generic
-// spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
+// spec too.
 export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>

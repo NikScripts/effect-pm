@@ -62,7 +62,7 @@ On `integration/storage`, cast-free, gate green:
   `defer` use this and read as real `(item)` / `(items[])` overloads.
 - **`Kind` type param dropped** — `Method<P, Su, E, Str, Ann, Client>`; `kind` is runtime-only now.
 
-See [`agent-a-type-display-cleanup.md`](./agent-a-type-display-cleanup.md) for the full record and the
+See [`agent-a-type-display-cleanup.md`](archive/2026-07/agents/agent-a-type-display-cleanup.md) for the full record and the
 **payload-prettify backlog** (nested entry `item`, other resources' overloads, verbose-type sweep) —
 that backlog pairs naturally with each resource's handle work below.
 

@@ -74,4 +74,4 @@ The heaviest recent engine work.
 - **Agent D** (+ peers) — named resource handles → [`agent-d-named-handles.md`](./agent-d-named-handles.md).
 - **Agent 3** — Logs P1 (levels / store followers / remote) → [`agent-03-logs-p1.md`](./agent-03-logs-p1.md).
   Plan-first; owner unlocks slices. Do **not** mix with named-handles.
-- Payload-prettify backlog → [`agent-a-type-display-cleanup.md`](./agent-a-type-display-cleanup.md).
+- Payload-prettify backlog → [`agent-a-type-display-cleanup.md`](../agents/agent-a-type-display-cleanup.md).

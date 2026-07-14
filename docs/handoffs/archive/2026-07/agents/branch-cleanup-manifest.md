@@ -12,7 +12,7 @@ For each `origin/cursor/*` branch:
 - **ahead** = `git rev-list --count origin/integration/storage..origin/<branch>`
 
 **Delete rule:** `merged=yes` **and** `ahead=0`, excluding the locked keep list in
-[`agent-02-branch-cleanup.md`](./agent-02-branch-cleanup.md).
+[`agent-02-branch-cleanup.md`](agent-02-branch-cleanup.md).
 
 ## Pre-delete audit (full)
 

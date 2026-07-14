@@ -67,7 +67,7 @@ This is **not** optional, and it is **not** “keep `Logs.persistLayer` + standa
 
 Canonical sources:
 
-- [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
+- [`agent-02-logs-platform-plan.md`](archive/2026-07/agents/agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
 - [`store-and-logs-design.md`](./store-and-logs-design.md) — **Single capture, single store write** (overrides table in Agent 2 plan wins on naming; the follower diagram is still the intent)
 
 ### What “`LogStore`” was doing in the interim

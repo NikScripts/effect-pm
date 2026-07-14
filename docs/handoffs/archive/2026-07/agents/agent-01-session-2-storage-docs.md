@@ -18,8 +18,8 @@
 | [`store-cutover-queue.md`](./store-cutover-queue.md) | Queue engine store shipped |
 | [`store-cutover-process.md`](./store-cutover-process.md) | Process store shipped |
 | [`store-cutover-runresource.md`](./store-cutover-runresource.md) | RunResource store shipped |
-| [`reports/2026-07-07-agent-report-store.md`](./reports/2026-07-07-agent-report-store.md) | Rewrite target — mostly stale |
-| [`reports/2026-07-07-agent-report-docs-release.md`](./reports/2026-07-07-agent-report-docs-release.md) | Grep policy |
+| [`reports/2026-07-07-agent-report-store.md`](../reports/2026-07-07-agent-report-store.md) | Rewrite target — mostly stale |
+| [`reports/2026-07-07-agent-report-docs-release.md`](../reports/2026-07-07-agent-report-docs-release.md) | Grep policy |
 
 **Do not edit:** `src/Process.ts`, `processStoreSpec.ts`, Process agent report (Agent 2 owns Process code/docs).
 
@@ -60,9 +60,9 @@ Verify claims against `src/QueueResource.ts`, `src/Store.ts`, `src/store/*` — 
 
 ### Slice 3 — Agent reports + integration-sync
 
-- Rewrite [`reports/2026-07-07-agent-report-store.md`](./reports/2026-07-07-agent-report-store.md): Stage 1 **done**, engine wired for all four toolkits, cast status per module, open = write-buffer + owner TODOs only
-- Update [`integration-sync-2026-07-07.md`](./integration-sync-2026-07-07.md) Store + Queue + RunResource tables — remove `processStoreTap`, “Queue facet only”, “Stage 1 blocked”
-- Update [`reports/2026-07-07-agent-report-queue-resource.md`](./reports/2026-07-07-agent-report-queue-resource.md) priority → **Done** if nothing open except write-buffer future
+- Rewrite [`reports/2026-07-07-agent-report-store.md`](../reports/2026-07-07-agent-report-store.md): Stage 1 **done**, engine wired for all four toolkits, cast status per module, open = write-buffer + owner TODOs only
+- Update [`integration-sync-2026-07-07.md`](integration-sync-2026-07-07.md) Store + Queue + RunResource tables — remove `processStoreTap`, “Queue facet only”, “Stage 1 blocked”
+- Update [`reports/2026-07-07-agent-report-queue-resource.md`](../reports/2026-07-07-agent-report-queue-resource.md) priority → **Done** if nothing open except write-buffer future
 
 ### Slice 4 — Cross-doc grep sweep
 

@@ -137,5 +137,5 @@ methods — logs + swallows — while defects (encode/wiring) and read errors pr
 - API + mental model: [`store.md`](./store.md)
 - Migration: [`store-migration.md`](./store-migration.md)
 - Golden example: [`queue-resource.md`](./queue-resource.md)
-- Design handoff: [`../handoffs/store-and-logs-design.md`](../handoffs/store-and-logs-design.md)
+- Design handoff: [`../../handoffs/store-and-logs-design.md`](../../handoffs/store-and-logs-design.md)
 </content>

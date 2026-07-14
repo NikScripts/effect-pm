@@ -2,7 +2,7 @@
 
 **Status:** **DONE** — Phases 1–5 landed (`cursor/logs-platform-a3ad` + `cursor/phase5-logs-migration-a3ad`). Legacy `captureLogs` / spec `logs` removed; consumers use `Resource.logs` / `NodeStatus.logs` + `LogEntry.hasKey`. See [`docs/LOGS.md`](../LOGS.md).
 
-**Prerequisite:** [`agent-cursor-logs-store-cutover.md`](./agent-cursor-logs-store-cutover.md) (or equivalent) — migrate `LogStore` off `ProcessStore` facet to `Store.contract` + implicit `appendLog` / `logQuery` shapes **before** platform wiring lands.
+**Prerequisite:** [`agent-cursor-logs-store-cutover.md`](agent-cursor-logs-store-cutover.md) (or equivalent) — migrate `LogStore` off `ProcessStore` facet to `Store.contract` + implicit `appendLog` / `logQuery` shapes **before** platform wiring lands.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · companion (partially stale — see §Overrides): [`store-and-logs-design.md`](./store-and-logs-design.md)
 
