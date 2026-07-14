@@ -378,37 +378,42 @@ pre.shiki { background: transparent; }
 .twoslash-popup-docs {
   margin: 0;
   padding: 0.45rem 0.7rem 0.5rem;
-  border-top: 1px solid var(--border);
   color: var(--muted-fg);
   font-family: var(--font-sans);
   font-size: 0.78rem;
 }
-/* The "dual preview" expanded-declaration box: its own code panel wedged BETWEEN the compact type and
-   the JSDoc comments, separated by a rule, with a small "expanded" label. */
+/* The "dual preview" expanded-declaration box — its own panel wedged BETWEEN the compact type box and
+   the JSDoc comments box. */
 .twoslash-popup-expand {
   display: block;
-  border-top: 1px solid var(--border);
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
-/* Single scroll container: inner panels never scroll on their own — the popup container
-   (overflow: auto) is the one scroller for both axes. */
-.twoslash-popup-container pre { overflow: visible; }
-.twoslash-popup-expand::before {
-  content: "expanded";
-  display: block;
-  padding: 0.3rem 0.7rem 0;
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted-fg);
-}
 .twoslash-popup-expand pre {
   margin: 0;
-  padding: 0.35rem 0.7rem 0.5rem;
+  padding: 0.5rem 0.7rem;
   border: none;
   border-radius: 0;
+}
+/* Single scroll container: inner panels never scroll on their own, and their shiki <pre> backgrounds
+   are cleared so the zebra section colour below shows through. The popup container (overflow: auto)
+   is the one scroller for both axes. */
+.twoslash-popup-container pre {
+  overflow: visible;
+  background: transparent !important;
+}
+/* Zebra sections (type / expanded / comments): alternate blue and white so each panel is set off from
+   the next. Positional — the comments box flips to whichever colour keeps it opposite the box above,
+   whether or not an "expanded" box is present. */
+.twoslash-popup-code:not(.twoslash-popup-expand) {
+  background: color-mix(in oklab, var(--primary) 14%, var(--card)) !important;
+}
+.twoslash-popup-expand { background: var(--card) !important; }
+.twoslash-popup-container:has(.twoslash-popup-expand) .twoslash-popup-docs {
+  background: color-mix(in oklab, var(--primary) 14%, var(--card));
+}
+.twoslash-popup-container:not(:has(.twoslash-popup-expand)) .twoslash-popup-docs {
+  background: var(--card);
 }
 /* each JSDoc tag on its own line, with a space between the tag name and its value
    (`@category layers`, `@since 4.0.0`) instead of running together. */
@@ -429,27 +434,12 @@ pre.shiki { background: transparent; }
    or a JS reposition). Tracked for the doc-site owner. */
 .twoslash { overflow-x: auto; }
 
-/* Inline type errors — blocks opt in with `// @errors: <code>`. A red wavy squiggle under the
-   offending token, and the message line twoslash emits below it. */
-.twoslash-error {
-  text-decoration: underline wavy #e5484d;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.2em;
-}
-.twoslash-error-line,
-.twoslash-meta-line.twoslash-error-line {
-  display: block;
-  margin: 0.15rem 0;
-  padding: 0.2rem 0.6rem;
-  border-left: 2px solid #e5484d;
-  background: color-mix(in oklab, #e5484d 12%, transparent);
-  color: #c0393d;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
-}
-@media (prefers-color-scheme: dark) {
-  .twoslash-error-line, .twoslash-meta-line.twoslash-error-line { color: #ff9ea0; }
-}
+/* Inline type-error display is DISABLED. Twoslash under this repo's compiler config doesn't surface
+   type diagnostics (a plain `const x: number = "s"` yields zero error nodes, with or without an
+   `// @errors:` marker), so there's nothing to style. The build guardrail that keeps doc snippets
+   honest is `scripts/verify-twoslash-guides.ts` (it checks `result.errors`), not inline squiggles.
+   If error display is wanted later, it needs a diagnostics/handbookOptions fix in the twoslasher, then
+   `.twoslash-error` (token squiggle) + `.twoslash-error-line` (message) rules here. */
 
 /* rule severity — a section carrying one metadata class from Djot.
    Severity is signalled solely by the chip after the heading (below); no left bar. */
