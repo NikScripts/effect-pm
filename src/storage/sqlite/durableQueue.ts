@@ -68,7 +68,7 @@ const rowToEntry = (row: unknown): DurableEntry => {
   const priority = String(r["priority"]);
   return {
     id: String(r["id"]),
-    queueId: String(r["queue_id"]),
+    key: String(r["queue_id"]),
     dedupKey:
       r["dedup_key"] === null || r["dedup_key"] === undefined
         ? null
@@ -101,7 +101,7 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
             const now = yield* Clock.currentTimeMillis;
             const rank = durablePriorityRank[entry.priority];
             if (entry.dedupKey !== undefined) {
-              const existing = yield* sql`SELECT id, priority_rank FROM ${sql(TABLE)} WHERE queue_id = ${entry.queueId} AND dedup_key = ${entry.dedupKey} AND status = 'pending' LIMIT 1`;
+              const existing = yield* sql`SELECT id, priority_rank FROM ${sql(TABLE)} WHERE queue_id = ${entry.key} AND dedup_key = ${entry.dedupKey} AND status = 'pending' LIMIT 1`;
               const live = existing[0];
               if (live !== undefined) {
                 const rec = asRecord(live);
@@ -116,7 +116,7 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
             const seq = Number(asRecord(maxSeq[0])["m"]) + 1;
             const insertRow: Record<string, unknown> = {
               id: entry.id,
-              queue_id: entry.queueId,
+              queue_id: entry.key,
               dedup_key: entry.dedupKey ?? null,
               priority: entry.priority,
               priority_rank: rank,
@@ -134,12 +134,12 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
         )
         .pipe(Effect.mapError(fail("offer"))),
 
-    take: ({ queueId, leaseMillis }) =>
+    take: ({ key, leaseMillis }) =>
       sql
         .withTransaction(
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const rows = yield* sql`SELECT * FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending' AND (locked_until_ms IS NULL OR locked_until_ms < ${now}) ORDER BY priority_rank ASC, seq ASC LIMIT 1`;
+            const rows = yield* sql`SELECT * FROM ${sql(TABLE)} WHERE queue_id = ${key} AND status = 'pending' AND (locked_until_ms IS NULL OR locked_until_ms < ${now}) ORDER BY priority_rank ASC, seq ASC LIMIT 1`;
             const row = rows[0];
             if (row === undefined) return Option.none<DurableEntry>();
             const rec = asRecord(row);
@@ -174,8 +174,8 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
         )
         .pipe(Effect.mapError(fail("fail"))),
 
-    sizes: (queueId) =>
-      sql`SELECT priority, COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending' GROUP BY priority`.pipe(
+    sizes: (key) =>
+      sql`SELECT priority, COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${key} AND status = 'pending' GROUP BY priority`.pipe(
         Effect.map((rows) => {
           const sizes = { high: 0, normal: 0, low: 0 };
           for (const row of rows) {
@@ -188,37 +188,37 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
         Effect.mapError(fail("sizes")),
       ),
 
-    recover: (queueId) =>
+    recover: (key) =>
       sql
         .withTransaction(
           Effect.gen(function* () {
-            const counted = yield* sql`SELECT COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending' AND locked_until_ms IS NOT NULL`;
+            const counted = yield* sql`SELECT COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${key} AND status = 'pending' AND locked_until_ms IS NOT NULL`;
             const count = Number(asRecord(counted[0])["c"]);
-            yield* sql`UPDATE ${sql(TABLE)} SET locked_until_ms = NULL WHERE queue_id = ${queueId} AND status = 'pending' AND locked_until_ms IS NOT NULL`;
+            yield* sql`UPDATE ${sql(TABLE)} SET locked_until_ms = NULL WHERE queue_id = ${key} AND status = 'pending' AND locked_until_ms IS NOT NULL`;
             return count;
           }),
         )
         .pipe(Effect.mapError(fail("recover"))),
 
-    clear: (queueId) =>
+    clear: (key) =>
       sql
         .withTransaction(
           Effect.gen(function* () {
-            const counted = yield* sql`SELECT COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending'`;
+            const counted = yield* sql`SELECT COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${key} AND status = 'pending'`;
             const count = Number(asRecord(counted[0])["c"]);
-            yield* sql`DELETE FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending'`;
+            yield* sql`DELETE FROM ${sql(TABLE)} WHERE queue_id = ${key} AND status = 'pending'`;
             return count;
           }),
         )
         .pipe(Effect.mapError(fail("clear"))),
 
-    drain: (queueId, match) =>
+    drain: (key, match) =>
       sql
         .withTransaction(
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
             // available backlog (not leased), optionally narrowed to one id / key
-            let where = sql`queue_id = ${queueId} AND status = 'pending' AND (locked_until_ms IS NULL OR locked_until_ms < ${now})`;
+            let where = sql`queue_id = ${key} AND status = 'pending' AND (locked_until_ms IS NULL OR locked_until_ms < ${now})`;
             if (match.id !== undefined) {
               where = sql`${where} AND id = ${match.id}`;
             } else if (match.key !== undefined) {

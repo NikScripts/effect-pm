@@ -260,7 +260,7 @@ export const schemaVersionOf = (schema: Schema.Top): number => {
  * @public
  */
 export const makeQueueItemCodecDescriptor = <T>(
-  queueId: string,
+  key: string,
   itemSchema: Schema.Codec<T, unknown, never, never>,
   options?: { readonly version?: string },
 ): QueueItemCodecDescriptor => {
@@ -268,7 +268,7 @@ export const makeQueueItemCodecDescriptor = <T>(
   const wrapped = Schema.toStandardJSONSchemaV1(itemSchema);
   const jsonSchema = wrapped["~standard"].jsonSchema.input({ target: "draft-07" });
   return {
-    id: `${queueId}/item@v${String(version)}`,
+    id: `${key}/item@v${String(version)}`,
     version: options?.version ?? String(version),
     encoding: "json",
     jsonSchema,
@@ -686,7 +686,7 @@ export interface QueueMetrics {
  * @public
  */
 export type QueueEvent<T, E = unknown, A = void> =
-  | { readonly _tag: "Start"; readonly queueId: string }
+  | { readonly _tag: "Start"; readonly key: string }
   | {
       readonly _tag: "Enqueued";
       readonly entries: ReadonlyArray<QueueEntry<T>>;
@@ -718,11 +718,11 @@ export type QueueEvent<T, E = unknown, A = void> =
       readonly entry: QueueEntry<T>;
       readonly cause: Cause.Cause<E>;
     }
-  | { readonly _tag: "Drained"; readonly queueId: string; readonly completed: number }
-  | { readonly _tag: "Cleared"; readonly queueId: string; readonly count: number }
+  | { readonly _tag: "Drained"; readonly key: string; readonly completed: number }
+  | { readonly _tag: "Cleared"; readonly key: string; readonly count: number }
   | {
       readonly _tag: "ShutdownRequested";
-      readonly queueId: string;
+      readonly key: string;
       /** How the wind-down treats already-queued items (see `shutdownMode`). */
       readonly mode: "drain" | "finishActive";
       /** Items still pending when shutdown was requested. */
@@ -730,31 +730,31 @@ export type QueueEvent<T, E = unknown, A = void> =
     }
   | {
       readonly _tag: "ShutdownComplete";
-      readonly queueId: string;
+      readonly key: string;
       /** Total items completed over the queue's lifetime. */
       readonly completed: number;
     }
   | {
       readonly _tag: "Released";
-      readonly queueId: string;
+      readonly key: string;
       readonly releaseId: string;
       readonly entries: ReadonlyArray<QueueEntry<T>>;
     }
   | {
       readonly _tag: "DeadLettered";
-      readonly queueId: string;
+      readonly key: string;
       readonly entries: ReadonlyArray<QueueEntry<T>>;
       readonly reason: string;
     }
   | {
       readonly _tag: "Dropped";
-      readonly queueId: string;
+      readonly key: string;
       readonly entries: ReadonlyArray<QueueEntry<T>>;
       readonly reason: string;
     }
   | {
       readonly _tag: "RateLimitExceeded";
-      readonly queueId: string;
+      readonly key: string;
       readonly entry: QueueEntry<T>;
       readonly limitKey: string;
       readonly algorithm: "fixed-window" | "token-bucket";
@@ -2191,7 +2191,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       if (previous !== "draining") return; // another fiber finalized first
       yield* publishEvent({
         _tag: "ShutdownComplete",
-        queueId: queueName,
+        key: queueName,
         completed: yield* Ref.get(completedCount),
       });
       yield* refreshStatus;
@@ -2266,7 +2266,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 
         yield* publishEvent({
           _tag: "RateLimitExceeded",
-          queueId: queueName,
+          key: queueName,
           entry,
           limitKey: payload.limitKey,
           algorithm: payload.algorithm,
@@ -2349,7 +2349,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                   ? persist.store
                       .offer({
                         id: internal.entryId,
-                        queueId: queueName,
+                        key: queueName,
                         dedupKey: internal.key,
                         priority,
                         payload,
@@ -2792,7 +2792,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                 if (shutdownMode === "finishActive") return yield* Effect.interrupt;
               }
               const taken = yield* persist.store
-                .take({ queueId: queueName, leaseMillis: persist.leaseMillis })
+                .take({ key: queueName, leaseMillis: persist.leaseMillis })
                 .pipe(
                   Effect.catch((error) =>
                     Effect.as(
@@ -2886,7 +2886,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         );
       }
 
-      yield* publishEvent({ _tag: "Start", queueId: queueName });
+      yield* publishEvent({ _tag: "Start", key: queueName });
 
       // Bootstrap refill (onStart): forked so a slow source load doesn't block startup.
       if (refillConfig?.onStart === true) {
@@ -2908,7 +2908,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
               const completed = yield* Ref.get(completedCount);
               yield* publishEvent({
                 _tag: "Drained",
-                queueId: queueName,
+                key: queueName,
                 completed,
               });
               // Self-refill on drain: re-poll the source (drives the self-feeding loop).
@@ -2958,7 +2958,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       if (discarded.length > 0) {
         yield* publishEvent({
           _tag: "Dropped",
-          queueId: queueName,
+          key: queueName,
           entries: discarded,
           reason: "shutdown",
         });
@@ -2984,7 +2984,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                     ? store
                         .offer({
                           id: item.entryId,
-                          queueId: queueName,
+                          key: queueName,
                           dedupKey: item.key,
                           priority: levelToPriority(item.level),
                           payload,
@@ -3072,7 +3072,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         if (entries.length > 0) {
           yield* publishEvent({
             _tag: "Released",
-            queueId: queueName,
+            key: queueName,
             releaseId,
             entries,
           });
@@ -3113,7 +3113,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
           );
           yield* publishEvent({
             _tag: "Released",
-            queueId: queueName,
+            key: queueName,
             releaseId,
             entries,
           });
@@ -3143,13 +3143,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
             kind === "dead-lettered"
               ? {
                   _tag: "DeadLettered",
-                  queueId: queueName,
+                  key: queueName,
                   entries,
                   reason: options.reason,
                 }
               : {
                   _tag: "Dropped",
-                  queueId: queueName,
+                  key: queueName,
                   entries,
                   reason: options.reason,
                 },
@@ -3229,7 +3229,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         const pending = yield* totalPendingEffect;
         yield* publishEvent({
           _tag: "ShutdownRequested",
-          queueId: queueName,
+          key: queueName,
           mode: shutdownMode,
           pending,
         });
@@ -3261,7 +3261,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
           // Purge the stale in-memory copies the feeder had leased (the store is the truth).
           yield* laneStore.drain;
           yield* Ref.set(completedCount, 0);
-          yield* publishEvent({ _tag: "Cleared", queueId: queueName, count: cleared });
+          yield* publishEvent({ _tag: "Cleared", key: queueName, count: cleared });
           yield* Effect.logDebug(
             `Queue "${queueName}" cleared ${String(cleared)} items`,
           );
@@ -3278,7 +3278,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
           }
         }
         yield* Ref.set(completedCount, 0);
-        yield* publishEvent({ _tag: "Cleared", queueId: queueName, count });
+        yield* publishEvent({ _tag: "Cleared", key: queueName, count });
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
         yield* wakeDrainedIfAllQueuesEmpty;
         return count;

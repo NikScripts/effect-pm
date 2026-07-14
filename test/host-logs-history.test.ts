@@ -27,7 +27,7 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
       yield* Effect.gen(function* () {
         while (
           (yield* Logs.byNode(BillingNode)).length < 2 ||
-          !(yield* Logs.byResource({ processId: testSyncProcessKey })).some(
+          !(yield* Logs.byResource(testSyncProcessKey)).some(
             (row) => row.message === "worker line",
           )
         ) {
@@ -44,7 +44,7 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
       ).toBe(true);
       expect(nodeRows.some((row) => row.message.includes("node-wide line"))).toBe(true);
 
-      const workerRows = yield* Logs.byResource({ processId: testSyncProcessKey });
+      const workerRows = yield* Logs.byResource(testSyncProcessKey);
       expect(workerRows.some((row) => row.message === "worker line")).toBe(true);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   ));
@@ -52,6 +52,6 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
 it("byResource is empty for a resource with no logs (graceful, not an error)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      expect(yield* Logs.byResource({ queueId: "never" })).toEqual([]);
+      expect(yield* Logs.byResource("never")).toEqual([]);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   ));

@@ -467,7 +467,6 @@ const provideWithLayer = <A, E, RIn, ROut>(
   // `R` is deliberately FORWARDED to the caller (`Exclude<RIn, ROut>`), not left unprovided;
   // `missingEffectContext` can't distinguish requirement-forwarding from a leak on a generic
   // helper, so it false-positives here (the code is type-correct — tsc is clean).
-  // @effect-diagnostics-next-line missingEffectContext:off
   Effect.scoped(
     Effect.gen(function* () {
       const context = yield* Layer.build(layer);
@@ -511,18 +510,14 @@ function provideStepLayers<R>(
   // `missingEffectContext` false-positives on the forwarding, same as {@link provideWithLayer}.
   const { pollingLayer, scheduleLayer } = state;
   if (pollingLayer !== undefined && scheduleLayer !== undefined) {
-    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, Layer.mergeAll(pollingLayer, scheduleLayer));
   }
   if (pollingLayer !== undefined) {
-    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, pollingLayer);
   }
   if (scheduleLayer !== undefined) {
-    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, scheduleLayer);
   }
-  // @effect-diagnostics-next-line missingEffectContext:off
   return step;
 }
 
@@ -575,7 +570,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void> =>
     store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
-  const processId = storeScopeTag?.key ?? name;
+  const resourceKey = storeScopeTag?.key ?? name;
 
   // Sliding PubSub: publishing never blocks the driver (drops oldest when a subscriber lags).
   // Guaranteed delivery stays on the durable store — persist == stream at the source (Queue pattern).
@@ -587,7 +582,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const eventsHub = Effect.runSync(PubSub.sliding<ProcessLiveEvent>(1024));
 
   const terminalRow = (input: ProcessStoreTerminalInput) => ({
-    processId,
+    key: resourceKey,
     scheduleKey: input.scheduleKey,
     startedAt: input.startedAt,
     completedAt: input.completedAt,
@@ -605,7 +600,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const recordStoreStarted = (args: ProcessStoreStartedInput): Effect.Effect<void> =>
     publishExecutionEvent({
       _tag: "Started",
-      processId,
+      key: resourceKey,
       scheduleKey: args.scheduleKey,
       startedAt: args.startedAt,
       isStartupRun: args.isStartupRun,

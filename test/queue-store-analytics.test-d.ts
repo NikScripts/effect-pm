@@ -37,7 +37,7 @@ type Handle = StoreHandleAtKey<Regs, typeof Jobs>;
 
 // base is still present
 declare const _handle: Handle;
-void _handle.record({ _tag: "Start", queueId: "q" });
+void _handle.record({ _tag: "Start", key: "q" });
 void _handle.events();
 
 // each read method has the exact required signature
@@ -93,7 +93,7 @@ void _handleAdd.audit.append({ campaignId: "c1" });
 // ── tier isolation: the lean base does NOT leak the rich reads ───────────────
 type BaseHandle = Store.HandleOf<ReturnType<typeof builtInQueueStoreContract<typeof Jobs>>>;
 declare const _base: BaseHandle;
-void _base.record({ _tag: "Start", queueId: "q" });
+void _base.record({ _tag: "Start", key: "q" });
 void _base.events();
 // @ts-expect-error the base contract has no analytics reads
 void _base.failures;

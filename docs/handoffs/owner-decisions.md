@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — `Logs.byResource` full key; kill resource-identity `*Id`
+
+- **Owner said:** Scope identity is **key** + **kind** (`Resource.kindOf`); get rid of `processId`/`queueId` costumes; exception only for Effect RPC naming (`groupId`); no legacy storage to keep; do it now.
+- **Chose:** `Logs.byResource(tag | key)` hard-break; remove log annotation `processId`/`queueId` + helpers; CLI match via `LogEntry.hasKey`; Process/Queue event + durable-queue resource identity fields → `key`; keep `groupId`.
+- **Rejected / deferred:** store memo; Agent D handles; `docs/site`; Process.events further Eng.
+- **Supervisor impact:** Agent 3 Eng on `cursor/logs-byresource-full-key-a009`.
+
+---
+
 ## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks
 
 - **Owner said:** Scrub living cites of anything under `docs/legacy/**`. Confirm fleet health as the health roadmap item; Resource-RPC auth = README-only (A). Agree `docs/plans/` home, archive hybrid, refresh treeshaking.

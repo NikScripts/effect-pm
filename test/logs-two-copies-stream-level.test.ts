@@ -41,9 +41,7 @@ describe("node + resource durable copies", () => {
         yield* Effect.gen(function* () {
           while (true) {
             const nodeRows = yield* Logs.byNode(BillingNode, { limit: 50 });
-            const resourceRows = yield* Logs.byResource({
-              processId: SyncProc.key,
-            });
+            const resourceRows = yield* Logs.byResource(SyncProc.key,);
             const shared = nodeRows.find((row) => row.message === "shared-line");
             const lineId = shared?.annotations[LogAnnotationKeys.lineId];
             if (

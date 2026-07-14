@@ -3,7 +3,6 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Duration, Effect, FileSystem, Layer, Path } from "effect";
 import * as Logs from "../src/Logs";
-import { LogAnnotationKeys } from "../src/LogContext";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
@@ -28,14 +27,12 @@ describe("node log pipeline → SQLite", () => {
       const sqliteFilename = path.join(directory, "logs.sqlite");
 
       yield* Effect.gen(function* () {
-        yield* Effect.annotateLogs(Effect.logInfo("sqlite pipeline tick"), {
-          [LogAnnotationKeys.processId]: testSyncProcessKey,
-        }).pipe(Logs.withScope(SyncProc));
+        yield* Effect.logInfo("sqlite pipeline tick").pipe(Logs.withScope(SyncProc));
 
         yield* Effect.gen(function* () {
           while (
             (yield* Logs.byNode(BillingNode)).length === 0 ||
-            (yield* Logs.byResource({ processId: testSyncProcessKey })).length === 0
+            (yield* Logs.byResource(testSyncProcessKey)).length === 0
           ) {
             yield* Effect.sleep(Duration.millis(20));
           }
@@ -44,7 +41,7 @@ describe("node log pipeline → SQLite", () => {
         const byNode = yield* Logs.byNode(BillingNode, { limit: 10 });
         assert.ok(byNode.some((row) => row.message === "sqlite pipeline tick"));
 
-        const byResource = yield* Logs.byResource({ processId: testSyncProcessKey });
+        const byResource = yield* Logs.byResource(testSyncProcessKey);
         assert.ok(byResource.some((row) => row.message === "sqlite pipeline tick"));
       }).pipe(Effect.provide(AppStore.layer({ filename: sqliteFilename })), Effect.scoped);
     }).pipe(Effect.provide(nodePlatform)),

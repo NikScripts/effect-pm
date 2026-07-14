@@ -31,8 +31,8 @@ export const durablePriorityRank: Record<DurablePriority, number> = {
 export interface DurableEntryInput {
   /** Opaque per-entry handle (not the dedup key). */
   readonly id: string;
-  /** Which queue this belongs to (one backend can hold many). */
-  readonly queueId: string;
+  /** Which queue registration key this belongs to (one backend can hold many). */
+  readonly key: string;
   /** Dedup key — unique among *live* (pending/in-flight) entries; absent = never deduped. */
   readonly dedupKey?: string;
   readonly priority: DurablePriority;
@@ -45,7 +45,7 @@ export interface DurableEntryInput {
 /** A leased entry returned by {@link DurableQueueStoreShape.take}. @public */
 export interface DurableEntry {
   readonly id: string;
-  readonly queueId: string;
+  readonly key: string;
   readonly dedupKey: string | null;
   readonly priority: DurablePriority;
   readonly sequence: number;
@@ -96,7 +96,7 @@ export interface DurableQueueStoreShape {
    * `attempts` and setting a lease (`leaseMillis`). `None` if nothing is available.
    */
   readonly take: (options: {
-    readonly queueId: string;
+    readonly key: string;
     readonly leaseMillis: number;
   }) => Effect.Effect<Option.Option<DurableEntry>, DurableQueueError>;
   /** Acknowledge success — remove the entry. */
@@ -111,22 +111,22 @@ export interface DurableQueueStoreShape {
   ) => Effect.Effect<FailResult, DurableQueueError>;
   /** Pending counts per priority (in-flight included). */
   readonly sizes: (
-    queueId: string,
+    key: string,
   ) => Effect.Effect<DurableSizes, DurableQueueError>;
   /**
    * Reclaim work whose lease has expired (`locked_until < now`) — the at-least-once recovery used
    * on boot/restart. Returns the count reclaimed.
    */
-  readonly recover: (queueId: string) => Effect.Effect<number, DurableQueueError>;
+  readonly recover: (key: string) => Effect.Effect<number, DurableQueueError>;
   /** Delete all pending (incl. in-flight) entries for a queue. Returns the count removed. */
-  readonly clear: (queueId: string) => Effect.Effect<number, DurableQueueError>;
+  readonly clear: (key: string) => Effect.Effect<number, DurableQueueError>;
   /**
    * Remove and return **available** (not in-flight) backlog entries matching `id` or `key` (all if
    * neither given). Powers the durable `release` / `deadLetter` / `drop` control verbs. In-flight
    * (leased) work is left untouched — it can't be selector-targeted while a worker holds it.
    */
   readonly drain: (
-    queueId: string,
+    key: string,
     match: { readonly id?: string; readonly key?: string },
   ) => Effect.Effect<ReadonlyArray<DurableEntry>, DurableQueueError>;
 }
