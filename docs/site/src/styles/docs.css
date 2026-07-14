@@ -337,7 +337,8 @@ pre.shiki { background: transparent; }
   display: none;
   width: max-content;
   max-width: min(88vw, 42rem);
-  padding: 0.5rem 0.7rem;
+  padding: 0;               /* no gutter — the type fills the popup */
+  overflow: hidden;         /* so the full-bleed type respects the rounded corners */
   background: var(--panel) !important;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -348,16 +349,28 @@ pre.shiki { background: transparent; }
   text-align: left;
 }
 .twoslash-hover:hover > .twoslash-popup-container { display: block; }
-.twoslash-popup-code { display: block; font-family: var(--font-mono); background: transparent !important; }
+/* The type is a <code>, so it inherited the base code chrome (border/radius/padding). Strip it so
+   it reads as the popup's content, filling the width, not a boxed chip inside the popup. */
+.twoslash-popup-code {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  font-family: var(--font-mono);
+  background: transparent !important;
+  border: none;
+  border-radius: 0;
+}
 .twoslash-popup-docs {
-  margin-top: 0.45rem;
-  padding-top: 0.45rem;
+  margin: 0;
+  padding: 0.45rem 0.7rem 0.5rem;
   border-top: 1px solid var(--border);
   color: var(--muted-fg);
   font-family: var(--font-sans);
   font-size: 0.78rem;
 }
-.twoslash-popup-docs-tag-name { color: var(--primary); }
+/* each JSDoc tag on its own line, with a space between the tag name and its value
+   (`@category layers`, `@since 4.0.0`) instead of running together. */
+.twoslash-popup-docs-tag { display: block; }
+.twoslash-popup-docs-tag-name { color: var(--primary); margin-right: 0.4em; }
 /* Long lines scroll horizontally. Caveat: overflow-x: auto makes this a scroll container, which
    clips both axes at the box — so the twoslash hover popup is cut off at the top. Escaping the popup
    while scrolling isn't possible in pure CSS on Safari (would need CSS anchor positioning, unsupported,
