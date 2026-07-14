@@ -28,6 +28,7 @@ const twoslasher = createTwoslasher({
 
 const pages = [
   "docs/index.md",
+  "docs/guides/queues.md",
   "docs/guides/telemetry.md",
   "docs/guides/shardmap.md",
 ];
