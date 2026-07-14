@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — handoffs cleanup (**Phase 1 plan-first**); then plans refactor; then legacy port + Draft label (later unlocks). **No UI / `docs/site` chrome.**
+1. **Agent 1:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — Phase 1 plan posted: [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md). **Awaiting owner approval** before archive moves. No UI / `docs/site` chrome.
 2. **Agent 3:** [#43](https://github.com/NikScripts/effect-pm/pull/43) hard-removes interim `Logs.persistLayer` / `LogStore` (followers already on `integration`; store-layer `lineId` memo deferred).
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
