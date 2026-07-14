@@ -2,8 +2,8 @@
 
 > **2026-07-09 (`integration/storage`):** Agent 1 Session 2 — `STORAGE.md` golden-model rewrite.
 > Agent 2 Session 1 — cast-free Process store contract (`9dab7a3`).
-> **Active sessions:** Agent 1 → [`agent-01-session-2-storage-docs.md`](./agent-01-session-2-storage-docs.md);
-> Agent 2 → [`agent-02-session-2-process-platform.md`](./agent-02-session-2-process-platform.md).
+> **Active sessions:** Agent 1 → [`agent-01-session-2-storage-docs.md`](agent-01-session-2-storage-docs.md);
+> Agent 2 → [`agent-02-session-2-process-platform.md`](agent-02-session-2-process-platform.md).
 
 **Branch:** `cursor/integration-result-schema-a3ad` (`ef914ab` and later)  
 **Purpose:** One place to see **what landed since the last merge**, which **module note to read**, and **open issues** for cross-agent review. Detailed work lives in linked handoffs — this file does not duplicate them.
@@ -48,7 +48,7 @@ Two report sets exist — use **both**, for different layers:
 
 ### Store (platform)
 
-**Read:** [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) · [`reports/2026-07-07-agent-report-store.md`](./reports/2026-07-07-agent-report-store.md)
+**Read:** [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) · [`reports/2026-07-07-agent-report-store.md`](../reports/2026-07-07-agent-report-store.md)
 
 | Shipped | Open |
 |---------|------|
@@ -64,7 +64,7 @@ Two report sets exist — use **both**, for different layers:
 
 ### Process
 
-**Read:** [`store-cutover-process.md`](./store-cutover-process.md) · [`process-store-cutover-review.md`](./process-store-cutover-review.md) · [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md)
+**Read:** [`store-cutover-process.md`](./store-cutover-process.md) · [`process-store-cutover-review.md`](process-store-cutover-review.md) · [`reports/2026-07-07-agent-report-process.md`](../reports/2026-07-07-agent-report-process.md)
 
 | Shipped | Open |
 |---------|------|
@@ -86,7 +86,7 @@ file:line evidence.
 
 ### QueueResource + CustomQueueResource
 
-**Read:** [`store-cutover-queue.md`](./store-cutover-queue.md) · [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) · [`reports/2026-07-07-agent-report-queue-resource.md`](./reports/2026-07-07-agent-report-queue-resource.md)
+**Read:** [`store-cutover-queue.md`](./store-cutover-queue.md) · [`store-cutover-customqueue.md`](./store-cutover-customqueue.md) · [`reports/2026-07-07-agent-report-queue-resource.md`](../reports/2026-07-07-agent-report-queue-resource.md)
 
 | Shipped | Open |
 |---------|------|
@@ -103,7 +103,7 @@ file:line evidence.
 
 ### RunResource
 
-**Read:** [`store-cutover-runresource.md`](./store-cutover-runresource.md) · [`reports/2026-07-07-agent-report-run-resource.md`](./reports/2026-07-07-agent-report-run-resource.md)
+**Read:** [`store-cutover-runresource.md`](./store-cutover-runresource.md) · [`reports/2026-07-07-agent-report-run-resource.md`](../reports/2026-07-07-agent-report-run-resource.md)
 
 | Shipped | Open |
 |---------|------|
@@ -122,7 +122,7 @@ file:line evidence.
 
 ### Docs + release
 
-**Read:** [`reports/2026-07-07-agent-report-docs-release.md`](./reports/2026-07-07-agent-report-docs-release.md)
+**Read:** [`reports/2026-07-07-agent-report-docs-release.md`](../reports/2026-07-07-agent-report-docs-release.md)
 
 | Open |
 |------|
@@ -164,7 +164,7 @@ pnpm test
 ## File index (integration branch)
 
 ```
-docs/handoffs/integration-sync-2026-07-07.md     ← this file (start here)
+docs/handoffs/archive/2026-07/agents/integration-sync-2026-07-07.md     ← this file (start here)
 docs/handoffs/reports/README.md                  ← agent reports index
 docs/handoffs/store-cutover-00-store-core.md     ← store engine policy (authoritative)
 docs/handoffs/store-cutover-{process,queue,runresource,customqueue}.md

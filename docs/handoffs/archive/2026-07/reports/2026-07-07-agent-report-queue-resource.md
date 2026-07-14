@@ -82,4 +82,4 @@ pnpm exec vitest run test/queue-resource.test.ts test/queue-contract.test.ts \
 
 - **Store agent:** `bridge.at` typing consumed by `materializeEngineQueueStore*` — done.
 - **Process / RunResource:** config-object tag reference — aligned.
-- **Agent 01 close-out:** [`agent-01-store-cutover-closeout.md`](../agent-01-store-cutover-closeout.md).
+- **Agent 01 close-out:** [`agent-01-store-cutover-closeout.md`](../agents/agent-01-store-cutover-closeout.md).

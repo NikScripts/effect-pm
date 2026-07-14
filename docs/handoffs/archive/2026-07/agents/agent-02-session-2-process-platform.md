@@ -16,8 +16,8 @@
 |-----|-----|
 | [`store-cutover-process.md`](./store-cutover-process.md) | Shipped behavior |
 | [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) | §5 error/success encoding |
-| [`process-store-cutover-review.md`](./process-store-cutover-review.md) | Update stale review notes |
-| [`integration-sync-2026-07-07.md`](./integration-sync-2026-07-07.md) | Process row + cross-cutting #2 |
+| [`process-store-cutover-review.md`](process-store-cutover-review.md) | Update stale review notes |
+| [`integration-sync-2026-07-07.md`](integration-sync-2026-07-07.md) | Process row + cross-cutting #2 |
 | [`result-schema-and-rpc-validation.md`](./result-schema-and-rpc-validation.md) | RPC slot policy |
 
 **Reference:** `src/Process.ts` `recordStoreFailed`, `src/internal/processEvent.ts`, RunResource fact encoding if mirroring.
@@ -67,7 +67,7 @@ Add `test/process-contract-shape.test-d.ts` or RPC test if wire changes.
 | Path | Action |
 |------|--------|
 | `examples/forms/process-store/**` | Ensure examples use `Process.layer`, `Process.store`, config-object Tag; fix stale imports/comments |
-| `docs/handoffs/process-store-cutover-review.md` | Add “Review 2026-07-09” — tap deleted, cast-free contract, journal codec on integration line; strike obsolete serialization warnings if store-core fix landed |
+| `docs/handoffs/archive/2026-07/agents/process-store-cutover-review.md` | Add “Review 2026-07-09” — tap deleted, cast-free contract, journal codec on integration line; strike obsolete serialization warnings if store-core fix landed |
 | `docs/STORAGE.md` | **Only** Process execution history subsection if still wrong after Agent 1 (coordinate: if Agent 1 runs in parallel, touch Process paragraphs only) |
 | `integration-sync-2026-07-07.md` | Process table: cast ✅, open = RPC error only if slice 3 blocked |
 
@@ -77,7 +77,7 @@ Add `test/process-contract-shape.test-d.ts` or RPC test if wire changes.
 pnpm run typecheck && pnpm test
 ```
 
-Update [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md) with Session 2 outcomes. Push. Draft PR → `integration/storage`. Mark this handoff complete.
+Update [`reports/2026-07-07-agent-report-process.md`](../reports/2026-07-07-agent-report-process.md) with Session 2 outcomes. Push. Draft PR → `integration/storage`. Mark this handoff complete.
 
 ---
 

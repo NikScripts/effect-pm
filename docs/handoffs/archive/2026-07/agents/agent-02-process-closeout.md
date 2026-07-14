@@ -13,8 +13,8 @@
 |-----|-----|
 | [`store-cutover-process.md`](./store-cutover-process.md) | Authoritative — what's done |
 | [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) | §5 — `Failed.error` / `Completed.success` encoding |
-| [`integration-sync-2026-07-07.md`](./integration-sync-2026-07-07.md) | Stale lines to fix in agent report |
-| [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md) | Refresh target |
+| [`integration-sync-2026-07-07.md`](integration-sync-2026-07-07.md) | Stale lines to fix in agent report |
+| [`reports/2026-07-07-agent-report-process.md`](../reports/2026-07-07-agent-report-process.md) | Refresh target |
 
 **Reference implementations (cast-free contracts):**
 
@@ -90,7 +90,7 @@ Queue and RunResource `builtIn*StoreContract` helpers are cast-free.
 
 ### C — Stale report + handoff truth sweep
 
-Update [`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md):
+Update [`reports/2026-07-07-agent-report-process.md`](../reports/2026-07-07-agent-report-process.md):
 
 - Remove references to `processStoreTap.ts`, `ProcessExecutionStore`, `RunCompleted` / `RunFailed` symbol names
 - Mark cast removal done (slice B)
@@ -125,7 +125,7 @@ Single PR → `integration/storage`. Mark this handoff done at the bottom.
 
 - Queue / CustomQueue / RunResource engine work
 - `src/Store.ts` journal codec changes
-- Branch cleanup (done — see [`branch-cleanup-manifest.md`](./branch-cleanup-manifest.md))
+- Branch cleanup (done — see [`branch-cleanup-manifest.md`](branch-cleanup-manifest.md))
 
 ---
 
@@ -145,4 +145,4 @@ PR → `integration/storage` with cast-free contract (or documented blocker), re
 - [x] PR open → `integration/storage`
 
 **Complete:** 2026-07-09 — Agent 2 Process close-out. Cast-free `builtInProcessStoreContract`; see
-[`reports/2026-07-07-agent-report-process.md`](./reports/2026-07-07-agent-report-process.md).
+[`reports/2026-07-07-agent-report-process.md`](../reports/2026-07-07-agent-report-process.md).

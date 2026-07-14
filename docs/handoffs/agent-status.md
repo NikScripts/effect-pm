@@ -2,15 +2,15 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration branch:** **`integration`** (formerly `integration/storage`). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 + ProcessStorage retirement + `NodeLogs` removal all folded. See [`whats-changed-2026-07-13.md`](./whats-changed-2026-07-13.md).
+**Integration branch:** **`integration`** (formerly `integration/storage`). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 + ProcessStorage retirement + `NodeLogs` removal all folded. See [`whats-changed-2026-07-13.md`](archive/2026-07/features/whats-changed-2026-07-13.md).
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | **on `integration`** | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) | **date stack nearly done** — next: walk beta22 handoff or next Phase-1 stack | `integration` tip | shared+isolated test / readiness | `2026-07-02-beta22-…` left; open-asks §1–3 | 2026-07-14 |
-| **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](./agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
+| **1** | `cursor/docs-corpus-phase1-archive-ce05` | [docs corpus](./agent-01-docs-corpus.md) · [open asks](./open-asks.md) | **Phase 1 A–D archived** — open-asks §1–2 closed; §3 layerNoop parked | tip of archive branch | link ripples + standards | Batch E/Z + Phase 2 deferred; [#54](https://github.com/NikScripts/effect-pm/pull/54) type hygiene still open | 2026-07-14 |
+| **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **ready perfection / closed** | [Logs store followers](./agent-03-logs-p1.md) · Process.events | **tracks done** — [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#48](https://github.com/NikScripts/effect-pm/pull/48)/[#51](https://github.com/NikScripts/effect-pm/pull/51) on `integration` | `integration` tip | typecheck / suite green at #51 | Superseded [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed. [#52](https://github.com/NikScripts/effect-pm/pull/52)/[#50](https://github.com/NikScripts/effect-pm/pull/50) landed. Out of scope: D handles, site UI, store memo, Logs followers/`LogStore`/`persistLayer`. No further Process.events Eng. | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
-| **A** | merged | [rules/docs](./agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
+| **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
 | **D** | **merged to `integration`** | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **M3 shipped** | `d2d340b4b` | typecheck 0 (both) / lint 0 / 418 tests | **M3 done:** `yield* MyQueue` hovers as named `QueueResource<Item>` (Svc seam on ResourceTag + 1 harness-guarded cast in nameQueueService; `events` success now `void`). Follow-ups: M2 `.Service` unify, per-Tag success/error carriers, elide trailing default args. Agent 3 must not touch handles | 2026-07-14 |
 
@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** Landed on `integration` — `Resource.monitoredDependency`, readiness draft, date-stamped deletes, `open-asks.md`. Next: walk remaining unfinished handoffs / open-asks §1 (widget seam). No UI / `docs/site` chrome.
+1. **Agent 1:** Phase 1 archive batches A–D on `cursor/docs-corpus-phase1-archive-ce05`. Widget seam + hoist docs closed in open-asks; `layerNoop` parked. Next unlock: batch E / Z or Phase 2. Merge [#54](https://github.com/NikScripts/effect-pm/pull/54) when ready. No UI / `docs/site` chrome.
 2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls

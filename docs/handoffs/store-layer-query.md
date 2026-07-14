@@ -402,4 +402,4 @@ pnpm exec vitest run test/store.test.ts test/store-default.test.ts \
 
 - [`store-cutover-00-store-core.md`](./store-cutover-00-store-core.md) — Storage defaulted service, no `serviceOption`
 - [`store-and-logs-design.md`](./store-and-logs-design.md) — two-plane model
-- Process agent review: [`process-store-cutover-review.md`](./process-store-cutover-review.md) — serialization / tap notes (separate from layer query)
+- Process agent review: [`process-store-cutover-review.md`](archive/2026-07/agents/process-store-cutover-review.md) — serialization / tap notes (separate from layer query)

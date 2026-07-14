@@ -4,7 +4,7 @@
 **Base:** `integration/storage` (`39c75d7`+)  
 **Branch:** `cursor/logs-store-cutover-a009` (new)
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`store-migration-roadmap.md`](./store-migration-roadmap.md) · [`store-and-logs-design.md`](./store-and-logs-design.md)
+**Docs bus:** [`agent-status.md`](./agent-status.md) · [`store-migration-roadmap.md`](../features/store-migration-roadmap.md) · [`store-and-logs-design.md`](./store-and-logs-design.md)
 
 ---
 
@@ -136,7 +136,7 @@ pnpm run lint
 ## Short prompt (paste to Cursor Agent)
 
 ```
-Read docs/handoffs/agent-cursor-logs-store-cutover.md and store-migration-roadmap.md (Logs section).
+Read docs/handoffs/archive/2026-07/agents/agent-cursor-logs-store-cutover.md and store-migration-roadmap.md (Logs section).
 
 Branch cursor/logs-store-cutover-a009 from integration/storage.
 

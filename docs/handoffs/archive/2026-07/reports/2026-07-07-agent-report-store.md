@@ -82,6 +82,6 @@ pnpm exec vitest run test/store.test.ts test/store-default.test.ts test/store.sq
 
 ## Coordination
 
-- **Agent 1 (docs):** [`agent-01-session-2-storage-docs.md`](../agent-01-session-2-storage-docs.md) — `STORAGE.md` rewrite + grep sweep.
+- **Agent 1 (docs):** [`agent-01-session-2-storage-docs.md`](../agents/agent-01-session-2-storage-docs.md) — `STORAGE.md` rewrite + grep sweep.
 - **Agent 2 (Process):** owns `PROCESS-API.md`, `guides/process.md` — not Store agent.
 - **Queue agent:** write-buffer only; engine store **done**.

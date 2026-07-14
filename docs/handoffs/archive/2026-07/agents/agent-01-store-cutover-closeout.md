@@ -88,7 +88,7 @@ Update checkboxes / stale bullets so docs describe **shipped** code:
 
 ### D — Integration sync stub
 
-Add a short “2026-07-09 integration/storage” note at top of [`integration-sync-2026-07-07.md`](./integration-sync-2026-07-07.md) OR a one-line pointer file — what landed on `integration/storage` since the July 7 sync (config-object tags, CQR store, golden pass). Keep it under 30 lines.
+Add a short “2026-07-09 integration/storage” note at top of [`integration-sync-2026-07-07.md`](integration-sync-2026-07-07.md) OR a one-line pointer file — what landed on `integration/storage` since the July 7 sync (config-object tags, CQR store, golden pass). Keep it under 30 lines.
 
 ### E — Ship
 

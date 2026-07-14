@@ -80,8 +80,8 @@ light up per league (SDP rate-limit headroom, WNBA-OCP usage — the egress surf
 Cross-host rollup still rides the separate **Telemetry** track later.
 
 ## Related
-- `docs/handoffs/api-resource-metrics.md` (ApiMetrics + `.Tag` + instrumentEndpoints — shipped).
-- `docs/handoffs/telemetry-resource.md` (cross-host aggregation — the next layer up).
-- `docs/handoffs/resource-host-health.md` (the HostStatus/health auto-serve — the precedent this
+- `docs/handoffs/archive/2026-07/features/api-resource-metrics.md` (ApiMetrics + `.Tag` + instrumentEndpoints — shipped).
+- `docs/handoffs/archive/2026-07/features/telemetry-resource.md` (cross-host aggregation — the next layer up).
+- `docs/handoffs/archive/2026-07/features/resource-host-health.md` (the HostStatus/health auto-serve — the precedent this
   mirrors).
 - `docs/guides/setup.md` §"HostStatus … auto-served by `serveAllHttp`".

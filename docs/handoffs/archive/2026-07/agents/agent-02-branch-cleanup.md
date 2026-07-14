@@ -11,7 +11,7 @@
 
 | Doc | Why |
 |-----|-----|
-| [`integration-sync-2026-07-07.md`](./integration-sync-2026-07-07.md) | What landed on `integration/storage` |
+| [`integration-sync-2026-07-07.md`](integration-sync-2026-07-07.md) | What landed on `integration/storage` |
 | [`reports/README.md`](./reports/README.md) | Active agents and keep-list context |
 
 ---
@@ -98,7 +98,7 @@ Save output in the manifest (slice B).
 
 ### B — Write manifest
 
-Create [`branch-cleanup-manifest.md`](./branch-cleanup-manifest.md) with:
+Create [`branch-cleanup-manifest.md`](branch-cleanup-manifest.md) with:
 
 1. Audit date + `integration/storage` tip SHA
 2. **Deleted** — branch name, last commit SHA, one-line summary (from `git log -1 --oneline`)
@@ -140,7 +140,7 @@ git remote prune origin
 
 Single PR → `integration/storage` containing:
 
-- `docs/handoffs/branch-cleanup-manifest.md`
+- `docs/handoffs/archive/2026-07/agents/branch-cleanup-manifest.md`
 - Updated `docs/handoffs/reports/README.md`
 - This file marked complete
 
@@ -156,5 +156,5 @@ Single PR → `integration/storage` containing:
 - [x] Merged into `integration/storage` (2026-07-09)
 
 **Complete:** 2026-07-09 — Agent 2 deleted 18 merged `cursor/*` remotes; kept active branches per manifest.
-[`branch-cleanup-manifest.md`](./branch-cleanup-manifest.md). Phase 2: delete `store-cutover-closeout-ce05` and
+[`branch-cleanup-manifest.md`](branch-cleanup-manifest.md). Phase 2: delete `store-cutover-closeout-ce05` and
 `branch-cleanup-a009` after supervisor merge (done).

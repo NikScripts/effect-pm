@@ -18,7 +18,7 @@ pattern**, and rename `HttpApiResource` → **`ApiResource`**. Branch: `rewrite/
 ### 1. Usage metrics (primary) — emit to the registry; the dashboard surface is `Telemetry`
 **Decided:** ApiResource just **emits to the Effect `Metric` registry**; the dashboard-native,
 cross-host aggregation lives in the separate **`Telemetry` resource** (see
-`docs/handoffs/telemetry-resource.md`). Don't build a per-resource observable here.
+`docs/handoffs/archive/2026-07/features/telemetry-resource.md`). Don't build a per-resource observable here.
 
 Every request funnels through the gated `HttpClient`, so add a metrics middleware (a second
 `HttpClient.transform` wrapping the gated client), recording labeled by `client` (tag id) + `status`:

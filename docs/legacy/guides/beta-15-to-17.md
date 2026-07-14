@@ -169,4 +169,4 @@ One further consumer finding is tracked for **beta.18** (not a blocker at league
 per-resource sources can't hoist to `serveAllHttp`'s single shared provide without double-enqueue, so
 consumers self-provide per tick and trip `strictEffectProvide`. The design is settled (per-resource `Layer.provide`
 on a `Resource.serve` layer + `Resource.httpServer` — no config-embedded layer, no branding):
-`docs/handoffs/per-resource-dependency-serve-design.md`.
+`docs/handoffs/archive/2026-07/features/per-resource-dependency-serve-design.md`.

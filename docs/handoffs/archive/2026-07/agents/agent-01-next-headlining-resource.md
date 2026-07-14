@@ -6,7 +6,7 @@
 **Why:** research and any later impl must sit on the current integration tip so fleet work does not fork pre-Logs.  
 **Research branch:** after pull, create `cursor/<short-name>-a3ad` off `integration` **only if** you need to commit findings docs — prefer posting research in owner chat first. **No implementation** until owner picks a direction.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`phase5-logs-migration-review.md`](./phase5-logs-migration-review.md) · [`multi-host-instances-decisions.md`](./multi-host-instances-decisions.md) · [`docs/standards/resources.md`](../standards/resources.md)
+**Docs bus:** [`agent-status.md`](./agent-status.md) · [`phase5-logs-migration-review.md`](phase5-logs-migration-review.md) · [`multi-host-instances-decisions.md`](./multi-host-instances-decisions.md) · [`docs/standards/resources.md`](../standards/resources.md)
 
 ---
 
@@ -51,7 +51,7 @@ Fleet/peer machinery already shipped (`Resource.distributed`, `Resource.peers`, 
 | `docs/standards/resources.md` | Locked peer/fleet rules |
 | `examples/resource-web/hub.ts`, `server.ts` | WorkerPool dogfood |
 | `examples/web-dashboard/fleet.ts` | “Fleet” UI = Group tree, **not** peers mesh — don’t conflate |
-| `src/Telemetry.ts`, `docs/handoffs/telemetry-resource.md` | Adjacent observability candidate |
+| `src/Telemetry.ts`, `docs/handoffs/archive/2026-07/features/telemetry-resource.md` | Adjacent observability candidate |
 | `package.json` exports | RunResource lacks dedicated subpath; Process/Queue/MultiNode have them |
 
 ---
@@ -130,7 +130,7 @@ Checkout / pull Agent 2’s branch first:
   git checkout cursor/phase5-logs-migration-a3ad
   git pull
 
-Read docs/handoffs/agent-01-next-headlining-resource.md (and Inputs). Branch any research commits FROM that tip — do not base on bare integration/storage.
+Read docs/handoffs/archive/2026-07/agents/agent-01-next-headlining-resource.md (and Inputs). Branch any research commits FROM that tip — do not base on bare integration/storage.
 
 You are Agent 1. RESEARCH / PLAN ONLY — no implementation.
 

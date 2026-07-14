@@ -164,9 +164,9 @@ Resource.healthStream(SomeHost)  // Stream<HostHealth> — periodic, for the liv
 ## Related
 
 - `docs/plans/README.md` → "Resource Host health/status" (this item).
-- `docs/handoffs/telemetry-resource.md` — the sibling ops surface (metrics). Health = readiness
+- `docs/handoffs/archive/2026-07/features/telemetry-resource.md` — the sibling ops surface (metrics). Health = readiness
   view, Telemetry = metrics view; both served per Host, both dashboard-native. Consider a shared
   "served ops surface" story.
-- `docs/handoffs/ui-serve-all-http.md` — the serve surface this mounts onto.
+- `docs/handoffs/archive/2026-07/features/ui-serve-all-http.md` — the serve surface this mounts onto.
 - Requested by the wow-sports consumer (services-hub: three league Hosts + a web front); blocks a
   safe staged deploy of the hub dashboard.

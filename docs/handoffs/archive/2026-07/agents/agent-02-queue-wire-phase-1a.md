@@ -120,7 +120,7 @@ Apply the same `assert*` pattern to `customQueueSpec` → `CustomQueueInstanceSp
 ## Short prompt (paste to Agent 2)
 
 ```
-Read docs/handoffs/agent-02-queue-wire-phase-1a.md and docs/handoffs/owner-decisions.md (2026-07-11 Phase 1a).
+Read docs/handoffs/archive/2026-07/agents/agent-02-queue-wire-phase-1a.md and docs/handoffs/owner-decisions.md (2026-07-11 Phase 1a).
 
 You are Agent 2. Branch cursor/queue-wire-phase-1a-a009 from integration/storage. Do NOT extend PR #19/#20 branches.
 

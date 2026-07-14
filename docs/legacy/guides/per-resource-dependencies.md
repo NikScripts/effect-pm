@@ -118,3 +118,19 @@ Resource.serve(MyResource, { run: tick }).pipe(Layer.provide(handlersLayer));
 ```
 
 Nothing in the body changes except deleting the `Effect.provide`.
+
+## When **not** to hoist `Effect.provide` to `serve`
+
+Blanket advice (“move every in-body `Effect.provide` to the serve”) is wrong when the dependency is
+**sub-effect-scoped**, not whole-resource.
+
+| Scope | Where to provide | Why |
+|-------|------------------|-----|
+| **Whole-resource** | At `serve` / edge `Layer.provide` | Same instance for every tick/handler; keeps `strictEffectProvide` clean |
+| **Sub-effect** | Keep a scoping combinator in the **app** (e.g. `withImport(handlers, effect)`) | Hoisting widens `R` for the **entire** body and can change behavior without a type error |
+
+Classic case: an outer windowing/scheduler path must **not** capture a handler, while an inner tick
+must. If you hoist that handler to the resource edge, the outer path can see it too.
+
+Do **not** look for a package `locally` / `withImport` helper for this — consumer handler tags aren’t
+effect-pm types. Keep your own small scoping combinator next to the handler service.
