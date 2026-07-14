@@ -11,7 +11,9 @@
 
 import * as React from "react";
 
-const GAP = 8; // px between token and popup
+// Slight NEGATIVE gap: the popup overlaps the token by a couple px so there is no empty strip for the
+// pointer to cross — crossing an 8px gap dropped `:hover` and the popup vanished before you reached it.
+const GAP = -2;
 
 const popupOf = (hover: Element): HTMLElement | null =>
   hover.querySelector<HTMLElement>(":scope > .twoslash-popup-container");
