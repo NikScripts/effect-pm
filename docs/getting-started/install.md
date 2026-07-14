@@ -24,11 +24,19 @@ That's the core — queues, processes, resources, and serving them over RPC.
 ## Additional dependencies
 
 Beyond `effect`, some entry points want extra peers. Install them **only when you use that entry
-point** — nothing here is needed for core resources:
+point** — nothing here is needed for core resources.
+
+**Serving over HTTP** needs a platform HTTP server. Pick the one that matches your runtime —
+`@effect/platform-node` already ships as a dependency, so it's there for Node:
+
+`@effect/platform-node`\
+`@effect/platform-bun`\
+`@effect/platform-deno`
+
+**Dashboards** render with React:
 
 | Using | Also install |
 |-------|--------------|
-| Serving over HTTP | `@effect/platform-node` (bundled for Node; swap `@effect/platform-bun` / `-deno` per runtime) |
 | Web dashboard — `/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
 | Terminal dashboard — `/tui` | `react`, `ink` |
 

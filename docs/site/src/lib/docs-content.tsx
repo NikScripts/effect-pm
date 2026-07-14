@@ -70,6 +70,7 @@ const toReact = (n: any): React.ReactNode => {
     case "para": return h("p", { key: keySeq++, className: n.attributes?.class }, kids(n));
     case "str": return n.text;
     case "soft_break": case "softbreak": return " ";
+    case "hard_break": case "hardbreak": return h("br", { key: keySeq++ });
     case "verbatim": return h("code", { key: keySeq++ }, n.text);
     case "strong": return h("strong", { key: keySeq++ }, kids(n));
     case "emph": return h("em", { key: keySeq++ }, kids(n));
