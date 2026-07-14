@@ -42,6 +42,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Open asks priority queue
+
+- **Owner said:** For unfinished items like the dashboard widget plug-in seam — create a new doc that lists and organizes them; **priority at the top**. Walk one issue at a time in chat.
+- **Chose:** [`open-asks.md`](./open-asks.md) — owner-ordered priority queue for unfinished product/DX/consumer asks. First entry = dashboard widget plug-in seam (moved out of the date-stamped widgets handoff).
+- **Rejected:** Leaving open polish forever as date-stamped one-offs; burying the walk only in docs.
+- **Supervisor impact:** Agent 1 migrates unfinished asks into `open-asks.md` as they are walked; complete/declined rows leave the queue.
+
+---
+
 ## 2026-07-14 — Date-stamped handoffs: complete → delete
 
 - **Owner said:** One stack at a time. If a doc is **implemented / complete → delete**; if not finished → **defer to owner**. Do the first stack, then bring back whatever was never finished.
