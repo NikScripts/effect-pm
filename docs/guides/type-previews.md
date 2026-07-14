@@ -1,4 +1,4 @@
-{#type-previews title="Type previews (demo)"}
+{#type-previews title="Type previews (demo)" status="draft"}
 # Type previews — the dual-view trick
 
 A scratch page to verify one thing on a phone: a handle can hover as a **compact named
