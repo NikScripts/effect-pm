@@ -136,6 +136,7 @@
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json",
     "test": "vitest run",
     "treeshake": "node scripts/treeshake-check.mjs",
+    "check:markers": "tsx scripts/mark-the-surface-check.ts --baseline",
     "test:nwsl": "node scripts/nwsl-local.mjs test",
     "test:watch": "vitest",
     "lint": "eslint . --ignore-pattern repos/**",
