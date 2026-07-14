@@ -348,11 +348,11 @@ pre.shiki { background: transparent; }
   left: 0;
   z-index: 30;
   display: none;
-  width: max-content;
-  max-width: min(88vw, 42rem);
+  width: max-content;      /* shrink-wrap to the widest section, capped by max-width below */
   padding: 0;               /* no gutter — the type fills the popup */
-  /* ONE scroll container: the whole popup (type + expanded + comments) scrolls together, capped, so
-     the tall expanded box doesn't scroll on its own. Inner panels overflow visible (rule below). */
+  /* ONE VERTICAL scroll container: the whole popup (type + expanded + comments) scrolls up/down
+     together, capped, so the tall expanded box doesn't y-scroll on its own. Horizontally, each code
+     section scrolls itself (overflow-x below) so sections stay equal width. */
   max-height: min(70vh, 32rem);
   overflow: auto;
   overscroll-behavior: contain;
@@ -360,7 +360,11 @@ pre.shiki { background: transparent; }
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   box-shadow: 0 8px 28px -8px rgb(0 0 0 / 0.45);
-  white-space: pre;         /* no wrapping — lines extend and the container scrolls horizontally */
+  /* Bounded width. The popup shrink-wraps its content up to this cap. Every section fills the popup
+     (width: 100% below), so all sections are the SAME width — a long type can no longer leave the
+     comment box short. Past the cap: prose (comments) WRAPS; code (type / expanded) does NOT wrap —
+     it scrolls horizontally within its own section, since a type broken mid-line is unreadable. */
+  max-width: min(92vw, 42rem);
   font-size: 0.82rem;
   line-height: 1.5;
   text-align: left;
@@ -377,6 +381,8 @@ pre.shiki { background: transparent; }
   background: transparent !important;
   border: none;
   border-radius: 0;
+  white-space: pre;        /* code never wraps */
+  overflow-x: auto;        /* a too-wide type scrolls within its own section, not the whole popup */
 }
 /* Rich popups render the type as a nested shiki <pre>, which carries the base `pre {}` border, radius,
    and padding — a boxed chip. Drop only the border + radius (and reset margin); keep shiki's own inline
@@ -396,6 +402,8 @@ pre.shiki { background: transparent; }
   color: var(--muted-fg);
   font-family: var(--font-sans);
   font-size: 0.78rem;
+  white-space: normal;       /* prose wraps to the popup width */
+  overflow-wrap: break-word;
 }
 /* The "dual preview" expanded-declaration box — its own panel wedged BETWEEN the compact type box and
    the JSDoc comments box. */
@@ -403,6 +411,8 @@ pre.shiki { background: transparent; }
   display: block;
   font-family: var(--font-mono);
   font-size: 0.8rem;
+  white-space: pre;        /* expanded type never wraps */
+  overflow-x: auto;        /* scrolls within its own section when wide */
 }
 .twoslash-popup-expand pre {
   margin: 0;
@@ -424,12 +434,13 @@ pre.shiki { background: transparent; }
 .twoslash-popup-arrow { background: transparent !important; }
 .twoslash-popup-container > :nth-last-child(odd) { background: transparent !important; }
 .twoslash-popup-container > :nth-last-child(even) { background: var(--zebra-even) !important; }
-/* Each section is full width: grows to its content (no-wrap) and is at least the container width, so
-   the zebra bg spans the whole line. */
+/* Every section fills the popup exactly, so all sections are the SAME width and the zebra bg spans the
+   full line. The popup shrink-wraps to its widest content (capped by max-width); wide code scrolls
+   inside its own section (overflow-x above) rather than stretching the section past its siblings. */
 .twoslash-popup-code,
+.twoslash-popup-expand,
 .twoslash-popup-docs {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
   box-sizing: border-box;
 }
 
