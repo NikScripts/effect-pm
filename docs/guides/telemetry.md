@@ -1,4 +1,4 @@
-{#telemetry title="Telemetry" status="draft" appliesTo=all}
+{#telemetry title="Telemetry" status="draft" done="api previews types verified" appliesTo=all}
 # Telemetry
 
 Every effect-pm node already writes into Effect's `Metric` registry — queues, processes, HTTP
