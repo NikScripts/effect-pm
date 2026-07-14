@@ -3,7 +3,7 @@
 **Owner of the code:** Cursor Agent (authored `src/ShardMap.ts` + `src/internal/shardMap*`; active on
 `cursor/intro-shardmap-trio`, `cursor/shardmap-store`).
 **Found by:** Agent C standards audit. This doc is the complete spec — you shouldn't need the audit chat.
-**Branch:** `cursor/shardmap-store-ce05` (fix landed; merge to `integration` when green).
+**Branch:** `cursor/shardmap-typesafety-ce05` → PR [#39](https://github.com/NikScripts/effect-pm/pull/39) (merge to `integration` when green).
 
 **Status (2026-07-14):** **Remediated.** Generic `buildImpl` lives in `src/ShardMap.ts` (Telemetry
 posture). `EngineTag` / `Record<string, unknown>` erasure removed. All `@since 1.0.0` dropped.
