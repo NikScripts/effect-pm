@@ -1,5 +1,6 @@
-import { Effect, Layer, Metric, Option, Schema, Stream } from "effect";
+import { Effect, FileSystem, Layer, Metric, Option, Path, Schema, Stream } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Resource from "../src/Resource";
 import * as ShardMap from "../src/ShardMap";
 import * as Telemetry from "../src/Telemetry";
@@ -133,5 +134,72 @@ describe("ShardMap", () => {
     const b = ShardMap.consistentHash("fan-90210", nodes);
     expect(a).toBe(b);
     expect(nodes).toContain(a);
+  });
+
+  it.effect("default :memory: SQLite upserts live rows (no event log)", () => {
+    class MemorySessions extends ShardMap.Tag<MemorySessions>()(
+      "@test/MemorySessions",
+      {
+        key: SessionId,
+        value: Session,
+        keyOf: (s) => s.id,
+      },
+    ).pipe(Resource.distributed([DropletEast])) {}
+
+    const live = ShardMap.layer(MemorySessions).pipe(
+      Layer.provide(Resource.peersLayer(MemorySessions, DropletEast)),
+    );
+
+    return Effect.gen(function* () {
+      const sessions = yield* MemorySessions;
+      yield* sessions.put({ id: "a", userId: "u" });
+      yield* sessions.put({ id: "a", userId: "u2" }); // upsert
+      yield* sessions.put({ id: "b", userId: "v" });
+      yield* sessions.delete("b");
+      expect(yield* sessions.sizeLocal).toBe(1);
+      const a = yield* sessions.get("a");
+      expect(Option.isSome(a) && a.value.userId).toBe("u2");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("file SQLite rehydrates live keys across rematerialization", () => {
+    class FileSessions extends ShardMap.Tag<FileSessions>()("@test/FileSessions", {
+      key: SessionId,
+      value: Session,
+      keyOf: (s) => s.id,
+    }).pipe(Resource.distributed([DropletEast])) {}
+
+    return Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const fs = yield* FileSystem.FileSystem;
+      const dir = yield* Effect.acquireRelease(
+        fs.makeTempDirectory().pipe(Effect.orDie),
+        (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
+      );
+      const filename = path.join(dir, "shard.sqlite");
+      const mesh = Resource.peersLayer(FileSessions, DropletEast);
+      const live = ShardMap.layer(FileSessions, { filename }).pipe(
+        Layer.provide(mesh),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const sessions = yield* FileSessions;
+          yield* sessions.put({ id: "kept", userId: "u1" });
+          yield* sessions.put({ id: "gone", userId: "u2" });
+          yield* sessions.delete("gone");
+        }).pipe(Effect.provide(live)),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const sessions = yield* FileSessions;
+          const kept = yield* sessions.get("kept");
+          expect(Option.isSome(kept) && kept.value.userId).toBe("u1");
+          expect(Option.isNone(yield* sessions.get("gone"))).toBe(true);
+          expect(yield* sessions.sizeLocal).toBe(1);
+        }).pipe(Effect.provide(live)),
+      );
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped);
   });
 });

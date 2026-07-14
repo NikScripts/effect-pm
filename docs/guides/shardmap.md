@@ -148,6 +148,32 @@ const fleet = yield* sessions.size
 })
 ```
 
+## Persist the shard
+
+Local keys are **SQLite SSOT** — one row per live `(scope, key)`, not an event log.
+`ShardMap.layer` / `serve` open `:memory:` by default (always on); pass `{ filename }` for a
+durable file. Boot loads rows once; mutations `UPSERT` / `DELETE`.
+
+{.twoslash}
+``` ts
+import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Layer, Schema } from "effect"
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+const SessionId = Schema.String
+const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
+class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+  key: SessionId,
+  value: Session,
+  keyOf: (s) => s.id,
+}).pipe(Resource.distributed([DropletEast])) {}
+// ---cut---
+const live = ShardMap.serve(Sessions, {
+  filename: ".effect-pm/sessions.sqlite",
+}).pipe(Layer.provide(Resource.peersLayer(Sessions, DropletEast)))
+// omit filename → in-memory SQLite (default)
+```
+
 ## Partition ethic (v1)
 
 `ShardMap.consistentHash` sorts node keys and picks with `Hash.string` modulo — stable for a

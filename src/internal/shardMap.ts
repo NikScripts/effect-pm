@@ -1,22 +1,24 @@
 /**
- * ShardMap engine — in-memory shard, partition helpers, and routed/fleet members.
+ * ShardMap engine — SQL-backed local shard + routed/fleet members.
+ *
+ * Local keys live in SQLite (`effect_pm_shard_map`, scoped by tag key) and a hot `Ref<Map>` cache.
+ * Boot loads rows once; mutations UPSERT/DELETE. No Store bridge, no event replay.
  *
  * @internal
  */
-import { Effect, Hash, Option, Ref, Schema, Scope } from "effect";
+import { Effect, Hash, Option, Ref, Schema } from "effect";
+import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { Combine, combineQuery } from "../MultiNode";
 import * as Resource from "../Resource";
 import type { PeersId, ResourceTag, SelfNodeId } from "../Resource";
+import {
+  keyOfSym,
+  keySchemaSym,
+  valueSchemaSym,
+} from "./shardMapSymbols";
+import * as shardMapSql from "./shardMapSql";
 
-/** Stamped on every ShardMap tag — the key schema. */
-export const keySchemaSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/ShardMap/keySchema",
-);
-
-/** Stamped on every ShardMap tag — extract partition key from a value. */
-export const keyOfSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/ShardMap/keyOf",
-);
+export { keyOfSym, keySchemaSym, valueSchemaSym };
 
 /** Partition function — maps a wire key string onto a node key. */
 export type PartitionFn = (
@@ -28,6 +30,11 @@ export type PartitionFn = (
 export interface ShardMapOptions {
   /** Owner pick for a key. @default {@link consistentHash} */
   readonly partition?: PartitionFn;
+  /**
+   * SQLite filename for this shard's SSOT. Default `:memory:` (in-process, always on).
+   * Pass a path for crash-surviving durability.
+   */
+  readonly filename?: string;
 }
 
 /**
@@ -65,11 +72,13 @@ export const keyWire = (key: unknown): string => {
 /** Tag surface the engine needs — structural only; Spec depth erased at the boundary. */
 export type EngineTag = {
   readonly [keyOfSym]: (value: never) => unknown;
+  readonly [valueSchemaSym]: Schema.Top;
 } & ResourceTag<unknown, Resource.Spec>;
 
 /**
- * Build the in-memory shard + routed/fleet members. Requires {@link Resource.peers} /
- * {@link Resource.selfNode} (discharge with {@link Resource.peersLayer}).
+ * Build the SQL-backed shard + routed/fleet members. Requires {@link Resource.peers} /
+ * {@link Resource.selfNode} and {@link SqlClient} (toolkit layers install schema + provide a
+ * default `:memory:` client).
  *
  * Impl typing is erased here (boundary with the public {@link Resource.ImplOf} generics);
  * {@link Resource.layer} / {@link Resource.serve} re-constrain at the call site.
@@ -80,16 +89,18 @@ export const buildImpl = (
 ): Effect.Effect<
   Record<string, unknown>,
   never,
-  Scope.Scope | PeersId<unknown> | SelfNodeId<unknown>
+  PeersId<unknown> | SelfNodeId<unknown> | SqlClient
 > =>
   Effect.gen(function* () {
     const keyOf = tag[keyOfSym] as (value: unknown) => unknown;
     const partition: PartitionFn = options?.partition ?? consistentHash;
-    const store = yield* Ref.make(new Map<string, unknown>());
+    const scopeKey = tag.key;
+    const sql = yield* SqlClient;
+    const seeded = yield* shardMapSql.loadScope(sql, scopeKey).pipe(Effect.orDie);
+    const store = yield* Ref.make(seeded);
     const peers = yield* Resource.peers(tag as ResourceTag<unknown, Resource.Spec>);
     const self = yield* Resource.selfNode(tag as ResourceTag<unknown, Resource.Spec>);
 
-    // Prefer the tag's declared fleet (fixed membership); fall back to live mesh keys.
     const nodeKeys = (): ReadonlyArray<string> => {
       const declared = Resource.distributedOf(
         tag as ResourceTag<unknown, Resource.Spec>,
@@ -117,22 +128,30 @@ export const buildImpl = (
       );
 
     const putLocal = (value: unknown) =>
-      Ref.update(store, (m) => {
-        const next = new Map(m);
-        next.set(keyWire(keyOf(value)), value);
-        return next;
+      Effect.gen(function* () {
+        const wire = keyWire(keyOf(value));
+        yield* shardMapSql.upsert(sql, scopeKey, wire, value).pipe(Effect.orDie);
+        yield* Ref.update(store, (m) => {
+          const next = new Map(m);
+          next.set(wire, value);
+          return next;
+        });
       });
 
     const deleteLocal = (key: unknown) =>
-      Ref.modify(store, (m) => {
+      Effect.gen(function* () {
         const wire = keyWire(key);
-        const had = m.has(wire);
+        const had = yield* Ref.get(store).pipe(Effect.map((m) => m.has(wire)));
         if (!had) {
-          return [false, m] as const;
+          return false;
         }
-        const next = new Map(m);
-        next.delete(wire);
-        return [true, next] as const;
+        yield* shardMapSql.deleteKey(sql, scopeKey, wire).pipe(Effect.orDie);
+        yield* Ref.update(store, (m) => {
+          const next = new Map(m);
+          next.delete(wire);
+          return next;
+        });
+        return true;
       });
 
     const sizeLocal = Ref.get(store).pipe(Effect.map((m) => m.size));

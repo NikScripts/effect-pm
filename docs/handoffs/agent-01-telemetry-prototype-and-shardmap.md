@@ -218,7 +218,7 @@ const fleet = yield* sessions.size // → 40_186
 | Hero object | Live ops glass | Partitioned live state |
 | Feeds | Existing Metric emitters | App puts/gets |
 | Mesh role | Fold leaves | Route ownership |
-| Undercard | RR fleet rate-limits | Persistence via `ShardMap.store` |
+| Undercard | RR fleet rate-limits | Persistence via engine-owned SQLite (`effect_pm_shard_map`) |
 
 **Emotional test:** if you mute the code and leave only motion on screen, Telemetry feels like
 *watching the stadium*; ShardMap feels like *finding your seat*.

@@ -6,6 +6,11 @@
  * shard via {@link Resource.peers}. Leaf `*Local` ops stay on this node. Fleet folds report
  * shard sizes. An unreachable owner degrades to a miss — not a cascading health failure.
  *
+ * Persistence: the local shard is **SQLite SSOT** (table `effect_pm_shard_map`).
+ * {@link layer} / {@link serve} / {@link serveRemote} open an in-memory SQLite client by
+ * default (`:memory:`); pass `{ filename }` for a durable file. Boot `SELECT`s live rows;
+ * mutations `UPSERT` / `DELETE`. No Store bridge, no event replay.
+ *
  * @example
  * class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
  *   key: Schema.String,
@@ -15,7 +20,9 @@
  *
  * @module ShardMap
  */
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Effect, Layer, Schema } from "effect";
+import { SqlClient } from "effect/unstable/sql/SqlClient";
 import * as Resource from "./Resource";
 import {
   Tag as resourceTag,
@@ -27,6 +34,7 @@ import {
   type SelfNodeId,
 } from "./Resource";
 import * as internal from "./internal/shardMap";
+import * as shardMapSql from "./internal/shardMapSql";
 
 // ============================================================================
 // Public constants + partition
@@ -64,6 +72,28 @@ export type PartitionFn = internal.PartitionFn;
  * @since 1.0.0
  */
 export type ShardMapOptions = internal.ShardMapOptions;
+
+/**
+ * Provide {@link SqlClient} (default `:memory:`) and install the shard-map schema before the
+ * resource layer builds.
+ *
+ * @internal
+ */
+const withSqlite = <A, E, R>(
+  options: ShardMapOptions | undefined,
+  layer: Layer.Layer<A, E, R | SqlClient>,
+): Layer.Layer<A, E, R> => {
+  const filename = options?.filename ?? ":memory:";
+  const install = Layer.effectDiscard(
+    Effect.flatMap(SqlClient, (sql) =>
+      shardMapSql.install(sql).pipe(Effect.orDie),
+    ),
+  );
+  return layer.pipe(
+    Layer.provide(install),
+    Layer.provide(SqliteClient.layer({ filename })),
+  );
+};
 
 // ============================================================================
 // Spec builder
@@ -174,6 +204,7 @@ export type ShardMapTag<
   Error extends Schema.Top = typeof Schema.Never,
 > = ResourceTag<Self, ShardMapSpecOf<Key, Value, Error>> & {
   readonly [internal.keySchemaSym]: Key;
+  readonly [internal.valueSchemaSym]: Value;
   readonly [internal.keyOfSym]: (
     value: Schema.Schema.Type<Value>,
   ) => Schema.Schema.Type<Key>;
@@ -193,6 +224,7 @@ export type ShardMapNodeTag<
   Error extends Schema.Top = typeof Schema.Never,
 > = NodeBoundTag<Self, ShardMapSpecOf<Key, Value, Error>, HSelf> & {
   readonly [internal.keySchemaSym]: Key;
+  readonly [internal.valueSchemaSym]: Value;
   readonly [internal.keyOfSym]: (
     value: Schema.Schema.Type<Value>,
   ) => Schema.Schema.Type<Key>;
@@ -263,6 +295,7 @@ export const Tag =
     ) as ShardMapTag<Self, Key, Value, Error>;
     return Object.assign(tag, {
       [internal.keySchemaSym]: schemas.key,
+      [internal.valueSchemaSym]: schemas.value,
       [internal.keyOfSym]: schemas.keyOf,
     });
   };
@@ -272,7 +305,8 @@ export const Tag =
 // ============================================================================
 
 /**
- * Local layer — in-memory shard + routed/fleet members. Requires mesh discharge
+ * Local layer — SQL-backed shard + routed/fleet members. Opens SQLite (`:memory:` by default;
+ * override with `{ filename }`). Requires mesh discharge
  * ({@link Resource.peersLayer} or peersFrom + selfNodeLayer).
  *
  * @public
@@ -287,19 +321,26 @@ export const layer = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ): Layer.Layer<Self | Local<Self>, never, PeersId<Self> | SelfNodeId<Self>> =>
-  Layer.unwrap(
-    Effect.map(
-      internal.buildImpl(tag as unknown as internal.EngineTag, options),
-      (impl) =>
-        Resource.layer(
-          tag,
-          impl as unknown as Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
-        ),
-    ),
-  ) as Layer.Layer<Self | Local<Self>, never, PeersId<Self> | SelfNodeId<Self>>;
+  withSqlite(
+    options,
+    Layer.unwrap(
+      Effect.map(
+        internal.buildImpl(tag as unknown as internal.EngineTag, options),
+        (impl) =>
+          Resource.layer(
+            tag,
+            impl as unknown as Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
+          ),
+      ),
+    ) as Layer.Layer<
+      Self | Local<Self>,
+      never,
+      PeersId<Self> | SelfNodeId<Self> | SqlClient
+    >,
+  );
 
 /**
- * Serve remotely (handlers only). Requires mesh discharge.
+ * Serve remotely (handlers only). Opens SQLite (`:memory:` by default). Requires mesh discharge.
  *
  * @public
  * @since 1.0.0
@@ -313,27 +354,33 @@ export const serveRemote = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ) =>
-  Layer.unwrap(
-    Effect.map(
-      internal.buildImpl(tag as unknown as internal.EngineTag, options),
-      (impl) =>
-        Resource.serveRemote(
-          tag,
-          impl as unknown as Resource.ServeImplOf<
-            ShardMapSpecOf<Key, Value, Error>,
-            never
-          >,
-        ),
+  withSqlite(
+    options,
+    Layer.unwrap(
+      Effect.map(
+        internal.buildImpl(tag as unknown as internal.EngineTag, options),
+        (impl) =>
+          Resource.serveRemote(
+            tag,
+            impl as unknown as Resource.ServeImplOf<
+              ShardMapSpecOf<Key, Value, Error>,
+              never
+            >,
+          ),
+      ),
     ),
   );
 
 /**
- * Serve + grant local instance from one materialization.
+ * Serve + grant local instance from one materialization. Opens SQLite (`:memory:` by default).
  *
  * @example
  * ShardMap.serve(Sessions).pipe(
  *   Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
  * )
+ *
+ * // Durable file:
+ * ShardMap.serve(Sessions, { filename: ".effect-pm/sessions.sqlite" })
  *
  * @public
  * @since 1.0.0
@@ -347,11 +394,14 @@ export const serve = <
   tag: ShardMapTag<Self, Key, Value, Error>,
   options?: ShardMapOptions,
 ) =>
-  Resource.serve(
-    tag,
-    internal.buildImpl(tag as unknown as internal.EngineTag, options) as Effect.Effect<
-      Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
-      never,
-      PeersId<Self> | SelfNodeId<Self>
-    >,
+  withSqlite(
+    options,
+    Resource.serve(
+      tag,
+      internal.buildImpl(tag as unknown as internal.EngineTag, options) as Effect.Effect<
+        Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>,
+        never,
+        PeersId<Self> | SelfNodeId<Self> | SqlClient
+      >,
+    ),
   );
