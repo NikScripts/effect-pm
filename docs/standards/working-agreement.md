@@ -1,4 +1,4 @@
-{#working-agreement title="Agent Rules" order=90 appliesTo=process}
+{#working-agreement title="Agent Rules" order=90 status="draft" appliesTo=process}
 # Agent Rules
 
 Additional rules for agents working on the package — how work moves through branches, how designs

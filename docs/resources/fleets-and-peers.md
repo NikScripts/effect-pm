@@ -1,4 +1,4 @@
-{#fleets-and-peers title="Fleets & Peers" appliesTo=all}
+{#fleets-and-peers title="Fleets & Peers" status="draft" appliesTo=all}
 # Fleets & Peers
 
 Running one resource across many runtimes and having its instances coordinate.

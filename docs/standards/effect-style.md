@@ -1,4 +1,4 @@
-{#effect-style title="Effect Style" order=40 appliesTo=src}
+{#effect-style title="Effect Style" order=40 status="draft" appliesTo=src}
 # Effect Style
 
 How Effect code reads day to day — the platform surface and idioms, plus formatting and comments.

@@ -1,4 +1,4 @@
-{#core-concepts title="Core Concepts" appliesTo=all}
+{#core-concepts title="Core Concepts" status="draft" appliesTo=all}
 # Core Concepts
 
 {.note}

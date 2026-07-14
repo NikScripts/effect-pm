@@ -1,4 +1,4 @@
-{#storage title="Storage & Persistence" order=80 appliesTo=src}
+{#storage title="Storage & Persistence" order=80 status="draft" appliesTo=src}
 # Storage & Persistence
 
 Persistence comes in exactly three approved shapes. Pick one; anything that fits none is legacy and

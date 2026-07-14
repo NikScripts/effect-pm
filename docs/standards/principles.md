@@ -1,4 +1,4 @@
-{#principles title="Principles" order=10 appliesTo=all}
+{#principles title="Principles" order=10 status="draft" appliesTo=all}
 # Principles
 
 How we write code here, and how we shape the system. Every concrete rule downstream enforces one of

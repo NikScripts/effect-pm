@@ -1,4 +1,4 @@
-{#readiness title="Readiness & Health" appliesTo=all}
+{#readiness title="Readiness & Health" status="draft" appliesTo=all}
 # Readiness & Health
 
 {.note}

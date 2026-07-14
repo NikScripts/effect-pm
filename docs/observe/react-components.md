@@ -1,4 +1,4 @@
-{#react-components title="React Components" appliesTo=all}
+{#react-components title="React Components" status="draft" appliesTo=all}
 # React Components
 
 {.note}

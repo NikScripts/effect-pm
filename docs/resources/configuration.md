@@ -1,4 +1,4 @@
-{#configuration title="Configuration" appliesTo=all}
+{#configuration title="Configuration" status="draft" appliesTo=all}
 # Configuration
 
 {.note}

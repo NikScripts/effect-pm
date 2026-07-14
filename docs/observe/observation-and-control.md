@@ -1,4 +1,4 @@
-{#observation-and-control title="Observation & Control" appliesTo=all}
+{#observation-and-control title="Observation & Control" status="draft" appliesTo=all}
 # Observation & Control
 
 {.note}
