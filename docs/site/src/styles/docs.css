@@ -360,14 +360,15 @@ pre.shiki { background: transparent; }
   border-radius: 0;
 }
 /* Rich popups render the type as a nested shiki <pre>, which carries an inline white background plus
-   the base `pre {}` border/radius/padding — a boxed chip inside the popup. Strip it so the type fills
-   the popup cleanly. (`!important` beats the inline `background-color:#fff`.) */
+   the base `pre {}` border/radius/padding — a boxed chip inside the popup. Drop the border + radius so
+   it isn't a chip, but keep a whitish code surface (`--card`, theme-aware) and some padding so the
+   type fills the popup as a clean panel. (`!important` beats the inline `background-color:#fff`.) */
 .twoslash-popup-code pre {
   margin: 0;
-  padding: 0;
+  padding: 0.5rem 0.7rem;
   border: none;
   border-radius: 0;
-  background: transparent !important;
+  background: var(--card) !important;
 }
 .twoslash-popup-docs {
   margin: 0;
