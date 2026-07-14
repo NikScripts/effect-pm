@@ -7,7 +7,8 @@ couple of small asks. Nothing here is a blocker.
 > **Guidance gap (“when NOT to hoist”)** → [`open-asks.md`](./open-asks.md) §2.  
 > **Shared majority + outlier on one port** → **shipped**: `Resource.provide` + isolated `serve` in
 > the same `Resource.httpServer([...])` (`test/http-server-shared-and-isolated.test.ts`; readiness
-> page). `serveAllHttp` retired — there is no second host API to mix into.
+> page). `serveAllHttp` retired — there is no second host API to mix into.  
+> **Test doubles / `layerNoop`** → [`open-asks.md`](./open-asks.md) §3 (ship with the owned service).
 
 ## What worked well
 
@@ -21,10 +22,6 @@ couple of small asks. Nothing here is a blocker.
 
 ## Small asks
 
-- **Test doubles for the served stack.** `serve`/`withImport`-style APIs make dependencies explicit in
-  `R` (good), which means unit-testing a served resource now needs noop layers for its whole dep stack.
-  Where effect-pm owns those services, shipping `layerNoop` / a "test serve" helper would save every
-  consumer hand-stubbing them. (`ImportFlush.layerNoop` is great; more of that.)
 - **`httpServer([...serves], options)` docs** — the array-sugar form is the ergonomic one; make sure the
   guide leads with it over the bare `provideMerge` assembly.
 
