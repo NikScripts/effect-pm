@@ -1,4 +1,4 @@
-{#configuration title="Configuration" status="draft" appliesTo=all}
+{#configuration title="Configuration" status="draft" done="api" appliesTo=all}
 # Configuration
 
 How an application declares configuration, and how the parts that change while it runs are swapped safely. This builds on Effect's `Config` — it doesn't replace it, it adds a hot-swap layer on top.

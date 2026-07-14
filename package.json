@@ -259,6 +259,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "effect": "4.0.0-beta.92",
+    "esbuild": "^0.28.1",
     "eslint": "^10.3.0",
     "ink": "^7.1.0",
     "ink-testing-library": "^4.0.0",

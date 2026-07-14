@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Combine, combineQuery } from "../src/MultiNode";
+import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 
 class DbNode extends Resource.Node<DbNode>("peers-http/node") {}
@@ -29,7 +29,7 @@ const Server = Resource.httpServer([
       const peers = yield* Resource.peers(Database);
       return {
         connections: Effect.succeed(2),
-        totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+        totalConnections: combineQuery(peers, (p) => p.connections, combineSum).pipe(
           Effect.map((others) => 2 + others),
         ),
       };
