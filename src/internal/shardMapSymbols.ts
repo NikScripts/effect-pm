@@ -1,21 +1,22 @@
 /**
- * ShardMap tag stamp symbols — shared by the engine and store contract without a cycle.
+ * ShardMap tag stamp symbols — Key / Value / keyOf carriers on the Resource tag without
+ * importing the public module (avoids a cycle with the engine).
  *
- * @module internal/shardMapSymbols
+ * @module shardMapSymbols
  * @internal
  */
 
-/** Stamped on every ShardMap tag — the key schema. */
+/** Stamped on every ShardMap tag — the key schema. @internal */
 export const keySchemaSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/ShardMap/keySchema",
 );
 
-/** Stamped on every ShardMap tag — the value schema (store codec). */
+/** Stamped on every ShardMap tag — the value schema. @internal */
 export const valueSchemaSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/ShardMap/valueSchema",
 );
 
-/** Stamped on every ShardMap tag — extract partition key from a value. */
+/** Stamped on every ShardMap tag — extract partition key from a value. @internal */
 export const keyOfSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/ShardMap/keyOf",
 );

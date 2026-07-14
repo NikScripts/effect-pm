@@ -224,7 +224,7 @@ export type ShardMapSpecOf<
 // ============================================================================
 
 /**
- * A ShardMap instance tag.
+ * A ShardMap instance tag — wire contract plus stamped `key` / `value` / `keyOf` carriers.
  *
  * @public
  */
@@ -242,7 +242,7 @@ export type ShardMapTag<
 };
 
 /**
- * A node-bound {@link ShardMapTag}.
+ * A node-bound {@link ShardMapTag} (served + reached on a specific {@link NodeKey}).
  *
  * @public
  */
@@ -261,7 +261,8 @@ export type ShardMapNodeTag<
 };
 
 /**
- * Tag-construction schemas + `keyOf` for routed `put`.
+ * Tag-construction schemas + `keyOf` for routed `put` (partition strategy stays on
+ * {@link layer} / {@link serve} options — tag is the wire contract only).
  *
  * @public
  */
@@ -400,8 +401,9 @@ const buildImpl = <
     const seededUnknown = yield* shardMapSql
       .loadScope(sql, scopeKey)
       .pipe(Effect.orDie);
-    // SAFE: SQL JSON hydrate is opaque; wire Schema validates at the RPC boundary (Telemetry has
-    // no equivalent store — peer/Impl opacity is the same Mapped-under-Top story).
+    // SAFE: loadScope yields opaque JSON values; Schema.Top Value can't constrain
+    // DecodingServices for a boot-time decode Effect, and the wire Schema re-validates on RPC.
+    // Rows already passed UnknownFromJsonString in shardMapSql.loadScope.
     const seeded = seededUnknown as Map<string, ValueT<Value>>;
     const store = yield* Ref.make(seeded);
     const peers = yield* Resource.peers(tag);
@@ -458,7 +460,7 @@ const buildImpl = <
 
     const sizeLocal = Ref.get(store).pipe(Effect.map((m) => m.size));
 
-    const ownerOf = (key: KeyT<Key> | unknown): string =>
+    const ownerOf = (key: KeyT<Key>): string =>
       partition(internal.keyWire(key), nodeKeys());
 
     const get = (key: KeyT<Key>) =>
@@ -567,8 +569,8 @@ const asServeImpl = <
 
 /**
  * Local layer — SQL-backed shard + routed/fleet members. Opens SQLite (`:memory:` by default;
- * override with `{ filename }`). Requires mesh discharge
- * ({@link Resource.peersLayer} or peersFrom + selfNodeLayer).
+ * override with `{ filename }`). Requires the mesh capability
+ * ({@link Resource.peersLayer}, or {@link Resource.peersFrom} + {@link Resource.selfNodeLayer}).
  *
  * @public
  */
@@ -590,7 +592,10 @@ export const layer = <
   );
 
 /**
- * Serve remotely (handlers only). Opens SQLite (`:memory:` by default). Requires mesh discharge.
+ * Serve this ShardMap **remotely (served-only)** — counterpart to {@link Resource.serveRemote}.
+ * Mounts routed + fleet handlers **without** granting the local instance. Opens SQLite
+ * (`:memory:` by default). Requires the mesh capability ({@link Resource.peersLayer} or
+ * peersFrom + selfNodeLayer).
  *
  * @public
  */
@@ -612,7 +617,9 @@ export const serveRemote = <
   );
 
 /**
- * Serve + grant local instance from one materialization. Opens SQLite (`:memory:` by default).
+ * Serve this ShardMap **and** grant its local instance from **one** materialization —
+ * counterpart to {@link Resource.serve}. Opens SQLite (`:memory:` by default; pass
+ * `{ filename }` for a durable file). Requires the mesh capability:
  *
  * @example
  * ShardMap.serve(Sessions).pipe(
