@@ -56,6 +56,30 @@ const importWorker = (job: { readonly id: string }) =>
     yield* Effect.sleep(Duration.millis(400));
   });
 
+// A producer that enqueues jobs at all three priorities in waves, so the queue widgets show live
+// pending (high/normal/low) + done + throughput and the worker logs flow. Workers drain each burst
+// (concurrency 3), so the backlog oscillates instead of exploding — a stand-in for a real upstream.
+const loadQueue = (
+  enqueue: {
+    readonly prioritize: (items: ReadonlyArray<{ readonly id: string }>) => Effect.Effect<unknown, unknown>;
+    readonly add: (items: ReadonlyArray<{ readonly id: string }>) => Effect.Effect<unknown, unknown>;
+    readonly defer: (items: ReadonlyArray<{ readonly id: string }>) => Effect.Effect<unknown, unknown>;
+  },
+  label: string,
+) =>
+  Effect.forkScoped(
+    Effect.gen(function* () {
+      let n = 0;
+      const jobs = (count: number) => Array.from({ length: count }, () => ({ id: `${label}-${n++}` }));
+      while (true) {
+        yield* enqueue.prioritize(jobs(yield* Random.nextIntBetween(2, 6)));
+        yield* enqueue.add(jobs(yield* Random.nextIntBetween(3, 8)));
+        yield* enqueue.defer(jobs(yield* Random.nextIntBetween(4, 10)));
+        yield* Effect.sleep(Duration.seconds(yield* Random.nextIntBetween(4, 8)));
+      }
+    }),
+  );
+
 // ── WNBA live-score poller: armed only around game time ──────────────────────
 // In a real app you'd fetch the league schedule from a sports API; here we mock a few games and
 // arm the poller from 20 min before each tip-off until 60 min after — so it only polls live scores
@@ -190,8 +214,10 @@ const scoresApiMock = {
 // — occasional, not constant, so the box-score queue's dependency-aware readiness cascade is there to
 // catch but the dashboard mostly reads healthy. A real DB resource would acquire this eagerly with
 // `Layer.scoped` (failures at boot); here we just toggle a flag so the health board has something live.
+// Visible on the dashboard: a ~9s drop every 40s, so the health board / readiness banner flip
+// between healthy and degraded regularly enough to eyeball (and the box-score queue cascades with it).
 const scoresDbImpl = {
-  connected: Effect.map(Clock.currentTimeMillis, (now) => now % 180_000 > 10_000),
+  connected: Effect.map(Clock.currentTimeMillis, (now) => now % 40_000 > 9_000),
 };
 
 class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaStore")(
@@ -295,10 +321,21 @@ const liveNodeProgram = Effect.gen(function* () {
   return yield* Effect.never;
 }).pipe(Effect.provide(liveNode));
 
+// Serve the box-score queue AND keep it fed, so its widgets show live load.
+const wnbaNodeProgram = Effect.gen(function* () {
+  yield* loadQueue(yield* BoxScoreQueue, "box");
+  return yield* Effect.never;
+}).pipe(Effect.provide(wnbaNode));
+
+const statsNodeProgram = Effect.gen(function* () {
+  yield* loadQueue(yield* PlayByPlayQueue, "pbp");
+  return yield* Effect.never;
+}).pipe(Effect.provide(statsNode));
+
 const program = Effect.gen(function* () {
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(wnbaNode)));
+  yield* Effect.forkScoped(wnbaNodeProgram);
   yield* Effect.forkScoped(liveNodeProgram);
-  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(statsNode)));
+  yield* Effect.forkScoped(statsNodeProgram);
   yield* Effect.logInfo(
     `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,
   );
