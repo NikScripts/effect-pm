@@ -7,16 +7,6 @@ src/cli/index.ts:resourcesByName
 src/CustomQueueResource.ts:customQueueTag
 src/DynamicConfig.ts:ConfigBag
 src/DynamicConfig.ts:FixedField
-src/internal/json.ts:dateFromMillis
-src/internal/json.ts:dateFromUnknown
-src/internal/json.ts:epochMillisFromUnknown
-src/internal/json.ts:isBoolean
-src/internal/json.ts:isFiniteNumber
-src/internal/json.ts:isJsonValue
-src/internal/json.ts:isRecord
-src/internal/json.ts:isString
-src/internal/json.ts:responseBodyJson
-src/internal/json.ts:unknownJsonString
 src/internal/logs/streamLevel.ts:logStreamLevelSym
 src/internal/manager/logQuery.ts:buildLogQuery
 src/internal/manager/targetResolver.ts:AmbiguousProcessManagerTarget
