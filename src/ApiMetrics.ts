@@ -125,7 +125,7 @@ const apiMetricsSpec = {
 };
 
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. */
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @public */
 export const kind = "@nikscripts/effect-pm/ApiMetrics";
 
 /** The per-instance Resource key (wire group prefix) for a metrics tag. A node-bound tag prefixes by
