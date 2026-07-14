@@ -636,6 +636,8 @@ section[class~="may"] > h2::after { content: "MAY"; color: var(--may); }
   padding: 0;
   white-space: pre;
 }
+/* the install box is a discrete widget — always show its copy button (no hover reveal, works on touch) */
+.pm-command .copy-btn { opacity: 1; }
 
 /* tables — Djot pipe tables (docs-content renders table/row/cell). */
 table {
