@@ -202,6 +202,18 @@ Any drift fails the build.
 Two stages so we are never mid-air: Stage 1 is the reversible, visible convergence; Stage 2 is the
 standards payoff that removes the duplication. Same destination — spec-as-SSOT.
 
+### Finding (M1b, measured) — the divergence is 3 schema-typed members
+
+The bidirectional harness proved **13/16 members already match** Tag ⇄ engine. The only mismatches:
+`events`, `metrics` (stream element + `query` input), `release`/`releaseEncoded` (input `options`).
+Root cause: the **hand-authored public types `QueueEvent` / `QueueMetrics` / `QueueReleaseOptions` do
+not structurally equal their own schemas' `.Type`** — the Tag contract uses the schema `.Type`, the
+engine handle uses the hand-authored interface. This is a **latent Tag/Service divergence** independent
+of this work. **Decision needed:** fix those 3 public types to equal their schemas (SSOT, but blast
+radius — other consumers) **vs** type the skeleton's 3 members via `Resource.Decoded<typeof schema>`
+locally (isolated; leaves the latent drift for a later cleanup). Recommend the SSOT fix, verified by
+the same harness.
+
 ### Stage 1 — converge (safe checkpoint)
 
 - **M1 — canonical name + Tag naming (additive).** Define
