@@ -27,6 +27,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "logs",
       "metrics",
       "telemetry",
+      "fleet-health",
       "shardmap",
     ],
   },

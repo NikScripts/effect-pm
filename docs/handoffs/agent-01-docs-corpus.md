@@ -1,11 +1,12 @@
 # Agent 1 — Docs corpus: handoffs → plans → legacy (Draft)
 
-**Status:** **PHASE 1 A–E DONE** · **PHASE 2 P1–P4 LANDED** (2026-07-14).  
+**Status:** **PHASE 1 A–E DONE** · **PHASE 2 P1–P4 LANDED** · **PHASE 3 UNLOCKED** (2026-07-15).  
 **Phase 1 plan:** [`agent-01-docs-corpus-phase1-plan.md`](./agent-01-docs-corpus-phase1-plan.md).  
 **Phase 2 plan:** [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md) — `docs/plans/` is the living roadmap.  
+**Phase 3 plan:** [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md) — legacy → live book + Draft content convention.  
 **Agent:** **1**.  
 **Branch from:** **`integration`**.  
-**Working branch:** `cursor/docs-corpus-phase2-plan-ce05`.
+**Working branch:** `cursor/docs-corpus-phase3-ce05`.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/standards/documentation.md`](../standards/documentation.md) · [`docs/nav.ts`](../nav.ts) · [`docs/site/src/lib/content.ts`](../site/src/lib/content.ts)
 
@@ -79,22 +80,19 @@ Living roadmap: [`docs/plans/README.md`](../plans/README.md). Specs beside it. O
 
 ---
 
-## Phase 3 — Legacy docs → live book + Draft label (owner unlock later)
+## Phase 3 — Legacy docs → live book + Draft label (**unlocked**)
 
-**Do not start until Phase 2 unlocked (or owner reorders).**
+**Plan:** [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md).
 
 ### Goal
 
-Port still-useful `docs/legacy/**` content into the live book (`getting-started` / `resources` / `guides` / `observe`), then retire or shrink legacy.
+Port still-useful `docs/legacy/**` content into the live book (`getting-started` / `resources` /
+`guides` / `observe`), then retire or shrink legacy.
 
-### Draft label (stub — owner will expand after assign)
+### Draft label (content-side — locked)
 
-- Ported pages that are **not yet tip-accurate** must be marked **Draft** so readers don’t treat them as SSOT.  
-- **Agent 1:** propose **content-side** conventions only (e.g. page-block metadata, a `{.note}` / `{.draft}` callout, front-matter field, nav badge text in the markdown itself).  
-- **Do not** implement site chrome, CSS badges, or `content.ts` changes — that is **lettered-agent / Agent B** work after owner specifies the Draft UX.  
-- If a Draft marker needs a site feature, open a **short requirements note** for Agent B; do not build it.
-
-Also decide fate of orphans like `docs/LOGS.md` (candidate: become `docs/guides/logs.md` + nav slug — still content-only in this phase unless B is looped in for nav).
+See Phase 3 plan + [`docs/standards/documentation.md`](../standards/documentation.md):
+`status="draft"` + `{.draft}` callout on ports; no site chrome.
 
 ---
 

@@ -46,8 +46,8 @@ export default defineConfig({
     // build-time Node deps (per server environment — rsc + ssr) so the SSG server loads them
     // normally (`waku dev` was unaffected — it doesn't bundle a server chunk).
     environments: {
-      rsc: { resolve: { external: ["typescript", "twoslash", "@shikijs/twoslash"] } },
-      ssr: { resolve: { external: ["typescript", "twoslash", "@shikijs/twoslash"] } },
+      rsc: { resolve: { external: ["typescript", "twoslash", "@shikijs/twoslash", "prettier"] } },
+      ssr: { resolve: { external: ["typescript", "twoslash", "@shikijs/twoslash", "prettier"] } },
     },
     // Content is at docs/ and the package source is at repo/src — both above this app's
     // root (docs/site). Allow the dev server to read up to the repo root.

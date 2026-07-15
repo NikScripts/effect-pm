@@ -477,8 +477,7 @@ type CustomConfigFromEffect<
     | CustomQueueResourceOptionsWithoutItemSchema<any, any, any>
     | CustomQueueResourceOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- empty config branch
-> = { readonly effect: F } & (O extends undefined ? {} : O);
+> = { readonly effect: F } & (O extends undefined ? unknown : O);
 
 function makeCustomQueueEffect<
   const F extends QueueWorkerEffect<any, any, any, any>,

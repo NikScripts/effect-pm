@@ -6,7 +6,7 @@ Whether a served resource is actually able to do its job — beyond “the proce
 - **`GET /health`** — `200` when all ready, `503` when any is not (`status: "degraded"`), body lists each resource’s `{ key, kind, ready, detail? }`
 - **`NodeStatus`** — the same aggregate for the dashboard health board
 
-Readiness is **per-node and local**. It never hops to peers; a down neighbour must not cascade through `/health`. Fleet-wide health is a separate monitor that *reads* a `fleet` field as a client, not a readiness gate.
+Readiness is **per-node and local**. It never hops to peers; a down neighbour must not cascade through `/health`. Fleet-wide health is a separate monitor — see [Fleet Health](/docs/fleet-health) (`FleetHealth` folds peer `local` with Reachable / Unreachable).
 
 {.note}
 Acquisition vs readiness: get hard dependencies ready by acquiring them eagerly with `Layer` (failures surface at boot). Readiness covers runtime health `Layer` can’t see — a connection that drops after the process started.

@@ -36,8 +36,9 @@ export interface StoreShapeDef<Row extends Schema.Schema<unknown> = Schema.Schem
 /** A leaf shape value — row schema or {@link StoreShapeDef}. @internal */
 export type StoreShapeInputLeaf = Schema.Schema<unknown> | StoreShapeDef;
 
-/** A nested sub-tree of shape inputs — the recursive case. @internal */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- recursive tree; empty interface preserves circular alias
+/** A nested sub-tree of shape inputs — the recursive case. Must be an `interface`, not a `type` alias:
+ *  {@link StoreShapeInput} unions back to it, and a `type` alias fails with TS2456 (`circularly
+ *  references itself`) while an interface breaks the cycle. @internal */
 export interface StoreShapeTree extends Readonly<Record<string, StoreShapeInput>> {}
 
 /** Part 1 shape value — a leaf (row schema or {@link StoreShapeDef}) or a nested sub-tree. @internal */

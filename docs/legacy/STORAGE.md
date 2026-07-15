@@ -1,6 +1,8 @@
 # Storage
 
-**Single source of truth for persistence in this package.** Read this before changing `src/Store.ts`,
+**Consumer guide (living book):** [`docs/guides/stores.md`](../guides/stores.md) → `/docs/stores`.
+
+**Single source of truth for persistence in this package (agents).** Read this before changing `src/Store.ts`,
 toolkit store registration (`*.store(tag)`), `src/store/*` legacy facets, or engine store wiring.
 
 Verify: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm build`

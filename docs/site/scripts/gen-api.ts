@@ -20,7 +20,9 @@ import ts from "typescript";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const packageJsonPath = nodePath.join(repoRoot, "package.json");
-const defaultOutPath = nodePath.join(repoRoot, "docs/site/api.json");
+// NOT "api.json" — that filename collides with the `/api` route (Vite extension-resolves `/api` to
+// `api.json` and serves the data file instead of the page).
+const defaultOutPath = nodePath.join(repoRoot, "docs/site/api-model.json");
 
 // One named error per failure mode (Principles → Errors are values).
 class FileError extends Data.TaggedError("FileError")<{
@@ -57,6 +59,15 @@ const ApiEntry = Schema.Struct({
 });
 const ApiModel = Schema.Struct({
   entries: Schema.Array(ApiEntry),
+});
+// A tiny companion file (names + counts) so the /api landing page needn't load the full model.
+const ApiIndex = Schema.Struct({
+  namespaces: Schema.Array(
+    Schema.Struct({
+      entry: Schema.String,
+      count: Schema.Number,
+    }),
+  ),
 });
 type ApiSymbol = Schema.Schema.Type<typeof ApiSymbol>;
 type ApiEntry = Schema.Schema.Type<typeof ApiEntry>;
@@ -335,6 +346,12 @@ const program = Effect.gen(function* () {
     entries: model,
   }).pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
   yield* writeText(outPath, `${json}\n`);
+
+  const indexPath = nodePath.join(nodePath.dirname(outPath), "api-index.json");
+  const indexJson = yield* Schema.encodeEffect(Schema.fromJsonString(ApiIndex))({
+    namespaces: model.map((e) => ({ entry: e.entry, count: e.symbols.length })),
+  }).pipe(Effect.mapError((cause) => new FileError({ path: indexPath, cause })));
+  yield* writeText(indexPath, `${indexJson}\n`);
 
   const total = model.reduce((n, e) => n + e.symbols.length, 0);
   yield* Console.log(`wrote ${outPath}`);
