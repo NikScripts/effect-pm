@@ -53,9 +53,9 @@ it("Resource.logs query is empty without store registration (live relay only)", 
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Process.layer(LogProc, {
+        Process.layerMemory(LogProc, {
           effect: Effect.logInfo("process tick"),
-        }).pipe(Layer.provideMerge(Logs.layer)),
+        }).pipe(Layer.provide(Logs.layer)),
       ),
       Effect.scoped,
     ),

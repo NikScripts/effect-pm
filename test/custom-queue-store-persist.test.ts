@@ -44,7 +44,7 @@ describe("CustomQueueResource → baked store persistence", () => {
       expect(tags).toContain("Completed");
     }).pipe(
       Effect.provide(
-        CustomQueueResource.layer(Jobs, {
+        CustomQueueResource.layerMemory(Jobs, {
           levelCount: 3,
           namedLevels: { urgent: 0 },
           effect: () => Effect.void,
@@ -80,7 +80,7 @@ describe("CustomQueueResource → baked store persistence", () => {
       expect(tags).toContain("RetryExhausted");
     }).pipe(
       Effect.provide(
-        CustomQueueResource.layer(FailingJobs, {
+        CustomQueueResource.layerMemory(FailingJobs, {
           levelCount: 2,
           effect: () => Effect.fail("boom" as const),
           attempts: 1,

@@ -18,10 +18,10 @@ class OverrideStore extends Store.Service<OverrideStore>("@test/OverrideStore")(
 
 const clock = TestClock.layer();
 
-describe("Process.layer — baked-in default store", () => {
-  it.effect("records terminal runs with no external Store.Storage layer", () =>
+describe("Process.layer — Storage provision", () => {
+  it.effect("layerMemory records terminal runs with no app Store.Service", () =>
     Effect.gen(function* () {
-      const live = Process.layer(DefaultExec, {
+      const live = Process.layerMemory(DefaultExec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       });
@@ -42,15 +42,12 @@ describe("Process.layer — baked-in default store", () => {
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
 
-  it.effect("app Store.Service overrides the baked-in default via provideMerge", () =>
+  it.effect("AppStore via Layer.provide — engine captures app Storage (not layerDefaultMemory)", () =>
     Effect.gen(function* () {
-      const live = Layer.provideMerge(
-        OverrideStore.layerMemory,
-        Process.layer(OverrideExec, {
-          effect: Effect.succeed({ symbol: "OVERRIDE", usd: 1 }),
-          polling: Polling.spaced(Duration.millis(50)),
-        }),
-      );
+      const live = Process.layer(OverrideExec, {
+        effect: Effect.succeed({ symbol: "OVERRIDE", usd: 1 }),
+        polling: Polling.spaced(Duration.millis(50)),
+      }).pipe(Layer.provideMerge(OverrideStore.layerMemory));
       yield* Effect.gen(function* () {
         yield* OverrideExec;
         yield* TestClock.adjust(Duration.millis(200));

@@ -17,7 +17,7 @@ class Flaky extends QueueResource.Tag<Flaky>()("@test/Flaky", {
   error: Schema.String,
 }) {}
 
-const flakyLayer = QueueResource.layer(Flaky, {
+const flakyLayer = QueueResource.layerMemory(Flaky, {
   effect: (job) => Effect.fail(`boom:${job.id}`),
   attempts: 1, // no re-enqueue → a single terminal failure carrying the typed cause
   concurrency: 1,

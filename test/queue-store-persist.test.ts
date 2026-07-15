@@ -50,7 +50,7 @@ describe("QueueResource → baked store persistence", () => {
     }).pipe(
       // Only the queue layer — it bakes + exposes the store. No app Store.Service.
       Effect.provide(
-        QueueResource.layer(EmailQueue, {
+        QueueResource.layerMemory(EmailQueue, {
           effect: () => Effect.void,
           autoStart: true,
         }),
@@ -86,7 +86,7 @@ describe("QueueResource → baked store persistence", () => {
       expect(tags).toContain("RetryExhausted");
     }).pipe(
       Effect.provide(
-        QueueResource.layer(FailingQueue, {
+        QueueResource.layerMemory(FailingQueue, {
           effect: () => Effect.fail("boom" as const),
           attempts: 1,
           autoStart: true,

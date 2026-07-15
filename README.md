@@ -91,7 +91,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   QueueResource.store(RosterQueue),
 ) {}
 
-// host — registration journals + serve resources (`AppStore` bakes in Logs.layer)
+// host — engines require Storage; AppStore.layer* fills it (bakes Logs.layer + journals)
 Resource.httpServer([QueueResource.serve(RosterQueue, { effect })])
   .pipe(
     Layer.provide(AppStore.layerMemory),

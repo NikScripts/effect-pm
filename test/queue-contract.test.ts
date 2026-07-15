@@ -375,7 +375,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     expect(Option.getOrThrow(emptied)).toBe(true);
   }).pipe(
     Effect.provide(
-      QueueResource.layer(LocalQueue, {
+      QueueResource.layerMemory(LocalQueue, {
         effect: (_item: NumberItem) => Effect.void,
         concurrency: 1,
       }),
@@ -409,7 +409,7 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
     expect(entry?.level).toBe("Info");
   }).pipe(
     Effect.provide(
-      QueueResource.layer(LoggingQueue, {
+      QueueResource.layerMemory(LoggingQueue, {
         effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
         concurrency: 1,
       }).pipe(Layer.provideMerge(testLogsEnv())),

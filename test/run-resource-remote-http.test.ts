@@ -22,7 +22,7 @@ const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
 ): Effect.Effect<A, E, never> => {
   const server = Resource.httpServer([
-    RunResource.serve(RemoteGate, {
+    RunResource.serveMemory(RemoteGate, {
       effect: (n: number) =>
         n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
       concurrency: 2,

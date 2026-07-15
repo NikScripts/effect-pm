@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Storage correctness: do it all (Effect-true Storage requirement)
+
+- **Owner said:** Pick the order; do the whole storage-correctness plan; Effect way; show everything in chat.
+- **Chose:** Toolkit `layer`/`serve`/`serveRemote` **require** `Store.Storage`; soft-default only via `*Memory`. App compose with `Layer.provide`/`provideMerge(AppStore)`. Root cause of SQLite silence: shared in-memory `EventJournal` made memory "override" look real while SQLite stayed empty. Phases A–D on `cursor/storage-correctness-all-a009`. Phase C dual-relay: Effect Layer memo already uniques shared `Logs.layer`; docs in stores guide + B2 `_logs` require relay.
+- **Rejected / deferred:** store memo; Agent D handles; docs-site; Postgres.
+- **Supervisor impact:** Manager Eng; Agent 3 free for other work when PR lands.
+
+---
+
 ## 2026-07-14 — Storage correctness (can’t get Store wrong)
 
 - **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.

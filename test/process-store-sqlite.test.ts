@@ -25,15 +25,12 @@ class SqliteStore extends Store.Service<SqliteStore>("@test/SqliteProcessStore")
 const clock = TestClock.layer();
 
 describe("Process.layer — durable SQLite store", () => {
-  it.effect("app Store.Service overrides default memory for engine writes", () =>
+  it.effect("AppStore via Layer.provide — engine writes land on app memory store", () =>
     Effect.gen(function* () {
-      const live = Layer.provideMerge(
-        SqliteStore.layerMemory,
-        Process.layer(SqliteExec, {
-          effect: Effect.void,
-          polling: Polling.spaced(Duration.millis(50)),
-        }),
-      );
+      const live = Process.layer(SqliteExec, {
+        effect: Effect.void,
+        polling: Polling.spaced(Duration.millis(50)),
+      }).pipe(Layer.provideMerge(SqliteStore.layerMemory));
       yield* Effect.gen(function* () {
         yield* SqliteExec;
         yield* TestClock.adjust(Duration.millis(200));
@@ -42,6 +39,41 @@ describe("Process.layer — durable SQLite store", () => {
         expect(events.some((row) => row._tag === "Completed")).toBe(true);
       }).pipe(Effect.provide(Layer.mergeAll(live, clock)), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
+  );
+
+  it.effect("AppStore SQLite via Layer.provide — Process writes survive reconnect", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = path.join(tmpdir(), `effect-pm-process-engine-sqlite-${randomUUID()}`);
+      const dir = yield* Effect.acquireRelease(
+        fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
+        (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
+      );
+      const filename = path.join(dir, "engine.db");
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const live = Process.layer(SqliteExec, {
+            effect: Effect.void,
+            polling: Polling.spaced(Duration.millis(50)),
+          }).pipe(Layer.provideMerge(SqliteStore.layer({ filename })));
+          yield* Effect.gen(function* () {
+            yield* SqliteExec;
+            yield* TestClock.adjust(Duration.millis(200));
+            const events = yield* (yield* SqliteStore.at(SqliteExec)).events();
+            expect(events.some((row) => row._tag === "Completed")).toBe(true);
+          }).pipe(Effect.provide(Layer.mergeAll(live, clock)));
+        }),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const events = yield* (yield* SqliteStore.at(SqliteExec)).events();
+          expect(events.some((row) => row._tag === "Completed")).toBe(true);
+        }).pipe(Effect.provide(SqliteStore.layer({ filename }))),
+      );
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, clock)), Effect.scoped),
   );
 
   it.effect("process store contract round-trips on SQLite across reconnects", () =>

@@ -1,8 +1,8 @@
 /**
  * @module examples/forms/process-store/process-layer-store-auto-write
  *
- * Process.layer auto-writes terminal runs to Process.store(tag). The layer includes a baked-in
- * default in-memory store; override with AppStore.layerMemory via Layer.provideMerge.
+ * Process.layer requires Store.Storage. Provide AppStore so engines capture that journal.
+ * Ephemeral-only (no app store): Process.layerMemory.
  * Run: `pnpm run example:process-layer-store-auto-write`
  */
 

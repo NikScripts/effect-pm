@@ -61,7 +61,7 @@ const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
 // Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
 class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
-const QueueLayer = QueueResource.layer(MailQueue, {
+const QueueLayer = QueueResource.layerMemory(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`processing ${job.id}`);

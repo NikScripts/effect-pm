@@ -1,6 +1,6 @@
 # Storage correctness — you can’t get it wrong
 
-**Status:** PLAN (owner steer 2026-07-14) — make storage composition fail-loud; silent empty journals are the enemy.  
+**Status:** ENG (owner unlock 2026-07-15 — do A→D) — make storage composition fail-loud; silent empty journals are the enemy.  
 **Related Eng:** Agent 3 is free after [#59](https://github.com/NikScripts/effect-pm/pull/59); this is the preferred next Log/Store lane (supersedes thin “child-runtime Logs.layer only”).  
 **Not this plan:** store-layer `(scopeKey, lineId)` memo (still deferred); Agent D handles; docs-site chrome; Postgres backends.
 

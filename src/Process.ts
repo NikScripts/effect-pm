@@ -15,10 +15,10 @@
  *
  * ## Execution analytics (toolkit `layer` path)
  *
- * {@link layer}, {@link serve}, and {@link serveRemote} include a **baked-in default in-memory store**
- * (`layerDefaultMemory`). Finished runs auto-append to the built-in execution contract. Override at
- * the app root with `Layer.provideMerge(AppStore.layerMemory)` or `AppStore.layer({ filename })` when
- * you register {@link store}.
+ * {@link layer}, {@link serve}, and {@link serveRemote} **require** {@link Store.Storage}. Provide your
+ * app {@link Store.Service} (Logs + journals) with `Layer.provide(AppStore.layer…)` so engines
+ * capture that store — including SQLite. For ephemeral engine observability only (no Logs), use
+ * {@link layerMemory} / {@link serveMemory} / {@link serveRemoteMemory} (`Store.layerDefaultMemory`).
  *
  * ## Live `events` (persist == stream)
  *
@@ -2440,41 +2440,96 @@ const buildProcessImpl = <A, E, R>(
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
 // names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
 
-/** Merge {@link Store.layerDefaultMemory} so the toolkit layer always has a store; app override via `Layer.provideMerge`. @internal */
+/**
+ * Satisfy {@link Store.Storage} with the ephemeral default journal and **export** that
+ * {@link Store.Storage} for readback. Use when you have no app {@link Store.Service}.
+ *
+ * Prefer {@link layer} / {@link serve} / {@link serveRemote} plus
+ * `Layer.provide(AppStore.layer…)` so engines capture your store (SQLite or memory with Logs).
+ *
+ * @internal
+ */
 const withDefaultMemory = <A, E, R>(
-  layer: Layer.Layer<A, E, R>,
+  layer: Layer.Layer<A, E, R | Store.Storage>,
 ): Layer.Layer<A | Store.Storage, E, R> =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  Layer.provideMerge(layer, Store.layerDefaultMemory);
 
 /**
  * The **local** layer for a process: build its driver (auto-started) and provide its service.
+ *
+ * Requires {@link Store.Storage}. Provide your app store (preferred) or use {@link layerMemory}:
+ *
+ * ```ts
+ * Process.layer(Tag, config).pipe(Layer.provide(AppStore.layer({ filename })))
+ * // ephemeral observability only:
+ * Process.layerMemory(Tag, config)
+ * ```
  *
  * @public
  */
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
+): Layer.Layer<Self | Local<Self>, never, R | Store.Storage>;
 export function layer(
   tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return withDefaultMemory(
-    Layer.unwrap(
-      Effect.map(buildProcessImpl(tag, config), (built) =>
-        Resource.layer(baseTag, Resource.grantLocal(baseTag, built)),
-      ),
+  return Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (built) =>
+      Resource.layer(baseTag, Resource.grantLocal(baseTag, built)),
     ),
   );
 }
 
 /**
+ * {@link layer} with {@link Store.layerDefaultMemory} — ephemeral engine journal, **no** Logs platform.
+ *
+ * @public
+ */
+export function layerMemory<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
+export function layerMemory(
+  tag: ResourceTag<any, any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  return withDefaultMemory(layer(tag, config));
+}
+
+/**
  * Serve a process **and** grant its local instance from one materialization.
+ *
+ * Requires {@link Store.Storage}. Prefer `Layer.provide(AppStore.layer…)`; use {@link serveMemory}
+ * for an ephemeral default journal only.
  *
  * @public
  */
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<ProcessSpec>, never, R | Store.Storage>;
+export function serve(
+  tag: ResourceTag<any, any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  return Layer.unwrap(
+    Effect.map(
+      buildProcessImpl(tag, config),
+      (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
+    ),
+  );
+}
+
+/**
+ * {@link serve} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export function serveMemory<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<
@@ -2482,44 +2537,53 @@ export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   never,
   R
 >;
-export function serve(
+export function serveMemory(
   tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return withDefaultMemory(
-    Layer.unwrap(
-      Effect.map(
-        buildProcessImpl(tag, config),
-        (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
-      ),
-    ),
-  );
+  return withDefaultMemory(serve(tag, config));
 }
 
 /**
  * Serve a process **remotely (served-only)** — mounts its RPC handlers without granting the local
  * instance, preserving the requirement `R` for a per-resource `Layer.provide`.
  *
+ * Requires {@link Store.Storage}. Prefer `Layer.provide(AppStore.layer…)`; use {@link serveRemoteMemory}
+ * for an ephemeral default journal only.
+ *
  * @public
  */
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
   tag: ResourceTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
+): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R | Store.Storage>;
 export function serveRemote(
   tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   const baseTag: ResourceTag<any, ProcessSpec> = tag;
-  return withDefaultMemory(
-    Layer.unwrap(
-      Effect.map(
-        buildProcessImpl(tag, config),
-        (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
-      ),
+  return Layer.unwrap(
+    Effect.map(
+      buildProcessImpl(tag, config),
+      (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
     ),
   );
+}
+
+/**
+ * {@link serveRemote} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export function serveRemoteMemory<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
+export function serveRemoteMemory(
+  tag: ResourceTag<any, any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  return withDefaultMemory(serveRemote(tag, config));
 }
 
 /**

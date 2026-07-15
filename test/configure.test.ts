@@ -20,7 +20,7 @@ it("QueueResource.configure folds onto the layer config (paused override wins)",
       expect((yield* q.status.get).paused).toBe(true);
     }).pipe(
       Effect.provide(
-        QueueResource.layer(CfgQueue, {
+        QueueResource.layerMemory(CfgQueue, {
           effect: (_item) => Effect.void,
           paused: false,
         }).pipe(
@@ -38,7 +38,7 @@ it("without a configure patch the base config stands", () =>
       expect((yield* q.status.get).paused).toBe(false);
     }).pipe(
       Effect.provide(
-        QueueResource.layer(CfgQueue, {
+        QueueResource.layerMemory(CfgQueue, {
           effect: (_item) => Effect.void,
           paused: false,
         }),

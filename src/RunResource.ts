@@ -21,10 +21,11 @@
  *
  * ## Store provision
  *
- * {@link layer}, {@link serve}, and {@link Service.layer} merge {@link Store.layerDefaultMemory} — the store
- * bridge is always in context (like `Clock`), so engines emit unconditionally. Override with a real
- * {@link Store.Service} via `Layer.provideMerge(AppStore.layerMemory)` (or SQLite) on the composed app layer.
- * {@link make} requires the same bridge — provide {@link Store.layerDefaultMemory} or your store layer on the
+ * {@link layer}, {@link serve}, and {@link serveRemote} **require** {@link Store.Storage}. Prefer
+ * `Layer.provide(AppStore.layer…)` so the engine captures your store (memory + Logs, or SQLite).
+ * Use {@link layerMemory} / {@link serveMemory} / {@link serveRemoteMemory} (or
+ * {@link Store.layerDefaultMemory}) for ephemeral engine observability without an app store.
+ * {@link Service}.layer is the soft-default memory form. {@link make} still needs Storage on the
  * effect (see tests).
  *
  * ## Remote usage
@@ -529,11 +530,14 @@ const runTag = <Self>() => {
   return build;
 };
 
-/** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
+/**
+ * Soft-default {@link Store.Storage} for ephemeral-only paths (`*Memory`). Prefer
+ * {@link layer} + `Layer.provide(AppStore.layer…)`. @internal
+ */
 const withDefaultStoreBridge = <A, E, R>(
   layer: Layer.Layer<A, E, R | Store.Storage>,
 ): Layer.Layer<A | Store.Storage, E, R> =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  Layer.provideMerge(layer, Store.layerDefaultMemory);
 
 /**
  * Build the live gate behind `tag` and map it onto the toolkit service impl — shared by
@@ -622,6 +626,9 @@ export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E ex
 /**
  * Build a `Layer` from a tag and config — yields an observable toolkit service.
  *
+ * Requires {@link Store.Storage}. Prefer `Layer.provide(AppStore.layer…)`; use {@link layerMemory}
+ * for an ephemeral default journal only.
+ *
  * @public
  */
 export const layer = <
@@ -633,17 +640,35 @@ export const layer = <
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
-  withDefaultStoreBridge(
-    Layer.unwrap(
-      Effect.map(buildRunImpl(tag, config), (built) =>
-        Resource.layer(tag, Resource.grantLocal(tag, built)),
-      ),
+): Layer.Layer<Self | Local<Self>, never, R | Store.Storage> =>
+  Layer.unwrap(
+    Effect.map(buildRunImpl(tag, config), (built) =>
+      Resource.layer(tag, Resource.grantLocal(tag, built)),
     ),
   );
 
 /**
+ * {@link layer} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export const layerMemory = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
+  withDefaultStoreBridge(layer(tag, config));
+
+/**
  * Serve this run gate **remotely (served-only)** — RPC handlers without granting the local instance.
+ *
+ * Requires {@link Store.Storage}. Prefer AppStore via `Layer.provide`; use {@link serveRemoteMemory}
+ * for ephemeral default only.
  *
  * @public
  */
@@ -656,24 +681,47 @@ export function serveRemote<
 >(
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
+): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>>, never, R | Store.Storage>;
 export function serveRemote(
   tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return withDefaultStoreBridge(
-    Layer.unwrap(
-      Effect.map(
-        buildRunImpl(tag, config),
-        (built) =>
-          Resource.serveRemote(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
-      ),
-    ) as Layer.Layer<any, any, any>,
-  );
+  return Layer.unwrap(
+    Effect.map(
+      buildRunImpl(tag, config),
+      (built) =>
+        Resource.serveRemote(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
+    ),
+  ) as Layer.Layer<any, any, any>;
+}
+
+/**
+ * {@link serveRemote} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export function serveRemoteMemory<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
+export function serveRemoteMemory(
+  tag: ResourceTag<any, any, any>,
+  config: RunResourceLayerConfig<any, any, any, any>,
+): Layer.Layer<any, any, any> {
+  return withDefaultStoreBridge(serveRemote(tag as any, config as any));
 }
 
 /**
  * Serve this run gate **and** grant its local instance from one materialization.
+ *
+ * Requires {@link Store.Storage}. Prefer AppStore via `Layer.provide`; use {@link serveMemory}
+ * for ephemeral default only.
  *
  * @public
  */
@@ -687,22 +735,46 @@ export function serve<
   tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>>,
   never,
-  R
+  R | Store.Storage
 >;
 export function serve(
   tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return withDefaultStoreBridge(
-    Layer.unwrap(
-      Effect.map(
-        buildRunImpl(tag, config),
-        (built) => Resource.serve(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
-      ),
-    ) as Layer.Layer<any, any, any>,
-  );
+  return Layer.unwrap(
+    Effect.map(
+      buildRunImpl(tag, config),
+      (built) => Resource.serve(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
+    ),
+  ) as Layer.Layer<any, any, any>;
+}
+
+/**
+ * {@link serve} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export function serveMemory<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
+  never,
+  R
+>;
+export function serveMemory(
+  tag: ResourceTag<any, any, any>,
+  config: RunResourceLayerConfig<any, any, any, any>,
+): Layer.Layer<any, any, any> {
+  return withDefaultStoreBridge(serve(tag as any, config as any));
 }
 
 /**

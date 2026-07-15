@@ -20,7 +20,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Persistence & storage
 
-- **Storage correctness (fail-loud composition)** — make wrong Store/Logs wiring die or warn instead of silent empty / split-brain journals. Plan: [storage-correctness.md](./storage-correctness.md). Phased: stores guide + provideMerge recipe → hard guards → one bus/journal per Node runtime.
+- **Storage correctness (fail-loud composition)** — **in progress** on `cursor/storage-correctness-all-a009`. Toolkit requires `Storage`; `docs/guides/stores.md` is recipe SSOT. Plan: [storage-correctness.md](./storage-correctness.md).
 - **Postgres backends** for `HistoryStore` and `DurableQueueStore` (same interfaces; today: in-memory + SQLite).
 - **Storage-adapter integration testing** — real-DB integration suites beyond the in-memory conformance tests.
 - **Richer history vocabulary + listener/stream hooks** — for domains that need more than append-only facts, layered *beside* the store (never a process-store monolith).

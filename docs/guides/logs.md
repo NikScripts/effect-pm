@@ -108,8 +108,9 @@ const program = Effect.gen(function* () {
 
 ### Layer order
 
-Queue workers may fork at Layer build. Provide the Store (and therefore `Logs.layer`) **into** the
-resource Layer so capture is up before those workers start:
+Toolkit `layer` / `serve` **require** `Store.Storage`. Provide your `Store.Service` into the resource
+Layer so capture (and engine writes) use that store — especially before queue workers fork at
+Layer build:
 
 ``` ts
 Effect.provide(
@@ -120,8 +121,8 @@ Effect.provide(
 )
 ```
 
-Process workers typically start on `run` / supervision, so either order is usually fine — prefer the
-same `provideMerge` pattern so Node stacks stay uniform.
+Ephemeral-only (no AppStore / no Logs): `QueueResource.layerMemory` / `Process.layerMemory`.
+Recipe SSOT: [`docs/guides/stores.md`](./stores.md).
 
 ## Keys
 

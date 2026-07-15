@@ -38,7 +38,7 @@ it("base process arms and runs its effect immediately (default schedule)", () =>
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
-        Effect.provide(Process.layer(BaseProc, { effect: Ref.update(ran, (n) => n + 1) })),
+        Effect.provide(Process.layerMemory(BaseProc, { effect: Ref.update(ran, (n) => n + 1) })),
       );
     }),
   ));
@@ -54,7 +54,7 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Process.layer(BaseProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Process.layerMemory(BaseProc, { effect: Effect.void }))),
   ));
 
 it("inline schedule verb group round-trips through set/add/clear and the entries ref", () =>
@@ -76,7 +76,7 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
 
       yield* proc.schedule.clear;
       expect(yield* proc.schedule.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Process.layer(SchedProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Process.layerMemory(SchedProc, { effect: Effect.void }))),
   ));
 
 it("result captures the latest success (absent before the first run)", () =>
@@ -95,7 +95,7 @@ it("result captures the latest success (absent before the first run)", () =>
       }
     }).pipe(
       Effect.provide(
-        Process.layer(Priced, {
+        Process.layerMemory(Priced, {
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
         }),
       ),

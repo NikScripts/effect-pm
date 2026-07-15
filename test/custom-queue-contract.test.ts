@@ -52,7 +52,7 @@ it.live("customQueueResource.layer drives add(item, level)", () =>
 
     yield* program.pipe(
       Effect.provide(
-        CustomQueueResource.layer(Jobs, {
+        CustomQueueResource.layerMemory(Jobs, {
           levelCount: 3,
           namedLevels: { fast: 2 },
           effect: () => Effect.void,

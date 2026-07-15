@@ -12,12 +12,13 @@
  *
  * ## Layers
  *
- * - {@link Service.layerMemory} / {@link store.layerMemory} — `EventJournal.layerMemory` (process-local).
- * - {@link Service.layer} / {@link store.layer} with `{ filename }` — SQLite via `SqlEventJournal`
- *   (`effect/unstable/eventlog`) on `@effect/sql-sqlite-node`. Omit `filename` for
- *   `EventJournal.layerMemory`.
+ * - {@link Service.layerMemory} / {@link store.layerMemory} — `EventJournal.layerMemory` (process-local) + Logs.
+ * - {@link Service.layer} / {@link store.layer} with **required** `{ filename }` — SQLite via `SqlEventJournal`
+ *   (`effect/unstable/eventlog`) on `@effect/sql-sqlite-node`.
  *
- * ## Registration
+ * Toolkit engines (`Process.layer`, …) **require** {@link Storage}. Provide your {@link Service} with
+ * `Layer.provide` / `provideMerge` (see `docs/guides/stores.md`). Use `Process.layerMemory` only for
+ * ephemeral engine observability without an app store (`layerDefaultMemory` — no Logs).
  *
  * Register scopes on an aggregate with {@link register} or {@link scoped}.
  * Resolve handles with `yield* MyStore.at(Tag)` (tag-first) or `yield* tag.store` when the tag
@@ -30,20 +31,9 @@
  *
  * ## Engine authoring
  *
- * Toolkit engines (Process, Queue, RunResource, custom resources) resolve store handles through
- * {@link Storage} — a **defaulted service** always in context when {@link layerDefaultMemory} is
- * merged (or when an app {@link Service} overrides it). Declare it as a dependency; never
- * `Effect.serviceOption`.
- *
- * - {@link withDefault} — always-on observability (`record` unconditionally).
- * - {@link withStorage} — opt-in when the app registered the scope on a custom store.
- * - `yield* Storage` then `bridge.at(scopeKey, contract)` — low-level; prefer the façades.
- *
- * Bake the default into a resource layer:
- *
- * ```ts
- * myLayer.pipe(Layer.provideMerge(Store.layerDefaultMemory))
- * ```
+ * Toolkit engines declare {@link Storage} as a dependency. Soft-default only via toolkit
+ * `*Memory` layers (`Layer.provideMerge(Store.layerDefaultMemory)`). Prefer
+ * `engine.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` so capture sees your store.
  *
  * @example Shape-first contract
  * ```ts
@@ -199,7 +189,7 @@ type StoreLayers<Self> = {
   /** Includes {@link LogRelay} + capture logger (durable log tails). */
   readonly layerMemory: Layer.Layer<Self | Storage | LogRelay>;
   readonly layer: (
-    options?: StoreLayerOptions,
+    options: StoreLayerOptions,
   ) => Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope>;
 };
 
@@ -333,24 +323,6 @@ const buildStandaloneSqliteLayer = <
 };
 
 /** @internal */
-const buildStandaloneLayer = <
-  Self,
-  Id extends string,
-  C extends StoreContractValue,
->(
-  tag: Context.ServiceClass<Self, Id, StoreHandleFromContract<C>>,
-  registration: NormalizedStoreRegistration,
-  options?: { readonly filename?: string },
-): Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope> =>
-  options?.filename !== undefined
-    ? buildStandaloneSqliteLayer(tag, registration, options.filename)
-    : (buildStandaloneMemoryLayer(tag, registration) as Layer.Layer<
-        Self | Storage | LogRelay,
-        StoreSqliteConnectionError,
-        Scope.Scope
-      >);
-
-/** @internal */
 const layerFromScopeState = <
   Self,
   Id extends string,
@@ -438,15 +410,9 @@ const buildLayerForAggregate = <
 >(
   tag: Context.ServiceClass<Self, Id, StoreBundle<Regs>>,
   registrations: ReadonlyArray<NormalizedStoreRegistration>,
-  options?: StoreLayerOptions,
+  options: StoreLayerOptions,
 ): Layer.Layer<Self | Storage | LogRelay, StoreSqliteConnectionError, Scope.Scope> =>
-  options?.filename !== undefined
-    ? buildSqliteLayerForAggregate(tag, registrations, options.filename)
-    : (buildMemoryLayerForAggregate(tag, registrations) as Layer.Layer<
-        Self | Storage | LogRelay,
-        StoreSqliteConnectionError,
-        Scope.Scope
-      >);
+  buildSqliteLayerForAggregate(tag, registrations, options.filename);
 
 /** Attach `layerMemory` / `layer` to a registration-only store class. @internal */
 const attachStoreLayers = <
@@ -460,8 +426,8 @@ const attachStoreLayers = <
     const registrations = storeClass[storeRegsSym];
     const registration = registrations[0]!;
     const layerMemory = buildStandaloneMemoryLayer(storeClass, registration);
-    const layer = (options?: StoreLayerOptions) =>
-      buildStandaloneLayer(storeClass, registration, options);
+    const layer = (options: StoreLayerOptions) =>
+      buildStandaloneSqliteLayer(storeClass, registration, options.filename);
     return Object.assign(storeClass, {
       layerMemory,
       layer,
@@ -474,7 +440,7 @@ const attachStoreLayers = <
     aggregate as Context.ServiceClass<Self, Id, StoreBundle<unknown>>,
     registrations,
   );
-  const layer = (options?: StoreLayerOptions) =>
+  const layer = (options: StoreLayerOptions) =>
     buildLayerForAggregate(
       aggregate as Context.ServiceClass<Self, Id, StoreBundle<unknown>>,
       registrations,
@@ -499,10 +465,10 @@ const applyStoreDefaultLogLevel = <
   return Object.assign(storeClass, {
     [storeDefaultLogLevelSym]: level,
     layerMemory: buildMemoryLayerForAggregate(storeClass, registrations),
-    layer: (options?: StoreLayerOptions) =>
+    layer: (options: StoreLayerOptions) =>
       buildLayerForAggregate(storeClass, registrations, {
         ...options,
-        logLevel: options?.logLevel ?? level,
+        logLevel: options.logLevel ?? level,
       }),
   });
 };
@@ -1332,7 +1298,7 @@ export type TagClass<
  * - **Tag-keyed multi** — array: `[QueueResource.store(Mail), …]` → `yield* AppStore.at(Mail)`
  * - **Custom-keyed** — object: `{ mail: QueueResource.store(Mail), … }` → `yield* AppStore.at("mail")`
  *
- * `layerMemory` uses in-memory refs. `layer({ filename })` persists to SQLite; omit `filename` for memory.
+ * `layerMemory` uses in-memory refs. `layer({ filename })` persists to SQLite (`filename` required).
  *
  * @example Single store
  * ```ts
@@ -1443,8 +1409,8 @@ export const scoped = <
   const standaloneClass = defineStandaloneStore(scope, contract);
   const registration = buildStandaloneRegistration(scope, contract);
   const layerMemory = buildStandaloneMemoryLayer(standaloneClass, registration);
-  const layer = (options?: StoreLayerOptions) =>
-    buildStandaloneLayer(standaloneClass, registration, options);
+  const layer = (options: StoreLayerOptions) =>
+    buildStandaloneSqliteLayer(standaloneClass, registration, options.filename);
   return Object.assign(standaloneClass, {
     layerMemory,
     layer,

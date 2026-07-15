@@ -1279,6 +1279,22 @@ const buildQueueImpl = <
  *
  * @public
  */
+/**
+ * Satisfy {@link Store.Storage} with the ephemeral default and export it for readback.
+ * Prefer {@link layer} + `Layer.provide(AppStore.layer…)`. @internal
+ */
+const withDefaultMemory = <A, E, R>(
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> =>
+  Layer.provideMerge(layer, Store.layerDefaultMemory);
+
+/**
+ * Local queue layer — requires {@link Store.Storage}. Prefer
+ * `QueueResource.layer(…).pipe(Layer.provide(AppStore.layer…))`.
+ * Ephemeral default journal only: {@link layerMemory}.
+ *
+ * @public
+ */
 export const layer = <
   Self,
   F extends QueueItemFields = QueueItemFields,
@@ -1289,14 +1305,30 @@ export const layer = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+): Layer.Layer<Self | Local<Self>, never, R | RR | Store.Storage> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (built) =>
       Resource.layer(tag, Resource.grantLocal(tag, built)),
     ),
-    // The observability store is baked in: the in-memory default backs every queue unless the app
-    // provided its own, and it's exposed so persisted events read back via `Storage`.
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * {@link layer} with {@link Store.layerDefaultMemory} — ephemeral engine journal, no Logs platform.
+ *
+ * @public
+ */
+export const layerMemory = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  R = never,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+  withDefaultMemory(layer(tag, config));
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
@@ -1332,7 +1364,24 @@ export const serveRemote = <
     Effect.map(buildQueueImpl(tag, config), (built) =>
       Resource.serveRemote(tag, built),
     ),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * {@link serveRemote} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export const serveRemoteMemory = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  R = never,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
+) => withDefaultMemory(serveRemote(tag, config));
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
@@ -1362,13 +1411,34 @@ export const serve = <
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>>,
   never,
-  R | RR
+  R | RR | Store.Storage
 > =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * {@link serve} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export const serveMemory = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  R = never,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
+  never,
+  R | RR
+> => withDefaultMemory(serve(tag, config));
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

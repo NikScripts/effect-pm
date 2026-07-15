@@ -508,6 +508,12 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     return Resource.builtResource(tag, impl, context);
   });
 
+/** Prefer {@link layer} + AppStore; {@link layerMemory} for ephemeral. @internal */
+const withDefaultMemory = <A, E, R>(
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> =>
+  Layer.provideMerge(layer, Store.layerDefaultMemory);
+
 /** @public */
 export const layer = <
   Self,
@@ -518,12 +524,29 @@ export const layer = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+): Layer.Layer<Self | Local<Self>, never, R | RR | Store.Storage> =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (built) =>
       Resource.layer(tag, Resource.grantLocal(tag, built)),
     ),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * {@link layer} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export const layerMemory = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+  withDefaultMemory(layer(tag, config));
 
 /**
  * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
@@ -548,7 +571,23 @@ export const serveRemote = <
     Effect.map(buildCustomQueueImpl(tag, config), (built) =>
       Resource.serveRemote(tag, built as any),
     ),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * {@link serveRemote} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export const serveRemoteMemory = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+) => withDefaultMemory(serveRemote(tag, config));
 
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the
@@ -569,15 +608,35 @@ export const serve = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
   never,
-  R | RR
+  R | RR | Store.Storage
 > =>
   Layer.unwrap(
     Effect.map(buildCustomQueueImpl(tag, config), (built) =>
       Resource.serve(tag, built as any),
     ),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * {@link serve} with {@link Store.layerDefaultMemory}.
+ *
+ * @public
+ */
+export const serveMemory = <
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
+  never,
+  R | RR
+> => withDefaultMemory(serve(tag, config));
 
 /** @public */
 export const configure = <
