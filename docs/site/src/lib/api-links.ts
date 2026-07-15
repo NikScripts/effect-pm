@@ -2,19 +2,17 @@
 // Built from the generated API model. Qualified names (Namespace.export) are unique; a bare export
 // name is only linkable when it's unambiguous (belongs to exactly one symbol), so we never guess.
 
-import { namespaces } from "./api.js";
+import { linkSymbols } from "./api-data.js";
 
-const qualified = new Map<string, string>(); // "QueueResource.Tag" -> "/api/QueueResource/Tag"
+const qualified = new Map<string, string>(); // "QueueResource.Tag" -> its doc URL
 const bare = new Map<string, string>(); // "QueueNodeBoundTag" -> url, only when unambiguous
 {
   const count = new Map<string, number>();
   const firstUrl = new Map<string, string>();
-  for (const ns of namespaces()) {
-    for (const s of ns.symbols) {
-      qualified.set(s.qualifiedName, s.url);
-      count.set(s.name, (count.get(s.name) ?? 0) + 1);
-      if (!firstUrl.has(s.name)) firstUrl.set(s.name, s.url);
-    }
+  for (const s of linkSymbols()) {
+    qualified.set(s.qualifiedName, s.url);
+    count.set(s.name, (count.get(s.name) ?? 0) + 1);
+    if (!firstUrl.has(s.name)) firstUrl.set(s.name, s.url);
   }
   for (const [name, url] of firstUrl) {
     if (count.get(name) === 1) bare.set(name, url);

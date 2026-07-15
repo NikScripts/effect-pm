@@ -3,7 +3,7 @@
 // comment through the shared JSDoc renderer). loadHighlighter() must run before rendering a card.
 
 import * as React from "react";
-import { sourceUrl, type ApiSymbol as Sym } from "../lib/api.js";
+import { sourceUrl, type ApiSymbol as Sym, type ApiSymbolRow as Row } from "../lib/api-data.js";
 import { highlightSourceWithHovers, highlightToReact, renderJsdocToReact } from "../lib/highlight.js";
 
 // The `file:line` location — a link to the line on GitHub when the model carries a repo base,
@@ -46,7 +46,7 @@ const firstSentence = (s: string): string => {
   return i > 0 ? s.slice(0, i + 1) : s;
 };
 
-export const ApiSymbolRow = ({ s, href }: { s: Sym; href: string }): React.ReactElement => (
+export const ApiSymbolRow = ({ s, href }: { s: Row; href: string }): React.ReactElement => (
   <a className="api-row" href={href}>
     <code className="api-row-name">{s.qualifiedName}</code>
     <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>

@@ -15,7 +15,7 @@ import { execSync } from "node:child_process";
 import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
-import { Cause, Config, Console, Data, Effect, Exit, Schema } from "effect";
+import { Cause, Console, Data, Effect, Exit, Schema } from "effect";
 import prettier from "prettier";
 import ts from "typescript";
 
@@ -39,9 +39,22 @@ const repoBaseUrl = ((): string => {
   return `https://github.com/${m[1]}/${m[2]}/blob/${ref}`;
 })();
 const packageJsonPath = nodePath.join(repoRoot, "package.json");
-// NOT "api.json" — that filename collides with the `/api` route (Vite extension-resolves `/api` to
-// `api.json` and serves the data file instead of the page).
-const defaultOutPath = nodePath.join(repoRoot, "docs/site/api-model.json");
+// Split, per-page data lives under docs/site/api-data/ (one file per symbol + per-module summaries +
+// a tiny index), so each page loads only its own slice — never one giant model.
+const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
+
+// The documented package. `slug` is the URL segment (/api/<slug>/…); `name` is the npm name.
+const pkgSlug = "effect-pm";
+const pkgName = ((): string => {
+  try {
+    return String(JSON.parse(nodeFs.readFileSync(packageJsonPath, "utf8")).name ?? pkgSlug);
+  } catch {
+    return pkgSlug;
+  }
+})();
+// A namespace entry -> its URL slug. Mirrors src/lib/api-data.ts (kept in sync).
+const slugForEntry = (entry: string): string =>
+  entry === "(top-level)" ? "top-level" : entry.replace(/\//g, "-");
 
 // One named error per failure mode (Principles → Errors are values).
 class FileError extends Data.TaggedError("FileError")<{
@@ -73,26 +86,11 @@ const ApiSymbol = Schema.Struct({
     line: Schema.Number,
   }),
 });
-const ApiEntry = Schema.Struct({
-  entry: Schema.String,
-  symbols: Schema.Array(ApiSymbol),
-});
-const ApiModel = Schema.Struct({
-  repoBaseUrl: Schema.String, // GitHub blob base for source links (empty = no links)
-  entries: Schema.Array(ApiEntry),
-});
-// A tiny companion file (names + counts) so the /api landing page needn't load the full model.
-const ApiIndex = Schema.Struct({
-  namespaces: Schema.Array(
-    Schema.Struct({
-      entry: Schema.String,
-      count: Schema.Number,
-    }),
-  ),
-});
+interface ApiEntry {
+  readonly entry: string;
+  readonly symbols: ReadonlyArray<ApiSymbol>;
+}
 type ApiSymbol = Schema.Schema.Type<typeof ApiSymbol>;
-type ApiEntry = Schema.Schema.Type<typeof ApiEntry>;
-type ApiModel = Schema.Schema.Type<typeof ApiModel>;
 
 interface Entry {
   readonly name: string; // "Resource", "storage/sqlite", "index"
@@ -109,6 +107,17 @@ const readText = (path: string) =>
 const writeText = (path: string, text: string) =>
   Effect.try({
     try: () => nodeFs.writeFileSync(path, text),
+    catch: (cause) => new FileError({ path, cause }),
+  });
+
+// Write a JSON file, creating parent dirs as needed. Plain JSON.stringify — the model is all
+// strings/numbers/arrays (no rich Effect types), so no Schema codec is needed for the round-trip.
+const writeJson = (path: string, value: unknown) =>
+  Effect.try({
+    try: () => {
+      nodeFs.mkdirSync(nodePath.dirname(path), { recursive: true });
+      nodeFs.writeFileSync(path, `${JSON.stringify(value)}\n`);
+    },
     catch: (cause) => new FileError({ path, cause }),
   });
 
@@ -282,7 +291,7 @@ const makeExtractor = (checker: ts.TypeChecker) => {
         entry: ns ?? "(top-level)",
         name,
         qualifiedName,
-        url: `/api/${ns ?? "top-level"}/${name}`,
+        url: `/api/${pkgSlug}/${slugForEntry(ns ?? "(top-level)")}/${name}`,
         kind: kindOf(sym),
         signatures,
         typeText,
@@ -308,7 +317,6 @@ const isModuleSym = (sym: ts.Symbol): boolean =>
   (sym.getDeclarations() ?? []).some((d) => ts.isSourceFile(d));
 
 const program = Effect.gen(function* () {
-  const outPath = yield* Config.string("API_OUT").pipe(Config.withDefault(defaultOutPath));
   const wanted = process.argv.slice(2);
   const all = yield* readEntries;
   const entries = wanted.length > 0 ? all.filter((e) => wanted.includes(e.name)) : all;
@@ -389,22 +397,56 @@ const program = Effect.gen(function* () {
     .filter((e) => e.symbols.length > 0)
     .sort((a, b) => b.symbols.length - a.symbols.length);
 
-  const json = yield* Schema.encodeEffect(Schema.fromJsonString(ApiModel))({
-    repoBaseUrl,
-    entries: model,
-  }).pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
-  yield* writeText(outPath, `${json}\n`);
+  // --- write the split, per-page data ---------------------------------------------------------
+  // Each page loads only its slice: /api -> index.json; /api/<pkg>/<module> -> the module summary;
+  // /api/<pkg>/<module>/<symbol> -> that one symbol file. links.json (build-only) resolves doc links.
+  yield* Effect.try({
+    try: () => nodeFs.rmSync(dataDir, { recursive: true, force: true }),
+    catch: (cause) => new FileError({ path: dataDir, cause }),
+  });
 
-  const indexPath = nodePath.join(nodePath.dirname(outPath), "api-index.json");
-  const indexJson = yield* Schema.encodeEffect(Schema.fromJsonString(ApiIndex))({
-    namespaces: model.map((e) => ({ entry: e.entry, count: e.symbols.length })),
-  }).pipe(Effect.mapError((cause) => new FileError({ path: indexPath, cause })));
-  yield* writeText(indexPath, `${indexJson}\n`);
+  const modules: Array<{ slug: string; entry: string; count: number }> = [];
+  const paths: Array<readonly [string, string, string]> = [];
+  const links: Array<{ name: string; qualifiedName: string; url: string }> = [];
+
+  yield* Effect.forEach(model, (e) =>
+    Effect.gen(function* () {
+      const nsSlug = slugForEntry(e.entry);
+      // module summary: light rows (no signatures / source / comments) for the module page
+      const rows = e.symbols.map((s) => ({
+        name: s.name,
+        qualifiedName: s.qualifiedName,
+        kind: s.kind,
+        summary: s.summary,
+        url: s.url,
+      }));
+      yield* writeJson(nodePath.join(dataDir, pkgSlug, `${nsSlug}.json`), {
+        package: pkgSlug,
+        entry: e.entry,
+        symbols: rows,
+      });
+      // one file per symbol: the full detail
+      yield* Effect.forEach(e.symbols, (s) =>
+        writeJson(nodePath.join(dataDir, pkgSlug, nsSlug, `${s.name}.json`), s),
+      );
+      modules.push({ slug: nsSlug, entry: e.entry, count: e.symbols.length });
+      for (const s of e.symbols) {
+        paths.push([pkgSlug, nsSlug, s.name]);
+        links.push({ name: s.name, qualifiedName: s.qualifiedName, url: s.url });
+      }
+    }),
+  );
+
+  yield* writeJson(nodePath.join(dataDir, "index.json"), {
+    packages: [{ slug: pkgSlug, name: pkgName, modules }],
+  });
+  yield* writeJson(nodePath.join(dataDir, "paths.json"), { symbols: paths });
+  yield* writeJson(nodePath.join(dataDir, "links.json"), { symbols: links });
+  yield* writeJson(nodePath.join(dataDir, "meta.json"), { repoBaseUrl });
 
   const total = model.reduce((n, e) => n + e.symbols.length, 0);
-  yield* Console.log(`wrote ${outPath}`);
-  yield* Console.log(`${model.length} entries, ${total} @public symbols`);
-  yield* Effect.forEach(model, (e) => Console.log(`  ${e.entry.padEnd(20)} ${e.symbols.length}`));
+  yield* Console.log(`wrote ${dataDir}`);
+  yield* Console.log(`1 package (${pkgName}), ${model.length} modules, ${total} symbols`);
 });
 
 // Surface any failure — typed error or defect — as a value, then let the exit code decide.

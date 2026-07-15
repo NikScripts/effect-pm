@@ -1,23 +1,22 @@
-import { namespaceSummaries, slugForEntry } from "../../lib/api-index.js";
+import { packages } from "../../lib/api-data.js";
 
-// The API-reference landing page. Uses only the tiny summary (names + counts), never the full model.
+// The API landing — the list of documented packages. Loads only the tiny top index.
 export default async function ApiIndex() {
-  const nss = namespaceSummaries();
-  const total = nss.reduce((n, ns) => n + ns.count, 0);
+  const pkgs = packages();
   return (
     <>
       <title>API Reference — effect-pm</title>
       <article className="prose">
         <h1>API Reference</h1>
         <p>
-          {total} public symbols across {nss.length} namespaces, each signature resolved from the
-          TypeScript type checker. Pick a namespace:
+          {pkgs.length} package{pkgs.length === 1 ? "" : "s"}, each generated from its TypeScript
+          types. Pick a package:
         </p>
         <div className="api-index">
-          {nss.map((ns) => (
-            <a className="api-index-item" key={ns.entry} href={`/api/${slugForEntry(ns.entry)}`}>
-              <span className="api-index-name">{ns.entry}</span>
-              <span className="api-index-count">{ns.count}</span>
+          {pkgs.map((p) => (
+            <a className="api-index-item" key={p.slug} href={`/api/${p.slug}`}>
+              <span className="api-index-name">{p.name}</span>
+              <span className="api-index-count">{p.modules.reduce((n, m) => n + m.count, 0)}</span>
             </a>
           ))}
         </div>
