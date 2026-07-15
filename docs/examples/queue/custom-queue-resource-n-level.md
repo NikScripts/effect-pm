@@ -1,5 +1,5 @@
-{#custom-queue-resource-n-level title="CustomQueue — N-level lanes" status="draft" appliesTo=all}
-# CustomQueue — N-level lanes
+{#custom-queue-resource-n-level title="CustomQueue — N-Level Lanes" status="draft" appliesTo=all}
+# CustomQueue — N-Level Lanes
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.

@@ -1,5 +1,5 @@
-{#queue-resource-priority-retry title="Queue — priority, dedup, retry" status="draft" appliesTo=all}
-# Queue — priority, dedup, retry
+{#queue-resource-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
+# Queue — Priority, Dedup, Retry
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.

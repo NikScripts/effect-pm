@@ -12,10 +12,15 @@ with `#queue`, `#resource`, …
 
 ## Queue
 
-| Doc | Source | Run |
-|-----|--------|-----|
-| [Priority, dedup, retry](/docs/queue-resource-priority-retry) | `examples/forms/queue/queue-resource-priority-retry.ts` | `pnpm run example:queue-resource` |
-| [Custom N-level lanes](/docs/custom-queue-resource-n-level) | `examples/forms/queue/custom-queue-resource-n-level.ts` | `pnpm run example:custom-queue-resource` |
+### [Priority, Dedup, Retry](/docs/queue-resource-priority-retry)
+
+Source: `examples/forms/queue/queue-resource-priority-retry.ts`  
+Run: `pnpm run example:queue-resource`
+
+### [Custom N-Level Lanes](/docs/custom-queue-resource-n-level)
+
+Source: `examples/forms/queue/custom-queue-resource-n-level.ts`  
+Run: `pnpm run example:custom-queue-resource`
 
 ---
 
@@ -37,7 +42,7 @@ Coming next (`examples/forms/polling`).
 
 ---
 
-## Process store
+## Process Store
 
 Coming next (`examples/forms/process-store`).
 
@@ -49,6 +54,6 @@ Coming next (`examples/forms/store`).
 
 ---
 
-## Dynamic config
+## Dynamic Config
 
 Coming next (`examples/forms/dynamic-config`).
