@@ -148,12 +148,6 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
   readonly method: string;
 }> {}
 
-/** No transport url for a node — neither on the {@link Resource.Node} (`{ url }`) nor passed to
- *  {@link Resource.httpClient}. @public */
-export class MissingNodeUrl extends Data.TaggedError("MissingNodeUrl")<{
-  readonly node: string;
-}> {}
-
 /**
  * {@link effectFn} was called without a payload — inputless members belong on {@link effect}.
  *
@@ -2864,19 +2858,15 @@ export interface HttpServerOptions {
    * bound {@link Node} when all share one key.
    */
   readonly node?: string | { readonly key: string };
-  /**
-   * RPC transport. `"http"` (default) serves request/response + streams over HTTP POST — fine for
-   * servers, CLIs, and a handful of streams. `"websocket"` serves everything over **one multiplexed
-   * WebSocket per client**, which a **browser dashboard needs**: it opens many concurrent live streams
-   * (each resource's status + metrics + logs), and over HTTP/1.1 the browser caps at ~6 connections
-   * per origin, so beyond ~6 streams the rest are starved (no graphs, no logs, some resources blank).
-   * A WebSocket sidesteps that cap entirely. Clients must match the server: {@link client} /
-   * {@link httpClient} for `"http"`, {@link socketClient} for `"websocket"`.
-   */
-  readonly protocol?: "http" | "websocket";
 }
 
+/** A server RPC-protocol builder — {@link serverProtocolHttp} or {@link serverProtocolWebsocket}. */
+type ServerProtocol = (
+  path: HttpRouter.PathInput,
+) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>;
+
 const httpServerBase = (
+  serverProtocol: ServerProtocol,
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer> =>
   Layer.unwrap(
@@ -2939,11 +2929,10 @@ const httpServerBase = (
       const merged = [...entries.map((entry) => entry.group), nodeTag[groupSym]].reduce(
         (acc, group) => acc.merge(group),
       );
-      const rpcAppLayer = RpcServer.layerHttp({
-        group: merged,
-        path: options?.path ?? "/rpc",
-        protocol: options?.protocol ?? "http",
-      }).pipe(
+      // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
+      // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it — an
+      // http POST handler or a ws upgrade — on the same router (`HttpRouter.serve` below).
+      const rpcAppLayer = RpcServer.layer(merged).pipe(
         Layer.provide(
           nodeTag[groupSym].toLayer(
             nodeHandlers as unknown as Parameters<
@@ -2951,6 +2940,7 @@ const httpServerBase = (
             >[0],
           ),
         ),
+        Layer.provide(serverProtocol(options?.path ?? "/rpc")),
       );
       const healthRoute = HttpRouter.add(
         "GET",
@@ -3051,21 +3041,84 @@ export function httpServer(
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, never, unknown> {
-  // the serves form bundles the boilerplate: provideMerge the serve layers (kept, not pruned) + the
-  // shared registry, so the caller lists resources and provides only the platform (+ any shared dep).
-  // one serve layer or many — a single `Layer` is treated as a one-element list.
+  return serverImpl(serverProtocolHttp, servesOrOptions, maybeOptions);
+}
+
+// Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
+// server RPC protocol. The serves form bundles the boilerplate: provideMerge the serve layers (kept,
+// not pruned) + the shared registry, so the caller lists resources and provides only the platform (+
+// any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
+function serverImpl(
+  serverProtocol: ServerProtocol,
+  servesOrOptions?:
+    | Layer.Layer<any, any, any>
+    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | HttpServerOptions,
+  maybeOptions?: HttpServerOptions,
+): Layer.Layer<never, never, unknown> {
   const serves = Array.isArray(servesOrOptions)
     ? servesOrOptions
     : Layer.isLayer(servesOrOptions)
       ? [servesOrOptions]
       : undefined;
   if (serves !== undefined) {
-    return httpServerBase(maybeOptions).pipe(
+    return httpServerBase(serverProtocol, maybeOptions).pipe(
       Layer.provideMerge(mergeLayers(serves)),
       Layer.provide(servedResourcesLayer),
     ) as unknown as Layer.Layer<never, never, unknown>;
   }
-  return httpServerBase(servesOrOptions as HttpServerOptions | undefined);
+  return httpServerBase(serverProtocol, servesOrOptions as HttpServerOptions | undefined);
+}
+
+/**
+ * A **WebSocket** RPC server — the {@link httpServer} sibling for the browser. Everything a client
+ * subscribes to (each resource's `status` + `metrics` + `logs`) rides **one multiplexed WebSocket per
+ * client**, so a dashboard never trips the browser's ~6-connection-per-origin HTTP/1.1 cap that
+ * starves streams over plain HTTP. Identical to {@link httpServer} in every other way — same serve
+ * list, same options, same `/health` — it just speaks WebSocket instead of HTTP POST. Clients connect
+ * with {@link socketClient} (or `Resource.layerProtocol(Resource.protocolWebsocket())`); a fleet whose
+ * peers also serve over this should add `Resource.layerPeerProtocol(Resource.protocolWebsocket)`.
+ *
+ * ```ts
+ * const Node = Resource.wsServer([Resource.serve(Jobs, jobsImpl)]).pipe(
+ *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+ * );
+ * ```
+ *
+ * @public
+ */
+export function wsServer<Serve extends Layer.Layer<any, any, any>>(
+  serve: Serve,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serve>,
+  never,
+  Layer.Services<Serve> | HttpServer.HttpServer
+>;
+export function wsServer(
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
+export function wsServer<
+  Serves extends readonly [
+    Layer.Layer<any, any, any>,
+    ...ReadonlyArray<Layer.Layer<any, any, any>>,
+  ],
+>(
+  serves: Serves,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  never,
+  Layer.Services<Serves[number]> | HttpServer.HttpServer
+>;
+export function wsServer(
+  servesOrOptions?:
+    | Layer.Layer<any, any, any>
+    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | HttpServerOptions,
+  maybeOptions?: HttpServerOptions,
+): Layer.Layer<never, never, unknown> {
+  return serverImpl(serverProtocolWebsocket, servesOrOptions, maybeOptions);
 }
 
 /**
@@ -3376,24 +3429,17 @@ const httpClient = <Self>(
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self> => {
-  // the url lives on the node by default (decision 2 — the node carries everything to reach it);
-  // an explicit `options.url` overrides. One or the other must be present.
-  const url = options?.url ?? node.url;
-  if (url === undefined) {
-    throw new MissingNodeUrl({ node: node.key });
-  }
-  return Layer.merge(
+): Layer.Layer<Self> =>
+  // a per-node shortcut = `connect` + {@link protocolHttp}. The url lives on the node by default
+  // (decision 2 — the node carries how to reach it); `options.url` overrides; `"/rpc"` (same-origin)
+  // is the final fallback, matching {@link httpServer}'s default path.
+  Layer.merge(
     connectLayer(
       node,
-      RpcClient.layerProtocolHttp({ url }).pipe(
-        Layer.provide(options?.serialization ?? defaultSerialization),
-        Layer.provide(FetchHttpClient.layer),
-      ),
+      protocolHttp(options?.url ?? node.url ?? "/rpc", options?.serialization),
     ),
     Layer.effectDiscard(warnHttpClientInBrowser),
   );
-};
 
 // Normalize a `socketClient` url to `ws://` / `wss://`, resolved **lazily** (in the enclosing
 // `Effect.sync`, at layer-build time) so the module doesn't read `location` at import — `socketClient`
@@ -3413,6 +3459,71 @@ const toWebSocketUrl = (raw: string): string => {
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
   return `${scheme}//${location.host}${raw.startsWith("/") ? raw : `/${raw}`}`;
 };
+
+/**
+ * The **standard way to set the RPC client transport**: hand it any `RpcClient.Protocol` layer and
+ * it becomes the ambient transport that every nodeless {@link Resource.client} — and each node's
+ * {@link peers} fold — reads. This is the primitive; {@link protocolHttp} / {@link protocolWebsocket}
+ * build the two common protocols, and {@link socketClient} / {@link httpClient} are per-node
+ * shortcuts layered on top. Provide it once and the whole app agrees on a wire:
+ *
+ * ```ts
+ * Effect.provide(app, Resource.layerProtocol(Resource.protocolWebsocket())); // one knob
+ * Effect.provide(app, Resource.layerProtocol(Resource.protocolHttp("http://edge/rpc")));
+ * ```
+ *
+ * @public
+ */
+export const layerProtocol = (
+  protocol: Layer.Layer<RpcClient.Protocol>,
+): Layer.Layer<RpcClient.Protocol> => protocol;
+
+/**
+ * Build an **http** client `Protocol` (Fetch + ndjson serialization) for one endpoint `url` (default
+ * `"/rpc"`, resolved same-origin in a browser) — the value you hand {@link layerProtocol} or
+ * {@link Resource.connect}. The server/CLI/backend transport; a browser dashboard should prefer
+ * {@link protocolWebsocket} (HTTP/1.1's ~6-connection cap starves many concurrent streams). @public
+ */
+export const protocolHttp = (
+  url = "/rpc",
+  serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
+): Layer.Layer<RpcClient.Protocol> =>
+  RpcClient.layerProtocolHttp({ url }).pipe(
+    Layer.provide(serialization),
+    Layer.provide(FetchHttpClient.layer),
+  );
+
+/**
+ * Build a **WebSocket** client `Protocol` (one multiplexed connection + ndjson) for one endpoint
+ * `url` (default `"/rpc"`). The `url` may be a same-origin **path** (`"/rpc"` — resolved against the
+ * page `location`, `http→ws` / `https→wss`), an `http(s)://` url (scheme swapped), or an absolute
+ * `ws(s)://` url; resolution is lazy, so this is safe at module scope in a file a Node server also
+ * imports. The browser transport — every stream rides one connection, past the ~6-connection cap that
+ * starves streams over {@link protocolHttp}. @public
+ */
+export const protocolWebsocket = (
+  url = "/rpc",
+  serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
+): Layer.Layer<RpcClient.Protocol> =>
+  RpcClient.layerProtocolSocket().pipe(
+    Layer.provide(serialization),
+    Layer.provide(Socket.layerWebSocket(Effect.sync(() => toWebSocketUrl(url)))),
+    Layer.provide(Socket.layerWebSocketConstructorGlobal),
+  );
+
+/** The **http** server `Protocol` (RPC over HTTP POST) mounted on the server router at `path` — what
+ *  {@link httpServer} provides internally. `RpcSerialization` is supplied by the server. */
+const serverProtocolHttp = (
+  path: HttpRouter.PathInput = "/rpc",
+): Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter> =>
+  RpcServer.layerProtocolHttp({ path });
+
+/** The **WebSocket** server `Protocol` (RPC over a ws upgrade at `path`) — what {@link wsServer}
+ *  provides internally so a browser rides one multiplexed connection per client. */
+const serverProtocolWebsocket = (
+  path: HttpRouter.PathInput = "/rpc",
+): Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter> =>
+  RpcServer.layerProtocolWebsocket({ path });
 
 /**
  * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
@@ -3438,20 +3549,13 @@ const socketClient = <Self>(
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self> => {
-  const raw = options?.url ?? node.url;
-  if (raw === undefined) {
-    throw new MissingNodeUrl({ node: node.key });
-  }
-  return connectLayer(
+): Layer.Layer<Self> =>
+  // a per-node shortcut = `connect` + {@link protocolWebsocket}. Same url resolution as
+  // {@link httpClient}: `options.url` → the node's own url → `"/rpc"` (same-origin) fallback.
+  connectLayer(
     node,
-    RpcClient.layerProtocolSocket().pipe(
-      Layer.provide(options?.serialization ?? defaultSerialization),
-      Layer.provide(Socket.layerWebSocket(Effect.sync(() => toWebSocketUrl(raw)))),
-      Layer.provide(Socket.layerWebSocketConstructorGlobal),
-    ),
+    protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
-};
 
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
@@ -3493,12 +3597,7 @@ export const clientHttp = <Self, S extends Spec>(
   },
 ): Layer.Layer<Self> =>
   clientLayer(tag).pipe(
-    Layer.provide(
-      RpcClient.layerProtocolHttp({ url: resolveHttpTarget(target) }).pipe(
-        Layer.provide(options?.serialization ?? defaultSerialization),
-        Layer.provide(FetchHttpClient.layer),
-      ),
-    ),
+    Layer.provide(protocolHttp(resolveHttpTarget(target), options?.serialization)),
   );
 
 // ── multi-node: the fleet + peer clients ──
@@ -3592,21 +3691,47 @@ const buildPeerService = <Self, S extends Spec>(
   return service as PeerServiceOf<S>;
 };
 
-/** Build a lazy client to one peer node over http (its own `url`), scoped to its transport. Fully lazy —
- *  see {@link buildPeerService} (nothing connects until a fold reads a field). */
+/** The wire a fleet's {@link peers} mesh dials on — a `(url) => Layer<RpcClient.Protocol>` builder.
+ *  A Context.Reference defaulting to {@link protocolHttp}, so {@link peersLayer} reads it with no added
+ *  requirement; {@link layerPeerProtocol} overrides it per node (e.g. to {@link protocolWebsocket}). */
+type PeerProtocolBuilder = (url: string) => Layer.Layer<RpcClient.Protocol>;
+const peerProtocolRef = Context.Reference<PeerProtocolBuilder>(
+  "@nikscripts/effect-pm/Resource/peerProtocol",
+  { defaultValue: (): PeerProtocolBuilder => protocolHttp },
+);
+
+/**
+ * Set the wire a fleet's {@link peers} mesh dials on — the `(url) => Layer<RpcClient.Protocol>`
+ * builder ({@link protocolHttp} by default, or {@link protocolWebsocket}). Provide it alongside
+ * {@link peersLayer} on any node whose peers serve a non-http transport, so cross-node folds
+ * (`fleetActive`, `activeByNode`) reach peers that speak websocket. The peer urls stay on the
+ * {@link Node}s; this only chooses *how* to dial them:
+ *
+ * ```ts
+ * Node.pipe(
+ *   Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
+ *   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
+ * );
+ * ```
+ *
+ * @public
+ */
+export const layerPeerProtocol = (
+  builder: PeerProtocolBuilder,
+): Layer.Layer<never> => Layer.succeedContext(Context.make(peerProtocolRef, builder));
+
+/** Build a lazy client to one peer node, dialing its `url` with the injected {@link peerProtocolRef}
+ *  builder (http by default). Fully lazy — see {@link buildPeerService} (nothing connects until a fold
+ *  reads a field). */
 const buildPeerClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   url: string,
 ): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    // build the http protocol into the enclosing scope, then feed its value to the client (a value
+    // build the chosen protocol into the enclosing scope, then feed its value to the client (a value
     // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
-    const context = yield* Layer.build(
-      RpcClient.layerProtocolHttp({ url }).pipe(
-        Layer.provide(defaultSerialization),
-        Layer.provide(FetchHttpClient.layer),
-      ),
-    );
+    const buildProtocol = yield* peerProtocolRef;
+    const context = yield* Layer.build(buildProtocol(url));
     const client: unknown = yield* Effect.provideService(
       RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
       RpcClient.Protocol,
