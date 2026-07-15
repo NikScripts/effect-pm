@@ -150,10 +150,17 @@ export function TwoslashHover(): null {
     // Long-press = held ≥450ms without dragging, then released (the copy runs on touchend so it's
     // inside a gesture). Press a popup section to copy that section; press a TOKEN to open its popup
     // and copy the type — the reliable mobile path, since tap-to-open-then-press-the-popup was fragile.
+    const HOLD = 400; // ms to hold before it's "armed" to copy on release
     let pressTarget: Element | null = null;
     let pressStart = 0;
+    let armTimer = 0;
     let startAt: { x: number; y: number } | null = null;
     const cancelPress = (): void => {
+      if (armTimer) {
+        clearTimeout(armTimer);
+        armTimer = 0;
+      }
+      pressTarget?.classList.remove("tw-pressing", "tw-armed");
       pressTarget = null;
       startAt = null;
     };
@@ -166,24 +173,27 @@ export function TwoslashHover(): null {
       startAt = { x: t.clientX, y: t.clientY };
       pressStart = Date.now();
       pressTarget = target;
+      target.classList.add("tw-pressing"); // finger-down feedback
+      armTimer = window.setTimeout(() => target.classList.add("tw-armed"), HOLD); // held enough → release to copy
     };
     const onTouchMove = (e: TouchEvent): void => {
       if (startAt === null) return;
       const t = e.touches[0];
-      if (Math.abs(t.clientX - startAt.x) > 10 || Math.abs(t.clientY - startAt.y) > 10) cancelPress();
+      // generous tolerance — a long press naturally drifts a few px
+      if (Math.abs(t.clientX - startAt.x) > 16 || Math.abs(t.clientY - startAt.y) > 16) cancelPress();
     };
     const onTouchEnd = (): void => {
-      if (pressTarget !== null && startAt !== null && Date.now() - pressStart >= 450) {
-        if (pressTarget.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
-          copySection(pressTarget);
-        } else {
-          // a token: open its popup (so the copy is visible), then copy the compact type
-          open(pressTarget);
-          const code = pressTarget.querySelector(".twoslash-popup-code");
-          if (code) copySection(code);
-        }
+      const armed = pressTarget !== null && startAt !== null && Date.now() - pressStart >= HOLD;
+      const target = pressTarget;
+      cancelPress(); // clears the press highlight
+      if (!armed || target === null) return;
+      if (target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
+        copySection(target);
+      } else {
+        open(target); // a token: open its popup so the copy is visible, then copy the compact type
+        const code = target.querySelector(".twoslash-popup-code");
+        if (code) copySection(code);
       }
-      cancelPress();
     };
 
     document.addEventListener("mouseover", onOver);

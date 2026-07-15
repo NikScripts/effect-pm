@@ -920,3 +920,18 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   }
 }
 
+
+/* long-press feedback: finger-down highlight, then a stronger "armed" highlight once held long
+   enough (release to copy). Applied to the token or the popup section under the press. */
+.twoslash-hover.tw-pressing,
+.twoslash-popup-code.tw-pressing,
+.twoslash-popup-docs.tw-pressing {
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  border-radius: 4px;
+  transition: background 0.1s ease;
+}
+.twoslash-hover.tw-armed,
+.twoslash-popup-code.tw-armed,
+.twoslash-popup-docs.tw-armed {
+  background: color-mix(in oklab, var(--primary) 32%, transparent);
+}
