@@ -12,7 +12,7 @@ class HealthNode extends Resource.Node<HealthNode>("health/node") {}
 class HealthQueue extends QueueResource.Tag<HealthQueue>()("health/Q", { payload: Item, node: HealthNode }) {}
 
 const Server = Resource.httpServer([
-  QueueResource.serve(HealthQueue, { effect: (_i: { n: number }) => Effect.void }),
+  QueueResource.serveMemory(HealthQueue, { effect: (_i: { n: number }) => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("httpServer mounts a /health readiness route (200 + resource roster)", () =>

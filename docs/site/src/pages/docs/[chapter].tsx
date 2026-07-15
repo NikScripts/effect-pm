@@ -23,10 +23,12 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
 }
 
 // Dynamic in dev (edits re-render, any slug resolves); static SSG per chapter in build.
+// Include top-level pages (`docs/examples.md` → slug `examples`); only `index` is excluded —
+// it has its own `/` route. (Previously `group !== ""` dropped every root-level chapter.)
 export const getConfig = async () =>
   import.meta.env.DEV
     ? ({ render: "dynamic" } as const)
     : ({
         render: "static",
-        staticPaths: chapters.filter((c) => c.group !== "").map((c) => c.slug),
+        staticPaths: chapters.filter((c) => c.slug !== "index").map((c) => c.slug),
       } as const);

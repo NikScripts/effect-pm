@@ -1,125 +1,92 @@
 {#stores title="Stores" status="draft" done="api" appliesTo=all}
 # Stores
 
-{.draft}
-**Draft** — ported from the pre-site corpus; tip-check before treating as SSOT.
+Durable storage for resources — one composition recipe so Soft unwrap captures your
+app journal when you override, and bare toolkit layers still work (in-memory baked in).
 
-Shape-first scoped persistence for append/query rows — **contracts**, **shapes** (flat or nested),
-typed **handles**, and a transform layer for turning a contract into ready-to-record **effects**.
-Backed by Effect’s `EventJournal` (memory or SQLite via `SqlEventJournal`) — not a custom row table.
+This guide is the SSOT for wiring. Persistence *shapes* (append/read vs custom store vs
+engine-owned SQL) live in [`docs/standards/storage.md`](../standards/storage.md). Log fans and
+`_logs` tails live in [`docs/guides/logs.md`](./logs.md).
 
-Agent-facing persistence rules and cutover history stay in
-[`docs/legacy/STORAGE.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/legacy/STORAGE.md)
-for now. Durable **logs** are a separate chapter: [Logs](/docs/logs).
+## The recipe (Effect-true)
 
-## Mental model
+Toolkit engines (`Process.layer` / `serve` / `serveRemote`, and the Queue / CustomQueue /
+RunResource counterparts) **soft-default** `Store.layerDefaultMemory` via
+`Store.withDefaultStorage` — **R is fulfilled** out of the box. `*Memory` variants are
+aliases of the same soft-default (ephemeral engine journal — **no** Logs platform).
 
-1. A **contract** (`Store.contract`) declares named **shapes** — each a row schema — and optional
-   **custom methods**.
-2. A shape becomes `store.<shape>.append` / `store.<shape>.read` on the resolved **handle**.
-3. Resolve a handle with `MyStore.at(scope)`, `tag.store`, or skip the handle and use
-   `Store.effects` whose every method already carries its `Storage` requirement.
+Override by providing your app store **into** the toolkit layer so Soft unwrap sees ambient
+`Storage` before the default:
 
-## Quick start
-
-``` ts
+```ts
+import { Layer } from "effect"
+import * as Process from "@nikscripts/effect-pm/Process"
 import * as Store from "@nikscripts/effect-pm/Store"
-import { Effect, Schema } from "effect"
+import * as Resource from "@nikscripts/effect-pm/Resource"
 
-const contract = Store.contract({
-  readings: Store.shape(Schema.Struct({ value: Schema.Number })),
-})
+class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  Store.register("thermometer", contract),
+  BillingNode.logs,
+  Process.store(Daily),
 ) {}
 
-const program = Effect.gen(function* () {
-  const store = yield* AppStore.at("thermometer")
-  yield* store.readings.append({ value: 72 })
-  return yield* store.readings.read({ limit: 5 })
-})
+// Soft unwrap sees AppStore.Storage — engines write the SQLite journal.
+const live = Process.layer(Daily, { effect: poll }).pipe(
+  Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
+)
 
-Effect.provide(program, AppStore.layerMemory)
+// httpServer form — Layer.provide is fine when you do not `yield* AppStore` in-process:
+Resource.httpServer([Process.serve(Daily, { effect: poll })], { protocol: "websocket" }).pipe(
+  Layer.provide(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
+)
 ```
 
-| Layer | Backing |
-|-------|---------|
-| `AppStore.layerMemory` | `EventJournal.layerMemory` (process-local) |
-| `AppStore.layer({ filename: "data.sqlite" })` | `SqliteClient` + `SqlEventJournal` |
-| `AppStore.layer()` | Same as `layerMemory` |
+| Intent | API |
+|--------|-----|
+| Ephemeral engine journal (default) | `Process.layer` / `serve` (or `*Memory` aliases) — no provide needed |
+| App journals + Logs | `…pipe(Layer.provide(Merge?)(AppStore.layer…))` into the toolkit layer |
+| SQLite | `AppStore.layer({ filename })` — `filename` is **required** |
+| In-memory AppStore (+ Logs) | `AppStore.layerMemory` |
 
-Toolkit engines (Process, Queue, …) merge `Store.layerDefaultMemory` so observability always has a
-store; override at the root with your app `Store.Service` layer.
+## Why sibling merge was a footgun
 
-## Contracts + shapes
+Older toolkit layers **always baked** `Layer.provideMerge(layerDefaultMemory)` inside the engine
+layer. Soft never saw an ambient AppStore, so SQLite AppStores stayed empty while two in-memory
+journals looked like a working “override” (shared `EventJournal`).
 
-Each key in the shapes record becomes a namespace on the handle:
+Now Soft unwrap peeks at ambient `Storage` at build time:
 
-- `store.<shape>.append(payload)` — decode with the row schema, append one row (or an array batch —
-  the payload is `row | ReadonlyArray<row>`).
-- `store.<shape>.read(payload?)` — query appended rows (`limit` / `before` / `after` / nested where).
+- No AppStore in context → bake `layerDefaultMemory` (**R fulfilled**).
+- AppStore fed via `Layer.provide` / `provideMerge` **into** the toolkit layer → engines capture that store (memory + Logs, or SQLite).
 
-A shape value may be a bare schema, `Store.shape(row)`, or a **nested record** of those — the handle
-mirrors the tree:
+**Do not** sibling-`Layer.merge` the toolkit layer with AppStore and expect override — Soft never sees `Storage`, engines stay on the default journal, and the AppStore file stays empty.
 
-``` ts
-const contract = Store.contract({
-  sensors: {
-    temperature: Schema.Struct({ celsius: Schema.Number }),
-    humidity: Schema.Struct({ percent: Schema.Number }),
-  },
-  alerts: Schema.Struct({ message: Schema.String }),
-})
-```
+**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge; unregistered engine scopes fail resolve and journals stay empty (engine writes fail-soft). Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueResource.store` / ….
 
-### Custom methods + `Store.extend`
+## One store per Node (intentional multi-node = N stores)
 
-Optional part 2 of `Store.contract` aliases shape methods or builds derived Effects. Prefer
-`Store.extend` to stack **tiers** on a base contract rather than rebuilding it — the queue’s lean
-base → engine writes → analytics reads is the model ([Queues](/docs/queues)).
+- One `Store.Service` per Node ManagedRuntime: many registrations, one journal/file, one `Logs.layer`.
+- Multi-node demos (`examples/resource-web`) use **N** stores / **N** runtimes — each node its own
+  `AppStore.layer*`.
+- Do **not** install a second `Logs.layer` or second `Store.Service` in the same runtime.
 
-## `Store.effects` + transforms
+## Logs vs `layerDefaultMemory`
 
-`Store.effects(scope, contract)` builds a pure object of effects shaped like the handle; **`Storage`
-rides on every method’s requirement**. Engines hold that object and provide `Storage` once at the
-boundary.
+`Store.layerDefaultMemory` (what soft-default / `*Memory` toolkit layers use) is **engine observability only**.
+It does **not** install `LogRelay` / durable `_logs` tails. Durable logs need
+`Store.Service.layer*` (bakes `Logs.layer`) or an explicit `Logs.layer`.
 
-`Store.mapEffects` walks every method and pipes each returned Effect through a transform.
-`Store.catchWriteErrors` is the common one-liner: catch `StoreWriteError`, log a warning, succeed as
-`void` — encode/wiring defects are **not** swallowed.
+Node journal + resource `_logs` copies of the same live line are intentional — see the logs guide.
 
-## Backing (EventJournal)
+## Reading back
 
-| Journal field | Store meaning |
-|---------------|---------------|
-| `primaryKey` | Registration `scopeKey` (tag `.key` or string scope) |
-| `event` | Shape / append method name |
-| `payload` | Encoded row |
-
-`Store.changes(scope)` (or a store/handle + optional selector) streams from `EventJournal.changes`.
-Retention: `Store.register(…).pipe(Store.retention(500))`.
-
-## Registration paths
-
-| Form | Example |
-|------|---------|
-| Resource / Node | `Resource.store(Node)` / `Node.logs` |
-| Process | `Process.store(Tag)` |
-| Queue | `QueueResource.store(Tag)` |
-| Custom queue | `CustomQueueResource.store(Tag)` |
-| Run gate | `RunResource.store(Tag)` |
-| String scope | `Store.register("scope", contract)` |
-
-Resolve: `yield* AppStore.at(MyTag)` · `yield* AppStore.at("scope")` · `yield* MyTag.store`.
-
-## Examples
-
-- `examples/forms/store/store-memory.ts`
-- `examples/forms/store/store-sqlite.ts`
+- Process / queue execution rows: toolkit store handles (`store.events()`, …) or `Store.resolveOrDie`.
+- App-facing queries after override: `yield* AppStore` / registration helpers.
 
 ## Related
 
-- [Logs](/docs/logs) — durable log journals on the same Store
-- [Queues](/docs/queues) — three-tier store example
-- [Storage & Persistence](/docs/storage) — standards (three approved persistence shapes)
+- [`docs/guides/logs.md`](./logs.md) — fans, `_logs`, `Resource.logs`
+- [`docs/standards/storage.md`](../standards/storage.md) — persistence shapes

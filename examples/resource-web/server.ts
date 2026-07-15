@@ -253,9 +253,10 @@ const logStorageDemo = Layer.effectDiscard(
 );
 
 // Three nodes in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
-// API on WnbaNode, the live-score poller on LiveNode, the play-by-play queue on StatsNode. Each
-// `httpServer` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
-// fight over one HttpServer).
+// API on WnbaNode, the live-score poller on LiveNode, the play-by-play queue on StatsNode. Soft
+// Storage: each node provides its own `*Store.layerMemory` **into** `httpServer` (one AppStore per
+// Node runtime — see `docs/guides/stores.md`). `Layer.provide` (not sibling merge) so Soft unwrap
+// captures AppStore; also keeps NodeHttpServers from fighting over one HttpServer.
 const wnbaNode = Resource.httpServer([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,

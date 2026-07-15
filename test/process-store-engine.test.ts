@@ -48,7 +48,7 @@ class EngineStore extends Store.Service<EngineStore>("@test/EngineStore")(
 ) {}
 
 const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  Layer.provideMerge(EngineStore.layerMemory, layer);
+  layer.pipe(Layer.provideMerge(EngineStore.layerMemory));
 
 const storeAndClock = Layer.mergeAll(EngineStore.layerMemory, TestClock.layer());
 
@@ -202,10 +202,9 @@ describe("Process.layer — Process.store auto-write", () => {
 });
 
 describe("Process.serve / serveRemote — store auto-write", () => {
-  it.effect("Process.serve records terminal runs via the baked-in store", () =>
+  it.effect("Process.serve records terminal runs via the app store", () =>
     Effect.gen(function* () {
-      const live = Layer.provideMerge(
-        EngineStore.layerMemory,
+      const live = processLayer(
         Process.serve(ServeExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),
@@ -223,8 +222,7 @@ describe("Process.serve / serveRemote — store auto-write", () => {
 
   it.effect("Process.serveRemote records terminal runs without granting the local tag", () =>
     Effect.gen(function* () {
-      const live = Layer.provideMerge(
-        EngineStore.layerMemory,
+      const live = processLayer(
         Process.serveRemote(ServeRemoteExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),

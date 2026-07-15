@@ -9,8 +9,8 @@
  */
 import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import * as Socket from "effect/unstable/socket/Socket";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as queueEntry } from "../../src/QueueResource";
@@ -53,10 +53,10 @@ class DropletStore extends Store.Service<DropletStore>("@examples/web-dashboard/
 ) {}
 
 // ── request-rate monitor ─────────────────────────────────────────────────────
-// Streams are persistent connections (one open request the server pushes down), so the
-// dashboard's steady-state NEW requests should be ~0/s and "open" = its live streams. A
-// high rate would mean a poll/reconnect loop. The loopback producer tags its requests
-// with `x-loopback` so we report the BROWSER's load separately from the demo's traffic.
+// Counts plain HTTP requests (e.g. `/health` polls). Both the browser and the loopback producer now
+// speak WebSocket (one `upgrade` per client, not `request` events), so they don't show here — this is
+// just a cheap "is something hammering plain HTTP?" check. The legacy `x-loopback` split is vestigial
+// (the producer no longer sends tagged http requests), so `producer` stays 0.
 let extReqs = 0;
 let intReqs = 0;
 let openExt = 0;
@@ -110,14 +110,18 @@ const serveLayer = Resource.httpServer([
 );
 
 // loopback client transport: ONE Droplet-node transport the producers share (the single
-// /rpc endpoint, procedures group-prefixed). Tagged `x-loopback` so the rate monitor
-// separates the demo's own traffic from the browser's.
+// /rpc endpoint, procedures group-prefixed). It MUST match the server's protocol — the server
+// serves `{ protocol: "websocket" }` above, so the producer speaks WebSocket too. (Using the http
+// protocol here fails silently — `q.add` errors with "empty HTTP response from RPC server" and the
+// producer's `Effect.ignore` swallows it, so nothing is ever enqueued and the dashboard shows empty
+// queues. That mismatch was this example's "no live data" bug.)
 const loopback = Resource.connect(
   Droplet,
-  RpcClient.layerProtocolHttp({
-    url: `http://localhost:${PORT}/rpc`,
-    transformClient: (c) => HttpClient.mapRequest(c, HttpClientRequest.setHeader("x-loopback", "1")),
-  }).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(FetchHttpClient.layer)),
+  RpcClient.layerProtocolSocket().pipe(
+    Layer.provide(RpcSerialization.layerNdjson),
+    Layer.provide(Socket.layerWebSocket(`ws://localhost:${PORT}/rpc`)),
+    Layer.provide(Socket.layerWebSocketConstructorGlobal),
+  ),
 );
 const clientLayer = Layer.mergeAll(
   Resource.client(Mail).pipe(Layer.provide(loopback)),

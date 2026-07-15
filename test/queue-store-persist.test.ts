@@ -4,10 +4,8 @@ import * as QueueResource from "../src/QueueResource";
 import { Storage } from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 
-// The observability store is baked into QueueResource.layer (layerDefaultMemory, exposed). The engine
-// persists its lifecycle events there via a plain declared dependency (no serviceOption), and they
-// read back through the exposed Storage — no separate app Store.Service, and (the point)
-// no deadlock, because a declared dependency is built in order and memoized. `it.live` = real clock.
+// Soft-default Memory: QueueResource.layer exposes Storage (layerDefaultMemory) with no AppStore.
+// Engines write via a declared Storage dependency; read back through the same bridge. `it.live` = real clock.
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
@@ -50,7 +48,7 @@ describe("QueueResource → baked store persistence", () => {
     }).pipe(
       // Only the queue layer — it bakes + exposes the store. No app Store.Service.
       Effect.provide(
-        QueueResource.layer(EmailQueue, {
+        QueueResource.layerMemory(EmailQueue, {
           effect: () => Effect.void,
           autoStart: true,
         }),
@@ -86,7 +84,7 @@ describe("QueueResource → baked store persistence", () => {
       expect(tags).toContain("RetryExhausted");
     }).pipe(
       Effect.provide(
-        QueueResource.layer(FailingQueue, {
+        QueueResource.layerMemory(FailingQueue, {
           effect: () => Effect.fail("boom" as const),
           attempts: 1,
           autoStart: true,

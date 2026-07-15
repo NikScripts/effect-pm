@@ -129,7 +129,9 @@ export interface LogReadOptions {
 /**
  * Read durable logs for a **whole node** (every resource on that process).
  *
- * Requires `Resource.store(Node)` / `Node.logs` on the ambient {@link Store.Service} Storage.
+ * Needs `Node.logs` / `Resource.store(Node)` on an app {@link Store.Service} (Soft-override the
+ * toolkit layer — see `docs/guides/stores.md`). Soft-default Memory alone is engine observability
+ * only — no Logs platform / durable `_logs` tails.
  *
  * @public
  */
@@ -155,7 +157,9 @@ const resolveResourceLogKey = (
  * Pass a scope tag (`Process.Tag` / `QueueResource.Tag` / …) or its `.key` string.
  * Resource kind is {@link Resource.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …).
+ * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …) on the
+ * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
+ * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *
  * @remarks
  * Prefer {@link Resource.logs} for new code. See `docs/LOGS.md` — Store / query parameters.

@@ -115,21 +115,26 @@ hand-rolled JSON, pipeables over nesting, typed error channels, and so on. `type
 **Browser / React code is a different ruleset.** A handful of these rules assume Effect-domain code
 and are wrong for a browser/React layer, where raw `Date.now()`, `console`, `setTimeout`, `fetch` and
 `async` event handlers *are* the correct primitives: `globalDate`, `globalConsole`, `globalTimers`,
-`globalFetch`, `globalRandom`, `asyncFunction`. The intended setup for such a layer (our own `src/web`
-dashboard, and yours) is a **separate, relaxed config** scoped to that path with those turned off — so
-UI code isn't forced through Effect wrappers it doesn't need.
+`globalFetch`, `globalRandom`, `asyncFunction`. So our own `src/web` dashboard (and each React example
+app) lives under its **own `tsconfig`** with those turned off — the `@effect/language-service` plugin is
+configured **per `tsconfig`**, not per glob. The root config excludes `src/web`, and the browser config
+is wired into `typecheck` and into the `web` bundle's declaration build, so UI code is checked under the
+relaxed rules end-to-end with no inline exemptions.
 
 {.note}
-The `@effect/language-service` plugin severities are configured **per `tsconfig`**, not per glob, so a
-browser layer gets its own ruleset by living under its own `tsconfig` (which a bundler build like
-`tsup`/Vite doesn't mind — it compiles from an entry, not the config's `include`). effect-pm's `src/web`
-currently still rides the base ruleset with a few documented `@effect-diagnostics-next-line` exemptions
-at the browser boundaries; a dedicated browser config is the planned home for those.
+A bundler build (`tsup`/Vite) doesn't mind the split — it compiles from an entry, not the config's
+`include`. The one wrinkle: tsup's `.d.ts` step runs the plugin too, so the `web` entry's declaration
+build is pointed at the browser `tsconfig` (see `tsup.config.ts`), not the strict root.
+
+The same layer also gets a **React ESLint ruleset** — `eslint-plugin-react` + `eslint-plugin-react-hooks`
+(`rules-of-hooks` / `exhaustive-deps`) with browser globals — scoped to `src/web` and `src/tui`, since
+the base ESLint config only lints Effect-domain `.ts`.
 
 **What to do in your project.** Add the plugin with its **defaults** — you don't need our strict
 severities to benefit, and you can ratchet individual rules up to `error` as you adopt them. If you
 have a **browser/React layer**, give it its own `tsconfig` that turns the browser-global and
-`asyncFunction` rules off for that path; keep the strict set on your Effect-domain code.
+`asyncFunction` rules off for that path (keep the strict set on your Effect-domain code), and give it
+the React ESLint plugins.
 
 **Prettify TS** — the editor extension `mylesmurphy.prettify-ts`, so type hovers expand into readable
 shapes instead of a collapsed `…`. Nearly every type in effect-pm reads better through it.

@@ -29,7 +29,7 @@ it("metricsHistory is empty when no HistoryStore is provided (graceful, opt-in)"
       expect(yield* queue.metrics.query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        QueueResource.layer(HQueue, {
+        QueueResource.layerMemory(HQueue, {
           effect: (_item) => Effect.void,
         }),
       ),

@@ -34,18 +34,20 @@ a concurrent `AppStore.at(tag)` and locks the scoped `EventJournal` (verified on
 dependency** is built in topological order and memoized, so the store builds first and every reader reuses
 the same instance — no race, no forked-fiber trick, no lazy per-event resolution.
 
-### 2. Provision — `layerDefaultMemory` baked into toolkit layers
+### 2. Provision — soft-default Memory (R fulfilled); override via provide
 
-Every worker resource layer **requires** {@link Storage} in its dependency graph. Toolkit entry points merge
-{@link Store.layerDefaultMemory} via `Layer.provideMerge` so gates work out of the box:
+Toolkit `layer` / `serve` / `serveRemote` soft-default {@link Store.layerDefaultMemory} via
+{@link Store.withDefaultStorage} — **R is fulfilled** out of the box (`*Memory` aliases same).
 
-- **Process:** `Process.layer` / `serve` / `serveRemote` via `withDefaultMemory`.
-- **RunResource:** `RunResource.layer` / `serve` / `Service.layer`.
-- **QueueResource:** `QueueResource.layer` / `serve` / `serveRemote`.
+Override by feeding an app `Store.Service` **into** the toolkit layer so Soft unwrap captures it:
 
-A real `AppStore` at the app root **overrides** the default by plain merge
-(`Layer.provideMerge(AppStore.layerMemory, Resource.layer(...))` — later layer wins on `Storage`). Do **not**
-hard-provide inside the resource layer in a way that blocks override.
+```ts
+Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+Resource.httpServer([…]).pipe(Layer.provide(AppStore.layerMemory))
+```
+
+Sibling `Layer.merge(engine, AppStore)` does **not** override. Live recipe SSOT:
+[`docs/guides/stores.md`](../guides/stores.md).
 
 ### 3. Tag is the SSOT for wire schemas (`payload`/`success`/`error`)
 

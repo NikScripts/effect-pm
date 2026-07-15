@@ -13,8 +13,8 @@ class QA extends QueueResource.Tag<QA>()("serveAllQ/A", { payload: Item, node: L
 class QB extends QueueResource.Tag<QB>()("serveAllQ/B", { payload: Item, node: LeagueNode }) {}
 
 const Server = Resource.httpServer([
-  QueueResource.serve(QA, { effect: (_i: { n: number }) => Effect.void }),
-  QueueResource.serve(QB, { effect: (_i: { n: number }) => Effect.void }),
+  QueueResource.serveMemory(QA, { effect: (_i: { n: number }) => Effect.void }),
+  QueueResource.serveMemory(QB, { effect: (_i: { n: number }) => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("two real queues on one node/port via httpServer", () =>

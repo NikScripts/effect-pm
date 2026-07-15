@@ -8,7 +8,9 @@
  * - The resource **`layer`** calls {@link foldConfiguredSpec} once at acquisition, then builds
  *   runtime state (for example {@link QueueResource}'s `makeQueueRuntime`).
  * - Patches are **not** hot-reloaded after the layer is built.
- * - **`Layer.provide` / `Layer.provideMerge` order** is normal Effect layering (later wins on conflicts).
+ * - **`Layer.provide` / `Layer.provideMerge` order** is ordinary Effect layering for patch/service
+ *   conflicts. Soft Storage override is **not** “later wins”: provide the app
+ *   {@link Store.Service} **into** the toolkit `layer` / `serve` (see `docs/guides/stores.md`).
  *
  * @module ResourceConfigure
  */

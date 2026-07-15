@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
 // The full remote path: a REAL toolkit Process driver served over http via
-// `httpServer([Process.serve(...)])`, driven by `Resource.client` over the wire — the same
+// `httpServer([Process.serveMemory(...)])`, driven by `Resource.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
 // (start/stop), observation (`status`), the out-of-band run (run), and the schedule
 // CRUD all cross real RPC. An empty inline schedule keeps the process disarmed (so `armed` is
@@ -27,7 +27,7 @@ const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteProc>,
 ) => {
   const server = Resource.httpServer([
-    Process.serve(RemoteProc, config),
+    Process.serveMemory(RemoteProc, config),
   ]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );

@@ -221,6 +221,9 @@ export interface NavItem {
   readonly order?: number;
 }
 
+// Book URLs are flat: `docs/guides/queues.md` and `docs/examples/queue/foo.md` become
+// `/docs/queues` and `/docs/foo` (folder is organization only). Basename must be unique
+// site-wide — see the collision guard in `content.ts`.
 const hrefFor = (slug: string, group: string): string =>
   group === "" && slug === "index" ? "/" : `/docs/${slug}`;
 

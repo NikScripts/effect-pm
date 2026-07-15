@@ -5,6 +5,9 @@
  * local queue (worker + producer) feeds the shared `PageXL` from its live `status`
  * and `metrics` streams; the log tail comes from {@link Resource.logs}.
  *
+ * Soft Storage: `QueueResource.layerMemory(…).pipe(Layer.provide(TuiStore.layerMemory))`
+ * — provide AppStore into the toolkit layer (see `docs/guides/stores.md`).
+ *
  * `Atom.runtime(layer)` is the seam: this is `QueueResource.layer` (local) today;
  * swapping in `Resource.client(tag)` (remote) changes nothing else.
  *
@@ -61,7 +64,7 @@ const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
 // Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
 class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
-const QueueLayer = QueueResource.layer(MailQueue, {
+const QueueLayer = QueueResource.layerMemory(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`processing ${job.id}`);

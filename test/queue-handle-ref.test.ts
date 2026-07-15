@@ -28,7 +28,7 @@ it("Resource.layer handle: status.changes emits live counts on enqueue", () =>
       expect(q.metrics.stream).toBeDefined();
     }).pipe(
       Effect.provide(
-        QueueResource.layer(LiveQueue, {
+        QueueResource.layerMemory(LiveQueue, {
           effect: (_item) => Effect.void,
           paused: true,
           concurrency: 1,

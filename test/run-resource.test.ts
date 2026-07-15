@@ -87,7 +87,7 @@ describe("RunResource.Service", () => {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
       const SlowGate = RunResource.Tag<{ readonly _tag: "SlowGate" }>()("@test/SlowGate", { payload: Schema.String, success: Schema.String });
-      const gateLayer = RunResource.layer(SlowGate, {
+      const gateLayer = RunResource.layerMemory(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
             const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -151,7 +151,7 @@ describe("RunResource.Tag + layer", () => {
     Schema.Number,
   );
 
-  const testLayer = RunResource.layer(TestGate, {
+  const testLayer = RunResource.layerMemory(TestGate, {
     effect: (n: number) => Effect.succeed(n + 100),
     concurrency: 1,
   });
@@ -191,7 +191,7 @@ describe("RunResource.Tag + layer", () => {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
       const live = Layer.mergeAll(
-        RunResource.layer(TestGate, {
+        RunResource.layerMemory(TestGate, {
           effect: (n: number) =>
             Effect.gen(function* () {
               const nActive = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -275,7 +275,7 @@ describe("RunResource.make — default store bridge", () => {
 describe("RunResource.layer — baked default store bridge", () => {
   const BakedGate = RunResource.Tag<{ readonly _tag: "BakedGate" }>()("@test/BakedGate", { payload: Schema.Number, success: Schema.Number });
 
-  const bakedLayer = RunResource.layer(BakedGate, {
+  const bakedLayer = RunResource.layerMemory(BakedGate, {
     effect: (n: number) => Effect.succeed(n),
     concurrency: 1,
   });
@@ -446,7 +446,7 @@ describe("RunResource — unit gates and interrupts", () => {
     });
     return {
       tag: HoldGate,
-      layer: RunResource.layer(HoldGate, {
+      layer: RunResource.layerMemory(HoldGate, {
         effect: () => Deferred.await(hold),
         concurrency: 1,
       }),
@@ -501,7 +501,7 @@ describe("RunResource.layer — store failure isolation", () => {
     changes: () => Effect.die(new Error("unused")),
   } as unknown as StorageApi);
 
-  const live = RunResource.layer(FailingBridgeGate, {
+  const live = RunResource.layerMemory(FailingBridgeGate, {
     effect: (n: number) => Effect.succeed(n + 1),
     concurrency: 1,
   }).pipe(Layer.provideMerge(failingBridgeLayer));

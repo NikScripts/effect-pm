@@ -15,10 +15,15 @@
  *
  * ## Execution analytics (toolkit `layer` path)
  *
- * {@link layer}, {@link serve}, and {@link serveRemote} include a **baked-in default in-memory store**
- * (`layerDefaultMemory`). Finished runs auto-append to the built-in execution contract. Override at
- * the app root with `Layer.provideMerge(AppStore.layerMemory)` or `AppStore.layer({ filename })` when
- * you register {@link store}.
+ * {@link layer}, {@link serve}, and {@link serveRemote} soft-default {@link Store.layerDefaultMemory}
+ * via {@link Store.withDefaultStorage} — **R is fulfilled** out of the box. Override by providing
+ * your {@link Store.Service} into the toolkit layer so Soft unwrap captures that bridge (memory +
+ * Logs, or SQLite):
+ *
+ * ```ts
+ * Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * Resource.httpServer([Process.serve(Tag, config)]).pipe(Layer.provide(AppStore.layerMemory))
+ * ```
  *
  * ## Live `events` (persist == stream)
  *
@@ -464,11 +469,18 @@ const provideWithLayer = <A, E, RIn, ROut>(
   step: Effect.Effect<A, E, RIn>,
   layer: Layer.Layer<ROut, E, never>,
 ): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
-  // `Effect.provide` with the layer directly builds it in its own scope and provides `ROut`,
-  // forwarding the residual `Exclude<RIn, ROut>` to the caller — the same result as the manual
-  // `Layer.build` + `Effect.scoped` form, but without the generic `Effect.gen` boundary that made
-  // effect-LSP false-positive on the forwarded requirement (`missingEffectContext`). tsc stays clean.
-  Effect.provide(step, layer);
+  // Build the layer in a local scope and provide its Context. Deliberately NOT `Effect.provide(step,
+  // layer)`: `strictEffectProvide` (enforced in tsconfig.src.strict-effect-provide.json) reserves the
+  // layer form for entry points. The residual `Exclude<RIn, ROut>` is forwarded to the caller — the
+  // editor's `missingEffectContext` can't tell that forwarding from a leak on a generic helper and
+  // shows a squiggle here, but it does not affect the typecheck exit code (only the two rules'
+  // structural forms do, and this satisfies both without a suppression).
+  Effect.scoped(
+    Effect.gen(function* () {
+      const context = yield* Layer.build(layer);
+      return yield* Effect.provide(step, context);
+    }),
+  );
 
 function createProcess<E, RUser>(
   state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,
@@ -2379,14 +2391,24 @@ const buildProcessImpl = <A, E, R>(
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
 // names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
 
-/** Merge {@link Store.layerDefaultMemory} so the toolkit layer always has a store; app override via `Layer.provideMerge`. @internal */
+/**
+ * Soft-default {@link Store.Storage} ({@link Store.withDefaultStorage}) — R fulfilled; override by
+ * providing an app store into this layer. @internal
+ */
 const withDefaultMemory = <A, E, R>(
-  layer: Layer.Layer<A, E, R>,
-): Layer.Layer<A | Store.Storage, E, R> =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
 
 /**
  * The **local** layer for a process: build its driver (auto-started) and provide its service.
+ *
+ * Soft-defaults an in-memory {@link Store.Storage} (R fulfilled). Override with your app store:
+ *
+ * ```ts
+ * Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * ```
+ *
+ * {@link layerMemory} is an alias for the same soft-default.
  *
  * @public
  */
@@ -2409,7 +2431,25 @@ export function layer(
 }
 
 /**
+ * Alias of {@link layer} — soft-default in-memory Storage (override the same way).
+ *
+ * @public
+ */
+export function layerMemory<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
+export function layerMemory(
+  tag: ResourceTag<any, any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  return layer(tag, config);
+}
+
+/**
  * Serve a process **and** grant its local instance from one materialization.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
  * @public
  */
@@ -2437,8 +2477,30 @@ export function serve(
 }
 
 /**
+ * Alias of {@link serve}.
+ *
+ * @public
+ */
+export function serveMemory<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<ProcessSpec> | Store.Storage,
+  never,
+  R
+>;
+export function serveMemory(
+  tag: ResourceTag<any, any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  return serve(tag, config);
+}
+
+/**
  * Serve a process **remotely (served-only)** — mounts its RPC handlers without granting the local
  * instance, preserving the requirement `R` for a per-resource `Layer.provide`.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
  * @public
  */
@@ -2459,6 +2521,22 @@ export function serveRemote(
       ),
     ),
   );
+}
+
+/**
+ * Alias of {@link serveRemote}.
+ *
+ * @public
+ */
+export function serveRemoteMemory<Self, S extends Spec, A = void, E = never, R = never>(
+  tag: ResourceTag<Self, S>,
+  config: ProcessLayerConfig<A, E, R>,
+): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
+export function serveRemoteMemory(
+  tag: ResourceTag<any, any, any>,
+  config: ProcessLayerConfig<any, any, any>,
+): Layer.Layer<any, any, any> {
+  return serveRemote(tag, config);
 }
 
 /**
