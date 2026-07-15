@@ -3,8 +3,22 @@
 // comment through the shared JSDoc renderer). loadHighlighter() must run before rendering a card.
 
 import * as React from "react";
-import type { ApiSymbol as Sym } from "../lib/api.js";
+import { sourceUrl, type ApiSymbol as Sym } from "../lib/api.js";
 import { highlightSourceWithHovers, highlightToReact, renderJsdocToReact } from "../lib/highlight.js";
+
+// The `file:line` location — a link to the line on GitHub when the model carries a repo base,
+// otherwise plain text.
+const SrcRef = ({ file, line }: { file: string; line: number }): React.ReactElement => {
+  const url = sourceUrl(file, line);
+  const label = `${file}:${line}`;
+  return url !== undefined ? (
+    <a className="api-src" href={url} target="_blank" rel="noreferrer">
+      {label}
+    </a>
+  ) : (
+    <span className="api-src">{label}</span>
+  );
+};
 
 // Raw `/** … */` → clean markdown: drop the comment fences and the per-line ` * ` gutter.
 const cleanComment = (raw: string): string =>
@@ -59,9 +73,7 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
         <div className="api-sym-head">
           <code className="api-sym-name">{s.qualifiedName}</code>
           <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
-          <span className="api-src">
-            {s.source.file}:{s.source.line}
-          </span>
+          <SrcRef file={s.source.file} line={s.source.line} />
         </div>
         {sigs.length > 0 ? (
           <div className="api-sig">{highlightToReact(sigs.join("\n"), "ts")}</div>
@@ -80,7 +92,7 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
       {s.sourceText ? (
         <section className="api-source">
           <div className="api-source-head">
-            Source <span className="api-src">{s.source.file}:{s.source.line}</span>
+            Source <SrcRef file={s.source.file} line={s.source.line} />
             <span className="api-source-lines">{s.sourceText.split("\n").length} lines</span>
           </div>
           {/* line numbers start at the export's real file line, so `ln` counts from source.line - 1 */}

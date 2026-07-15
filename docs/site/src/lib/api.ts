@@ -43,11 +43,17 @@ export interface ApiNamespace {
   readonly symbols: ReadonlyArray<ApiSymbol>;
 }
 
-const model: { readonly entries: ReadonlyArray<ApiNamespace> } = JSON.parse(
-  Object.values(rawModel)[0] ?? '{"entries":[]}',
-);
+const model: { readonly repoBaseUrl?: string; readonly entries: ReadonlyArray<ApiNamespace> } =
+  JSON.parse(Object.values(rawModel)[0] ?? '{"entries":[]}');
 
 export const namespaces = (): ReadonlyArray<ApiNamespace> => model.entries;
+
+// GitHub blob base (…/blob/REF) for "view source" links; "" when the model has no remote.
+export const repoBaseUrl = (): string => model.repoBaseUrl ?? "";
+
+/** GitHub URL for a symbol's source line, or undefined when no repo base is known. */
+export const sourceUrl = (file: string, line: number): string | undefined =>
+  model.repoBaseUrl ? `${model.repoBaseUrl}/${file}#L${line}` : undefined;
 
 export const namespaceBySlug = (slug: string): ApiNamespace | undefined =>
   model.entries.find((e) => slugForEntry(e.entry) === slug);

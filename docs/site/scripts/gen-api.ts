@@ -11,6 +11,7 @@
 //
 //   tsx scripts/gen-api.ts [entryName ...]     (no args = all core entries)
 
+import { execSync } from "node:child_process";
 import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +20,24 @@ import prettier from "prettier";
 import ts from "typescript";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+
+// The GitHub blob base for "view source" links — `https://github.com/OWNER/REPO/blob/REF`. OWNER/REPO
+// come from the origin remote; REF is SOURCE_REF (for CI) or the current branch, else `main`. Empty
+// string if the remote isn't GitHub, and the site then renders the path as plain text.
+const gitOut = (args: string): string => {
+  try {
+    return execSync(`git ${args}`, { cwd: repoRoot, encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+};
+const repoBaseUrl = ((): string => {
+  const remote = gitOut("remote get-url origin");
+  const m = remote.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/);
+  if (m === null) return "";
+  const ref = process.env.SOURCE_REF || gitOut("rev-parse --abbrev-ref HEAD") || "main";
+  return `https://github.com/${m[1]}/${m[2]}/blob/${ref}`;
+})();
 const packageJsonPath = nodePath.join(repoRoot, "package.json");
 // NOT "api.json" — that filename collides with the `/api` route (Vite extension-resolves `/api` to
 // `api.json` and serves the data file instead of the page).
@@ -59,6 +78,7 @@ const ApiEntry = Schema.Struct({
   symbols: Schema.Array(ApiSymbol),
 });
 const ApiModel = Schema.Struct({
+  repoBaseUrl: Schema.String, // GitHub blob base for source links (empty = no links)
   entries: Schema.Array(ApiEntry),
 });
 // A tiny companion file (names + counts) so the /api landing page needn't load the full model.
@@ -370,6 +390,7 @@ const program = Effect.gen(function* () {
     .sort((a, b) => b.symbols.length - a.symbols.length);
 
   const json = yield* Schema.encodeEffect(Schema.fromJsonString(ApiModel))({
+    repoBaseUrl,
     entries: model,
   }).pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
   yield* writeText(outPath, `${json}\n`);
