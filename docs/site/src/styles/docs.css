@@ -895,9 +895,6 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 /* the export's actual source — its own standalone container, always shown, real file line numbers */
 .api-source {
   margin-top: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
   background: var(--card);
 }
 .api-source-head {
@@ -908,7 +905,6 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   align-items: center;
   gap: 0.6rem;
   background: color-mix(in oklab, var(--fg) 4%, transparent);
-  border-bottom: 1px solid var(--border);
 }
 .api-source-head .api-src { margin-left: 0; }
 .api-source-lines { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; opacity: 0.75; }
@@ -918,8 +914,13 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   font-size: 0.78rem;
 }
 /* only the main code pre (a direct child) — NOT the <pre>s nested in twoslash hover popups, whose
-   own x-padding (e.g. the pretty-type preview) must survive */
-.api-source-code > pre { margin: 0; padding: 0.55rem 0; }
+   own x-padding (e.g. the pretty-type preview) must survive. Flat: no border/radius from base pre {}. */
+.api-source-code > pre {
+  margin: 0;
+  padding: 0.55rem 0;
+  border: none;
+  border-radius: 0;
+}
 /* number every rendered code line, starting from the export's file line */
 .api-source-code .line { counter-increment: ln; }
 .api-source-code .line::before {
