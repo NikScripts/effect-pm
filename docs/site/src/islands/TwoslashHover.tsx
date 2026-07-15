@@ -140,30 +140,32 @@ export function TwoslashHover(): null {
           ? "comments"
           : "type";
     const copySection = (section: Element): void => {
-      const text = (section as HTMLElement).innerText.trim();
+      const el = section as HTMLElement;
+      const text = (el.innerText || el.textContent || "").trim();
       if (text && copyText(text)) {
         toast(`Copied ${labelFor(section)}`);
       }
     };
 
-    // Long-press = held ≥450ms on one section without dragging, then released — the copy runs on
-    // touchend so it's inside a gesture.
-    let pressSection: Element | null = null;
+    // Long-press = held ≥450ms without dragging, then released (the copy runs on touchend so it's
+    // inside a gesture). Press a popup section to copy that section; press a TOKEN to open its popup
+    // and copy the type — the reliable mobile path, since tap-to-open-then-press-the-popup was fragile.
+    let pressTarget: Element | null = null;
     let pressStart = 0;
     let startAt: { x: number; y: number } | null = null;
     const cancelPress = (): void => {
-      pressSection = null;
+      pressTarget = null;
       startAt = null;
     };
     const onTouchStart = (e: TouchEvent): void => {
-      const section = (e.target as Element | null)?.closest?.(
-        ".twoslash-popup-code, .twoslash-popup-docs",
+      const target = (e.target as Element | null)?.closest?.(
+        ".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover",
       );
-      if (section === null || section === undefined || e.touches.length !== 1) return;
+      if (target === null || target === undefined || e.touches.length !== 1) return;
       const t = e.touches[0];
       startAt = { x: t.clientX, y: t.clientY };
       pressStart = Date.now();
-      pressSection = section;
+      pressTarget = target;
     };
     const onTouchMove = (e: TouchEvent): void => {
       if (startAt === null) return;
@@ -171,8 +173,15 @@ export function TwoslashHover(): null {
       if (Math.abs(t.clientX - startAt.x) > 10 || Math.abs(t.clientY - startAt.y) > 10) cancelPress();
     };
     const onTouchEnd = (): void => {
-      if (pressSection !== null && startAt !== null && Date.now() - pressStart >= 450) {
-        copySection(pressSection);
+      if (pressTarget !== null && startAt !== null && Date.now() - pressStart >= 450) {
+        if (pressTarget.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
+          copySection(pressTarget);
+        } else {
+          // a token: open its popup (so the copy is visible), then copy the compact type
+          open(pressTarget);
+          const code = pressTarget.querySelector(".twoslash-popup-code");
+          if (code) copySection(code);
+        }
       }
       cancelPress();
     };

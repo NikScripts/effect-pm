@@ -912,6 +912,7 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 /* On touch devices, suppress the native long-press callout/selection over the popup so our
    long-press-to-copy owns the gesture. Desktop keeps text selection. */
 @media (hover: none) {
+  .twoslash-hover,
   .twoslash-popup-container {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
