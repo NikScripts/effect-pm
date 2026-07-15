@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-14 — Storage correctness (can’t get Store wrong)
+
+- **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.
+- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
+- **Rejected / deferred this track:** store-layer lineId memo; assigning handles/site to Agent 3.
+- **Supervisor impact:** Agent 3 plan-first on storage correctness; unlock Phase A and/or B before code.
+
+---
+
 ## 2026-07-14 — `Logs.byResource` full key; kill resource-identity `*Id`
 
 - **Owner said:** Scope identity is **key** + **kind** (`Resource.kindOf`); get rid of `processId`/`queueId` costumes; exception only for Effect RPC naming (`groupId`); no legacy storage to keep; do it now.
@@ -31,6 +40,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (Phase 2):** Plan-first only — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md). Proposed home = **`docs/plans/`**; no mass moves until owner unlocks P1–P4.
 - **Rejected / deferred:** Batch Z deletes; relocating STORAGE-cited cutover files; implementing roadmap features.
 - **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`.
+
+---
+
+## 2026-07-14 — Storage correctness (can’t get Store wrong)
+
+- **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.
+- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
+- **Rejected / deferred this track:** store-layer lineId memo; assigning handles/site to Agent 3.
+- **Supervisor impact:** Agent 3 plan-first on storage correctness; unlock Phase A and/or B before code.
 
 ---
 

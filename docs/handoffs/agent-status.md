@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/docs-corpus-phase2-plan-ce05` | [docs corpus](./agent-01-docs-corpus.md) · [Phase 2](./agent-01-docs-corpus-phase2-plan.md) · [plans](../plans/README.md) · [open asks](./open-asks.md) | **Phase 2 P1–P4 landed** — `docs/plans/` live; fleet health on roadmap; auth README-only | tip of phase2-plan | docs only | Phase 3 unlock next; Batch Z deferred; `layerNoop` parked | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | `cursor/logs-byresource-full-key-a009` | [byResource full key](./agent-03-byresource-full-key.md) | **in flight** — full-key `byResource` + kill resource-identity `processId`/`queueId` | branch tip | typecheck / 470 tests | Keep RPC `groupId`; no memo / handles / site | 2026-07-14 |
+| **3** | from `integration` | [storage correctness](./agent-03-storage-correctness.md) · [plan](../plans/storage-correctness.md) | **plan-first** (await unlock) | — | — | [#59](https://github.com/NikScripts/effect-pm/pull/59) byResource landed. Next: fail-loud Store/Logs composition. Out of scope: memo, D handles, site | 2026-07-14 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -20,17 +20,18 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** Phase 2 P1–P4 on `cursor/docs-corpus-phase2-plan-ce05` — `docs/plans/` is SSOT; fleet health roadmap bullet locked; Resource-RPC auth stays README-only. Next: Phase 3 unlock. No UI / `docs/site` chrome.
-2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+2. **Agent 3:** [`storage-correctness`](../plans/storage-correctness.md) — make Store/Logs wiring fail-loud (**plan-first**; owner unlocks Phase A docs and/or B guards). [#59](https://github.com/NikScripts/effect-pm/pull/59) done.
+3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-3. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
-4. `main` merge + `pnpm run version` — still deferred
-5. ~~[#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide~~ — **merged**
+4. Storage correctness Phase A / B / A+B — unlock checklist in the plan
+5. Store-layer `(scopeKey, lineId)` memo — **deferred**
+6. `main` merge + `pnpm run version` — still deferred
 
-### Done this session (Agent 3)
-- Process live `events` — [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51) (failure surface: `Failed` + stamped `Completed`; persist == stream)
-- Logs lineage append — [#48](https://github.com/NikScripts/effect-pm/pull/48)
-- Closed superseded plan/brief PRs [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46)
+### Done prior (Agent 3)
+- [#59](https://github.com/NikScripts/effect-pm/pull/59) `byResource` full key + kill resource-identity `processId`/`queueId`
+- [#57](https://github.com/NikScripts/effect-pm/pull/57) private `_logs`
+- Process.events [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#51](https://github.com/NikScripts/effect-pm/pull/51) · lineage [#48](https://github.com/NikScripts/effect-pm/pull/48) · ready-perfection [#52](https://github.com/NikScripts/effect-pm/pull/52)
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.
@@ -41,7 +42,7 @@
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
 
-**Agent 3 ready-perfection pass:** remotes cleaned; [#52](https://github.com/NikScripts/effect-pm/pull/52) close-out + [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide **merged** to `integration`. Agent 3 idle pending new owner assignment.
+**Agent 3:** reassigned to [storage correctness](../plans/storage-correctness.md) (plan-first).
 
 ---
 
