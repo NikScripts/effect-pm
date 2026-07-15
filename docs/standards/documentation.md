@@ -1,4 +1,4 @@
-{#documentation title="Documentation" order=50 status="draft" appliesTo=src}
+{#documentation title="Documentation" order=50 appliesTo=src}
 # Documentation
 
 Three kinds of documentation, three different jobs — and each has a shape worth holding to:
@@ -184,10 +184,13 @@ parsed straight from the blocks, so a page is both prose and a machine contract.
 - **Fenced code names its language** — the opening fence is three backticks, a space, then the
   language (`ts`, `bash`, …).
 - **`{.note}`** marks a callout, like this one.
-- **Draft status (content-side).** Almost every live page opens with `status="draft"` until tip-stable.
-  Optional `done="…"` is a space-joined checklist of what has been tip-checked (`api`, `previews`,
-  `types`, `verified`). When a page is **ported from `docs/legacy/**`**, keep `status="draft"` and put
-  a `{.draft}` callout immediately under the H1 until a tip-check clears it:
+- **Draft status (content-side).** Live book pages that are **not** Standards and **not** the
+  Introduction open with `status="draft"` until tip-stable. The **Glossary page** is draft, and
+  **every glossary term** is marked with a `{.draft}` callout above its heading. Standards and the
+  Introduction omit `status="draft"` (they are tip guidance / book home). Optional `done="…"` is a
+  space-joined checklist of what has been tip-checked (`api`, `previews`, `types`, `verified`).
+  When a page is **ported from `docs/legacy/**`**, keep `status="draft"` and put a `{.draft}` callout
+  immediately under the H1 until a tip-check clears it:
 
   ```
   {.draft}

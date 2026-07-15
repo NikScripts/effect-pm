@@ -12,9 +12,11 @@ Site chrome / badges / `content.ts` = **lettered agents**. Agent 1 only writes *
 
 | Mechanism | Meaning |
 |-----------|---------|
-| Page block `status="draft"` | Page is not yet tip-stable SSOT (default for almost every live page today) |
-| Optional `done="…"` | Space-joined checklist tokens already in use: `api` · `previews` · `types` · `verified` |
+| Page block `status="draft"` | Page is not tip-stable SSOT — **required** on all live pages **except** Standards + Introduction |
+| Glossary `{.draft}` on **each term** | Every glossary entry is draft-marked (page also has `status="draft"`) |
+| Optional `done="…"` | Space-joined checklist tokens: `api` · `previews` · `types` · `verified` |
 | `{.draft}` callout under H1 | **Required** on pages freshly ported from `docs/legacy/**` until a tip-check clears it |
+| Standards + Introduction | **Omit** `status="draft"` |
 
 Wording for the callout:
 
