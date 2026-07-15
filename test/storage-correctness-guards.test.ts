@@ -30,8 +30,8 @@ describe("storage correctness — soft-default + AppStore override", () => {
         const store = yield* Store.resolveOrDie(Exec.key, builtInProcessStoreContract(Exec));
         const events = yield* store.events();
         expect(events.some((row) => row._tag === "Completed")).toBe(true);
-      }).pipe(Effect.provide(Layer.mergeAll(live, clock)));
-    }).pipe(Effect.scoped),
+      }).pipe(Effect.provide(live), Effect.scoped);
+    }).pipe(Effect.provide(clock), Effect.scoped),
   );
 
   it.effect("Process.layer + Layer.provideMerge(AppStore.sqlite) persists across reconnect", () =>

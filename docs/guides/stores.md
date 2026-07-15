@@ -64,6 +64,8 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 
 **Do not** sibling-`Layer.merge` the toolkit layer with AppStore and expect override — Soft never sees `Storage`, engines stay on the default journal, and the AppStore file stays empty.
 
+**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft will capture that bridge and `resolveOrDie` dies for unregistered scopes. Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueResource.store` / ….
+
 ## One store per Node (intentional multi-node = N stores)
 
 - One `Store.Service` per Node ManagedRuntime: many registrations, one journal/file, one `Logs.layer`.
