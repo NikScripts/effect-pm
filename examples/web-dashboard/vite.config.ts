@@ -21,10 +21,12 @@ export default defineConfig({
     // the browser is a thin client; proxy each node's RPC so the client is same-origin.
     // /rpc → the Droplet (queues); /mini → the Mini (KeyRotation, served at its /rpc).
     proxy: {
-      "/rpc": { target: "http://localhost:7777", changeOrigin: true },
+      // ws: true — the dashboard talks WebSocket (Resource.socketClient); vite must upgrade+proxy it.
+      "/rpc": { target: "http://localhost:7777", changeOrigin: true, ws: true },
       "/mini": {
         target: "http://localhost:7778",
         changeOrigin: true,
+        ws: true,
         rewrite: (p) => p.replace(/^\/mini/, ""),
       },
     },
