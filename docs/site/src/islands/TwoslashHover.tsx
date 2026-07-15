@@ -104,31 +104,39 @@ export function TwoslashHover(): null {
       toastTimer = window.setTimeout(() => toastEl?.classList.remove("is-visible"), 1300);
     };
 
-    // Copy that also works over plain HTTP (Tailscale): navigator.clipboard is undefined on insecure
-    // origins, so a hidden-textarea + execCommand is the primary path. Called from touchend so it runs
-    // inside a real user gesture (both paths require that).
+    // Copy that works on iOS Safari over plain HTTP (Tailscale). navigator.clipboard is undefined on
+    // insecure origins; iOS's execCommand copy needs a real Range selection over a RENDERED node (a
+    // hidden <span>) — a textarea `.select()` is ignored. Called from touchend so it's in a gesture.
     const copyText = (text: string): boolean => {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.top = "0";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        ta.setSelectionRange(0, text.length);
-        const ok = document.execCommand("copy");
-        ta.remove();
-        if (ok) return true;
-      } catch {
-        // fall through to the async API
-      }
       if (navigator.clipboard?.writeText !== undefined) {
         void navigator.clipboard.writeText(text).catch(() => {});
         return true;
       }
-      return false;
+      try {
+        const span = document.createElement("span");
+        span.textContent = text;
+        // rendered but visually clipped (iOS won't select an opacity:0 / hidden node), and explicitly
+        // user-selectable (a `user-select: none` ancestor would otherwise block the copy).
+        span.style.cssText =
+          "position:fixed;top:0;left:0;white-space:pre;clip:rect(0,0,0,0);-webkit-user-select:text;user-select:text;";
+        document.body.appendChild(span);
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNode(span);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch {
+          ok = false;
+        }
+        sel?.removeAllRanges();
+        span.remove();
+        return ok;
+      } catch {
+        return false;
+      }
     };
 
     // Each popup section is its own copyable unit: the compact type, the expanded ("pretty") type, and
@@ -142,9 +150,9 @@ export function TwoslashHover(): null {
     const copySection = (section: Element): void => {
       const el = section as HTMLElement;
       const text = (el.innerText || el.textContent || "").trim();
-      if (text && copyText(text)) {
-        toast(`Copied ${labelFor(section)}`);
-      }
+      if (!text) return;
+      // Always toast so the gesture has feedback either way (a failure isn't silent).
+      toast(copyText(text) ? `Copied ${labelFor(section)}` : "Copy failed");
     };
 
     // Long-press = held ≥450ms without dragging, then released (the copy runs on touchend so it's
@@ -186,6 +194,13 @@ export function TwoslashHover(): null {
       outsideTap = false;
       const target = el.closest(".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover");
       if (target === null) return;
+      // On a popup section, own the gesture: cancel iOS's native long-press (text selection /
+      // magnifier / callout) so a LONG hold can't hijack the selection and break the copy at
+      // touchend. Requires the non-passive listener registered below. (Tokens keep their default so
+      // the code block still scrolls.)
+      if (e.cancelable && target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
+        e.preventDefault();
+      }
       const t = e.touches[0];
       startAt = { x: t.clientX, y: t.clientY };
       pressStart = Date.now();
@@ -232,7 +247,8 @@ export function TwoslashHover(): null {
       document.addEventListener("mouseover", onOver);
       document.addEventListener("mouseout", onOut);
     } else {
-      document.addEventListener("touchstart", onTouchStart, { passive: true });
+      // non-passive so onTouchStart can preventDefault the iOS long-press over a popup section
+      document.addEventListener("touchstart", onTouchStart, { passive: false });
       document.addEventListener("touchmove", onTouchMove, { passive: true });
       document.addEventListener("touchend", onTouchEnd);
       document.addEventListener("touchcancel", cancelPress);

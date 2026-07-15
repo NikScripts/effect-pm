@@ -921,22 +921,36 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 }
 
 
-/* long-press feedback: finger-down highlight, then a stronger "armed" highlight once held long
-   enough (release to copy). Applied to the token or the popup section under the press. */
-/* token: a background pill */
-.twoslash-hover.tw-pressing {
-  background: color-mix(in oklab, var(--primary) 14%, transparent);
-  border-radius: 4px;
-  transition: background 0.1s ease;
+/* Long-press feedback. "pressing" = finger down (a faint wash); "armed" = held long enough, RELEASE
+   NOW (a strong wash). Both wash toward --fg, which is dark in light mode and light in dark mode, so
+   the armed state reads as "darker" on a light page and "lighter" on a dark one — high contrast
+   against whatever the section's own background is. */
+:root {
+  --press-tint: color-mix(in oklab, var(--fg) 12%, transparent);
+  --armed-tint: color-mix(in oklab, var(--fg) 40%, transparent);
 }
-.twoslash-hover.tw-armed { background: color-mix(in oklab, var(--primary) 34%, transparent); }
-/* preview sections: an inset ring, visible over their own (shiki) backgrounds */
+/* token: an inline background pill */
+.twoslash-hover.tw-pressing {
+  background: var(--press-tint);
+  border-radius: 4px;
+}
+.twoslash-hover.tw-armed { background: var(--armed-tint); }
+/* preview sections: a pseudo-element wash over their own (shiki) background */
 .twoslash-popup-code.tw-pressing,
 .twoslash-popup-docs.tw-pressing {
-  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 45%, transparent);
-  transition: box-shadow 0.1s ease;
+  position: relative;
 }
-.twoslash-popup-code.tw-armed,
-.twoslash-popup-docs.tw-armed {
-  box-shadow: inset 0 0 0 2px var(--primary);
+.twoslash-popup-code.tw-pressing::after,
+.twoslash-popup-docs.tw-pressing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--press-tint);
+  transition: background 0.1s ease;
+}
+.twoslash-popup-code.tw-armed::after,
+.twoslash-popup-docs.tw-armed::after {
+  background: var(--armed-tint);
 }
