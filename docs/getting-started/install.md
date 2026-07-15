@@ -95,6 +95,42 @@ and install the package:
 -D @effect/language-service
 ```
 
+### Diagnostic rulesets
+
+The language service is more than nicer hovers — it enforces a **ruleset**. It's worth knowing there
+are several, because the right rules for Effect-domain code are not the right rules for a browser UI.
+
+**What effect-pm's own source enforces.** We run every diagnostic at `error` (a few deliberate
+exceptions: `anyUnknownInErrorContext`, `missingLayerContext`, `serviceNotAsClass` are off;
+`effectDoNotation` is a warning). So our source is held to Effect's idioms — no raw `Date` / `console` /
+`setTimeout` / `fetch` / `Math.random` / `process.env` reached for outside Effect, `Schema` over
+hand-rolled JSON, pipeables over nesting, typed error channels, and so on. `typecheck` actually runs
+**two** passes:
+
+| Config | Scope | Adds over the base |
+|--------|-------|--------------------|
+| `tsconfig.json` | `src`, `test`, `examples` | the full diagnostic set at `error` |
+| `tsconfig.src.strict-effect-provide.json` | `src/**` only | `strictEffectProvide: error` — too noisy to demand of tests/examples |
+
+**Browser / React code is a different ruleset.** A handful of these rules assume Effect-domain code
+and are wrong for a browser/React layer, where raw `Date.now()`, `console`, `setTimeout`, `fetch` and
+`async` event handlers *are* the correct primitives: `globalDate`, `globalConsole`, `globalTimers`,
+`globalFetch`, `globalRandom`, `asyncFunction`. The intended setup for such a layer (our own `src/web`
+dashboard, and yours) is a **separate, relaxed config** scoped to that path with those turned off — so
+UI code isn't forced through Effect wrappers it doesn't need.
+
+{.note}
+The `@effect/language-service` plugin severities are configured **per `tsconfig`**, not per glob, so a
+browser layer gets its own ruleset by living under its own `tsconfig` (which a bundler build like
+`tsup`/Vite doesn't mind — it compiles from an entry, not the config's `include`). effect-pm's `src/web`
+currently still rides the base ruleset with a few documented `@effect-diagnostics-next-line` exemptions
+at the browser boundaries; a dedicated browser config is the planned home for those.
+
+**What to do in your project.** Add the plugin with its **defaults** — you don't need our strict
+severities to benefit, and you can ratchet individual rules up to `error` as you adopt them. If you
+have a **browser/React layer**, give it its own `tsconfig` that turns the browser-global and
+`asyncFunction` rules off for that path; keep the strict set on your Effect-domain code.
+
 **Prettify TS** — the editor extension `mylesmurphy.prettify-ts`, so type hovers expand into readable
 shapes instead of a collapsed `…`. Nearly every type in effect-pm reads better through it.
 
