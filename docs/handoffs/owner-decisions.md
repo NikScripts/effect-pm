@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Task Agent 3: storage cutover follow-through
+
+- **Owner said:** Task Agent 3 (after Soft edge-case pass on #62).
+- **Chose:** Unlock [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md) slices **S1→S3** — inventory/TSDoc+plan ripple, example teachability, **CustomQueue Soft SQLite/sibling parity**. Queue/Run Soft guards already on #62 tip — do not redo. Plan-first first reply still required.
+- **Rejected / deferred for Agent 3:** fail-loud Soft die on Node-logs-only / unregistered engine; reopen #62 API; memo; handles; docs-site.
+- **Supervisor impact:** Agent 3 active; Manager/keeps #62 Eng.
+
+---
+
 ## 2026-07-15 — Storage soft-default: bake Memory (R fulfilled); override via provide
 
 - **Owner said:** Everything is supposed to have in-memory storage baked in; R is fulfilled but you can override and provide. Requiring Storage in R is unacceptable.

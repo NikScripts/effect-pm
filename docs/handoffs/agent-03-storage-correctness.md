@@ -1,19 +1,17 @@
 # Agent 3 — Storage correctness (can’t get Store wrong)
 
-**Status:** **SHIPPED (PR)** — [#62](https://github.com/NikScripts/effect-pm/pull/62) on `cursor/storage-correctness-all-a009` (Manager Eng).  
-**Follow-through:** [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md)  
-**Plan SSOT:** [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md)  
+**Status:** **SHIPPED (PR)** — [#62](https://github.com/NikScripts/effect-pm/pull/62) on `cursor/storage-correctness-all-a009`.  
+**Follow-through (unlocked):** [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md)  
 **Guide SSOT:** [`docs/guides/stores.md`](../guides/stores.md)
 
 ---
 
-## What landed
+## What landed on #62
 
-Toolkit `layer` / `serve` / `serveRemote` soft-default `Store.layerDefaultMemory` via
-`Store.withDefaultStorage` — **R is fulfilled**. Override by providing AppStore into the toolkit
-layer (`Layer.provide` / `provideMerge`). `*Memory` = aliases. SQLite capture + soft-default-alone
-+ sibling-merge footgun proven for Process.
+Soft-default Memory (`Store.withDefaultStorage`) — R fulfilled; AppStore override via
+`Layer.provide` / `provideMerge` into the toolkit layer. Process + Queue + RunResource Soft SQLite
++ sibling-merge + Node-logs-only guards. Dual-DemoStore forms fixed.
 
 ## Agent 3 next
 
-Do **not** reopen #62 API. Take the **follow-through** brief (inventory / examples / Queue parity).
+Take the **follow-through** brief (S1→S3). Do **not** reopen #62 API.
