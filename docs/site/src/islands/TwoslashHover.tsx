@@ -10,7 +10,6 @@
 // instant you leave the token). Mounted once in the root layout; event delegation covers every block.
 
 import * as React from "react";
-import { WebHaptics } from "web-haptics";
 
 const GAP = 8; // px of external space between the token and the popup
 const CLOSE_DELAY = 180; // ms grace to travel from token to popup before it closes
@@ -86,14 +85,9 @@ export function TwoslashHover(): null {
       if (hover && hover.contains(e.relatedTarget as Node | null)) return;
       if (hover) scheduleClose();
     };
-    // --- long-press an open popup to copy its type (mobile) ---
-    // A brief confirmation buzz. web-haptics uses navigator.vibrate on Android and the iOS 17.4+
-    // <input switch> trick on iPhone (Safari ignores navigator.vibrate).
-    const haptics = new WebHaptics();
-    const haptic = (): void => {
-      void haptics.trigger("success").catch(() => {});
-    };
-
+    // --- long-press an open popup section to copy it (mobile) ---
+    // The toast IS the feedback: iOS Safari has no working web haptics (Apple patched the switch
+    // trick) and no navigator.vibrate, so there's nothing reliable to buzz with.
     let toastEl: HTMLDivElement | null = null;
     let toastTimer = 0;
     const toast = (msg: string): void => {
@@ -148,7 +142,6 @@ export function TwoslashHover(): null {
     const copySection = (section: Element): void => {
       const text = (section as HTMLElement).innerText.trim();
       if (text && copyText(text)) {
-        haptic();
         toast(`Copied ${labelFor(section)}`);
       }
     };
@@ -199,7 +192,6 @@ export function TwoslashHover(): null {
       document.removeEventListener("touchcancel", cancelPress);
       cancelClose();
       cancelPress();
-      haptics.destroy();
       if (toastTimer) clearTimeout(toastTimer);
       toastEl?.remove();
     };

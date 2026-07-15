@@ -919,22 +919,3 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   }
 }
 
-/* diagnostic haptic-test button (API landing) */
-.haptic-test {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.25rem 0 1.2rem;
-  padding: 0.5rem 0.95rem;
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--bg);
-  background: var(--primary);
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-.haptic-test:active { opacity: 0.85; }

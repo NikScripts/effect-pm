@@ -1,4 +1,3 @@
-import { HapticTest } from "../../islands/HapticTest.js";
 import { namespaceSummaries, slugForEntry } from "../../lib/api-index.js";
 
 // The API-reference landing page. Uses only the tiny summary (names + counts), never the full model.
@@ -14,7 +13,6 @@ export default async function ApiIndex() {
           {total} public symbols across {nss.length} namespaces, each signature resolved from the
           TypeScript type checker. Pick a namespace:
         </p>
-        <HapticTest />
         <div className="api-index">
           {nss.map((ns) => (
             <a className="api-index-item" key={ns.entry} href={`/api/${slugForEntry(ns.entry)}`}>
