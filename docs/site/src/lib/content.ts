@@ -11,6 +11,8 @@
 const modules = import.meta.glob(
   [
     "../../../index.md",
+    "../../../examples.md",
+    "../../../examples/**/*.md",
     "../../../getting-started/**/*.md",
     "../../../resources/**/*.md",
     "../../../guides/**/*.md",

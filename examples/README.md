@@ -26,7 +26,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | Track | Read / run in this order |
 |-------|--------------------------|
-| **Start here** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) + the toolkit-by-example guide (`docs/legacy/guides/toolkit-by-example.md`) |
+| **Start here** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → [Examples (docs)](../docs/examples.md#queue) |
 | **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
 | **Queues** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → [`forms/queue/custom-queue-resource-n-level.ts`](./forms/queue/custom-queue-resource-n-level.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |

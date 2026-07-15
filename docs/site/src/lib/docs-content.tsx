@@ -267,6 +267,9 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   const extras: Array<NavItem> = [];
   for (const c of chapters) {
     if (listed.has(c.slug)) continue;
+    // Paired example docs live under docs/examples/** — linked from the Examples hub only.
+    // Do not dump them into sidebar "More".
+    if (c.group === "examples" || c.group.startsWith("examples/")) continue;
     const it = await itemForSlug(c.slug);
     if (it !== undefined) extras.push(it);
   }

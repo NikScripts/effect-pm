@@ -37,9 +37,9 @@ Why: runnable `examples/` is closer to tip truth; Twoslash-paired docs compound 
 
 | Batch | Scope | Status |
 |-------|-------|--------|
-| **E0** | Model + B ask (content glob + exclude example docs from “More”) | **now** |
-| **E1** | Hub page + nav slug `examples` + first paired docs: **forms/queue** (2) | next |
-| **E2** | forms/resource (9) | |
+| **E0** | Model + B ask (content glob + exclude example docs from “More”) | **done** (glob + More filter landed with E1) |
+| **E1** | Hub page + nav slug `examples` + first paired docs: **forms/queue** (2) | **in flight** |
+| **E2** | forms/resource (9) | next |
 | **E3** | forms/schedule + polling + process-store + store + dynamic-config | |
 | **E4** | scenarios / serve-per-resource / remaining root scripts | |
 | **E5** | Large apps (tui / web / dashboard) — owner call; maybe “scenario” page not 1:1 every file | |
