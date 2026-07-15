@@ -1890,8 +1890,9 @@ export const NodeDetail = (props: {
 // Widget registry — the built-in set
 // ============================================================================
 
-/** A resource's readiness as a small "badge dot": a border-only circle when ready, filled (same amber
- *  as the degraded overlay) when not. Reads its node's `NodeStatus` — the SSOT the overlay uses. */
+/** A resource's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
+ *  **amber** one when not — the UI's ready/degraded colours (`#22c55e` / `#eab308`, as the readiness
+ *  pips). Reads its node's `NodeStatus` — the SSOT the overlay uses. */
 const ReadinessDotInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
@@ -1900,11 +1901,10 @@ const ReadinessDotInner = (props: {
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
   const ready = readiness === undefined || readiness.ready; // loading/unknown → ready (empty)
-  const amber = "rgba(146,64,14,0.95)";
   return (
     <span
       className="size-3.5 shrink-0 rounded-full border"
-      style={ready ? { borderColor: amber } : { borderColor: amber, backgroundColor: amber }}
+      style={ready ? { borderColor: "#22c55e" } : { borderColor: "#eab308", backgroundColor: "#eab308" }}
       aria-label={ready ? "ready" : "degraded"}
       title={ready ? "ready" : (readiness?.detail ?? "degraded")}
     />
