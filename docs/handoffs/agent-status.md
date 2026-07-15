@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | `cursor/docs-corpus-phase3-ce05` | [Phase 3 plan](./agent-01-docs-corpus-phase3-plan.md) · [docs corpus](./agent-01-docs-corpus.md) | **Phase 3** — Draft rule + Stores on `integration`; next = toolkit-by-example | `integration` tip | docs:manifest:check | **Next:** P3-2 toolkit-by-example; then P3-3 processes; Batch Z deferred | 2026-07-15 |
+| **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **Examples book priority** — Twoslash-paired docs; hub in sidebar only | branch tip | — | **Next:** E1 hub + forms/queue pairs; B: glob + More filter; legacy background | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **merged to `integration`** ([#59](https://github.com/NikScripts/effect-pm/pull/59)) | [byResource full key](./agent-03-byresource-full-key.md) | **`Logs.byResource` full key shipped** — kill resource-identity `processId`/`queueId` | `integration` tip | typecheck / suite | Idle pending owner assignment | 2026-07-15 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** Phase 3 legacy → live book (`cursor/docs-corpus-phase3-ce05`) — Draft content convention locked; Stores ported. Next batches: toolkit-by-example, processes placeholder. No UI / `docs/site` chrome. Ignore effect β98 fallout (Agent C).
+1. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
 2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
