@@ -2,6 +2,9 @@
  * @module examples/forms/queue/custom-queue-resource-n-level
  *
  * CustomQueueResource — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
+ * `layerMemory` soft-defaults in-memory Storage (R fulfilled). For durable journals + Logs,
+ * Soft-override: `CustomQueueResource.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`
+ * — see `docs/guides/stores.md`.
  * Run: `pnpm run example:custom-queue-resource`
  */
 

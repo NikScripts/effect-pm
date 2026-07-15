@@ -5,6 +5,9 @@
  * local queue (worker + producer) feeds the shared `PageXL` from its live `status`
  * and `metrics` streams; the log tail comes from {@link Resource.logs}.
  *
+ * Soft Storage: `QueueResource.layerMemory(…).pipe(Layer.provide(TuiStore.layerMemory))`
+ * — provide AppStore into the toolkit layer (see `docs/guides/stores.md`).
+ *
  * `Atom.runtime(layer)` is the seam: this is `QueueResource.layer` (local) today;
  * swapping in `Resource.client(tag)` (remote) changes nothing else.
  *

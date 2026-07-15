@@ -1,9 +1,8 @@
 # Agent 3 — Storage cutover follow-through
 
-**Status:** **UNLOCKED** — owner tasked 2026-07-15. Plan-first first reply, then eng.  
+**Status:** **IN FLIGHT** — owner go 2026-07-15; S1–S3 on `cursor/storage-cutover-followthrough-a009` (from #62 tip).  
 **Agent:** **3**  
 **Depends on:** [#62](https://github.com/NikScripts/effect-pm/pull/62) tip (bake+override Soft). Guide SSOT [`docs/guides/stores.md`](../guides/stores.md).  
-**Branch from:** **`integration`** once #62 merges — **or** tip of `cursor/storage-correctness-all-a009` if owner says parallel.  
 **Working branch:** `cursor/storage-cutover-followthrough-a009`.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md)
@@ -79,3 +78,4 @@ Not a redesign. Not store memo. Not handles. Not docs-site. **Do not reopen #62 
 ### Session log
 
 - **2026-07-15** — Owner: “task agent 3.” Brief refreshed after #62 Soft edge-case pass (Queue/Run parity already on tip).
+- **2026-07-15** — Owner: **go**. Branched from #62 tip. S1 plan/TSDoc/later-wins Soft wording; S2 example Soft headers (resource-web, TUI, custom-queue form); S3 CustomQueue Soft SQLite + sibling-merge guards (10 Soft tests green).
