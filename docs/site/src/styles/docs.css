@@ -86,16 +86,27 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 2.75rem;          /* 44px — a proper touch target (was 33px, easy to miss) */
+  height: 2.75rem;
   padding: 0;
   color: var(--fg);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
+  /* Register taps immediately instead of waiting to see if it's a double-tap-to-zoom — the wait was
+     swallowing quick taps, so the menu "needed many tries" to open. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in oklab, var(--primary) 22%, transparent);
 }
-.icon-btn:hover { background: var(--card); border-color: var(--border); }
+/* Only on real hover devices — a bare `:hover` makes iOS need a first tap just to "hover" and a
+   second to click. */
+@media (hover: hover) {
+  .icon-btn:hover { background: var(--card); border-color: var(--border); }
+}
+/* The stroked icon has "holes" between its lines; without this a tap landing in a gap hits the SVG
+   (or nothing) instead of the button. Make the icon transparent to pointers so the button always wins. */
+.icon-btn svg { pointer-events: none; }
 
 /* mobile menu — a full-page takeover (fixed), NOT a disclosure that pushes content.
    Sits under the sticky top bar (which stays on top at z-index 50). */
