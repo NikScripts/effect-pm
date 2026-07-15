@@ -875,3 +875,35 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   .api-row { grid-template-columns: 1fr auto; }
   .api-row-sum { display: none; }
 }
+
+/* long-press-to-copy: toast confirmation for the twoslash type popups */
+.copy-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+  z-index: 70;
+  padding: 0.5rem 0.95rem;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0;
+  transform: translate(-50%, 0.8rem);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.copy-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) {
+  .copy-toast { transform: translate(-50%, 0); transition: opacity 0.18s ease; }
+}
+/* On touch devices, suppress the native long-press callout/selection over the popup so our
+   long-press-to-copy owns the gesture. Desktop keeps text selection. */
+@media (hover: none) {
+  .twoslash-popup-container {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
