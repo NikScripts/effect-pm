@@ -1703,7 +1703,7 @@ const ReadinessDotInner = (props: {
   return (
     <span
       title={title}
-      className="h-2.5 w-2.5 shrink-0 rounded-full"
+      className="-mr-1 h-2 w-2 shrink-0 rounded-full"
       style={{ backgroundColor: color }}
     />
   );
