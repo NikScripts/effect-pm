@@ -258,8 +258,13 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   const listed = new Set<string>();
   const groups: Array<NavGroup> = [];
   for (const g of nav) {
+    // A direct-link lone entry (e.g. API Reference → /api): one synthetic item, no slug resolution.
+    if (g.href !== undefined) {
+      groups.push({ label: g.label, items: [{ slug: "", href: g.href, title: g.label }], lone: true });
+      continue;
+    }
     const items: Array<NavItem> = [];
-    for (const slug of g.slugs) {
+    for (const slug of g.slugs ?? []) {
       const it = await itemForSlug(slug);
       if (it !== undefined) {
         items.push(it);

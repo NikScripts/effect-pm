@@ -23,7 +23,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <NavBar groups={groups} />
       <div className="layout">
         <aside className="sidebar">
-          <a className="sidebar-api" href="/api">API Reference</a>
           <GroupedNav groups={groups} />
         </aside>
         <main>{children}</main>

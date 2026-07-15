@@ -97,9 +97,6 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
             placeholder="Filter chapters…"
             aria-label="Filter chapters"
           />
-          <a className="sidebar-api" href="/api" onClick={close}>
-            API Reference
-          </a>
           <GroupedNav groups={groups} query={query} onNavigate={close} />
         </div>
       </div>

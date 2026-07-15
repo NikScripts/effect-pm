@@ -863,18 +863,6 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 .glossary-popup-def { color: var(--muted-fg); }
 
 /* ===== API reference (generated from api.json by scripts/gen-api.ts) ===== */
-.sidebar-api {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--primary);
-  text-decoration: none;
-  padding: 0.4rem 0;
-  margin-bottom: 0.6rem;
-  border-bottom: 1px solid var(--border);
-}
-.sidebar-api:hover { text-decoration: underline; }
 
 .api-back { margin: 0 0 1.2rem; font-size: 0.85rem; }
 .api-back a { color: var(--muted-fg); text-decoration: none; }
