@@ -12,7 +12,7 @@ const SourceLive = Layer.succeed(Source, Source.of({ load: () => Effect.succeed(
 const Item = Schema.Struct({ n: Schema.Number });
 class Q extends QueueResource.Tag<Q>()("queue-refill-deps/Q", { payload: Item }) {}
 
-const queueLayer = QueueResource.layer(Q, {
+const queueLayer = QueueResource.layerMemory(Q, {
   effect: (_item: { n: number }) => Effect.void, // worker needs nothing
   // autoStart:false so the test can subscribe to the live status before the refill runs (the
   // refill fires when the worker pool starts, which we trigger explicitly via `start`).

@@ -6,6 +6,41 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Task Agent 3: storage cutover follow-through
+
+- **Owner said:** Task Agent 3 (after Soft edge-case pass on #62).
+- **Chose:** Unlock [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md) slices **S1→S3** — inventory/TSDoc+plan ripple, example teachability, **CustomQueue Soft SQLite/sibling parity**. Queue/Run Soft guards already on #62 tip — do not redo. Plan-first first reply still required.
+- **Rejected / deferred for Agent 3:** fail-loud Soft die on Node-logs-only / unregistered engine; reopen #62 API; memo; handles; docs-site.
+- **Supervisor impact:** Agent 3 active; Manager/keeps #62 Eng.
+
+---
+
+## 2026-07-15 — Storage soft-default: bake Memory (R fulfilled); override via provide
+
+- **Owner said:** Everything is supposed to have in-memory storage baked in; R is fulfilled but you can override and provide. Requiring Storage in R is unacceptable.
+- **Chose:** `Store.withDefaultStorage` on toolkit `layer`/`serve`/`serveRemote` — Soft unwrap: no ambient `Storage` → `layerDefaultMemory` (**R fulfilled**); ambient AppStore via `Layer.provide`/`provideMerge` into the toolkit layer → capture that store (incl. SQLite). `*Memory` = aliases. Sibling `Layer.merge` does not override.
+- **Rejected:** “require Storage in R / soft-default only via `*Memory`” (earlier #62 cut was wrong for DX).
+- **Supervisor impact:** Correct #62 tip; Agent 3 follow-through still inventory/examples/Queue parity against bake+override guide.
+
+---
+
+## 2026-07-15 — Storage correctness: do it all (Effect-true Storage requirement)
+
+- **Owner said:** Pick the order; do the whole storage-correctness plan; Effect way; show everything in chat.
+- **Chose (superseded same day):** Toolkit `layer`/`serve`/`serveRemote` **require** `Store.Storage`; soft-default only via `*Memory`. Root cause of SQLite silence: shared in-memory `EventJournal` made memory "override" look real while SQLite stayed empty. **Superseded by** bake+override decision above.
+- **Rejected / deferred:** store memo; Agent D handles; docs-site; Postgres.
+- **Supervisor impact:** Manager Eng; Agent 3 free for follow-through when PR lands.
+
+---
+
+## 2026-07-14 — Storage correctness (can’t get Store wrong)
+
+- **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.
+- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
+- **Rejected / deferred this track:** store-layer lineId memo; assigning handles/site to Agent 3.
+- **Supervisor impact:** Agent 3 plan-first on storage correctness; unlock Phase A and/or B before code.
+
+---
 ## 2026-07-15 — Phase 3 unlock (legacy → live book + Draft)
 
 - **Owner said:** “Go” on Phase 3 after FleetHealth landed; sync integration; ignore effect β98 fallout (Agent C).
@@ -26,7 +61,6 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose:** `@nikscripts/effect-pm/FleetHealth` as Telemetry twin — leaf `local`, fleet `byNode` / `status`, Schema `Reachable` | `Unreachable` via `Exit.match`, `MultiNode.combineByNodeExit` keeps peer failures. Local `/health` / `withReadiness` unchanged (standards).
 - **Rejected:** Folding peers inside `withReadiness`; silent omit of down peers (metric-style `fleetHealth` helper).
 - **Supervisor impact:** Branch `cursor/fleet-health-ce05`; roadmap bullet marked shipped.
-
 ## 2026-07-14 — `Logs.byResource` full key; kill resource-identity `*Id`
 
 - **Owner said:** Scope identity is **key** + **kind** (`Resource.kindOf`); get rid of `processId`/`queueId` costumes; exception only for Effect RPC naming (`groupId`); no legacy storage to keep; do it now.
@@ -52,6 +86,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (Phase 2):** Plan-first only — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md). Proposed home = **`docs/plans/`**; no mass moves until owner unlocks P1–P4.
 - **Rejected / deferred:** Batch Z deletes; relocating STORAGE-cited cutover files; implementing roadmap features.
 - **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`.
+
+---
+
+## 2026-07-14 — Storage correctness (can’t get Store wrong)
+
+- **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.
+- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
+- **Rejected / deferred this track:** store-layer lineId memo; assigning handles/site to Agent 3.
+- **Supervisor impact:** Agent 3 plan-first on storage correctness; unlock Phase A and/or B before code.
 
 ---
 

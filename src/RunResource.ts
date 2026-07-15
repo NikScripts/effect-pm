@@ -21,11 +21,16 @@
  *
  * ## Store provision
  *
- * {@link layer}, {@link serve}, and {@link Service.layer} merge {@link Store.layerDefaultMemory} — the store
- * bridge is always in context (like `Clock`), so engines emit unconditionally. Override with a real
- * {@link Store.Service} via `Layer.provideMerge(AppStore.layerMemory)` (or SQLite) on the composed app layer.
- * {@link make} requires the same bridge — provide {@link Store.layerDefaultMemory} or your store layer on the
- * effect (see tests).
+ * {@link layer}, {@link serve}, and {@link serveRemote} soft-default {@link Store.layerDefaultMemory}
+ * via {@link Store.withDefaultStorage} — **R is fulfilled** out of the box. Override by providing
+ * your {@link Store.Service} into the toolkit layer so Soft unwrap captures that bridge:
+ *
+ * ```ts
+ * RunResource.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * ```
+ *
+ * {@link layerMemory} / {@link serveMemory} / {@link serveRemoteMemory} are aliases of the same
+ * soft-default. {@link make} still needs {@link Store.Storage} on the effect (see tests).
  *
  * ## Remote usage
  *
@@ -610,11 +615,13 @@ const runVerbIsInputless = (tag: {
   return method !== undefined && "payload" in method && method.payload === undefined;
 };
 
-/** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
+/**
+ * Soft-default {@link Store.Storage} ({@link Store.withDefaultStorage}) — R fulfilled; override by
+ * providing an app store into this layer. @internal
+ */
 const withDefaultStoreBridge = <A, E, R>(
   layer: Layer.Layer<A, E, R | Store.Storage>,
-): Layer.Layer<A | Store.Storage, E, R> =>
-  layer.pipe(Layer.provideMerge(Store.layerDefaultMemory));
+): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
 
 /**
  * Build the live gate behind `tag` and map it onto the toolkit service impl — shared by
@@ -712,6 +719,14 @@ export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E ex
 /**
  * Build a `Layer` from a tag and config — yields an observable toolkit service.
  *
+ * Soft-defaults {@link Store.Storage} (R fulfilled). Override with your app store:
+ *
+ * ```ts
+ * RunResource.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * ```
+ *
+ * {@link layerMemory} is an alias for the same soft-default.
+ *
  * @public
  */
 export const layer = <
@@ -733,7 +748,26 @@ export const layer = <
   );
 
 /**
+ * Alias of {@link layer}.
+ *
+ * @public
+ */
+export const layerMemory = <
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
+  layer(tag, config);
+
+/**
  * Serve this run gate **remotely (served-only)** — RPC handlers without granting the local instance.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
  * @public
  */
@@ -766,7 +800,31 @@ export function serveRemote(
 }
 
 /**
+ * Alias of {@link serveRemote}.
+ *
+ * @public
+ */
+export function serveRemoteMemory<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
+export function serveRemoteMemory(
+  tag: ResourceTag<any, any, any>,
+  config: RunResourceLayerConfig<any, any, any, any>,
+): Layer.Layer<any, any, any> {
+  return serveRemote(tag as any, config as any);
+}
+
+/**
  * Serve this run gate **and** grant its local instance from one materialization.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
  * @public
  */
@@ -797,6 +855,32 @@ export function serve(
       ),
     ),
   );
+}
+
+/**
+ * Alias of {@link serve}.
+ *
+ * @public
+ */
+export function serveMemory<
+  Self,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top = typeof Schema.Never,
+  R = never,
+>(
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
+  never,
+  R
+>;
+export function serveMemory(
+  tag: ResourceTag<any, any, any>,
+  config: RunResourceLayerConfig<any, any, any, any>,
+): Layer.Layer<any, any, any> {
+  return serve(tag as any, config as any);
 }
 
 /**

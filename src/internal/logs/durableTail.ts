@@ -144,7 +144,9 @@ export const layerOptional = (options: DurableTail): Layer.Layer<never> =>
  * Durable tails for registrations that carry the implicit {@link LogEntry} `_logs` shape.
  *
  * Pass the {@link LogRelay} resolved in the same store-layer unwrap that builds the bundle.
- * When `relay` is `None`, returns {@link Layer.empty}. Resource scopes match {@link LogEntry.hasKey}.
+ * When registrations need `_logs` and `relay` is `None`, dies — Store.Service.layer* always
+ * bakes Logs; silent skip is not allowed on the public path. Prefer {@link layerOptional} only
+ * for deliberate internal escapes.
  *
  * @internal
  */
@@ -153,6 +155,16 @@ export const layersForRegistrations = (
   handlesByAccessor: Readonly<Record<string, unknown>>,
   relay: Option.Option<LogRelayService>,
 ): Layer.Layer<never> => {
+  const needsLogs = registrations.some((registration) =>
+    hasImplicitLogShape(registration.contract),
+  );
+  if (needsLogs && Option.isNone(relay)) {
+    return Layer.unwrap(
+      Effect.die(
+        "Store registrations include _logs but LogRelay is missing — use Store.Service.layer / layerMemory (bakes Logs.layer), not a partial store build",
+      ),
+    );
+  }
   if (Option.isNone(relay)) {
     return Layer.empty;
   }

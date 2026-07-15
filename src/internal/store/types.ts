@@ -2,13 +2,13 @@
 
 export type StoreLogLevel = "All" | "Debug" | "Info" | "Warn" | "Error" | "None";
 
-/** @internal */
+/** Options for {@link Service.layer} / {@link store.layer} — SQLite only. @internal */
 export interface StoreLayerOptions {
   /**
-   * SQLite database file path. When set, {@link Service.layer} provides {@link SqlEventJournal}
-   * on that file (`:memory:` or a path). Omitted → {@link EventJournal.layerMemory}.
+   * SQLite database file path (`:memory:` or a durable path). Required —
+   * use {@link Service.layerMemory} for an in-memory journal.
    */
-  readonly filename?: string;
+  readonly filename: string;
   /** Default durable log export level for registrations without an explicit pipe override. */
   readonly logLevel?: StoreLogLevel;
 }

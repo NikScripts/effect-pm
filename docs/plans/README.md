@@ -20,9 +20,11 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Persistence & storage
 
+- **Storage correctness (fail-loud composition)** — **PR [#62](https://github.com/NikScripts/effect-pm/pull/62)** (Eng done). Follow-through: examples/TSDoc/Queue SQLite parity — [agent-03-storage-cutover-followthrough.md](../handoffs/agent-03-storage-cutover-followthrough.md). Plan: [storage-correctness.md](./storage-correctness.md).
 - **Postgres backends** for `HistoryStore` and `DurableQueueStore` (same interfaces; today: in-memory + SQLite).
 - **Storage-adapter integration testing** — real-DB integration suites beyond the in-memory conformance tests.
 - **Richer history vocabulary + listener/stream hooks** — for domains that need more than append-only facts, layered *beside* the store (never a process-store monolith).
+- **Store-layer `(scopeKey, lineId)` durable memo** — deferred; in-memory tail claim is enough for live followers.
 
 ## Durable queue refinements
 

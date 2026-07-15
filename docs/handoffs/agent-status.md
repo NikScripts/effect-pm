@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Phase 3 plan](./agent-01-docs-corpus-phase3-plan.md) · [docs corpus](./agent-01-docs-corpus.md) | **Phase 3** — Draft rule + Stores on `integration`; next = toolkit-by-example | `integration` tip | docs:manifest:check | **Next:** P3-2 toolkit-by-example; then P3-3 processes; Batch Z deferred | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | **merged to `integration`** ([#59](https://github.com/NikScripts/effect-pm/pull/59)) | [byResource full key](./agent-03-byresource-full-key.md) | **`Logs.byResource` full key shipped** — kill resource-identity `processId`/`queueId` | `integration` tip | typecheck / suite | Idle pending owner assignment | 2026-07-15 |
+| **3** | Soft stack on `integration` | [cutover follow-through](./agent-03-storage-cutover-followthrough.md) · [stores guide](../guides/stores.md) · [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) | **idle** — Soft bake+override + follow-through merged | `integration` tip | Soft guards on line | Fail-loud Soft / memo / handles still parked; β98 = Agent C | 2026-07-15 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -19,18 +19,21 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** Phase 3 legacy → live book (`cursor/docs-corpus-phase3-ce05`) — Draft content convention locked; Stores ported. Next batches: toolkit-by-example, processes placeholder. No UI / `docs/site` chrome. Ignore effect β98 fallout (Agent C).
-2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+1. **Agent 1:** Phase 3 legacy → live book (`cursor/docs-corpus-phase3-ce05`) — Draft content convention locked; Soft `docs/guides/stores.md` is wiring SSOT on `integration`. Next: toolkit-by-example / processes. No UI / `docs/site` chrome. β98 fallout → Agent C.
+2. **Agent 3:** Soft stack **idle** — [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) on `integration`. Next only if owner unlocks fail-loud Soft / memo (not handles/site).
+3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-3. Store-layer `(scopeKey, lineId)` memo — **deferred** (tail claim is enough for live followers)
-4. `main` merge + `pnpm run version` — still deferred
-5. ~~[#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide~~ — **merged**
+4. Store-layer `(scopeKey, lineId)` memo — **deferred**
+5. Fail-loud Soft when AppStore lacks engine registration — **parked** (Agent 3 out of scope unless unlocked)
+6. `main` merge + `pnpm run version` — still deferred
 
-### Done this session (Agent 3)
-- Process live `events` — [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51) (failure surface: `Failed` + stamped `Completed`; persist == stream)
-- Logs lineage append — [#48](https://github.com/NikScripts/effect-pm/pull/48)
-- Closed superseded plan/brief PRs [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46)
+### Done prior (Agent 3)
+- [#62](https://github.com/NikScripts/effect-pm/pull/62) Soft bake+override (`withDefaultStorage`) — **merged**
+- [#65](https://github.com/NikScripts/effect-pm/pull/65) cutover follow-through (CustomQueue Soft + Soft prose) — **merged**
+- [#59](https://github.com/NikScripts/effect-pm/pull/59) `byResource` full key + kill resource-identity `processId`/`queueId`
+- [#57](https://github.com/NikScripts/effect-pm/pull/57) private `_logs`
+- Process.events [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#51](https://github.com/NikScripts/effect-pm/pull/51) · lineage [#48](https://github.com/NikScripts/effect-pm/pull/48) · ready-perfection [#52](https://github.com/NikScripts/effect-pm/pull/52)
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.
@@ -41,7 +44,7 @@
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
 
-**Agent 3 ready-perfection pass:** remotes cleaned; [#52](https://github.com/NikScripts/effect-pm/pull/52) close-out + [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide **merged** to `integration`. Agent 3 idle pending new owner assignment.
+**Agent 3:** unlocked on [storage cutover follow-through](./agent-03-storage-cutover-followthrough.md). Storage correctness Eng remains [#62](https://github.com/NikScripts/effect-pm/pull/62).
 
 ---
 

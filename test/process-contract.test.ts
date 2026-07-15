@@ -25,7 +25,7 @@ it("with the default schedule a process arms and runs its effect immediately", (
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
-        Effect.provide(Process.layer(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) })),
+        Effect.provide(Process.layerMemory(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) })),
       );
     }),
   ));
@@ -53,7 +53,7 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
         expect(typeof after.lastRunDurationMillis).toBe("number");
       }).pipe(
         Effect.provide(
-          Process.layer(ScheduledProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          Process.layerMemory(ScheduledProc, { effect: Ref.update(ran, (n) => n + 1) }),
         ),
       );
     }),
@@ -76,7 +76,7 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
       yield* proc.schedule.clear;
       entries = yield* proc.schedule.entries.get;
       expect(entries).toEqual([]);
-    }).pipe(Effect.provide(Process.layer(ScheduledProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Process.layerMemory(ScheduledProc, { effect: Effect.void }))),
   ));
 
 it("stop/start toggles supervision (observable via status.supervising)", () =>
@@ -90,5 +90,5 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Process.layer(ArmedProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Process.layerMemory(ArmedProc, { effect: Effect.void }))),
   ));

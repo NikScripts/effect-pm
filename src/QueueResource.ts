@@ -1279,6 +1279,20 @@ const buildQueueImpl = <
  *
  * @public
  */
+/**
+ * Satisfy {@link Store.Storage} with the ephemeral default and export it for readback.
+ * Prefer {@link layer} + `Layer.provide(AppStore.layer…)`. @internal
+ */
+const withDefaultMemory = <A, E, R>(
+  layer: Layer.Layer<A, E, R | Store.Storage>,
+): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
+
+/**
+ * Local queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
+ * `QueueResource.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
+ *
+ * @public
+ */
 export const layer = <
   Self,
   F extends QueueItemFields = QueueItemFields,
@@ -1290,13 +1304,31 @@ export const layer = <
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) =>
-      Resource.layer(tag, Resource.grantLocal(tag, built)),
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildQueueImpl(tag, config), (built) =>
+        Resource.layer(tag, Resource.grantLocal(tag, built)),
+      ),
     ),
-    // The observability store is baked in: the in-memory default backs every queue unless the app
-    // provided its own, and it's exposed so persisted events read back via `Storage`.
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * Alias of {@link layer}.
+ *
+ * @public
+ */
+export const layerMemory = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  R = never,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+  layer(tag, config);
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
@@ -1328,11 +1360,30 @@ export const serveRemote = <
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ) =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) =>
-      Resource.serveRemote(tag, built),
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildQueueImpl(tag, config), (built) =>
+        Resource.serveRemote(tag, built),
+      ),
     ),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  );
+
+/**
+ * Alias of {@link serveRemote}.
+ *
+ * @public
+ */
+export const serveRemoteMemory = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  R = never,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
+) => serveRemote(tag, config);
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
@@ -1366,9 +1417,32 @@ export const serve = <
   never,
   R | RR
 > =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
-  ).pipe(Layer.provideMerge(Store.layerDefaultMemory));
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
+    ),
+  );
+
+/**
+ * Alias of {@link serve}.
+ *
+ * @public
+ */
+export const serveMemory = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  R = never,
+  RR = never,
+  Success extends Schema.Top = typeof Schema.Void,
+  Error extends Schema.Top = typeof Schema.Never,
+>(
+  tag: QueueTagFor<Self, F, Success, Error>,
+  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
+  never,
+  R | RR
+> => serve(tag, config);
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

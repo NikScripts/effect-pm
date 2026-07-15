@@ -16,14 +16,14 @@ class Doubler extends QueueResource.Tag<Doubler>()("@test/Doubler", {
 }) {}
 
 // The worker returns the typed success value (`Effect<number, …>`), driven by `success: Schema.Number`.
-const doublerLayer = QueueResource.layer(Doubler, {
+const doublerLayer = QueueResource.layerMemory(Doubler, {
   effect: (job) => Effect.succeed(job.id.length * 2),
   concurrency: 1,
 });
 
 // ── queue WITHOUT a success schema (historic void channel) ───────────────────
 class Sink extends QueueResource.Tag<Sink>()("@test/Sink", { payload: jobSchema }) {}
-const sinkLayer = QueueResource.layer(Sink, {
+const sinkLayer = QueueResource.layerMemory(Sink, {
   effect: (_job) => Effect.void,
   concurrency: 1,
 });

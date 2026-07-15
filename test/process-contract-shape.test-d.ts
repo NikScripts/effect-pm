@@ -82,11 +82,11 @@ void _proof;
 
 // The runtime layers pin the tag to the base spec; a composed tag (`+ result` / `+ schedule`) must
 // still be accepted, and each grants its own `Self` so `yield* Tag` keeps the composed surface.
-const _baseLocal = Process.layer(Health, { effect: Effect.void });
-const _resultServe = Process.serve(Prices, {
+const _baseLocal = Process.layerMemory(Health, { effect: Effect.void });
+const _resultServe = Process.serveMemory(Prices, {
   effect: Effect.succeed({ symbol: "AAPL", usd: 1 }),
 });
-const _scheduleServeRemote = Process.serveRemote(Matches, { effect: Effect.void });
+const _scheduleServeRemote = Process.serveRemoteMemory(Matches, { effect: Effect.void });
 const _scheduleResLocal = Process.scheduleLayer(SeasonSchedule);
 const _scheduleResServe = Process.scheduleServe(SeasonSchedule, {
   initial: [Process.window("wk1", startAt, stopAt)],

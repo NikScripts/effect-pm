@@ -39,7 +39,7 @@ const withProcessHttp = (
   config: Process.ProcessLayerConfig<any, any, any>,
   use: (port: number) => Effect.Effect<any, any, any>,
 ) => {
-  const server = Resource.httpServer([Process.serve(tag, config)]).pipe(
+  const server = Resource.httpServer([Process.serveMemory(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {

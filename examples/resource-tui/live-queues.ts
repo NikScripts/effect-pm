@@ -6,6 +6,10 @@
  * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Resource.client`
  * per tag for remote later). One bundle per queue exposes the live `status` /
  * `metrics` / `logs` atoms and the control fns.
+ *
+ * Soft Storage: toolkit `layerMemory` soft-defaults Memory; `TuiStore` is provided
+ * **into** the merged queue layers (`….pipe(Layer.provide(TuiStore.layerMemory))`)
+ * so Soft unwrap captures one AppStore (Logs + journals). See `docs/guides/stores.md`.
  */
 
 import {
@@ -130,17 +134,17 @@ class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/TuiStore"
 // can skip side-effecting daemon layers entirely. Running them on a ManagedRuntime
 // from module load makes accumulation deterministic and independent of the UI.
 const AppLayer = Layer.mergeAll(
-  QueueResource.layer(Mail, cfg),
-  QueueResource.layer(Jobs, cfg),
-  QueueResource.layer(Billing, cfg),
-  QueueResource.layer(Notify, cfg),
-  QueueResource.layer(Worker1, cfg),
-  QueueResource.layer(Worker2, cfg),
-  QueueResource.layer(Worker3, cfg),
-  QueueResource.layer(RegionUS, cfg),
-  QueueResource.layer(RegionEU, cfg),
-  QueueResource.layer(Daily, cfg),
-  QueueResource.layer(Weekly, cfg),
+  QueueResource.layerMemory(Mail, cfg),
+  QueueResource.layerMemory(Jobs, cfg),
+  QueueResource.layerMemory(Billing, cfg),
+  QueueResource.layerMemory(Notify, cfg),
+  QueueResource.layerMemory(Worker1, cfg),
+  QueueResource.layerMemory(Worker2, cfg),
+  QueueResource.layerMemory(Worker3, cfg),
+  QueueResource.layerMemory(RegionUS, cfg),
+  QueueResource.layerMemory(RegionEU, cfg),
+  QueueResource.layerMemory(Daily, cfg),
+  QueueResource.layerMemory(Weekly, cfg),
 ).pipe(
   Layer.provide(TuiStore.layerMemory),
   // silence the default console logger so worker logs don't bleed onto the Ink alt-screen
