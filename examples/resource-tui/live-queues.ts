@@ -6,6 +6,10 @@
  * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Resource.client`
  * per tag for remote later). One bundle per queue exposes the live `status` /
  * `metrics` / `logs` atoms and the control fns.
+ *
+ * Soft Storage: toolkit `layerMemory` soft-defaults Memory; `TuiStore` is provided
+ * **into** the merged queue layers (`….pipe(Layer.provide(TuiStore.layerMemory))`)
+ * so Soft unwrap captures one AppStore (Logs + journals). See `docs/guides/stores.md`.
  */
 
 import {

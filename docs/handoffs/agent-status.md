@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Phase 3 plan](./agent-01-docs-corpus-phase3-plan.md) · [docs corpus](./agent-01-docs-corpus.md) | **Phase 3** — Draft rule + Stores on `integration`; next = toolkit-by-example | `integration` tip | docs:manifest:check | **Next:** P3-2 toolkit-by-example; then P3-3 processes; Batch Z deferred | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | `cursor/storage-cutover-followthrough-a009` | [cutover follow-through](./agent-03-storage-cutover-followthrough.md) · [stores guide](../guides/stores.md) · [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) | **landing** Soft stack → `integration` | Soft tip | Soft guards | Merge #62 then #65; Soft guide SSOT; β98 = Agent C | 2026-07-15 |
+| **3** | `cursor/storage-cutover-followthrough-a009` | [cutover follow-through](./agent-03-storage-cutover-followthrough.md) · [stores guide](../guides/stores.md) · [#62](https://github.com/NikScripts/effect-pm/pull/62) **merged** · [#65](https://github.com/NikScripts/effect-pm/pull/65) | **landing** #65 → `integration` | Soft tip | Soft guards | Soft bake+override on line via #62; merge #65 follow-through; β98 = Agent C | 2026-07-15 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -19,8 +19,8 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** Phase 3 legacy → live book (`cursor/docs-corpus-phase3-ce05`) — Draft content convention locked; Soft `docs/guides/stores.md` is wiring SSOT once #62/#65 land. Next: toolkit-by-example / processes. No UI / `docs/site` chrome. β98 fallout → Agent C.
-2. **Agent 3:** Soft stack landing — [#62](https://github.com/NikScripts/effect-pm/pull/62) then [#65](https://github.com/NikScripts/effect-pm/pull/65).
+1. **Agent 1:** Phase 3 legacy → live book (`cursor/docs-corpus-phase3-ce05`) — Draft content convention locked; Soft `docs/guides/stores.md` is wiring SSOT (#62 on `integration`). Next: toolkit-by-example / processes. No UI / `docs/site` chrome. β98 fallout → Agent C.
+2. **Agent 3:** Soft follow-through [#65](https://github.com/NikScripts/effect-pm/pull/65) — landing onto `integration` (#62 already merged).
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
@@ -29,7 +29,7 @@
 6. `main` merge + `pnpm run version` — still deferred
 
 ### Done prior (Agent 3)
-- [#62](https://github.com/NikScripts/effect-pm/pull/62) storage correctness A–D (Manager Eng on Agent 3 plan) — review / merge
+- [#62](https://github.com/NikScripts/effect-pm/pull/62) storage correctness Soft bake+override — **merged** to `integration`
 - [#59](https://github.com/NikScripts/effect-pm/pull/59) `byResource` full key + kill resource-identity `processId`/`queueId`
 - [#57](https://github.com/NikScripts/effect-pm/pull/57) private `_logs`
 - Process.events [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#51](https://github.com/NikScripts/effect-pm/pull/51) · lineage [#48](https://github.com/NikScripts/effect-pm/pull/48) · ready-perfection [#52](https://github.com/NikScripts/effect-pm/pull/52)
