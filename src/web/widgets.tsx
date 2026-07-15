@@ -159,7 +159,7 @@ export const QueueCard = (props: {
       className={cn(
         // flex-col so the content stays top-aligned when the grid stretches the card to the row
         // height — a bare <button> vertically centres its content in the slack.
-        "flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
       )}
     >
@@ -626,7 +626,7 @@ export const ProcessCard = (props: {
       type="button"
       onClick={() => props.onOpen(props.tag)}
       style={vt}
-      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
         <ReadinessDot tag={props.tag} />
@@ -1001,7 +1001,7 @@ export const PagedCard = (props: {
         if (e.key === "Enter" || e.key === " ") props.onOpen?.();
       }}
       style={props.style}
-      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
+      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
     >
       <div
         ref={ref}
@@ -1700,10 +1700,12 @@ const ReadinessDotInner = (props: {
   const color = state === "ready" ? "#22c55e" : state === "degraded" ? "#eab308" : "#94a3b8";
   const title =
     state === "degraded" && readiness?.detail !== undefined ? `degraded — ${readiness.detail}` : state;
+  // Absolute so it pins to the card's top-left corner without taking header space (the card root is
+  // `relative`); a small LED, not a column.
   return (
     <span
       title={title}
-      className="-mr-1 h-2 w-2 shrink-0 rounded-full"
+      className="absolute left-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
       style={{ backgroundColor: color }}
     />
   );
@@ -1816,7 +1818,7 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
 export const ResourceCard = (props: WidgetProps): React.ReactElement => {
   const node = resourceNodeRef(props.tag);
   return (
-    <Card>
+    <Card className="relative">
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
           <ReadinessDot tag={props.tag} />
