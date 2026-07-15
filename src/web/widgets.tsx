@@ -1890,6 +1890,35 @@ export const NodeDetail = (props: {
 // Widget registry — the built-in set
 // ============================================================================
 
+/** A resource's readiness as a small "badge dot": a border-only circle when ready, filled (same amber
+ *  as the degraded overlay) when not. Reads its node's `NodeStatus` — the SSOT the overlay uses. */
+const ReadinessDotInner = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  const ready = readiness === undefined || readiness.ready; // loading/unknown → ready (empty)
+  const amber = "rgba(146,64,14,0.95)";
+  return (
+    <span
+      className="size-3.5 shrink-0 rounded-full border"
+      style={ready ? { borderColor: amber } : { borderColor: amber, backgroundColor: amber }}
+      aria-label={ready ? "ready" : "degraded"}
+      title={ready ? "ready" : (readiness?.detail ?? "degraded")}
+    />
+  );
+};
+
+/** The plain-resource readiness dot — an empty badge when ready, filled when degraded. Nothing for a
+ *  nodeless tag (no node computes its readiness). @public */
+export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = resourceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <ReadinessDotInner tag={props.tag} node={node} />;
+};
+
 /**
  * Basic fallback card — a resource whose kind has no registered widget (a bare `…/Resource`, or an
  * unregistered kind). Shows the resource's name, its kind, and a degraded banner; a richer card is
@@ -1919,7 +1948,7 @@ export const ResourceCard = (props: WidgetProps): React.ReactElement => {
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
           <span className="flex-1 truncate font-medium text-foreground">{props.name}</span>
-          <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
+          <ReadinessDot tag={props.tag} />
         </div>
         {node !== undefined ? (
           <div className="mt-2 text-[0.8rem] text-muted-foreground">{displayName(node.id)}</div>
