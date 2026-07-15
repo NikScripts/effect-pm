@@ -4,7 +4,9 @@
 A Resource is defined **once** — a Tag with a Contract, and an Implementation behind it. Where it
 runs and how you reach it is decided entirely by the **Layer** you provide. The code that uses it
 never changes: `yield* Tag` reads the same whether the Resource runs in this process, is served over
-RPC, or is a client to one running on another machine. This page is a tour of those layers.
+RPC, or is a client to one running on another machine. [Creating a
+Resource](/docs/creating-a-resource) ran one in-process; this page tours the layers that place it
+anywhere else — served, remote, or across a fleet.
 
 {.note}
 The rule of thumb: **the Tag is fixed, the Layer varies.** Swapping a resource from in-process to
@@ -47,7 +49,9 @@ Two entry points, differing only in the RPC transport they speak:
 ## Connecting a client
 
 The client mirror of serving. A remote Resource needs two things: the client handle for the Tag, and
-a **transport** to reach the node it runs on.
+a **transport** to reach the node it runs on. A **Node** is a named endpoint — declared with
+`Resource.Node<Self>("key", { url })` — that carries the address its Resources answer at, so a
+served tag is self-describing and a client knows where to dial.
 
 ``` ts
 // One resource by port or url — batteries included (transport + client in one call):
@@ -66,8 +70,8 @@ Per-node transport shortcuts, matching the two server entry points:
 - **`Resource.httpClient(node, { url? })`** — HTTP. The server side is `httpServer`.
 - **`Resource.socketClient(node, { url? })`** — WebSocket. The server side is `wsServer`. The `url`
   may be a same-origin path (`"/rpc"`, resolved against the page — `http→ws`, `https→wss`), an
-  `http(s)://` url (scheme swapped), or an absolute `ws(s)://` url. Both default the `url` to `"/rpc"`
-  and fall back to the Node's own url.
+  `http(s)://` url (scheme swapped), or an absolute `ws(s)://` url. Both shortcuts resolve the `url`
+  as: the option you pass → the Node's own url → `"/rpc"` (same-origin) as the final fallback.
 
 **The client and server must speak the same wire** — a `socketClient` cannot talk to an `httpServer`.
 
