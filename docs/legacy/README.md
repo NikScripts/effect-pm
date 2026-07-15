@@ -1,19 +1,16 @@
-# Documentation index
+# Documentation index (legacy / pre-site)
 
-Start here when browsing the repo in GitHub or an editor.
+Prefer the **living book** (`docs/guides/`, `docs/resources/`, `docs/getting-started/`, …) served by
+the docs site. This folder is the **pre-site corpus** — still useful for agents and as a port source
+during Phase 3 ([plan](../handoffs/agent-01-docs-corpus-phase3-plan.md)).
 
-| Document | Audience | Contents |
-|----------|----------|----------|
-| [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md) | Humans + tools | Narrative architecture, dependency rules, links. |
-| [AGENTS.md](./AGENTS.md) | AI assistants | Repo map, invariants, safe-change checklist. |
-| [PROCESS-API.md](./PROCESS-API.md) | Everyone | Spec-style tables for `Process`, `Polling`, `ProcessSchedule`. |
-| [RESOURCE-API.md](./RESOURCE-API.md) | Everyone | Current `QueueResource`, `RunResource`, `HttpClientRunGate`, and `HttpApiResource` APIs. |
-| [guides/toolkit-by-example.md](./guides/toolkit-by-example.md) | Everyone | Every resource / group / host / UI pattern by example. |
-| [guides/history-and-persistence.md](./guides/history-and-persistence.md) | Everyone | History, the durable queue, and the dashboard data layer. |
-| [STORAGE.md](./STORAGE.md) | Integrators | Persistence model (the SSOT). |
-| [guides/README.md](./guides/README.md) | Integrators | How-to guides. |
-| [plans/README.md](../plans/README.md) | Contributors | **Future-only** roadmap: priority table + topic files (no shipped API truth here). |
+| Document | Audience | Status |
+|----------|----------|--------|
+| [STORAGE.md](./STORAGE.md) | Agents | Persistence SSOT until Phase 3 finishes; consumers → [Stores](../guides/stores.md) |
+| [AGENTS.md](./AGENTS.md) | AI assistants | Repo map / verify commands |
+| [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md) | Humans + tools | Narrative map (port pending) |
+| [PROCESS-API.md](./PROCESS-API.md) / [RESOURCE-API.md](./RESOURCE-API.md) | Spec tables | Prefer API site + live guides |
+| [guides/](./guides/) | How-tos | Many are **pointers** to live pages; remaining ports listed in the Phase 3 plan |
+| [plans/](../plans/) | Contributors | Future-only roadmap (not under legacy) |
 
 **Examples**: [`../examples/README.md`](../examples/README.md).
-
-**Package entry TSDoc**: [`../src/index.ts`](../src/index.ts) (`@packageDocumentation`).

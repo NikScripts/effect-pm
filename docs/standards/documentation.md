@@ -184,6 +184,18 @@ parsed straight from the blocks, so a page is both prose and a machine contract.
 - **Fenced code names its language** — the opening fence is three backticks, a space, then the
   language (`ts`, `bash`, …).
 - **`{.note}`** marks a callout, like this one.
+- **Draft status (content-side).** Almost every live page opens with `status="draft"` until tip-stable.
+  Optional `done="…"` is a space-joined checklist of what has been tip-checked (`api`, `previews`,
+  `types`, `verified`). When a page is **ported from `docs/legacy/**`**, keep `status="draft"` and put
+  a `{.draft}` callout immediately under the H1 until a tip-check clears it:
+
+  ```
+  {.draft}
+  **Draft** — ported from the pre-site corpus; tip-check before treating as SSOT.
+  ```
+
+  After tip-check: remove the `{.draft}` callout; set `done=` honestly. **Do not** invent site CSS /
+  nav badges for Draft — that is lettered-agent / Agent B work (see handoff Phase 3).
 
 **Known rough edges — for the LSP work to resolve, not to hand-fix now:**
 - `order=N` on standards pages duplicates `nav.ts`'s ordering — two sources for one fact.

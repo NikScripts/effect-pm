@@ -1,45 +1,17 @@
-# Guides
+# Guides (legacy / pre-site)
 
-How to build with the toolkit: location-transparent **`Resource`** tags (`QueueResource`,
-`Process` / `Process.Schedule`), nestable **`Group`**, persistence, and the
-dashboard data layer.
+Prefer the **living book** Guides chapter (`docs/guides/` → site `/docs/…`). Phase 3 ports are tracked in
+[`agent-01-docs-corpus-phase3-plan.md`](../handoffs/agent-01-docs-corpus-phase3-plan.md).
 
-Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
-[`docs/RESOURCE-API.md`](../RESOURCE-API.md), and [`docs/STORAGE.md`](../STORAGE.md).
+| Legacy file | Prefer |
+|-------------|--------|
+| [store.md](./store.md) / [store-backing.md](./store-backing.md) | [Stores](../../guides/stores.md) |
+| [queue-resource.md](./queue-resource.md) | [Queues](../../guides/queues.md) |
+| [process.md](./process.md) | [Processes](../../guides/processes.md) (still a placeholder — port pending) |
+| [telemetry.md](./telemetry.md) | [Telemetry](../../guides/telemetry.md) |
+| [setup.md](./setup.md) | [Install](../../getting-started/install.md) · [Creating a Resource](../../getting-started/creating-a-resource.md) |
+| [toolkit-by-example.md](./toolkit-by-example.md) | Port pending (Phase 3 batch P3-2) |
+| [history-and-persistence.md](./history-and-persistence.md) | [Stores](../../guides/stores.md) · [Logs](../../guides/logs.md) |
+| Agent persistence tables | [STORAGE.md](../STORAGE.md) |
 
----
-
-## Start here
-
-| Guide | Topic |
-| --- | --- |
-| [setup.md](./setup.md) | **Consuming the package** — install + peer deps, the subpaths, wiring a server + CLI/TUI/web against your tags |
-| [toolkit-by-example.md](./toolkit-by-example.md) | Every resource / group / host / UI pattern, by example |
-| [history-and-persistence.md](./history-and-persistence.md) | Metrics history (`HistoryStore`), durable queue (`persist`), logs via [`docs/LOGS.md`](../../LOGS.md) |
-| [beta-15-to-17.md](./beta-15-to-17.md) | **Upgrade guide** — custom resources (15) → multi-host (16) → durable logs + fleet ergonomics (17), with migration notes |
-
-## Resources (define workers)
-
-| Guide | Topic |
-| --- | --- |
-| [process.md](./process.md) | `Process` — the `Process.Tag` toolkit + the `Process.make` engine |
-| [queue-resource.md](./queue-resource.md) | `QueueResource` — priority, concurrency, `rateLimit`, `refill`, `persist` |
-| [resource-configure.md](./resource-configure.md) | `.configure` layer patches (per-env overrides) |
-| [per-resource-dependencies.md](./per-resource-dependencies.md) | Serving resources that need **different** implementations of the same dependency, isolated — `Resource.serve` / `httpServer` |
-
-## Ops & UI
-
-| Guide | Topic |
-| --- | --- |
-| [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md) | Service **tags** vs **Layer/runtime** modules (Vite / React / RN safe) |
-
----
-
-## Reading order
-
-1. Define **queues** (`QueueResource`) and **managed processes** (`Process`).
-2. Provide them **local** (`.layer`) or **served** (`.serve` on the host, composed with
-   `Resource.httpServer`; `Resource.client` on the dashboard) — same `yield* Tag` either way.
-3. Opt into **persistence** (`persist`, `HistoryStore` / `SQLiteHistoryStore`) where you need
-   durability or history.
-4. Organize with **`Group`** (nestable; members may live on different hosts).
+Archived: `beta-15-to-17` · `CODEBASE-INVENTORY` → `docs/handoffs/archive/2026-07/legacy/`.

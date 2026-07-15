@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | **merged to `integration`** ([#60](https://github.com/NikScripts/effect-pm/pull/60)) | [docs corpus](./agent-01-docs-corpus.md) · [FleetHealth](../guides/fleet-health.md) · [plans](../plans/README.md) | **FleetHealth on `integration`** — Reachable/Unreachable fleet glass (Telemetry twin) | `integration` tip | fleet-health tests + example + type shapes | **Next:** Phase 3 (owner unlock); Batch Z deferred; `layerNoop` parked | 2026-07-15 |
+| **1** | `cursor/docs-corpus-phase3-ce05` | [Phase 3 plan](./agent-01-docs-corpus-phase3-plan.md) · [docs corpus](./agent-01-docs-corpus.md) | **Phase 3 in flight** — Draft convention + Stores port from legacy | branch tip | docs:manifest:check | P3-2 toolkit-by-example next; Batch Z deferred; ignore effect β98 (Agent C) | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | **merged to `integration`** ([#59](https://github.com/NikScripts/effect-pm/pull/59)) | [byResource full key](./agent-03-byresource-full-key.md) | **`Logs.byResource` full key shipped** — kill resource-identity `processId`/`queueId` | `integration` tip | typecheck / suite | Idle pending owner assignment | 2026-07-15 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** Phase 3 — port useful `docs/legacy/**` → live book + Draft content convention (no site chrome). FleetHealth ([#60](https://github.com/NikScripts/effect-pm/pull/60)) on `integration`. Batch Z deletes still per-row. No UI / `docs/site` chrome.
+1. **Agent 1:** Phase 3 legacy → live book (`cursor/docs-corpus-phase3-ce05`) — Draft content convention locked; Stores ported. Next batches: toolkit-by-example, processes placeholder. No UI / `docs/site` chrome. Ignore effect β98 fallout (Agent C).
 2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls

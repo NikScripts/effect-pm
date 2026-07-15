@@ -48,4 +48,5 @@ docs/plans/
 
 ## Next
 
-Phase 3 (legacy → live book + Draft label) awaits owner unlock. Batch Z deletes still need per-row ticks.
+Phase 3 unlocked — [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md).
+Batch Z deletes still need per-row ticks.
