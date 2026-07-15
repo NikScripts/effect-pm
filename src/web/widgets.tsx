@@ -245,8 +245,11 @@ export const Cell = (props: {
   if (!isLeafTag(props.member)) return <></>;
   const tag = props.member;
   const Widget = widgetFor(registry, tag.key, resourceKindOf(tag) ?? resourceKind);
+  // `grid` (single implicit cell) stretches the card to fill this wrapper in BOTH axes, so the wrapper
+  // — the actual grid item — matches the card exactly and the absolute overlay lines up with it (a
+  // plain block wrapper left the card content-height, so the overlay overshot below + to the sides).
   return (
-    <div className="relative">
+    <div className="relative grid">
       <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />
       <DegradedOverlay tag={tag} />
     </div>
