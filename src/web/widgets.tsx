@@ -459,7 +459,6 @@ export const ActionButton = (props: {
     if (wasPending.current && AsyncResult.isSuccess(r)) {
       wasPending.current = false;
       setFlash(true);
-      // @effect-diagnostics-next-line globalTimers:off
       const t = setTimeout(() => setFlash(false), 1200);
       return () => clearTimeout(t);
     }

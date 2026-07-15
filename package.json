@@ -137,7 +137,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json && tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json && tsgo --noEmit -p src/web/tsconfig.json && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "treeshake": "node scripts/treeshake-check.mjs",
     "check:markers": "tsx scripts/mark-the-surface-check.ts --baseline",
@@ -269,6 +269,9 @@
     "effect": "4.0.0-beta.98",
     "esbuild": "^0.28.1",
     "eslint": "^10.3.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
     "ink": "^7.1.0",
     "ink-testing-library": "^4.0.0",
     "lucide-react": "^1.17.0",
