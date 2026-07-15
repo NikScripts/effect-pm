@@ -465,23 +465,6 @@ const writeScheduleMirror = (
   MutableRef.set(mirror.nextPollCadence, nextPollCadence);
 };
 
-const provideWithLayer = <A, E, RIn, ROut>(
-  step: Effect.Effect<A, E, RIn>,
-  layer: Layer.Layer<ROut, E, never>,
-): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
-  // Build the layer in a local scope and provide its Context. Deliberately NOT `Effect.provide(step,
-  // layer)`: `strictEffectProvide` (enforced in tsconfig.src.strict-effect-provide.json) reserves the
-  // layer form for entry points. The residual `Exclude<RIn, ROut>` is forwarded to the caller — the
-  // editor's `missingEffectContext` can't tell that forwarding from a leak on a generic helper and
-  // shows a squiggle here, but it does not affect the typecheck exit code (only the two rules'
-  // structural forms do, and this satisfies both without a suppression).
-  Effect.scoped(
-    Effect.gen(function* () {
-      const context = yield* Layer.build(layer);
-      return yield* Effect.provide(step, context);
-    }),
-  );
-
 function createProcess<E, RUser>(
   state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,
 ): Process<RUser>;
@@ -1044,16 +1027,23 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     withLogScope({ key: name })(effect);
 
   // Provide whichever step layers are present (polling / schedule), forwarding the residual `RUser`.
-  // A single `provideWithLayer` in expression position — `annotateProcessLogs` widens the requirement
-  // back to the full union, so the per-state `Exclude<…>` precision the old overloaded helper computed
-  // was never observed downstream (any `Exclude<…>` is assignable to its wide param).
+  // Built + provided as its Context in expression position (NOT `Effect.provide(core, stepLayer)`:
+  // `strictEffectProvide` reserves the layer form for entry points). Inlined rather than routed through
+  // a generic helper on purpose — with `supervisedCore`/`stepLayer` concrete here the residual
+  // `Exclude<…, ROut>` computes to a real union, so `missingEffectContext` sees it's forwarded, not
+  // leaked; on the generic helper it couldn't tell the two apart and false-flagged. `annotateProcessLogs`
+  // then widens back to the full union, so that residual precision is never observed downstream anyway.
   const stepLayer =
     state.pollingLayer !== undefined && state.scheduleLayer !== undefined
       ? Layer.mergeAll(state.pollingLayer, state.scheduleLayer)
       : state.pollingLayer ?? state.scheduleLayer ?? Layer.empty;
   return {
     ...base,
-    effect: annotateProcessLogs(provideWithLayer(supervisedCore, stepLayer)),
+    effect: annotateProcessLogs(
+      Effect.scoped(
+        Effect.flatMap(Layer.build(stepLayer), (context) => Effect.provide(supervisedCore, context)),
+      ),
+    ),
   };
 }
 
