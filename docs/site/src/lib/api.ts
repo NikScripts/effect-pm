@@ -2,8 +2,15 @@
 // Used by the per-namespace and per-symbol pages. The /api landing page uses ./api-index (a tiny
 // summary) instead, so it never pulls the whole model.
 
-import apiJson from "../../api-model.json";
 import { slugForEntry } from "./api-index.js";
+
+// Load as a RAW string, not a JSON module — importing a 679 KB .json makes Vite generate a 3 MB
+// base64 `sourcesContent` map for it on every compile, which crawled the dev server.
+const rawModel = import.meta.glob<string>("../../api-model.json", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
 
 export { slugForEntry };
 
@@ -35,7 +42,9 @@ export interface ApiNamespace {
   readonly symbols: ReadonlyArray<ApiSymbol>;
 }
 
-const model: { readonly entries: ReadonlyArray<ApiNamespace> } = apiJson;
+const model: { readonly entries: ReadonlyArray<ApiNamespace> } = JSON.parse(
+  Object.values(rawModel)[0] ?? '{"entries":[]}',
+);
 
 export const namespaces = (): ReadonlyArray<ApiNamespace> => model.entries;
 
