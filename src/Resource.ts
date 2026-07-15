@@ -2858,22 +2858,15 @@ export interface HttpServerOptions {
    * bound {@link Node} when all share one key.
    */
   readonly node?: string | { readonly key: string };
-  /**
-   * The server RPC transport, as a `path -> Layer<RpcServer.Protocol>` builder — {@link
-   * serverProtocolHttp} (default) or {@link serverProtocolWebsocket}. `serverProtocolHttp` serves
-   * request/response + streams over HTTP POST (fine for servers, CLIs, a handful of streams);
-   * `serverProtocolWebsocket` serves everything over **one multiplexed WebSocket per client**, which a
-   * **browser dashboard needs** — it opens many concurrent live streams (each resource's status +
-   * metrics + logs), and over HTTP/1.1 the browser caps at ~6 connections per origin, starving the
-   * rest. Clients pick the matching transport via {@link layerProtocol} ({@link protocolHttp} /
-   * {@link protocolWebsocket}), or the {@link httpClient} / {@link socketClient} shortcuts.
-   */
-  readonly protocol?: (
-    path: HttpRouter.PathInput,
-  ) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>;
 }
 
+/** A server RPC-protocol builder — {@link serverProtocolHttp} or {@link serverProtocolWebsocket}. */
+type ServerProtocol = (
+  path: HttpRouter.PathInput,
+) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>;
+
 const httpServerBase = (
+  serverProtocol: ServerProtocol,
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer> =>
   Layer.unwrap(
@@ -2937,10 +2930,8 @@ const httpServerBase = (
         (acc, group) => acc.merge(group),
       );
       // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
-      // the `protocol` option (default {@link serverProtocolHttp}) provides it — http POST or a ws
-      // upgrade — on the same router (`HttpRouter.serve` below). Same total requirements as the old
-      // `layerHttp({ protocol })`, but the wire is injected, not baked.
-      const serverProtocol = options?.protocol ?? serverProtocolHttp;
+      // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it — an
+      // http POST handler or a ws upgrade — on the same router (`HttpRouter.serve` below).
       const rpcAppLayer = RpcServer.layer(merged).pipe(
         Layer.provide(
           nodeTag[groupSym].toLayer(
@@ -3050,21 +3041,84 @@ export function httpServer(
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, never, unknown> {
-  // the serves form bundles the boilerplate: provideMerge the serve layers (kept, not pruned) + the
-  // shared registry, so the caller lists resources and provides only the platform (+ any shared dep).
-  // one serve layer or many — a single `Layer` is treated as a one-element list.
+  return serverImpl(serverProtocolHttp, servesOrOptions, maybeOptions);
+}
+
+// Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
+// server RPC protocol. The serves form bundles the boilerplate: provideMerge the serve layers (kept,
+// not pruned) + the shared registry, so the caller lists resources and provides only the platform (+
+// any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
+function serverImpl(
+  serverProtocol: ServerProtocol,
+  servesOrOptions?:
+    | Layer.Layer<any, any, any>
+    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | HttpServerOptions,
+  maybeOptions?: HttpServerOptions,
+): Layer.Layer<never, never, unknown> {
   const serves = Array.isArray(servesOrOptions)
     ? servesOrOptions
     : Layer.isLayer(servesOrOptions)
       ? [servesOrOptions]
       : undefined;
   if (serves !== undefined) {
-    return httpServerBase(maybeOptions).pipe(
+    return httpServerBase(serverProtocol, maybeOptions).pipe(
       Layer.provideMerge(mergeLayers(serves)),
       Layer.provide(servedResourcesLayer),
     ) as unknown as Layer.Layer<never, never, unknown>;
   }
-  return httpServerBase(servesOrOptions as HttpServerOptions | undefined);
+  return httpServerBase(serverProtocol, servesOrOptions as HttpServerOptions | undefined);
+}
+
+/**
+ * A **WebSocket** RPC server — the {@link httpServer} sibling for the browser. Everything a client
+ * subscribes to (each resource's `status` + `metrics` + `logs`) rides **one multiplexed WebSocket per
+ * client**, so a dashboard never trips the browser's ~6-connection-per-origin HTTP/1.1 cap that
+ * starves streams over plain HTTP. Identical to {@link httpServer} in every other way — same serve
+ * list, same options, same `/health` — it just speaks WebSocket instead of HTTP POST. Clients connect
+ * with {@link socketClient} (or `Resource.layerProtocol(Resource.protocolWebsocket())`); a fleet whose
+ * peers also serve over this should add `Resource.layerPeerProtocol(Resource.protocolWebsocket)`.
+ *
+ * ```ts
+ * const Node = Resource.wsServer([Resource.serve(Jobs, jobsImpl)]).pipe(
+ *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+ * );
+ * ```
+ *
+ * @public
+ */
+export function wsServer<Serve extends Layer.Layer<any, any, any>>(
+  serve: Serve,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serve>,
+  never,
+  Layer.Services<Serve> | HttpServer.HttpServer
+>;
+export function wsServer(
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
+export function wsServer<
+  Serves extends readonly [
+    Layer.Layer<any, any, any>,
+    ...ReadonlyArray<Layer.Layer<any, any, any>>,
+  ],
+>(
+  serves: Serves,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  never,
+  Layer.Services<Serves[number]> | HttpServer.HttpServer
+>;
+export function wsServer(
+  servesOrOptions?:
+    | Layer.Layer<any, any, any>
+    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | HttpServerOptions,
+  maybeOptions?: HttpServerOptions,
+): Layer.Layer<never, never, unknown> {
+  return serverImpl(serverProtocolWebsocket, servesOrOptions, maybeOptions);
 }
 
 /**
@@ -3457,22 +3511,16 @@ export const protocolWebsocket = (
     Layer.provide(Socket.layerWebSocketConstructorGlobal),
   );
 
-/**
- * Build the **http** server `Protocol` (RPC over HTTP POST) mounted on {@link httpServer}'s router at
- * `path` (default `"/rpc"`) — the value you hand `httpServer`'s `protocol` option. The server
- * counterpart to {@link protocolHttp}; needs `RpcSerialization` (supplied by `httpServer`). @public
- */
-export const serverProtocolHttp = (
+/** The **http** server `Protocol` (RPC over HTTP POST) mounted on the server router at `path` — what
+ *  {@link httpServer} provides internally. `RpcSerialization` is supplied by the server. */
+const serverProtocolHttp = (
   path: HttpRouter.PathInput = "/rpc",
 ): Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter> =>
   RpcServer.layerProtocolHttp({ path });
 
-/**
- * Build the **WebSocket** server `Protocol` (RPC over a ws upgrade at `path`, default `"/rpc"`) —
- * hand it to {@link httpServer}'s `protocol` option so a browser dashboard rides one multiplexed
- * connection per client. The server counterpart to {@link protocolWebsocket}. @public
- */
-export const serverProtocolWebsocket = (
+/** The **WebSocket** server `Protocol` (RPC over a ws upgrade at `path`) — what {@link wsServer}
+ *  provides internally so a browser rides one multiplexed connection per client. */
+const serverProtocolWebsocket = (
   path: HttpRouter.PathInput = "/rpc",
 ): Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter> =>
   RpcServer.layerProtocolWebsocket({ path });

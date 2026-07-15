@@ -48,13 +48,12 @@ across all of them, so prefer it for the browser unconditionally.
 
 Three matching pieces — the server must serve the same protocol the client speaks:
 
-**1. Server** — serve WebSocket. The `protocol` option takes a server-protocol builder
-(`Resource.serverProtocolHttp`, the default, or `Resource.serverProtocolWebsocket`):
+**1. Server** — serve WebSocket with `Resource.wsServer` (the `Resource.httpServer` sibling; same
+serve list and options, it just speaks WebSocket):
 
 ``` ts
-Resource.httpServer(
+Resource.wsServer(
   [Resource.serve(Jobs, jobsImpl) /* … */],
-  { protocol: Resource.serverProtocolWebsocket },
 )
 ```
 
@@ -95,17 +94,15 @@ default to HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh 
 or the fold 404s against the ws-only `/rpc`. One knob per node, alongside `peersLayer`:
 
 ``` ts
-Resource.httpServer([Resource.serve(WorkerPool, poolImpl) /* … */], {
-  protocol: Resource.serverProtocolWebsocket,
-}).pipe(
+Resource.wsServer([Resource.serve(WorkerPool, poolImpl) /* … */]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)), // peers speak ws too
 )
 ```
 
-Under the hood every transport is the same seam — `Resource.layerProtocol(protocol)` sets a client
-wire from an `RpcClient.Protocol` (build one with `Resource.protocolHttp` / `Resource.protocolWebsocket`),
-and `socketClient` / `httpClient` are per-node shortcuts over it.
+Under the hood every client transport is the same seam — `Resource.layerProtocol(protocol)` sets a
+client wire from an `RpcClient.Protocol` (build one with `Resource.protocolHttp` /
+`Resource.protocolWebsocket`), and `socketClient` / `httpClient` are per-node shortcuts over it.
 
 ## Widgets
 

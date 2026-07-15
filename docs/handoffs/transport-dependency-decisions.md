@@ -6,8 +6,9 @@ Layers stay transport-agnostic; the protocol is an injected dependency.
 early drafts below): the standard seam is **`Resource.layerProtocol(protocol)`** where `protocol` is
 effect's own `RpcClient.Protocol`; helpers **`protocolHttp(url)` / `protocolWebsocket(url)`** build the
 common ones, and **`socketClient` / `httpClient`** are per-node shortcuts over it. The server mirrors
-it: `httpServer`'s `protocol` option is a `serverProtocolHttp` / `serverProtocolWebsocket` builder
-(default http). Peers read an injected builder via **`layerPeerProtocol(builder)`** (a Context.Reference
+those named shortcuts: **`httpServer([...])`** (http) and **`wsServer([...])`** (websocket) — no
+`protocol` option (an earlier draft had one; the owner rightly called it out as clunky/asymmetric).
+Peers read an injected builder via **`layerPeerProtocol(builder)`** (a Context.Reference
 defaulting to `protocolHttp`, so http fleets are unchanged). No `Transport` service, no per-protocol
 layers. Verified: full gate green, `WorkerPool` folds to 12 over ws in `examples/resource-web`, new
 `test/multi-host-peers-protocol.test.ts`. The sections below are the design history that led here.

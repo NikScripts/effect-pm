@@ -38,7 +38,7 @@ const live = Process.layer(Daily, { effect: poll }).pipe(
 )
 
 // httpServer form — Layer.provide is fine when you do not `yield* AppStore` in-process:
-Resource.httpServer([Process.serve(Daily, { effect: poll })], { protocol: Resource.serverProtocolWebsocket }).pipe(
+Resource.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
   Layer.provide(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 )

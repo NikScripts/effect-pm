@@ -26,12 +26,12 @@ class MiniStore extends Store.Service<MiniStore>("@examples/web-dashboard/MiniSt
   Process.store(KeyRotation),
 ) {}
 
-const serveLayer = Resource.httpServer([
+const serveLayer = Resource.wsServer([
   processEntry(KeyRotation, {
     effect: Effect.logInfo("wnba: key-rotation check"),
     polling: Polling.spaced(Duration.seconds(5)),
   }),
-], { protocol: Resource.serverProtocolWebsocket }).pipe(
+]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(MiniStore.layerMemory),
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
