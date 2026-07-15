@@ -871,8 +871,10 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 .api-sym-head { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.55rem; }
 .api-sym-name { font-family: var(--font-mono); font-weight: 600; font-size: 0.95rem; }
 .api-src { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-fg); white-space: nowrap; }
-a.api-src { text-decoration: none; }
-a.api-src:hover { color: var(--primary); text-decoration: underline; }
+/* the file:line is a GitHub link — colour it and underline it so it reads as tappable (no hover on
+   touch) */
+a.api-src { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+a.api-src:hover { text-decoration-thickness: 2px; }
 
 .api-kind {
   font-size: 0.66rem;
