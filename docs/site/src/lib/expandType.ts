@@ -8,6 +8,7 @@
 // This must be a compiler-API walk, not a `Prettify<T>` type: a written type alias is echoed
 // as-written, only an inferred/compiler-resolved type resolves a mapped type to concrete members.
 
+import * as nodePath from "node:path";
 import * as ts from "typescript";
 
 export interface ExpanderOptions {
@@ -85,13 +86,19 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
     return true;
   };
 
+  // Per hover offset: the expanded member block (when worth expanding) AND the hovered symbol's
+  // declaration location `relFile:line` — the key into the pre-resolved {@link} map, so hover docs
+  // link the same as the pages.
+  interface HoverInfo {
+    readonly expanded?: string;
+    readonly ownerLoc?: string;
+  }
+
   /**
-   * Given the block's full code and a set of full-code offsets, return offset → expanded member
-   * block (or undefined when the type isn't an object worth expanding). The result is code-like text
-   * ready to append under the compact type in the popover.
+   * Given the block's full code and a set of full-code offsets, return offset → { expanded, ownerLoc }.
    */
-  return (fullCode: string, offsets: readonly number[]): Map<number, string> => {
-    const out = new Map<number, string>();
+  return (fullCode: string, offsets: readonly number[]): Map<number, HoverInfo> => {
+    const out = new Map<number, HoverInfo>();
     current = fullCode;
     version += 1;
     const program = service.getProgram();
@@ -102,19 +109,36 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
     for (const offset of offsets) {
       const node = nodeAt(sf, offset);
       if (!node) continue;
-      const type = checker.getTypeAtLocation(node);
-      if (!isExpandable(type)) continue;
-      const lines: string[] = [];
-      for (const sym of type.getProperties()) {
-        const mt = checker.getTypeOfSymbolAtLocation(sym, node);
-        let rendered = checker
-          .typeToString(mt, node, FLAGS)
-          .replace(/import\("[^"]*"\)\./g, "")
-          .replace(/\s*\n\s*/g, " ");
-        if (rendered.length > MAX_MEMBER_LEN) rendered = `${rendered.slice(0, MAX_MEMBER_LEN - 1)}…`;
-        lines.push(`  ${sym.getName()}: ${rendered};`);
+      let expanded: string | undefined;
+      let ownerLoc: string | undefined;
+
+      // owner location: the declaration of the hovered symbol (keys the {@link} map)
+      const sym = checker.getSymbolAtLocation(node);
+      const decl = sym?.getDeclarations()?.[0];
+      if (decl !== undefined) {
+        const f = decl.getSourceFile();
+        const line = f.getLineAndCharacterOfPosition(decl.getStart()).line + 1;
+        ownerLoc = `${nodePath.relative(opts.vfsRoot, f.fileName)}:${line}`;
       }
-      out.set(offset, `{\n${lines.join("\n")}\n}`);
+
+      // expanded member block (existing dual-preview)
+      const type = checker.getTypeAtLocation(node);
+      if (isExpandable(type)) {
+        const lines: string[] = [];
+        for (const member of type.getProperties()) {
+          const mt = checker.getTypeOfSymbolAtLocation(member, node);
+          let rendered = checker
+            .typeToString(mt, node, FLAGS)
+            .replace(/import\("[^"]*"\)\./g, "")
+            .replace(/\s*\n\s*/g, " ");
+          if (rendered.length > MAX_MEMBER_LEN)
+            rendered = `${rendered.slice(0, MAX_MEMBER_LEN - 1)}…`;
+          lines.push(`  ${member.getName()}: ${rendered};`);
+        }
+        expanded = `{\n${lines.join("\n")}\n}`;
+      }
+
+      if (expanded !== undefined || ownerLoc !== undefined) out.set(offset, { expanded, ownerLoc });
     }
     return out;
   };

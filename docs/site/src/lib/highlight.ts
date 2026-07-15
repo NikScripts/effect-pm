@@ -19,6 +19,21 @@ import { toHast } from "mdast-util-to-hast";
 import prettier from "prettier";
 import { makeTypeExpander } from "./expandType";
 import { resolveApiLink } from "./api-links";
+import { docLinksByLocation } from "./api-data";
+
+// Compiler-resolved {@link} maps, keyed by a symbol's declaration `file:line` (see gen-api). Hovers
+// look up the hovered symbol's location here to link the same as the pages do.
+const hoverDocLinks = docLinksByLocation();
+// When rendering the source panel we KNOW the owner symbol (the page's), so pass its resolved links
+// directly — the source is compiled inline, so its local symbols have no real location to key on.
+let currentOwnerDocLinks: Record<string, string> | undefined;
+// Rewrite {@link X} -> {@link <url>|X} for targets we resolved, so the doc renderer links them
+// (resolveDocRef treats a "/"-prefixed target as an already-resolved url).
+const embedDocLinks = (docs: string, links: Record<string, string>): string =>
+  docs.replace(/\{@link\s+([^}|\s]+)[^}]*\}/g, (m, target: string) => {
+    const url = links[target.trim()];
+    return url !== undefined ? `{@link ${url}|${target.trim()}}` : m;
+  });
 
 const THEMES = { light: "github-light", dark: "github-dark" } as const;
 const LOAD_LANGS = ["typescript", "tsx", "bash", "json"] as const;
@@ -115,8 +130,8 @@ const formatHoverType = (text: string): string => {
   return text;
 };
 
-// Cache expansions per block code (dev re-renders the same block repeatedly).
-const blockCache = new Map<string, Map<number, string>>();
+// Cache per-block hover info (expanded type + owner location) — dev re-renders the same block often.
+const blockCache = new Map<string, ReturnType<typeof expandTypes>>();
 
 const twoslasher = Object.assign(
   (
@@ -139,16 +154,27 @@ const twoslasher = Object.assign(
         blockCache.set(code, expansions);
       }
       hovers.forEach((h, i) => {
-        const expanded = expansions!.get(offsets[i]);
-        if (!expanded) return;
+        const info = expansions!.get(offsets[i]);
+        // Embed compiler-resolved {@link} urls into the docs. Source panel: the owner is the page's
+        // symbol (currentOwnerDocLinks). Doc blocks: an imported symbol resolves to its real
+        // location (ownerLoc) in the shared doc-links map.
+        if (h.docs !== undefined) {
+          const links =
+            currentOwnerDocLinks ??
+            (info?.ownerLoc !== undefined ? hoverDocLinks[info.ownerLoc] : undefined);
+          if (links !== undefined) h.docs = embedDocLinks(h.docs, links);
+        }
+        // Dual-preview expand box (existing).
+        const expanded = info?.expanded;
+        if (expanded === undefined) return;
         const head = declHead(h.text);
         // Need a real declaration head (`const emails: `) so the box reads as a declaration, not a
         // bare `{ … }`. Skip type-name / class / alias hovers that have none.
         if (!head) return;
         // Skip when the hover already shows the shape inline (its type is already an object literal).
         if (h.text.slice(head.length).trimStart().startsWith("{")) return;
-        const prior = (h as { docs?: string }).docs;
-        (h as { docs?: string }).docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
+        const prior = h.docs;
+        h.docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
       });
       // Format each hover's compact type AFTER expansion (which reads the raw text) so long types
       // break across lines in the popup.
@@ -293,7 +319,11 @@ const API_REF = /[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?/g;
 // A doc `{@link Target}` or an inline-code identifier -> its doc URL, or undefined. `Namespace.name`
 // resolves by qualified name; a bare name only when unambiguous.
 const resolveDocRef = (ref: string): string | undefined =>
-  ref.includes(".") ? resolveApiLink(ref, "", false) : resolveApiLink(undefined, ref, true);
+  ref.startsWith("/")
+    ? ref // already a resolved url (embedded into hover docs by embedDocLinks)
+    : ref.includes(".")
+      ? resolveApiLink(ref, "", false)
+      : resolveApiLink(undefined, ref, true);
 // Split inline-code text into HAST, wrapping any API-export name in a dotted-underline link.
 const linkifyCode = (text: string): any[] => {
   const out: any[] = [];
@@ -489,6 +519,7 @@ export const highlightSourceWithHovers = (
   relFile: string, // repo-relative, e.g. "src/QueueResource.ts"
   startLine: number, // 1-based first line of the declaration
   endLine: number, // 1-based last line (inclusive)
+  ownerDocLinks?: Record<string, string>, // the page symbol's resolved {@link} map (for its hovers)
 ): React.ReactNode | undefined => {
   try {
     const lines = nodeFs.readFileSync(nodePath.join(repoRoot, relFile), "utf8").split("\n");
@@ -503,7 +534,12 @@ export const highlightSourceWithHovers = (
       "// ---cut-after---",
       ...lines.slice(endLine),
     ].join("\n");
-    return highlightToReact(input, "ts", { twoslash: true });
+    currentOwnerDocLinks = ownerDocLinks;
+    try {
+      return highlightToReact(input, "ts", { twoslash: true });
+    } finally {
+      currentOwnerDocLinks = undefined;
+    }
   } catch {
     return undefined;
   }

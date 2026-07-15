@@ -480,6 +480,17 @@ const program = Effect.gen(function* () {
   yield* writeJson(nodePath.join(dataDir, "paths.json"), { symbols: paths });
   yield* writeJson(nodePath.join(dataDir, "links.json"), { symbols: links });
   yield* writeJson(nodePath.join(dataDir, "meta.json"), { repoBaseUrl });
+  // Resolved {@link} maps keyed by each symbol's declaration `file:line` — so hovers (which know only
+  // the hovered symbol's location) reuse the same compiler-resolved links as the pages.
+  yield* writeJson(
+    nodePath.join(dataDir, "doclinks.json"),
+    Object.fromEntries(
+      model
+        .flatMap((e) => e.symbols)
+        .filter((s) => Object.keys(s.docLinks).length > 0)
+        .map((s) => [`${s.source.file}:${s.source.line}`, s.docLinks]),
+    ),
+  );
 
   const total = model.reduce((n, e) => n + e.symbols.length, 0);
   yield* Console.log(`wrote ${dataDir}`);

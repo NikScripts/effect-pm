@@ -99,6 +99,10 @@ export interface LinkSymbol {
 export const linkSymbols = (): ReadonlyArray<LinkSymbol> =>
   readJson<{ symbols: ReadonlyArray<LinkSymbol> }>("links.json")?.symbols ?? [];
 
+// Resolved {@link} maps keyed by a symbol's declaration `file:line` — for hover link resolution.
+export const docLinksByLocation = (): Readonly<Record<string, Record<string, string>>> =>
+  readJson<Record<string, Record<string, string>>>("doclinks.json") ?? {};
+
 export const repoBaseUrl = (): string =>
   readJson<{ repoBaseUrl?: string }>("meta.json")?.repoBaseUrl ?? "";
 

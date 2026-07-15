@@ -61,8 +61,12 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
   // Falls back to plain highlighting if twoslash can't compile the file.
   const sourceLines = s.sourceText.split("\n").length;
   const sourceView =
-    highlightSourceWithHovers(s.source.file, s.source.line, s.source.line + sourceLines - 1) ??
-    highlightToReact(s.sourceText, "ts");
+    highlightSourceWithHovers(
+      s.source.file,
+      s.source.line,
+      s.source.line + sourceLines - 1,
+      s.docLinks,
+    ) ?? highlightToReact(s.sourceText, "ts");
   const chips = [
     ...(s.category !== undefined ? [{ cls: "api-chip-cat", text: s.category }] : []),
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),
