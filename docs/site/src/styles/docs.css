@@ -921,14 +921,13 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 }
 
 
-/* long-press feedback: finger-down highlight, then a stronger "armed" highlight once held long
-   enough (release to copy). Applied to the token or the popup section under the press. */
-/* Long-press feedback. "pressing" = finger down (a faint blue tint); "armed" = held long enough,
-   RELEASE NOW (a bright green wash) — a distinct colour so it's obvious it's time to let go before
-   iOS's own long-press selection kicks in and breaks the copy. */
+/* Long-press feedback. "pressing" = finger down (a faint wash); "armed" = held long enough, RELEASE
+   NOW (a strong wash). Both wash toward --fg, which is dark in light mode and light in dark mode, so
+   the armed state reads as "darker" on a light page and "lighter" on a dark one — high contrast
+   against whatever the section's own background is. */
 :root {
-  --press-tint: color-mix(in oklab, var(--primary) 16%, transparent);
-  --armed-tint: oklch(0.72 0.17 150 / 0.42); /* green = "go / release" */
+  --press-tint: color-mix(in oklab, var(--fg) 12%, transparent);
+  --armed-tint: color-mix(in oklab, var(--fg) 40%, transparent);
 }
 /* token: an inline background pill */
 .twoslash-hover.tw-pressing {

@@ -194,6 +194,13 @@ export function TwoslashHover(): null {
       outsideTap = false;
       const target = el.closest(".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover");
       if (target === null) return;
+      // On a popup section, own the gesture: cancel iOS's native long-press (text selection /
+      // magnifier / callout) so a LONG hold can't hijack the selection and break the copy at
+      // touchend. Requires the non-passive listener registered below. (Tokens keep their default so
+      // the code block still scrolls.)
+      if (e.cancelable && target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
+        e.preventDefault();
+      }
       const t = e.touches[0];
       startAt = { x: t.clientX, y: t.clientY };
       pressStart = Date.now();
@@ -240,7 +247,8 @@ export function TwoslashHover(): null {
       document.addEventListener("mouseover", onOver);
       document.addEventListener("mouseout", onOut);
     } else {
-      document.addEventListener("touchstart", onTouchStart, { passive: true });
+      // non-passive so onTouchStart can preventDefault the iOS long-press over a popup section
+      document.addEventListener("touchstart", onTouchStart, { passive: false });
       document.addEventListener("touchmove", onTouchMove, { passive: true });
       document.addEventListener("touchend", onTouchEnd);
       document.addEventListener("touchcancel", cancelPress);
