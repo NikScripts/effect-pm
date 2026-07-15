@@ -892,6 +892,42 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 .api-doc code { font-family: var(--font-mono); font-size: 0.86em; }
 .api-doc strong { color: var(--fg); }
 
+/* the export's actual source, collapsible, with real file line numbers down the gutter */
+.api-source { margin-top: 0.8rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.api-source > summary {
+  cursor: pointer;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  color: var(--muted-fg);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  user-select: none;
+  list-style-position: inside;
+}
+.api-source > summary .api-src { margin-left: 0; }
+.api-source-lines { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; opacity: 0.75; }
+.api-source-code {
+  counter-reset: ln var(--ln-start);
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.api-source-code pre { margin: 0; padding: 0.55rem 0; }
+/* number every rendered code line, starting from the export's file line */
+.api-source-code .line { counter-increment: ln; }
+.api-source-code .line::before {
+  content: counter(ln);
+  display: inline-block;
+  width: 3ch;
+  margin-right: 1rem;
+  padding-right: 0.7rem;
+  text-align: right;
+  color: color-mix(in oklab, var(--fg) 32%, transparent);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
 .api-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
 .api-chip { font-size: 0.68rem; padding: 0.12rem 0.42rem; border-radius: 4px; font-family: var(--font-mono); }
 .api-chip-cat { text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }

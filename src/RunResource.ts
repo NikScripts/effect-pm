@@ -541,6 +541,17 @@ const materializeRunTag = <Self>() =>
     );
   };
 
+/**
+ * Define a run (concurrency-gated effect) as a named service {@link Tag}:
+ * `class Backup extends RunResource.Tag<Backup>()("@app/Backup", { payload: ArgsSchema }) {}`. The
+ * class *is* the Tag — `yield* Backup` resolves the {@link RunResource} handle (its `.run` applies
+ * the bounded-concurrency gate inline), while {@link layer} provides it and {@link serve} exposes it
+ * over RPC. `payload` is the argument schema; optional `success` / `error` declare the result and
+ * failure wire schemas.
+ *
+ * @public
+ * @category constructors
+ */
 const runTag = <Self>() => {
   function build(key: string): RunTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
   function build<

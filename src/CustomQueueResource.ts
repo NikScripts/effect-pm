@@ -330,6 +330,16 @@ export interface CustomQueueTagConfig<
   readonly node?: NodeKey<unknown>;
 }
 
+/**
+ * Define an N-level managed queue as a named service {@link Tag} (also exported as
+ * {@link customQueueTag}): `class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/Jobs", { … }) {}`.
+ * The class *is* the Tag — `yield* Jobs` resolves the queue handle, {@link layer} provides it and
+ * {@link serve} exposes it over RPC. `payload` is the item schema; `levelCount` / `namedLevels`
+ * declare the priority levels; optional `success` / `error` add the worker wire schemas.
+ *
+ * @public
+ * @category constructors
+ */
 export const customQueueTag = <Self>() => {
   function build<
     F extends Schema.Struct.Fields,

@@ -918,6 +918,17 @@ const nameQueueService = <
 ): QueueTag<Self, F, Success, Error> & QueueItemSchemaCarrier<F> =>
   tag as unknown as QueueTag<Self, F, Success, Error> & QueueItemSchemaCarrier<F>;
 
+/**
+ * Define a queue as a named service {@link Tag}:
+ * `class Mail extends QueueResource.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
+ * *is* the Tag — `yield* Mail` inside an Effect resolves the {@link QueueResource} handle
+ * (enqueue / status / metrics), while {@link layer} provides the running queue and {@link serve}
+ * exposes it over RPC. `payload` is the item schema; the {@link QueueTagConfig} overload adds
+ * `success` / `error` wire schemas for the worker's result and failures.
+ *
+ * @public
+ * @category constructors
+ */
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,

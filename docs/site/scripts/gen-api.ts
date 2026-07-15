@@ -43,6 +43,7 @@ const ApiSymbol = Schema.Struct({
   kind: Schema.String,
   signatures: Schema.Array(Schema.String), // one per overload (empty for non-callables)
   typeText: Schema.optional(Schema.String), // for non-callable values / type aliases / interfaces
+  sourceText: Schema.String, // the export's actual source (the declaration as written), shown verbatim
   summary: Schema.String, // resolved doc summary (previews / search)
   rawComment: Schema.String, // raw /** … */ with {@link} intact (the site re-renders this)
   tags: Schema.Array(ApiTag),
@@ -240,6 +241,18 @@ const makeExtractor = (checker: ts.TypeChecker) => {
       }));
     const rawComment = rawCommentOf(decl);
     const source = decl.getSourceFile();
+    // The export's actual source, as written. All in-package declarations (function overloads carry
+    // several) joined — `getText()` starts after the JSDoc, so this is code only, docs shown
+    // separately. A `const`/`let` declaration's `const`/`export` keyword lives on the enclosing
+    // statement, so climb to it; otherwise the node's own text is the whole declaration.
+    const declText = (d: ts.Declaration): string =>
+      ts.isVariableDeclaration(d) && ts.isVariableDeclarationList(d.parent)
+        ? d.parent.parent.getText()
+        : d.getText();
+    const sourceText = (sym.getDeclarations() ?? [])
+      .filter((d) => d.getSourceFile().fileName.startsWith(srcDir))
+      .map(declText)
+      .join("\n\n");
     const name = exportSym.getName();
     const qualifiedName = ns === undefined ? name : `${ns}.${name}`;
 
@@ -252,6 +265,7 @@ const makeExtractor = (checker: ts.TypeChecker) => {
         kind: kindOf(sym),
         signatures,
         typeText,
+        sourceText,
         summary: strip(ts.displayPartsToString(sym.getDocumentationComment(checker))),
         rawComment,
         tags,
@@ -319,18 +333,30 @@ const program = Effect.gen(function* () {
     for (const m of checker.getExportsOfModule(g.module)) namespaced.add(resolve(m));
   }
 
+  // A symbol can be exported under several names — its internal name AND a `export { x as Public }`
+  // rename (e.g. `customQueueTag` and `… as Tag`). Show only the PUBLIC rename a caller is meant to
+  // use, never a second entry under the internal name.
+  const preferRename = (mods: ReadonlyArray<ts.Symbol>): ReadonlyArray<ts.Symbol> => {
+    const byResolved = new Map<ts.Symbol, Array<ts.Symbol>>();
+    for (const m of mods) {
+      const r = resolve(m);
+      const arr = byResolved.get(r);
+      if (arr === undefined) byResolved.set(r, [m]);
+      else arr.push(m);
+    }
+    return [...byResolved].map(([r, exps]) => exps.find((e) => e.getName() !== r.getName()) ?? exps[0]);
+  };
+
   const nsEntries: Array<ApiEntry> = groups.map((g) => ({
     entry: g.ns,
-    symbols: checker
-      .getExportsOfModule(g.module)
+    symbols: preferRename(checker.getExportsOfModule(g.module))
       .flatMap((m) => toApi(g.ns, m))
       .sort((a, b) => a.name.localeCompare(b.name)),
   }));
   const topLevel =
     barrelMod === undefined
       ? []
-      : checker
-          .getExportsOfModule(barrelMod)
+      : preferRename(checker.getExportsOfModule(barrelMod))
           .filter((ex) => !isModuleSym(resolve(ex)) && !namespaced.has(resolve(ex)))
           .flatMap((ex) => toApi(undefined, ex))
           .sort((a, b) => a.name.localeCompare(b.name));

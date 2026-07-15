@@ -30,6 +30,7 @@ export interface ApiSymbol {
   readonly kind: string;
   readonly signatures: ReadonlyArray<string>;
   readonly typeText?: string;
+  readonly sourceText: string;
   readonly summary: string;
   readonly rawComment: string;
   readonly tags: ReadonlyArray<ApiTag>;
