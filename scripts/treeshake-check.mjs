@@ -56,6 +56,15 @@ const cases = [
     ],
     member: "Tag",
   },
+  {
+    // `RunResource` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
+    // engine. A `RunResource.Tag`-only import must not retain the engine (`makeRunResourceHandleEffect`
+    // / `make` / `layer` / `serve`).
+    name: "RunResource",
+    entry: "src/RunResource.ts",
+    engine: ["src/internal/runResource.ts"],
+    member: "Tag",
+  },
 ];
 
 const bundleTagOnly = async (entryAbs, member) => {

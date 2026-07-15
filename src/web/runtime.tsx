@@ -24,7 +24,6 @@ import {
 
 // The injected runtime's requirement `R` varies per consumer; React context can't be generic,
 // so this single seam erases it. `<Dashboard runtime={...} />` keeps the consumer-facing type.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRuntime = Atom.AtomRuntime<any, any>;
 
 const RuntimeContext = React.createContext<AnyRuntime | null>(null);

@@ -86,16 +86,27 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 2.75rem;          /* 44px — a proper touch target (was 33px, easy to miss) */
+  height: 2.75rem;
   padding: 0;
   color: var(--fg);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
   cursor: pointer;
+  /* Register taps immediately instead of waiting to see if it's a double-tap-to-zoom — the wait was
+     swallowing quick taps, so the menu "needed many tries" to open. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in oklab, var(--primary) 22%, transparent);
 }
-.icon-btn:hover { background: var(--card); border-color: var(--border); }
+/* Only on real hover devices — a bare `:hover` makes iOS need a first tap just to "hover" and a
+   second to click. */
+@media (hover: hover) {
+  .icon-btn:hover { background: var(--card); border-color: var(--border); }
+}
+/* The stroked icon has "holes" between its lines; without this a tap landing in a gap hits the SVG
+   (or nothing) instead of the button. Make the icon transparent to pointers so the button always wins. */
+.icon-btn svg { pointer-events: none; }
 
 /* mobile menu — a full-page takeover (fixed), NOT a disclosure that pushes content.
    Sits under the sticky top bar (which stays on top at z-index 50). */
@@ -385,8 +396,8 @@ pre.shiki { background: transparent; }
   background: transparent !important;
   border: none;
   border-radius: 0;
-  white-space: pre;        /* code never wraps */
-  overflow-x: auto;        /* a too-wide type scrolls within its own section, not the whole popup */
+  white-space: pre;        /* code never wraps; prettier-formatted types carry their own line breaks */
+  overflow-x: auto;        /* a too-wide line scrolls within its own section, not the whole popup */
 }
 /* Rich popups render the type as a nested shiki <pre>, which carries the base `pre {}` border, radius,
    and padding — a boxed chip. Drop only the border + radius (and reset margin); keep shiki's own inline
@@ -415,8 +426,8 @@ pre.shiki { background: transparent; }
   display: block;
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  white-space: pre;        /* expanded type never wraps */
-  overflow-x: auto;        /* scrolls within its own section when wide */
+  white-space: pre;        /* expanded type keeps its prettier line breaks */
+  overflow-x: auto;        /* scrolls within its own section when a line is still wide */
 }
 .twoslash-popup-expand pre {
   margin: 0;
@@ -874,4 +885,72 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 @media (max-width: 640px) {
   .api-row { grid-template-columns: 1fr auto; }
   .api-row-sum { display: none; }
+}
+
+/* long-press-to-copy: toast confirmation for the twoslash type popups */
+.copy-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+  z-index: 70;
+  padding: 0.5rem 0.95rem;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0;
+  transform: translate(-50%, 0.8rem);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.copy-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) {
+  .copy-toast { transform: translate(-50%, 0); transition: opacity 0.18s ease; }
+}
+/* On touch devices, suppress the native long-press callout/selection over the popup so our
+   long-press-to-copy owns the gesture. Desktop keeps text selection. */
+@media (hover: none) {
+  .twoslash-hover,
+  .twoslash-popup-container {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+
+/* Long-press feedback. "pressing" = finger down (a faint wash); "armed" = held long enough, RELEASE
+   NOW (a strong wash). Both wash toward --fg, which is dark in light mode and light in dark mode, so
+   the armed state reads as "darker" on a light page and "lighter" on a dark one — high contrast
+   against whatever the section's own background is. */
+:root {
+  --press-tint: color-mix(in oklab, var(--fg) 12%, transparent);
+  --armed-tint: color-mix(in oklab, var(--fg) 40%, transparent);
+}
+/* token: an inline background pill */
+.twoslash-hover.tw-pressing {
+  background: var(--press-tint);
+  border-radius: 4px;
+}
+.twoslash-hover.tw-armed { background: var(--armed-tint); }
+/* preview sections: a pseudo-element wash over their own (shiki) background */
+.twoslash-popup-code.tw-pressing,
+.twoslash-popup-docs.tw-pressing {
+  position: relative;
+}
+.twoslash-popup-code.tw-pressing::after,
+.twoslash-popup-docs.tw-pressing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--press-tint);
+  transition: background 0.1s ease;
+}
+.twoslash-popup-code.tw-armed::after,
+.twoslash-popup-docs.tw-armed::after {
+  background: var(--armed-tint);
 }

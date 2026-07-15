@@ -5,7 +5,8 @@
  * resources (one shape, one instance per node). Pure gather + fold over a **caller-supplied** keyed
  * peer map (`node → service`), so it runs unchanged in the browser (a dashboard), in node/bun (an
  * aggregator), or a CLI. Each node's outcome is captured, so the combine decides how to treat a node
- * that's down — sum the survivors, fail hard, or report "2/3 reporting". The toolkit imposes no policy.
+ * that's down — sum the survivors ({@link combineByNode}), keep every Exit
+ * ({@link combineByNodeExit}), fail hard, or report "2/3 reporting". The toolkit imposes no policy.
  *
  * This is slice 1 of the multi-node design (see `docs/handoffs/multi-host-instances-decisions.md`): the
  * contract field-kinds (`multiQuery` / `multiStream`) and the serve/peer wiring build on these.
@@ -94,6 +95,18 @@ export const combineByNode = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): Record<string, A> =>
   Object.fromEntries(combineSuccesses(results).map((s) => [s.node, s.value]));
+
+/**
+ * Every peer exit keyed by node — **keeps failures**. Use this when silence would lie (fleet
+ * health): map `Exit` → wire (`Reachable` / `Unreachable`) yourself. Contrast
+ * {@link combineByNode}, which drops failed peers (fine for optional metric folds).
+ *
+ * @public
+ */
+export const combineByNodeExit = <A, E>(
+  results: ReadonlyArray<NodeResult<A, E>>,
+): Record<string, Exit.Exit<A, E>> =>
+  Object.fromEntries(results.map((r) => [r.node, r.exit]));
 
 /** Interleave every node's stream into one (a `transform` for {@link combineStream}). @public */
 export const mergeNodeStreams = <A, E>(

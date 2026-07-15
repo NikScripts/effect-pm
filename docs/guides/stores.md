@@ -1,4 +1,4 @@
-{#stores title="Stores" status="draft" appliesTo=all}
+{#stores title="Stores" status="draft" done="api" appliesTo=all}
 # Stores
 
 Durable storage for resources — one composition recipe so Soft unwrap captures your

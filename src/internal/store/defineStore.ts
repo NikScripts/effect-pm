@@ -204,8 +204,7 @@ export type StandaloneStoreClass<
   readonly scopeKey: K;
   readonly spec: C["spec"];
   readonly contract: C;
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- conditional empty branch
-} & (Tag extends undefined ? {} : { readonly tag: Tag });
+} & (Tag extends undefined ? unknown : { readonly tag: Tag });
 
 export { isStandaloneStoreClass } from "./registrationNormalize";
 

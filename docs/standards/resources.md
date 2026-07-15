@@ -1,4 +1,4 @@
-{#resources title="Resource Factories" order=60 status="draft" appliesTo=src}
+{#resources title="Resource Factories" order=60 appliesTo=src}
 # Resource Factories
 
 How a resource is defined, served, and meshed across nodes. Covers the tag/layer split, the serve vocabulary, and multi-node meshing.
@@ -219,6 +219,10 @@ class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
 // ❌ readiness that hops to peers — a down neighbour drags this node down
 Resource.withReadiness(() => Effect.map(Resource.peers(Prices), allReady))
 ```
+
+For a **stadium-board** view of the pack (Reachable / Unreachable), use
+[`FleetHealth`](../guides/fleet-health.md) — a separate glass; do not stuff the fold into
+`withReadiness`.
 
 {#fold-over-leaf-fields .must appliesTo="src examples"}
 ## Fold over leaf fields; fleet views stay out of the fan-out

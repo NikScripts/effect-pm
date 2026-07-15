@@ -25,7 +25,6 @@ export const debugEnabled = (): boolean => {
 
 /** Log only in debug mode (appears in the overlay + the real console). */
 export const dlog = (...args: ReadonlyArray<unknown>): void => {
-  // @effect-diagnostics-next-line globalConsole:off
   if (debugEnabled()) console.log("[dbg]", ...args);
 };
 
@@ -101,7 +100,6 @@ export const DebugConsole = (): React.ReactElement | null => {
   // API is absent over a non-secure origin (http on a LAN/Tailscale IP), so fall back to a hidden
   // textarea + execCommand. Always give feedback: check (ok) / x (failed). A DOM clipboard handler,
   // not Effect domain — async/await is the right shape here.
-  // @effect-diagnostics-next-line asyncFunction:off
   const copy = async (): Promise<void> => {
     const text = all.map((l) => `${fmtClock(l.t)} [${l.level}] ${l.text}`).join("\n");
     let ok = false;
@@ -130,7 +128,6 @@ export const DebugConsole = (): React.ReactElement | null => {
       }
     }
     setCopyState(ok ? "ok" : "fail");
-    // @effect-diagnostics-next-line globalTimers:off
     setTimeout(() => setCopyState("idle"), 1500);
   };
   // fully turn debug off: clear the persisted flag AND the ?debug URL param, then hide

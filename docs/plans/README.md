@@ -7,7 +7,7 @@ Pre-1.0: breaking changes land as minor bumps.
 ## Toolkit
 
 - **Guaranteed barrel-namespace tree-shaking** — make `import { QueueResource } from "@nikscripts/effect-pm"` + `QueueResource.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
-- **Fleet health** — per-node readiness + `/health` / `NodeStatus` are **shipped**. Still open: a first-class **fleet-wide** health surface that aggregates peer readiness (without cascading “peer down” into local readiness). Builds on fleets/peers + readiness as they exist today.
+- **Fleet health** — **shipped** as [`FleetHealth`](../guides/fleet-health.md) (`@nikscripts/effect-pm/FleetHealth`). Per-node readiness + `/health` stay local; the glass folds peers with `Reachable` / `Unreachable` (Effect `Exit` kept). See that guide.
 - **Resource-RPC auth** — a first-class authentication/authorization story for served resources (deployments use an edge gateway / Cloudflare Zero Trust short-term). Spec TBD when scope is locked; stays a roadmap bullet until then.
 
 ## Orchestration

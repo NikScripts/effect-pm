@@ -121,6 +121,8 @@
     "dist",
     "repos",
     "examples/scenarios/nwslsoccer",
+    // The browser/React layer has its own (relaxed) ruleset — see src/web/tsconfig.json.
+    "src/web/**",
     "src/bin/**"
   ]
 }

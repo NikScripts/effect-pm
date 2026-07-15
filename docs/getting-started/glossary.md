@@ -37,7 +37,8 @@ The code that fulfils a Contract — the concrete behaviour behind each of its m
 ## Layer
 
 How a Resource is provided, and therefore where it runs: `Resource.layer` runs it in process,
-`Resource.serve` exposes it over HTTP, and `Resource.clientHttp` connects to one running elsewhere.
+`Resource.serve` exposes it over HTTP, and `Resource.clientHttp` connects to one running elsewhere
+(a browser dashboard uses `Resource.socketClient` — a WebSocket — instead; see the Dashboard guide).
 
 {.draft}
 ## Handle

@@ -30,17 +30,33 @@ export default defineConfig([
       Store: "src/Store.ts",
       ApiMetrics: "src/ApiMetrics.ts",
       Telemetry: "src/Telemetry.ts",
+      FleetHealth: "src/FleetHealth.ts",
       ShardMap: "src/ShardMap.ts",
       DynamicConfig: "src/DynamicConfig.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       HttpApiResource: "src/HttpApiResource.ts",
-      web: "src/web/index.ts",
       cli: "src/cli/index.ts",
       tui: "src/tui/index.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
     },
     dts: true,
     clean: true,
+    esbuildOptions(options) {
+      options.jsx = "automatic";
+    },
+  },
+  {
+    // The `web` (browser/React) entry builds its declarations under the relaxed browser ruleset
+    // (src/web/tsconfig.json) — the root config's Effect-purity plugin (globalDate / globalTimers /
+    // globalConsole / asyncFunction) is wrong for UI code and would fail the DTS build. `clean` stays
+    // off so it doesn't wipe the first build's output.
+    ...shared,
+    entry: {
+      web: "src/web/index.ts",
+    },
+    tsconfig: "src/web/tsconfig.json",
+    dts: true,
+    clean: false,
     esbuildOptions(options) {
       options.jsx = "automatic";
     },

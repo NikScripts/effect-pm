@@ -9,7 +9,6 @@
 import { utcDateFromMillis } from "../internal/utcDate";
 
 /** Current epoch milliseconds. */
-// @effect-diagnostics-next-line globalDate:off
 export const now = (): number => Date.now();
 
 /** A `Date` for display formatting from epoch millis (UTC-constructed, formatted locally). */
@@ -22,7 +21,6 @@ export const fmtClock = (millis: number): string => dateFromMillis(millis).toLoc
  *  if blank/invalid. Confined here since it constructs a `Date` to interpret the local zone. */
 export const millisFromLocalInput = (value: string): number | undefined => {
   if (value === "") return undefined;
-  // @effect-diagnostics-next-line globalDate:off
   const ms = new Date(value).getTime();
   return Number.isNaN(ms) ? undefined : ms;
 };

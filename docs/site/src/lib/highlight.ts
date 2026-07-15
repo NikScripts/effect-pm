@@ -14,6 +14,7 @@ import { createTransformerFactory, rendererRich } from "@shikijs/twoslash";
 import { createTwoslasher } from "twoslash";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toHast } from "mdast-util-to-hast";
+import prettier from "prettier";
 import { makeTypeExpander } from "./expandType";
 
 const THEMES = { light: "github-light", dark: "github-dark" } as const;
@@ -76,6 +77,41 @@ const EXPAND_OPEN = "@@PMEXPAND@@";
 // to the type), so the expanded box reads as the same declaration with the body spelled out.
 const declHead = (text: string): string => text.match(/^([\s\S]*?:\s)/)?.[1] ?? "";
 
+// Prettier-format a hover's compact type so long generics break across lines in the popup instead of
+// stretching off-screen. Twoslash prefixes some hovers with "(property) " / "(method) " etc. — keep
+// that; wrap the rest in a valid TS construct, format, and unwrap. Best-effort: unparseable text is
+// returned unchanged. Narrow printWidth because the popup is narrow.
+const hoverFormatOpts = { parser: "typescript" as const, printWidth: 50, semi: false };
+const tryFormat = (src: string, unwrap: (s: string) => string): string | undefined => {
+  try {
+    return unwrap(prettier.format(src, hoverFormatOpts).trim());
+  } catch {
+    return undefined;
+  }
+};
+const formatHoverType = (text: string): string => {
+  const m = /^(\([a-z ]+\)\s+)?([\s\S]+)$/.exec(text);
+  const prefix = m?.[1] ?? "";
+  const body = (m?.[2] ?? text).trim();
+  // `name: Type` / `name?: Type` (a property or variable) — format only the type after the colon.
+  const decl = /^([\w$]+\??:\s*)([\s\S]+)$/.exec(body);
+  if (decl !== null) {
+    const t = tryFormat(`type _t = ${decl[2]}`, (s) =>
+      s.replace(/^type _t =\s*/, "").replace(/;$/, "").trim(),
+    );
+    if (t !== undefined) return `${prefix}${decl[1]}${t}`;
+  }
+  // a full declaration (const / function / class / type …)
+  const full = tryFormat(`declare ${body}`, (s) => s.replace(/^declare\s+/, "").replace(/;$/, "").trim());
+  if (full !== undefined) return prefix + full;
+  // a bare type
+  const bare = tryFormat(`type _t = ${body}`, (s) =>
+    s.replace(/^type _t =\s*/, "").replace(/;$/, "").trim(),
+  );
+  if (bare !== undefined) return prefix + bare;
+  return text;
+};
+
 // Cache expansions per block code (dev re-renders the same block repeatedly).
 const blockCache = new Map<string, Map<number, string>>();
 
@@ -111,6 +147,9 @@ const twoslasher = Object.assign(
         const prior = (h as { docs?: string }).docs;
         (h as { docs?: string }).docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
       });
+      // Format each hover's compact type AFTER expansion (which reads the raw text) so long types
+      // break across lines in the popup.
+      for (const h of hovers) h.text = formatHoverType(h.text);
     } catch {
       // Expansion is best-effort: on any failure keep the plain (compact) twoslash hovers.
     }
