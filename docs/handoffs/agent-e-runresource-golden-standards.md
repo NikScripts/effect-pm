@@ -9,6 +9,24 @@ Work in this repo/worktree. Branch off `integration` (an empty
 `runresource-golden-standards` branch already exists off the current integration —
 use it or recreate it). Merge to `integration` when green.
 
+## Baseline / environment (read first)
+
+- **`effect` is now `4.0.0-beta.98`** (upgraded from beta.92; on integration as of
+  the merge that landed this handoff update). `pnpm install` before you start.
+- **Green baseline on integration:** full `tsc` **0 errors** (ignore only
+  `scratchpad/*` and `test/resource-readiness.test.ts` TS2589); **470/470** tests;
+  effect LSP 0/0/0 on every file *except* `RunResource.ts` (which has the 3 below).
+- **beta.98 gotcha you inherit — `any`-poisoned upstream types hide runtime breaks.**
+  The beta.92→.98 bump renamed `HttpApiEndpoint.name`→`.identifier`, but because
+  `HttpApiEndpoint.Top extends HttpApiEndpoint<…, any, unknown>`, reading the old
+  `.name` typechecked as `any` and **tsc stayed silent** while ApiMetrics silently
+  recorded nothing — only the test suite caught it. Lesson for your cast removals:
+  a green `tsc` is necessary but not sufficient; **run `vitest` too** (see the
+  full-project-typecheck lesson below). RunResource itself does NOT touch httpapi,
+  so no beta.98 migration is needed inside it.
+- **`effect/Optic` (schema-derived optics) is now available** but is **out of scope**
+  for this golden-standard pass — don't introduce it here.
+
 ## The bar — what "done" means (the QR/Process checklist)
 
 1. **Named handle** — `yield* MyRun` hovers as a compact named type, not the
@@ -24,7 +42,17 @@ use it or recreate it). Merge to `integration` when green.
    No hand-authored duplicate of a schema type without a guard.
 8. **No debris** (TODO/FIXME/ts-ignore/console), **tests green**, guide deferred.
 
-## RunResource audit — the gap (measured 2026-07-14)
+## RunResource audit — the gap (re-measured 2026-07-14 on beta.98)
+
+Current numbers on integration: **named handle MISSING**, **3** effect-LSP errors
+(all `missingEffectContext: unknown` at **510 / 513 / 522**), **32** casts by
+`grep -nE "\bas\b" src/RunResource.ts | grep -E "as [A-Z]|as unknown|as any|as \{"`
+— of which **4 are `as any`** (both in `serve`/`serveRemote`, lines ~669 & ~702:
+`tag as any`, `built as any`). Cast breakdown: 6× `as ResourceTag`, 5× `as unknown`,
+5× `as Layer.Layer`, 4× `as any`, 3× `as {`, 2× each `as Schema.Top` /
+`as RunResourceWireSchemas` / `as Resource.AnyMethod`, and 10 singletons. The 4
+`as any` in serve/serveRemote map **directly** to QR's already-solved fix — QR
+removed the vestigial `built as any` in its own `serve`/`serveRemote`; copy that.
 
 ### A. Named handle — MISSING (the M3-equivalent; the substantial piece)
 There is **no `RunResource<…>` handle interface**; `yield* MyRun` types as the raw
@@ -56,7 +84,7 @@ assignable) rather than leaking `unknown` R. Suppress with `//
 @effect-diagnostics-next-line missingEffectContext:off` ONLY if it's provably a
 false-positive (as in Process); otherwise fix structurally.
 
-### C. Casts — ~15 (target: 1–2 guarded/documented). Playbook per cast:
+### C. Casts — 32 (target: 1–2 guarded/documented). Playbook per cast:
 Run `grep -nE "\bas\b" src/RunResource.ts | grep -E "as [A-Z]|as unknown|as any|as \{"`
 to enumerate. Known patterns and where to copy the fix:
 - **`(config.payload ?? Schema.Void) as I` / `… as A` / `… as E`** (×3, ~L353-355)
@@ -105,7 +133,7 @@ to enumerate. Known patterns and where to copy the fix:
 - `npx tsc --noEmit -p tsconfig.json` → 0 non-preexisting errors (ignore only
   `scratchpad/*` and `test/resource-readiness.test.ts` TS2589).
 - `npx effect-language-service diagnostics --file src/RunResource.ts` → 0/0/0.
-- `npx vitest run` → all green (baseline was 463 tests / 106 files).
+- `npx vitest run` → all green (baseline is **470 tests / 108 files** on beta.98).
 - `node docs/site/scripts/treeshake-check.mjs` → RunResource case green (needs
   `esbuild`; `pnpm add -D esbuild` if the gitignored lockfile dropped it).
 - Cast count reduced to 1–2, each documented or test-d-guarded. No `as any`.
