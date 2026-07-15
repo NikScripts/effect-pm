@@ -917,7 +917,9 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   overflow-x: auto;
   font-size: 0.78rem;
 }
-.api-source-code pre { margin: 0; padding: 0.55rem 0; }
+/* only the main code pre (a direct child) — NOT the <pre>s nested in twoslash hover popups, whose
+   own x-padding (e.g. the pretty-type preview) must survive */
+.api-source-code > pre { margin: 0; padding: 0.55rem 0; }
 /* number every rendered code line, starting from the export's file line */
 .api-source-code .line { counter-increment: ln; }
 .api-source-code .line::before {
