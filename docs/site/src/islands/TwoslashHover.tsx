@@ -140,49 +140,103 @@ export function TwoslashHover(): null {
           ? "comments"
           : "type";
     const copySection = (section: Element): void => {
-      const text = (section as HTMLElement).innerText.trim();
+      const el = section as HTMLElement;
+      const text = (el.innerText || el.textContent || "").trim();
       if (text && copyText(text)) {
         toast(`Copied ${labelFor(section)}`);
       }
     };
 
-    // Long-press = held ≥450ms on one section without dragging, then released — the copy runs on
-    // touchend so it's inside a gesture.
-    let pressSection: Element | null = null;
+    // Long-press = held ≥450ms without dragging, then released (the copy runs on touchend so it's
+    // inside a gesture). Press a popup section to copy that section; press a TOKEN to open its popup
+    // and copy the type — the reliable mobile path, since tap-to-open-then-press-the-popup was fragile.
+    const HOLD = 400; // ms to hold before it's "armed" to copy on release
+    let pressTarget: Element | null = null;
     let pressStart = 0;
+    let armTimer = 0;
     let startAt: { x: number; y: number } | null = null;
     const cancelPress = (): void => {
-      pressSection = null;
+      if (armTimer) {
+        clearTimeout(armTimer);
+        armTimer = 0;
+      }
+      pressTarget?.classList.remove("tw-pressing", "tw-armed");
+      pressTarget = null;
       startAt = null;
     };
+    const closeNow = (): void => {
+      if (openEl) {
+        openEl.classList.remove("is-open");
+        clearPos(openEl);
+        openEl = null;
+      }
+    };
+
+    // Touch model: tap a token to open a STICKY popup (stays until you tap outside); long-press a
+    // section (or the token) to copy it. A tap outside closes it.
+    let outsideTap = false;
     const onTouchStart = (e: TouchEvent): void => {
-      const section = (e.target as Element | null)?.closest?.(
-        ".twoslash-popup-code, .twoslash-popup-docs",
-      );
-      if (section === null || section === undefined || e.touches.length !== 1) return;
+      if (e.touches.length !== 1) return;
+      const el = e.target as Element | null;
+      // the popup is a DOM descendant of its token, so `.twoslash-hover` covers both token and popup
+      if (el?.closest?.(".twoslash-hover") == null) {
+        outsideTap = openEl !== null; // finger landed outside any popup — close on release
+        return;
+      }
+      outsideTap = false;
+      const target = el.closest(".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover");
+      if (target === null) return;
       const t = e.touches[0];
       startAt = { x: t.clientX, y: t.clientY };
       pressStart = Date.now();
-      pressSection = section;
+      pressTarget = target;
+      target.classList.add("tw-pressing"); // finger-down feedback
+      armTimer = window.setTimeout(() => target.classList.add("tw-armed"), HOLD);
     };
     const onTouchMove = (e: TouchEvent): void => {
       if (startAt === null) return;
       const t = e.touches[0];
-      if (Math.abs(t.clientX - startAt.x) > 10 || Math.abs(t.clientY - startAt.y) > 10) cancelPress();
+      // generous tolerance — a long press naturally drifts a few px
+      if (Math.abs(t.clientX - startAt.x) > 16 || Math.abs(t.clientY - startAt.y) > 16) cancelPress();
     };
     const onTouchEnd = (): void => {
-      if (pressSection !== null && startAt !== null && Date.now() - pressStart >= 450) {
-        copySection(pressSection);
+      if (outsideTap) {
+        outsideTap = false;
+        closeNow();
+        return;
       }
-      cancelPress();
+      const target = pressTarget;
+      const longPress = target !== null && startAt !== null && Date.now() - pressStart >= HOLD;
+      cancelPress(); // clears the press highlight
+      if (target === null) return;
+      if (target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
+        if (longPress) copySection(target); // long-press a preview section → copy it
+        return;
+      }
+      // a token
+      if (longPress) {
+        open(target); // open its popup and copy the compact type
+        const code = target.querySelector(".twoslash-popup-code");
+        if (code) copySection(code);
+      } else if (openEl === target) {
+        closeNow(); // tap an already-open token → close
+      } else {
+        open(target); // tap to open (sticky)
+      }
     };
 
-    document.addEventListener("mouseover", onOver);
-    document.addEventListener("mouseout", onOut);
-    document.addEventListener("touchstart", onTouchStart, { passive: true });
-    document.addEventListener("touchmove", onTouchMove, { passive: true });
-    document.addEventListener("touchend", onTouchEnd);
-    document.addEventListener("touchcancel", cancelPress);
+    // Hover devices open on hover; touch devices use the tap-open + long-press-copy model above.
+    const hoverCapable =
+      typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
+    if (hoverCapable) {
+      document.addEventListener("mouseover", onOver);
+      document.addEventListener("mouseout", onOut);
+    } else {
+      document.addEventListener("touchstart", onTouchStart, { passive: true });
+      document.addEventListener("touchmove", onTouchMove, { passive: true });
+      document.addEventListener("touchend", onTouchEnd);
+      document.addEventListener("touchcancel", cancelPress);
+    }
     return () => {
       document.removeEventListener("mouseover", onOver);
       document.removeEventListener("mouseout", onOut);

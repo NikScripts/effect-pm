@@ -912,6 +912,7 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 /* On touch devices, suppress the native long-press callout/selection over the popup so our
    long-press-to-copy owns the gesture. Desktop keeps text selection. */
 @media (hover: none) {
+  .twoslash-hover,
   .twoslash-popup-container {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -919,3 +920,23 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   }
 }
 
+
+/* long-press feedback: finger-down highlight, then a stronger "armed" highlight once held long
+   enough (release to copy). Applied to the token or the popup section under the press. */
+/* token: a background pill */
+.twoslash-hover.tw-pressing {
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  border-radius: 4px;
+  transition: background 0.1s ease;
+}
+.twoslash-hover.tw-armed { background: color-mix(in oklab, var(--primary) 34%, transparent); }
+/* preview sections: an inset ring, visible over their own (shiki) backgrounds */
+.twoslash-popup-code.tw-pressing,
+.twoslash-popup-docs.tw-pressing {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 45%, transparent);
+  transition: box-shadow 0.1s ease;
+}
+.twoslash-popup-code.tw-armed,
+.twoslash-popup-docs.tw-armed {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
