@@ -115,14 +115,22 @@ export function TwoslashHover(): null {
       try {
         const span = document.createElement("span");
         span.textContent = text;
-        span.style.cssText = "position:fixed;top:0;left:0;white-space:pre;opacity:0;";
+        // rendered but visually clipped (iOS won't select an opacity:0 / hidden node), and explicitly
+        // user-selectable (a `user-select: none` ancestor would otherwise block the copy).
+        span.style.cssText =
+          "position:fixed;top:0;left:0;white-space:pre;clip:rect(0,0,0,0);-webkit-user-select:text;user-select:text;";
         document.body.appendChild(span);
         const sel = window.getSelection();
         const range = document.createRange();
-        range.selectNodeContents(span);
+        range.selectNode(span);
         sel?.removeAllRanges();
         sel?.addRange(range);
-        const ok = document.execCommand("copy");
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch {
+          ok = false;
+        }
         sel?.removeAllRanges();
         span.remove();
         return ok;
