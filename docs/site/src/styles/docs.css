@@ -923,20 +923,35 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 
 /* long-press feedback: finger-down highlight, then a stronger "armed" highlight once held long
    enough (release to copy). Applied to the token or the popup section under the press. */
-/* token: a background pill */
-.twoslash-hover.tw-pressing {
-  background: color-mix(in oklab, var(--primary) 14%, transparent);
-  border-radius: 4px;
-  transition: background 0.1s ease;
+/* Long-press feedback. "pressing" = finger down (a faint blue tint); "armed" = held long enough,
+   RELEASE NOW (a bright green wash) — a distinct colour so it's obvious it's time to let go before
+   iOS's own long-press selection kicks in and breaks the copy. */
+:root {
+  --press-tint: color-mix(in oklab, var(--primary) 16%, transparent);
+  --armed-tint: oklch(0.72 0.17 150 / 0.42); /* green = "go / release" */
 }
-.twoslash-hover.tw-armed { background: color-mix(in oklab, var(--primary) 34%, transparent); }
-/* preview sections: an inset ring, visible over their own (shiki) backgrounds */
+/* token: an inline background pill */
+.twoslash-hover.tw-pressing {
+  background: var(--press-tint);
+  border-radius: 4px;
+}
+.twoslash-hover.tw-armed { background: var(--armed-tint); }
+/* preview sections: a pseudo-element wash over their own (shiki) background */
 .twoslash-popup-code.tw-pressing,
 .twoslash-popup-docs.tw-pressing {
-  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 45%, transparent);
-  transition: box-shadow 0.1s ease;
+  position: relative;
 }
-.twoslash-popup-code.tw-armed,
-.twoslash-popup-docs.tw-armed {
-  box-shadow: inset 0 0 0 2px var(--primary);
+.twoslash-popup-code.tw-pressing::after,
+.twoslash-popup-docs.tw-pressing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--press-tint);
+  transition: background 0.1s ease;
+}
+.twoslash-popup-code.tw-armed::after,
+.twoslash-popup-docs.tw-armed::after {
+  background: var(--armed-tint);
 }
