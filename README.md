@@ -91,7 +91,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   QueueResource.store(RosterQueue),
 ) {}
 
-// host — engines require Storage; AppStore.layer* fills it (bakes Logs.layer + journals)
+// host — engines soft-default Memory; AppStore overrides Soft capture (bakes Logs + journals)
 Resource.httpServer([QueueResource.serve(RosterQueue, { effect })])
   .pipe(
     Layer.provide(AppStore.layerMemory),

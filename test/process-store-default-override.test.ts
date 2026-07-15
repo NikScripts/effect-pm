@@ -18,10 +18,10 @@ class OverrideStore extends Store.Service<OverrideStore>("@test/OverrideStore")(
 
 const clock = TestClock.layer();
 
-describe("Process.layer — Storage provision", () => {
-  it.effect("layerMemory records terminal runs with no app Store.Service", () =>
+describe("Process.layer — soft-default Memory + AppStore override", () => {
+  it.effect("layer alone records terminal runs with no app Store.Service", () =>
     Effect.gen(function* () {
-      const live = Process.layerMemory(DefaultExec, {
+      const live = Process.layer(DefaultExec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       });
@@ -42,7 +42,7 @@ describe("Process.layer — Storage provision", () => {
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
 
-  it.effect("AppStore via Layer.provide — engine captures app Storage (not layerDefaultMemory)", () =>
+  it.effect("AppStore via Layer.provideMerge — engine captures app Storage (not layerDefaultMemory)", () =>
     Effect.gen(function* () {
       const live = Process.layer(OverrideExec, {
         effect: Effect.succeed({ symbol: "OVERRIDE", usd: 1 }),

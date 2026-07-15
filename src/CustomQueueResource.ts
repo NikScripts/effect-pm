@@ -508,13 +508,22 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     return Resource.builtResource(tag, impl, context);
   });
 
-/** Prefer {@link layer} + AppStore; {@link layerMemory} for ephemeral. @internal */
+/**
+ * Soft-default {@link Store.Storage} ({@link Store.withDefaultStorage}) — R fulfilled; override by
+ * providing an app store into this layer. @internal
+ */
 const withDefaultMemory = <A, E, R>(
   layer: Layer.Layer<A, E, R | Store.Storage>,
-): Layer.Layer<A | Store.Storage, E, R> =>
-  Layer.provideMerge(layer, Store.layerDefaultMemory);
+): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
 
-/** @public */
+/**
+ * Local custom-queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
+ * `CustomQueueResource.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
+ *
+ * {@link layerMemory} is an alias for the same soft-default.
+ *
+ * @public
+ */
 export const layer = <
   Self,
   F extends CustomQueueItemFields = CustomQueueItemFields,
@@ -524,15 +533,17 @@ export const layer = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<Self | Local<Self>, never, R | RR | Store.Storage> =>
-  Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-      Resource.layer(tag, Resource.grantLocal(tag, built)),
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildCustomQueueImpl(tag, config), (built) =>
+        Resource.layer(tag, Resource.grantLocal(tag, built)),
+      ),
     ),
   );
 
 /**
- * {@link layer} with {@link Store.layerDefaultMemory}.
+ * Alias of {@link layer}.
  *
  * @public
  */
@@ -546,7 +557,7 @@ export const layerMemory = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
-  withDefaultMemory(layer(tag, config));
+  layer(tag, config);
 
 /**
  * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
@@ -554,6 +565,8 @@ export const layerMemory = <
  * {@link Resource.servedResourcesLayer} **without** granting the local instance, preserving the worker
  * requirement `R` for per-resource `Layer.provide`. For a pure gateway/edge; use {@link serve} when the
  * serving node also drives the queue.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
  * @public
  */
@@ -567,14 +580,16 @@ export const serveRemote = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
-  Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-      Resource.serveRemote(tag, built as any),
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildCustomQueueImpl(tag, config), (built) =>
+        Resource.serveRemote(tag, built as any),
+      ),
     ),
   );
 
 /**
- * {@link serveRemote} with {@link Store.layerDefaultMemory}.
+ * Alias of {@link serveRemote}.
  *
  * @public
  */
@@ -587,7 +602,7 @@ export const serveRemoteMemory = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-) => withDefaultMemory(serveRemote(tag, config));
+) => serveRemote(tag, config);
 
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the
@@ -595,6 +610,8 @@ export const serveRemoteMemory = <
  * {@link Resource.servedResourcesLayer}, **and** grants `Self | Local<Self>` so co-located code
  * can `yield* Tag`; the served cells *are* the in-process instance. A served-**only** gateway uses
  * {@link serveRemote}.
+ *
+ * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
  * @public
  */
@@ -608,18 +625,20 @@ export const serve = <
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
   never,
-  R | RR | Store.Storage
+  R | RR
 > =>
-  Layer.unwrap(
-    Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-      Resource.serve(tag, built as any),
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildCustomQueueImpl(tag, config), (built) =>
+        Resource.serve(tag, built as any),
+      ),
     ),
   );
 
 /**
- * {@link serve} with {@link Store.layerDefaultMemory}.
+ * Alias of {@link serve}.
  *
  * @public
  */
@@ -636,8 +655,7 @@ export const serveMemory = <
   Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
-> => withDefaultMemory(serve(tag, config));
-
+> => serve(tag, config);
 /** @public */
 export const configure = <
   Self,

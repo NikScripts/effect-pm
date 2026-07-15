@@ -108,9 +108,9 @@ const program = Effect.gen(function* () {
 
 ### Layer order
 
-Toolkit `layer` / `serve` **require** `Store.Storage`. Provide your `Store.Service` into the resource
-Layer so capture (and engine writes) use that store — especially before queue workers fork at
-Layer build:
+Toolkit `layer` / `serve` soft-default in-memory `Storage` (**R fulfilled**). Provide your
+`Store.Service` **into** the resource Layer so Soft unwrap captures that store — especially
+before queue workers fork at Layer build:
 
 ``` ts
 Effect.provide(
@@ -121,8 +121,8 @@ Effect.provide(
 )
 ```
 
-Ephemeral-only (no AppStore / no Logs): `QueueResource.layerMemory` / `Process.layerMemory`.
-Recipe SSOT: [`docs/guides/stores.md`](./stores.md).
+Bare `QueueResource.layer` / `Process.layer` (or `*Memory` aliases) work without an AppStore;
+durable logs still need `Store.Service.layer*`. Recipe SSOT: [`docs/guides/stores.md`](./stores.md).
 
 ## Keys
 

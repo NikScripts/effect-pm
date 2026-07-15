@@ -16,9 +16,10 @@
  * - {@link Service.layer} / {@link store.layer} with **required** `{ filename }` — SQLite via `SqlEventJournal`
  *   (`effect/unstable/eventlog`) on `@effect/sql-sqlite-node`.
  *
- * Toolkit engines (`Process.layer`, …) **require** {@link Storage}. Provide your {@link Service} with
- * `Layer.provide` / `provideMerge` (see `docs/guides/stores.md`). Use `Process.layerMemory` only for
- * ephemeral engine observability without an app store (`layerDefaultMemory` — no Logs).
+ * Toolkit engines (`Process.layer`, …) soft-default {@link layerDefaultMemory} via
+ * {@link withDefaultStorage} (**R fulfilled**). Override by providing your {@link Service} into
+ * the toolkit layer (`Layer.provide` / `provideMerge` — see `docs/guides/stores.md`). `*Memory`
+ * toolkit variants are aliases of the same soft-default (`layerDefaultMemory` — no Logs).
  *
  * Register scopes on an aggregate with {@link register} or {@link scoped}.
  * Resolve handles with `yield* MyStore.at(Tag)` (tag-first) or `yield* tag.store` when the tag
@@ -31,9 +32,10 @@
  *
  * ## Engine authoring
  *
- * Toolkit engines declare {@link Storage} as a dependency. Soft-default only via toolkit
- * `*Memory` layers (`Layer.provideMerge(Store.layerDefaultMemory)`). Prefer
- * `engine.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` so capture sees your store.
+ * Toolkit engines soft-default {@link Storage} via {@link withDefaultStorage}
+ * (**R fulfilled**; {@link layerDefaultMemory} when no ambient store). Override with
+ * `engine.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` so Soft unwrap captures your store.
+ * Toolkit `*Memory` APIs are aliases of that soft-default.
  *
  * @example Shape-first contract
  * ```ts
@@ -162,8 +164,8 @@ export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, Stor
 
 /**
  * Scope bridge every store handle resolves through — provided by an app {@link Service} layer or
- * {@link layerDefaultMemory}. Toolkit and third-party engines declare this as a dependency and
- * resolve handles via {@link withDefault} / {@link withStorage} (preferred) or `bridge.at`.
+ * the soft-default {@link layerDefaultMemory} (via {@link withDefaultStorage}). Engines resolve
+ * handles via {@link withDefault} / {@link withStorage} (preferred) or `bridge.at`.
  *
  * @example Engine — resolve once at layer build
  * ```ts
@@ -476,8 +478,9 @@ const applyStoreDefaultLogLevel = <
 /**
  * Baked-in default store layer: provides {@link Storage} from a process-local in-memory
  * `EventJournal`. Materializes any scope on demand so {@link withDefault} never fails when this
- * layer is in context. Merge into toolkit layers; apps override with `Layer.provideMerge` and a
- * registered {@link Service}.
+ * layer is in context. Toolkit layers soft-merge this via {@link withDefaultStorage}; apps
+ * override by providing a {@link Service} (`Layer.provide` / `provideMerge`) so Soft unwrap sees
+ * ambient {@link Storage} before the default.
  *
  * @public
  */
@@ -486,6 +489,32 @@ export const layerDefaultMemory: Layer.Layer<Storage> = Layer.unwrap(
     Layer.succeed(Storage, buildDefaultScopeBridge(journal)),
   ),
 ).pipe(Layer.provide(EventJournal.layerMemory));
+
+/**
+ * Soft-default {@link Storage} for toolkit engines.
+ *
+ * - No ambient {@link Storage} → merge {@link layerDefaultMemory} (**R fulfilled**).
+ * - Ambient {@link Storage} already present (app `Store.Service` via `Layer.provide` /
+ *   `provideMerge` into this layer) → build the engine against that store (override, including SQLite).
+ *
+ * Prefer composing override **into** the toolkit layer so Soft unwrap sees it:
+ * `Process.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` or
+ * `httpServer([…]).pipe(Layer.provide(AppStore.layer…))`.
+ *
+ * @public
+ */
+export const withDefaultStorage = <A, E, R>(
+  engine: Layer.Layer<A, E, R | Storage>,
+): Layer.Layer<A | Storage, E, R> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const existing = yield* Effect.serviceOption(Storage);
+      if (Option.isSome(existing)) {
+        return Layer.provide(engine, Layer.succeed(Storage, existing.value));
+      }
+      return Layer.provideMerge(engine, layerDefaultMemory);
+    }),
+  ) as Layer.Layer<A | Storage, E, R>;
 
 /**
  * A pipeable store contract — shapes plus optional custom methods.

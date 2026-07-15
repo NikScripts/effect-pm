@@ -6,12 +6,21 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Storage soft-default: bake Memory (R fulfilled); override via provide
+
+- **Owner said:** Everything is supposed to have in-memory storage baked in; R is fulfilled but you can override and provide. Requiring Storage in R is unacceptable.
+- **Chose:** `Store.withDefaultStorage` on toolkit `layer`/`serve`/`serveRemote` — Soft unwrap: no ambient `Storage` → `layerDefaultMemory` (**R fulfilled**); ambient AppStore via `Layer.provide`/`provideMerge` into the toolkit layer → capture that store (incl. SQLite). `*Memory` = aliases. Sibling `Layer.merge` does not override.
+- **Rejected:** “require Storage in R / soft-default only via `*Memory`” (earlier #62 cut was wrong for DX).
+- **Supervisor impact:** Correct #62 tip; Agent 3 follow-through still inventory/examples/Queue parity against bake+override guide.
+
+---
+
 ## 2026-07-15 — Storage correctness: do it all (Effect-true Storage requirement)
 
 - **Owner said:** Pick the order; do the whole storage-correctness plan; Effect way; show everything in chat.
-- **Chose:** Toolkit `layer`/`serve`/`serveRemote` **require** `Store.Storage`; soft-default only via `*Memory`. App compose with `Layer.provide`/`provideMerge(AppStore)`. Root cause of SQLite silence: shared in-memory `EventJournal` made memory "override" look real while SQLite stayed empty. Phases A–D on `cursor/storage-correctness-all-a009`. Phase C dual-relay: Effect Layer memo already uniques shared `Logs.layer`; docs in stores guide + B2 `_logs` require relay.
+- **Chose (superseded same day):** Toolkit `layer`/`serve`/`serveRemote` **require** `Store.Storage`; soft-default only via `*Memory`. Root cause of SQLite silence: shared in-memory `EventJournal` made memory "override" look real while SQLite stayed empty. **Superseded by** bake+override decision above.
 - **Rejected / deferred:** store memo; Agent D handles; docs-site; Postgres.
-- **Supervisor impact:** Manager Eng; Agent 3 free for other work when PR lands.
+- **Supervisor impact:** Manager Eng; Agent 3 free for follow-through when PR lands.
 
 ---
 

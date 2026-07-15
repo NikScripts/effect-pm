@@ -1285,13 +1285,11 @@ const buildQueueImpl = <
  */
 const withDefaultMemory = <A, E, R>(
   layer: Layer.Layer<A, E, R | Store.Storage>,
-): Layer.Layer<A | Store.Storage, E, R> =>
-  Layer.provideMerge(layer, Store.layerDefaultMemory);
+): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
 
 /**
- * Local queue layer — requires {@link Store.Storage}. Prefer
- * `QueueResource.layer(…).pipe(Layer.provide(AppStore.layer…))`.
- * Ephemeral default journal only: {@link layerMemory}.
+ * Local queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
+ * `QueueResource.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
  *
  * @public
  */
@@ -1305,15 +1303,17 @@ export const layer = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-): Layer.Layer<Self | Local<Self>, never, R | RR | Store.Storage> =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) =>
-      Resource.layer(tag, Resource.grantLocal(tag, built)),
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildQueueImpl(tag, config), (built) =>
+        Resource.layer(tag, Resource.grantLocal(tag, built)),
+      ),
     ),
   );
 
 /**
- * {@link layer} with {@link Store.layerDefaultMemory} — ephemeral engine journal, no Logs platform.
+ * Alias of {@link layer}.
  *
  * @public
  */
@@ -1328,7 +1328,7 @@ export const layerMemory = <
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
-  withDefaultMemory(layer(tag, config));
+  layer(tag, config);
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
@@ -1360,14 +1360,16 @@ export const serveRemote = <
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ) =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) =>
-      Resource.serveRemote(tag, built),
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildQueueImpl(tag, config), (built) =>
+        Resource.serveRemote(tag, built),
+      ),
     ),
   );
 
 /**
- * {@link serveRemote} with {@link Store.layerDefaultMemory}.
+ * Alias of {@link serveRemote}.
  *
  * @public
  */
@@ -1381,7 +1383,7 @@ export const serveRemoteMemory = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-) => withDefaultMemory(serveRemote(tag, config));
+) => serveRemote(tag, config);
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
@@ -1411,16 +1413,18 @@ export const serve = <
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>>,
+  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
-  R | RR | Store.Storage
+  R | RR
 > =>
-  Layer.unwrap(
-    Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
+  withDefaultMemory(
+    Layer.unwrap(
+      Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
+    ),
   );
 
 /**
- * {@link serve} with {@link Store.layerDefaultMemory}.
+ * Alias of {@link serve}.
  *
  * @public
  */
@@ -1438,7 +1442,7 @@ export const serveMemory = <
   Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
-> => withDefaultMemory(serve(tag, config));
+> => serve(tag, config);
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

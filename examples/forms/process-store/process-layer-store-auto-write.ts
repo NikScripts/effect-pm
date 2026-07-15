@@ -1,8 +1,8 @@
 /**
  * @module examples/forms/process-store/process-layer-store-auto-write
  *
- * Process.layer requires Store.Storage. Provide AppStore so engines capture that journal.
- * Ephemeral-only (no app store): Process.layerMemory.
+ * Process.layer soft-defaults in-memory Storage (R fulfilled). Provide AppStore into the
+ * layer to override Soft capture (journals + Logs). `Process.layerMemory` is an alias.
  * Run: `pnpm run example:process-layer-store-auto-write`
  */
 

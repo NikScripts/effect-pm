@@ -9,8 +9,10 @@
 
 ## What landed
 
-Toolkit `layer` / `serve` / `serveRemote` **require** `Store.Storage`. Soft-default = `*Memory`.  
-App compose with `Layer.provide` / `provideMerge(AppStore)`. SQLite capture proven for Process.
+Toolkit `layer` / `serve` / `serveRemote` soft-default `Store.layerDefaultMemory` via
+`Store.withDefaultStorage` — **R is fulfilled**. Override by providing AppStore into the toolkit
+layer (`Layer.provide` / `provideMerge`). `*Memory` = aliases. SQLite capture + soft-default-alone
++ sibling-merge footgun proven for Process.
 
 ## Agent 3 next
 

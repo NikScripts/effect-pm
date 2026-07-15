@@ -17,7 +17,23 @@ class AppStore extends Store.Service<AppStore>("@test/storage-correctness/FileSt
 
 const clock = TestClock.layer();
 
-describe("storage correctness — AppStore SQLite capture", () => {
+describe("storage correctness — soft-default + AppStore override", () => {
+  it.effect("Process.layer alone soft-defaults Memory (R fulfilled, no AppStore)", () =>
+    Effect.gen(function* () {
+      const live = Process.layer(Exec, {
+        effect: Effect.void,
+        polling: Polling.spaced(Duration.millis(50)),
+      });
+      yield* Effect.gen(function* () {
+        yield* Exec;
+        yield* TestClock.adjust(Duration.millis(200));
+        const store = yield* Store.resolveOrDie(Exec.key, builtInProcessStoreContract(Exec));
+        const events = yield* store.events();
+        expect(events.some((row) => row._tag === "Completed")).toBe(true);
+      }).pipe(Effect.provide(Layer.mergeAll(live, clock)));
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("Process.layer + Layer.provideMerge(AppStore.sqlite) persists across reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
@@ -53,7 +69,7 @@ describe("storage correctness — AppStore SQLite capture", () => {
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, clock)), Effect.scoped),
   );
 
-  it.effect("layerMemory alone never writes the AppStore SQLite file", () =>
+  it.effect("sibling Layer.merge(Process.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -64,13 +80,16 @@ describe("storage correctness — AppStore SQLite capture", () => {
       );
       const filename = path.join(dir, "app.db");
 
-      // Footgun class: ephemeral toolkit Memory + private AppStore provide — SQLite stays empty.
+      // Footgun: Soft never sees ambient Storage when AppStore is only a sibling merge.
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = Process.layerMemory(Exec, {
-            effect: Effect.void,
-            polling: Polling.spaced(Duration.millis(50)),
-          }).pipe(Layer.provide(AppStore.layer({ filename })));
+          const live = Layer.merge(
+            Process.layer(Exec, {
+              effect: Effect.void,
+              polling: Polling.spaced(Duration.millis(50)),
+            }),
+            AppStore.layer({ filename }),
+          );
           yield* Effect.gen(function* () {
             yield* Exec;
             yield* TestClock.adjust(Duration.millis(200));

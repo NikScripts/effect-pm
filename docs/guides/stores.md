@@ -1,8 +1,8 @@
 {#stores title="Stores" status="draft" appliesTo=all}
 # Stores
 
-Durable storage for resources — one composition recipe so you cannot silently record on
-`layerDefaultMemory` while reading an app `Store.Service`.
+Durable storage for resources — one composition recipe so Soft unwrap captures your
+app journal when you override, and bare toolkit layers still work (in-memory baked in).
 
 This guide is the SSOT for wiring. Persistence *shapes* (append/read vs custom store vs
 engine-owned SQL) live in [`docs/standards/storage.md`](../standards/storage.md). Log fans and
@@ -11,11 +11,12 @@ engine-owned SQL) live in [`docs/standards/storage.md`](../standards/storage.md)
 ## The recipe (Effect-true)
 
 Toolkit engines (`Process.layer` / `serve` / `serveRemote`, and the Queue / CustomQueue /
-RunResource counterparts) **require** `Store.Storage`. They capture that service once at layer
-build. Soft-default ephemeral journals are **only** via the `*Memory` variants
-(`Process.layerMemory`, …) which merge `Store.layerDefaultMemory` — **no** Logs platform.
+RunResource counterparts) **soft-default** `Store.layerDefaultMemory` via
+`Store.withDefaultStorage` — **R is fulfilled** out of the box. `*Memory` variants are
+aliases of the same soft-default (ephemeral engine journal — **no** Logs platform).
 
-Real apps provide an app store:
+Override by providing your app store **into** the toolkit layer so Soft unwrap sees ambient
+`Storage` before the default:
 
 ```ts
 import { Layer } from "effect"
@@ -31,7 +32,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(Daily),
 ) {}
 
-// Prefer this: AppStore satisfies Storage (and keeps AppStore readable).
+// Soft unwrap sees AppStore.Storage — engines write the SQLite journal.
 const live = Process.layer(Daily, { effect: poll }).pipe(
   Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
 )
@@ -45,20 +46,23 @@ Resource.httpServer([Process.serve(Daily, { effect: poll })], { protocol: "webso
 
 | Intent | API |
 |--------|-----|
-| App journals + Logs | `Process.layer` / `serve` + `Layer.provide(Merge?)(AppStore.layer…)` |
-| Ephemeral engine journal only | `Process.layerMemory` / `serveMemory` / `serveRemoteMemory` |
+| Ephemeral engine journal (default) | `Process.layer` / `serve` (or `*Memory` aliases) — no provide needed |
+| App journals + Logs | `…pipe(Layer.provide(Merge?)(AppStore.layer…))` into the toolkit layer |
 | SQLite | `AppStore.layer({ filename })` — `filename` is **required** |
 | In-memory AppStore (+ Logs) | `AppStore.layerMemory` |
 
-## Why bare soft-default was a footgun
+## Why sibling merge was a footgun
 
-Older toolkit layers **baked** `Store.layerDefaultMemory` with `provideMerge`. Two in-memory
-`EventJournal` layers in one runtime share one journal, so `provideMerge(AppStore.layerMemory,
-Process.layer)` looked like override while SQLite AppStores stayed empty — engines had already
-captured the default bridge.
+Older toolkit layers **always baked** `Layer.provideMerge(layerDefaultMemory)` inside the engine
+layer. Soft never saw an ambient AppStore, so SQLite AppStores stayed empty while two in-memory
+journals looked like a working “override” (shared `EventJournal`).
 
-Now: `layer` leaves `Storage` as a requirement. `Layer.provide(AppStore)` / `provideMerge(AppStore)`
-fills that requirement **before** capture. SQLite and memory AppStores both receive engine writes.
+Now Soft unwrap peeks at ambient `Storage` at build time:
+
+- No AppStore in context → bake `layerDefaultMemory` (**R fulfilled**).
+- AppStore fed via `Layer.provide` / `provideMerge` **into** the toolkit layer → engines capture that store (memory + Logs, or SQLite).
+
+**Do not** sibling-`Layer.merge` the toolkit layer with AppStore and expect override — Soft never sees `Storage`, engines stay on the default journal, and the AppStore file stays empty.
 
 ## One store per Node (intentional multi-node = N stores)
 
@@ -69,7 +73,7 @@ fills that requirement **before** capture. SQLite and memory AppStores both rece
 
 ## Logs vs `layerDefaultMemory`
 
-`Store.layerDefaultMemory` (what `*Memory` toolkit layers use) is **engine observability only**.
+`Store.layerDefaultMemory` (what soft-default / `*Memory` toolkit layers use) is **engine observability only**.
 It does **not** install `LogRelay` / durable `_logs` tails. Durable logs need
 `Store.Service.layer*` (bakes `Logs.layer`) or an explicit `Logs.layer`.
 
@@ -78,14 +82,9 @@ Node journal + resource `_logs` copies of the same live line are intentional —
 ## Reading back
 
 - Process / queue execution rows: toolkit store handles (`store.events()`, …) or `Store.resolveOrDie`.
-- Logs: `Logs.byNode` / `Logs.byResource` / `Resource.logs(tag)` — not a public `handle.log` shape
-  (private `_logs`).
+- App-facing queries after override: `yield* AppStore` / registration helpers.
 
-## Troubleshooting empty journals
+## Related
 
-| Symptom | Likely cause |
-|---------|----------------|
-| SQLite file empty after Process ran | Used `*Memory` engine layer, or never `Layer.provide(AppStore)` |
-| `Resource.logs` empty | Missing `Node.logs` / `Process.store(tag)` registration on AppStore |
-| Live logs but no durable rows | `Logs.layer` alone without store registration |
-| Two buses / split history | Second `Logs.layer` or second `Store.Service` in the same runtime |
+- [`docs/guides/logs.md`](./logs.md) — fans, `_logs`, `Resource.logs`
+- [`docs/standards/storage.md`](../standards/storage.md) — persistence shapes
