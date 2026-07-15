@@ -931,6 +931,14 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
   border-right: 1px solid var(--border);
   user-select: none;
 }
+/* the twoslash hover popups render their type as code with its own `.line` spans — those must NOT
+   get a line number, nor advance the gutter counter for the real lines below them */
+.api-source-code .twoslash-popup-container .line {
+  counter-increment: none;
+}
+.api-source-code .twoslash-popup-container .line::before {
+  content: none;
+}
 
 .api-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
 .api-chip { font-size: 0.68rem; padding: 0.12rem 0.42rem; border-radius: 4px; font-family: var(--font-mono); }
