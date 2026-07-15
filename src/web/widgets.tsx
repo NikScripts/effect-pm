@@ -1774,6 +1774,53 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
   </Card>
 );
 
+/** One resource's live readiness, read from its node's `NodeStatus` (SSOT — same source as the health
+ *  board), shown **always**: a green `ready` / amber `degraded` pip + state, the root cause when
+ *  degraded, and the node it runs on. `node` is defined (the card only renders this when it has one). */
+const ReadinessLine = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  // No row yet (status still loading) → a muted "connecting"; else ready (green) / degraded (amber).
+  const state = readiness === undefined ? "connecting" : readiness.ready ? "ready" : "degraded";
+  const color = state === "ready" ? "#22c55e" : state === "degraded" ? "#eab308" : "#6b7280";
+  return (
+    <div className="mt-2 flex items-center gap-2 text-[0.8rem]">
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      <span className="font-medium">{state}</span>
+      {state === "degraded" && readiness?.detail !== undefined ? (
+        <span className="min-w-0 flex-1 truncate text-amber-600">— {readiness.detail}</span>
+      ) : (
+        <span className="flex-1" />
+      )}
+      <span className="shrink-0 text-muted-foreground">{displayName(props.node.id)}</span>
+    </div>
+  );
+};
+
+/**
+ * The card for a plain resource — a bare `Resource.Tag` with no richer widget (a dependency like a
+ * DB connection, a health gate). Hand-crafted around the one signal every resource has: its
+ * **readiness**. Name + kind + a live ready/degraded row from its node's `NodeStatus`. @public
+ */
+export const ResourceCard = (props: WidgetProps): React.ReactElement => {
+  const node = resourceNodeRef(props.tag);
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate font-medium text-foreground">{props.name}</span>
+          <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
+        </div>
+        {node !== undefined ? <ReadinessLine tag={props.tag} node={node} /> : null}
+      </CardContent>
+    </Card>
+  );
+};
+
 // Each built-in adapts a typed card to the registry's LeafTag props. Registered under its kind, so
 // the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
 const queueWidget: Widget = ({ tag, name, onOpen }) =>
@@ -1806,5 +1853,10 @@ export const base: WidgetRegistry = withEntries(
     byKind: HashMap.empty<string, Widget>(),
     fallback: FallbackCard,
   },
-  [forKind(queueKind, queueWidget), forKind(processKind, processWidget), forKind(apiKind, apiWidget)],
+  [
+    forKind(queueKind, queueWidget),
+    forKind(processKind, processWidget),
+    forKind(apiKind, apiWidget),
+    forKind(resourceKind, ResourceCard),
+  ],
 );
