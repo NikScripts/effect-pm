@@ -41,9 +41,10 @@ Three jobs. Drain order with `concurrency: 1`: **password-reset** (high), **welc
 (normal), **newsletter** (low). `welcome` fails on attempt 1 and succeeds on attempt 2; the
 others succeed once.
 
-`queue.completed` counts **finished attempts** (success *or* failure each increment once) —
+`status.completed` counts **finished attempts** (success *or* failure each increment once) —
 so expect **≈ 4**, then the queue is empty. That is not “unique jobs” and not “successful
-sends only.”
+sends only.” On the tip `Tag` handle there is no top-level `queue.completed`; read it from
+`status` (same snapshot that carries `sizes` / `inFlight` / `phase`).
 
 ## The program
 
@@ -79,12 +80,12 @@ class EmailQueue extends QueueResource.Tag<EmailQueue>()("examples/EmailQueue", 
   error: SendError,
 }) {}
 
-/** Poll `completed` until `expected` finished attempts (success or failure each count once). */
+/** Poll `status.completed` until `expected` finished attempts (success or failure each count once). */
 const waitUntilCompleted = (expected: number) =>
   Effect.gen(function* () {
     const queue = yield* EmailQueue
     while (true) {
-      const completed = yield* queue.completed
+      const { completed } = yield* queue.status.get
       if (completed >= expected) return completed
       yield* Effect.sleep(Duration.millis(10))
     }

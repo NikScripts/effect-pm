@@ -34,12 +34,12 @@ class EmailQueue extends QueueResource.Tag<EmailQueue>()("examples/EmailQueue", 
   error: SendError,
 }) {}
 
-/** Poll `completed` until `expected` finished attempts (success or failure each count once). */
+/** Poll `status.completed` until `expected` finished attempts (success or failure each count once). */
 const waitUntilCompleted = (expected: number) =>
   Effect.gen(function* () {
     const queue = yield* EmailQueue;
     while (true) {
-      const completed = yield* queue.completed;
+      const { completed } = yield* queue.status.get;
       if (completed >= expected) return completed;
       yield* Effect.sleep(Duration.millis(10));
     }
