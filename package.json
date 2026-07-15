@@ -88,6 +88,10 @@
       "types": "./dist/Telemetry.d.ts",
       "default": "./dist/Telemetry.js"
     },
+    "./FleetHealth": {
+      "types": "./dist/FleetHealth.d.ts",
+      "default": "./dist/FleetHealth.js"
+    },
     "./ShardMap": {
       "types": "./dist/ShardMap.d.ts",
       "default": "./dist/ShardMap.js"
@@ -181,6 +185,7 @@
     "example:schedule-control-db-sync": "tsx examples/scenarios/schedule-sync-from-external-db.ts",
     "example:run-resource": "tsx examples/forms/resource/run-resource-unit-and-input.ts",
     "example:telemetry-fleet-glass": "tsx examples/forms/resource/telemetry-fleet-glass.ts",
+    "example:fleet-health-glass": "tsx examples/forms/resource/fleet-health-glass.ts",
     "example:shardmap-sessions": "tsx examples/forms/resource/shardmap-sessions.ts",
     "example:run-resource-store-readback": "tsx examples/forms/resource/run-resource-store-readback.ts",
     "example:http-client-run-gate": "tsx examples/forms/resource/http-client-run-gate.ts",

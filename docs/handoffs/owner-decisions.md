@@ -6,6 +6,20 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — FleetHealth landed on `integration`
+
+- **Owner said:** Add any final improvements and sync with integration.
+- **Chose:** Merge `cursor/fleet-health-ce05` (#60) onto `integration` (incl. type-shape tests, api-model regen after `api.json` → `api-model.json` rename, guide/example polish).
+- **Rejected / deferred:** Phase 3 start until explicit unlock; Batch Z deletes; `layerNoop` until a concrete package ambient needs it; `docs/site` chrome.
+- **Supervisor impact:** Agent 1 next = Phase 3 (owner unlock). FleetHealth guide + `@nikscripts/effect-pm/FleetHealth` are living SSOT.
+
+## 2026-07-14 — FleetHealth (meshed stadium-board readiness)
+
+- **Owner said:** Cost worth it if it fits Effect; then build. Fleet health product locked earlier (fleet board, not Host; auth stays README-only).
+- **Chose:** `@nikscripts/effect-pm/FleetHealth` as Telemetry twin — leaf `local`, fleet `byNode` / `status`, Schema `Reachable` | `Unreachable` via `Exit.match`, `MultiNode.combineByNodeExit` keeps peer failures. Local `/health` / `withReadiness` unchanged (standards).
+- **Rejected:** Folding peers inside `withReadiness`; silent omit of down peers (metric-style `fleetHealth` helper).
+- **Supervisor impact:** Branch `cursor/fleet-health-ce05`; roadmap bullet marked shipped.
+
 ## 2026-07-14 — `Logs.byResource` full key; kill resource-identity `*Id`
 
 - **Owner said:** Scope identity is **key** + **kind** (`Resource.kindOf`); get rid of `processId`/`queueId` costumes; exception only for Effect RPC naming (`groupId`); no legacy storage to keep; do it now.

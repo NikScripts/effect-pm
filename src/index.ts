@@ -127,6 +127,7 @@ export {
   type ApiUsageSnapshot,
 } from "./ApiUsageSchema";
 export * as Telemetry from "./Telemetry";
+export * as FleetHealth from "./FleetHealth";
 export * as ShardMap from "./ShardMap";
 export * as DynamicConfig from "./DynamicConfig";
 export {

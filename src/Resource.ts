@@ -3743,18 +3743,18 @@ export const peersFrom = <Self, S extends Spec>(
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**
- * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by node** (`combineByNode`),
- * and add **this** node's own value keyed by {@link selfNode}. The canned form of the recurring
- * droplet-health-table pattern, on the {@link peers} + {@link selfNode} + `/MultiNode` primitives:
+ * A **fleet fold** of successful peer leaf picks keyed by node (plus {@link selfNode}). Soft on
+ * down peers — failures are skipped (partial table). Prefer this for **optional** metric-style
+ * aggregates. For **health**, use `@nikscripts/effect-pm/FleetHealth` (`Exit` → Reachable /
+ * Unreachable) or `MultiNode.combineByNodeExit`.
  *
  * ```ts
- * // in a resource's layer — a `fleet` field returning one row per node
- * fleetStatus: Resource.fleetHealth(FleetDatabase, (peer) => peer.status, ownStatus)
+ * // metric-style: missing peers omitted
+ * inFlightByNode: Resource.fleetHealth(FleetMetrics, (peer) => peer.snapshot.pipe(...), own)
  * ```
  *
- * A down peer is skipped (its `pick` failure is captured, never thrown) — a partial table, not an error.
- * Requires the {@link peersLayer} capability (which bundles {@link selfNode}). The only error / requirement
- * is `own`'s.
+ * Requires the {@link peersLayer} capability (which bundles {@link selfNode}). The only error /
+ * requirement is `own`'s.
  *
  * @public
  */
