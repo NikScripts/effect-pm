@@ -464,67 +464,11 @@ const provideWithLayer = <A, E, RIn, ROut>(
   step: Effect.Effect<A, E, RIn>,
   layer: Layer.Layer<ROut, E, never>,
 ): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
-  // `R` is deliberately FORWARDED to the caller (`Exclude<RIn, ROut>`), not left unprovided;
-  // `missingEffectContext` can't distinguish requirement-forwarding from a leak on a generic
-  // helper, so it false-positives here (the code is type-correct — tsc is clean).
-  // @effect-diagnostics-next-line missingEffectContext:off
-  Effect.scoped(
-    Effect.gen(function* () {
-      const context = yield* Layer.build(layer);
-      return yield* Effect.provide(step, context);
-    }),
-  );
-
-function provideStepLayers<R>(
-  step: Effect.Effect<void, never, R>,
-  state: Pick<
-    ProcessBuildStateWithPollingAndSchedule<never, never>,
-    "pollingLayer" | "scheduleLayer"
-  >,
-): Effect.Effect<void, never, Exclude<Exclude<R, PollingTag>, ProcessScheduleTag>>;
-function provideStepLayers<R>(
-  step: Effect.Effect<void, never, R>,
-  state: Pick<
-    ProcessBuildStateWithPolling<never, never>,
-    "pollingLayer" | "scheduleLayer"
-  >,
-): Effect.Effect<void, never, Exclude<R, PollingTag>>;
-function provideStepLayers<R>(
-  step: Effect.Effect<void, never, R>,
-  state: Pick<
-    ProcessBuildStateWithSchedule<never, never>,
-    "pollingLayer" | "scheduleLayer"
-  >,
-): Effect.Effect<void, never, Exclude<R, ProcessScheduleTag>>;
-function provideStepLayers<R>(
-  step: Effect.Effect<void, never, R>,
-  state: Pick<
-    ProcessBuildStateWithoutStepLayers<never, never>,
-    "pollingLayer" | "scheduleLayer"
-  >,
-): Effect.Effect<void, never, R>;
-function provideStepLayers<R>(
-  step: Effect.Effect<void, never, R>,
-  state: Pick<AnyProcessBuildState<never, never>, "pollingLayer" | "scheduleLayer">,
-) {
-  // Each branch forwards the caller's residual `R` (the overload signatures above type it exactly);
-  // `missingEffectContext` false-positives on the forwarding, same as {@link provideWithLayer}.
-  const { pollingLayer, scheduleLayer } = state;
-  if (pollingLayer !== undefined && scheduleLayer !== undefined) {
-    // @effect-diagnostics-next-line missingEffectContext:off
-    return provideWithLayer(step, Layer.mergeAll(pollingLayer, scheduleLayer));
-  }
-  if (pollingLayer !== undefined) {
-    // @effect-diagnostics-next-line missingEffectContext:off
-    return provideWithLayer(step, pollingLayer);
-  }
-  if (scheduleLayer !== undefined) {
-    // @effect-diagnostics-next-line missingEffectContext:off
-    return provideWithLayer(step, scheduleLayer);
-  }
-  // @effect-diagnostics-next-line missingEffectContext:off
-  return step;
-}
+  // `Effect.provide` with the layer directly builds it in its own scope and provides `ROut`,
+  // forwarding the residual `Exclude<RIn, ROut>` to the caller — the same result as the manual
+  // `Layer.build` + `Effect.scoped` form, but without the generic `Effect.gen` boundary that made
+  // effect-LSP false-positive on the forwarded requirement (`missingEffectContext`). tsc stays clean.
+  Effect.provide(step, layer);
 
 function createProcess<E, RUser>(
   state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,
@@ -1087,27 +1031,17 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
     withLogScope({ key: name })(effect);
 
-  if (state.pollingLayer !== undefined && state.scheduleLayer !== undefined) {
-    return {
-      ...base,
-      effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
-    };
-  }
-  if (state.pollingLayer !== undefined) {
-    return {
-      ...base,
-      effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
-    };
-  }
-  if (state.scheduleLayer !== undefined) {
-    return {
-      ...base,
-      effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
-    };
-  }
+  // Provide whichever step layers are present (polling / schedule), forwarding the residual `RUser`.
+  // A single `provideWithLayer` in expression position — `annotateProcessLogs` widens the requirement
+  // back to the full union, so the per-state `Exclude<…>` precision the old overloaded helper computed
+  // was never observed downstream (any `Exclude<…>` is assignable to its wide param).
+  const stepLayer =
+    state.pollingLayer !== undefined && state.scheduleLayer !== undefined
+      ? Layer.mergeAll(state.pollingLayer, state.scheduleLayer)
+      : state.pollingLayer ?? state.scheduleLayer ?? Layer.empty;
   return {
     ...base,
-    effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
+    effect: annotateProcessLogs(provideWithLayer(supervisedCore, stepLayer)),
   };
 }
 
