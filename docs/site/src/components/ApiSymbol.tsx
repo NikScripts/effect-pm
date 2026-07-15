@@ -48,39 +48,41 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),
   ];
   return (
-    <article className="api-sym">
-      <div className="api-sym-head">
-        <code className="api-sym-name">{s.qualifiedName}</code>
-        <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
-        <span className="api-src">
-          {s.source.file}:{s.source.line}
-        </span>
-      </div>
-      {sigs.length > 0 ? (
-        <div className="api-sig">{highlightToReact(sigs.join("\n"), "ts")}</div>
-      ) : null}
-      {lead ? <div className="api-doc">{renderJsdocToReact(lead)}</div> : null}
+    <>
+      <article className="api-sym">
+        <div className="api-sym-head">
+          <code className="api-sym-name">{s.qualifiedName}</code>
+          <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
+          <span className="api-src">
+            {s.source.file}:{s.source.line}
+          </span>
+        </div>
+        {sigs.length > 0 ? (
+          <div className="api-sig">{highlightToReact(sigs.join("\n"), "ts")}</div>
+        ) : null}
+        {lead ? <div className="api-doc">{renderJsdocToReact(lead)}</div> : null}
+        {chips.length > 0 ? (
+          <div className="api-chips">
+            {chips.map((c, i) => (
+              <span className={`api-chip ${c.cls}`} key={i}>
+                {c.text}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </article>
       {s.sourceText ? (
-        <details className="api-source">
-          <summary>
+        <section className="api-source">
+          <div className="api-source-head">
             Source <span className="api-src">{s.source.file}:{s.source.line}</span>
             <span className="api-source-lines">{s.sourceText.split("\n").length} lines</span>
-          </summary>
+          </div>
           {/* line numbers start at the export's real file line, so `ln` counts from source.line - 1 */}
           <div className="api-source-code" style={{ "--ln-start": s.source.line - 1 }}>
             {highlightToReact(s.sourceText, "ts")}
           </div>
-        </details>
+        </section>
       ) : null}
-      {chips.length > 0 ? (
-        <div className="api-chips">
-          {chips.map((c, i) => (
-            <span className={`api-chip ${c.cls}`} key={i}>
-              {c.text}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </article>
+    </>
   );
 };

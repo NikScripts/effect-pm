@@ -892,25 +892,29 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 .api-doc code { font-family: var(--font-mono); font-size: 0.86em; }
 .api-doc strong { color: var(--fg); }
 
-/* the export's actual source, collapsible, with real file line numbers down the gutter */
-.api-source { margin-top: 0.8rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.api-source > summary {
-  cursor: pointer;
-  padding: 0.45rem 0.65rem;
+/* the export's actual source — its own standalone container, always shown, real file line numbers */
+.api-source {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+}
+.api-source-head {
+  padding: 0.5rem 0.75rem;
   font-size: 0.78rem;
   color: var(--muted-fg);
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  user-select: none;
-  list-style-position: inside;
+  background: color-mix(in oklab, var(--fg) 4%, transparent);
+  border-bottom: 1px solid var(--border);
 }
-.api-source > summary .api-src { margin-left: 0; }
+.api-source-head .api-src { margin-left: 0; }
 .api-source-lines { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; opacity: 0.75; }
 .api-source-code {
   counter-reset: ln var(--ln-start);
   overflow-x: auto;
-  border-top: 1px solid var(--border);
   font-size: 0.78rem;
 }
 .api-source-code pre { margin: 0; padding: 0.55rem 0; }

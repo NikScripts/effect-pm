@@ -239,20 +239,21 @@ const makeExtractor = (checker: ts.TypeChecker) => {
         name: tag.name,
         text: ts.displayPartsToString(tag.text ?? []),
       }));
-    const rawComment = rawCommentOf(decl);
     const source = decl.getSourceFile();
-    // The export's actual source, as written. All in-package declarations (function overloads carry
-    // several) joined — `getText()` starts after the JSDoc, so this is code only, docs shown
-    // separately. A `const`/`let` declaration's `const`/`export` keyword lives on the enclosing
-    // statement, so climb to it; otherwise the node's own text is the whole declaration.
-    const declText = (d: ts.Declaration): string =>
-      ts.isVariableDeclaration(d) && ts.isVariableDeclarationList(d.parent)
-        ? d.parent.parent.getText()
-        : d.getText();
-    const sourceText = (sym.getDeclarations() ?? [])
-      .filter((d) => d.getSourceFile().fileName.startsWith(srcDir))
-      .map(declText)
-      .join("\n\n");
+    // REAL source, cut straight out of the file. The LSP gives each declaration's exact range; take
+    // the contiguous span covering this symbol's declarations (overloads carry several) and slice it
+    // from the source text verbatim — no AST re-print. A `const`/`let` declaration's `const`/`export`
+    // keyword lives on the enclosing statement, so climb to it.
+    const declNode = (d: ts.Declaration): ts.Node =>
+      ts.isVariableDeclaration(d) && ts.isVariableDeclarationList(d.parent) ? d.parent.parent : d;
+    const nodes = (sym.getDeclarations() ?? [])
+      .filter((d) => d.getSourceFile().fileName === source.fileName)
+      .map(declNode);
+    const spanStart = Math.min(...nodes.map((n) => n.getStart()));
+    const spanEnd = Math.max(...nodes.map((n) => n.getEnd()));
+    const sourceText = nodes.length > 0 ? source.text.slice(spanStart, spanEnd) : "";
+    const sourceLine = source.getLineAndCharacterOfPosition(spanStart).line + 1;
+    const rawComment = rawCommentOf(decl);
     const name = exportSym.getName();
     const qualifiedName = ns === undefined ? name : `${ns}.${name}`;
 
@@ -273,7 +274,7 @@ const makeExtractor = (checker: ts.TypeChecker) => {
         linkTargets: [...new Set([...rawComment.matchAll(/\{@link\s+([^}|\s]+)/g)].map((m) => m[1]))],
         source: {
           file: nodePath.relative(repoRoot, source.fileName),
-          line: source.getLineAndCharacterOfPosition(decl.getStart()).line + 1,
+          line: sourceLine,
         },
       },
     ];
