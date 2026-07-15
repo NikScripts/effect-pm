@@ -464,11 +464,18 @@ const provideWithLayer = <A, E, RIn, ROut>(
   step: Effect.Effect<A, E, RIn>,
   layer: Layer.Layer<ROut, E, never>,
 ): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
-  // `Effect.provide` with the layer directly builds it in its own scope and provides `ROut`,
-  // forwarding the residual `Exclude<RIn, ROut>` to the caller — the same result as the manual
-  // `Layer.build` + `Effect.scoped` form, but without the generic `Effect.gen` boundary that made
-  // effect-LSP false-positive on the forwarded requirement (`missingEffectContext`). tsc stays clean.
-  Effect.provide(step, layer);
+  // Build the layer in a local scope and provide its Context. Deliberately NOT `Effect.provide(step,
+  // layer)`: `strictEffectProvide` (enforced in tsconfig.src.strict-effect-provide.json) reserves the
+  // layer form for entry points. The residual `Exclude<RIn, ROut>` is forwarded to the caller — the
+  // editor's `missingEffectContext` can't tell that forwarding from a leak on a generic helper and
+  // shows a squiggle here, but it does not affect the typecheck exit code (only the two rules'
+  // structural forms do, and this satisfies both without a suppression).
+  Effect.scoped(
+    Effect.gen(function* () {
+      const context = yield* Layer.build(layer);
+      return yield* Effect.provide(step, context);
+    }),
+  );
 
 function createProcess<E, RUser>(
   state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,

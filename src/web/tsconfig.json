@@ -1,0 +1,32 @@
+{
+  // The browser/React ruleset. `src/web` is a UI layer, not Effect-domain code: raw `Date` /
+  // `console` / `setTimeout`, DOM `async` handlers and `new Promise` are the correct primitives here,
+  // so the matching Effect-purity diagnostics are turned off (same set as the React example apps —
+  // examples/web-dashboard, examples/resource-tui). The root config excludes `src/web/**`, so these
+  // files resolve to this config in the editor and in `typecheck`. Bundled by tsup (from the `web`
+  // entry), so this is check-only (`noEmit`).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "types": ["node", "react", "react-dom"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "globalTimers": "off",
+          "globalDate": "off",
+          "globalConsole": "off",
+          "newPromise": "off",
+          "asyncFunction": "off",
+          "nodeBuiltinImport": "off"
+        }
+      }
+    ]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["../../node_modules", "../../dist"]
+}
