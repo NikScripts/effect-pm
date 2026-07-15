@@ -195,6 +195,23 @@ const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): Re
   );
 };
 
+/** Invisible: reads ONE node's `NodeStatus` and reports how many of the group's leaves **on that
+ *  node** are degraded, so {@link GroupCard} can sum them for its aggregate badge. A child-level hook
+ *  (not a `.map` over the node list) keeps a constant hook order if a group ever gains/loses a node —
+ *  the same Rules-of-Hooks pattern {@link HealthBoard} uses. */
+const NodeDegradedProbe = (props: {
+  readonly node: NodeRef;
+  readonly leafKeys: ReadonlySet<string>;
+  readonly onCount: (id: string, count: number) => void;
+}): null => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const count = (s?.resources ?? []).filter((x) => !x.ready && props.leafKeys.has(x.key)).length;
+  const { onCount, node } = props;
+  React.useEffect(() => onCount(node.id, count), [onCount, node.id, count]);
+  return null;
+};
+
 /** A subgroup as a grid widget — tap opens it as its own page (drill-down). */
 export const GroupCard = (props: {
   readonly node: GroupNode;
@@ -208,16 +225,50 @@ export const GroupCard = (props: {
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
   // The display name of a member is the key it sits under in this node — map member identity → key.
   const nameOf = new Map<unknown, string>(Object.entries(Group.members(props.node)).map(([k, m]) => [m, k]));
+  // Aggregate readiness across the group's leaves — which may span several nodes. Each node reports its
+  // degraded-leaf count up (via a hidden probe); the badge shows the total, only when non-zero.
+  const nodes = nodesOf(props.node);
+  const leafKeys = React.useMemo(
+    () => new Set(leafTags(props.node).map(tagWireKey).filter((k): k is string => k !== undefined)),
+    [props.node],
+  );
+  const [counts, setCounts] = React.useState<ReadonlyMap<string, number>>(() => new Map());
+  const report = React.useCallback((id: string, count: number): void => {
+    setCounts((prev) => {
+      if (prev.get(id) === count) return prev;
+      const next = new Map(prev);
+      next.set(id, count);
+      return next;
+    });
+  }, []);
+  const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
   return (
     <button
       type="button"
       onClick={() => props.onOpen(props.node)}
       style={vt}
-      className="flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
+      className="relative flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
+      {nodes.map((node) => (
+        <NodeDegradedProbe key={node.id} node={node} leafKeys={leafKeys} onCount={report} />
+      ))}
+      {degraded > 0 ? (
+        <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-amber-500" />
+      ) : null}
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
-        <span className="text-xs text-muted-foreground">{leafTags(props.node).length} resources</span>
+        <strong className="min-w-0 flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
+        {degraded > 0 ? (
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-medium text-amber-50"
+            style={{ backgroundColor: "rgba(146,64,14,0.95)" }}
+          >
+            {degraded} of {leafTags(props.node).length} degraded
+          </span>
+        ) : (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {leafTags(props.node).length} resources
+          </span>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         {leaves.map((tag) => <MemberRow key={tag.key} tag={tag} name={nameOf.get(tag) ?? displayName(tag.key)} />)}
