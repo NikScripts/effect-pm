@@ -96,6 +96,12 @@ const nodeStatusLayer = (resourceKey: string) =>
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
+  // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself —
+  // whose value is the `RpcClient.Protocol` (post-`connect`) — is in the runtime context. The
+  // HealthBoard's per-node `NodeStatus` reads it (`Layer.effect(RpcClient.Protocol, node)`); without
+  // this, that node isn't resolvable and the node status hangs on "connecting…".
+  dropletTransport,
+  miniTransport,
   Resource.client(Mail).pipe(Layer.provide(dropletTransport)),
   Resource.client(Jobs).pipe(Layer.provide(dropletTransport)),
   Resource.client(Billing).pipe(Layer.provide(dropletTransport)),
@@ -108,7 +114,7 @@ export const appLayer = Layer.mergeAll(
   Resource.client(Daily).pipe(Layer.provide(dropletTransport)),
   Resource.client(Weekly).pipe(Layer.provide(dropletTransport)),
   // KeyRotation lives on the Mini node — its own transport, not the Droplet.
-  Resource.client(KeyRotation).pipe(Layer.provide(Resource.socketClient(MiniNode, { url: miniUrl }))),
+  Resource.client(KeyRotation).pipe(Layer.provide(miniTransport)),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */
