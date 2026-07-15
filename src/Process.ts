@@ -467,6 +467,7 @@ const provideWithLayer = <A, E, RIn, ROut>(
   // `R` is deliberately FORWARDED to the caller (`Exclude<RIn, ROut>`), not left unprovided;
   // `missingEffectContext` can't distinguish requirement-forwarding from a leak on a generic
   // helper, so it false-positives here (the code is type-correct — tsc is clean).
+  // @effect-diagnostics-next-line missingEffectContext:off
   Effect.scoped(
     Effect.gen(function* () {
       const context = yield* Layer.build(layer);
@@ -510,14 +511,18 @@ function provideStepLayers<R>(
   // `missingEffectContext` false-positives on the forwarding, same as {@link provideWithLayer}.
   const { pollingLayer, scheduleLayer } = state;
   if (pollingLayer !== undefined && scheduleLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, Layer.mergeAll(pollingLayer, scheduleLayer));
   }
   if (pollingLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, pollingLayer);
   }
   if (scheduleLayer !== undefined) {
+    // @effect-diagnostics-next-line missingEffectContext:off
     return provideWithLayer(step, scheduleLayer);
   }
+  // @effect-diagnostics-next-line missingEffectContext:off
   return step;
 }
 
