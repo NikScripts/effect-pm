@@ -140,7 +140,7 @@ export function TwoslashHover(): null {
     };
 
     // Each popup section is its own copyable unit: the compact type, the expanded ("pretty") type, and
-    // the comments. Long-press one to copy just it.
+    // the comments. Double-tap one to copy just it.
     const labelFor = (section: Element): string =>
       section.classList.contains("twoslash-popup-expand")
         ? "expanded type"
@@ -155,23 +155,6 @@ export function TwoslashHover(): null {
       toast(copyText(text) ? `Copied ${labelFor(section)}` : "Copy failed");
     };
 
-    // Long-press = held ≥450ms without dragging, then released (the copy runs on touchend so it's
-    // inside a gesture). Press a popup section to copy that section; press a TOKEN to open its popup
-    // and copy the type — the reliable mobile path, since tap-to-open-then-press-the-popup was fragile.
-    const HOLD = 400; // ms to hold before it's "armed" to copy on release
-    let pressTarget: Element | null = null;
-    let pressStart = 0;
-    let armTimer = 0;
-    let startAt: { x: number; y: number } | null = null;
-    const cancelPress = (): void => {
-      if (armTimer) {
-        clearTimeout(armTimer);
-        armTimer = 0;
-      }
-      pressTarget?.classList.remove("tw-pressing", "tw-armed");
-      pressTarget = null;
-      startAt = null;
-    };
     const closeNow = (): void => {
       if (openEl) {
         openEl.classList.remove("is-open");
@@ -180,88 +163,86 @@ export function TwoslashHover(): null {
       }
     };
 
-    // Touch model: tap a token to open a STICKY popup (stays until you tap outside); long-press a
-    // section (or the token) to copy it. A tap outside closes it.
-    let outsideTap = false;
+    // Touch model: single-tap a token to open/close its sticky popup; DOUBLE-tap a preview section to
+    // copy it. A plain tap-and-drag is left untouched, so normal iOS text selection still works.
+    // (Long-press was dropped — it fought iOS's own long-press selection, breaking BOTH manual
+    // selection and the copy; a quick tap doesn't, which is why short holds always copied fine.)
+    const DOUBLE_MS = 350; // max gap between the two taps of a double-tap
+    const TAP_SLOP = 12; // px; more movement than this is a drag (select/scroll), not a tap
+    let downAt: { x: number; y: number } | null = null;
+    let lastTapEl: Element | null = null;
+    let lastTapTime = 0;
+    const flashCopied = (section: Element): void => {
+      section.classList.add("tw-copied");
+      window.setTimeout(() => section.classList.remove("tw-copied"), 450);
+    };
     const onTouchStart = (e: TouchEvent): void => {
-      if (e.touches.length !== 1) return;
-      const el = e.target as Element | null;
-      // the popup is a DOM descendant of its token, so `.twoslash-hover` covers both token and popup
-      if (el?.closest?.(".twoslash-hover") == null) {
-        outsideTap = openEl !== null; // finger landed outside any popup — close on release
+      if (e.touches.length !== 1) {
+        downAt = null;
         return;
       }
-      outsideTap = false;
-      const target = el.closest(".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover");
-      if (target === null) return;
-      // On a popup section, own the gesture: cancel iOS's native long-press (text selection /
-      // magnifier / callout) so a LONG hold can't hijack the selection and break the copy at
-      // touchend. Requires the non-passive listener registered below. (Tokens keep their default so
-      // the code block still scrolls.)
-      if (e.cancelable && target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
-        e.preventDefault();
+      const t = e.touches[0];
+      downAt = { x: t.clientX, y: t.clientY };
+    };
+    const onTouchEnd = (e: TouchEvent): void => {
+      const start = downAt;
+      downAt = null;
+      if (start === null) return;
+      const t = e.changedTouches[0];
+      // a drag (text selection or scroll) — leave it entirely to the browser
+      if (
+        t === undefined ||
+        Math.abs(t.clientX - start.x) > TAP_SLOP ||
+        Math.abs(t.clientY - start.y) > TAP_SLOP
+      ) {
+        lastTapEl = null;
+        return;
       }
-      const t = e.touches[0];
-      startAt = { x: t.clientX, y: t.clientY };
-      pressStart = Date.now();
-      pressTarget = target;
-      target.classList.add("tw-pressing"); // finger-down feedback
-      armTimer = window.setTimeout(() => target.classList.add("tw-armed"), HOLD);
-    };
-    const onTouchMove = (e: TouchEvent): void => {
-      if (startAt === null) return;
-      const t = e.touches[0];
-      // generous tolerance — a long press naturally drifts a few px
-      if (Math.abs(t.clientX - startAt.x) > 16 || Math.abs(t.clientY - startAt.y) > 16) cancelPress();
-    };
-    const onTouchEnd = (): void => {
-      if (outsideTap) {
-        outsideTap = false;
+      const el = e.target as Element | null;
+      const section = el?.closest?.(".twoslash-popup-code, .twoslash-popup-docs") ?? null;
+      const hover = el?.closest?.(".twoslash-hover") ?? null;
+      // tap outside any token/popup → close the open one
+      if (section === null && hover === null) {
+        lastTapEl = null;
         closeNow();
         return;
       }
-      const target = pressTarget;
-      const longPress = target !== null && startAt !== null && Date.now() - pressStart >= HOLD;
-      cancelPress(); // clears the press highlight
-      if (target === null) return;
-      if (target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
-        if (longPress) copySection(target); // long-press a preview section → copy it
+      if (section !== null) {
+        const now = Date.now();
+        if (lastTapEl === section && now - lastTapTime < DOUBLE_MS) {
+          lastTapEl = null; // second tap on the same section → copy it
+          lastTapTime = 0;
+          copySection(section);
+          flashCopied(section);
+          window.getSelection()?.removeAllRanges(); // clear the word iOS selects on a double-tap
+        } else {
+          lastTapEl = section;
+          lastTapTime = now;
+        }
         return;
       }
-      // a token
-      if (longPress) {
-        open(target); // open its popup and copy the compact type
-        const code = target.querySelector(".twoslash-popup-code");
-        if (code) copySection(code);
-      } else if (openEl === target) {
-        closeNow(); // tap an already-open token → close
-      } else {
-        open(target); // tap to open (sticky)
-      }
+      // a token in the code (outside the popup): open/close its sticky popup
+      lastTapEl = null;
+      if (openEl === hover) closeNow();
+      else if (hover !== null) open(hover);
     };
 
-    // Hover devices open on hover; touch devices use the tap-open + long-press-copy model above.
+    // Hover devices open on hover; touch devices use tap-to-open + double-tap-to-copy above.
     const hoverCapable =
       typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
     if (hoverCapable) {
       document.addEventListener("mouseover", onOver);
       document.addEventListener("mouseout", onOut);
     } else {
-      // non-passive so onTouchStart can preventDefault the iOS long-press over a popup section
-      document.addEventListener("touchstart", onTouchStart, { passive: false });
-      document.addEventListener("touchmove", onTouchMove, { passive: true });
-      document.addEventListener("touchend", onTouchEnd);
-      document.addEventListener("touchcancel", cancelPress);
+      document.addEventListener("touchstart", onTouchStart, { passive: true });
+      document.addEventListener("touchend", onTouchEnd, { passive: true });
     }
     return () => {
       document.removeEventListener("mouseover", onOver);
       document.removeEventListener("mouseout", onOut);
       document.removeEventListener("touchstart", onTouchStart);
-      document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
-      document.removeEventListener("touchcancel", cancelPress);
       cancelClose();
-      cancelPress();
       if (toastTimer) clearTimeout(toastTimer);
       toastEl?.remove();
     };

@@ -909,48 +909,35 @@ a[href*="/docs/glossary#"]:hover { text-decoration-color: var(--primary); }
 @media (prefers-reduced-motion: reduce) {
   .copy-toast { transform: translate(-50%, 0); transition: opacity 0.18s ease; }
 }
-/* On touch devices, suppress the native long-press callout/selection over the popup so our
-   long-press-to-copy owns the gesture. Desktop keeps text selection. */
-@media (hover: none) {
-  .twoslash-hover,
-  .twoslash-popup-container {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
+/* Preview sections are double-tap-to-copy. `manipulation` kills the iOS double-tap-to-zoom (and its
+   300ms delay) without touching text selection — a plain tap-and-drag still selects normally. */
+.twoslash-popup-code,
+.twoslash-popup-docs {
+  touch-action: manipulation;
 }
 
-
-/* Long-press feedback. "pressing" = finger down (a faint wash); "armed" = held long enough, RELEASE
-   NOW (a strong wash). Both wash toward --fg, which is dark in light mode and light in dark mode, so
-   the armed state reads as "darker" on a light page and "lighter" on a dark one — high contrast
-   against whatever the section's own background is. */
-:root {
-  --press-tint: color-mix(in oklab, var(--fg) 12%, transparent);
-  --armed-tint: color-mix(in oklab, var(--fg) 40%, transparent);
-}
-/* token: an inline background pill */
-.twoslash-hover.tw-pressing {
-  background: var(--press-tint);
-  border-radius: 4px;
-}
-.twoslash-hover.tw-armed { background: var(--armed-tint); }
-/* preview sections: a pseudo-element wash over their own (shiki) background */
-.twoslash-popup-code.tw-pressing,
-.twoslash-popup-docs.tw-pressing {
+/* Copied-flash: a brief wash on the section you double-tapped, confirming the copy alongside the
+   toast. Washes toward --fg (dark in light mode, light in dark mode) so it's high-contrast against
+   the section's own background in either theme. */
+.twoslash-popup-code.tw-copied,
+.twoslash-popup-docs.tw-copied {
   position: relative;
 }
-.twoslash-popup-code.tw-pressing::after,
-.twoslash-popup-docs.tw-pressing::after {
+.twoslash-popup-code.tw-copied::after,
+.twoslash-popup-docs.tw-copied::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background: var(--press-tint);
-  transition: background 0.1s ease;
+  background: color-mix(in oklab, var(--fg) 34%, transparent);
+  animation: tw-copied-fade 0.45s ease forwards;
 }
-.twoslash-popup-code.tw-armed::after,
-.twoslash-popup-docs.tw-armed::after {
-  background: var(--armed-tint);
+@keyframes tw-copied-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .twoslash-popup-code.tw-copied::after,
+  .twoslash-popup-docs.tw-copied::after { animation: none; }
 }
