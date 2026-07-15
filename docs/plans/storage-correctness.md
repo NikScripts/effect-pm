@@ -45,7 +45,7 @@ Process.layer(Daily, { effect: poll }).pipe(
 )
 
 // httpServer — Layer.provide is fine when you do not yield* AppStore in-process:
-Resource.httpServer([Process.serve(Daily, { effect: poll })], { protocol: "websocket" }).pipe(
+Resource.httpServer([Process.serve(Daily, { effect: poll })], { protocol: Resource.serverProtocolWebsocket }).pipe(
   Layer.provide(AppStore.layer({ filename })),
   …
 )
