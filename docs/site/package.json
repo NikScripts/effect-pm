@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Official docs/website for @nikscripts/effect-pm — bespoke Waku RSC app, Djot content, Effect pipeline.",
   "scripts": {
-    "dev": "waku dev --host 0.0.0.0 --port 5190",
+    "dev": "NODE_OPTIONS=--max-old-space-size=8192 waku dev --host 0.0.0.0 --port 5190",
     "build": "waku build",
     "preview": "waku start --host 0.0.0.0 --port 5190",
     "docs:manifest": "tsx scripts/gen-manifest.ts",
@@ -27,7 +27,8 @@
     "recharts": "^3.9.2",
     "shiki": "^4.3.1",
     "tailwind-merge": "^3.6.0",
-    "waku": "1.0.0-beta.3"
+    "waku": "1.0.0-beta.3",
+    "web-haptics": "^0.0.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",
