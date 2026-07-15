@@ -249,6 +249,7 @@ const itemForSlug = (slug: string): Promise<NavItem | undefined> => {
 export interface NavGroup {
   readonly label: string;
   readonly items: ReadonlyArray<NavItem>;
+  readonly lone?: boolean; // a standalone page — render as a lone link, not a collapsible group
 }
 
 // The grouped, ordered nav — structure from docs/nav.ts, titles from each page. Any
@@ -265,7 +266,7 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
         listed.add(slug);
       }
     }
-    if (items.length > 0) groups.push({ label: g.label, items });
+    if (items.length > 0) groups.push({ label: g.label, items, lone: g.lone });
   }
   const extras: Array<NavItem> = [];
   for (const c of chapters) {

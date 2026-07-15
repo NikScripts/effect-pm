@@ -189,10 +189,21 @@ body {
 .nav-group-items a { text-decoration: none; color: var(--muted-fg); }
 .nav-group-items a:hover,
 .nav-group-items a[aria-current="page"] { color: var(--primary); }
+/* a lone page — styled like a top-level group head, but it's a direct link (no caret/collapse) */
+.nav-lone-link {
+  display: block;
+  padding: 0.45rem 0.35rem;
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: none;
+}
+.nav-lone-link:hover,
+.nav-lone-link[aria-current="page"] { color: var(--primary); }
 
 /* overlay context: large tap targets */
 .menu-overlay .nav-group { border-bottom: 1px solid var(--border); }
 .menu-overlay .nav-group-head { font-size: 1.02rem; padding: 0.7rem 0.35rem; }
+.menu-overlay .nav-lone-link { font-size: 1.02rem; padding: 0.7rem 0.35rem; }
 .menu-overlay .nav-group-items a {
   padding: 0.55rem 0.35rem 0.55rem 1.4rem;
   font-size: 1rem;
@@ -202,6 +213,7 @@ body {
 /* sidebar context: compact mono; hidden on phones (the overlay replaces it) */
 .sidebar { display: none; }
 .sidebar .nav-group-head { font-family: var(--font-mono); font-size: 0.82rem; padding: 0.35rem 1.25rem; }
+.sidebar .nav-lone-link { font-family: var(--font-mono); font-size: 0.82rem; padding: 0.35rem 1.25rem; }
 .sidebar .nav-group-items a {
   display: block;
   padding: 0.28rem 1.25rem 0.28rem 1.85rem;

@@ -56,6 +56,24 @@ export function GroupedNav({
       {groups.map((g) => {
         const items = filtering ? g.items.filter((i) => i.title.toLowerCase().includes(q)) : g.items;
         if (items.length === 0) return null;
+        // A lone page: a bare top-level link, no group header / caret / collapse.
+        if (g.lone) {
+          return (
+            <div key={g.label} className="nav-group nav-lone">
+              {items.map((i) => (
+                <a
+                  key={i.href}
+                  className="nav-lone-link"
+                  href={i.href}
+                  aria-current={i.href === path ? "page" : undefined}
+                  onClick={onNavigate}
+                >
+                  {i.title}
+                </a>
+              ))}
+            </div>
+          );
+        }
         const open = filtering || !collapsed.has(g.label);
         return (
           <div key={g.label} className="nav-group">

@@ -6,6 +6,9 @@
 export interface NavGroup {
   readonly label: string;
   readonly slugs: ReadonlyArray<string>;
+  // A standalone page, not a group: rendered as a lone top-level link (no header, no collapse).
+  // Use for a single-page entry that doesn't belong in a collapsible section.
+  readonly lone?: boolean;
 }
 
 export const nav: ReadonlyArray<NavGroup> = [
@@ -32,13 +35,15 @@ export const nav: ReadonlyArray<NavGroup> = [
     ],
   },
   {
-    label: "Examples",
-    slugs: ["examples"],
-  },
-  {
     // Tentative group name — "Observe and Control" per the outline, may change.
     label: "Observe and Control",
     slugs: ["observation-and-control", "dashboard", "react-components", "tui-cli"],
+  },
+  {
+    // A single page, not a section — a lone link that sits directly above Standards.
+    label: "Examples",
+    slugs: ["examples"],
+    lone: true,
   },
   {
     label: "Standards",
