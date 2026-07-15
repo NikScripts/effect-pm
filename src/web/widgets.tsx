@@ -1929,7 +1929,8 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
     <CardContent className="p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-medium text-foreground">{props.name}</span>
-        <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
+        {/* no operational status ref → the readiness dot fills the status slot (same as ResourceCard) */}
+        <ReadinessDot tag={props.tag} />
       </div>
       <ResourceReadinessBanner tag={props.tag} />
     </CardContent>
