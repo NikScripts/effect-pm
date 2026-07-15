@@ -58,6 +58,7 @@
 import { Context, Effect, Layer, Schema, Scope } from "effect";
 import * as Resource from "./Resource";
 import type {
+  BuiltResource,
   HandlerContextOf,
   ImplOf,
   Local,
@@ -77,7 +78,7 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import * as internal from "./internal/runResource";
-import { errorSym, successSym } from "./internal/runTagSchemas";
+import { stampRunWireSchemas } from "./internal/runTagSchemas";
 import * as Store from "./Store";
 import {
   runGateStatus,
@@ -141,6 +142,47 @@ export type RunGateHandle<T, A, E> = internal.RunGateHandle<T, A, E>;
 export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
 
 /**
+ * A run-gate handle — the value `yield* MyRun` produces. The **named** compact form of a run gate's
+ * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so it
+ * hovers as `RunResource<Ticket, Price>` instead of the expanded `ServiceOf<…>` member wall; the docs
+ * popover / prettify-ts expand it to the full shape on demand.
+ *
+ * @typeParam Payload - the decoded gate input (`run(input)`; `void` → the gate is a bare {@link Effect})
+ * @typeParam Success - the gated effect's success value
+ * @typeParam Error - the gated effect's failure channel
+ * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
+ *   a remote {@link Resource.client})
+ *
+ * @public
+ */
+export interface RunResource<
+  Payload,
+  Success = void,
+  Error = never,
+  Requirements = never,
+> {
+  /** Live gate counters (waiting / in-flight / completed / failed / interrupted / durations). */
+  readonly status: Resource.Subscribable<RunGateStatus>;
+  /** Count of runs waiting for a concurrency permit. */
+  readonly waiting: Resource.Subscribable<number>;
+  /** Count of runs currently executing. */
+  readonly inFlight: Resource.Subscribable<number>;
+  /** Count of runs that completed successfully. */
+  readonly completed: Resource.Subscribable<number>;
+  /** Count of runs that failed (excluding interrupts). */
+  readonly failed: Resource.Subscribable<number>;
+  /** Count of runs interrupted while waiting or executing. */
+  readonly interrupted: Resource.Subscribable<number>;
+  /**
+   * Acquire a permit, run the gated effect, release the permit on completion. A unit gate (`void`
+   * input) is a bare {@link Effect}; a parameterized gate is `(input) => Effect`.
+   */
+  readonly run: [Payload] extends [void]
+    ? Effect.Effect<Success, Error, Requirements>
+    : (input: Payload) => Effect.Effect<Success, Error, Requirements>;
+}
+
+/**
  * Static `.run` shortcut on {@link Tag} / {@link Service} — adds the tag to `R`.
  *
  * @public
@@ -191,13 +233,21 @@ export interface RunResourceServiceDefinition<
   ) => Layer.Layer<never>;
 }
 
-/** Tag + static `.run` shortcut. @internal */
+/**
+ * Tag + static `.run` shortcut, whose service value is the **named** {@link RunResource} handle (via the
+ * `Svc` seam on {@link ResourceTag}), so `yield* MyRun` hovers as `RunResource<Ticket, Price>` rather
+ * than the expanded `ServiceOf<…>` wall. @internal
+ */
 type RunTagWithStaticRun<
   Self,
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
-> = ResourceTag<Self, RunInstanceSpec<I, A, E>> & {
+> = ResourceTag<
+  Self,
+  RunInstanceSpec<I, A, E>,
+  RunResource<Resource.Decoded<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>>
+> & {
   readonly run: RunResourceStaticRun<I, A, E, Self>;
 };
 
@@ -342,6 +392,24 @@ export type RunResourceRunner = internal.RunResourceRunner;
 // Internal helpers
 // ============================================================================
 
+/**
+ * Resolve an optional wire schema to its {@link Schema.Void} default while keeping the caller's `S`
+ * clean: the public overload returns `S` (not the `S | typeof Schema.Void` union a bare `?? Schema.Void`
+ * yields). Sound — a caller whose `S` is not `typeof Schema.Void` always supplies the schema (the type
+ * param is inferred from it), so the `?? Schema.Void` branch runs only when `S` really is
+ * `typeof Schema.Void`. A function-overload narrowing — no cast. @internal
+ */
+function withVoidDefault<S extends Schema.Top>(schema: S | undefined): S;
+function withVoidDefault(schema: Schema.Top | undefined): Schema.Top {
+  return schema ?? Schema.Void;
+}
+
+/** Mirror of {@link withVoidDefault} for the wire **error** schema (default {@link Schema.Never}). @internal */
+function withNeverDefault<S extends Schema.Top>(schema: S | undefined): S;
+function withNeverDefault(schema: Schema.Top | undefined): Schema.Top {
+  return schema ?? Schema.Never;
+}
+
 /** Resolved wire schemas with RPC defaults applied. @internal */
 const resolveRunWireSchemas = <
   I extends Schema.Top,
@@ -350,9 +418,9 @@ const resolveRunWireSchemas = <
 >(
   config: RunResourceWireSchemas<I, A, E>,
 ): { readonly payload: I; readonly success: A; readonly error: E } => ({
-  payload: (config.payload ?? Schema.Void) as I,
-  success: (config.success ?? Schema.Void) as A,
-  error: (config.error ?? Schema.Never) as E,
+  payload: withVoidDefault(config.payload),
+  success: withVoidDefault(config.success),
+  error: withNeverDefault(config.error),
 });
 
 /** Normalize bare unit-gate effects and thunk forms into `(input) => Effect`. @internal */
@@ -365,112 +433,108 @@ const toRunFn = <I, A, E, R>(
   return effect as (input: I) => Effect.Effect<A, E, R>;
 };
 
-const stampRunWireSchemas = <
-  Self,
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top,
->(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-  config: RunResourceWireSchemas<I, A, E>,
-  resolved: { readonly payload: I; readonly success: A; readonly error: E },
-): ResourceTag<Self, RunInstanceSpec<I, A, E>> => {
-  const stamp: Partial<Record<typeof successSym | typeof errorSym, Schema.Top>> = {};
-  if (config.success !== undefined) {
-    stamp[successSym] = resolved.success;
-  }
-  if (config.error !== undefined && (resolved.error as Schema.Top) !== Schema.Never) {
-    stamp[errorSym] = resolved.error;
-  }
-  const hasStamp = config.success !== undefined
-    || (config.error !== undefined && (resolved.error as Schema.Top) !== Schema.Never);
-  return hasStamp
-    ? (Object.assign(tag, stamp) as ResourceTag<Self, RunInstanceSpec<I, A, E>>)
-    : tag;
-};
-
-const makeStaticRunInputless = <
-  Self,
-  A extends Schema.Top,
-  E extends Schema.Top,
->(
-  tag: ResourceTag<Self, RunInstanceSpec<typeof Schema.Void, A, E>>,
-): Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self> =>
-  Effect.gen(function* () {
-    const svc = yield* tag;
-    return yield* (svc.run as Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>);
-  });
-
-const makeStaticRunParameterized = <
-  Self,
-  I extends Exclude<Schema.Top, typeof Schema.Void>,
-  A extends Schema.Top,
-  E extends Schema.Top,
->(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-): ((
-  input: Schema.Schema.Type<I>,
-) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>) =>
-  (input) =>
-    Effect.gen(function* () {
-      const svc = yield* tag;
-      return yield* (svc.run as (payload: Schema.Schema.Type<I>) => Effect.Effect<
-        Schema.Schema.Type<A>,
-        Schema.Schema.Type<E>
-      >)(input);
-    });
-
+/**
+ * Build the tag's static `.run` shortcut. Whether the gate is inputless (a bare {@link Effect}) or
+ * parameterized (`(input) => Effect`) is decided by the resolved `payload` schema — no spec
+ * introspection. Returns the concrete Effect-or-function union; {@link nameRunService}'s single cast
+ * later blesses it as the deferred `RunResourceStaticRun` conditional (which TS can't reduce for
+ * generic params), so this builder needs no return cast. @internal
+ */
 const makeStaticRun = <
   Self,
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
-): RunResourceStaticRun<I, A, E, Self> =>
-  (Resource.isEffect(tag[Resource.specSym].run as Resource.AnyMethod)
-    ? makeStaticRunInputless(tag as unknown as ResourceTag<Self, RunInstanceSpec<typeof Schema.Void, A, E>>)
-    : makeStaticRunParameterized(
-        tag as unknown as ResourceTag<Self, RunInstanceSpec<Exclude<I, typeof Schema.Void>, A, E>>,
-      )) as unknown as RunResourceStaticRun<I, A, E, Self>;
+  // Svc is left open (`any`) so the pre-naming `ServiceOf` tag (from {@link materializeRunTag}) is
+  // accepted; `svc.run` is read below through a concrete union regardless. The result — a bare Effect
+  // (unit) or an input function (parameterized) — is blessed as the deferred `RunResourceStaticRun`
+  // conditional by {@link nameRunService}'s single cast, so this builder needs no return cast.
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  payload: Schema.Top,
+):
+  | Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>
+  | ((
+      input: Schema.Schema.Type<I>,
+    ) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>) => {
+  type Out = Schema.Schema.Type<A>;
+  type Err = Schema.Schema.Type<E>;
+  // The gate's `run` is a deferred `[void] extends …` conditional — a bare Effect (unit) or an input
+  // function (parameterized) — that TS can't reduce for generic params, so it is read through this one
+  // documented boundary. The `Effect.isEffect` guard picks the runtime form, so both callers are safe.
+  const runOf = (svc: { readonly run: unknown }) =>
+    svc.run as
+      | Effect.Effect<Out, Err>
+      | ((input: unknown) => Effect.Effect<Out, Err>);
+  const inputless: Effect.Effect<Out, Err, Self> = Effect.flatMap(tag, (svc) => {
+    const run = runOf(svc);
+    return Effect.isEffect(run) ? run : run(undefined);
+  });
+  const parameterized = (
+    input: Schema.Schema.Type<I>,
+  ): Effect.Effect<Out, Err, Self> =>
+    Effect.flatMap(tag, (svc) => {
+      const run = runOf(svc);
+      return Effect.isEffect(run) ? run : run(input);
+    });
+  return payload === Schema.Void ? inputless : parameterized;
+};
 
 const isRunTagSchemaConfig = (value: unknown): value is RunResourceTagSchemas =>
   typeof value === "object" && value !== null && !Schema.isSchema(value);
 
-/** Infer wire schemas from a tag config object (defaults match {@link resolveRunWireSchemas}). @internal */
-type RunSchemasOf<C extends RunResourceTagSchemas> = {
-  readonly payload: C extends { readonly payload: infer I extends Schema.Top } ? I : typeof Schema.Void;
-  readonly success: C extends { readonly success: infer A extends Schema.Top } ? A : typeof Schema.Void;
-  readonly error: C extends { readonly error: infer E extends Schema.Top } ? E : typeof Schema.Never;
-};
-
-const materializeRunTag = <
+/**
+ * Name the built run-gate tag's service as {@link RunResource}. The single deliberate cast in this
+ * module: `ServiceOf<RunInstanceSpec<I, A, E>>` and
+ * `RunResource<Decoded<I>, A["Type"], E["Type"], never>` are **mutually assignable** — proven
+ * bidirectionally in `test/run-handle.test-d.ts` — but TS can't verify that equality for *generic*
+ * params at the invariant service-`Shape` position, so the generic factory needs one assertion here.
+ * The `.test-d.ts` is the soundness guard: if the shapes ever drift, it fails the build. @internal
+ */
+const nameRunService = <
   Self,
-  const C extends RunResourceTagSchemas,
+  I extends Schema.Top,
+  A extends Schema.Top,
+  E extends Schema.Top,
 >(
-  key: string,
-  config: C,
-): RunTagWithStaticRun<
-  Self,
-  RunSchemasOf<C>["payload"],
-  RunSchemasOf<C>["success"],
-  RunSchemasOf<C>["error"]
-> => {
-  type I = RunSchemasOf<C>["payload"];
-  type A = RunSchemasOf<C>["success"];
-  type E = RunSchemasOf<C>["error"];
-  const resolved = resolveRunWireSchemas(config as RunResourceWireSchemas<I, A, E>);
-  const spec = runSpec(resolved.payload, resolved.success, resolved.error);
-  const tag = Resource.Tag<Self>()(key, spec, {
-    description: config.description,
-    kind,
-  });
-  const ready = Resource.withReadiness(tag, (svc) =>
-    Effect.map(svc.status.get, () => ({ ready: true })),
-  );
-  const stamped = stampRunWireSchemas<Self, I, A, E>(ready, config as RunResourceWireSchemas<I, A, E>, resolved);
-  return Object.assign(stamped, { run: makeStaticRun(stamped) });
-};
+  // `run` is accepted loosely (the concrete Effect/function {@link makeStaticRun} builds): this one cast
+  // blesses both the invariant service `Shape` (`ServiceOf ⇄ RunResource`) *and* the static `.run`'s
+  // deferred `[void] extends …` conditional in a single boundary.
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>> & { readonly run: unknown },
+): RunTagWithStaticRun<Self, I, A, E> =>
+  tag as unknown as RunTagWithStaticRun<Self, I, A, E>;
+
+// Two-stage (`<Self>()` then the config): `Self` is provided by the caller (the outer `runTag<Self>`),
+// so it is never left to infer from arguments — where it appears only in the return position and would
+// resolve to `unknown`, leaking an unprovidable `unknown` requirement onto the tag's static `.run`
+// (`Effect<…, Self>`) and tripping effect-LSP `missingEffectContext`. `I`/`A`/`E` still infer from the
+// config in the second stage. @internal
+const materializeRunTag = <Self>() =>
+  <
+    I extends Schema.Top = typeof Schema.Void,
+    A extends Schema.Top = typeof Schema.Void,
+    E extends Schema.Top = typeof Schema.Never,
+  >(
+    key: string,
+    config: RunResourceTagSchemas<I, A, E>,
+  ): RunTagWithStaticRun<Self, I, A, E> => {
+    const resolved = resolveRunWireSchemas(config);
+    const spec = runSpec(resolved.payload, resolved.success, resolved.error);
+    const tag = Resource.Tag<Self>()(key, spec, {
+      description: config.description,
+      kind,
+    });
+    const ready = Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.status.get, () => ({ ready: true })),
+    );
+    const stamped = stampRunWireSchemas(ready, {
+      success: config.success,
+      error: config.error,
+    });
+    return nameRunService(
+      Object.assign(stamped, { run: makeStaticRun(stamped, resolved.payload) }),
+    );
+  };
 
 const runTag = <Self>() => {
   function build(key: string): RunTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
@@ -507,26 +571,43 @@ const runTag = <Self>() => {
     maybeOptions?: { readonly description?: string },
   ): any {
     if (inputOrSchemas === undefined) {
-      return materializeRunTag(key, {});
+      return materializeRunTag<Self>()(key, {});
     }
     if (isRunTagSchemaConfig(inputOrSchemas)) {
-      return materializeRunTag(key, inputOrSchemas);
+      return materializeRunTag<Self>()(key, inputOrSchemas);
     }
     const payload = inputOrSchemas;
-    const hasError =
-      errorOrOptions !== undefined && Schema.isSchema(errorOrOptions);
-    const error = hasError ? errorOrOptions : undefined;
-    const options = hasError
-      ? maybeOptions
-      : errorOrOptions as { readonly description?: string } | undefined;
-    return materializeRunTag(key, {
+    // `Schema.isSchema` is a type guard, so the 4th positional arg narrows cleanly into either the
+    // `error` schema or the trailing `{ description }` options — no cast at either branch.
+    const error =
+      errorOrOptions !== undefined && Schema.isSchema(errorOrOptions)
+        ? errorOrOptions
+        : undefined;
+    const options =
+      errorOrOptions !== undefined && !Schema.isSchema(errorOrOptions)
+        ? errorOrOptions
+        : maybeOptions;
+    return materializeRunTag<Self>()(key, {
       payload,
       success: success!,
       ...(error !== undefined ? { error } : {}),
       description: options?.description,
-    } as RunResourceTagSchemas);
+    });
   }
   return build;
+};
+
+/**
+ * Whether the tag's `run` spec verb is an inputless unit gate — its `run` method carries no `payload`
+ * (an inputless {@link Resource.effect}) vs a parameterized {@link Resource.effectFn}. A `LocalMethod`
+ * has no `payload` field, so `"payload" in m` narrows the erased flat-spec member
+ * (`AnyMethod | AnyLocalMethod`) to the wire {@link Resource.Method} cast-free. @internal
+ */
+const runVerbIsInputless = (tag: {
+  readonly [Resource.specSym]: Resource.FlatSpec;
+}): boolean => {
+  const method = tag[Resource.specSym].run;
+  return method !== undefined && "payload" in method && method.payload === undefined;
 };
 
 /** Merge the baked-in default store bridge; apps override with `Layer.provideMerge(AppStore.layerMemory)`. @internal */
@@ -548,9 +629,16 @@ const buildRunImpl = <
   E extends Schema.Top,
   R,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  // Svc left open (`any`): the named {@link RunResource} handle's `[Payload] extends [void]` `run`
+  // conditional can't be reduced for generic params, so the redundant service slot (fully determined
+  // by the pinned `RunInstanceSpec<I, A, E>`) is not re-checked here — the tag flows in cast-free.
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Effect.Effect<any, never, R | Scope.Scope | Store.Storage> =>
+): Effect.Effect<
+  BuiltResource<RunInstanceSpec<I, A, E>, R>,
+  never,
+  R | Scope.Scope | Store.Storage
+> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const provideR = <Out, Err>(
@@ -572,14 +660,20 @@ const buildRunImpl = <
       get: handle.status.get,
       changes: handle.status.changes,
     };
-    const runImpl = (
-      Resource.isEffect(tag[Resource.specSym].run as Resource.AnyMethod)
-        ? Effect.suspend(
-            handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>,
-          )
-        : handle.run
-    ) as ImplOf<RunInstanceSpec<I, A, E>>["run"];
+    // The engine `handle.run` is a `[void] extends …` thunk for a unit gate (`() => Effect`) and an
+    // input function otherwise; the contract's `run` wants a bare Effect (unit) or the same input
+    // function. `Effect.suspend` lifts the unit thunk into a plain Effect; the parameterized form
+    // passes through. Whether the gate is inputless is the tag's `run` spec verb — read cast-free via
+    // {@link runVerbIsInputless}.
+    const runImpl = runVerbIsInputless(tag)
+      ? Effect.suspend(
+          handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>,
+        )
+      : handle.run;
 
+    // The observation members pass straight through (additive-only adapter); `run` is the engine→
+    // contract boundary — the deferred unit-vs-parameterized conditional TS can't reduce for generic
+    // params — so the assembled impl is typed at the {@link ImplOf} contract once here.
     const impl = {
       status: statusSub,
       waiting: handle.waiting,
@@ -588,12 +682,8 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       run: runImpl,
-    };
-    return Resource.builtResource(
-      tag,
-      impl as Resource.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>,
-      context,
-    );
+    } as Resource.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>;
+    return Resource.builtResource(tag, impl, context);
   });
 
 // ============================================================================
@@ -613,7 +703,7 @@ export const make = internal.makeRunGateHandleEffect;
  * @public
  */
 export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
   patch: ConfigPatch<
     RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, never>
   >,
@@ -631,7 +721,7 @@ export const layer = <
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   withDefaultStoreBridge(
@@ -654,21 +744,24 @@ export function serveRemote<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemote(
   tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
+  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `BuiltResource` and
+  // `Resource.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
+  // overload above). Mirrors `Process.serveRemote`.
+  const baseTag: ResourceTag<any, RunInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(
-        buildRunImpl(tag, config),
-        (built) =>
-          Resource.serveRemote(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
+        buildRunImpl(baseTag, config),
+        (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
       ),
-    ) as Layer.Layer<any, any, any>,
+    ),
   );
 }
 
@@ -684,7 +777,7 @@ export function serve<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
@@ -695,13 +788,14 @@ export function serve(
   tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
+  const baseTag: ResourceTag<any, RunInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(
-        buildRunImpl(tag, config),
-        (built) => Resource.serve(tag as any, built as any) as unknown as Layer.Layer<any, any, any>,
+        buildRunImpl(baseTag, config),
+        (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
       ),
-    ) as Layer.Layer<any, any, any>,
+    ),
   );
 }
 
@@ -731,12 +825,7 @@ export const Service = <Self>() => {
       Schema.Schema.Type<E>,
       R
     > = {
-      effect: config.effect as RunResourceLayerEffect<
-        Schema.Schema.Type<I>,
-        Schema.Schema.Type<A>,
-        Schema.Schema.Type<E>,
-        R
-      >,
+      effect: config.effect,
       concurrency: config.concurrency,
       name,
     };
@@ -767,19 +856,9 @@ export const Service = <Self>() => {
           R
         >["effect"],
       ) => configureWrapEffectField(name, fn),
-      layer: withDefaultStoreBridge(
-        Layer.unwrap(
-          Effect.map(
-            buildRunImpl(tag as ResourceTag<any, any, any>, layerConfig),
-            (built) =>
-              Resource.layer(
-                tag as ResourceTag<any, any, any>,
-                Resource.grantLocal(tag as ResourceTag<any, any, any>, built),
-              ),
-          ),
-        ) as Layer.Layer<Self, never, R | Store.Storage>,
-      ),
-      run: makeStaticRun(tag),
+      layer: layer(tag, layerConfig),
+      // `tag` already carries the named static `.run` (stamped by `materializeRunTag`), so it is not
+      // re-set here — `Object.assign` preserves it.
     });
   }
   return build;

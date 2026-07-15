@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Phase 3 unlock (legacy → live book + Draft)
+
+- **Owner said:** “Go” on Phase 3 after FleetHealth landed; sync integration; ignore effect β98 fallout (Agent C).
+- **Chose:** Content-side Draft convention (`status="draft"` + `{.draft}` callout; no site chrome); inventory in [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md); first port = fill `docs/guides/stores.md`; archive `beta-15-to-17` + `CODEBASE-INVENTORY`; keep `STORAGE.md` as agent SSOT with consumer pointer.
+- **Rejected / deferred:** Batch Z deletes; STORAGE rewrite; site Draft badges; toolkit-by-example / processes ports (next batches).
+- **Supervisor impact:** Branch `cursor/docs-corpus-phase3-ce05`.
+
 ## 2026-07-15 — FleetHealth landed on `integration`
 
 - **Owner said:** Add any final improvements and sync with integration.
