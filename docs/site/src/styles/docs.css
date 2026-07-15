@@ -442,6 +442,15 @@ pre.shiki { background: transparent; }
    colours; we theme only the popup container (with `!important` to beat the `.shiki span` dark
    rule above). Popups are pure CSS (no client JS). */
 .twoslash-hover { position: relative; border-bottom: 1px dotted color-mix(in oklab, var(--fg) 40%, transparent); }
+/* API-docgen link on a type name inside a hover preview — same dotted underline, keeps the token's
+   syntax colour, links to the doc page. No nested hover (it's a plain anchor). */
+.api-typelink {
+  border-bottom: 1px dotted color-mix(in oklab, var(--fg) 40%, transparent);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.api-typelink:hover { border-bottom-color: var(--primary); }
 .twoslash-popup-container {
   position: absolute;
   bottom: calc(100% + 0.4rem);
