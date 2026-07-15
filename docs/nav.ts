@@ -17,11 +17,11 @@ export const nav: ReadonlyArray<NavGroup> = [
   {
     // Glossary intentionally omitted — it's a reference utility, linked from the footer, not a chapter.
     label: "Getting started",
-    slugs: ["index", "install", "core-concepts", "creating-a-resource"],
+    slugs: ["index", "install", "core-concepts"],
   },
   {
     label: "Resources",
-    slugs: ["contracts", "fleets-and-peers", "readiness", "configuration"],
+    slugs: ["creating-a-resource", "contracts", "fleets-and-peers", "readiness", "configuration"],
   },
   {
     label: "Guides",
