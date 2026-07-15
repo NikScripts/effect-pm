@@ -60,7 +60,43 @@ FleetHealth.serve(MeshHealth, { readiness }).pipe(
 
 `Unreachable` ≠ `ready: false`. A cold cache is degraded; a dead peer is unreachable.
 
+{.twoslash}
+``` ts
+import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Effect } from "effect"
+class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+  Resource.distributed([DropletEast, DropletWest]),
+) {}
+const program = Effect.gen(function* () {
+// ---cut---
+const glass = yield* MeshHealth
+
+const local = yield* glass.local
+// local: FleetHealth.LocalHealth — { status: "ok" | "degraded", resources: … }
+
+const byNode = yield* glass.byNode
+// byNode: Record<string, FleetHealth.NodeReport>
+//   Reachable  → { _tag: "Reachable", status, resources }
+//   Unreachable → { _tag: "Unreachable" }
+
+const status = yield* glass.status
+// status: "ok" | "degraded" | "partial"
+// ---cut-after---
+})
+```
+
+Peers only expose the **leaf** (`local`). `byNode` / `status` are `Resource.fleet` — excluded from
+fan-out so a fold can't re-aggregate an aggregate. When you need to keep every peer `Exit` yourself,
+use `MultiNode.combineByNodeExit` (FleetHealth does); `combineByNode` / `Resource.fleetHealth` still
+skip-omit for metric-style folds.
+
 ## What not to do
 
 Do **not** fold peers inside `withReadiness` — that cascades one node's failure into neighbours'
 `/health`. Standards forbid it; FleetHealth exists so the fold is explicit and client-shaped.
+
+Runnable form: `pnpm run example:fleet-health-glass`. See also [Telemetry](/docs/telemetry) and
+[Fleets & Peers](/docs/fleets-and-peers).

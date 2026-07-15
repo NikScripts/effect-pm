@@ -1,14 +1,14 @@
 import { Effect, Exit, Layer } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { combineByNodeExit, combineQuery } from "../src/MultiNode";
+import { combineByNode, combineByNodeExit, combineQuery } from "../src/MultiNode";
 import * as FleetHealth from "../src/FleetHealth";
 import * as Resource from "../src/Resource";
 
 class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
 
-describe("MultiNode.combineByNodeExit", () => {
-  it.effect("keeps successful and failed peer exits", () =>
+describe("MultiNode.combineByNode vs combineByNodeExit", () => {
+  it.effect("combineByNodeExit keeps every peer; combineByNode drops failures", () =>
     Effect.gen(function* () {
       const peers = {
         west: { local: Effect.succeed(1) },
@@ -17,8 +17,32 @@ describe("MultiNode.combineByNodeExit", () => {
       const exits = yield* combineQuery(peers, (p) => p.local, combineByNodeExit);
       expect(Exit.isSuccess(exits.west!)).toBe(true);
       expect(Exit.isFailure(exits.gone!)).toBe(true);
+      expect(Object.keys(exits).sort()).toEqual(["gone", "west"]);
+
+      const survivors = yield* combineQuery(peers, (p) => p.local, combineByNode);
+      expect(survivors).toEqual({ west: 1 });
+      expect("gone" in survivors).toBe(false);
     }),
   );
+});
+
+describe("FleetHealth.rollup", () => {
+  const ok = FleetHealth.Reachable.make({ status: "ok", resources: [] });
+  const degraded = FleetHealth.Reachable.make({ status: "degraded", resources: [] });
+  const down = FleetHealth.Unreachable.make({});
+
+  it("ok when every row is Reachable + ok", () => {
+    expect(FleetHealth.rollup({ a: ok, b: ok })).toBe("ok");
+  });
+
+  it("degraded when any Reachable is degraded and none Unreachable", () => {
+    expect(FleetHealth.rollup({ a: ok, b: degraded })).toBe("degraded");
+  });
+
+  it("partial wins over degraded when any Unreachable", () => {
+    expect(FleetHealth.rollup({ a: degraded, b: down })).toBe("partial");
+    expect(FleetHealth.rollup({ a: ok, b: down })).toBe("partial");
+  });
 });
 
 describe("FleetHealth", () => {
@@ -33,6 +57,19 @@ describe("FleetHealth", () => {
         resources: [{ key: "app/Jobs", kind: "@nikscripts/effect-pm/QueueResource", ready }],
       }),
     ),
+  });
+
+  it.effect("default readiness ⇒ empty resources / ok", () => {
+    const live = FleetHealth.layer(MeshHealth).pipe(
+      Layer.provide(FleetHealth.alone(MeshHealth)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const local = yield* glass.local;
+      expect(local.status).toBe("ok");
+      expect(local.resources).toEqual([]);
+      expect(yield* glass.status).toBe("ok");
+    }).pipe(Effect.provide(live));
   });
 
   it.effect("alone mesh: leaf ok + trivial fleet fold", () => {
@@ -51,6 +88,24 @@ describe("FleetHealth", () => {
       const byNode = yield* glass.byNode;
       expect(Object.keys(byNode)).toEqual(["@nikscripts/effect-pm/FleetHealth/alone"]);
       expect(byNode["@nikscripts/effect-pm/FleetHealth/alone"]?._tag).toBe("Reachable");
+    }).pipe(Effect.provide(live));
+  });
+
+  it.effect("leaf degraded when any readiness row is not ready", () => {
+    const readiness = Effect.succeed([
+      { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
+      { key: "app/Jobs", kind: "@nikscripts/effect-pm/QueueResource", ready: false },
+    ]);
+    const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
+      Layer.provide(FleetHealth.alone(MeshHealth)),
+    );
+    return Effect.gen(function* () {
+      const glass = yield* MeshHealth;
+      const local = yield* glass.local;
+      expect(local.status).toBe("degraded");
+      expect(local.resources.map((r) => r.key)).toEqual(["app/Cache", "app/Jobs"]);
+      // alone ⇒ only self, so fleet status mirrors leaf degraded
+      expect(yield* glass.status).toBe("degraded");
     }).pipe(Effect.provide(live));
   });
 
@@ -96,8 +151,26 @@ describe("FleetHealth", () => {
       const glass = yield* MeshHealth;
       const byNode = yield* glass.byNode;
       expect(byNode[DropletWest.key]?._tag).toBe("Unreachable");
+      expect(byNode[DropletEast.key]?._tag).toBe("Reachable");
+      expect(Object.keys(byNode).sort()).toEqual(
+        [DropletEast.key, DropletWest.key].sort(),
+      );
       expect(yield* glass.status).toBe("partial");
       expect(FleetHealth.rollup(byNode)).toBe("partial");
     }).pipe(Effect.provide(live));
+  });
+
+  it.effect("kind is stamped on the tag", () =>
+    Effect.sync(() => {
+      expect(Resource.kindOf(MeshHealth)).toBe(FleetHealth.kind);
+      expect(FleetHealth.kind).toBe("@nikscripts/effect-pm/FleetHealth");
+    }),
+  );
+
+  it("Tag() is unbound; Tag({ node }) stamps the droplet", () => {
+    // MeshHealth is `Tag()()` (default key already claimed) — still unbound after distributed.
+    expect(Resource.nodeOf(MeshHealth)).toBeUndefined();
+    class BoundGlass extends FleetHealth.Tag<BoundGlass>()({ node: DropletEast }) {}
+    expect(Resource.nodeOf(BoundGlass)).toBe(DropletEast);
   });
 });

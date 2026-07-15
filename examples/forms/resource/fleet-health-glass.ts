@@ -50,18 +50,25 @@ const eastLayer = FleetHealth.layer(MeshHealth, {
   Layer.provide(Resource.selfNodeLayer(MeshHealth, DropletEast)),
 );
 
+/** Format one `byNode` row — exhausts `NodeReport` (`Reachable` | `Unreachable`). */
+const formatRow = (node: string, row: FleetHealth.NodeReport): string => {
+  switch (row._tag) {
+    case "Reachable":
+      return `${node}=${row.status}`;
+    case "Unreachable":
+      return `${node}=unreachable`;
+  }
+};
+
 const program = Effect.gen(function* () {
   const glass = yield* MeshHealth;
-  const local = yield* glass.local;
-  const byNode = yield* glass.byNode;
-  const status = yield* glass.status;
+  // Shapes: LocalHealth · Record<node, NodeReport> · "ok" | "degraded" | "partial"
+  const local: FleetHealth.LocalHealth = yield* glass.local;
+  const byNode: Readonly<Record<string, FleetHealth.NodeReport>> = yield* glass.byNode;
+  const status: FleetHealth.FleetStatus = yield* glass.status;
 
   const columns = Object.entries(byNode)
-    .map(([node, row]) =>
-      row._tag === "Reachable"
-        ? `${node}=${row.status}`
-        : `${node}=unreachable`,
-    )
+    .map(([node, row]) => formatRow(node, row))
     .join(", ");
 
   yield* Effect.log("");
