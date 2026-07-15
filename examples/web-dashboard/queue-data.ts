@@ -9,6 +9,7 @@
  */
 import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
+import { RpcClient } from "effect/unstable/rpc";
 import * as Resource from "../../src/Resource";
 import { specOf } from "../../src/Resource";
 import * as Group from "../../src/Group";
@@ -88,9 +89,15 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 const dropletTransport = Resource.socketClient(Droplet, { url: dropletRpc });
 const miniTransport = Resource.socketClient(MiniNode, { url: miniUrl });
 
+// The nodeless NodeStatus client needs the ambient `RpcClient.Protocol`. The node tag's value IS that
+// protocol (post-`connect`), and the node is exposed in `appLayer` below, so read it via
+// `Layer.effect(RpcClient.Protocol, node)` — the same pattern the HealthBoard uses. (Providing the
+// node's *transport* here instead left the client's `RpcClient.Protocol` unsatisfied.)
 const nodeStatusLayer = (resourceKey: string) =>
   Resource.client(NodeStatus.Tag).pipe(
-    Layer.provide(nodeOf(resourceKey) === "mini" ? miniTransport : dropletTransport),
+    Layer.provide(
+      Layer.effect(RpcClient.Protocol, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet),
+    ),
   );
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
