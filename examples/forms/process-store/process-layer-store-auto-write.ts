@@ -2,7 +2,8 @@
  * @module examples/forms/process-store/process-layer-store-auto-write
  *
  * Process.layer soft-defaults in-memory Storage (R fulfilled). Provide AppStore into the
- * layer to override Soft capture (journals + Logs). `Process.layerMemory` is an alias.
+ * layer to override Soft capture (journals + Logs). One AppStore — do not also wrap the
+ * program in a second `DemoStore.layerMemory` (split journals).
  * Run: `pnpm run example:process-layer-store-auto-write`
  */
 
@@ -22,35 +23,38 @@ class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
   Store.register(PricesProcess, builtInProcessStoreContract(PricesProcess)),
 ) {}
 
-const storeEnv = Layer.mergeAll(DemoStore.layerMemory, TestClock.layer());
-
 const program = Effect.gen(function* () {
-  const live = Process.layer(PricesProcess, {
-    effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
-    polling: Polling.spaced(Duration.millis(50)),
-  }).pipe(Layer.provideMerge(DemoStore.layerMemory));
+  yield* PricesProcess;
+  yield* TestClock.adjust(Duration.millis(200));
 
-  yield* Effect.gen(function* () {
-    yield* PricesProcess;
-    yield* TestClock.adjust(Duration.millis(200));
-
-    const store = yield* DemoStore;
-    const events = yield* store.events();
-    const completed = events.find((row) => row._tag === "Completed");
-    yield* Effect.log(`built-in store: ${String(events.length)} event(s)`);
-    const price =
-      completed !== undefined &&
-      completed._tag === "Completed" &&
-      "success" in completed &&
-      completed.success !== undefined
-        ? yield* Schema.decodeUnknownEffect(Price)(completed.success).pipe(Effect.option)
-        : Option.none();
-    yield* Option.match(price, {
-      onNone: () => Effect.log("latest result: none"),
-      onSome: (p) =>
-        Effect.log(`latest result: ${p.symbol} @ ${String(p.usd)}`),
-    });
-  }).pipe(Effect.provide(live), Effect.scoped);
-}).pipe(Effect.provide(storeEnv), Effect.scoped, Effect.orDie);
+  const store = yield* DemoStore;
+  const events = yield* store.events();
+  const completed = events.find((row) => row._tag === "Completed");
+  yield* Effect.log(`built-in store: ${String(events.length)} event(s)`);
+  const price =
+    completed !== undefined &&
+    completed._tag === "Completed" &&
+    "success" in completed &&
+    completed.success !== undefined
+      ? yield* Schema.decodeUnknownEffect(Price)(completed.success).pipe(Effect.option)
+      : Option.none();
+  yield* Option.match(price, {
+    onNone: () => Effect.log("latest result: none"),
+    onSome: (p) =>
+      Effect.log(`latest result: ${p.symbol} @ ${String(p.usd)}`),
+  });
+}).pipe(
+  Effect.provide(
+    Layer.mergeAll(
+      Process.layer(PricesProcess, {
+        effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
+        polling: Polling.spaced(Duration.millis(50)),
+      }).pipe(Layer.provideMerge(DemoStore.layerMemory)),
+      TestClock.layer(),
+    ),
+  ),
+  Effect.scoped,
+  Effect.orDie,
+);
 
 runNodeProgramOrExit(program, "process-layer-store-auto-write finished");
