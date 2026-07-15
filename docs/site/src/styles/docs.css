@@ -394,6 +394,8 @@ pre.shiki { background: transparent; }
    `> pre > code > .line` direct-child chain numbers only the main code lines, never the lines
    inside a twoslash hover popup (those sit much deeper). */
 .code-block { position: relative; }
+/* consistent left inset before the line-number gutter (matches .api-source-code) */
+.code-block > pre { padding-left: 0.7rem; }
 .code-block > pre > code { counter-reset: ln; }
 .code-block > pre > code > .line::before {
   counter-increment: ln;
@@ -982,7 +984,7 @@ a.api-src:hover { color: var(--primary); }
    own x-padding (e.g. the pretty-type preview) must survive. Flat: no border/radius from base pre {}. */
 .api-source-code > pre {
   margin: 0;
-  padding: 0.55rem 0;
+  padding: 0.55rem 0 0.55rem 0.7rem; /* left inset before the gutter, matching .code-block */
   border: none;
   border-radius: 0;
 }
