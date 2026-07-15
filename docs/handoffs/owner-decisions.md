@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Tutorials & Documentation goals (add alongside, don't replace)
+
+- **Owner said:** Integrate the nine narrative goals into standards; undo the earlier rewrite; talk first; start small — add rules, keep existing Narrative rules.
+- **Chose:** Append *The Spine* … *Sharp Edges, In Place* under Narrative docs in [`documentation.md`](../standards/documentation.md). Keep Show don't tell / glossary / capitalize / verified / handoff. No narrative page rewrites in this step.
+- **Rejected / deferred:** Replacing existing rules; upgrading Introduction / Creating a Resource until a later agreed pass.
+- **Supervisor impact:** Agent 1; sync to `integration`.
+
 ## 2026-07-15 — Examples book priority (over legacy recipe ports)
 
 - **Owner said:** Pair every example file with a near-identical Twoslash doc; hub page in sidebar only; example docs grouped by module with `#` anchors; Agent 1 chooses priority vs legacy.
