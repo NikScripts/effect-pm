@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import type { ApiSymbol as Sym } from "../lib/api.js";
-import { highlightToReact, renderJsdocToReact } from "../lib/highlight.js";
+import { highlightSourceWithHovers, highlightToReact, renderJsdocToReact } from "../lib/highlight.js";
 
 // Raw `/** … */` → clean markdown: drop the comment fences and the per-line ` * ` gutter.
 const cleanComment = (raw: string): string =>
@@ -43,6 +43,12 @@ export const ApiSymbolRow = ({ s, href }: { s: Sym; href: string }): React.React
 export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
   const sigs = s.signatures.length > 0 ? s.signatures : s.typeText !== undefined ? [s.typeText] : [];
   const lead = docLead(s.rawComment);
+  // The source, with twoslash hover previews (whole file type-checked, cut to this declaration).
+  // Falls back to plain highlighting if twoslash can't compile the file.
+  const sourceLines = s.sourceText.split("\n").length;
+  const sourceView =
+    highlightSourceWithHovers(s.source.file, s.source.line, s.source.line + sourceLines - 1) ??
+    highlightToReact(s.sourceText, "ts");
   const chips = [
     ...(s.category !== undefined ? [{ cls: "api-chip-cat", text: s.category }] : []),
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),
@@ -79,7 +85,7 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
           </div>
           {/* line numbers start at the export's real file line, so `ln` counts from source.line - 1 */}
           <div className="api-source-code" style={{ "--ln-start": s.source.line - 1 }}>
-            {highlightToReact(s.sourceText, "ts")}
+            {sourceView}
           </div>
         </section>
       ) : null}

@@ -6,6 +6,8 @@
 //
 // We render Shiki's HAST as real React elements (no dangerouslySetInnerHTML).
 
+import * as nodeFs from "node:fs";
+import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import * as React from "react";
 import * as ts from "typescript";
@@ -366,3 +368,33 @@ export const highlightToReact = (
  *  API-reference pages. `loadHighlighter()` must have run first so fenced code can be highlighted. */
 export const renderJsdocToReact = (docs: string): React.ReactNode =>
   hastToReact({ type: "root", children: jsdocToHast(docs) });
+
+/**
+ * Render an export's REAL source WITH twoslash hover previews. Twoslash type-checks the WHOLE file
+ * (so the LSP resolves every identifier — relative imports included, via a `@filename` directive) and
+ * `---cut---` trims everything except the target declaration from the display. `loadHighlighter()`
+ * must have run first. Returns undefined on any failure so the caller can fall back to plain source.
+ */
+export const highlightSourceWithHovers = (
+  relFile: string, // repo-relative, e.g. "src/QueueResource.ts"
+  startLine: number, // 1-based first line of the declaration
+  endLine: number, // 1-based last line (inclusive)
+): React.ReactNode | undefined => {
+  try {
+    const lines = nodeFs.readFileSync(nodePath.join(repoRoot, relFile), "utf8").split("\n");
+    // `@filename` places the virtual file at the real path so `./x` imports resolve; `@noErrors`
+    // keeps a stray diagnostic from throwing; the cut pair leaves only the declaration on screen.
+    const input = [
+      "// @noErrors",
+      `// @filename: ${relFile}`,
+      ...lines.slice(0, startLine - 1),
+      "// ---cut---",
+      ...lines.slice(startLine - 1, endLine),
+      "// ---cut-after---",
+      ...lines.slice(endLine),
+    ].join("\n");
+    return highlightToReact(input, "ts", { twoslash: true });
+  } catch {
+    return undefined;
+  }
+};
