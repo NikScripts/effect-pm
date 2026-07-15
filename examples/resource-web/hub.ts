@@ -113,9 +113,14 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // API-usage tap — is served remotely (server.ts); the browser is a thin `Resource.client` over each
 // node's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaNode` alongside the box-score queue.
 // One transport per node → one pip each, auto-fed by `NodeStatus`.
-const wnbaTransport = Resource.httpClient(WnbaNode, { url: "/rpc" });
-const liveTransport = Resource.httpClient(LiveNode, { url: "/live/rpc" });
-const statsTransport = Resource.httpClient(StatsNode, { url: "/stats/rpc" });
+// A browser opens many concurrent live streams (each resource's status + metrics + logs); over
+// HTTP/1.1 that dies at the ~6-connection-per-origin cap. `socketClient` rides ONE multiplexed
+// WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
+// A `"/path"` url resolves against the page origin (browser host + http/https→ws/wss), lazily — so
+// `hub.ts` is safe to import from the Node server too (nothing reads `location` at load).
+const wnbaTransport = Resource.socketClient(WnbaNode, { url: "/rpc" });
+const liveTransport = Resource.socketClient(LiveNode, { url: "/live/rpc" });
+const statsTransport = Resource.socketClient(StatsNode, { url: "/stats/rpc" });
 
 // Expose each node itself in the runtime (not only the resource clients): the node-status die reads
 // `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one

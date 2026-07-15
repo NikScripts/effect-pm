@@ -1,11 +1,12 @@
 /**
  * @module examples/resource-web/server
  *
- * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over
- * http on one port, plus the `NodeStatus` that `httpServer` auto-mounts. The browser dashboard
- * reaches it via `Resource.httpClient(WnbaNode, …)` (vite proxies `/rpc` here), so the top-right
- * node status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
- * `pnpm run example:resource-web`).
+ * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over a
+ * **WebSocket** (`httpServer({ protocol: "websocket" })`) on one port, plus the `NodeStatus` that
+ * `httpServer` auto-mounts. The browser dashboard reaches it via `Resource.socketClient(WnbaNode, …)`
+ * (vite proxies `/rpc` here with `ws: true`) — one multiplexed connection carries every resource's
+ * status/metrics/logs streams, which HTTP/1.1's ~6-connection cap would otherwise starve. Run:
+ * `pnpm run example:resource-web-server` (alongside `pnpm run example:resource-web`).
  */
 import { Clock, Console, DateTime, Duration, Effect, Layer, Random, Stream } from "effect";
 // A node node entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
@@ -242,9 +243,7 @@ const logStorageDemo = Layer.effectDiscard(
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.seconds(8));
       const onNode = yield* Logs.byNode(LiveNode, { limit: 500 });
-      const fromPoller = yield* Logs.byResource({
-        processId: "wnba/LiveScorePoller",
-      });
+      const fromPoller = yield* Logs.byResource("wnba/LiveScorePoller");
       yield* Console.log(
         `[logs] durable storage — live node holds ${onNode.length} lines; ` +
           `${fromPoller.length} are LiveScorePoller's (by resource)`,
@@ -274,7 +273,7 @@ const wnbaNode = Resource.httpServer([
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
   Resource.serve(WorkerPool, workerPoolImpl(5)),
-]).pipe(
+], { protocol: "websocket" }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
@@ -290,7 +289,7 @@ const liveNode = Resource.httpServer([
     polling: Polling.spaced(Duration.seconds(2)),
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
-]).pipe(
+], { protocol: "websocket" }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(LiveStore.layerMemory),
@@ -304,7 +303,7 @@ const statsNode = Resource.httpServer([
     concurrency: 3,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
-]).pipe(
+], { protocol: "websocket" }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(StatsStore.layerMemory),

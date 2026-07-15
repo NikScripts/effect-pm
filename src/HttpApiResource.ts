@@ -60,7 +60,7 @@ import { makeRunnerFromConcurrency } from "./internal/runResource";
  */
 export interface HttpApiResourceConfig<
   _ApiId extends string,
-  _Groups extends HttpApiGroup.Any,
+  _Groups extends HttpApiGroup.Constraint,
   Name extends string = string,
 > {
   readonly name: Name;
@@ -81,7 +81,7 @@ export interface HttpApiResourceConfig<
  */
 export interface HttpApiResourceLayerEffectConfig<
   ApiId extends string = string,
-  Groups extends HttpApiGroup.Any = HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint = HttpApiGroup.Top,
 > {
   readonly concurrency?: number;
   /**
@@ -199,7 +199,7 @@ const wrapEndpointCall = <Fn extends (...args: Array<never>) => Effect.Effect<un
  */
 export const instrumentEndpoints = <
   ApiId extends string,
-  Groups extends HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint,
 >(
   api: HttpApiType.HttpApi<ApiId, Groups>,
   client: HttpApiClient.Client<Groups>,
@@ -215,13 +215,13 @@ export const instrumentEndpoints = <
       if (bucket === undefined) {
         return;
       }
-      const original = bucket[endpoint.name];
+      const original = bucket[endpoint.identifier];
       if (typeof original !== "function") {
         return;
       }
-      bucket[endpoint.name] = wrapEndpointCall(
+      bucket[endpoint.identifier] = wrapEndpointCall(
         original as (...args: Array<never>) => Effect.Effect<unknown, unknown, unknown>,
-        { client: clientId, group: group.identifier, endpoint: endpoint.name },
+        { client: clientId, group: group.identifier, endpoint: endpoint.identifier },
         metrics,
       );
     },
@@ -271,7 +271,7 @@ const applyTransportMiddleware = (
   options: {
     readonly runner: RunResourceRunner;
     readonly withInFlight: InFlightTransform;
-    readonly transformClient?: HttpApiResourceConfig<string, HttpApiGroup.Any, string>["transformClient"];
+    readonly transformClient?: HttpApiResourceConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },
 ): HttpClient.HttpClient => {
   const userTransformed =
@@ -282,7 +282,7 @@ const applyTransportMiddleware = (
 
 const maybeInstrumentEndpoints = <
   ApiId extends string,
-  Groups extends HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint,
   Service,
 >(
   service: Service,
@@ -297,7 +297,7 @@ const maybeInstrumentEndpoints = <
 
 const buildLayer = <
   ApiId extends string,
-  Groups extends HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint,
   Name extends string,
   Self,
 >(
@@ -330,7 +330,7 @@ const buildLayer = <
 
 function makeHttpApiResource<
   ApiId extends string,
-  Groups extends HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint,
   Name extends string,
 >(
   api: HttpApiType.HttpApi<ApiId, Groups>,
@@ -347,7 +347,7 @@ function makeHttpApiResource<
 const httpApiResourceService = <Self>() =>
   <
     ApiId extends string,
-    Groups extends HttpApiGroup.Any,
+    Groups extends HttpApiGroup.Constraint,
     const Name extends string,
   >(
     name: Name,
@@ -373,7 +373,7 @@ function layerEffect<
   Error,
   Requirements,
   ApiId extends string = string,
-  Groups extends HttpApiGroup.Any = HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint = HttpApiGroup.Top,
 >(
   tag: Context.Key<Identifier, Service>,
   effect: Effect.Effect<Service, Error, Requirements>,

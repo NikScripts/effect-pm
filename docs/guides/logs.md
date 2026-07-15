@@ -96,10 +96,7 @@ const program = Effect.gen(function* () {
   const nodeRows = yield* Logs.byNode(BillingNode, { limit: 200 })
 
   // Resource journal — that registration's scope (same key as Daily.key).
-  const resourceRows = yield* Logs.byResource(
-    { processId: Daily.key },
-    { limit: 100 },
-  )
+  const resourceRows = yield* Logs.byResource(Daily, { limit: 100 })
 
   // Preferred: live + durable product export for the tag.
   const { query } = yield* Resource.logs(Daily)
@@ -192,8 +189,8 @@ LogEntry.atRoot(segment)(entry)         // lineage[0] === segment
 LogEntry.atLeaf(resourceKey)(entry)     // last segment === resourceKey
 ```
 
-Legacy `processId` / `queueId` annotations still populate lineage when decoding old rows; new writers
-use lineage.
+Legacy `processId` / `queueId` annotations are gone — writers stamp lineage only via `Logs.withScope`.
+Resource kind is `Resource.kindOf(tag)`, not an annotation field.
 
 ## Per-resource export
 

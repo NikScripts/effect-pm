@@ -15,11 +15,14 @@ import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cause, Config, Console, Data, Effect, Exit, Schema } from "effect";
+import prettier from "prettier";
 import ts from "typescript";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const packageJsonPath = nodePath.join(repoRoot, "package.json");
-const defaultOutPath = nodePath.join(repoRoot, "docs/site/api.json");
+// NOT "api.json" — that filename collides with the `/api` route (Vite extension-resolves `/api` to
+// `api.json` and serves the data file instead of the page).
+const defaultOutPath = nodePath.join(repoRoot, "docs/site/api-model.json");
 
 // One named error per failure mode (Principles → Errors are values).
 class FileError extends Data.TaggedError("FileError")<{
@@ -56,6 +59,15 @@ const ApiEntry = Schema.Struct({
 });
 const ApiModel = Schema.Struct({
   entries: Schema.Array(ApiEntry),
+});
+// A tiny companion file (names + counts) so the /api landing page needn't load the full model.
+const ApiIndex = Schema.Struct({
+  namespaces: Schema.Array(
+    Schema.Struct({
+      entry: Schema.String,
+      count: Schema.Number,
+    }),
+  ),
 });
 type ApiSymbol = Schema.Schema.Type<typeof ApiSymbol>;
 type ApiEntry = Schema.Schema.Type<typeof ApiEntry>;
@@ -137,6 +149,36 @@ const formatFlags =
 const strip = (text: string): string =>
   text.replace(/import\("[^"]*"\)\./g, "").replace(/\s*\n\s*/g, " ");
 
+// Display formatting via Prettier: signatures/types from the checker are one long line, so wrap each
+// in a valid TS construct, format, and strip the wrapper — long overloads break across lines instead
+// of scrolling. Best-effort: an unparseable fragment is shown as-is.
+const prettierOpts = { parser: "typescript" as const, printWidth: 76, semi: false };
+const formatSignature = (sig: string): string => {
+  try {
+    return prettier
+      .format(`interface _ {\n${sig}\n}`, prettierOpts)
+      .trim()
+      .replace(/^interface _ \{\n?/, "")
+      .replace(/\n?\}$/, "")
+      .replace(/^ {2}/gm, "")
+      .trim();
+  } catch {
+    return sig;
+  }
+};
+const formatType = (t: string): string => {
+  try {
+    return prettier
+      .format(`type _ = ${t}\n`, prettierOpts)
+      .trim()
+      .replace(/^type _ =\s*/, "")
+      .replace(/;\s*$/, "")
+      .trim();
+  } catch {
+    return t;
+  }
+};
+
 // --- pure extraction: everything below is a function of the checker, no IO ---
 const srcDir = `${nodePath.join(repoRoot, "src")}/`;
 const makeExtractor = (checker: ts.TypeChecker) => {
@@ -184,14 +226,11 @@ const makeExtractor = (checker: ts.TypeChecker) => {
 
     const signatures = type
       .getCallSignatures()
-      .map((sig) => strip(checker.signatureToString(sig, decl, formatFlags, ts.SignatureKind.Call)));
+      .map((sig) =>
+        formatSignature(strip(checker.signatureToString(sig, decl, formatFlags, ts.SignatureKind.Call))),
+      );
     const fullType = strip(checker.typeToString(type, decl, formatFlags));
-    const typeText =
-      signatures.length > 0
-        ? undefined
-        : fullType.length > 400
-          ? `${fullType.slice(0, 399)}…`
-          : fullType;
+    const typeText = signatures.length > 0 ? undefined : formatType(fullType);
 
     const tags = sym
       .getJsDocTags(checker)
@@ -307,6 +346,12 @@ const program = Effect.gen(function* () {
     entries: model,
   }).pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
   yield* writeText(outPath, `${json}\n`);
+
+  const indexPath = nodePath.join(nodePath.dirname(outPath), "api-index.json");
+  const indexJson = yield* Schema.encodeEffect(Schema.fromJsonString(ApiIndex))({
+    namespaces: model.map((e) => ({ entry: e.entry, count: e.symbols.length })),
+  }).pipe(Effect.mapError((cause) => new FileError({ path: indexPath, cause })));
+  yield* writeText(indexPath, `${indexJson}\n`);
 
   const total = model.reduce((n, e) => n + e.symbols.length, 0);
   yield* Console.log(`wrote ${outPath}`);

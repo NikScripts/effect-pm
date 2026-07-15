@@ -244,8 +244,6 @@ export * as Store from "./Store";
 export {
   LogAnnotationKeys,
   withNodeLogAnnotations,
-  withProcessLogAnnotations,
-  withQueueLogAnnotations,
 } from "./LogContext";
 export * as LogContext from "./LogContext";
 // Types - Process

@@ -6,9 +6,9 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **1** | `cursor/fleet-health-ce05` | [docs corpus](./agent-01-docs-corpus.md) · [FleetHealth](../guides/fleet-health.md) · [plans](../plans/README.md) | **FleetHealth shipped** — Reachable/Unreachable fleet glass (Telemetry twin) | tip of fleet-health | fleet-health tests + example | Phase 3 unlock; Batch Z deferred; `layerNoop` parked | 2026-07-14 |
+| **1** | **merged to `integration`** ([#60](https://github.com/NikScripts/effect-pm/pull/60)) | [docs corpus](./agent-01-docs-corpus.md) · [FleetHealth](../guides/fleet-health.md) · [plans](../plans/README.md) | **FleetHealth on `integration`** — Reachable/Unreachable fleet glass (Telemetry twin) | `integration` tip | fleet-health tests + example + type shapes | **Next:** Phase 3 (owner unlock); Batch Z deferred; `layerNoop` parked | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | **ready perfection / closed** | [Logs store followers](./agent-03-logs-p1.md) · Process.events | **tracks done** — [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#48](https://github.com/NikScripts/effect-pm/pull/48)/[#51](https://github.com/NikScripts/effect-pm/pull/51) on `integration` | `integration` tip | typecheck / suite green at #51 | Superseded [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed. [#52](https://github.com/NikScripts/effect-pm/pull/52)/[#50](https://github.com/NikScripts/effect-pm/pull/50) landed. Out of scope: D handles, site UI, store memo, Logs followers/`LogStore`/`persistLayer`. No further Process.events Eng. | 2026-07-14 |
+| **3** | **merged to `integration`** ([#59](https://github.com/NikScripts/effect-pm/pull/59)) | [byResource full key](./agent-03-byresource-full-key.md) | **`Logs.byResource` full key shipped** — kill resource-identity `processId`/`queueId` | `integration` tip | typecheck / suite | Idle pending owner assignment | 2026-07-15 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -19,7 +19,7 @@
 ## Supervisor queue
 
 ### Active (owner approval required)
-1. **Agent 1:** FleetHealth on `cursor/fleet-health-ce05` — meshed readiness glass; local `/health` unchanged. Phase 2 plans already on `integration`. Next: land this PR or Phase 3. No UI / `docs/site` chrome.
+1. **Agent 1:** Phase 3 — port useful `docs/legacy/**` → live book + Draft content convention (no site chrome). FleetHealth ([#60](https://github.com/NikScripts/effect-pm/pull/60)) on `integration`. Batch Z deletes still per-row. No UI / `docs/site` chrome.
 2. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
@@ -47,6 +47,7 @@ Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips.
 
 ## Completed
 
+- [#60](https://github.com/NikScripts/effect-pm/pull/60) FleetHealth — meshed stadium-board readiness (`Reachable` / `Unreachable`)
 - [#55](https://github.com/NikScripts/effect-pm/pull/55) Phase 1 handoffs archive A–D + open-asks closeout
 - [#54](https://github.com/NikScripts/effect-pm/pull/54) withReadiness pipe type hygiene (P0–P3)
 - [#52](https://github.com/NikScripts/effect-pm/pull/52) Agent 3 ready-perfection handoff close-out

@@ -1,9 +1,9 @@
-import { namespaces, slugForEntry } from "../../lib/api.js";
+import { namespaceSummaries, slugForEntry } from "../../lib/api-index.js";
 
-// The API-reference landing page: every namespace, with a symbol count, linking to its page.
+// The API-reference landing page. Uses only the tiny summary (names + counts), never the full model.
 export default async function ApiIndex() {
-  const nss = namespaces();
-  const total = nss.reduce((n, ns) => n + ns.symbols.length, 0);
+  const nss = namespaceSummaries();
+  const total = nss.reduce((n, ns) => n + ns.count, 0);
   return (
     <>
       <title>API Reference — effect-pm</title>
@@ -17,7 +17,7 @@ export default async function ApiIndex() {
           {nss.map((ns) => (
             <a className="api-index-item" key={ns.entry} href={`/api/${slugForEntry(ns.entry)}`}>
               <span className="api-index-name">{ns.entry}</span>
-              <span className="api-index-count">{ns.symbols.length}</span>
+              <span className="api-index-count">{ns.count}</span>
             </a>
           ))}
         </div>

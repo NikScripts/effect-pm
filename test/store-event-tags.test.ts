@@ -29,7 +29,7 @@ describe("store event _tag alignment", () => {
   it("process execution events use shared terminal tags", () => {
     const started = processDecode({
       _tag: "Started",
-      processId: "p",
+      key: "p",
       scheduleKey: null,
       startedAt: 1,
       isStartupRun: true,
@@ -38,7 +38,7 @@ describe("store event _tag alignment", () => {
 
     const completed = processDecode({
       _tag: "Completed",
-      processId: "p",
+      key: "p",
       scheduleKey: null,
       startedAt: 1,
       completedAt: 2,
@@ -49,7 +49,7 @@ describe("store event _tag alignment", () => {
 
     const failed = processDecode({
       _tag: "Failed",
-      processId: "p",
+      key: "p",
       scheduleKey: null,
       startedAt: 1,
       completedAt: 2,

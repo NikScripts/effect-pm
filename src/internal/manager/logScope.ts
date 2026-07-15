@@ -7,7 +7,7 @@
 
 import { Effect, Option } from "effect";
 import type { LogEntry } from "../../LogEntry";
-import { LogAnnotationKeys } from "../../LogContext";
+import * as LogEntryModule from "../../LogEntry";
 import {
   normalizeProcessManagerTarget,
   resolveProcessManagerTarget,
@@ -17,22 +17,20 @@ import {
 /**
  * Resolved operator log filter from a single user-entered target string.
  *
+ * Resource scopes carry the registration **key** (same as `Tag.key`). Kind is in `_tag`
+ * (`process` | `queue`); RPC wire prefix stays `groupId`.
+ *
  * @internal
  */
 export type LogScope =
   | { readonly _tag: "all" }
   | { readonly _tag: "group"; readonly groupId: string }
-  | { readonly _tag: "process"; readonly groupId: string; readonly processId: string }
-  | { readonly _tag: "queue"; readonly groupId: string; readonly queueId: string };
+  | { readonly _tag: "process"; readonly groupId: string; readonly key: string }
+  | { readonly _tag: "queue"; readonly groupId: string; readonly key: string };
 
 /** @internal */
 export const logScopeGroupId = (scope: LogScope): string | undefined =>
   scope._tag === "all" ? undefined : scope.groupId;
-
-const annotationValue = (
-  annotations: Readonly<Record<string, string>>,
-  key: string,
-): string | undefined => annotations[key];
 
 /** @internal */
 export const logEntryMatchesScope = (
@@ -43,19 +41,11 @@ export const logEntryMatchesScope = (
     return true;
   }
   // "group" is legacy CLI scoping (groups were removed) — no per-entry group annotation remains, so it
-  // matches every line. Resource scopes still filter by their processId / queueId annotation.
+  // matches every line. Resource scopes filter by lineage key.
   if (scope._tag === "group") {
     return true;
   }
-  if (scope._tag === "process") {
-    return (
-      annotationValue(entry.annotations, LogAnnotationKeys.processId) ===
-      scope.processId
-    );
-  }
-  return (
-    annotationValue(entry.annotations, LogAnnotationKeys.queueId) === scope.queueId
-  );
+  return LogEntryModule.hasKey(scope.key)(entry);
 };
 
 type GroupCatalogEntry = {
@@ -103,13 +93,13 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
             return {
               _tag: "process",
               groupId: candidate.groupId,
-              processId: candidate.key,
+              key: candidate.key,
             };
           }
           return {
             _tag: "queue",
             groupId: candidate.groupId,
-            queueId: candidate.key,
+            key: candidate.key,
           };
         }
         if (resolution._tag === "Ambiguous") {
