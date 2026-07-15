@@ -200,6 +200,47 @@ body {
 .nav-lone-link:hover,
 .nav-lone-link[aria-current="page"] { color: var(--primary); }
 
+/* site footer — brand + link columns + legal line */
+.site-footer {
+  margin-top: 4rem;
+  padding: 2.5rem 1.25rem 2rem;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--fg) 2.5%, transparent);
+  color: var(--muted-fg);
+  font-size: 0.85rem;
+}
+.site-footer-inner {
+  max-width: 66rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2rem 3rem;
+}
+.site-footer-name { font-family: var(--font-mono); font-weight: 600; font-size: 1rem; color: var(--fg); }
+.site-footer-tag { margin: 0.5rem 0 0; max-width: 24rem; line-height: 1.5; }
+.site-footer-cols { display: flex; flex-wrap: wrap; gap: 2.5rem; }
+.site-footer-col { display: flex; flex-direction: column; gap: 0.55rem; }
+.site-footer-heading {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--fg);
+}
+.site-footer-col a { color: var(--muted-fg); text-decoration: none; }
+.site-footer-col a:hover { color: var(--primary); }
+.site-footer-legal {
+  max-width: 66rem;
+  margin: 2rem auto 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.site-footer-legal a { color: var(--muted-fg); text-decoration: underline; text-underline-offset: 2px; }
+.site-footer-legal a:hover { color: var(--primary); }
+
 /* overlay context: large tap targets */
 .menu-overlay .nav-group { border-bottom: 1px solid var(--border); }
 .menu-overlay .nav-group-head { font-size: 1.02rem; padding: 0.7rem 0.35rem; }

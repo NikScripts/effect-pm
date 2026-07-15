@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { navGroups, glossaryEntries } from "../lib/docs-content.js";
 import { NavBar } from "../components/NavBar.js";
 import { GroupedNav } from "../components/GroupedNav.js";
+import { Footer } from "../components/Footer.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
 
@@ -27,6 +28,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         </aside>
         <main>{children}</main>
       </div>
+      <Footer />
       <TwoslashHover />
       <GlossaryHover data={glossaryEntries()} />
     </>

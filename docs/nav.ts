@@ -13,8 +13,9 @@ export interface NavGroup {
 
 export const nav: ReadonlyArray<NavGroup> = [
   {
+    // Glossary intentionally omitted — it's a reference utility, linked from the footer, not a chapter.
     label: "Getting started",
-    slugs: ["index", "install", "core-concepts", "creating-a-resource", "glossary"],
+    slugs: ["index", "install", "core-concepts", "creating-a-resource"],
   },
   {
     label: "Resources",

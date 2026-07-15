@@ -274,6 +274,8 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
     // Paired example docs live under docs/examples/** — linked from the Examples hub only.
     // Do not dump them into sidebar "More".
     if (c.group === "examples" || c.group.startsWith("examples/")) continue;
+    // Glossary is a footer link, deliberately out of the sidebar — keep it out of "More" too.
+    if (c.slug === "glossary") continue;
     const it = await itemForSlug(c.slug);
     if (it !== undefined) extras.push(it);
   }
