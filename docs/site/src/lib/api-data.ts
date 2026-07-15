@@ -39,6 +39,7 @@ export interface ApiSymbol {
   readonly tags: ReadonlyArray<ApiTag>;
   readonly category?: string;
   readonly linkTargets: ReadonlyArray<string>;
+  readonly docLinks: Readonly<Record<string, string>>; // {@link X} text -> resolved doc URL
   readonly source: ApiSource;
 }
 // The light row for a module page (no signatures / source / comments).

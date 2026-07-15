@@ -81,6 +81,9 @@ const ApiSymbol = Schema.Struct({
   tags: Schema.Array(ApiTag),
   category: Schema.optional(Schema.String),
   linkTargets: Schema.Array(Schema.String), // {@link X} names referenced
+  // {@link X} text -> resolved doc URL. The compiler decides the exact target, so bare names
+  // disambiguate correctly (e.g. `layer` -> QueueResource.layer within QueueResource's doc).
+  docLinks: Schema.Record(Schema.String, Schema.String),
   source: Schema.Struct({
     file: Schema.String,
     line: Schema.Number,
@@ -217,6 +220,10 @@ const makeExtractor = (checker: ts.TypeChecker) => {
   const resolve = (sym: ts.Symbol): ts.Symbol =>
     (sym.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(sym) : sym;
 
+  // Filled during extraction; used AFTER (resolveDocLinks) once every symbol has a URL.
+  const symbolUrl = new Map<ts.Symbol, string>(); // resolved export symbol -> its doc URL
+  const declOf = new Map<ApiSymbol, ts.Declaration>(); // api object -> its primary declaration
+
   const isPublic = (sym: ts.Symbol): boolean =>
     sym.getJsDocTags(checker).some((tag) => tag.name === "public");
 
@@ -285,31 +292,55 @@ const makeExtractor = (checker: ts.TypeChecker) => {
     const rawComment = rawCommentOf(decl);
     const name = exportSym.getName();
     const qualifiedName = ns === undefined ? name : `${ns}.${name}`;
+    const url = `/api/${pkgSlug}/${slugForEntry(ns ?? "(top-level)")}/${name}`;
 
-    return [
-      {
-        entry: ns ?? "(top-level)",
-        name,
-        qualifiedName,
-        url: `/api/${pkgSlug}/${slugForEntry(ns ?? "(top-level)")}/${name}`,
-        kind: kindOf(sym),
-        signatures,
-        typeText,
-        sourceText,
-        summary: strip(ts.displayPartsToString(sym.getDocumentationComment(checker))),
-        rawComment,
-        tags,
-        category: tags.find((tag) => tag.name === "category")?.text,
-        linkTargets: [...new Set([...rawComment.matchAll(/\{@link\s+([^}|\s]+)/g)].map((m) => m[1]))],
-        source: {
-          file: nodePath.relative(repoRoot, source.fileName),
-          line: sourceLine,
-        },
+    const api: ApiSymbol = {
+      entry: ns ?? "(top-level)",
+      name,
+      qualifiedName,
+      url,
+      kind: kindOf(sym),
+      signatures,
+      typeText,
+      sourceText,
+      summary: strip(ts.displayPartsToString(sym.getDocumentationComment(checker))),
+      rawComment,
+      tags,
+      category: tags.find((tag) => tag.name === "category")?.text,
+      linkTargets: [...new Set([...rawComment.matchAll(/\{@link\s+([^}|\s]+)/g)].map((m) => m[1]))],
+      docLinks: {}, // filled by resolveDocLinks after every symbol has a URL
+      source: {
+        file: nodePath.relative(repoRoot, source.fileName),
+        line: sourceLine,
       },
-    ];
+    };
+    symbolUrl.set(sym, url);
+    declOf.set(api, decl);
+    return [api];
   };
 
-  return { toApi, resolve };
+  // Resolve a symbol's {@link X} targets to doc URLs via the checker — the compiler picks the exact
+  // symbol, so bare names disambiguate by context. Run AFTER extraction (symbolUrl complete).
+  const resolveDocLinks = (api: ApiSymbol): Record<string, string> => {
+    const decl = declOf.get(api);
+    if (decl === undefined) return {};
+    const out: Record<string, string> = {};
+    const visit = (node: ts.Node): void => {
+      if (
+        (ts.isJSDocLink(node) || ts.isJSDocLinkCode(node) || ts.isJSDocLinkPlain(node)) &&
+        node.name !== undefined
+      ) {
+        const target = checker.getSymbolAtLocation(node.name);
+        const resolved = target === undefined ? undefined : symbolUrl.get(resolve(target));
+        if (resolved !== undefined) out[node.name.getText()] = resolved;
+      }
+      node.forEachChild(visit);
+    };
+    for (const j of ts.getJSDocCommentsAndTags(decl)) visit(j);
+    return out;
+  };
+
+  return { toApi, resolve, resolveDocLinks };
 };
 
 // `export * as X` / a subpath module resolves to a symbol whose declaration IS a source file.
@@ -328,7 +359,7 @@ const program = Effect.gen(function* () {
     ),
   );
   const checker = tsProgram.getTypeChecker();
-  const { toApi, resolve } = makeExtractor(checker);
+  const { toApi, resolve, resolveDocLinks } = makeExtractor(checker);
   const moduleOf = (file: string): ts.Symbol | undefined => {
     const sf = tsProgram.getSourceFile(file);
     return sf === undefined ? undefined : checker.getSymbolAtLocation(sf);
@@ -390,12 +421,18 @@ const program = Effect.gen(function* () {
           .flatMap((ex) => toApi(undefined, ex))
           .sort((a, b) => a.name.localeCompare(b.name));
 
-  const model: ReadonlyArray<ApiEntry> = [
+  const extracted: ReadonlyArray<ApiEntry> = [
     ...nsEntries,
     { entry: "(top-level)", symbols: topLevel },
   ]
     .filter((e) => e.symbols.length > 0)
     .sort((a, b) => b.symbols.length - a.symbols.length);
+
+  // Second pass: resolve every symbol's {@link} targets now that all URLs are known.
+  const model: ReadonlyArray<ApiEntry> = extracted.map((e) => ({
+    entry: e.entry,
+    symbols: e.symbols.map((s) => ({ ...s, docLinks: resolveDocLinks(s) })),
+  }));
 
   // --- write the split, per-page data ---------------------------------------------------------
   // Each page loads only its slice: /api -> index.json; /api/<pkg>/<module> -> the module summary;

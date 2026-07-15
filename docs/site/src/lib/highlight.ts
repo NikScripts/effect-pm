@@ -319,7 +319,7 @@ const linkifyCode = (text: string): any[] => {
 
 // `this`-free so the same renderer serves both the twoslash hover popups and the API-reference pages;
 // fenced code uses the shared highlighter directly (loadHighlighter must have run first).
-function jsdocToHast(docs: string): any[] {
+function jsdocToHast(docs: string, resolveLink?: (target: string) => string | undefined): any[] {
   const tree = fromMarkdown(preprocessJsdoc(docs));
   const root: any = toHast(tree, {
     handlers: {
@@ -356,7 +356,10 @@ function jsdocToHast(docs: string): any[] {
         const children = state.all(node);
         const url = typeof node.url === "string" ? node.url : "";
         if (url.startsWith("@link:")) {
-          const resolved = resolveDocRef(url.slice("@link:".length).trim());
+          // Prefer the caller's precise, compiler-resolved map (context-aware, disambiguates bare
+          // names); fall back to the name-based resolver.
+          const target = url.slice("@link:".length).trim();
+          const resolved = resolveLink?.(target) ?? resolveDocRef(target);
           return resolved !== undefined
             ? { type: "element", tagName: "a", properties: { className: ["twoslash-jsdoc-link"], href: resolved }, children }
             : { type: "element", tagName: "span", properties: { className: ["twoslash-jsdoc-link"] }, children };
@@ -471,8 +474,10 @@ export const highlightToReact = (
 
 /** Render a JSDoc comment body — markdown with `{@link}`, fenced code, bold, etc. — to React, for the
  *  API-reference pages. `loadHighlighter()` must have run first so fenced code can be highlighted. */
-export const renderJsdocToReact = (docs: string): React.ReactNode =>
-  hastToReact({ type: "root", children: jsdocToHast(docs) });
+export const renderJsdocToReact = (
+  docs: string,
+  resolveLink?: (target: string) => string | undefined,
+): React.ReactNode => hastToReact({ type: "root", children: jsdocToHast(docs, resolveLink) });
 
 /**
  * Render an export's REAL source WITH twoslash hover previews. Twoslash type-checks the WHOLE file
