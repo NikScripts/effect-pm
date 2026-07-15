@@ -11,6 +11,8 @@
 const modules = import.meta.glob(
   [
     "../../../index.md",
+    "../../../examples.md",
+    "../../../examples/**/*.md",
     "../../../getting-started/**/*.md",
     "../../../resources/**/*.md",
     "../../../guides/**/*.md",
@@ -43,6 +45,21 @@ const toEntry = (path: string, raw: string): RawChapter => {
 export const chapters: ReadonlyArray<RawChapter> = Object.entries(modules)
   .map(([path, raw]) => toEntry(path, raw))
   .sort((a, b) => a.path.localeCompare(b.path));
+
+// URLs are `/docs/<basename>` (folder group is disk + nav only). Basenames must be unique
+// across the whole book — first-match `chapterBySlug` would otherwise hide collisions.
+{
+  const seen = new Map<string, string>();
+  for (const c of chapters) {
+    const prev = seen.get(c.slug);
+    if (prev !== undefined) {
+      throw new Error(
+        `Duplicate docs slug "${c.slug}": ${prev} and ${c.path} both map to /docs/${c.slug}. Rename one file.`,
+      );
+    }
+    seen.set(c.slug, c.path);
+  }
+}
 
 export const chapterBySlug = (slug: string): RawChapter | undefined =>
   chapters.find((c) => c.slug === slug);

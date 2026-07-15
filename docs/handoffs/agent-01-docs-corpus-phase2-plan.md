@@ -48,5 +48,7 @@ docs/plans/
 
 ## Next
 
-Phase 3 unlocked — [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md).
-Batch Z deletes still need per-row ticks.
+**Pivot (2026-07-15):** **Examples book** takes priority over remaining legacy recipe ports.
+See [`agent-01-examples-book.md`](./agent-01-examples-book.md).  
+`toolkit-by-example` is **not** promoted to a Guides chapter.  
+Legacy leftovers (processes placeholder, pointer stubs) are background. Batch Z still per-row.

@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-15 — Examples book priority (over legacy recipe ports)
+
+- **Owner said:** Pair every example file with a near-identical Twoslash doc; hub page in sidebar only; example docs grouped by module with `#` anchors; Agent 1 chooses priority vs legacy.
+- **Chose:** **Examples book first** ([`agent-01-examples-book.md`](./agent-01-examples-book.md)). Do **not** promote `toolkit-by-example` to Guides. Forms batch first; site glob + hide example docs from “More” = Agent B note.
+- **Rejected / deferred:** Full own-page port of toolkit-by-example; pairing every tui/web file in E1; remaining legacy narrative ports as the headline track.
+- **Supervisor impact:** Agent 1 executes E0/E1 on `cursor/docs-corpus-phase3-ce05`; B gets requirements note for content glob + More filter.
+
 ## 2026-07-15 — Task Agent 3: storage cutover follow-through
 
 - **Owner said:** Task Agent 3 (after Soft edge-case pass on #62).

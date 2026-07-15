@@ -63,12 +63,13 @@ Codified in [`docs/standards/documentation.md`](../standards/documentation.md).
 
 | Batch | Work | Status |
 |-------|------|--------|
-| **P3-0** | Plan + Draft convention in Documentation standard | **this PR** |
-| **P3-1** | Fill `docs/guides/stores.md`; pointer stubs for legacy store\* | **this PR** |
-| **P3-2** | Port `toolkit-by-example` → live Guides + nav | next |
-| **P3-3** | Replace `processes.md` placeholder from legacy process guide | next |
-| **P3-4** | Pointer stubs / shrink for queue/telemetry/setup overlap | next |
-| **P3-5** | Archive `beta-15-to-17` + `CODEBASE-INVENTORY` | **this PR** (safe) |
+| **P3-0** | Plan + Draft convention in Documentation standard | **done** |
+| **P3-1** | Fill `docs/guides/stores.md`; pointer stubs for legacy store\* | **done** |
+| **P3-2** | ~~Port `toolkit-by-example` → Guides~~ | **cancelled** — not a guide |
+| **P3-2′** | Examples hub + Twoslash-paired `docs/examples/**` | **priority** — [`agent-01-examples-book.md`](./agent-01-examples-book.md) |
+| **P3-3** | Replace `processes.md` placeholder | later (background) |
+| **P3-4** | Pointer stubs for queue/telemetry/setup overlap | later |
+| **P3-5** | Archive `beta-15-to-17` + `CODEBASE-INVENTORY` | **done** |
 | **P3-6** | `PACKAGE-GUIDE` / API tables / STORAGE agent path | later (owner) |
 
 ---

@@ -1,74 +1,91 @@
 /**
  * @module examples/forms/queue/queue-resource-priority-retry
  *
- * QueueResource priority, dedup, auto re-enqueue (`attempts`), and observing lifecycle via the
- * `events` stream with `Resource.runForEachTag`. Run: `pnpm run example:queue-resource`
+ * QueueResource priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
+ * observation via `events` + `Resource.runForEachTag`.
+ *
+ * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:queue-resource`
  */
 
-import { Cause, Data, Duration, Effect } from "effect";
-import { QueueResource, Resource, type QueueHandle } from "../../../src";
+import { Cause, Duration, Effect, Schema } from "effect";
+import { QueueResource, Resource } from "../../../src";
 
-interface EmailJob {
-  readonly id: string;
-  readonly to: string;
-  readonly failFirstAttempt: boolean;
-}
+// ── Contract: payload + typed worker failure ──────────────────────────────────
 
-class SendError extends Data.TaggedError("SendError")<{
-  readonly id: string;
-  readonly reason: string;
-}> {}
+const EmailJob = Schema.Struct({
+  id: Schema.String,
+  to: Schema.String,
+  /** Demo flag: fail attempt 1 so the queue schedules a retry. */
+  failFirstAttempt: Schema.Boolean,
+});
 
-const waitUntilCompleted = (
-  queue: QueueHandle<EmailJob, SendError, never, never>,
-  expected: number,
-) =>
+/**
+ * Wire-ready failure for the tag's `error` slot.
+ * Prefer `Schema.TaggedErrorClass` (yieldable + encodable) over `Data.TaggedError` when the
+ * failure is part of the public queue contract.
+ */
+class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
+  id: Schema.String,
+  reason: Schema.String,
+}) {}
+
+class EmailQueue extends QueueResource.Tag<EmailQueue>()("examples/EmailQueue", {
+  payload: EmailJob,
+  error: SendError,
+}) {}
+
+/** Poll `status.completed` until `expected` finished attempts (success or failure each count once). */
+const waitUntilCompleted = (expected: number) =>
   Effect.gen(function* () {
+    const queue = yield* EmailQueue;
     while (true) {
-      const completed = yield* queue.completed;
+      const { completed } = yield* queue.status.get;
       if (completed >= expected) return completed;
       yield* Effect.sleep(Duration.millis(10));
     }
   });
 
-class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError>()(
-  "examples/EmailQueue",
-  {
-    paused: true, // enqueue while paused, then resume — common bootstrap pattern
-    concurrency: 1,
-    capacity: 100,
-    key: (job) => job.id, // dedup: same id is skipped while in flight
-    attempts: 2, // auto re-enqueue: 2 attempts (1 initial + 1 retry), then exhausted
-    effect: (job, ctx) =>
-      Effect.gen(function* () {
-        yield* Effect.logInfo(
-          `send attempt ${String(ctx.attempts)} for ${job.id} (${ctx.priority})`,
-        );
+// ── Layer: worker + policy (Tag stays free of runtime config) ─────────────────
 
-        if (job.failFirstAttempt && ctx.attempts === 1) {
-          return yield* new SendError({
-            id: job.id,
-            reason: "simulated transient SMTP failure",
-          });
-        }
+const EmailQueueLive = QueueResource.layer(EmailQueue, {
+  paused: true, // enqueue / subscribe first; drain only after `resume`
+  concurrency: 1, // sequential — log order stays readable for the demo
+  capacity: 100,
+  key: (job) => job.id, // same id while in flight → skipped (not a permanent cache)
+  attempts: 2, // initial try + one automatic re-enqueue; then RetryExhausted
+  // No `onFailure` → default disposition: retry until `attempts`, then dead-letter.
+  effect: (job, ctx) =>
+    Effect.gen(function* () {
+      yield* Effect.logInfo(
+        `send attempt ${String(ctx.attempts)} for ${job.id} (${ctx.priority})`,
+      );
 
-        yield* Effect.logInfo(`sent:${job.id}`);
-      }),
-  },
-) {}
+      if (job.failFirstAttempt && ctx.attempts === 1) {
+        return yield* new SendError({
+          id: job.id,
+          reason: "simulated transient SMTP failure",
+        });
+      }
+
+      yield* Effect.logInfo(`sent:${job.id}`);
+    }),
+});
+
+// ── Drive: observe → enqueue → resume → wait ──────────────────────────────────
 
 const program = Effect.gen(function* () {
   const queue = yield* EmailQueue;
 
-  // observe lifecycle off the events stream (replaces the old onExit/onEnqueued/onRetryExhausted
-  // hooks) — one off-fiber subscriber, dispatched by tag.
+  // Fork one subscriber before resume so early Enqueued / Started events aren't missed.
   yield* Effect.forkScoped(
     queue.events.pipe(
       Resource.runForEachTag({
         Enqueued: (e) =>
           Effect.logInfo(`enqueued ${String(e.entries.length)} ${e.priority} job(s)`),
         Completed: (e) =>
-          Effect.logInfo(`sent ${e.entry.item.id} after ${String(e.entry.attempts)} attempt(s)`),
+          Effect.logInfo(
+            `sent ${e.entry.item.id} after ${String(e.entry.attempts)} attempt(s)`,
+          ),
         RetryScheduled: (e) =>
           Effect.logWarning(`retry ${e.entry.item.id}: ${Cause.pretty(e.cause)}`),
         RetryExhausted: (e) =>
@@ -77,6 +94,7 @@ const program = Effect.gen(function* () {
     ),
   );
 
+  // Lanes while paused: high → normal → low. With concurrency 1, drain order matches.
   yield* queue.add([
     { id: "welcome", to: "reader@example.com", failFirstAttempt: true },
   ]);
@@ -92,8 +110,8 @@ const program = Effect.gen(function* () {
 
   yield* queue.resume;
 
-  // welcome runs twice (handler retry) → 4 completed attempts total for 3 jobs.
-  const completed = yield* waitUntilCompleted(queue, 4);
+  // welcome: fail + succeed (2) + two other jobs once each → 4 finished attempts.
+  const completed = yield* waitUntilCompleted(4);
   yield* Effect.logInfo(`completed item attempts: ${String(completed)}`);
 
   const empty = yield* queue.isEmpty.get;
@@ -102,7 +120,7 @@ const program = Effect.gen(function* () {
 
 void Effect.runPromise(
   program.pipe(
-    Effect.provide(EmailQueue.layer),
+    Effect.provide(EmailQueueLive),
     Effect.scoped,
     Effect.tap(() => Effect.logInfo("form:queue-resource-priority-retry finished OK")),
   ),

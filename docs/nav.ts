@@ -32,6 +32,10 @@ export const nav: ReadonlyArray<NavGroup> = [
     ],
   },
   {
+    label: "Examples",
+    slugs: ["examples"],
+  },
+  {
     // Tentative group name — "Observe and Control" per the outline, may change.
     label: "Observe and Control",
     slugs: ["observation-and-control", "dashboard", "react-components", "tui-cli"],
