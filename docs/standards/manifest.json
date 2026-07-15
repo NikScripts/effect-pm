@@ -57,6 +57,78 @@
           "title": "Comment what a junior dev couldn't infer"
         },
         {
+          "id": "documentation.the-spine",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "The Spine"
+        },
+        {
+          "id": "documentation.make-the-invisible-visible",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Make the Invisible Visible"
+        },
+        {
+          "id": "documentation.earn-the-abstraction",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Earn the Abstraction"
+        },
+        {
+          "id": "documentation.naming-is-pedagogy",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Naming Is Pedagogy"
+        },
+        {
+          "id": "documentation.minimal-deltas",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Minimal Deltas"
+        },
+        {
+          "id": "documentation.present-tense-imperative-affirmative",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Present-Tense, Imperative, Affirmative"
+        },
+        {
+          "id": "documentation.one-door-for-tasks",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "One Door for Tasks, a Staircase to the Machinery"
+        },
+        {
+          "id": "documentation.no-simply",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "No Simply"
+        },
+        {
+          "id": "documentation.sharp-edges-in-place",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "Sharp Edges, In Place"
+        },
+        {
           "id": "documentation.show-dont-tell",
           "severity": "should",
           "appliesTo": [
@@ -1067,5 +1139,5 @@
       ]
     }
   ],
-  "ruleCount": 116
+  "ruleCount": 125
 }
