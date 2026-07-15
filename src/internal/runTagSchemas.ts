@@ -15,6 +15,25 @@ export const errorSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/RunResource/error",
 );
 
+/**
+ * Stamp `success` / `error` wire schemas onto a run-gate tag. `Object.assign`'s in-place mutation is
+ * returned as the same `T` — no cast (mirrors `stampQueueWireSchemas`). `error` is only stamped when
+ * it is a real (non-{@link Schema.Never}) schema, so `errorOf` stays `undefined` for infallible gates.
+ * @internal
+ */
+export const stampRunWireSchemas = <T extends object>(
+  tag: T,
+  schemas: { readonly success?: Schema.Top; readonly error?: Schema.Top },
+): T => {
+  if (schemas.success !== undefined) {
+    Object.assign(tag, { [successSym]: schemas.success });
+  }
+  if (schemas.error !== undefined && schemas.error !== Schema.Never) {
+    Object.assign(tag, { [errorSym]: schemas.error });
+  }
+  return tag;
+};
+
 /** Read the `success` schema stamped on a run gate tag, if any. @internal */
 export const successOf = (tag: unknown): Schema.Top | undefined => {
   if (
