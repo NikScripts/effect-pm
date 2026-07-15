@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/docs-corpus-phase2-plan-ce05` | [docs corpus](./agent-01-docs-corpus.md) · [Phase 2](./agent-01-docs-corpus-phase2-plan.md) · [plans](../plans/README.md) · [open asks](./open-asks.md) | **Phase 2 P1–P4 landed** — `docs/plans/` live; fleet health on roadmap; auth README-only | tip of phase2-plan | docs only | Phase 3 unlock next; Batch Z deferred; `layerNoop` parked | 2026-07-14 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | `cursor/storage-correctness-all-a009` | [storage correctness](./agent-03-storage-correctness.md) · [plan](../plans/storage-correctness.md) · [stores guide](../guides/stores.md) | **Eng A–D in progress** — toolkit requires Storage; `*Memory` soft-default; SQLite override proven; LogRelay singleton + `_logs` require relay; `layer({filename})` required | tip of branch | typecheck 0; store/logs suites green | Out of scope: memo, D handles, site | 2026-07-15 |
+| **3** | from `integration` (+ #62) | [cutover follow-through](./agent-03-storage-cutover-followthrough.md) · [stores guide](../guides/stores.md) · [#62](https://github.com/NikScripts/effect-pm/pull/62) | **plan-first** — free; next = TSDoc/example cutover + Queue SQLite parity after #62 | — | — | Must not reopen #62 API; no memo / handles / docs-site | 2026-07-15 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -20,15 +20,16 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** Phase 2 P1–P4 on `cursor/docs-corpus-phase2-plan-ce05` — `docs/plans/` is SSOT; fleet health roadmap bullet locked; Resource-RPC auth stays README-only. Next: Phase 3 unlock. No UI / `docs/site` chrome.
-2. **Agent 3 / Manager:** storage correctness on `cursor/storage-correctness-all-a009` — Eng A–D (owner unlocked “do it all”).
+2. **Agent 3:** [storage cutover follow-through](./agent-03-storage-cutover-followthrough.md) — **plan-first** after [#62](https://github.com/NikScripts/effect-pm/pull/62). Manager owns #62 Eng.
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. Storage correctness Phase A / B / A+B — unlock checklist in the plan
+4. Unlock Agent 3 follow-through slices S1 / S2 / S3 (or S1→S3)
 5. Store-layer `(scopeKey, lineId)` memo — **deferred**
 6. `main` merge + `pnpm run version` — still deferred
 
 ### Done prior (Agent 3)
+- [#62](https://github.com/NikScripts/effect-pm/pull/62) storage correctness A–D (Manager Eng on Agent 3 plan) — review / merge
 - [#59](https://github.com/NikScripts/effect-pm/pull/59) `byResource` full key + kill resource-identity `processId`/`queueId`
 - [#57](https://github.com/NikScripts/effect-pm/pull/57) private `_logs`
 - Process.events [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#51](https://github.com/NikScripts/effect-pm/pull/51) · lineage [#48](https://github.com/NikScripts/effect-pm/pull/48) · ready-perfection [#52](https://github.com/NikScripts/effect-pm/pull/52)
@@ -42,7 +43,7 @@
 ### Branch hygiene (2026-07-14)
 Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
 
-**Agent 3:** reassigned to [storage correctness](../plans/storage-correctness.md) (plan-first).
+**Agent 3:** free for [storage cutover follow-through](./agent-03-storage-cutover-followthrough.md) (plan-first). Storage correctness Eng is [#62](https://github.com/NikScripts/effect-pm/pull/62).
 
 ---
 
