@@ -1,14 +1,20 @@
 "use client";
 
-// The top bar + mobile menu. Matches the Effect site: brand on the left, search +
-// hamburger on the right (inside the one bar), and the hamburger opens a full-page
-// overlay that takes over the viewport instead of a disclosure that pushes content
-// down. On wide screens the hamburger/overlay are hidden — the persistent sidebar
-// (rendered by the layout) does the job. Server passes the nav items as props.
+// The top bar + mobile menu. Brand on the left, search + hamburger on the right; the hamburger opens
+// a full-page overlay takeover. On wide screens the hamburger/overlay are hidden — the persistent
+// sidebar (rendered by the layout) does the job.
+//
+// Open/close is a NATIVE checkbox toggle driven by CSS `:checked`, NOT React state. The server-
+// rendered `<input>`/`<label>` and the CSS work the instant the HTML lands, so the hamburger responds
+// before (and without) hydration — the old `useState` toggle silently ate taps on twoslash-heavy
+// pages while the island was still hydrating. The search filter inside stays a hydrated island; JS
+// only ENHANCES here (body-scroll-lock fallback, Escape-to-close, focus-on-open, close-on-navigate).
 
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
 import { GroupedNav } from "./GroupedNav.js";
+
+const MENU_ID = "menu-toggle";
 
 const Icon = {
   search: (
@@ -30,69 +36,73 @@ const Icon = {
 };
 
 export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.ReactElement {
-  const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const cbRef = React.useRef<HTMLInputElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Lock body scroll + close on Escape while the takeover is open.
+  const close = (): void => {
+    const cb = cbRef.current;
+    if (cb && cb.checked) {
+      cb.checked = false;
+      document.body.style.overflow = "";
+    }
+  };
+
+  // Progressive enhancement only — the toggle itself is the native checkbox above. Here we mirror the
+  // checkbox state into the things CSS can't do on its own: a body-scroll-lock fallback for browsers
+  // without :has(), focus the filter on open, and Escape-to-close.
   React.useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+    const cb = cbRef.current;
+    if (cb === null) return;
+    const onChange = (): void => {
+      document.body.style.overflow = cb.checked ? "hidden" : "";
+      if (cb.checked) requestAnimationFrame(() => inputRef.current?.focus());
     };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") close();
+    };
+    cb.addEventListener("change", onChange);
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      cb.removeEventListener("change", onChange);
       window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
     };
-  }, [open]);
-
-  const openMenu = (focusSearch: boolean): void => {
-    setOpen(true);
-    if (focusSearch) requestAnimationFrame(() => inputRef.current?.focus());
-  };
+  }, []);
 
   return (
     <>
+      <input ref={cbRef} type="checkbox" id={MENU_ID} className="menu-cb" aria-label="Toggle navigation menu" />
       <header className="topbar">
         <a className="brand" href="/">effect-pm</a>
         <div className="topbar-actions">
-          <button type="button" className="icon-btn" aria-label="Search" onClick={() => openMenu(true)}>
+          <label htmlFor={MENU_ID} className="icon-btn" aria-label="Search">
             {Icon.search}
-          </button>
-          <button
-            type="button"
-            className="icon-btn menu-btn"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => (open ? setOpen(false) : openMenu(false))}
-          >
-            {open ? Icon.close : Icon.menu}
-          </button>
+          </label>
+          <label htmlFor={MENU_ID} className="icon-btn menu-btn">
+            <span className="i-menu">{Icon.menu}</span>
+            <span className="i-close">{Icon.close}</span>
+          </label>
         </div>
       </header>
 
-      {open ? (
-        <div className="menu-overlay" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="menu-inner">
-            <input
-              ref={inputRef}
-              className="menu-search"
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter chapters…"
-              aria-label="Filter chapters"
-            />
-            <a className="sidebar-api" href="/api" onClick={() => setOpen(false)}>
-              API Reference
-            </a>
-            <GroupedNav groups={groups} query={query} onNavigate={() => setOpen(false)} />
-          </div>
+      <div className="menu-overlay" role="dialog" aria-modal="true" aria-label="Navigation">
+        <div className="menu-inner">
+          <input
+            ref={inputRef}
+            className="menu-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter chapters…"
+            aria-label="Filter chapters"
+          />
+          <a className="sidebar-api" href="/api" onClick={close}>
+            API Reference
+          </a>
+          <GroupedNav groups={groups} query={query} onNavigate={close} />
         </div>
-      ) : null}
+      </div>
     </>
   );
 }

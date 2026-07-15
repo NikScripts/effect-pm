@@ -108,9 +108,28 @@ body {
    (or nothing) instead of the button. Make the icon transparent to pointers so the button always wins. */
 .icon-btn svg { pointer-events: none; }
 
+/* Open/close is a pure-CSS checkbox toggle (see NavBar.tsx) so the hamburger works before hydration.
+   The checkbox is visually hidden but still togglable by its <label>s and readable by AT. */
+.menu-cb {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+/* icon swap: hamburger when closed, X when open */
+.menu-btn .i-close { display: none; }
+.menu-cb:checked ~ .topbar .menu-btn .i-menu { display: none; }
+.menu-cb:checked ~ .topbar .menu-btn .i-close { display: inline-flex; }
+/* lock the page behind the takeover without JS (Safari 15.4+/modern) */
+html:has(.menu-cb:checked) { overflow: hidden; }
+
 /* mobile menu — a full-page takeover (fixed), NOT a disclosure that pushes content.
-   Sits under the sticky top bar (which stays on top at z-index 50). */
+   Sits under the sticky top bar (which stays on top at z-index 50). Hidden until the checkbox
+   toggles it, so it can be server-rendered (always in the DOM) yet only shown on demand. */
 .menu-overlay {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -119,6 +138,7 @@ body {
   -webkit-overflow-scrolling: touch;
   padding-top: calc(env(safe-area-inset-top, 0px) + 3.2rem);
 }
+.menu-cb:checked ~ .menu-overlay { display: block; }
 .menu-inner { max-width: 46rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
 .menu-search {
   width: 100%;
@@ -228,6 +248,8 @@ main {
     padding: 1.5rem 0;
   }
   .topbar-actions { display: none; }
+  /* the sidebar owns nav on wide screens; never show the overlay even if left checked on resize */
+  .menu-cb:checked ~ .menu-overlay { display: none; }
   main { margin: 0; padding-left: 0; padding-right: 0; }
 }
 
