@@ -48,9 +48,6 @@ sends only.” On the tip `Tag` handle there is no top-level `queue.completed`; 
 
 ## The program
 
-Imports use the package barrel so Twoslash can resolve types (the runnable file imports from
-`../../../src` instead). Otherwise this fence matches the example source.
-
 {.twoslash}
 ``` ts
 import { Cause, Duration, Effect, Schema } from "effect"
