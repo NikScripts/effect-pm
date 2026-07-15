@@ -3342,6 +3342,22 @@ const connectLayer = <Self, RIn>(
 const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
 
+// One-time nudge when {@link httpClient} builds in a browser — the silent footgun. `httpClient` is
+// the server/CLI/backend transport; a browser dashboard opens many concurrent streams and starves at
+// the ~6-connection HTTP/1.1 cap, with no error. Point the mistake at {@link socketClient}. Fires via
+// the runtime logger (once), so it can't be a raw-console lint smell and stays quiet on the server.
+let httpClientBrowserWarned = false;
+const warnHttpClientInBrowser = Effect.suspend(() => {
+  if (typeof window === "undefined" || httpClientBrowserWarned) return Effect.void;
+  httpClientBrowserWarned = true;
+  return Effect.logWarning(
+    "Resource.httpClient is running in a browser. A dashboard opens many concurrent streams " +
+      "(each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 connections " +
+      "per origin — the rest are starved (no graphs, no logs, frozen cards). Use Resource.socketClient " +
+      "for the browser. See docs/observe/dashboard.md.",
+  );
+});
+
 /**
  * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
  * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
@@ -3367,12 +3383,15 @@ const httpClient = <Self>(
   if (url === undefined) {
     throw new MissingNodeUrl({ node: node.key });
   }
-  return connectLayer(
-    node,
-    RpcClient.layerProtocolHttp({ url }).pipe(
-      Layer.provide(options?.serialization ?? defaultSerialization),
-      Layer.provide(FetchHttpClient.layer),
+  return Layer.merge(
+    connectLayer(
+      node,
+      RpcClient.layerProtocolHttp({ url }).pipe(
+        Layer.provide(options?.serialization ?? defaultSerialization),
+        Layer.provide(FetchHttpClient.layer),
+      ),
     ),
+    Layer.effectDiscard(warnHttpClientInBrowser),
   );
 };
 

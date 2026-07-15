@@ -81,9 +81,12 @@ const dropletRpc = inBrowser ? "/rpc" : "http://localhost:7777/rpc";
 export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 
 // One transport per HOST — each node serves its whole group on one /rpc (httpServer),
-// so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini.
-const dropletTransport = Resource.httpClient(Droplet, { url: dropletRpc });
-const miniTransport = Resource.httpClient(MiniNode, { url: miniUrl });
+// so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini. WebSocket
+// (not http) so the browser's many live streams multiplex over one connection per node instead
+// of starving at the ~6-connection HTTP/1.1 cap — see docs/observe/dashboard.md. `socketClient`
+// resolves a "/path" against the page origin, and swaps http→ws for the non-browser (CLI) url.
+const dropletTransport = Resource.socketClient(Droplet, { url: dropletRpc });
+const miniTransport = Resource.socketClient(MiniNode, { url: miniUrl });
 
 const nodeStatusLayer = (resourceKey: string) =>
   Resource.client(NodeStatus.Tag).pipe(
@@ -105,7 +108,7 @@ export const appLayer = Layer.mergeAll(
   Resource.client(Daily).pipe(Layer.provide(dropletTransport)),
   Resource.client(Weekly).pipe(Layer.provide(dropletTransport)),
   // KeyRotation lives on the Mini node — its own transport, not the Droplet.
-  Resource.client(KeyRotation).pipe(Layer.provide(Resource.httpClient(MiniNode, { url: miniUrl }))),
+  Resource.client(KeyRotation).pipe(Layer.provide(Resource.socketClient(MiniNode, { url: miniUrl }))),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */
