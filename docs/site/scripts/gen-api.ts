@@ -85,8 +85,9 @@ const ApiSymbol = Schema.Struct({
   // disambiguate correctly (e.g. `layer` -> QueueResource.layer within QueueResource's doc).
   docLinks: Schema.Record(Schema.String, Schema.String),
   source: Schema.Struct({
-    file: Schema.String,
+    file: Schema.String, // repo-relative (for reading the source panel)
     line: Schema.Number,
+    url: Schema.optional(Schema.String), // GitHub blob URL (package-specific repo)
   }),
 });
 interface ApiEntry {
@@ -213,8 +214,19 @@ const formatType = (t: string): string => {
 };
 
 // --- pure extraction: everything below is a function of the checker, no IO ---
-const srcDir = `${nodePath.join(repoRoot, "src")}/`;
-const makeExtractor = (checker: ts.TypeChecker) => {
+// One documented package (ours, or a dependency like effect).
+interface PkgConfig {
+  readonly slug: string; // URL segment: /api/<slug>/…
+  readonly name: string; // npm name shown on the package page
+  readonly entries: ReadonlyArray<Entry>; // program roots; the "index" one is the barrel of modules
+  readonly srcDir: string; // absolute, trailing slash — only document declarations under here
+  readonly repoBaseUrl: string; // GitHub blob base for this package's source ("" = no source links)
+  readonly repoPathPrefix: string; // stripped from the repo-relative file for the GitHub URL
+  readonly options: ts.CompilerOptions;
+  readonly isPublic: (sym: ts.Symbol, checker: ts.TypeChecker) => boolean;
+}
+
+const makeExtractor = (checker: ts.TypeChecker, cfg: PkgConfig) => {
   // Re-exports (`export { x } from "./y"`) arrive as Alias symbols carrying no docs of their own —
   // resolve to the real symbol before reading anything.
   const resolve = (sym: ts.Symbol): ts.Symbol =>
@@ -224,8 +236,7 @@ const makeExtractor = (checker: ts.TypeChecker) => {
   const symbolUrl = new Map<ts.Symbol, string>(); // resolved export symbol -> its doc URL
   const declOf = new Map<ApiSymbol, ts.Declaration>(); // api object -> its primary declaration
 
-  const isPublic = (sym: ts.Symbol): boolean =>
-    sym.getJsDocTags(checker).some((tag) => tag.name === "public");
+  const isPublic = (sym: ts.Symbol): boolean => cfg.isPublic(sym, checker);
 
   const kindOf = (sym: ts.Symbol): string => {
     const f = sym.flags;
@@ -251,7 +262,7 @@ const makeExtractor = (checker: ts.TypeChecker) => {
     if (decl === undefined) return [];
     // Only document what THIS package defines. A re-export whose definition resolves into a dependency
     // (e.g. `export type { ConsumeResult } from "effect/…"`) belongs in that package's docs, not ours.
-    if (!decl.getSourceFile().fileName.startsWith(srcDir)) return [];
+    if (!decl.getSourceFile().fileName.startsWith(cfg.srcDir)) return [];
     if (!isPublic(sym)) return [];
 
     // Value symbols → getTypeOfSymbolAtLocation; type/interface/class → getDeclaredTypeOfSymbol.
@@ -292,7 +303,8 @@ const makeExtractor = (checker: ts.TypeChecker) => {
     const rawComment = rawCommentOf(decl);
     const name = exportSym.getName();
     const qualifiedName = ns === undefined ? name : `${ns}.${name}`;
-    const url = `/api/${pkgSlug}/${slugForEntry(ns ?? "(top-level)")}/${name}`;
+    const url = `/api/${cfg.slug}/${slugForEntry(ns ?? "(top-level)")}/${name}`;
+    const relFile = nodePath.relative(repoRoot, source.fileName);
 
     const api: ApiSymbol = {
       entry: ns ?? "(top-level)",
@@ -310,8 +322,11 @@ const makeExtractor = (checker: ts.TypeChecker) => {
       linkTargets: [...new Set([...rawComment.matchAll(/\{@link\s+([^}|\s]+)/g)].map((m) => m[1]))],
       docLinks: {}, // filled by resolveDocLinks after every symbol has a URL
       source: {
-        file: nodePath.relative(repoRoot, source.fileName),
+        file: relFile,
         line: sourceLine,
+        url: cfg.repoBaseUrl
+          ? `${cfg.repoBaseUrl}/${relFile.startsWith(cfg.repoPathPrefix) ? relFile.slice(cfg.repoPathPrefix.length) : relFile}#L${sourceLine}`
+          : undefined,
       },
     };
     symbolUrl.set(sym, url);
@@ -347,19 +362,17 @@ const makeExtractor = (checker: ts.TypeChecker) => {
 const isModuleSym = (sym: ts.Symbol): boolean =>
   (sym.getDeclarations() ?? []).some((d) => ts.isSourceFile(d));
 
-const program = Effect.gen(function* () {
-  const wanted = process.argv.slice(2);
-  const all = yield* readEntries;
-  const entries = wanted.length > 0 ? all.filter((e) => wanted.includes(e.name)) : all;
-
+// Extract one package's model: build a program over its entries, walk the barrel's `export * as`
+// modules (+ any non-barrel subpath entries), resolve every symbol, then resolve {@link}s.
+const extractPackage = (cfg: PkgConfig) => Effect.gen(function* () {
   const tsProgram = yield* Effect.sync(() =>
     ts.createProgram(
-      entries.map((e) => e.file),
-      compilerOptions,
+      cfg.entries.map((e) => e.file),
+      cfg.options,
     ),
   );
   const checker = tsProgram.getTypeChecker();
-  const { toApi, resolve, resolveDocLinks } = makeExtractor(checker);
+  const { toApi, resolve, resolveDocLinks } = makeExtractor(checker, cfg);
   const moduleOf = (file: string): ts.Symbol | undefined => {
     const sf = tsProgram.getSourceFile(file);
     return sf === undefined ? undefined : checker.getSymbolAtLocation(sf);
@@ -367,11 +380,11 @@ const program = Effect.gen(function* () {
 
   // Namespace groups = every subpath entry (its own `import * as` namespace) PLUS any barrel
   // `export * as NS` whose module has no subpath of its own (e.g. RunResource, LogEntry).
-  const barrel = entries.find((e) => e.name === "index");
+  const barrel = cfg.entries.find((e) => e.name === "index");
   const barrelMod = barrel === undefined ? undefined : moduleOf(barrel.file);
-  const subpathFiles = new Set(entries.map((e) => e.file));
+  const subpathFiles = new Set(cfg.entries.map((e) => e.file));
   const groups: Array<{ ns: string; module: ts.Symbol }> = [];
-  for (const e of entries) {
+  for (const e of cfg.entries) {
     if (e.name === "index") continue;
     const mod = moduleOf(e.file);
     if (mod !== undefined) groups.push({ ns: e.name, module: mod });
@@ -434,67 +447,109 @@ const program = Effect.gen(function* () {
     symbols: e.symbols.map((s) => ({ ...s, docLinks: resolveDocLinks(s) })),
   }));
 
-  // --- write the split, per-page data ---------------------------------------------------------
-  // Each page loads only its slice: /api -> index.json; /api/<pkg>/<module> -> the module summary;
-  // /api/<pkg>/<module>/<symbol> -> that one symbol file. links.json (build-only) resolves doc links.
+  return model;
+});
+
+const effectOptions: ts.CompilerOptions = {
+  module: ts.ModuleKind.ESNext,
+  target: ts.ScriptTarget.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  strict: true,
+  skipLibCheck: true,
+  types: [],
+  allowImportingTsExtensions: true, // effect-smol imports use explicit `.ts` extensions
+  noEmit: true,
+};
+
+const program = Effect.gen(function* () {
+  const wanted = process.argv.slice(2); // optional: restrict to these package slugs
+  const ourEntries = yield* readEntries;
+  const effectSrc = nodePath.join(repoRoot, "repos/effect/packages/effect/src");
+  const effectRef = gitOut("-C repos/effect rev-parse HEAD") || "main";
+
+  const allSpecs: ReadonlyArray<PkgConfig> = [
+    {
+      slug: pkgSlug,
+      name: pkgName,
+      entries: ourEntries,
+      srcDir: `${nodePath.join(repoRoot, "src")}/`,
+      repoBaseUrl,
+      repoPathPrefix: "",
+      options: compilerOptions,
+      isPublic: (sym, checker) => sym.getJsDocTags(checker).some((t) => t.name === "public"),
+    },
+    {
+      slug: "effect",
+      name: "effect",
+      entries: [{ name: "index", file: nodePath.join(effectSrc, "index.ts") }],
+      srcDir: `${effectSrc}/`,
+      repoBaseUrl: `https://github.com/Effect-TS/effect-smol/blob/${effectRef}`,
+      repoPathPrefix: "repos/effect/",
+      options: effectOptions,
+      // Effect marks its public API with @category / @since, not @public.
+      isPublic: (sym, checker) =>
+        sym.getJsDocTags(checker).some((t) => t.name === "category" || t.name === "since"),
+    },
+  ];
+  const specs = wanted.length === 0 ? allSpecs : allSpecs.filter((s) => wanted.includes(s.slug));
+
   yield* Effect.try({
     try: () => nodeFs.rmSync(dataDir, { recursive: true, force: true }),
     catch: (cause) => new FileError({ path: dataDir, cause }),
   });
 
-  const modules: Array<{ slug: string; entry: string; count: number }> = [];
+  const pkgInfos: Array<{
+    slug: string;
+    name: string;
+    modules: Array<{ slug: string; entry: string; count: number }>;
+  }> = [];
   const paths: Array<readonly [string, string, string]> = [];
   const links: Array<{ name: string; qualifiedName: string; url: string }> = [];
+  const doclinks: Record<string, Record<string, string>> = {};
 
-  yield* Effect.forEach(model, (e) =>
-    Effect.gen(function* () {
-      const nsSlug = slugForEntry(e.entry);
-      // module summary: light rows (no signatures / source / comments) for the module page
-      const rows = e.symbols.map((s) => ({
-        name: s.name,
-        qualifiedName: s.qualifiedName,
-        kind: s.kind,
-        summary: s.summary,
-        url: s.url,
-      }));
-      yield* writeJson(nodePath.join(dataDir, pkgSlug, `${nsSlug}.json`), {
-        package: pkgSlug,
-        entry: e.entry,
-        symbols: rows,
-      });
-      // one file per symbol: the full detail
-      yield* Effect.forEach(e.symbols, (s) =>
-        writeJson(nodePath.join(dataDir, pkgSlug, nsSlug, `${s.name}.json`), s),
-      );
-      modules.push({ slug: nsSlug, entry: e.entry, count: e.symbols.length });
-      for (const s of e.symbols) {
-        paths.push([pkgSlug, nsSlug, s.name]);
-        links.push({ name: s.name, qualifiedName: s.qualifiedName, url: s.url });
-      }
-    }),
-  );
+  for (const spec of specs) {
+    const model = yield* extractPackage(spec);
+    const modules: Array<{ slug: string; entry: string; count: number }> = [];
+    yield* Effect.forEach(model, (e) =>
+      Effect.gen(function* () {
+        const nsSlug = slugForEntry(e.entry);
+        // module summary: light rows (no signatures / source / comments) for the module page
+        const rows = e.symbols.map((s) => ({
+          name: s.name,
+          qualifiedName: s.qualifiedName,
+          kind: s.kind,
+          summary: s.summary,
+          url: s.url,
+        }));
+        yield* writeJson(nodePath.join(dataDir, spec.slug, `${nsSlug}.json`), {
+          package: spec.slug,
+          entry: e.entry,
+          symbols: rows,
+        });
+        yield* Effect.forEach(e.symbols, (s) =>
+          writeJson(nodePath.join(dataDir, spec.slug, nsSlug, `${s.name}.json`), s),
+        );
+        modules.push({ slug: nsSlug, entry: e.entry, count: e.symbols.length });
+        for (const s of e.symbols) {
+          paths.push([spec.slug, nsSlug, s.name]);
+          links.push({ name: s.name, qualifiedName: s.qualifiedName, url: s.url });
+          if (Object.keys(s.docLinks).length > 0) {
+            doclinks[`${s.source.file}:${s.source.line}`] = s.docLinks;
+          }
+        }
+      }),
+    );
+    pkgInfos.push({ slug: spec.slug, name: spec.name, modules });
+    const total = model.reduce((n, e) => n + e.symbols.length, 0);
+    yield* Console.log(`  ${spec.slug.padEnd(12)} ${model.length} modules, ${total} symbols`);
+  }
 
-  yield* writeJson(nodePath.join(dataDir, "index.json"), {
-    packages: [{ slug: pkgSlug, name: pkgName, modules }],
-  });
+  yield* writeJson(nodePath.join(dataDir, "index.json"), { packages: pkgInfos });
   yield* writeJson(nodePath.join(dataDir, "paths.json"), { symbols: paths });
   yield* writeJson(nodePath.join(dataDir, "links.json"), { symbols: links });
   yield* writeJson(nodePath.join(dataDir, "meta.json"), { repoBaseUrl });
-  // Resolved {@link} maps keyed by each symbol's declaration `file:line` — so hovers (which know only
-  // the hovered symbol's location) reuse the same compiler-resolved links as the pages.
-  yield* writeJson(
-    nodePath.join(dataDir, "doclinks.json"),
-    Object.fromEntries(
-      model
-        .flatMap((e) => e.symbols)
-        .filter((s) => Object.keys(s.docLinks).length > 0)
-        .map((s) => [`${s.source.file}:${s.source.line}`, s.docLinks]),
-    ),
-  );
-
-  const total = model.reduce((n, e) => n + e.symbols.length, 0);
-  yield* Console.log(`wrote ${dataDir}`);
-  yield* Console.log(`1 package (${pkgName}), ${model.length} modules, ${total} symbols`);
+  yield* writeJson(nodePath.join(dataDir, "doclinks.json"), doclinks);
+  yield* Console.log(`wrote ${dataDir} — ${pkgInfos.length} package(s)`);
 });
 
 // Surface any failure — typed error or defect — as a value, then let the exit code decide.

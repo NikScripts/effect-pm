@@ -21,8 +21,9 @@ export interface ApiTag {
   readonly text: string;
 }
 export interface ApiSource {
-  readonly file: string;
+  readonly file: string; // repo-relative (for the source panel)
   readonly line: number;
+  readonly url?: string; // GitHub blob URL (this package's repo), if known
 }
 // The full detail for one symbol's own page.
 export interface ApiSymbol {

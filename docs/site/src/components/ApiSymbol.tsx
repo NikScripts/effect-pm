@@ -3,16 +3,17 @@
 // comment through the shared JSDoc renderer). loadHighlighter() must run before rendering a card.
 
 import * as React from "react";
-import { sourceUrl, type ApiSymbol as Sym, type ApiSymbolRow as Row } from "../lib/api-data.js";
+import type { ApiSource, ApiSymbol as Sym, ApiSymbolRow as Row } from "../lib/api-data.js";
 import { highlightSourceWithHovers, highlightToReact, renderJsdocToReact } from "../lib/highlight.js";
 
-// The `file:line` location — a link to the line on GitHub when the model carries a repo base,
-// otherwise plain text.
-const SrcRef = ({ file, line }: { file: string; line: number }): React.ReactElement => {
-  const url = sourceUrl(file, line);
-  const label = `${file}:${line}`;
-  return url !== undefined ? (
-    <a className="api-src" href={url} target="_blank" rel="noreferrer">
+// The `file:line` location — a link to the line on GitHub when known, otherwise plain text. External
+// packages get a shortened display path (e.g. `effect/Layer.ts`).
+const displayFile = (file: string): string =>
+  file.replace(/^repos\/effect\/packages\/effect\/src\//, "effect/");
+const SrcRef = ({ source }: { source: ApiSource }): React.ReactElement => {
+  const label = `${displayFile(source.file)}:${source.line}`;
+  return source.url !== undefined ? (
+    <a className="api-src" href={source.url} target="_blank" rel="noreferrer">
       {label}
     </a>
   ) : (
@@ -60,13 +61,17 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
   // The source, with twoslash hover previews (whole file type-checked, cut to this declaration).
   // Falls back to plain highlighting if twoslash can't compile the file.
   const sourceLines = s.sourceText.split("\n").length;
-  const sourceView =
-    highlightSourceWithHovers(
-      s.source.file,
-      s.source.line,
-      s.source.line + sourceLines - 1,
-      s.docLinks,
-    ) ?? highlightToReact(s.sourceText, "ts");
+  // External (dependency) source is plain-highlighted — it can't be twoslashed under our compiler
+  // config, and full-file twoslash across a large dependency isn't worth the build cost.
+  const external = s.source.file.startsWith("repos/");
+  const sourceView = external
+    ? highlightToReact(s.sourceText, "ts")
+    : (highlightSourceWithHovers(
+        s.source.file,
+        s.source.line,
+        s.source.line + sourceLines - 1,
+        s.docLinks,
+      ) ?? highlightToReact(s.sourceText, "ts"));
   const chips = [
     ...(s.category !== undefined ? [{ cls: "api-chip-cat", text: s.category }] : []),
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),
@@ -77,7 +82,7 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
         <div className="api-sym-head">
           <code className="api-sym-name">{s.qualifiedName}</code>
           <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
-          <SrcRef file={s.source.file} line={s.source.line} />
+          <SrcRef source={s.source} />
         </div>
         {sigs.length > 0 ? (
           <div className="api-sig">{highlightToReact(sigs.join("\n"), "ts")}</div>
@@ -98,7 +103,7 @@ export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
       {s.sourceText ? (
         <section className="api-source">
           <div className="api-source-head">
-            Source <SrcRef file={s.source.file} line={s.source.line} />
+            Source <SrcRef source={s.source} />
             <span className="api-source-lines">{s.sourceText.split("\n").length} lines</span>
           </div>
           {/* line numbers start at the export's real file line, so `ln` counts from source.line - 1 */}
