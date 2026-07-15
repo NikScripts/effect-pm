@@ -11,7 +11,7 @@ export interface NavGroup {
 export const nav: ReadonlyArray<NavGroup> = [
   {
     label: "Getting started",
-    slugs: ["index", "install", "core-concepts", "creating-a-resource", "glossary"],
+    slugs: ["index", "install", "core-concepts", "creating-a-resource", "managing-layers", "glossary"],
   },
   {
     label: "Resources",
