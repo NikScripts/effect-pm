@@ -35,7 +35,7 @@ import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRun
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
@@ -199,6 +199,8 @@ const ProcessDetail = (props: {
   readonly onOpenSchedule: () => void;
 }): React.ReactElement => {
   const bundle = useProcessBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   // One lock for the whole process detail — guards both the controls and the schedule editor.
   const [locked, setLocked] = React.useState(true);
@@ -207,6 +209,7 @@ const ProcessDetail = (props: {
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
+        <ProcessStatusBadge supervising={s?.supervising} />
       </div>
       <ResourceReadinessBanner tag={props.tag} />
       <ProcessStats bundle={bundle} />
@@ -221,12 +224,15 @@ const ProcessDetail = (props: {
  *  controls, no logs (an `ApiMetrics` tap has neither). */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
   const bundle = useApiBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
+        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
       <ResourceReadinessBanner tag={props.tag} />
       <ApiStats bundle={bundle} />

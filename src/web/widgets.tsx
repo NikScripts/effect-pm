@@ -120,6 +120,24 @@ export const StatusBadge = (props: { readonly phase: string; readonly paused: bo
   return <Badge color={s.color}>{s.label}</Badge>;
 };
 
+/** Running / stopped pill for a process — from its live `supervising` flag. Shared by the process
+ *  card and its detail header. @public */
+export const ProcessStatusBadge = (props: { readonly supervising: boolean | undefined }): React.ReactElement => (
+  <Badge color={props.supervising === true ? "#22c55e" : "#94a3b8"}>
+    {props.supervising === true ? "running" : "stopped"}
+  </Badge>
+);
+
+/** Health pill for an API-metrics resource — green / amber / red by error rate ({@link apiHealth}).
+ *  Shared by the API card and its detail header. @public */
+export const ApiStatusBadge = (props: {
+  readonly requests: number;
+  readonly errors: number;
+}): React.ReactElement => {
+  const health = apiHealth(props.requests, props.errors);
+  return <Badge color={health.color}>{health.label}</Badge>;
+};
+
 const Bar = (props: { readonly value: number; readonly max: number; readonly color: string }): React.ReactElement => (
   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
     <div
@@ -716,9 +734,7 @@ export const ProcessCard = (props: {
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
-          {s?.supervising === true ? "running" : "stopped"}
-        </Badge>
+        <ProcessStatusBadge supervising={s?.supervising} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>{s?.armed === true ? "armed" : "disarmed"}</span>
@@ -1172,7 +1188,7 @@ export const ApiCard = (props: {
       <div className="flex items-center gap-2">
         <span>🌐</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={health.color}>{health.label}</Badge>
+        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span><strong className="text-foreground">{(m?.throughputPerSec ?? 0).toFixed(1)}</strong> req/s</span>
