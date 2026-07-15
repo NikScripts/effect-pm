@@ -122,8 +122,18 @@ body {
 .menu-btn .i-close { display: none; }
 .menu-cb:checked ~ .topbar .menu-btn .i-menu { display: none; }
 .menu-cb:checked ~ .topbar .menu-btn .i-close { display: inline-flex; }
-/* lock the page behind the takeover without JS (Safari 15.4+/modern) */
-html:has(.menu-cb:checked) { overflow: hidden; }
+/* Scroll-lock is done in JS (body overflow), NOT `html:has(){overflow:hidden}` — locking the html
+   scroll container breaks the topbar's position:sticky on iOS (it drops behind the overlay, hiding
+   the close button) and resets the scroll position. */
+/* While the menu is open, pin the bar as FIXED and OPAQUE so it's guaranteed above the overlay
+   (z-50 > 40) and the close button stays tappable — sticky + a translucent backdrop-filter bar can
+   fall behind a full-screen overlay on iOS. */
+.menu-cb:checked ~ .topbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+}
 
 /* mobile menu — a full-page takeover (fixed), NOT a disclosure that pushes content.
    Sits under the sticky top bar (which stays on top at z-index 50). Hidden until the checkbox
