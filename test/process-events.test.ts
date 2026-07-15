@@ -58,7 +58,7 @@ class EventsStore extends Store.Service<EventsStore>("@test/ProcessEventsStore")
 ) {}
 
 const withStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  Layer.provideMerge(EventsStore.layerMemory, layer);
+  layer.pipe(Layer.provideMerge(EventsStore.layerMemory));
 
 const asRpcMethod = (m: unknown): AnyMethod | undefined =>
   m !== undefined && typeof m === "object" && m !== null && "kind" in m
@@ -85,7 +85,7 @@ describe("Process.events — live stream", () => {
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
       expect(tags).toEqual(["Started", "Completed"]);
     }).pipe(
-      Effect.provide(Process.layer(LiveEventsProc, { effect: Effect.void })),
+      Effect.provide(Process.layerMemory(LiveEventsProc, { effect: Effect.void })),
       Effect.scoped,
     ),
   );
@@ -109,7 +109,7 @@ describe("Process.events — live stream", () => {
       }
     }).pipe(
       Effect.provide(
-        Process.layer(StringFailProc, {
+        Process.layerMemory(StringFailProc, {
           effect: Effect.fail(new Boom({ code: 7 })),
         }),
       ),
@@ -142,7 +142,7 @@ describe("Process.events — live stream", () => {
       });
     }).pipe(
       Effect.provide(
-        Process.layer(TypedFailProc, {
+        Process.layerMemory(TypedFailProc, {
           effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
         }),
       ),
@@ -168,7 +168,7 @@ describe("Process.events — live stream", () => {
       });
     }).pipe(
       Effect.provide(
-        Process.layer(SuccessEventsProc, {
+        Process.layerMemory(SuccessEventsProc, {
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
         }),
       ),

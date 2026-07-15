@@ -35,7 +35,7 @@ const program = Effect.gen(function* () {
 Effect.runPromise(
   program.pipe(
     Effect.provide(
-      CustomQueueResource.layer(Jobs, {
+      CustomQueueResource.layerMemory(Jobs, {
         levelCount: 4,
         namedLevels: { interactive: 0, standard: 2, batch: 3 },
         takeAlgorithm: "weighted",

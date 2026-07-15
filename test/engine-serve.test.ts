@@ -37,8 +37,8 @@ const cfg = { effect: tick, polling: Polling.spaced(Duration.millis(50)) };
 const Node = Resource.httpServer().pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      Process.serve(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
-      Process.serve(ProcB, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depB"))),
+      Process.serveMemory(ProcA, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depA"))),
+      Process.serveMemory(ProcB, cfg).pipe(Layer.provide(Layer.succeed(Dep, "depB"))),
     ),
   ),
   Layer.provide(recorderLayer), // Dep discharged per resource; Recorder shared

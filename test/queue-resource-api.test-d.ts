@@ -42,7 +42,7 @@ const _makeWithOptions = Effect.scoped(
   QueueResource.make((item: string) => Effect.logInfo(item), { concurrency: 2 }),
 );
 
-const _layer = QueueResource.layer(NotificationTag, {
+const _layer = QueueResource.layerMemory(NotificationTag, {
   effect: (_email) => Effect.void,
   concurrency: 1,
 });

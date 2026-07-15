@@ -39,7 +39,7 @@ describe("Process manual run RPC", () => {
         return yield* proc.run.pipe(Effect.exit);
       }).pipe(
         Effect.provide(
-          Process.layer(FailingProc, {
+          Process.layerMemory(FailingProc, {
             effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
           }),
         ),
@@ -64,7 +64,7 @@ describe("Process manual run RPC", () => {
         expect(Exit.isFailure(exit)).toBe(true);
       }).pipe(
         Effect.provide(
-          Process.serveRemote(FailingProc, {
+          Process.serveRemoteMemory(FailingProc, {
             effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
           }),
         ),
@@ -79,7 +79,7 @@ describe("Process manual run RPC", () => {
       const result = yield* proc.run;
       expect(result).toBe(42);
     }).pipe(
-      Effect.provide(Process.layer(OkProc, { effect: Effect.succeed(42) })),
+      Effect.provide(Process.layerMemory(OkProc, { effect: Effect.succeed(42) })),
       Effect.scoped,
     ),
   );
@@ -93,7 +93,7 @@ describe("Process manual run RPC", () => {
         };
         yield* svc.run;
       }).pipe(
-        Effect.provide(Process.serveRemote(VoidProc, { effect: Effect.void })),
+        Effect.provide(Process.serveRemoteMemory(VoidProc, { effect: Effect.void })),
         Effect.scoped,
       ) as Effect.Effect<void, never, never>,
     ),

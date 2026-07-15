@@ -155,7 +155,9 @@ const resolveResourceLogKey = (
  * Pass a scope tag (`Process.Tag` / `QueueResource.Tag` / …) or its `.key` string.
  * Resource kind is {@link Resource.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …).
+ * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …) on the
+ * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
+ * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *
  * @remarks
  * Prefer {@link Resource.logs} for new code. See `docs/LOGS.md` — Store / query parameters.

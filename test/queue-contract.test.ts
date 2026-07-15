@@ -16,9 +16,9 @@ import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import { queueControlSpec } from "../src/QueueResource";
-import { testLogsEnv } from "./fixtures/logsEnv";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
+import * as Logs from "../src/Logs";
 import * as Resource from "../src/Resource";
 import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Resource";
 
@@ -375,7 +375,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     expect(Option.getOrThrow(emptied)).toBe(true);
   }).pipe(
     Effect.provide(
-      QueueResource.layer(LocalQueue, {
+      QueueResource.layerMemory(LocalQueue, {
         effect: (_item: NumberItem) => Effect.void,
         concurrency: 1,
       }),
@@ -409,10 +409,12 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
     expect(entry?.level).toBe("Info");
   }).pipe(
     Effect.provide(
+      // Soft-default Memory for the engine; LogRelay alone for live Resource.logs
+      // (do not provideMerge a Node-only AppStore — Soft would capture that Storage).
       QueueResource.layer(LoggingQueue, {
         effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
         concurrency: 1,
-      }).pipe(Layer.provideMerge(testLogsEnv())),
+      }).pipe(Layer.provideMerge(Logs.layer)),
     ),
     Effect.scoped,
   );

@@ -21,19 +21,19 @@ class NumberQueue extends QueueResource.Tag<NumberQueue>()("@td/NumberQueue", {
 }) {}
 
 // the worker `effect` is REQUIRED to return `Effect<number, …>` (the success schema drives it)
-const _numberLayer = QueueResource.layer(NumberQueue, {
+const _numberLayer = QueueResource.layerMemory(NumberQueue, {
   effect: (job) => Effect.succeed(job.id.length),
 });
 void _numberLayer;
 
 // returning the wrong success type is a type error
-QueueResource.layer(NumberQueue, {
+QueueResource.layerMemory(NumberQueue, {
   // @ts-expect-error worker must return `Effect<number, …>`, not `Effect<string, …>`
   effect: (_job) => Effect.succeed("nope"),
 });
 
 // a `void`-returning worker is rejected when a success schema is declared
-QueueResource.layer(NumberQueue, {
+QueueResource.layerMemory(NumberQueue, {
   // @ts-expect-error worker must return `Effect<number, …>`, not `Effect<void, …>`
   effect: (_job) => Effect.void,
 });
@@ -58,7 +58,7 @@ expectExact<
 class VoidQueue extends QueueResource.Tag<VoidQueue>()("@td/VoidQueue", { payload: jobSchema }) {}
 
 // a `void`-returning worker compiles
-const _voidLayer = QueueResource.layer(VoidQueue, {
+const _voidLayer = QueueResource.layerMemory(VoidQueue, {
   effect: (_job) => Effect.void,
 });
 void _voidLayer;

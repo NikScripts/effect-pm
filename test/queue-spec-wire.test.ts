@@ -66,7 +66,7 @@ describe("queueSpec wire — structural validation", () => {
 
 describe("queueSpec wire — RPC round-trip", () => {
   const numberQueueServer = Resource.httpServer([
-    QueueResource.serve(NumberQueue, {
+    QueueResource.serveMemory(NumberQueue, {
       effect: (job) => Effect.succeed(job.id.length),
       concurrency: 1,
     }),
