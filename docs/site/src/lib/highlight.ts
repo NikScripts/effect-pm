@@ -286,6 +286,37 @@ function preprocessJsdoc(md: string): string {
   );
 }
 
+// Stage 2 of API-docgen links. Link API export names that appear inside inline `code` spans in
+// JSDoc — the monospaced bits only, never plain prose — plus resolve `{@link X}` targets to real
+// doc URLs. Same qualified-first / unambiguous-bare rule as the type-preview links.
+const API_REF = /[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?/g;
+// A doc `{@link Target}` or an inline-code identifier -> its doc URL, or undefined. `Namespace.name`
+// resolves by qualified name; a bare name only when unambiguous.
+const resolveDocRef = (ref: string): string | undefined =>
+  ref.includes(".") ? resolveApiLink(ref, "", false) : resolveApiLink(undefined, ref, true);
+// Split inline-code text into HAST, wrapping any API-export name in a dotted-underline link.
+const linkifyCode = (text: string): any[] => {
+  const out: any[] = [];
+  let last = 0;
+  for (const m of text.matchAll(API_REF)) {
+    const tok = m[0];
+    const at = m.index ?? 0;
+    const url = resolveDocRef(tok);
+    if (url === undefined) continue;
+    if (at > last) out.push({ type: "text", value: text.slice(last, at) });
+    out.push({
+      type: "element",
+      tagName: "a",
+      properties: { class: "api-typelink", href: url },
+      children: [{ type: "text", value: tok }],
+    });
+    last = at + tok.length;
+  }
+  if (out.length === 0) return [{ type: "text", value: text }];
+  if (last < text.length) out.push({ type: "text", value: text.slice(last) });
+  return out;
+};
+
 // `this`-free so the same renderer serves both the twoslash hover popups and the API-reference pages;
 // fenced code uses the shared highlighter directly (loadHighlighter must have run first).
 function jsdocToHast(docs: string): any[] {
@@ -310,14 +341,27 @@ function jsdocToHast(docs: string): any[] {
         }
         return { type: "element", tagName: "div", properties: { className: ["twoslash-popup-docs-code"] }, children };
       },
-      // `{@link …}` (rewritten to an `@link:` sentinel URL above) -> a styled, non-navigating
-      // reference. Real markdown links keep their <a> and open in a new tab.
+      // inline `code` -> a <code>, with any API-export name inside it turned into a doc link. Only
+      // the monospaced content is scanned; plain prose is never touched.
+      inlineCode: (_state: any, node: any) => ({
+        type: "element",
+        tagName: "code",
+        properties: {},
+        children: linkifyCode(String(node.value)),
+      }),
+      // `{@link …}` (rewritten to an `@link:` sentinel URL above) -> a REAL link when the target
+      // resolves to an API symbol, otherwise a styled, non-navigating reference. Real markdown links
+      // keep their <a> and open in a new tab.
       link: (state: any, node: any) => {
         const children = state.all(node);
         const url = typeof node.url === "string" ? node.url : "";
-        return url.startsWith("@link:")
-          ? { type: "element", tagName: "span", properties: { className: ["twoslash-jsdoc-link"] }, children }
-          : { type: "element", tagName: "a", properties: { href: url, target: "_blank", rel: ["noreferrer"] }, children };
+        if (url.startsWith("@link:")) {
+          const resolved = resolveDocRef(url.slice("@link:".length).trim());
+          return resolved !== undefined
+            ? { type: "element", tagName: "a", properties: { className: ["twoslash-jsdoc-link"], href: resolved }, children }
+            : { type: "element", tagName: "span", properties: { className: ["twoslash-jsdoc-link"] }, children };
+        }
+        return { type: "element", tagName: "a", properties: { href: url, target: "_blank", rel: ["noreferrer"] }, children };
       },
     },
   });

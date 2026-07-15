@@ -593,6 +593,9 @@ pre.shiki { background: transparent; }
   text-underline-offset: 2px;
   cursor: default;
 }
+/* a `{@link}` that resolved to a doc page is a real anchor — tappable */
+a.twoslash-jsdoc-link { cursor: pointer; }
+a.twoslash-jsdoc-link:hover { text-decoration-thickness: 2px; }
 .twoslash-popup-docs strong { color: var(--fg); font-weight: 600; }
 .twoslash-popup-docs em { font-style: italic; }
 .twoslash-popup-docs blockquote {
