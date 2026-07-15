@@ -72,12 +72,7 @@ export default [
       // The classic React-hooks rules (the set wow-sports' react-internal enforces via plugin v5).
       // v7's `recommended` also ships experimental rules (static-components / incompatible-library /
       // use-memo) that fight reactivity libraries like effect-atom, so we don't spread it wholesale.
-      //
-      // `rules-of-hooks` starts at `warn`, not `error`: `widgets.tsx` `HealthBoard` calls hooks inside
-      // a `nodes.map(...)` (a genuine violation — it only holds while a group's node set is stable).
-      // Surface it now, promote to `error` once that read is refactored (child-per-node / a group-level
-      // status hook) so introducing the ruleset doesn't block on a pre-existing UI fix.
-      "react-hooks/rules-of-hooks": "warn",
+      "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       // The new JSX transform makes `import React` unnecessary in scope.
       "react/react-in-jsx-scope": "off"

@@ -1574,22 +1574,31 @@ export const HealthBoard = (props: {
   readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
   const nodes = nodesOf(props.group);
-  const rows = nodes.map((node) => {
-    const bundle = useNodeBundle(node);
-    const r = useAtomValue(bundle.status);
-    const h = useAtomValue(bundle.health);
-    return {
-      node,
-      s: AsyncResult.isSuccess(r) ? r.value : undefined,
-      history: AsyncResult.isSuccess(h) ? h.value : [],
-    };
-  });
-  const degraded = rows.flatMap(({ node, s }) =>
+  // Each node's live status is read by its own `NodeHealthRow` child (hooks at the child's top level —
+  // not in a `.map` over the node list, which the Rules of Hooks forbid and which would break if a
+  // group ever gained/lost a node). The children report their status up so this board can compute the
+  // cross-node aggregates (ready/total, degraded resources, degraded nodes). Statuses arrive async
+  // (the underlying atoms start "connecting"), so this reporting adds no flash the direct reads didn't.
+  const [statusMap, setStatusMap] = React.useState<
+    ReadonlyMap<string, NodeStatusValue | undefined>
+  >(() => new Map());
+  const reportStatus = React.useCallback(
+    (id: string, s: NodeStatusValue | undefined): void => {
+      setStatusMap((prev) => {
+        const next = new Map(prev);
+        next.set(id, s);
+        return next;
+      });
+    },
+    [],
+  );
+  const statuses = nodes.map((node) => ({ node, s: statusMap.get(node.id) }));
+  const degraded = statuses.flatMap(({ node, s }) =>
     (s?.resources ?? []).filter((x) => !x.ready).map((res) => ({ node, res })),
   );
-  const total = rows.reduce((n, { s }) => n + (s?.resources.length ?? 0), 0);
-  const ready = rows.reduce((n, { s }) => n + (s?.resources.filter((x) => x.ready).length ?? 0), 0);
-  const degradedNodes = rows.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
+  const total = statuses.reduce((n, { s }) => n + (s?.resources.length ?? 0), 0);
+  const ready = statuses.reduce((n, { s }) => n + (s?.resources.filter((x) => x.ready).length ?? 0), 0);
+  const degradedNodes = statuses.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
   const healthy = degradedNodes === 0;
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-y-auto safe-area landscape:h-auto landscape:min-h-[100dvh]">
@@ -1634,12 +1643,11 @@ export const HealthBoard = (props: {
           nodes · {nodes.length}
         </h2>
         <div className="space-y-2">
-          {rows.map(({ node, s, history }) => (
-            <NodeHealthCard
+          {nodes.map((node) => (
+            <NodeHealthRow
               key={node.id}
               node={node}
-              s={s}
-              history={history}
+              onStatus={reportStatus}
               onOpen={() => props.onOpenNode(node)}
               onOpenResource={props.onOpenResource}
             />
@@ -1647,6 +1655,34 @@ export const HealthBoard = (props: {
         </div>
       </section>
     </div>
+  );
+};
+
+/** One node's health card for {@link HealthBoard}. Calls the per-node status/health hooks at its own
+ *  top level (Rules-of-Hooks safe) and reports the status up so the board can aggregate across nodes. */
+const NodeHealthRow = (props: {
+  readonly node: NodeRef;
+  readonly onStatus: (id: string, s: NodeStatusValue | undefined) => void;
+  readonly onOpen: () => void;
+  readonly onOpenResource: (resourceKey: string) => void;
+}): React.ReactElement => {
+  const bundle = useNodeBundle(props.node);
+  const r = useAtomValue(bundle.status);
+  const h = useAtomValue(bundle.health);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const history = AsyncResult.isSuccess(h) ? h.value : [];
+  const { onStatus, node } = props;
+  React.useEffect(() => {
+    onStatus(node.id, s);
+  }, [onStatus, node.id, s]);
+  return (
+    <NodeHealthCard
+      node={node}
+      s={s}
+      history={history}
+      onOpen={props.onOpen}
+      onOpenResource={props.onOpenResource}
+    />
   );
 };
 
