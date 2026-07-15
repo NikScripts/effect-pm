@@ -159,7 +159,7 @@ export const QueueCard = (props: {
       className={cn(
         // flex-col so the content stays top-aligned when the grid stretches the card to the row
         // height — a bare <button> vertically centres its content in the slack.
-        "flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
       )}
     >
@@ -176,6 +176,7 @@ export const QueueCard = (props: {
         <PrioRow p="normal" count={sizes.normal} max={max} />
         <PrioRow p="low" count={sizes.low} max={max} />
       </div>
+      <DegradedOverlay tag={props.tag} />
     </button>
   );
 };
@@ -245,15 +246,7 @@ export const Cell = (props: {
   if (!isLeafTag(props.member)) return <></>;
   const tag = props.member;
   const Widget = widgetFor(registry, tag.key, resourceKindOf(tag) ?? resourceKind);
-  // `grid` (single implicit cell) stretches the card to fill this wrapper in BOTH axes, so the wrapper
-  // — the actual grid item — matches the card exactly and the absolute overlay lines up with it (a
-  // plain block wrapper left the card content-height, so the overlay overshot below + to the sides).
-  return (
-    <div className="relative grid">
-      <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />
-      <DegradedOverlay tag={tag} />
-    </div>
-  );
+  return <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />;
 };
 
 const DegradedOverlayInner = (props: {
@@ -667,7 +660,7 @@ export const ProcessCard = (props: {
       type="button"
       onClick={() => props.onOpen(props.tag)}
       style={vt}
-      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
@@ -680,6 +673,7 @@ export const ProcessCard = (props: {
         <span>{s?.armed === true ? "armed" : "disarmed"}</span>
         <span><strong className="text-foreground">{s?.activeInstances ?? 0}</strong> active</span>
       </div>
+      <DegradedOverlay tag={props.tag} />
     </button>
   );
 };
@@ -1029,6 +1023,8 @@ export const PagedCard = (props: {
   readonly pages: ReadonlyArray<React.ReactNode>;
   readonly onOpen?: () => void;
   readonly style?: React.CSSProperties;
+  /** Absolute overlay rendered over the card (the root is `relative`) — e.g. a degraded treatment. */
+  readonly overlay?: React.ReactNode;
 }): React.ReactElement => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(0);
@@ -1041,7 +1037,7 @@ export const PagedCard = (props: {
         if (e.key === "Enter" || e.key === " ") props.onOpen?.();
       }}
       style={props.style}
-      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
+      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
     >
       <div
         ref={ref}
@@ -1088,6 +1084,7 @@ export const PagedCard = (props: {
           ))}
         </div>
       ) : null}
+      {props.overlay}
     </div>
   );
 };
@@ -1150,7 +1147,14 @@ export const ApiCard = (props: {
         ))}
       </div>
     );
-  return <PagedCard onOpen={() => props.onOpen(props.tag)} style={vt} pages={[page1, page2]} />;
+  return (
+    <PagedCard
+      onOpen={() => props.onOpen(props.tag)}
+      style={vt}
+      pages={[page1, page2]}
+      overlay={<DegradedOverlay tag={props.tag} />}
+    />
+  );
 };
 
 /** Stat cards from an API resource's snapshot + latest window. */
@@ -1860,7 +1864,7 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
 export const ResourceCard = (props: WidgetProps): React.ReactElement => {
   const node = resourceNodeRef(props.tag);
   return (
-    <Card>
+    <Card className="relative">
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
           <span className="flex-1 truncate font-medium text-foreground">{props.name}</span>
@@ -1870,6 +1874,7 @@ export const ResourceCard = (props: WidgetProps): React.ReactElement => {
           <div className="mt-2 text-[0.8rem] text-muted-foreground">{displayName(node.id)}</div>
         ) : null}
       </CardContent>
+      <DegradedOverlay tag={props.tag} />
     </Card>
   );
 };
