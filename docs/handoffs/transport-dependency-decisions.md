@@ -1,9 +1,16 @@
 # Protocol as a dependency — a `Protocol` provider service
 
-Layers stay transport-agnostic; a single **`Protocol` service** carries the deployment's wire choice
-and fabricates each node's `RpcClient.Protocol` / the server's `RpcServer.Protocol`. Provide it once.
+Layers stay transport-agnostic; the protocol is an injected dependency.
 
-**Status:** design, awaiting approval. No implementation until the owner gives the go.
+**Status:** IMPLEMENTED on `feat/protocol-dependency`. Final shape (owner-directed, differs from the
+early drafts below): the standard seam is **`Resource.layerProtocol(protocol)`** where `protocol` is
+effect's own `RpcClient.Protocol`; helpers **`protocolHttp(url)` / `protocolWebsocket(url)`** build the
+common ones, and **`socketClient` / `httpClient`** are per-node shortcuts over it. The server mirrors
+it: `httpServer`'s `protocol` option is a `serverProtocolHttp` / `serverProtocolWebsocket` builder
+(default http). Peers read an injected builder via **`layerPeerProtocol(builder)`** (a Context.Reference
+defaulting to `protocolHttp`, so http fleets are unchanged). No `Transport` service, no per-protocol
+layers. Verified: full gate green, `WorkerPool` folds to 12 over ws in `examples/resource-web`, new
+`test/multi-host-peers-protocol.test.ts`. The sections below are the design history that led here.
 
 ## The problem this fixes
 

@@ -31,7 +31,7 @@ const serveLayer = Resource.httpServer([
     effect: Effect.logInfo("wnba: key-rotation check"),
     polling: Polling.spaced(Duration.seconds(5)),
   }),
-], { protocol: "websocket" }).pipe(
+], { protocol: Resource.serverProtocolWebsocket }).pipe(
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(MiniStore.layerMemory),
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),

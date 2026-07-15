@@ -2,7 +2,7 @@
  * @module examples/resource-web/server
  *
  * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over a
- * **WebSocket** (`httpServer({ protocol: "websocket" })`) on one port, plus the `NodeStatus` that
+ * **WebSocket** (`httpServer({ protocol: Resource.serverProtocolWebsocket })`) on one port, plus the `NodeStatus` that
  * `httpServer` auto-mounts. The browser dashboard reaches it via `Resource.socketClient(WnbaNode, …)`
  * (vite proxies `/rpc` here with `ws: true`) — one multiplexed connection carries every resource's
  * status/metrics/logs streams, which HTTP/1.1's ~6-connection cap would otherwise starve. Run:
@@ -274,8 +274,11 @@ const wnbaNode = Resource.httpServer([
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
   Resource.serve(WorkerPool, workerPoolImpl(5)),
-], { protocol: "websocket" }).pipe(
+], { protocol: Resource.serverProtocolWebsocket }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
+  // peers dial websocket too — one knob, matching the server's own wire (default would be http → 404
+  // against a ws-only /rpc). The peer urls stay on the Nodes; this only chooses how to reach them.
+  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
@@ -290,8 +293,9 @@ const liveNode = Resource.httpServer([
     polling: Polling.spaced(Duration.seconds(2)),
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
-], { protocol: "websocket" }).pipe(
+], { protocol: Resource.serverProtocolWebsocket }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
+  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(LiveStore.layerMemory),
   Layer.provideMerge(logStorageDemo),
@@ -304,8 +308,9 @@ const statsNode = Resource.httpServer([
     concurrency: 3,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
-], { protocol: "websocket" }).pipe(
+], { protocol: Resource.serverProtocolWebsocket }).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
+  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(StatsStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),

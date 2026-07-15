@@ -48,12 +48,13 @@ across all of them, so prefer it for the browser unconditionally.
 
 Three matching pieces — the server must serve the same protocol the client speaks:
 
-**1. Server** — serve WebSocket:
+**1. Server** — serve WebSocket. The `protocol` option takes a server-protocol builder
+(`Resource.serverProtocolHttp`, the default, or `Resource.serverProtocolWebsocket`):
 
 ``` ts
 Resource.httpServer(
   [Resource.serve(Jobs, jobsImpl) /* … */],
-  { protocol: "websocket" },
+  { protocol: Resource.serverProtocolWebsocket },
 )
 ```
 
@@ -85,6 +86,26 @@ server: {
 ```
 
 A worked end-to-end setup is in `examples/resource-web` (three nodes, one WebSocket each).
+
+### Fleets — peers dial the same wire
+
+When a node's resource folds across **peers** (a `fleet` field like `fleetActive` — see
+[multi-node](../guides/multi-node)), those server-to-server calls have their own transport. They
+default to HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh onto WebSocket too,
+or the fold 404s against the ws-only `/rpc`. One knob per node, alongside `peersLayer`:
+
+``` ts
+Resource.httpServer([Resource.serve(WorkerPool, poolImpl) /* … */], {
+  protocol: Resource.serverProtocolWebsocket,
+}).pipe(
+  Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
+  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)), // peers speak ws too
+)
+```
+
+Under the hood every transport is the same seam — `Resource.layerProtocol(protocol)` sets a client
+wire from an `RpcClient.Protocol` (build one with `Resource.protocolHttp` / `Resource.protocolWebsocket`),
+and `socketClient` / `httpClient` are per-node shortcuts over it.
 
 ## Widgets
 

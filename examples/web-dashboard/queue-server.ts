@@ -99,7 +99,7 @@ const serveLayer = Resource.httpServer([
   queueEntry(RegionEU, cfg),
   queueEntry(Daily, cfg),
   queueEntry(Weekly, cfg),
-], { protocol: "websocket" }).pipe(
+], { protocol: Resource.serverProtocolWebsocket }).pipe(
   // capture metrics history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(DropletStore.layerMemory),
