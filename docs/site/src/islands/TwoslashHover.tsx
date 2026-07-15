@@ -164,17 +164,34 @@ export function TwoslashHover(): null {
       pressTarget = null;
       startAt = null;
     };
+    const closeNow = (): void => {
+      if (openEl) {
+        openEl.classList.remove("is-open");
+        clearPos(openEl);
+        openEl = null;
+      }
+    };
+
+    // Touch model: tap a token to open a STICKY popup (stays until you tap outside); long-press a
+    // section (or the token) to copy it. A tap outside closes it.
+    let outsideTap = false;
     const onTouchStart = (e: TouchEvent): void => {
-      const target = (e.target as Element | null)?.closest?.(
-        ".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover",
-      );
-      if (target === null || target === undefined || e.touches.length !== 1) return;
+      if (e.touches.length !== 1) return;
+      const el = e.target as Element | null;
+      // the popup is a DOM descendant of its token, so `.twoslash-hover` covers both token and popup
+      if (el?.closest?.(".twoslash-hover") == null) {
+        outsideTap = openEl !== null; // finger landed outside any popup — close on release
+        return;
+      }
+      outsideTap = false;
+      const target = el.closest(".twoslash-popup-code, .twoslash-popup-docs, .twoslash-hover");
+      if (target === null) return;
       const t = e.touches[0];
       startAt = { x: t.clientX, y: t.clientY };
       pressStart = Date.now();
       pressTarget = target;
       target.classList.add("tw-pressing"); // finger-down feedback
-      armTimer = window.setTimeout(() => target.classList.add("tw-armed"), HOLD); // held enough → release to copy
+      armTimer = window.setTimeout(() => target.classList.add("tw-armed"), HOLD);
     };
     const onTouchMove = (e: TouchEvent): void => {
       if (startAt === null) return;
@@ -183,25 +200,43 @@ export function TwoslashHover(): null {
       if (Math.abs(t.clientX - startAt.x) > 16 || Math.abs(t.clientY - startAt.y) > 16) cancelPress();
     };
     const onTouchEnd = (): void => {
-      const armed = pressTarget !== null && startAt !== null && Date.now() - pressStart >= HOLD;
+      if (outsideTap) {
+        outsideTap = false;
+        closeNow();
+        return;
+      }
       const target = pressTarget;
+      const longPress = target !== null && startAt !== null && Date.now() - pressStart >= HOLD;
       cancelPress(); // clears the press highlight
-      if (!armed || target === null) return;
+      if (target === null) return;
       if (target.matches(".twoslash-popup-code, .twoslash-popup-docs")) {
-        copySection(target);
-      } else {
-        open(target); // a token: open its popup so the copy is visible, then copy the compact type
+        if (longPress) copySection(target); // long-press a preview section → copy it
+        return;
+      }
+      // a token
+      if (longPress) {
+        open(target); // open its popup and copy the compact type
         const code = target.querySelector(".twoslash-popup-code");
         if (code) copySection(code);
+      } else if (openEl === target) {
+        closeNow(); // tap an already-open token → close
+      } else {
+        open(target); // tap to open (sticky)
       }
     };
 
-    document.addEventListener("mouseover", onOver);
-    document.addEventListener("mouseout", onOut);
-    document.addEventListener("touchstart", onTouchStart, { passive: true });
-    document.addEventListener("touchmove", onTouchMove, { passive: true });
-    document.addEventListener("touchend", onTouchEnd);
-    document.addEventListener("touchcancel", cancelPress);
+    // Hover devices open on hover; touch devices use the tap-open + long-press-copy model above.
+    const hoverCapable =
+      typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
+    if (hoverCapable) {
+      document.addEventListener("mouseover", onOver);
+      document.addEventListener("mouseout", onOut);
+    } else {
+      document.addEventListener("touchstart", onTouchStart, { passive: true });
+      document.addEventListener("touchmove", onTouchMove, { passive: true });
+      document.addEventListener("touchend", onTouchEnd);
+      document.addEventListener("touchcancel", cancelPress);
+    }
     return () => {
       document.removeEventListener("mouseover", onOver);
       document.removeEventListener("mouseout", onOut);
