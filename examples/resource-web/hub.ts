@@ -101,6 +101,7 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   BoxScoreQueue,
   PlayByPlayQueue,
   ScoresApi,
+  WorkerPool,
 }) {}
 
 /** The hub the dashboard renders. */

@@ -87,7 +87,7 @@ setInterval(() => {
 // node every queue as ONE group on ONE port: `httpServer` mounts a single `/rpc`
 // endpoint with group-id-prefixed procedures behind the Droplet node. (The wnba
 // key-rotation process lives on the Mini — see mini-server.ts.)
-const serveLayer = Resource.httpServer([
+const serveLayer = Resource.wsServer([
   queueEntry(Mail, cfg),
   queueEntry(Jobs, cfg),
   queueEntry(Billing, cfg),
@@ -99,7 +99,7 @@ const serveLayer = Resource.httpServer([
   queueEntry(RegionEU, cfg),
   queueEntry(Daily, cfg),
   queueEntry(Weekly, cfg),
-], { protocol: "websocket" }).pipe(
+]).pipe(
   // capture metrics history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(DropletStore.layerMemory),
