@@ -115,53 +115,123 @@ const total = a + b // add a and b
 
 ## Narrative docs
 
-{#show-dont-tell .should appliesTo=docs}
-## Show, don't tell
+Narrative pages — Introduction, Getting Started, Guides, Examples hubs — have two jobs worth
+stealing from the references this book measures itself against: **compound** (each page
+recontextualizes one spine rather than introducing net-new concepts) and **engineer the
+language** (a controlled vocabulary and a task-shaped grammar). Accuracy, runnable examples, and
+knowing which mode a page is in are assumed. The named goals below are the review vocabulary —
+cite them by name ("this violates *No Simply*").
 
-A guide earns trust with real, working code a reader can run — not adjectives about how clean or
-powerful the thing is. Lead with the code doing the job and let it carry the claim; cut "effortless",
-"elegant", "simply". If a sentence would survive being replaced by a code block, replace it.
+The meta-lesson underneath all nine: compounding only works when the system being documented is itself
+coherent. Where the design has special cases or inconsistent naming, the docs are forced to re-teach,
+and no amount of writing craft buys back "builds on itself." Good docs are partly a mirror held up to
+the design.
 
-``` ts
-// ✅ good — the feature, shown
-const worker = QueueResource.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
+{#the-spine .must appliesTo=docs}
+## The Spine
 
-// ❌ bad — telling, not showing
-// "effect-pm makes serving a queue across runtimes effortless and elegant."
-```
+Hang nearly every page off one load-bearing mental model, stated up front. New material is a facet of
+that spine — recontextualization, not a pile of independent topics. Error handling is "what that one
+channel does," not a new chapter identity.
+
+For this book the spine is the **Resource**: a [**Tag**](/docs/glossary#tag) carrying a
+[**Contract**](/docs/glossary#contract), fulfilled by an **Implementation**, placed by a
+[**Layer**](/docs/glossary#layer), used through a [**Handle**](/docs/glossary#handle) that reads the
+same locally or across a network. If a feature cannot be phrased as a facet of that spine, either
+the framing is wrong or the feature sits off-model — and both are worth knowing.
+
+{#make-the-invisible-visible .should appliesTo=docs}
+## Make the Invisible Visible
+
+Composition shown beats composition described. Find the dynamic the static medium hides — type
+evolution under combinators, a Handle that stays the same while the Layer changes, work moving
+through a queue — invent **one** consistent device to render it, and use that device everywhere the
+dynamic appears. Readers learn the device once; then it compounds across pages. Prefer three short
+frames (or three annotated fences) over a paragraph that narrates motion.
+
+In this book the default device is the Twoslash fence with a `---cut---` preamble and inline type
+comments on the Handle (`emails: the Emails handle — local OR an RPC client, same type`). Stay with
+that device unless a page has a stronger domain-specific one (for example stage diagrams for drain
+order) and then use *that* one consistently on that subject.
+
+{#earn-the-abstraction .should appliesTo=docs}
+## Earn the Abstraction
+
+Lead with the wall the reader will hit — the try/catch, the hand-rolled client, the untyped Promise —
+then present the abstraction as the release of pressure they already feel. An unmotivated abstraction
+reads as ceremony; a motivated one reads as inevitable. This matters most for the best features,
+where the temptation to open with the fireworks is strongest. Adjectives like "effortless" and
+"elegant" are not motivation — cut them and show the pain, then the tool.
+
+{#naming-is-pedagogy .must appliesTo=docs}
+## Naming Is Pedagogy
+
+One name per concept, identical in code and prose. A sheet is never also a panel. Where naming is
+inconsistent the docs are forced to re-teach and compounding collapses. Treat the vocabulary as a
+fixed ledger — the [glossary](/docs/glossary) is the list of what counts; capitalize those domain
+terms (**Tag**, **Service**, **Contract**, **Resource**, **Layer**, **Handle**, **Node**,
+**Implementation**) so the concept is distinct from the ordinary word. Link
+`/docs/glossary#term` the first time a page needs it.
+
+The forcing function cuts into the design: **if a page has to stop and disambiguate two names for
+one thing, that is an API smell surfacing as a docs problem.** Fix it upstream. A term a doc comment
+already defines belongs in the API docs, not the glossary.
+
+{#minimal-deltas .should appliesTo=docs}
+## Minimal Deltas
+
+Each example isolates exactly the one concept the page is teaching, presented as the smallest change
+from the prior fence — not a fresh full program the reader must diff mentally. A sequence of small
+deltas teaches the *axis of variation*; three complete dumps teach less. Prefer `---cut---` / repeated
+preambles over restarting from imports every time. Deltas over dumps.
+
+{#present-tense-imperative-affirmative .should appliesTo=docs}
+## Present-Tense, Imperative, Affirmative
+
+Describe behavior in present tense — "the app opens," not "will open" — so the system reads as a
+stable set of facts. Address the reader directly and tell them to act: "Tap Settings," not "the user
+should navigate to." Prefer the affirmative: "enter eight or more characters" beats "don't use fewer
+than eight." Active voice throughout, with the actor named.
+
+{#one-door-for-tasks .should appliesTo=docs}
+## One Door for Tasks, a Staircase to the Machinery
+
+Tutorials and how-tos stay clean of internals — the reader accomplishes the task without learning the
+mechanism. Explanation and architecture pages carry the mechanism, clearly labeled, because for hard
+features "how does this even work" is load-bearing for trust. One front door for tasks; a well-marked
+staircase downstairs. Do not force the task-doer downstairs, and do not leave the curious reader
+without a staircase. Link the staircase; do not dump it in the hallway.
+
+{#no-simply .must appliesTo=docs}
+## No Simply
+
+Ban "simply," "just," and "obviously" as hedges that imply the reader is slow when they struggle. For
+anything conceptually heavy this is corrosive: the concept *is* hard, and pretending otherwise breaks
+trust the moment reality disagrees. State the hard thing plainly, in a confident unhedged tone — no
+apologizing, no padding. Calm authority. Show the feature with real code; do not advertise it with
+adjectives.
+
+{#sharp-edges-in-place .must appliesTo=docs}
+## Sharp Edges, In Place
+
+Document failure modes on the page for the feature that has them — not in a "gotchas" appendix.
+A happy-path-only doc set is a trap that costs credibility on the pages where credibility matters
+most. Honesty about limitations on the hard features earns trust for the easy ones.
 
 {#narrative-code-is-verified .must appliesTo=docs}
 ## Code in prose is verified, like any example
 
 A snippet in a guide is held to the same bar as an `@example`: it compiles against the real API before
 it ships. A reader will copy it verbatim — a snippet that doesn't type-check teaches the wrong shape
-and burns the trust the guide is built on. (How we standardize examples end to end is still being
-settled — see the note below.)
+and burns the trust the guide is built on.
 
 {#handoff-is-self-contained .must appliesTo=docs}
 ## A handoff is self-contained requirements for its reader
 
 A handoff is written for the person who will do the work, not as a first-person letter about what you
-did. State what they must build and know — paths, constraints, the real gotchas, the acceptance bar —
-so they never have to reconstruct your session to act. If it only makes sense to someone who was there,
-it isn't a handoff.
-
-{#glossary-defines-concepts .should appliesTo=docs}
-## The glossary defines what the API docs can't
-
-The API reference documents *symbols* — every exported function and type. The **glossary** documents
-*concepts*: Tag, Service, Contract, cross-runtime service — the vocabulary a reader needs that no single
-export names. Define each such term once, in the glossary, and link to it (`/docs/glossary#term`) the
-first time it matters on a page. A term a doc comment already defines belongs in the API docs, not here.
-
-{#capitalize-domain-terms .should appliesTo=docs}
-## Capitalize the domain terms
-
-The toolkit's concepts are proper terms — **Tag**, **Service**, **Contract**, **Resource**, **Layer**,
-**Handle**, **Node**, **Implementation** — and read as such: capitalized, so *a Tag* (the concept) is
-distinct from the ordinary word. The glossary is the list of what counts; a lowercase `tag` in prose
-reads as a mistake. Where a word is genuinely generic — "reach it through an HTTP client" — leave it be;
-capitalize the term when it names the concept, not every time the letters appear.
+did. State what they must build and know — paths, constraints, the real sharp edges, the acceptance
+bar — so they never have to reconstruct your session to act. If it only makes sense to someone who
+was there, it isn't a handoff.
 
 ## Authoring Djot (prototype)
 
@@ -206,5 +276,6 @@ parsed straight from the blocks, so a page is both prose and a machine contract.
   non-rule guides, which have no rules to scope) — dead metadata that reads as load-bearing.
 
 {.note}
-**Examples are an open question.** How the real `examples/` apps are sourced, kept building, and used
-as the canonical demos is still being decided — a separate discussion from this chapter.
+**Examples book.** Runnable teaching scripts live under `examples/`; paired Twoslash pages are
+indexed from [`/docs/examples`](/docs/examples). Keep fences verified against the tip API — see
+*Code in prose is verified* above and *Minimal Deltas*.

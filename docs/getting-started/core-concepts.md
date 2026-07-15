@@ -1,15 +1,18 @@
 {#core-concepts title="Core Concepts" status="draft" done="api previews types verified" appliesTo=all}
 # Core Concepts
 
-Every program depends on capabilities it does not build itself — a clock, a database, somewhere to send
-email. Effect models each of these as a [**Service**](/docs/glossary#service), and effect-pm's Resources
-build directly on that model. This page starts with Services and adds one idea at a time.
+This page walks the book's spine one step at a time. The Introduction named it; here each piece
+earns its place: [**Service**](/docs/glossary#service) → [**Tag**](/docs/glossary#tag) →
+[**Contract**](/docs/glossary#contract) → [**Resource**](/docs/glossary#resource) →
+[**Handle**](/docs/glossary#handle). Later guides recontextualize these terms; they do not invent
+new ones.
 
 ## Services and Tags
 
-A Service is a capability your program depends on. Rather than thread it through function after
-function, you refer to it through a [**Tag**](/docs/glossary#tag): a typed name that stands for the Service everywhere it is
-used. Your code declares what it needs, and the type system keeps track of it for you.
+Every program depends on capabilities it does not build itself — a clock, a database, somewhere to
+send email. Effect models each of these as a **Service**. Rather than thread the capability through
+function after function, you refer to it through a **Tag**: a typed name that stands for the Service
+everywhere it is used. Your code declares what it needs, and the type system keeps track of it.
 
 Working with a Service is three steps — define it, use it, and provide it:
 
@@ -31,8 +34,10 @@ depends on it.
 
 ## From Services to Contracts
 
-effect-pm starts where Effect's Services leave off. A Resource is a Service, but its Tag declares a
-[**Contract**](/docs/glossary#contract): the Resource's methods, together with a schema for every value that passes through them.
+An ordinary Effect Service stops at one runtime. Cross-runtime work hits the wall immediately: you
+own the Implementation here and invent a client there, and the two shapes drift. effect-pm starts at
+that wall. A Resource is a Service whose Tag declares a **Contract**: the Resource's methods, together
+with a schema for every value that passes through them.
 
 {.twoslash}
 ``` ts
@@ -50,7 +55,7 @@ runtime to satisfy. A Contract, because every value it names is a schema, is an 
 satisfied across runtimes — the schemas are enough to carry each call over the wire. The seam a Tag
 creates, once a line between modules, can now be a line between processes.
 
-## The same Tag, wherever it runs
+## The Same Tag, Wherever It Runs
 
 You declare a Resource once. Where it runs, you decide later — with the Layer you provide:
 
@@ -79,11 +84,16 @@ const client = Resource.clientHttp(Counter, 4000)      // reach one running else
 void inProcess; void served; void client
 ```
 
-Whichever you choose, `yield* Counter` returns the same Handle. Reading a value, calling a method,
-watching it change — the code reads identically whether the Resource sits beside it or across a
-network. Only the Layer changes. That is what *cross-runtime* means.
+Watch the axis of variation: three Layers, one Tag. Whichever you choose, `yield* Counter` returns
+the same Handle. Reading a value, calling a method, watching it change — the code reads identically
+whether the Resource sits beside it or across a network. Only the Layer changes. That is what
+*cross-runtime* means.
 
-## The shape of a Contract
+**Sharp edge:** a browser dashboard that opens many live streams saturates the browser's HTTP
+connection cap if you use `Resource.clientHttp`. Use `Resource.socketClient` (WebSocket) there — see
+the [Dashboard](/docs/dashboard) guide.
+
+## The Shape of a Contract
 
 A Contract's methods take a small number of forms:
 
@@ -94,12 +104,12 @@ A Contract's methods take a small number of forms:
 
 ## Nodes
 
-When a program spans more than one runtime, each runtime is a [**Node**](/docs/glossary#node). A Node carries the address at
-which its Resources can be reached, and served Resources find one another through the Nodes they share.
-You reach for Nodes only when a Resource is served or distributed; a single-runtime program needs none.
-**[Fleets & Peers](/docs/fleets-and-peers)** covers them in full.
+When a program spans more than one runtime, each runtime is a [**Node**](/docs/glossary#node). A Node
+carries the address at which its Resources can be reached, and served Resources find one another
+through the Nodes they share. Reach for Nodes when a Resource is served or distributed; a
+single-runtime program needs none. **[Fleets & Peers](/docs/fleets-and-peers)** covers them in full.
 
-## In brief
+## In Brief
 
 A **Tag** names a Resource. Its **Contract** describes the methods and their schemas. An
 **Implementation** fulfils the Contract, and a **Layer** places it — in process, served, or reached as
