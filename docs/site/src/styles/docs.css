@@ -385,8 +385,8 @@ pre.shiki { background: transparent; }
   background: transparent !important;
   border: none;
   border-radius: 0;
-  white-space: pre-wrap;   /* long types wrap to the popup width instead of stretching off-screen */
-  overflow-wrap: anywhere;
+  white-space: pre;        /* code never wraps; prettier-formatted types carry their own line breaks */
+  overflow-x: auto;        /* a too-wide line scrolls within its own section, not the whole popup */
 }
 /* Rich popups render the type as a nested shiki <pre>, which carries the base `pre {}` border, radius,
    and padding — a boxed chip. Drop only the border + radius (and reset margin); keep shiki's own inline
@@ -415,8 +415,8 @@ pre.shiki { background: transparent; }
   display: block;
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  white-space: pre-wrap;   /* long expansions wrap to the popup width instead of stretching */
-  overflow-wrap: anywhere;
+  white-space: pre;        /* expanded type keeps its prettier line breaks */
+  overflow-x: auto;        /* scrolls within its own section when a line is still wide */
 }
 .twoslash-popup-expand pre {
   margin: 0;
