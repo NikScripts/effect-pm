@@ -3376,17 +3376,39 @@ const httpClient = <Self>(
   );
 };
 
+// Normalize a `socketClient` url to `ws://` / `wss://`, resolved **lazily** (in the enclosing
+// `Effect.sync`, at layer-build time) so the module doesn't read `location` at import — `socketClient`
+// is called at module scope in files a Node server also imports. Accepts an absolute `ws(s)://` url
+// (used as-is), an `http(s)://` url (scheme swapped), or a same-origin **path** like `"/rpc"`
+// (resolved against the page `location`, so the browser follows its own host + http/https→ws/wss).
+const toWebSocketUrl = (raw: string): string => {
+  if (raw.startsWith("ws://") || raw.startsWith("wss://")) return raw;
+  if (raw.startsWith("http://")) return `ws://${raw.slice(7)}`;
+  if (raw.startsWith("https://")) return `wss://${raw.slice(8)}`;
+  if (typeof location === "undefined") {
+    throw new Error(
+      `Resource.socketClient: a relative url ("${raw}") resolves against the browser's location; ` +
+        `pass an absolute ws:// / wss:// url when not in a browser`,
+    );
+  }
+  const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${scheme}//${location.host}${raw.startsWith("/") ? raw : `/${raw}`}`;
+};
+
 /**
  * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
  * {@link httpClient}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
  * multiplexed connection**, so a dashboard never trips the browser's ~6-connection-per-origin
  * HTTP/1.1 limit that starves streams over {@link httpClient} (past ~6 live streams: no graphs, no
- * logs, some resources blank). The server must serve `protocol: "websocket"` — see
- * {@link httpServer}. The socket uses the browser's global `WebSocket`; pass a `ws://…` / `wss://…`
- * url (same-origin: resolve a path against `location`).
+ * logs, some resources blank). The server must serve `protocol: "websocket"` — see {@link httpServer}.
+ *
+ * The `url` may be a same-origin **path** (`"/rpc"` — resolved against the page `location`, so the
+ * browser follows its own host + scheme, `http→ws` / `https→wss`), an `http(s)://` url (scheme
+ * swapped), or an absolute `ws(s)://` url. Resolution is lazy, so this is safe to call at module
+ * scope in a file a Node server also imports. Uses the browser's global `WebSocket`.
  *
  * ```ts
- * const EdgeLive = Resource.socketClient(EdgeNode, { url: `wss://${location.host}/rpc` });
+ * const EdgeLive = Resource.socketClient(EdgeNode, { url: "/rpc" }); // same origin as the page
  * ```
  *
  * @public
@@ -3398,15 +3420,15 @@ const socketClient = <Self>(
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self> => {
-  const url = options?.url ?? node.url;
-  if (url === undefined) {
+  const raw = options?.url ?? node.url;
+  if (raw === undefined) {
     throw new MissingNodeUrl({ node: node.key });
   }
   return connectLayer(
     node,
     RpcClient.layerProtocolSocket().pipe(
       Layer.provide(options?.serialization ?? defaultSerialization),
-      Layer.provide(Socket.layerWebSocket(url)),
+      Layer.provide(Socket.layerWebSocket(Effect.sync(() => toWebSocketUrl(raw)))),
       Layer.provide(Socket.layerWebSocketConstructorGlobal),
     ),
   );
