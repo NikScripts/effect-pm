@@ -116,16 +116,11 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // A browser opens many concurrent live streams (each resource's status + metrics + logs); over
 // HTTP/1.1 that dies at the ~6-connection-per-origin cap. `socketClient` rides ONE multiplexed
 // WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
-// `hub.ts` is imported by the Node server too (for the tag/node declarations), where `location` is
-// undefined and the transports below are never built — so guard it to a dummy base off the browser.
-const wsBase =
-  typeof location === "undefined"
-    ? "ws://localhost"
-    : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
-const wsUrl = (path: string) => `${wsBase}${path}`;
-const wnbaTransport = Resource.socketClient(WnbaNode, { url: wsUrl("/rpc") });
-const liveTransport = Resource.socketClient(LiveNode, { url: wsUrl("/live/rpc") });
-const statsTransport = Resource.socketClient(StatsNode, { url: wsUrl("/stats/rpc") });
+// A `"/path"` url resolves against the page origin (browser host + http/https→ws/wss), lazily — so
+// `hub.ts` is safe to import from the Node server too (nothing reads `location` at load).
+const wnbaTransport = Resource.socketClient(WnbaNode, { url: "/rpc" });
+const liveTransport = Resource.socketClient(LiveNode, { url: "/live/rpc" });
+const statsTransport = Resource.socketClient(StatsNode, { url: "/stats/rpc" });
 
 // Expose each node itself in the runtime (not only the resource clients): the node-status die reads
 // `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one

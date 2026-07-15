@@ -57,20 +57,21 @@ Resource.httpServer(
 )
 ```
 
-**2. Client** — one `socketClient` per node, with a `ws://` / `wss://` URL. In the browser, build
-it from `location` so it follows the page's host and scheme:
+**2. Client** — one `socketClient` per node. A same-origin **path** resolves against the page
+`location` (its host, and `http→ws` / `https→wss`), so you just pass `"/rpc"` — no URL assembly, and
+it's safe in a module a server also imports (resolution is lazy):
 
 ``` ts
-const wsBase =
-  location.protocol === "https:" ? `wss://${location.host}` : `ws://${location.host}`
-
-const transport = Resource.socketClient(JobsNode, { url: `${wsBase}/rpc` })
+const transport = Resource.socketClient(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
 
 const appLayer = Layer.mergeAll(
   transport,
   Resource.client(Jobs).pipe(Layer.provide(transport)),
 )
 ```
+
+(`url` also accepts an absolute `ws://` / `wss://` url, or an `http(s)://` url with the scheme
+swapped — for a Node client, or a cross-origin server.)
 
 **3. Dev proxy** — if you proxy the RPC path in dev (same-origin, no CORS), enable WebSocket
 upgrades (`ws: true`). For Vite:
