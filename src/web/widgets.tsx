@@ -164,6 +164,7 @@ export const QueueCard = (props: {
       )}
     >
       <div className="mb-2 flex items-center gap-2">
+        <ReadinessDot tag={props.tag} />
         <strong className="flex-1 truncate">{props.name}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
@@ -628,6 +629,7 @@ export const ProcessCard = (props: {
       className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
+        <ReadinessDot tag={props.tag} />
         <span>⚙</span>
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
@@ -1080,6 +1082,7 @@ export const ApiCard = (props: {
   const page1 = (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
+        <ReadinessDot tag={props.tag} />
         <span>🌐</span>
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={health.color}>{health.label}</Badge>
@@ -1686,6 +1689,37 @@ export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React
   return <ReadinessBannerInner tag={props.tag} node={node} />;
 };
 
+const ReadinessDotInner = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  const state = readiness === undefined ? "connecting" : readiness.ready ? "ready" : "degraded";
+  const color = state === "ready" ? "#22c55e" : state === "degraded" ? "#eab308" : "#94a3b8";
+  const title =
+    state === "degraded" && readiness?.detail !== undefined ? `degraded — ${readiness.detail}` : state;
+  return (
+    <span
+      title={title}
+      className="h-2.5 w-2.5 shrink-0 rounded-full"
+      style={{ backgroundColor: color }}
+    />
+  );
+};
+
+/** The consistent **readiness LED** for a card's top-left — green `ready` / amber `degraded` / muted
+ *  `connecting`, read from the resource's `NodeStatus` (the same SSOT as the health board + detail
+ *  banner). The degraded root cause is the hover title. This is the readiness axis (can it serve),
+ *  distinct from the top-right status badge (operational phase). Renders nothing for a nodeless tag,
+ *  so a card can drop it in unconditionally. @public */
+export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = resourceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <ReadinessDotInner tag={props.tag} node={node} />;
+};
+
 /** Fullscreen node view: header + each served resource's readiness (tap → that resource's page).
  *  Graphs land with node metrics. */
 export const NodeDetail = (props: {
@@ -1774,48 +1808,24 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
   </Card>
 );
 
-/** One resource's live readiness, read from its node's `NodeStatus` (SSOT — same source as the health
- *  board), shown **always**: a green `ready` / amber `degraded` pip + state, the root cause when
- *  degraded, and the node it runs on. `node` is defined (the card only renders this when it has one). */
-const ReadinessLine = (props: {
-  readonly tag: unknown;
-  readonly node: NodeRef;
-}): React.ReactElement => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
-  // No row yet (status still loading) → a muted "connecting"; else ready (green) / degraded (amber).
-  const state = readiness === undefined ? "connecting" : readiness.ready ? "ready" : "degraded";
-  const color = state === "ready" ? "#22c55e" : state === "degraded" ? "#eab308" : "#6b7280";
-  return (
-    <div className="mt-2 flex items-center gap-2 text-[0.8rem]">
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      <span className="font-medium">{state}</span>
-      {state === "degraded" && readiness?.detail !== undefined ? (
-        <span className="min-w-0 flex-1 truncate text-amber-600">— {readiness.detail}</span>
-      ) : (
-        <span className="flex-1" />
-      )}
-      <span className="shrink-0 text-muted-foreground">{displayName(props.node.id)}</span>
-    </div>
-  );
-};
-
 /**
  * The card for a plain resource — a bare `Resource.Tag` with no richer widget (a dependency like a
- * DB connection, a health gate). Hand-crafted around the one signal every resource has: its
- * **readiness**. Name + kind + a live ready/degraded row from its node's `NodeStatus`. @public
+ * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
+ * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */
 export const ResourceCard = (props: WidgetProps): React.ReactElement => {
   const node = resourceNodeRef(props.tag);
   return (
     <Card>
       <CardContent className="p-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate font-medium text-foreground">{props.name}</span>
+        <div className="flex items-center gap-2">
+          <ReadinessDot tag={props.tag} />
+          <span className="flex-1 truncate font-medium text-foreground">{props.name}</span>
           <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
         </div>
-        {node !== undefined ? <ReadinessLine tag={props.tag} node={node} /> : null}
+        {node !== undefined ? (
+          <div className="mt-2 text-[0.8rem] text-muted-foreground">{displayName(node.id)}</div>
+        ) : null}
       </CardContent>
     </Card>
   );
