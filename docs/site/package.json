@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Official docs/website for @nikscripts/effect-pm — bespoke Waku RSC app, Djot content, Effect pipeline.",
   "scripts": {
-    "dev": "waku dev --host 0.0.0.0 --port 5190",
+    "dev": "NODE_OPTIONS=--max-old-space-size=8192 waku dev --host 0.0.0.0 --port 5190",
     "build": "waku build",
     "preview": "waku start --host 0.0.0.0 --port 5190",
     "docs:manifest": "tsx scripts/gen-manifest.ts",
