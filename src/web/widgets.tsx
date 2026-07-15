@@ -159,12 +159,11 @@ export const QueueCard = (props: {
       className={cn(
         // flex-col so the content stays top-aligned when the grid stretches the card to the row
         // height — a bare <button> vertically centres its content in the slack.
-        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        "flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <ReadinessDot tag={props.tag} />
         <strong className="flex-1 truncate">{props.name}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
@@ -246,7 +245,47 @@ export const Cell = (props: {
   if (!isLeafTag(props.member)) return <></>;
   const tag = props.member;
   const Widget = widgetFor(registry, tag.key, resourceKindOf(tag) ?? resourceKind);
-  return <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />;
+  return (
+    <div className="relative">
+      <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />
+      <DegradedOverlay tag={tag} />
+    </div>
+  );
+};
+
+const DegradedOverlayInner = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement | null => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  if (readiness === undefined || readiness.ready) return null; // ready / still loading → no overlay
+  return (
+    <>
+      {/* amber ring on the whole card — scannable across the grid, no layout shift */}
+      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-amber-500" />
+      {/* the root cause, as a strip over the card's bottom edge */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-xl px-2 py-1 text-[0.72rem] font-medium text-amber-50"
+        style={{ backgroundColor: "rgba(146, 64, 14, 0.95)" }}
+      >
+        <span className="shrink-0">⚠ degraded</span>
+        {readiness.detail !== undefined ? (
+          <span className="min-w-0 flex-1 truncate">— {readiness.detail}</span>
+        ) : null}
+      </div>
+    </>
+  );
+};
+
+/** Shown ONLY when a resource is not ready: an amber ring on its card + a strip with the root cause,
+ *  read from its node's `NodeStatus` (SSOT). Overlaid (absolute, no layout shift) at the `Cell` level,
+ *  so it works for every card type. Nothing while ready, loading, or nodeless. @public */
+export const DegradedOverlay = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = resourceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <DegradedOverlayInner tag={props.tag} node={node} />;
 };
 
 /** A labelled stat card. */
@@ -625,10 +664,9 @@ export const ProcessCard = (props: {
       type="button"
       onClick={() => props.onOpen(props.tag)}
       style={vt}
-      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
-        <ReadinessDot tag={props.tag} />
         <span>⚙</span>
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
@@ -1000,7 +1038,7 @@ export const PagedCard = (props: {
         if (e.key === "Enter" || e.key === " ") props.onOpen?.();
       }}
       style={props.style}
-      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
+      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
     >
       <div
         ref={ref}
@@ -1081,7 +1119,6 @@ export const ApiCard = (props: {
   const page1 = (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <ReadinessDot tag={props.tag} />
         <span>🌐</span>
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={health.color}>{health.label}</Badge>
@@ -1724,39 +1761,6 @@ export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React
   return <ReadinessBannerInner tag={props.tag} node={node} />;
 };
 
-const ReadinessDotInner = (props: {
-  readonly tag: unknown;
-  readonly node: NodeRef;
-}): React.ReactElement => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
-  const state = readiness === undefined ? "connecting" : readiness.ready ? "ready" : "degraded";
-  const color = state === "ready" ? "#22c55e" : state === "degraded" ? "#eab308" : "#94a3b8";
-  const title =
-    state === "degraded" && readiness?.detail !== undefined ? `degraded — ${readiness.detail}` : state;
-  // Absolute so it pins to the card's top-left corner without taking header space (the card root is
-  // `relative`); a small LED, not a column.
-  return (
-    <span
-      title={title}
-      className="absolute left-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
-      style={{ backgroundColor: color }}
-    />
-  );
-};
-
-/** The consistent **readiness LED** for a card's top-left — green `ready` / amber `degraded` / muted
- *  `connecting`, read from the resource's `NodeStatus` (the same SSOT as the health board + detail
- *  banner). The degraded root cause is the hover title. This is the readiness axis (can it serve),
- *  distinct from the top-right status badge (operational phase). Renders nothing for a nodeless tag,
- *  so a card can drop it in unconditionally. @public */
-export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = resourceNodeRef(props.tag);
-  if (node === undefined) return null;
-  return <ReadinessDotInner tag={props.tag} node={node} />;
-};
-
 /** Fullscreen node view: header + each served resource's readiness (tap → that resource's page).
  *  Graphs land with node metrics. */
 export const NodeDetail = (props: {
@@ -1853,10 +1857,9 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
 export const ResourceCard = (props: WidgetProps): React.ReactElement => {
   const node = resourceNodeRef(props.tag);
   return (
-    <Card className="relative">
+    <Card>
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
-          <ReadinessDot tag={props.tag} />
           <span className="flex-1 truncate font-medium text-foreground">{props.name}</span>
           <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
         </div>
