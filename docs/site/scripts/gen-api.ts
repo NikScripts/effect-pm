@@ -492,14 +492,81 @@ const effectOptions: ts.CompilerOptions = {
   noEmit: true,
 };
 
+const effectPackagesDir = nodePath.join(repoRoot, "repos/effect/packages");
+
+// A PkgConfig for one effect-smol package dir (must contain src/index.ts). Documented like core
+// effect: @category/@since = public, GitHub source at the pinned submodule SHA. Its slug is the npm
+// name minus the `@effect/` scope (`@effect/platform-node` -> `platform-node`; core `effect` stays
+// `effect`), so every package gets its own /api/<slug>/… tree and modules page.
+const specForEffectPkg = (
+  pkgDir: string,
+  repoBaseUrl: string,
+): Effect.Effect<PkgConfig, FileError, FileSystem.FileSystem> =>
+  readText(nodePath.join(pkgDir, "package.json")).pipe(
+    Effect.flatMap((text) =>
+      Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(
+        Effect.mapError((cause) => new FileError({ path: pkgDir, cause })),
+      ),
+    ),
+    Effect.map((parsed) => {
+      const name =
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "name" in parsed &&
+        typeof parsed.name === "string"
+          ? parsed.name
+          : nodePath.basename(pkgDir);
+      return {
+        slug: name.replace(/^@effect\//, ""),
+        name,
+        entries: [{ name: "index", file: nodePath.join(pkgDir, "src", "index.ts") }],
+        srcDir: `${nodePath.join(pkgDir, "src")}/`,
+        repoBaseUrl,
+        repoPathPrefix: "repos/effect/",
+        options: effectOptions,
+        isPublic: (sym: ts.Symbol, checker: ts.TypeChecker) =>
+          sym.getJsDocTags(checker).some((t) => t.name === "category" || t.name === "since"),
+      };
+    }),
+  );
+
+// Every effect-smol package (a dir with src/index.ts) except `tools/*` (build tooling, not library
+// APIs). The meta-dirs ai/sql/atom hold no src of their own, so they expand to their child packages.
+const enumerateEffectPkgDirs: Effect.Effect<ReadonlyArray<string>, never, FileSystem.FileSystem> =
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const hasIndex = (d: string) =>
+      fs.exists(nodePath.join(d, "src", "index.ts")).pipe(Effect.catch(() => Effect.succeed(false)));
+    const readDir = (d: string) =>
+      fs.readDirectory(d).pipe(Effect.catch(() => Effect.succeed([])));
+    const dirs: Array<string> = [];
+    for (const entry of yield* readDir(effectPackagesDir)) {
+      if (entry === "tools") continue;
+      const dir = nodePath.join(effectPackagesDir, entry);
+      if (yield* hasIndex(dir)) {
+        dirs.push(dir);
+        continue;
+      }
+      for (const sub of yield* readDir(dir)) {
+        const subDir = nodePath.join(dir, sub);
+        if (yield* hasIndex(subDir)) dirs.push(subDir);
+      }
+    }
+    return dirs.sort();
+  });
+
 const program = Effect.gen(function* () {
   const wanted = process.argv.slice(2); // optional: restrict to these package slugs
   const parsed = yield* readPackageJson;
   const ourEntries = yield* deriveEntries(parsed);
   const pkgName = pkgNameOf(parsed);
   const repoBaseUrl = yield* resolveRepoBaseUrl;
-  const effectSrc = nodePath.join(repoRoot, "repos/effect/packages/effect/src");
   const effectRef = (yield* git("-C", "repos/effect", "rev-parse", "HEAD")) || "main";
+  const effectRepoBaseUrl = `https://github.com/Effect-TS/effect-smol/blob/${effectRef}`;
+  const effectPkgDirs = yield* enumerateEffectPkgDirs;
+  const effectSpecs = yield* Effect.forEach(effectPkgDirs, (d) =>
+    specForEffectPkg(d, effectRepoBaseUrl),
+  );
 
   const allSpecs: ReadonlyArray<PkgConfig> = [
     {
@@ -512,18 +579,8 @@ const program = Effect.gen(function* () {
       options: compilerOptions,
       isPublic: (sym, checker) => sym.getJsDocTags(checker).some((t) => t.name === "public"),
     },
-    {
-      slug: "effect",
-      name: "effect",
-      entries: [{ name: "index", file: nodePath.join(effectSrc, "index.ts") }],
-      srcDir: `${effectSrc}/`,
-      repoBaseUrl: `https://github.com/Effect-TS/effect-smol/blob/${effectRef}`,
-      repoPathPrefix: "repos/effect/",
-      options: effectOptions,
-      // Effect marks its public API with @category / @since, not @public.
-      isPublic: (sym, checker) =>
-        sym.getJsDocTags(checker).some((t) => t.name === "category" || t.name === "since"),
-    },
+    // Every effect-smol package (core effect + platform + observability + ai/sql/atom providers).
+    ...effectSpecs,
   ];
   const specs = wanted.length === 0 ? allSpecs : allSpecs.filter((s) => wanted.includes(s.slug));
 
