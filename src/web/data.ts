@@ -20,6 +20,7 @@ import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResour
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
+import { kind as runKind, type RunGateStatus } from "../RunResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -167,6 +168,14 @@ interface ShardMapService {
 }
 /** A shard-map tag — yieldable for its live service. @public */
 export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & { readonly key: string };
+
+/** The structural shape of a **run-gate** resource's live service — a reactive `status` ref carrying
+ *  the live concurrency counters (waiting / in-flight / completed / failed / interrupted / duration). */
+interface RunService {
+  readonly status: Subscribable<RunGateStatus>;
+}
+/** A run-gate tag — yieldable for its live service. @public */
+export type RunTag<R = never> = Effect.Effect<RunService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
@@ -230,6 +239,11 @@ export interface ShardMapBundle {
   readonly size: ValueAtom<number>;
   readonly sizeByNode: ValueAtom<Record<string, number>>;
   readonly sizeLocal: ValueAtom<number>;
+}
+/** The atoms one **run-gate** card needs — the live status (concurrency counters) streamed from the
+ *  reactive `status` ref. Read-only. @public */
+export interface RunBundle {
+  readonly status: ValueAtom<RunGateStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
@@ -358,6 +372,9 @@ export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
 /** Shard-map guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isShardMapTag = (m: unknown): m is ShardMapTag =>
   resourceKindOf(m) === shardMapKind;
+/** Run-gate guard — its own stamped kind (dispatched by exact kind key). @public */
+export const isRunTag = (m: unknown): m is RunTag =>
+  resourceKindOf(m) === runKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -682,6 +699,25 @@ export const shardMapBundle = <R, ER>(
     size: Atom.mapResult(poll, (a) => a.size),
     sizeByNode: Atom.mapResult(poll, (a) => ({ ...a.sizeByNode })),
     sizeLocal: Atom.mapResult(poll, (a) => a.sizeLocal),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const runBundleCache = new WeakMap<object, Map<string, RunBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **run-gate** tag — subscribes to the reactive
+ *  `status` ref (streamed, like the queue/process cards). @public */
+export const runBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: RunTag<R>,
+): RunBundle => {
+  const cache = cacheFor(runBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const bundle: RunBundle = {
+    status: runtime.atom(Stream.unwrap(Effect.map(tag, (r) => r.status.changes))),
   };
   cache.set(tag.key, bundle);
   return bundle;

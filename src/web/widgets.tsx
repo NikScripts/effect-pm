@@ -30,6 +30,7 @@ import {
   type FleetHealthTag,
   type TelemetryTag,
   type ShardMapTag,
+  type RunTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -44,6 +45,7 @@ import {
   isFleetHealthTag,
   isTelemetryTag,
   isShardMapTag,
+  isRunTag,
   isProcessTag,
   isQueueTag,
   nodesOf,
@@ -58,6 +60,7 @@ import { kind as customQueueKind } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
+import { kind as runKind } from "../RunResource";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -73,7 +76,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -2296,6 +2299,67 @@ export const ShardMapCard = (props: {
   );
 };
 
+/** One labelled counter for the run-gate card's outcome row. */
+const RunCounter = (props: {
+  readonly label: string;
+  readonly value: number;
+  readonly color: string;
+}): React.ReactElement => (
+  <div className="flex flex-col gap-0.5">
+    <span className="tabular-nums text-sm font-semibold" style={{ color: props.color }}>{props.value}</span>
+    <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">{props.label}</span>
+  </div>
+);
+
+/**
+ * The card for a **RunResource** (concurrency gate) — surfaces its live counters: `inFlight` /
+ * `concurrency` as a utilization gauge headline (plus `waiting` backlog), the completed / failed /
+ * interrupted outcome tallies, and the mean run duration. Read-only. @public
+ */
+export const RunResourceCard = (props: {
+  readonly tag: RunTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = useRunBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const concurrency = s !== undefined ? s.concurrency : 0;
+  const inFlight = s !== undefined ? s.inFlight : 0;
+  const waiting = s !== undefined ? s.waiting : 0;
+  const completed = s !== undefined ? s.completed : 0;
+  const failed = s !== undefined ? s.failed : 0;
+  const interrupted = s !== undefined ? s.interrupted : 0;
+  const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : undefined;
+  return (
+    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+          limit {concurrency}
+        </span>
+      </div>
+      <div className="mb-1.5 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{inFlight}</span>
+        <span className="text-xs text-muted-foreground">in-flight · {waiting} waiting</span>
+      </div>
+      <div className="mb-3">
+        <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
+      </div>
+      <div className="flex items-center gap-6">
+        <RunCounter label="done" value={completed} color="#22c55e" />
+        <RunCounter label="failed" value={failed} color="#ef4444" />
+        <RunCounter label="interrupted" value={interrupted} color="#a1a1aa" />
+        {avgMs !== undefined ? (
+          <div className="ml-auto text-[0.7rem] text-muted-foreground">avg {avgMs}ms</div>
+        ) : null}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </div>
+  );
+};
+
 const queueWidget: Widget = ({ tag, name, onOpen }) =>
   isQueueTag(tag) ? (
     <QueueCard tag={tag} name={name} onOpen={onOpen} />
@@ -2338,6 +2402,12 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
+const runWidget: Widget = ({ tag, name, onOpen }) =>
+  isRunTag(tag) ? (
+    <RunResourceCard tag={tag} name={name} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
 
 /**
  * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
@@ -2358,6 +2428,7 @@ export const base: WidgetRegistry = withEntries(
     forKind(fleetHealthKind, fleetHealthWidget),
     forKind(telemetryKind, telemetryWidget),
     forKind(shardMapKind, shardMapWidget),
+    forKind(runKind, runWidget),
     forKind(resourceKind, ResourceCard),
   ],
 );

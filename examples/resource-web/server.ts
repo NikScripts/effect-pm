@@ -20,6 +20,7 @@ import * as CustomQueueResource from "../../src/CustomQueueResource";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
+import * as RunResource from "../../src/RunResource";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
@@ -28,7 +29,7 @@ import * as Store from "../../src/Store";
 import * as QueueResource from "../../src/QueueResource";
 import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
+import { BoxScoreQueue, FetchGate, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
 
 const WNBA_PORT = HOST_PORTS.wnba;
@@ -233,6 +234,7 @@ class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaSto
 class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
   LiveNode.logs,
   Process.store(LiveScorePoller),
+  RunResource.store(FetchGate),
 ) {}
 
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
@@ -309,6 +311,20 @@ const liveNode = Resource.wsServer([
   FleetHealth.serve(MeshHealth),
   Telemetry.serve(FleetMetrics),
   ShardMap.serve(Sessions),
+  // a bounded-concurrency run gate (4 permits) over a simulated box-score fetch — a slow effect that
+  // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the RunResourceCard shows
+  // live in-flight / done / failed counters.
+  RunResource.serve(FetchGate, {
+    concurrency: 4,
+    effect: (url: string) =>
+      Effect.gen(function* () {
+        yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(300, 900)));
+        if ((yield* Random.nextIntBetween(0, 8)) === 0) {
+          return yield* Effect.fail(`fetch timed out: ${url}`);
+        }
+        return yield* Random.nextIntBetween(1_000, 40_000);
+      }),
+  }),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
   Layer.provide(Resource.peersLayer(MeshHealth, LiveNode)),
@@ -357,6 +373,19 @@ const statsNode = Resource.wsServer([
 const liveNodeProgram = Effect.gen(function* () {
   const poller = yield* LiveScorePoller;
   yield* poller.schedule.set(pollerWindows);
+  // Drive the run gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
+  // and the RunResourceCard's in-flight gauge sits near its limit. Each run's failure is swallowed
+  // here (the gate already tallies it) so the producer fiber keeps going.
+  const gate = yield* FetchGate;
+  let g = 0;
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      while (true) {
+        yield* Effect.forkScoped(Effect.ignore(gate.run(`box/${g++}`)));
+        yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(90, 200)));
+      }
+    }),
+  );
   return yield* Effect.never;
 }).pipe(Effect.provide(liveNode));
 

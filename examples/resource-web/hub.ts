@@ -21,6 +21,7 @@ import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
+import * as RunResource from "../../src/RunResource";
 
 const importJob = Schema.Struct({ id: Schema.String });
 const session = Schema.Struct({ id: Schema.String, user: Schema.String });
@@ -71,6 +72,15 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
   value: session,
   keyOf: (s) => s.id,
 }).pipe(Resource.distributed([WnbaNode, LiveNode, StatsNode])) {}
+
+// A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
+// queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
+// driven concurrently so the RunResourceCard shows live in-flight / waiting / done counters.
+export class FetchGate extends RunResource.Tag<FetchGate>()("wnba/FetchGate", {
+  payload: Schema.String,
+  success: Schema.Number,
+  error: Schema.String,
+}) {}
 
 // A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
@@ -139,6 +149,7 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   MeshHealth,
   FleetMetrics,
   Sessions,
+  FetchGate,
 }) {}
 
 /** The hub the dashboard renders. */
@@ -180,6 +191,8 @@ const appLayer = Layer.mergeAll(
   Resource.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   Resource.client(FleetMetrics, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   Resource.client(Sessions, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  // FetchGate is a nodeless run gate served on LiveNode; name the instance to read (like WorkerPool).
+  Resource.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */
