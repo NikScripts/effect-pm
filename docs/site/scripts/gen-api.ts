@@ -463,7 +463,14 @@ const extractPackage = (cfg: PkgConfig) => Effect.gen(function* () {
     { entry: "(top-level)", symbols: topLevel },
   ]
     .filter((e) => e.symbols.length > 0)
-    .sort((a, b) => b.symbols.length - a.symbols.length);
+    // Modules list alphabetically; bare top-level exports lead.
+    .sort((a, b) =>
+      a.entry === "(top-level)"
+        ? -1
+        : b.entry === "(top-level)"
+          ? 1
+          : a.entry.localeCompare(b.entry),
+    );
 
   // Second pass: resolve every symbol's {@link} targets now that all URLs are known.
   const model: ReadonlyArray<ApiEntry> = extracted.map((e) => ({
