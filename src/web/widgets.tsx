@@ -40,6 +40,7 @@ import {
   type QueueTag,
   type ScheduleEntry,
   type NodeRef,
+  type ValueAtom,
   isApiTag,
   isCustomQueueTag,
   isFleetHealthTag,
@@ -95,6 +96,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./components/ui/dialog";
+
+/** An atom's success value, or `fallback` while it's pending/failed — collapses the ubiquitous
+ *  `const r = useAtomValue(a); AsyncResult.isSuccess(r) ? r.value : fallback` unwrap into one call so
+ *  the fallback is explicit and the ref var can't be mismatched. @public */
+export const useAtomOr = <A,>(atom: ValueAtom<A>, fallback: A): A => {
+  const r = useAtomValue(atom);
+  return AsyncResult.isSuccess(r) ? r.value : fallback;
+};
+
+/** An atom's success value, or `undefined` while it's pending/failed (the loading-to-undefined
+ *  variant of {@link useAtomOr}). @public */
+export const useAtomMaybe = <A,>(atom: ValueAtom<A>): A | undefined => {
+  const r = useAtomValue(atom);
+  return AsyncResult.isSuccess(r) ? r.value : undefined;
+};
 
 /** Last path segment of a tag/group id. */
 export const displayName = (key: string): string => key.split("/").pop() ?? key;
@@ -2372,10 +2388,8 @@ export const FleetHealthCard = (props: {
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useFleetHealthBundle(props.tag);
-  const statusR = useAtomValue(bundle.status);
-  const byNodeR = useAtomValue(bundle.byNode);
-  const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const status = useAtomMaybe(bundle.status);
+  const byNode = useAtomOr(bundle.byNode, {});
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   return (
     <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
@@ -2421,12 +2435,9 @@ export const TelemetryCard = (props: {
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useTelemetryBundle(props.tag);
-  const fleetR = useAtomValue(bundle.fleetInFlight);
-  const byNodeR = useAtomValue(bundle.inFlightByNode);
-  const countR = useAtomValue(bundle.metricCount);
-  const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : 0;
-  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
-  const count = AsyncResult.isSuccess(countR) ? countR.value : undefined;
+  const fleet = useAtomOr(bundle.fleetInFlight, 0);
+  const byNode = useAtomOr(bundle.inFlightByNode, {});
+  const count = useAtomMaybe(bundle.metricCount);
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
@@ -2464,12 +2475,9 @@ export const ShardMapCard = (props: {
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useShardMapBundle(props.tag);
-  const sizeR = useAtomValue(bundle.size);
-  const byNodeR = useAtomValue(bundle.sizeByNode);
-  const localR = useAtomValue(bundle.sizeLocal);
-  const size = AsyncResult.isSuccess(sizeR) ? sizeR.value : 0;
-  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
-  const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
+  const size = useAtomOr(bundle.size, 0);
+  const byNode = useAtomOr(bundle.sizeByNode, {});
+  const local = useAtomMaybe(bundle.sizeLocal);
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
@@ -2520,8 +2528,7 @@ export const RunResourceCard = (props: {
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useRunBundle(props.tag);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const s = useAtomMaybe(bundle.status);
   const concurrency = s !== undefined ? s.concurrency : 0;
   const inFlight = s !== undefined ? s.inFlight : 0;
   const waiting = s !== undefined ? s.waiting : 0;
@@ -2669,14 +2676,10 @@ export const TelemetryDetail = (props: {
   readonly onBack: () => void;
 }): React.ReactElement => {
   const bundle = useTelemetryBundle(props.tag);
-  const fleetR = useAtomValue(bundle.fleetInFlight);
-  const byNodeR = useAtomValue(bundle.inFlightByNode);
-  const countR = useAtomValue(bundle.metricCount);
-  const metricsR = useAtomValue(bundle.metrics);
-  const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : 0;
-  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
-  const count = AsyncResult.isSuccess(countR) ? countR.value : undefined;
-  const metrics = AsyncResult.isSuccess(metricsR) ? metricsR.value : [];
+  const fleet = useAtomOr(bundle.fleetInFlight, 0);
+  const byNode = useAtomOr(bundle.inFlightByNode, {});
+  const count = useAtomMaybe(bundle.metricCount);
+  const metrics = useAtomOr(bundle.metrics, []);
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   const sorted = [...metrics].sort((a, b) => a.id.localeCompare(b.id));
@@ -2735,12 +2738,9 @@ export const ShardMapDetail = (props: {
   readonly onBack: () => void;
 }): React.ReactElement => {
   const bundle = useShardMapBundle(props.tag);
-  const sizeR = useAtomValue(bundle.size);
-  const byNodeR = useAtomValue(bundle.sizeByNode);
-  const localR = useAtomValue(bundle.sizeLocal);
-  const size = AsyncResult.isSuccess(sizeR) ? sizeR.value : 0;
-  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
-  const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
+  const size = useAtomOr(bundle.size, 0);
+  const byNode = useAtomOr(bundle.sizeByNode, {});
+  const local = useAtomMaybe(bundle.sizeLocal);
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   const sections: ReadonlyArray<DeckSection> = [
@@ -2784,10 +2784,8 @@ export const FleetHealthDetail = (props: {
   readonly onBack: () => void;
 }): React.ReactElement => {
   const bundle = useFleetHealthBundle(props.tag);
-  const statusR = useAtomValue(bundle.status);
-  const byNodeR = useAtomValue(bundle.byNode);
-  const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const status = useAtomMaybe(bundle.status);
+  const byNode = useAtomOr(bundle.byNode, {});
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const sections: ReadonlyArray<DeckSection> = [
     {
@@ -2828,8 +2826,7 @@ export const RunResourceDetail = (props: {
   readonly onBack: () => void;
 }): React.ReactElement => {
   const bundle = useRunBundle(props.tag);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const s = useAtomMaybe(bundle.status);
   const concurrency = s?.concurrency ?? 0;
   const inFlight = s?.inFlight ?? 0;
   const completed = s?.completed ?? 0;
