@@ -1739,10 +1739,32 @@ type NodeProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
  */
 export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
 
+/**
+ * The transport a {@link Node} speaks, in Effect's client vocabulary: `"http"` (`RpcClient.
+ * layerProtocolHttp`) or `"socket"` (`RpcClient.layerProtocolSocket`, over a WebSocket in the browser).
+ * Stamped on the node so the topology is self-describing about *how* to reach it — `connect`/`client`
+ * derive the transport from it, and a server asserts it at serve time. Inferred from a `ws(s)://` url;
+ * otherwise declare it explicitly.
+ *
+ * @public
+ */
+export type ProtocolKind = "http" | "socket";
+
 /** A {@link Resource.Node} erased — a {@link NodeKey} that also carries its own transport `url`
- *  (decision 2), so a tag's `distributed` set is self-describing and {@link peersLayer} can reach each
- *  one. An element of a tag's fleet. @public */
-export type AnyNode = NodeKey<unknown> & { readonly url: string | undefined };
+ *  (decision 2) and {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
+ *  *where* AND *how* to reach each one, and {@link peersLayer} can reach it. An element of a tag's
+ *  fleet. @public */
+export type AnyNode = NodeKey<unknown> & {
+  readonly url: string | undefined;
+  readonly kind: ProtocolKind | undefined;
+};
+
+/** An {@link AnyNode} that has fully declared its transport — both `url` and `kind` are present, so
+ *  {@link Resource.connect} can derive the client from it with no protocol argument. @public */
+export type AddressedNode<HSelf> = NodeKey<HSelf> & {
+  readonly url: string;
+  readonly kind: ProtocolKind;
+};
 
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
  *  don't collide in one context. @internal */
@@ -3331,31 +3353,48 @@ export const forwardClient = <S extends Spec>(
  *
  * ```ts
  * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
- * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc
- * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is
+ * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "http"
+ * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "http"
+ * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "socket" (inferred from ws url)
+ * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // same-origin path, explicit kind
  * ```
  *
  * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
- * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url }` for an explicit endpoint.
- * The node carries it so {@link peersLayer} / {@link httpClient} reach the node with no separate url —
- * ship only the tag: {@link Resource.client} reads the node to resolve where to connect, and a
- * consumer wires the transport once with {@link Resource.connect}.
+ * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url, kind }` for an explicit
+ * endpoint. The node also carries its {@link ProtocolKind} `kind` — inferred `"socket"` from a
+ * `ws(s)://` url, `"http"` from an http target, or set explicitly (needed for a same-origin `"/rpc"`
+ * path that a browser resolves to ws). The node carries both so the topology is self-describing about
+ * *where* AND *how*: ship only the tag and {@link Resource.connect}`(node)` derives the transport with
+ * no protocol argument, {@link Resource.client} reads the node to resolve where to connect, and
+ * {@link peersLayer} reaches the fleet.
  *
  * @public
  */
 const makeNode = <Self>(
   name: string,
-  target?: number | string | { readonly url?: string },
+  target?: number | string | { readonly url?: string; readonly kind?: ProtocolKind },
 ) => {
+  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
+  // bad string); an explicit `{ url }` is used verbatim.
+  const url =
+    target === undefined
+      ? undefined
+      : typeof target === "object"
+        ? target.url
+        : resolveHttpTarget(target);
+  // `kind` is the SSOT for *how* to reach the node: an explicit `{ kind }` wins; otherwise a `ws(s)://`
+  // url is a socket and any other resolved url is http. Left `undefined` only when the url is (a bare
+  // `Node("x")` with no address) — then a caller must supply the transport at `connect` explicitly.
+  const kind: ProtocolKind | undefined =
+    (typeof target === "object" ? target.kind : undefined) ??
+    (url === undefined
+      ? undefined
+      : url.startsWith("ws://") || url.startsWith("wss://")
+        ? "socket"
+        : "http");
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
-    // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
-    // bad string); an explicit `{ url }` is used verbatim.
-    url:
-      target === undefined
-        ? undefined
-        : typeof target === "object"
-          ? target.url
-          : resolveHttpTarget(target),
+    url,
+    kind,
   });
   return Object.assign(node, {
     /**
