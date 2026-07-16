@@ -18,7 +18,7 @@ import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
-import { kind as telemetryKind, MetricsSnapshot } from "../Telemetry";
+import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind, type RunGateStatus } from "../RunResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
@@ -232,6 +232,8 @@ export interface TelemetryBundle {
   readonly metricCount: ValueAtom<number>;
   readonly inFlightByNode: ValueAtom<Record<string, number>>;
   readonly fleetInFlight: ValueAtom<number>;
+  /** This node's full metric registry (id + kind + reading) — the detail page's per-metric list. */
+  readonly metrics: ValueAtom<ReadonlyArray<MetricDatum>>;
 }
 /** The atoms one **shard-map** card needs — polled fleet size total + per-node entry map + this node's
  *  local count. Read-only. @public */
@@ -669,6 +671,7 @@ export const telemetryBundle = <R, ER>(
     metricCount: Atom.mapResult(poll, (a) => a.snapshot.metrics.length),
     inFlightByNode: Atom.mapResult(poll, (a) => a.inFlightByNode),
     fleetInFlight: Atom.mapResult(poll, (a) => a.fleetInFlight),
+    metrics: Atom.mapResult(poll, (a) => a.snapshot.metrics),
   };
   cache.set(tag.key, bundle);
   return bundle;

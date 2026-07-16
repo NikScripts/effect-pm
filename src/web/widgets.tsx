@@ -58,7 +58,7 @@ import { kindOf as resourceKindOf, kind as resourceKind } from "../Resource";
 import { kind as queueKind } from "../QueueResource";
 import { kind as customQueueKind } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
-import { kind as telemetryKind } from "../Telemetry";
+import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind } from "../RunResource";
 import { kind as processKind } from "../Process";
@@ -516,7 +516,12 @@ const availableWindows = (spanMs: number, hasData: boolean): ReadonlyArray<Windo
 
 /** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
  *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). */
-export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
+export const MetricChart = (props: {
+  readonly bundle: {
+    readonly history: QueueBundle["history"];
+    readonly trend: QueueBundle["trend"];
+  };
+}): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
   // Selection is kept by duration (not index) so it survives as more windows unlock with data.
   const [windowMs, setWindowMs] = React.useState<number>(WINDOWS[0].ms);
@@ -1291,6 +1296,84 @@ export const PagedCard = (props: {
         </div>
       ) : null}
       {props.overlay}
+    </div>
+  );
+};
+
+/**
+ * A **fullscreen** paged detail shell — the full-height sibling of {@link PagedCard}. A standard
+ * detail header (back + icon/title + optional badge + readiness banner) over a horizontally
+ * swipeable track of full-height pages with dot indicators. Each page scrolls vertically on its own
+ * when it overflows. Use it to give a resource more room than its grid card: page 1 the essentials,
+ * later pages the extras (logs, per-node rosters, raw counters). One page → no dots. @public
+ */
+export const FullscreenPager = (props: {
+  readonly title: string;
+  readonly onBack: () => void;
+  /** View-transition key — pass `res-${tag.key}` so the card↔detail morph matches the grid. */
+  readonly vtKey: string;
+  readonly icon?: React.ReactNode;
+  readonly badge?: React.ReactNode;
+  /** Renders a {@link ResourceReadinessBanner} for this tag (no-op when the tag has no node). */
+  readonly readinessTag?: unknown;
+  readonly pages: ReadonlyArray<React.ReactNode>;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(props.vtKey);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [active, setActive] = React.useState(0);
+  return (
+    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+        <strong className="flex-1 truncate text-base">
+          {props.icon !== undefined ? <>{props.icon} </> : null}{props.title}
+        </strong>
+        {props.badge}
+      </div>
+      {props.readinessTag !== undefined ? <ResourceReadinessBanner tag={props.readinessTag} /> : null}
+      <div
+        ref={ref}
+        onScroll={() => {
+          const el = ref.current;
+          if (el === null) return;
+          let best = 0;
+          let bestD = Infinity;
+          Array.from(el.children).forEach((c, i) => {
+            if (c instanceof HTMLElement) {
+              const d = Math.abs(c.offsetLeft - el.scrollLeft);
+              if (d < bestD) {
+                bestD = d;
+                best = i;
+              }
+            }
+          });
+          setActive(best);
+        }}
+        className="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden landscape:min-h-0"
+      >
+        {props.pages.map((page, i) => (
+          <div key={i} className="flex w-full shrink-0 snap-center flex-col gap-3 overflow-y-auto">{page}</div>
+        ))}
+      </div>
+      {props.pages.length > 1 ? (
+        <div className="flex shrink-0 justify-center gap-1">
+          {props.pages.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                const el = ref.current;
+                const child = el?.children[i];
+                if (el !== null && child instanceof HTMLElement) {
+                  el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
+                }
+              }}
+              className={cn("size-1.5 rounded-full transition-colors", i === active ? "bg-foreground" : "bg-muted-foreground/40")}
+              aria-label={`page ${i + 1}`}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -2146,6 +2229,9 @@ export const ResourceCard = (props: WidgetProps): React.ReactElement => {
 // the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
 /** One node's row in a fleet-health card: a coloured pip (reachable ok/degraded, or unreachable) +
  *  the node name + its state. */
+/** Shared class for a drillable read-only card — a `<button>` root that opens the fullscreen detail. */
+const DRILL_CARD = "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none";
+
 const FleetNodeRow = (props: { readonly node: string; readonly report: NodeReport }): React.ReactElement => {
   const color =
     props.report._tag === "Unreachable"
@@ -2175,6 +2261,7 @@ export const FleetHealthCard = (props: {
   readonly tag: FleetHealthTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
+  readonly onOpen: (tag: FleetHealthTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useFleetHealthBundle(props.tag);
@@ -2184,7 +2271,7 @@ export const FleetHealthCard = (props: {
   const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   return (
-    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>
@@ -2197,7 +2284,7 @@ export const FleetHealthCard = (props: {
         )}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </div>
+    </button>
   );
 };
 
@@ -2223,6 +2310,7 @@ export const TelemetryCard = (props: {
   readonly tag: TelemetryTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
+  readonly onOpen: (tag: TelemetryTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useTelemetryBundle(props.tag);
@@ -2235,7 +2323,7 @@ export const TelemetryCard = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         {count !== undefined ? (
@@ -2252,7 +2340,7 @@ export const TelemetryCard = (props: {
         {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </div>
+    </button>
   );
 };
 
@@ -2265,6 +2353,7 @@ export const ShardMapCard = (props: {
   readonly tag: ShardMapTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
+  readonly onOpen: (tag: ShardMapTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useShardMapBundle(props.tag);
@@ -2277,7 +2366,7 @@ export const ShardMapCard = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
@@ -2295,7 +2384,7 @@ export const ShardMapCard = (props: {
         <div className="mt-2 text-[0.7rem] text-muted-foreground">this node holds {local}</div>
       ) : null}
       <DegradedOverlay tag={props.tag} />
-    </div>
+    </button>
   );
 };
 
@@ -2320,6 +2409,7 @@ export const RunResourceCard = (props: {
   readonly tag: RunTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
+  readonly onOpen: (tag: RunTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useRunBundle(props.tag);
@@ -2333,7 +2423,7 @@ export const RunResourceCard = (props: {
   const interrupted = s !== undefined ? s.interrupted : 0;
   const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : undefined;
   return (
-    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
@@ -2356,7 +2446,274 @@ export const RunResourceCard = (props: {
         ) : null}
       </div>
       <DegradedOverlay tag={props.tag} />
+    </button>
+  );
+};
+
+// ── Fullscreen detail pages for the newer kinds ──────────────────────────────
+// Each is a FullscreenPager: page 1 the essentials (bigger than the grid card), later pages the
+// extras that don't fit a card (logs, the full metric registry, per-node rosters).
+
+/**
+ * Fullscreen detail for a **custom queue** — page 1 is the lanes + throughput chart + controls,
+ * page 2 the live log stream. Fills the drill-in that the grid `CustomQueueCard` opens. @public
+ */
+export const CustomQueueDetail = (props: {
+  readonly tag: CustomQueueTag;
+  readonly name?: string;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const bundle = useCustomQueueBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const paused = s?.paused === true;
+  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
+  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
+  const max = Math.max(1, ...lanes.map(([, n]) => n));
+  const [locked, setLocked] = React.useState(true);
+  const overview = (
+    <>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="pending" value={String(pending)} />
+        <Stat label="done" value={String(s?.completed ?? 0)} />
+        <Stat label="lanes" value={String(lanes.length)} />
+        <Stat label="phase" value={paused ? "paused" : s?.phase ?? "running"} />
+      </div>
+      <div className="rounded-xl border bg-card p-3">
+        <div className="mb-2 text-xs font-semibold text-muted-foreground">lanes</div>
+        <div className="flex flex-col gap-1.5">
+          {lanes.length === 0 ? (
+            <div className="text-xs text-muted-foreground">no lanes</div>
+          ) : (
+            lanes.map(([lane, count]) => <LaneRow key={lane} lane={lane} count={count} max={max} />)
+          )}
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {paused ? (
+          <ActionButton atom={bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
+        ) : (
+          <ActionButton atom={bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
+        )}
+        <ActionButton atom={bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
+        <ActionButton atom={bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+        <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+      </div>
+    </>
+  );
+  return (
+    <FullscreenPager
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+      readinessTag={props.tag}
+      badge={<Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
+      pages={[overview, <LogStream bundle={bundle} className="h-full rounded-xl border bg-card" />]}
+    />
+  );
+};
+
+/** One metric datum as a row — id + kind + its reading (count / gauge value / histogram count). */
+const MetricRow = (props: { readonly datum: MetricDatum }): React.ReactElement => {
+  const d = props.datum;
+  const value = d._tag === "Gauge" ? d.value : d._tag === "Counter" ? d.count : d.count;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">{d.id}</span>
+      <span className="shrink-0 rounded border px-1 text-[0.65rem] text-muted-foreground">{d._tag.toLowerCase()}</span>
+      <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">{value}</span>
     </div>
+  );
+};
+
+/**
+ * Fullscreen detail for a **Telemetry** mesh — page 1 the fleet in-flight total + per-node bars,
+ * page 2 this node's full metric registry (id + kind + reading), which the card only counts. @public
+ */
+export const TelemetryDetail = (props: {
+  readonly tag: TelemetryTag;
+  readonly name?: string;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const bundle = useTelemetryBundle(props.tag);
+  const fleetR = useAtomValue(bundle.fleetInFlight);
+  const byNodeR = useAtomValue(bundle.inFlightByNode);
+  const countR = useAtomValue(bundle.metricCount);
+  const metricsR = useAtomValue(bundle.metrics);
+  const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const count = AsyncResult.isSuccess(countR) ? countR.value : undefined;
+  const metrics = AsyncResult.isSuccess(metricsR) ? metricsR.value : [];
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  const sorted = [...metrics].sort((a, b) => a.id.localeCompare(b.id));
+  const overview = (
+    <>
+      <div className="rounded-xl border bg-card p-3">
+        <div className="mb-2 flex items-baseline gap-1.5">
+          <span className="text-3xl font-semibold tabular-nums text-foreground">{fleet}</span>
+          <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+        </div>
+      </div>
+    </>
+  );
+  const metricList = (
+    <div className="flex min-h-0 flex-1 flex-col rounded-xl border bg-card p-3">
+      <div className="mb-2 text-xs font-semibold text-muted-foreground">{sorted.length} metrics (this node)</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+        {sorted.length === 0 ? (
+          <div className="text-xs text-muted-foreground">no metrics</div>
+        ) : (
+          sorted.map((d) => <MetricRow key={`${d._tag}:${d.id}`} datum={d} />)
+        )}
+      </div>
+    </div>
+  );
+  return (
+    <FullscreenPager
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+      badge={count !== undefined ? <Badge color="#94a3b8">{count} metrics</Badge> : undefined}
+      pages={[overview, metricList]}
+    />
+  );
+};
+
+/**
+ * Fullscreen detail for a **ShardMap** mesh — the entry count across the fleet, the per-node shard
+ * sizes as bars, and this node's own shard. A single richer page (the card is a compact preview).
+ * @public
+ */
+export const ShardMapDetail = (props: {
+  readonly tag: ShardMapTag;
+  readonly name?: string;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const bundle = useShardMapBundle(props.tag);
+  const sizeR = useAtomValue(bundle.size);
+  const byNodeR = useAtomValue(bundle.sizeByNode);
+  const localR = useAtomValue(bundle.sizeLocal);
+  const size = AsyncResult.isSuccess(sizeR) ? sizeR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  const page = (
+    <div className="rounded-xl border bg-card p-3">
+      <div className="mb-2 flex items-baseline gap-1.5">
+        <span className="text-3xl font-semibold tabular-nums text-foreground">{size}</span>
+        <span className="text-xs text-muted-foreground">entries · fleet total</span>
+      </div>
+      <div className="mb-2 text-xs font-semibold text-muted-foreground">per shard</div>
+      <div className="flex flex-col gap-1.5">
+        {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+      </div>
+      {local !== undefined ? (
+        <div className="mt-3 text-xs text-muted-foreground">this node holds <strong className="text-foreground">{local}</strong></div>
+      ) : null}
+    </div>
+  );
+  return (
+    <FullscreenPager
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+      badge={<Badge color="#94a3b8">{rows.length} shard{rows.length === 1 ? "" : "s"}</Badge>}
+      pages={[page]}
+    />
+  );
+};
+
+/**
+ * Fullscreen detail for a **FleetHealth** mesh — the status rollup and the full per-node roster
+ * (each peer Reachable ok/degraded or Unreachable), roomier than the grid card. @public
+ */
+export const FleetHealthDetail = (props: {
+  readonly tag: FleetHealthTag;
+  readonly name?: string;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const bundle = useFleetHealthBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const byNodeR = useAtomValue(bundle.byNode);
+  const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const page = (
+    <div className="rounded-xl border bg-card p-3">
+      <div className="mb-2 text-xs font-semibold text-muted-foreground">{rows.length} nodes</div>
+      <div className="flex flex-col gap-2">
+        {rows.length === 0 ? (
+          <div className="text-xs text-muted-foreground">connecting…</div>
+        ) : (
+          rows.map(([node, report]) => <FleetNodeRow key={node} node={node} report={report} />)
+        )}
+      </div>
+    </div>
+  );
+  return (
+    <FullscreenPager
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+      badge={<Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>}
+      pages={[page]}
+    />
+  );
+};
+
+/**
+ * Fullscreen detail for a **RunResource** gate — the in-flight gauge + outcome tallies of the card,
+ * plus the raw status fields the card omits (concurrency, mean + total duration, config version).
+ * @public
+ */
+export const RunResourceDetail = (props: {
+  readonly tag: RunTag;
+  readonly name?: string;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const bundle = useRunBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const concurrency = s?.concurrency ?? 0;
+  const inFlight = s?.inFlight ?? 0;
+  const completed = s?.completed ?? 0;
+  const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : 0;
+  const page = (
+    <>
+      <div className="rounded-xl border bg-card p-3">
+        <div className="mb-1.5 flex items-baseline gap-1.5">
+          <span className="text-3xl font-semibold tabular-nums text-foreground">{inFlight}</span>
+          <span className="text-xs text-muted-foreground">in-flight · {s?.waiting ?? 0} waiting · limit {concurrency}</span>
+        </div>
+        <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="done" value={String(completed)} />
+        <Stat label="failed" value={String(s?.failed ?? 0)} />
+        <Stat label="interrupted" value={String(s?.interrupted ?? 0)} />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="avg run" value={`${avgMs}ms`} />
+        <Stat label="total time" value={`${Math.round((s?.totalDurationMs ?? 0) / 1000)}s`} />
+        <Stat label="config v" value={String(s?.configVersion ?? 0)} />
+      </div>
+    </>
+  );
+  return (
+    <FullscreenPager
+      title={props.name ?? displayName(props.tag.key)}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+      readinessTag={props.tag}
+      badge={<Badge color="#94a3b8">limit {concurrency}</Badge>}
+      pages={[page]}
+    />
   );
 };
 
@@ -2386,25 +2743,25 @@ const customQueueWidget: Widget = ({ tag, name, onOpen }) =>
   );
 const fleetHealthWidget: Widget = ({ tag, name, onOpen }) =>
   isFleetHealthTag(tag) ? (
-    <FleetHealthCard tag={tag} name={name} />
+    <FleetHealthCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 const telemetryWidget: Widget = ({ tag, name, onOpen }) =>
   isTelemetryTag(tag) ? (
-    <TelemetryCard tag={tag} name={name} />
+    <TelemetryCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
   isShardMapTag(tag) ? (
-    <ShardMapCard tag={tag} name={name} />
+    <ShardMapCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 const runWidget: Widget = ({ tag, name, onOpen }) =>
   isRunTag(tag) ? (
-    <RunResourceCard tag={tag} name={name} />
+    <RunResourceCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
