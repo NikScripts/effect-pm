@@ -2,7 +2,7 @@
   "name": "@nikscripts/effect-pm-docs",
   "private": true,
   "type": "module",
-  "description": "Official docs/website for @nikscripts/effect-pm — bespoke Waku RSC app, Djot content, Effect pipeline.",
+  "description": "Official docs/website for @nikscripts/effect-pm \u2014 bespoke Waku RSC app, Djot content, Effect pipeline.",
   "scripts": {
     "predev": "tsx scripts/gen-api.ts && tsx scripts/gen-hovers.ts",
     "dev": "NODE_OPTIONS=--max-old-space-size=8192 waku dev --host 0.0.0.0 --port 5190",
@@ -11,7 +11,9 @@
     "preview": "waku start --host 0.0.0.0 --port 5190",
     "docs:manifest": "tsx scripts/gen-manifest.ts",
     "docs:manifest:check": "tsx scripts/gen-manifest.ts --check",
-    "docs:api": "tsx scripts/gen-api.ts && tsx scripts/gen-hovers.ts"
+    "docs:api": "tsx scripts/gen-api.ts && tsx scripts/gen-hovers.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",
@@ -34,6 +36,7 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.86.2",
+    "@effect/vitest": "4.0.0-beta.98",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",
@@ -42,6 +45,7 @@
     "prettier": "2.8.8",
     "tailwindcss": "^4.3.2",
     "tsx": "^4.19.2",
+    "vitest": "^4.1.5",
     "twoslash": "0.3.9",
     "typescript": "^5.9.0"
   }
