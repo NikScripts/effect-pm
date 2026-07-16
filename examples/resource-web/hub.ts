@@ -179,7 +179,10 @@ const appLayer = Layer.mergeAll(
   liveTransport,
   statsTransport,
   Resource.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
+  // `Process.schedule(...)` returns a tag whose node binding is erased at the type level, so its
+  // client reads as nodeless — name the node explicitly with the 2-arg `client(tag, node)` form
+  // (post the node↔protocol branding change) rather than the 1-arg node-bound form.
+  Resource.client(LiveScorePoller, LiveNode).pipe(Layer.provide(liveTransport)),
   Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
   Resource.client(ImportJobs).pipe(Layer.provide(statsTransport)),
   Resource.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
