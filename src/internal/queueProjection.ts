@@ -87,9 +87,11 @@ export const buildCustomQueueProjection = (options: {
 
   const projectSizes = (levels: ReadonlyArray<number>): Record<string, number> => {
     const out: Record<string, number> = {};
+    // Every configured lane, always — an empty lane reports 0 (not omitted), so `sizes` is a stable
+    // key set (a consumer's per-lane view doesn't reflow when a lane drains), matching the default
+    // high/normal/low projection which always reports all three.
     for (let i = 0; i < levelCount; i++) {
-      const count = Math.max(0, levels[i] ?? 0);
-      if (count > 0) out[labels[i] ?? String(i)] = count;
+      out[labels[i] ?? String(i)] = Math.max(0, levels[i] ?? 0);
     }
     return out;
   };

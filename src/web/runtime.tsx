@@ -10,6 +10,8 @@ import type { Atom } from "effect/unstable/reactivity";
 import {
   type ApiBundle,
   type ApiTag,
+  type CustomQueueBundle,
+  type CustomQueueTag,
   type NodeBundle,
   type NodeRef,
   type ProcessBundle,
@@ -17,6 +19,7 @@ import {
   type QueueBundle,
   type QueueTag,
   apiBundle,
+  customQueueBundle,
   nodeStatusBundle,
   processBundle,
   queueBundle,
@@ -43,6 +46,10 @@ export const useRuntime = (): AnyRuntime => {
 
 /** Atom bundle for a queue tag, memoized per runtime+tag. @public */
 export const useQueueBundle = (tag: QueueTag): QueueBundle => queueBundle(useRuntime(), tag);
+
+/** Atom bundle for a custom-queue tag, memoized per runtime+tag. @public */
+export const useCustomQueueBundle = (tag: CustomQueueTag): CustomQueueBundle =>
+  customQueueBundle(useRuntime(), tag);
 
 /** Atom bundle for a process tag, memoized per runtime+tag. @public */
 export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundle(useRuntime(), tag);
