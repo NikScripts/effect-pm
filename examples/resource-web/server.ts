@@ -373,15 +373,19 @@ const statsNode = Resource.wsServer([
 const liveNodeProgram = Effect.gen(function* () {
   const poller = yield* LiveScorePoller;
   yield* poller.schedule.set(pollerWindows);
-  // Drive the run gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
-  // and the RunResourceCard's in-flight gauge sits near its limit. Each run's failure is swallowed
-  // here (the gate already tallies it) so the producer fiber keeps going.
+  // Drive the run gate: fork runs a bit faster than four permits can drain so a `waiting` backlog
+  // builds and the RunResourceCard's in-flight gauge sits near its limit — but **cap** the backlog so
+  // the fixture doesn't accumulate unbounded parked fibers over a long-running demo. Each run's
+  // failure is swallowed here (the gate already tallies it) so the producer fiber keeps going.
   const gate = yield* FetchGate;
+  const maxWaiting = 12;
   let g = 0;
   yield* Effect.forkScoped(
     Effect.gen(function* () {
       while (true) {
-        yield* Effect.forkScoped(Effect.ignore(gate.run(`box/${g++}`)));
+        if ((yield* gate.waiting.get) < maxWaiting) {
+          yield* Effect.forkScoped(Effect.ignore(gate.run(`box/${g++}`)));
+        }
         yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(90, 200)));
       }
     }),
