@@ -20,7 +20,7 @@
 ## Supervisor queue
 
 ### Reserved — hands off (2026-07-16, owner-assigned)
-0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **RESERVED surface — no other agent touches:** `src/Resource.ts` node/client typing (`NodeKey`, `AnyNode`, `AddressedNode`, `makeNode`, `connect`/`connectHttp`/`connectSocket`, `clientLayer`, `socketClient`, `verifyConnection`) + `NodeStatus` client wiring. Sequence P2 → P1 (node brand, coordinated *with* C but led by E) → P3/P5; P4 last. Breaking changes approved. C's protocol/dashboard work routes around this surface.
+0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **P1 DONE** (node↔protocol wiring bug → compile error, cast-free) + **P5 DONE** (http transport dies in browser) — both merged. **P2 SKIPPED** (cast). **P4 IN PROGRESS** (remove loose-fields shorthand). **RESERVED surface — no other agent touches:** (1) `src/Resource.ts` node/client typing (`NodeKey`, `AnyNode`, `AddressedNode`, `makeNode`, `connect*`, `clientLayer`, `socketClient`, `verifyConnection`, `protocolHttp`) + `NodeStatus` wiring; (2) the **payload/input schema-config** of `QueueResource.Tag` / `RunResource.Tag` / `Process.Tag` (P4). **Agent D must not touch queue/run/process payload-config until P4 merges.** Breaking OK.
 
 ### Active (owner approval required)
 1. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).

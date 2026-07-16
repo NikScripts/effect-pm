@@ -8,11 +8,11 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ## 2026-07-16 — Impossible-states plan: assigned + area reserved (breaking OK)
 
-- **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away."
-- **Chose:** Approved [`impossible-states-proposal.md`](./impossible-states-proposal.md). Sequence **P2** (`makeNode` precise return types → `connect(bareNode)` becomes a compile error) → **P1** (brand the node so a node↔protocol wiring mistake can't be typed — the dashboard "connecting… forever" bug) → **P3/P5**; **P4** (loose-fields removal) last.
-- **Reserved — hands off (all other agents, incl. C):** `src/Resource.ts` node/client typing surface — `NodeKey` / `AnyNode` / `AddressedNode` / `makeNode` / `connect` / `connectHttp` / `connectSocket` / `clientLayer` / `socketClient` / `verifyConnection` — plus `NodeStatus` client wiring. C's protocol/dashboard work routes around this surface until the plan lands.
-- **Rejected / deferred:** `connectFleet` (reverted — a cast-free version isn't reachable given node-type erasure; not worth casts for sugar). P4 sequenced last (broadest blast radius).
-- **Supervisor impact:** This agent leads impossible-states end to end; P1 is coordinated *with* C but led here. Do not reassign the reserved surface.
+- **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away." (Later: unlock P4 + expand the reservation to the tag-config schema-input surface.)
+- **Progress:** **P1 DONE** (node value wrapped → node↔protocol wiring bug is a compile error, cast-free — merged). **P5 DONE** (http client transport dies in a browser, not just warns — merged). **P2 SKIPPED** (a clean version needs a documented cast — the `makeNode` logs/address-type complexity, same wall as the reverted `connectFleet` — for a narrow win the runtime `UnaddressedNode` throw already covers). **P4 IN PROGRESS** (remove the loose-fields schema shorthand). P3 (serve-time mismatch) friction: `serverImpl` sees opaque serve layers.
+- **Reserved — hands off (all other agents, incl. C AND D):** (1) `src/Resource.ts` node/client typing — `NodeKey`/`AnyNode`/`AddressedNode`/`makeNode`/`connect*`/`clientLayer`/`socketClient`/`verifyConnection`/`protocolHttp` + `NodeStatus` wiring; (2) **NEW for P4** — the **payload/input schema-config surface** of `QueueResource.Tag` / `RunResource.Tag` / `Process.Tag` (loose-fields → require a `Struct`). Agent D's queue-handle work routes around the tag-config surface until P4 lands.
+- **Rejected / deferred:** `connectFleet` (reverted — cast-free version not reachable given node-type complexity; not worth casts for sugar). P2 (cast). P3 (opaque serve layers).
+- **Supervisor impact:** This agent leads impossible-states end to end. P4 reservation extends to the tag-config surface — **Agent D must not touch queue/run/process payload-config** until P4 is merged.
 
 ## 2026-07-16 — No Em Dash + No AI Fingerprints; lean Creating a Resource
 
