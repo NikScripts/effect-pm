@@ -19,7 +19,11 @@ const widgets = withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)]);
 
 export const App = (): React.ReactElement => (
   // No header here — the Dashboard renders its own group breadcrumb (⬢ ServicesHub …).
-  <div className="min-h-screen bg-background text-foreground">
+  // `min-h-[100dvh]` (dynamic viewport), NOT `min-h-screen` (=100vh): on mobile Safari `100vh` is the
+  // *large* viewport (toolbars collapsed), so a `100vh` shell is taller than the visible area whenever
+  // the address bar shows → the page scrolls a sliver. `dvh` tracks the actual visible height and
+  // matches the fullscreen detail's own `h-[100dvh]`.
+  <div className="min-h-[100dvh] bg-background text-foreground">
     <Dashboard runtime={runtime} group={ServicesHub} widgets={widgets} />
   </div>
 );
