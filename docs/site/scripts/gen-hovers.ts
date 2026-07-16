@@ -15,11 +15,9 @@ import { fileURLToPath } from "node:url";
 import { Console, Data, Effect, Exit, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
-import { createTransformerFactory, rendererRich } from "@shikijs/twoslash";
-import { createHighlighter } from "shiki";
-import { createTwoslasher } from "twoslash";
-import ts from "typescript";
-import { linkApiTypes, type ApiLinkResolver } from "../src/lib/api-linkify.js";
+// Reuse the LIVE render pipeline (dual-preview expand, markdown-rendered JSDoc, api-typelinks) so the
+// precomputed effect hovers are identical to our own package's — one renderer, no drift.
+import { highlightToHast, loadHighlighter } from "../src/lib/highlight.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
@@ -54,41 +52,6 @@ const IndexS = Schema.Struct({
 const ModuleSummaryS = Schema.Struct({
   symbols: Schema.Array(Schema.Struct({ name: Schema.String })),
 });
-const LinksS = Schema.Struct({
-  symbols: Schema.Array(
-    Schema.Struct({
-      name: Schema.String,
-      qualifiedName: Schema.String,
-      url: Schema.String,
-    }),
-  ),
-});
-
-// Build the same unambiguous-term resolver as src/lib/api-links.ts from the global links index, so the
-// precomputed hovers get the exact api-typelinks the live render does.
-const buildResolver = (
-  symbols: ReadonlyArray<{ name: string; qualifiedName: string; url: string }>,
-): ApiLinkResolver => {
-  const count = new Map<string, number>();
-  const urlOf = new Map<string, string>();
-  const add = (term: string, url: string): void => {
-    count.set(term, (count.get(term) ?? 0) + 1);
-    if (!urlOf.has(term)) urlOf.set(term, url);
-  };
-  for (const s of symbols) {
-    add(s.qualifiedName, s.url);
-    if (s.name !== s.qualifiedName) add(s.name, s.url);
-  }
-  const link = new Map<string, string>();
-  for (const [term, n] of count) {
-    const url = urlOf.get(term);
-    if (n === 1 && url !== undefined) link.set(term, url);
-  }
-  return (qualifiedName, name, allowBare) =>
-    (qualifiedName !== undefined ? link.get(qualifiedName) : undefined) ??
-    (allowBare ? link.get(name) : undefined);
-};
-
 // Mirrors src/lib/api-data.ts + scripts/gen-api.ts (kept in sync): a case-insensitively-unique file key.
 const symbolFileKey = (name: string): string => {
   const lower = name.toLowerCase();
@@ -155,17 +118,6 @@ const visibleText = (n: Hast): string => {
   return (n.children ?? []).map(visibleText).join("");
 };
 
-const compilerOptions: ts.CompilerOptions = {
-  module: ts.ModuleKind.ESNext,
-  target: ts.ScriptTarget.ESNext,
-  moduleResolution: ts.ModuleResolutionKind.Bundler,
-  strict: true,
-  skipLibCheck: true,
-  types: [],
-  allowImportingTsExtensions: true,
-  noEmit: true,
-};
-const THEMES = { light: "github-light", dark: "github-dark" } as const;
 const MAX_HOVER_LINES = 160; // above this a declaration's span is pathological — plain-highlight it
 
 const program = Effect.gen(function* () {
@@ -180,15 +132,8 @@ const program = Effect.gen(function* () {
     .filter((p) => p.slug !== "effect-pm")
     .filter((p) => wanted.length === 0 || wanted.includes(p.slug));
 
-  const highlighter = yield* Effect.promise(() =>
-    createHighlighter({ themes: [THEMES.light, THEMES.dark], langs: ["typescript"] }),
-  );
-  const twoslash = createTransformerFactory(
-    createTwoslasher({ vfsRoot: repoRoot, compilerOptions }),
-    rendererRich() as never,
-  )({});
-  const links = yield* readJson(nodePath.join(dataDir, "links.json"), LinksS);
-  const resolve = buildResolver(links?.symbols ?? []);
+  // Ready the shared highlighter + api-link / doc-link data (the same load the live render does).
+  yield* Effect.promise(() => loadHighlighter());
 
   // Collect every documented symbol, grouped by its source file, so each file is twoslashed once.
   interface Sym {
@@ -243,12 +188,10 @@ const program = Effect.gen(function* () {
       continue;
     }
     const input = ["// @noErrors", `// @filename: ${relFile}`, fileText].join("\n");
+    // The shared render pipeline — twoslash + dual-preview expand + markdown JSDoc + api-typelinks —
+    // exactly what the live render gives our own package.
     const hast: Hast = yield* Effect.sync(() =>
-      highlighter.codeToHast(input, {
-        lang: "typescript",
-        themes: THEMES,
-        transformers: [twoslash],
-      }),
+      highlightToHast(input, "ts", { twoslash: true }),
     ).pipe(Effect.catch(() => Effect.succeed(undefined)));
     if (hast === undefined) {
       missed += syms.length;
@@ -256,9 +199,6 @@ const program = Effect.gen(function* () {
     }
     const pre = (hast.children ?? []).find((c: Hast) => c.tagName === "pre");
     const code = (pre?.children ?? []).find((c: Hast) => c.tagName === "code");
-    // Link every API-export type name in the hover popups (once per file, before slicing) — the same
-    // dotted-underline api-typelinks the live render produces for our own package.
-    if (code !== undefined) linkApiTypes(code, resolve);
     const lineEls: Array<Hast> = (code?.children ?? []).filter(
       (c: Hast) => c.type === "element" && String(c.properties?.class ?? "").includes("line"),
     );

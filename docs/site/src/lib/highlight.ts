@@ -59,7 +59,9 @@ const compilerOptions: ts.CompilerOptions = {
   strict: true,
   skipLibCheck: true,
   types: [],
-  baseUrl: repoRoot,
+  allowImportingTsExtensions: true, // effect-smol source imports with explicit `.ts` — so the same
+  noEmit: true, // twoslasher renders both our package (extension-less) and effect deps (gen-hovers);
+  baseUrl: repoRoot, // noEmit is required alongside allowImportingTsExtensions (twoslash never emits)
   paths: {
     "@nikscripts/effect-pm": ["src/index.ts"],
     "@nikscripts/effect-pm/*": ["src/*"],
@@ -425,23 +427,38 @@ const hastToReact = (node: any): React.ReactNode => {
   return React.createElement(node.tagName, props, (node.children ?? []).map(hastToReact));
 };
 
-/** Highlight a code block to React. `twoslash` runs the TS language service for hover types.
- *  Falls back to a plain <pre> for unknown languages. */
+/** Highlight a code block to Shiki HAST with our full hover pipeline (dual-preview expand,
+ *  markdown-rendered JSDoc, api-typelinks). `twoslash` runs the TS language service for hover types.
+ *  Returns undefined for an unknown language / before the highlighter loads. Used by the live React
+ *  render (below) and by the build-time hover precompute (scripts/gen-hovers.ts), so both share ONE
+ *  rendering. `loadHighlighter()` must have run first. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+export const highlightToHast = (
+  code: string,
+  lang?: string,
+  opts?: { readonly twoslash?: boolean },
+): any | undefined => {
+  const text = code.replace(/\n$/, "");
+  const resolved = lang ? ALIAS[lang.toLowerCase()] : undefined;
+  if (!hl || !resolved) return undefined;
+  return hl.codeToHast(text, {
+    lang: resolved,
+    themes: THEMES,
+    transformers: opts?.twoslash ? [twoslash] : [],
+  });
+};
+
+/** Highlight a code block to React. Falls back to a plain <pre> for unknown languages. */
 export const highlightToReact = (
   code: string,
   lang?: string,
   opts?: { readonly twoslash?: boolean },
 ): React.ReactNode => {
-  const text = code.replace(/\n$/, "");
-  const resolved = lang ? ALIAS[lang.toLowerCase()] : undefined;
-  if (!hl || !resolved) {
+  const hast = highlightToHast(code, lang, opts);
+  if (hast === undefined) {
+    const text = code.replace(/\n$/, "");
     return React.createElement("pre", { key: keySeq++ }, React.createElement("code", null, text));
   }
-  const hast = hl.codeToHast(text, {
-    lang: resolved,
-    themes: THEMES,
-    transformers: opts?.twoslash ? [twoslash] : [],
-  });
   return hastToReact(hast);
 };
 
