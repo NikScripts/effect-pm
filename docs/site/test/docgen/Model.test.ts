@@ -39,7 +39,7 @@ describe("Model", () => {
       Schema.decodeUnknownSync(Model.Symbol)({
         ...sample,
         source: { file: "x", line: "nope" },
-      }),
+      })
     ).toThrow();
     // missing required fields
     expect(() => Schema.decodeUnknownSync(Model.Symbol)({ entry: "x" })).toThrow();
