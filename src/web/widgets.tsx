@@ -702,27 +702,68 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
 };
 
 /** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
+/** Effect log levels, low→high — for the min-level filter. Unknown levels rank as `info`. */
+const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, warning: 3, error: 4, fatal: 5 };
+const levelRank = (level: string): number => LEVEL_RANK[level.toLowerCase()] ?? 2;
+const MIN_LEVELS = ["all", "info", "warn", "error"] as const;
+
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
   readonly className?: string;
 }): React.ReactElement => {
   const r = useAtomValue(props.bundle.logs);
   React.useEffect(() => dlog("logs", asyncTag(r)), [r]);
-  const logs: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
+  const all: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
+  // client-side filter: substring match on the message + a minimum level
+  const [query, setQuery] = React.useState("");
+  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("all");
+  const needle = query.trim().toLowerCase();
+  const floor = min === "all" ? 0 : levelRank(min);
+  const logs = all.filter(
+    (l) => levelRank(l.level) >= floor && (needle === "" || l.message.toLowerCase().includes(needle)),
+  );
+  const filtered = needle !== "" || min !== "all";
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
     if (el !== null) el.scrollTop = el.scrollHeight;
   }, [logs.length]);
   return (
-    <div ref={ref} className={cn("overflow-auto text-xs", props.className)}>
-      {logs.map((l) => (
-        <div key={l.id} className="flex gap-2 px-2 py-0.5">
-          <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
-          <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
-          <span className="break-all">{l.message}</span>
-        </div>
-      ))}
+    <div className={cn("flex flex-col text-xs", props.className)}>
+      <div className="flex items-center gap-2 border-b px-2 py-1">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="filter logs…"
+          className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs outline-none placeholder:text-muted-foreground"
+        />
+        <select
+          value={min}
+          onChange={(e) => setMin(e.target.value as (typeof MIN_LEVELS)[number])}
+          className="shrink-0 rounded border bg-transparent px-1 py-0.5 text-xs"
+          aria-label="minimum log level"
+        >
+          {MIN_LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>{lvl === "all" ? "all levels" : `${lvl}+`}</option>
+          ))}
+        </select>
+        {filtered ? (
+          <span className="shrink-0 tabular-nums text-muted-foreground">{logs.length}/{all.length}</span>
+        ) : null}
+      </div>
+      <div ref={ref} className="min-h-0 flex-1 overflow-auto py-1">
+        {logs.length === 0 ? (
+          <div className="px-2 py-1 text-muted-foreground">{all.length === 0 ? "no logs yet" : "no lines match"}</div>
+        ) : (
+          logs.map((l) => (
+            <div key={l.id} className="flex gap-2 px-2 py-0.5">
+              <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
+              <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
+              <span className="break-all">{l.message}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
