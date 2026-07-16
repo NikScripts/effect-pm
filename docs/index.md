@@ -6,7 +6,7 @@
 An Effect Service lives inside one runtime. A *cross-runtime Service* isn't bound to one: define it
 once, run it on one runtime, and call it from another, with the same typed Handle.
 
-A real app runs as more than one runtime: a worker draining a queue here, a scheduler filling it
+Most apps run as more than one runtime: a worker draining a queue here, a scheduler filling it
 there. Every Resource is reached with the same typed Handle no matter which runtime calls it, with no
 hand-rolled HTTP client per consumer.
 
