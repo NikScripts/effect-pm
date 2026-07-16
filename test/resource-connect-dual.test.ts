@@ -1,9 +1,8 @@
-import { Duration, Effect, Layer, Schema, Scope, Stream } from "effect";
+import { Duration, Effect, Layer, Schema, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, expect, it } from "vitest";
 import { QueueResource } from "../src";
-import type { QueueLayerConfig } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 
 // `Resource.connect` and its `connectHttp` / `connectSocket` shortcuts are dual (data-first + pipeable
@@ -29,7 +28,11 @@ describe("Node ProtocolKind inference", () => {
 // (The compile-time dispatch proof for all connect/connectHttp/connectSocket call styles lives in
 // `resource-connect-dispatch.test.ts`. This file covers ProtocolKind inference and the wire round-trip.)
 
-// ── end-to-end: a node-derived socket client round-trips over a real ws server ────────────────────
+// ── end-to-end: node-derived clients round-trip over BOTH transports ──────────────────────────────
+// One harness, two transports. The tag's bound node is wired with the pipeable node client (url
+// overridden to the test port); `Resource.client(tag)` resolves the bound node, so no ambient protocol
+// is threaded by hand (the class of the HealthBoard's "connecting…" bug). Proves the derived-connect
+// path streams live over a real ws server AND a real http server.
 const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
@@ -40,38 +43,59 @@ class HubQueue extends QueueResource.Tag<HubQueue>()("cd/HubQueue", {
   node: HubNode,
 }) {}
 
-const serveWs = (config: QueueLayerConfig<Item, void, never, never>) =>
-  Resource.wsServer([QueueResource.serveMemory(HubQueue, config)]).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
-  );
+// The shared assertion: subscribe to status, enqueue, and confirm a completion delta crossed the wire.
+const assertStreams = Effect.gen(function* () {
+  const q = yield* HubQueue;
+  const completed: number[] = [];
+  yield* Stream.runForEach(q.status.changes, (s) =>
+    Effect.sync(() => completed.push(s.completed)),
+  ).pipe(Effect.forkScoped);
+  yield* Effect.sleep("200 millis");
+  yield* q.add({ n: 1 });
+  yield* q.add({ n: 2 });
+  yield* Effect.sleep("400 millis");
+  expect(completed.at(-1)).toBeGreaterThan(0);
+});
 
-const withNodeClient = <A, E>(
-  use: () => Effect.Effect<A, E, HubQueue | Scope.Scope>,
-) =>
+// Read the test-server port, wire the tag's bound node with the given pipeable client, run the
+// assertion. Requires only `HttpServer` (to read the port) — each `it` provides its own server layer,
+// so that layer's type is inferred inline rather than annotated.
+const withPortClient = (connectAt: (port: number) => Layer.Layer<HubNode>) =>
   Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
     const port = address._tag === "TcpAddress" ? address.port : 0;
-    // wire the tag's bound node with the pipeable socket client, url overridden to the test port.
-    const clientLayer = Resource.client(HubQueue).pipe(
-      Layer.provide(HubNode.pipe(Resource.connectSocket(`ws://127.0.0.1:${port}/rpc`))),
+    return yield* assertStreams.pipe(
+      Effect.provide(Resource.client(HubQueue).pipe(Layer.provide(connectAt(port)))),
+      Effect.scoped,
     );
-    return yield* use().pipe(Effect.provide(clientLayer), Effect.scoped);
-  }).pipe(Effect.provide(serveWs({ effect: () => Effect.void })), Effect.scoped);
+  });
 
-it("a node-derived socket client streams status live over the wire", () =>
+it("a node-derived socket client streams status live over ws", () =>
   Effect.runPromise(
-    withNodeClient(() =>
-      Effect.gen(function* () {
-        const q = yield* HubQueue;
-        const completed: number[] = [];
-        yield* Stream.runForEach(q.status.changes, (s) =>
-          Effect.sync(() => completed.push(s.completed)),
-        ).pipe(Effect.forkScoped);
-        yield* Effect.sleep("200 millis");
-        yield* q.add({ n: 1 });
-        yield* q.add({ n: 2 });
-        yield* Effect.sleep("400 millis");
-        expect(completed.at(-1)).toBeGreaterThan(0);
-      }),
-    ).pipe(Effect.timeout(Duration.seconds(10))),
+    withPortClient((port) =>
+      HubNode.pipe(Resource.connectSocket(`ws://127.0.0.1:${port}/rpc`)),
+    ).pipe(
+      Effect.provide(
+        Resource.wsServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+          Layer.provideMerge(NodeHttpServer.layerTest),
+        ),
+      ),
+      Effect.scoped,
+      Effect.timeout(Duration.seconds(10)),
+    ),
+  ));
+
+it("a node-derived http client streams status live over http", () =>
+  Effect.runPromise(
+    withPortClient((port) =>
+      HubNode.pipe(Resource.connectHttp(`http://127.0.0.1:${port}/rpc`)),
+    ).pipe(
+      Effect.provide(
+        Resource.httpServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+          Layer.provideMerge(NodeHttpServer.layerTest),
+        ),
+      ),
+      Effect.scoped,
+      Effect.timeout(Duration.seconds(10)),
+    ),
   ));
