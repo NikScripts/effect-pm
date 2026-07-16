@@ -85,6 +85,7 @@ import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { cn } from "./cn";
+import { DECK_DOTS, DECK_GROW_MIN, packSections, packingHeight } from "./deck-pack";
 import {
   Dialog,
   DialogClose,
@@ -1246,34 +1247,6 @@ export interface DeckSection {
   readonly minHeight?: number;
 }
 
-const DECK_GAP = 12; // px — matches the `gap-3` between sections
-const DECK_GROW_MIN = 160; // default packing height for a grow section
-const DECK_DOTS = 20; // px reserved for the dot gutter (kept constant so packing doesn't oscillate)
-
-/** Greedily pack section heights into pages that each fit `avail`, returning groups of indices. A
- *  section taller than a page still gets its own page (it scrolls within). */
-const packSections = (
-  heights: ReadonlyArray<number>,
-  avail: number,
-): ReadonlyArray<ReadonlyArray<number>> => {
-  const pages: Array<Array<number>> = [];
-  let cur: Array<number> = [];
-  let used = 0;
-  heights.forEach((h, i) => {
-    const next = cur.length === 0 ? h : used + DECK_GAP + h;
-    if (cur.length > 0 && next > avail) {
-      pages.push(cur);
-      cur = [i];
-      used = h;
-    } else {
-      cur.push(i);
-      used = next;
-    }
-  });
-  if (cur.length > 0) pages.push(cur);
-  return pages.length > 0 ? pages : [[]];
-};
-
 /** Track the active page (nearest child by scroll offset) and expose a smooth `scrollTo`. */
 const useDeckScroll = (): {
   readonly ref: React.RefObject<HTMLDivElement | null>;
@@ -1373,7 +1346,7 @@ export const Deck = (props: {
     const remeasure = (): void => {
       const avail = Math.max(1, el.clientHeight - DECK_DOTS);
       const heights = sections.map((s, i) =>
-        s.grow === true ? s.minHeight ?? DECK_GROW_MIN : measureRefs.current[i]?.offsetHeight ?? 0,
+        packingHeight(s, measureRefs.current[i]?.offsetHeight ?? 0),
       );
       setGroups(packSections(heights, avail));
     };
