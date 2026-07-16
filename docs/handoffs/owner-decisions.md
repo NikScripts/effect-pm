@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-16 — No Em Dash + No AI Fingerprints; lean Creating a Resource
+
+- **Owner said:** Research sounding less like AI (verbosity, em dashes); then do the small plan.
+- **Chose:** Additive Documentation rules *No Em Dash* (must) and *No AI Fingerprints* (should). Rewrite Creating a Resource lean against them. Corpus-wide dash sweep later.
+- **Rejected / deferred:** Full book voice pass; deleting older Narrative rules.
+- **Supervisor impact:** Agent 1; sync to `integration`.
+
 ## 2026-07-15 — Tutorials & Documentation goals (add alongside, don't replace)
 
 - **Owner said:** Integrate the nine narrative goals into standards; undo the earlier rewrite; talk first; start small — add rules, keep existing Narrative rules.

@@ -196,15 +196,39 @@ without a staircase. Link the staircase; do not dump it in the hallway.
 
 Ban "simply," "just," and "obviously" as hedges that imply the reader is slow when they struggle. For
 anything conceptually heavy this is corrosive: the concept *is* hard, and pretending otherwise breaks
-trust the moment reality disagrees. State the hard thing plainly, in a confident unhedged tone — no
+trust the moment reality disagrees. State the hard thing plainly, in a confident unhedged tone. No
 apologizing, no padding. Calm authority. (Complements *Show, don't tell*.)
 
 {#sharp-edges-in-place .must appliesTo=docs}
 ## Sharp Edges, In Place
 
-Document failure modes on the page for the feature that has them — not in a "gotchas" appendix. A
+Document failure modes on the page for the feature that has them, not in a "gotchas" appendix. A
 happy-path-only doc set is a trap that costs credibility on the pages where credibility matters most.
 Honesty about limitations on the hard features earns trust for the easy ones.
+
+{#no-em-dash .must appliesTo=docs}
+## No Em Dash
+
+Do not use the em dash (—) or en dash (–) in prose. Prefer a period, comma, colon, parentheses, or a
+full rewrite of the clause. Do not character-swap an em dash for a hyphen and call it done; rewrite
+so the pause is unnecessary. Hyphens in compound modifiers (`cross-runtime`) and in code remain fine.
+Literal dashes inside code, regexes, or Unicode escapes are exempt.
+
+{#no-ai-fingerprints .should appliesTo=docs}
+## No AI Fingerprints
+
+Cut patterns that read as machine-smoothed copy rather than a person making choices:
+
+- Bold-prefix bullets (`**Feature:** description`)
+- Corrective antithesis ("Not X. But Y.")
+- Dramatic pivots ("Here's the catch", "But here's the thing")
+- Throat-clearing ("Let's dive in", "In this guide we'll")
+- Gift-wrapped endings and mid-page scaffolds ("In summary", "Putting it together")
+- Soft hedges and enthusiasm padding ("worth noting", "really shines", "ensures")
+- Stacks of same-length punch sentences with no rhythm variation
+
+State the point. Vary sentence length. Name concrete actors and verbs. Complements *No Simply* and
+*Show, don't tell*.
 
 {#show-dont-tell .should appliesTo=docs}
 ## Show, don't tell

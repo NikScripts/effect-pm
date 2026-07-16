@@ -129,6 +129,22 @@
           "title": "Sharp Edges, In Place"
         },
         {
+          "id": "documentation.no-em-dash",
+          "severity": "must",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "No Em Dash"
+        },
+        {
+          "id": "documentation.no-ai-fingerprints",
+          "severity": "should",
+          "appliesTo": [
+            "docs"
+          ],
+          "title": "No AI Fingerprints"
+        },
+        {
           "id": "documentation.show-dont-tell",
           "severity": "should",
           "appliesTo": [
@@ -1139,5 +1155,5 @@
       ]
     }
   ],
-  "ruleCount": 125
+  "ruleCount": 127
 }

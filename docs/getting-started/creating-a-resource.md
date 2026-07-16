@@ -2,24 +2,24 @@
 # Creating a Resource
 
 {.draft}
-**Draft** — tip-check before treating as SSOT.
+**Draft.** Tip-check before treating as SSOT.
 
 Build one [**Resource**](/docs/glossary#resource) end to end: declare a [**Tag**](/docs/glossary#tag),
 fulfil its [**Contract**](/docs/glossary#contract) with an
 [**Implementation**](/docs/glossary#implementation), place it with a
 [**Layer**](/docs/glossary#layer), and call it through a [**Handle**](/docs/glossary#handle).
 
-Each fence adds one piece. By the end the same Tag runs in-process — and the same call site will
-read identically when you later serve or client it.
+Each fence adds one piece. The Tag runs in-process when you finish. The same call site still works
+when you later serve or client it.
 
-This page is the **task door**. Contract method shapes live in
-[Core Concepts](/docs/core-concepts); serve / client / fleet Layers live in
+This page teaches the task. Contract method shapes live in
+[Core Concepts](/docs/core-concepts). Serve, client, and fleet Layers live in
 [Managing Layers](/docs/managing-layers).
 
 ## Declare the Tag
 
-Start with the Contract on the Tag — methods and their schemas. Nothing runs yet; this is the typed
-name everything else hangs from:
+Put the Contract on the Tag: methods and their schemas. Nothing runs yet. This is the typed name
+everything else hangs from:
 
 {.twoslash}
 ``` ts
@@ -35,7 +35,7 @@ class Counter extends Resource.Tag<Counter>()("app/Counter", {
 
 ## Fulfil It
 
-Add an Implementation that returns those methods. A `SubscriptionRef` backs the observable `value`:
+Return those methods from an Implementation. A `SubscriptionRef` backs the observable `value`:
 
 {.twoslash}
 ``` ts
@@ -62,7 +62,7 @@ const counterImpl = Effect.gen(function* () {
 
 ## Place It In-Process
 
-Wire Tag and Implementation with `Resource.layer`. That is the only new line from the previous fence:
+Wire Tag and Implementation with `Resource.layer`:
 
 {.twoslash}
 ``` ts
@@ -91,8 +91,8 @@ const CounterLive = Resource.layer(Counter, counterImpl)
 
 ## Call the Handle
 
-`yield* Counter` returns the Handle. Increment, read `value`, reset — same shapes you will use when
-this Tag later sits behind RPC:
+`yield* Counter` returns the Handle. Increment, read `value`, reset. Same shapes later sit behind
+RPC:
 
 {.twoslash}
 ``` ts
@@ -129,9 +129,9 @@ const program = Effect.gen(function* () {
 
 ## What Changes Next
 
-Serve or client the same Tag without rewriting the program body — only the Layer at the edge
-changes. That tour is **[Managing Layers](/docs/managing-layers)**.
+Serve or client the same Tag without rewriting the program body. Only the Layer at the edge changes.
+That tour is [Managing Layers](/docs/managing-layers).
 
-**Sharp edge:** a browser dashboard that opens many live streams saturates the browser's HTTP
-connection cap if you pair `httpServer` with `clientHttp`. Serve with `Resource.wsServer` and connect
-with `Resource.socketClient` instead — same Tag, different wire. Details live on Managing Layers.
+**Sharp edge.** A browser dashboard that opens many live streams hits the browser HTTP connection
+cap if you pair `httpServer` with `clientHttp`. Serve with `Resource.wsServer` and connect with
+`Resource.socketClient`. Same Tag, different wire. Details live on Managing Layers.
