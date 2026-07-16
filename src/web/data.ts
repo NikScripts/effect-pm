@@ -16,6 +16,7 @@ import { client, nodeOf, kindOf as resourceKindOf, type NodeKey, type Subscribab
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
+import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -24,6 +25,9 @@ import { now } from "./now";
 
 /** Live queue status (from the contract schema). */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
+/** A custom-queue's live status — like a queue's, but `sizes` is a **named-lane** record (not the
+ *  fixed high/normal/low), and `phase` is `running | draining | off`. @public */
+export type CustomQueueStatus = Schema.Schema.Type<typeof customQueueStatus>;
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
 /** Live process status (from the contract schema). */
@@ -103,8 +107,34 @@ interface ApiService {
   readonly usage: Subscribable<ApiUsageSnapshot>;
 }
 
+/** The structural shape of a **custom** queue's live service — like {@link QueueService} but with a
+ *  named-lane `status`, an extra `levelSizes`, and a `start` command. Metrics/logs are identical. */
+interface CustomQueueService {
+  readonly status: Subscribable<CustomQueueStatus>;
+  readonly size: Subscribable<number>;
+  readonly isEmpty: Subscribable<boolean>;
+  readonly levelSizes: Effect.Effect<ReadonlyArray<number>>;
+  readonly metrics: {
+    readonly stream: Stream.Stream<QueueMetrics>;
+    readonly query: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
+  };
+  readonly logs: {
+    readonly stream: Stream.Stream<{ readonly level: string; readonly message: string }>;
+    readonly query: (o: {
+      readonly limit: number;
+    }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
+  };
+  readonly start: Effect.Effect<void>;
+  readonly pause: Effect.Effect<void>;
+  readonly resume: Effect.Effect<void>;
+  readonly clear: Effect.Effect<void>;
+  readonly shutdown: Effect.Effect<void>;
+}
+
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. */
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
+/** A custom-queue tag — yieldable for its live service. @public */
+export type CustomQueueTag<R = never> = Effect.Effect<CustomQueueService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
@@ -131,6 +161,20 @@ export interface QueueBundle {
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
+  readonly pause: CommandAtom;
+  readonly resume: CommandAtom;
+  readonly clear: CommandAtom;
+  readonly shutdown: CommandAtom;
+}
+/** The atoms + controls one **custom-queue** card needs — like {@link QueueBundle} (named-lane status)
+ *  plus a `start` command. @public */
+export interface CustomQueueBundle {
+  readonly status: ValueAtom<Option.Option<CustomQueueStatus>>;
+  readonly metrics: ValueAtom<Option.Option<QueueMetrics>>;
+  readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
+  readonly trend: ValueAtom<ReadonlyArray<number>>;
+  readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
+  readonly start: CommandAtom;
   readonly pause: CommandAtom;
   readonly resume: CommandAtom;
   readonly clear: CommandAtom;
@@ -250,6 +294,10 @@ export const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
 export const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
 /** @public */
 export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
+/** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
+ *  primary kinds; a custom queue dispatches by its exact kind key). @public */
+export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
+  resourceKindOf(m) === customQueueKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -401,6 +449,88 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
     logs: resourceLogsAtom(runtime, tag.key, node),
+    pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
+    resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
+    clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
+    shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const customQueueBundleCache = new WeakMap<object, Map<string, CustomQueueBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **custom-queue** tag — the {@link queueBundle}
+ *  parallel: same metrics/logs wire, a named-lane status, and a `start` command. @public */
+export const customQueueBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: CustomQueueTag<R>,
+): CustomQueueBundle => {
+  const cache = cacheFor(customQueueBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const node = nodeOf(tag);
+  if (node === undefined) {
+    throw new Error(`custom-queue tag ${tag.key} is missing a node`);
+  }
+
+  const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status.changes));
+  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream));
+  const toPoint = (m: QueueMetrics): MetricPoint => ({
+    t: DateTime.toEpochMillis(m.windowEnd),
+    throughput: m.throughputPerSec,
+    latency: m.avgTotalMillis ?? 0,
+  });
+  // total pending across all named lanes (the fixed high/normal/low sum has no meaning here)
+  const trendValue = (s: CustomQueueStatus): number =>
+    Object.values(s.sizes).reduce((sum, n) => sum + n, 0);
+  bumpLogIdFrom(`${tag.key}/logs`);
+
+  const statusTrend = runtime.atom(
+    statusStream.pipe(
+      Stream.scan(
+        {
+          latest: Option.none<CustomQueueStatus>(),
+          trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
+        },
+        (acc, s) => ({ latest: Option.some(s), trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
+      ),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/trend`, acc.trend))),
+    ),
+  );
+  const metricsHistory = runtime.atom(
+    Stream.concat(
+      Stream.unwrap(
+        Effect.flatMap(tag, (q) => q.metrics.query({ limit: HISTORY })).pipe(
+          Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
+        ),
+      ),
+      metricsStream.pipe(Stream.map((m): MetricsItem => ({ metric: m }))),
+    ).pipe(
+      Stream.scan(
+        {
+          latest: Option.none<QueueMetrics>(),
+          history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
+        },
+        (acc, item) =>
+          "metric" in item
+            ? { latest: Option.some(item.metric), history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
+            : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
+      ),
+      Stream.tap((acc) =>
+        Effect.sync(() => writeCache(`${tag.key}/history`, acc.history.slice(-HISTORY_CACHE))),
+      ),
+    ),
+  );
+
+  const bundle: CustomQueueBundle = {
+    status: Atom.mapResult(statusTrend, (a) => a.latest),
+    metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
+    history: Atom.mapResult(metricsHistory, (a) => a.history),
+    trend: Atom.mapResult(statusTrend, (a) => a.trend),
+    logs: resourceLogsAtom(runtime, tag.key, node),
+    start: runtime.fn(() => Effect.flatMap(tag, (q) => q.start)),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
