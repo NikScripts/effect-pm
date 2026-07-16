@@ -3,15 +3,15 @@
 
 **Build cross-runtime Services on Effect.**
 
-An Effect Service lives inside one runtime. A *cross-runtime Service* doesn't: define it once, run it
-on one runtime, and call it from another over RPC — with the same typed Handle.
+An Effect Service lives inside one runtime. A *cross-runtime Service* does not: define it once, run
+it on one runtime, and call it from another over RPC with the same typed Handle.
 
-A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
+A real app runs as more than one runtime: a worker draining a queue here, a scheduler filling it
 there. Wiring those together normally means one side owns a Resource and the others reach it through
-a hand-rolled HTTP client. Cross-runtime Services drop that: every Resource is reached with the same
-typed Handle, wherever it runs.
+a hand-rolled HTTP client. Cross-runtime Services drop that split. Every Resource is reached with the
+same typed Handle, wherever it runs.
 
-Here are two Resources — a queue and a scheduled process — on two runtimes, working together.
+Here are two Resources (a queue and a scheduled process) on two runtimes, working together.
 
 {.twoslash}
 ``` ts
@@ -25,9 +25,9 @@ class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-[`Resource.httpServer(serve)`](/docs/resource) is platform-agnostic — it just needs an HTTP server
-provided, and that provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
-for Bun, Deno, or an edge runtime is the only line that changes:
+[`Resource.httpServer(serve)`](/docs/resource) is platform-agnostic. It needs an HTTP server
+provided, and that provide is where you pick your runtime. Define it **once** as a small helper.
+Swapping `NodeHttpServer` for Bun, Deno, or an edge runtime is the only line that changes:
 
 {.twoslash}
 ``` ts
@@ -36,15 +36,15 @@ import { Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
 // ---cut---
-// your app, once — the single place that names a platform (data-last, so it pipes)
+// your app, once: the single place that names a platform (data-last, so it pipes)
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Resource.httpServer(resource).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 ```
 
-Now the **worker runtime** is one pipe — [`QueueResource.serve`](/docs/queues) gives `Emails` its worker (the `effect`
-that drains each job), piped onto port 3001:
+The **worker runtime** is one pipe. [`QueueResource.serve`](/docs/queues) gives `Emails` its worker
+(the `effect` that drains each job), piped onto port 3001:
 
 {.twoslash}
 ``` ts
@@ -64,11 +64,11 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
 const worker = QueueResource
   .serve(Emails, { effect: sendEmail })
   .pipe(nodeServer(3001))
-// worker: Layer — provide it to a runtime to run the queue on :3001
+// worker: Layer. Provide it to a runtime to run the queue on :3001
 ```
 
-The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
-that lives on the *other* runtime, reached by port:
+The **scheduler runtime** runs `Digest` every hour. Each run **enqueues into `Emails`**, a queue that
+lives on the *other* runtime, reached by port:
 
 {.twoslash}
 ``` ts
@@ -90,18 +90,18 @@ const scheduler = Process.layer(Digest, {
   }),
   polling: Polling.spaced(Duration.hours(1)),
 }).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
-// scheduler: Layer — the scheduler runtime
+// scheduler: Layer. The scheduler runtime
 ```
 
-`Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
-`emails.add(…)` read exactly as if the two shared one process. **Two Resources, two runtimes, one
-program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
+`Digest` runs on the scheduler, `Emails` on the worker. Inside the process, `yield* Emails` and
+`emails.add(…)` read as if the two shared one process. **Two Resources, two runtimes, one program.**
+Move a runtime to another machine and only its port becomes a url. Nothing else changes.
 
-## Operate them live
+## Operate Them Live
 
-A cross-runtime Service isn't just callable across runtimes — it's **operable** across them. The same
-Handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
-anywhere it's reached:
+A cross-runtime Service is callable across runtimes and **operable** across them. The same Handle
+that enqueues also controls and observes, so you steer and inspect the worker's queue from anywhere
+it is reached:
 
 {.twoslash}
 ``` ts
@@ -112,24 +112,24 @@ class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
 declare const onChange: (e: unknown) => Effect.Effect<void>
 const program = Effect.gen(function* () {
 // ---cut---
-const emails = yield* Emails            // emails: the Emails handle — local OR an RPC client, same type
+const emails = yield* Emails            // emails: the Emails handle (local or RPC client, same type)
 
-yield* emails.pause                     // pause: Effect<void> — stop draining, at runtime
-const depth = yield* emails.size.get    // depth: number — how many are waiting, right now
-yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEvent> — every change, live
+yield* emails.pause                     // pause: Effect<void>. Stop draining at runtime
+const depth = yield* emails.size.get    // depth: number. How many are waiting right now
+yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEvent>. Every change, live
 // ---cut-after---
 })
 ```
 
-And it comes with dashboards over the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
-each reading the Resource without ever touching its Implementation.
+Dashboards hang off the same Tag: a **`pm` CLI**, a **TUI**, and a **web** dashboard. Each reads the
+Resource without touching its Implementation.
 
-## Working with peers
+## Working with Peers
 
-The same Tag also lets a Resource reach its **peers** — its own other instances — and coordinate with
+The same Tag also lets a Resource reach its **peers** (its own other instances) and coordinate with
 them. Take sessions sharded across droplets: each Node holds the entries it owns, and a lookup for
 someone else's session is **forwarded to the Node that owns it**. [`ShardMap`](/docs/shardmap) is that
-pattern as a Resource factory — schemas on the Tag, routed ops, leaf shards, fleet sizes.
+pattern as a Resource factory: schemas on the Tag, routed ops, leaf shards, fleet sizes.
 
 {.twoslash}
 ``` ts
@@ -151,7 +151,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 ) {}
 ```
 
-Serve a droplet with the mesh discharge — local shard + peer clients from one materialization:
+Serve a droplet with the mesh discharge (local shard plus peer clients from one materialization):
 
 {.twoslash}
 ``` ts
@@ -183,7 +183,7 @@ const east = ShardMap.serve(Sessions).pipe(
 )
 ```
 
-From any Node, a caller just asks — ownership and the cross-Node hop stay inside the Resource:
+From any Node, a caller asks. Ownership and the cross-Node hop stay inside the Resource:
 
 {.twoslash}
 ``` ts
@@ -200,19 +200,19 @@ declare const id: typeof SessionId.Type
 // ---cut---
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions
-  const session = yield* sessions.get(id) // Option<Session> — from whoever owns it
+  const session = yield* sessions.get(id) // Option<Session>, from whoever owns it
 })
 ```
 
-An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
-reaching others, through the same Tag.**
+An unreachable owner degrades to a miss instead of blocking. **Every instance is an equal:** reached,
+and reaching others, through the same Tag.
 
-## Build your own
+## Build Your Own
 
-Everything so far — `Emails`, `Digest`, `Sessions` — is built on one primitive you use directly. A
-Resource is a **Contract** plus an **Implementation**, and it's first-class, not an escape hatch.
+`Emails`, `Digest`, and `Sessions` all sit on one primitive you use directly. A Resource is a
+**Contract** plus an **Implementation**.
 
-Describe the Contract — methods and their schemas:
+Describe the Contract (methods and their schemas):
 
 {.twoslash}
 ``` ts
@@ -220,7 +220,7 @@ import * as Resource from "@nikscripts/effect-pm/Resource"
 import { Schema } from "effect"
 // ---cut---
 class Counter extends Resource.Tag<Counter>()("app/Counter", {
-  value: Resource.ref(Schema.Number),          // an observable value — get + live changes
+  value: Resource.ref(Schema.Number),          // observable value: get + live changes
   increment: Resource.effectFn({ by: Schema.Number }),
   reset: Resource.effect(Schema.Void),
 }) {}
@@ -248,8 +248,7 @@ const counterImpl = Effect.gen(function* () {
 })
 ```
 
-That's it — it's now a cross-runtime Service like any built-in. The **same Tag**, provided the same
-three ways:
+It is now a cross-runtime Service like any built-in. The **same Tag**, provided three ways:
 
 {.twoslash}
 ``` ts
@@ -275,17 +274,17 @@ Resource.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
 Resource.clientHttp(Counter, 4000)                          // reached from another runtime
 ```
 
-And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,
-and web dashboards — because it's the same kind of thing `Emails` is.
+It also picks up the live `value`, runtime control, and a slot in the `pm` CLI, TUI, and web
+dashboards, because it is the same kind of thing `Emails` is.
 
-## The included types
+## The Included Types
 
-You don't start from scratch, either — the types you reach for most ship ready-made, each a
-cross-runtime Service you use like an Effect primitive:
+Most of what you reach for ships ready-made: each is a cross-runtime Service you use like an Effect
+primitive.
 
-- **Long-running processes** ([`Process`](/docs/processes)) — continuous or recurring work: a polling
-  cadence, arm/disarm schedule windows, execution history, and more.
-- **Queue** ([`QueueResource`](/docs/queues)) — a priority work queue: enqueue items, workers drain them
-  with dedup, retry, and concurrency control; durable when you provide a store.
-- **Shard map** ([`ShardMap`](/docs/shardmap)) — partitioned key/value across a fleet: routed
-  `get` / `put` / `delete`, leaf shards, and fleet size folds via peers.
+- **Long-running processes** ([`Process`](/docs/processes)): continuous or recurring work (polling
+  cadence, arm/disarm schedule windows, execution history, and more).
+- **Queue** ([`QueueResource`](/docs/queues)): a priority work queue. Enqueue items; workers drain them
+  with dedup, retry, and concurrency control. Durable when you provide a store.
+- **Shard map** ([`ShardMap`](/docs/shardmap)): partitioned key/value across a fleet (routed
+  `get` / `put` / `delete`, leaf shards, and fleet size folds via peers).
