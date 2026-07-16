@@ -1,10 +1,11 @@
 import { ApiSymbolRow } from "../../../../components/ApiSymbol.js";
 import { moduleSummary, packages } from "../../../../lib/api-data.js";
+import { runServer } from "../../../../lib/runtime.js";
 
 // A module page — a light list of its symbols (no Shiki, so it stays small). Loads only this
 // module's summary file; each row links to the symbol's own page.
 export default async function ApiModulePage({ pkg, module }: { pkg: string; module: string }) {
-  const m = moduleSummary(pkg, module);
+  const m = await runServer(moduleSummary(pkg, module));
   if (m === undefined)
     return (
       <p className="prose">
@@ -37,5 +38,7 @@ export const getConfig = async () =>
     ? ({ render: "dynamic" } as const)
     : ({
         render: "static",
-        staticPaths: packages().flatMap((p) => p.modules.map((m) => [p.slug, m.slug] as const)),
+        staticPaths: (await runServer(packages())).flatMap((p) =>
+          p.modules.map((m) => [p.slug, m.slug] as const),
+        ),
       } as const);

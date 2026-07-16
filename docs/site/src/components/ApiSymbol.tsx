@@ -55,23 +55,29 @@ export const ApiSymbolRow = ({ s, href }: { s: Row; href: string }): React.React
   </a>
 );
 
-export const ApiSymbolCard = ({ s }: { s: Sym }): React.ReactElement => {
+export const ApiSymbolCard = ({
+  s,
+  fileText,
+}: {
+  s: Sym;
+  fileText?: string; // the whole source file — provided (by the page) only for our own package
+}): React.ReactElement => {
   const sigs = s.signatures.length > 0 ? s.signatures : s.typeText !== undefined ? [s.typeText] : [];
   const lead = docLead(s.rawComment);
-  // The source, with twoslash hover previews (whole file type-checked, cut to this declaration).
-  // Falls back to plain highlighting if twoslash can't compile the file.
   const sourceLines = s.sourceText.split("\n").length;
-  // External (dependency) source is plain-highlighted — it can't be twoslashed under our compiler
-  // config, and full-file twoslash across a large dependency isn't worth the build cost.
-  const external = s.source.file.startsWith("repos/");
-  const sourceView = external
-    ? highlightToReact(s.sourceText, "ts")
-    : (highlightSourceWithHovers(
-        s.source.file,
-        s.source.line,
-        s.source.line + sourceLines - 1,
-        s.docLinks,
-      ) ?? highlightToReact(s.sourceText, "ts"));
+  // With the file text (our package): twoslash the source cut to this declaration. Without it
+  // (external deps): plain highlight — it can't twoslash under our config and the build cost isn't
+  // worth it.
+  const sourceView =
+    fileText !== undefined
+      ? (highlightSourceWithHovers(
+          fileText,
+          s.source.file,
+          s.source.line,
+          s.source.line + sourceLines - 1,
+          s.docLinks,
+        ) ?? highlightToReact(s.sourceText, "ts"))
+      : highlightToReact(s.sourceText, "ts");
   const chips = [
     ...(s.category !== undefined ? [{ cls: "api-chip-cat", text: s.category }] : []),
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),

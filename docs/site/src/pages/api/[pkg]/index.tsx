@@ -1,8 +1,9 @@
 import { packageBySlug, packages } from "../../../lib/api-data.js";
+import { runServer } from "../../../lib/runtime.js";
 
 // A package page — the list of its modules. Loads only the top index (module names + counts).
 export default async function ApiPackagePage({ pkg }: { pkg: string }) {
-  const p = packageBySlug(pkg);
+  const p = await runServer(packageBySlug(pkg));
   if (p === undefined) return <p className="prose">Package not found: {pkg}</p>;
   return (
     <>
@@ -28,4 +29,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
 export const getConfig = async () =>
   import.meta.env.DEV
     ? ({ render: "dynamic" } as const)
-    : ({ render: "static", staticPaths: packages().map((p) => p.slug) } as const);
+    : ({
+        render: "static",
+        staticPaths: (await runServer(packages())).map((p) => p.slug),
+      } as const);

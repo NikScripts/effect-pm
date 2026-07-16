@@ -6,8 +6,6 @@
 //
 // We render Shiki's HAST as real React elements (no dangerouslySetInnerHTML).
 
-import * as nodeFs from "node:fs";
-import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import * as React from "react";
 import * as ts from "typescript";
@@ -18,12 +16,14 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { toHast } from "mdast-util-to-hast";
 import prettier from "prettier";
 import { makeTypeExpander } from "./expandType";
-import { resolveApiLink } from "./api-links";
+import { loadApiLinks, resolveApiLink } from "./api-links";
 import { docLinksByLocation } from "./api-data";
+import { runServer } from "./runtime";
 
 // Compiler-resolved {@link} maps, keyed by a symbol's declaration `file:line` (see gen-api). Hovers
-// look up the hovered symbol's location here to link the same as the pages do.
-const hoverDocLinks = docLinksByLocation();
+// look up the hovered symbol's location here to link the same as the pages do. Populated by
+// loadHighlighter (via effect/FileSystem), so the sync render pipeline just reads it.
+let hoverDocLinks: Readonly<Record<string, Record<string, string>>> = {};
 // When rendering the source panel we KNOW the owner symbol (the page's), so pass its resolved links
 // directly — the source is compiled inline, so its local symbols have no real location to key on.
 let currentOwnerDocLinks: Record<string, string> | undefined;
@@ -436,7 +436,7 @@ const twoslash = createTransformerFactory(twoslasher, renderer as never)({});
 
 let hl: Highlighter | undefined;
 
-/** Load the shared highlighter once, before the (sync) render walk. */
+/** Load the shared highlighter + the link data once, before the (sync) render walk. */
 export const loadHighlighter = async (): Promise<void> => {
   if (!hl) {
     hl = await createHighlighter({
@@ -444,6 +444,8 @@ export const loadHighlighter = async (): Promise<void> => {
       langs: [...LOAD_LANGS],
     });
   }
+  hoverDocLinks = await runServer(docLinksByLocation());
+  await loadApiLinks();
 };
 
 // HTML attribute → React prop name for the few twoslash emits that React is strict about.
@@ -516,13 +518,14 @@ export const renderJsdocToReact = (
  * must have run first. Returns undefined on any failure so the caller can fall back to plain source.
  */
 export const highlightSourceWithHovers = (
-  relFile: string, // repo-relative, e.g. "src/QueueResource.ts"
+  fileText: string, // the whole source file (read by the caller through effect/FileSystem)
+  relFile: string, // repo-relative, e.g. "src/QueueResource.ts" — for the @filename directive
   startLine: number, // 1-based first line of the declaration
   endLine: number, // 1-based last line (inclusive)
   ownerDocLinks?: Record<string, string>, // the page symbol's resolved {@link} map (for its hovers)
 ): React.ReactNode | undefined => {
   try {
-    const lines = nodeFs.readFileSync(nodePath.join(repoRoot, relFile), "utf8").split("\n");
+    const lines = fileText.split("\n");
     // `@filename` places the virtual file at the real path so `./x` imports resolve; `@noErrors`
     // keeps a stray diagnostic from throwing; the cut pair leaves only the declaration on screen.
     const input = [

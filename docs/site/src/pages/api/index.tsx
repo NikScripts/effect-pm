@@ -1,8 +1,9 @@
 import { packages } from "../../lib/api-data.js";
+import { runServer } from "../../lib/runtime.js";
 
 // The API landing — the list of documented packages. Loads only the tiny top index.
 export default async function ApiIndex() {
-  const pkgs = packages();
+  const pkgs = await runServer(packages());
   return (
     <>
       <title>API Reference — effect-pm</title>

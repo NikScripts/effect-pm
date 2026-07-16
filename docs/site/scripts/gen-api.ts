@@ -6,38 +6,24 @@
 // with its existing Shiki + jsdocToHast. Same checker machinery as docs/site/src/lib/expandType.ts,
 // generalised from per-hover to the whole surface.
 //
-// Per Effect Style the raw node:* touches sit in typed helpers below; the model is a Schema (so the
-// JSON round-trips through a codec, not hand-rolled), and every failure is a value in the error channel.
+// Per Effect Style all IO goes through platform services — file reads/writes via effect/FileSystem,
+// git via effect/unstable/process (never node:fs / node:child_process). node:path stays for the pure
+// path math the checker walk needs (no IO). The model is a Schema (so the JSON round-trips through a
+// codec, not hand-rolled), and every failure is a value in the error channel.
 //
 //   tsx scripts/gen-api.ts [entryName ...]     (no args = all core entries)
 
-import { execSync } from "node:child_process";
-import * as nodeFs from "node:fs";
-import * as nodePath from "node:path";
+import * as nodePath from "node:path"; // pure path math only — no IO (keeps the extractor pure)
 import { fileURLToPath } from "node:url";
-import { Cause, Console, Data, Effect, Exit, Schema } from "effect";
+import { Cause, Config, Console, Data, Effect, Exit, Schema } from "effect";
+import * as FileSystem from "effect/FileSystem";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { NodeServices } from "@effect/platform-node";
 import prettier from "prettier";
 import ts from "typescript";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 
-// The GitHub blob base for "view source" links — `https://github.com/OWNER/REPO/blob/REF`. OWNER/REPO
-// come from the origin remote; REF is SOURCE_REF (for CI) or the current branch, else `main`. Empty
-// string if the remote isn't GitHub, and the site then renders the path as plain text.
-const gitOut = (args: string): string => {
-  try {
-    return execSync(`git ${args}`, { cwd: repoRoot, encoding: "utf8" }).trim();
-  } catch {
-    return "";
-  }
-};
-const repoBaseUrl = ((): string => {
-  const remote = gitOut("remote get-url origin");
-  const m = remote.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/);
-  if (m === null) return "";
-  const ref = process.env.SOURCE_REF || gitOut("rev-parse --abbrev-ref HEAD") || "main";
-  return `https://github.com/${m[1]}/${m[2]}/blob/${ref}`;
-})();
 const packageJsonPath = nodePath.join(repoRoot, "package.json");
 // Split, per-page data lives under docs/site/api-data/ (one file per symbol + per-module summaries +
 // a tiny index), so each page loads only its own slice — never one giant model.
@@ -45,16 +31,41 @@ const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 
 // The documented package. `slug` is the URL segment (/api/<slug>/…); `name` is the npm name.
 const pkgSlug = "effect-pm";
-const pkgName = ((): string => {
-  try {
-    return String(JSON.parse(nodeFs.readFileSync(packageJsonPath, "utf8")).name ?? pkgSlug);
-  } catch {
-    return pkgSlug;
-  }
-})();
 // A namespace entry -> its URL slug. Mirrors src/lib/api-data.ts (kept in sync).
 const slugForEntry = (entry: string): string =>
   entry === "(top-level)" ? "top-level" : entry.replace(/\//g, "-");
+
+// git, through effect/unstable/process (never node:child_process). Returns trimmed stdout, or "" if
+// the command fails — every git call here is best-effort metadata (origin URL, branch, submodule SHA).
+const git = (
+  ...args: ReadonlyArray<string>
+): Effect.Effect<string, never, ChildProcessSpawner.ChildProcessSpawner> =>
+  Effect.flatMap(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>
+    spawner.string(ChildProcess.make("git", [...args], { cwd: repoRoot })),
+  ).pipe(
+    Effect.map((out) => out.trim()),
+    Effect.catch(() => Effect.succeed("")),
+  );
+
+// The GitHub blob base for "view source" links — `https://github.com/OWNER/REPO/blob/REF`. OWNER/REPO
+// come from the origin remote; REF is SOURCE_REF (for CI) or the current branch, else `main`. Empty
+// string if the remote isn't GitHub, and the site then renders the path as plain text.
+const resolveRepoBaseUrl: Effect.Effect<string, never, ChildProcessSpawner.ChildProcessSpawner> =
+  Effect.gen(function* () {
+    const remote = yield* git("remote", "get-url", "origin");
+    const m = remote.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/);
+    if (m === null) return "";
+    // SOURCE_REF (CI) overrides the branch; env flows through Config, never a raw process.env read.
+    const sourceRef = yield* Config.string("SOURCE_REF").pipe(Config.withDefault(""));
+    const ref = sourceRef || (yield* git("rev-parse", "--abbrev-ref", "HEAD")) || "main";
+    return `https://github.com/${m[1]}/${m[2]}/blob/${ref}`;
+  }).pipe(Effect.catch(() => Effect.succeed(""))); // best-effort: any Config/git failure -> no links
+
+// The npm name from a parsed package.json (falls back to the slug). Pure — the read happens in-program.
+const pkgNameOf = (parsed: unknown): string =>
+  typeof parsed === "object" && parsed !== null && "name" in parsed && typeof parsed.name === "string"
+    ? parsed.name
+    : pkgSlug;
 
 // One named error per failure mode (Principles → Errors are values).
 class FileError extends Data.TaggedError("FileError")<{
@@ -101,60 +112,60 @@ interface Entry {
   readonly file: string; // absolute path to src/*.ts
 }
 
-// --- isolated node IO — the only raw node:* in the program, behind typed effects ---
-const readText = (path: string) =>
-  Effect.try({
-    try: () => nodeFs.readFileSync(path, "utf8"),
-    catch: (cause) => new FileError({ path, cause }),
-  });
-
-const writeText = (path: string, text: string) =>
-  Effect.try({
-    try: () => nodeFs.writeFileSync(path, text),
-    catch: (cause) => new FileError({ path, cause }),
-  });
+// --- file IO through effect/FileSystem (never node:fs) — each op maps its PlatformError to the
+// domain FileError, so every failure stays a value carrying the offending path ---
+const readText = (path: string): Effect.Effect<string, FileError, FileSystem.FileSystem> =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) => fs.readFileString(path)).pipe(
+    Effect.mapError((cause) => new FileError({ path, cause })),
+  );
 
 // Write a JSON file, creating parent dirs as needed. Plain JSON.stringify — the model is all
 // strings/numbers/arrays (no rich Effect types), so no Schema codec is needed for the round-trip.
-const writeJson = (path: string, value: unknown) =>
-  Effect.try({
-    try: () => {
-      nodeFs.mkdirSync(nodePath.dirname(path), { recursive: true });
-      nodeFs.writeFileSync(path, `${JSON.stringify(value)}\n`);
-    },
-    catch: (cause) => new FileError({ path, cause }),
-  });
+const writeJson = (
+  path: string,
+  value: unknown,
+): Effect.Effect<void, FileError, FileSystem.FileSystem> =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    fs
+      .makeDirectory(nodePath.dirname(path), { recursive: true })
+      .pipe(Effect.andThen(fs.writeFileString(path, `${JSON.stringify(value)}\n`))),
+  ).pipe(Effect.mapError((cause) => new FileError({ path, cause })));
 
 // Entry points ARE the public surface — derive them from `exports` (SSOT), mapping the published
 // `./dist/X.d.ts` back to its `src/X.ts`. UI entries (web/cli/tui) pull JSX/browser libs, so the
 // prototype skips them; everything else is a plain TS module.
 const skipEntries = new Set(["web", "cli", "tui"]);
-const deriveEntries = (parsed: unknown): ReadonlyArray<Entry> => {
-  if (typeof parsed !== "object" || parsed === null || !("exports" in parsed)) return [];
-  const exports = parsed.exports;
-  if (typeof exports !== "object" || exports === null) return [];
-  const out: Array<Entry> = [];
-  for (const [key, val] of Object.entries(exports)) {
-    if (key === "./package.json" || typeof val !== "object" || val === null) continue;
-    const types = "types" in val && typeof val.types === "string" ? val.types : undefined;
-    if (types === undefined) continue;
-    const name = key === "." ? "index" : key.replace(/^\.\//, "");
-    if (skipEntries.has(name)) continue;
-    const file = nodePath.join(
-      repoRoot,
-      types.replace(/^\.\/dist\//, "src/").replace(/\.d\.ts$/, ".ts"),
-    );
-    if (nodeFs.existsSync(file)) out.push({ name, file });
-  }
-  return out;
-};
+const deriveEntries = (
+  parsed: unknown,
+): Effect.Effect<ReadonlyArray<Entry>, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    if (typeof parsed !== "object" || parsed === null || !("exports" in parsed)) return [];
+    const exports = parsed.exports;
+    if (typeof exports !== "object" || exports === null) return [];
+    const fs = yield* FileSystem.FileSystem;
+    const out: Array<Entry> = [];
+    for (const [key, val] of Object.entries(exports)) {
+      if (key === "./package.json" || typeof val !== "object" || val === null) continue;
+      const types = "types" in val && typeof val.types === "string" ? val.types : undefined;
+      if (types === undefined) continue;
+      const name = key === "." ? "index" : key.replace(/^\.\//, "");
+      if (skipEntries.has(name)) continue;
+      const file = nodePath.join(
+        repoRoot,
+        types.replace(/^\.\/dist\//, "src/").replace(/\.d\.ts$/, ".ts"),
+      );
+      const exists = yield* fs.exists(file).pipe(Effect.catch(() => Effect.succeed(false)));
+      if (exists) out.push({ name, file });
+    }
+    return out;
+  });
 
-const readEntries = Effect.gen(function* () {
+// Parse package.json once; the program derives both the entry points and the npm name from it.
+const readPackageJson = Effect.gen(function* () {
   const text = yield* readText(packageJsonPath);
-  const parsed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(
+  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(
     Effect.mapError((cause) => new FileError({ path: packageJsonPath, cause })),
   );
-  return deriveEntries(parsed);
 });
 
 const compilerOptions: ts.CompilerOptions = {
@@ -324,9 +335,10 @@ const makeExtractor = (checker: ts.TypeChecker, cfg: PkgConfig) => {
       source: {
         file: relFile,
         line: sourceLine,
-        url: cfg.repoBaseUrl
-          ? `${cfg.repoBaseUrl}/${relFile.startsWith(cfg.repoPathPrefix) ? relFile.slice(cfg.repoPathPrefix.length) : relFile}#L${sourceLine}`
-          : undefined,
+        url:
+          cfg.repoBaseUrl !== ""
+            ? `${cfg.repoBaseUrl}/${relFile.startsWith(cfg.repoPathPrefix) ? relFile.slice(cfg.repoPathPrefix.length) : relFile}#L${sourceLine}`
+            : undefined,
       },
     };
     symbolUrl.set(sym, url);
@@ -463,9 +475,12 @@ const effectOptions: ts.CompilerOptions = {
 
 const program = Effect.gen(function* () {
   const wanted = process.argv.slice(2); // optional: restrict to these package slugs
-  const ourEntries = yield* readEntries;
+  const parsed = yield* readPackageJson;
+  const ourEntries = yield* deriveEntries(parsed);
+  const pkgName = pkgNameOf(parsed);
+  const repoBaseUrl = yield* resolveRepoBaseUrl;
   const effectSrc = nodePath.join(repoRoot, "repos/effect/packages/effect/src");
-  const effectRef = gitOut("-C repos/effect rev-parse HEAD") || "main";
+  const effectRef = (yield* git("-C", "repos/effect", "rev-parse", "HEAD")) || "main";
 
   const allSpecs: ReadonlyArray<PkgConfig> = [
     {
@@ -493,10 +508,9 @@ const program = Effect.gen(function* () {
   ];
   const specs = wanted.length === 0 ? allSpecs : allSpecs.filter((s) => wanted.includes(s.slug));
 
-  yield* Effect.try({
-    try: () => nodeFs.rmSync(dataDir, { recursive: true, force: true }),
-    catch: (cause) => new FileError({ path: dataDir, cause }),
-  });
+  yield* Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    fs.remove(dataDir, { recursive: true, force: true }),
+  ).pipe(Effect.mapError((cause) => new FileError({ path: dataDir, cause })));
 
   const pkgInfos: Array<{
     slug: string;
@@ -552,7 +566,11 @@ const program = Effect.gen(function* () {
   yield* Console.log(`wrote ${dataDir} — ${pkgInfos.length} package(s)`);
 });
 
-// Surface any failure — typed error or defect — as a value, then let the exit code decide.
-const main = program.pipe(Effect.tapCause((cause) => Console.error(Cause.pretty(cause))));
+// Surface any failure — typed error or defect — as a value, then let the exit code decide. The Node
+// platform services (FileSystem, Path, ChildProcessSpawner) are provided once, here at the edge.
+const main = program.pipe(
+  Effect.tapCause((cause) => Console.error(Cause.pretty(cause))),
+  Effect.provide(NodeServices.layer),
+);
 const exit = await Effect.runPromiseExit(main);
 process.exit(Exit.isSuccess(exit) ? 0 : 1);

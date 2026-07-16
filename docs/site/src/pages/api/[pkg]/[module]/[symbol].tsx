@@ -1,6 +1,7 @@
 import { ApiSymbolCard } from "../../../../components/ApiSymbol.js";
-import { symbolDetail, symbolPaths } from "../../../../lib/api-data.js";
+import { readSourceFile, symbolDetail, symbolPaths } from "../../../../lib/api-data.js";
 import { loadHighlighter } from "../../../../lib/highlight.js";
+import { runServer } from "../../../../lib/runtime.js";
 
 // One symbol, in full: /api/effect-pm/QueueResource/Tag. Loads only this symbol's file; the heavy
 // Shiki/twoslash markup is scoped to a single symbol.
@@ -13,7 +14,7 @@ export default async function ApiSymbolPage({
   module: string;
   symbol: string;
 }) {
-  const s = symbolDetail(pkg, module, symbol);
+  const s = await runServer(symbolDetail(pkg, module, symbol));
   if (s === undefined)
     return (
       <p className="prose">
@@ -21,6 +22,10 @@ export default async function ApiSymbolPage({
       </p>
     );
   await loadHighlighter();
+  // Read the source file for the twoslash panel — our package only; deps (repos/*) stay plain.
+  const fileText = s.source.file.startsWith("repos/")
+    ? undefined
+    : await runServer(readSourceFile(s.source.file));
   return (
     <>
       <title>{`${s.qualifiedName} — API — effect-pm`}</title>
@@ -28,7 +33,7 @@ export default async function ApiSymbolPage({
         <p className="api-back">
           <a href={`/api/${pkg}/${module}`}>← {s.entry}</a>
         </p>
-        <ApiSymbolCard s={s} />
+        <ApiSymbolCard s={s} fileText={fileText} />
       </article>
     </>
   );
@@ -39,5 +44,5 @@ export const getConfig = async () =>
     ? ({ render: "dynamic" } as const)
     : ({
         render: "static",
-        staticPaths: symbolPaths().map(([p, m, sym]) => [p, m, sym] as const),
+        staticPaths: (await runServer(symbolPaths())).map(([p, m, sym]) => [p, m, sym] as const),
       } as const);

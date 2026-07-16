@@ -1,114 +1,152 @@
 // Server-side access to the split API data (docs/site/api-data, produced by scripts/gen-api.ts).
-// Each function reads ONLY the file a page needs — never one big model — so pages stay small and the
-// reference scales to many packages. Read at build (SSG) / dev; the result is baked into static HTML.
+// Reads go through effect/FileSystem (NEVER node:fs — docs/standards effect-style) and decode via
+// Schema (no casts). Each function reads ONLY the file a page needs; run them with runServer in a
+// server component. Schemas are the SSOT — the exported interfaces derive from them.
 
-import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { Effect, Schema } from "effect";
+import * as FileSystem from "effect/FileSystem";
 
 const dataDir = fileURLToPath(new URL("../../api-data/", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url)); // docs/site/src/lib -> repo root
 
-const readJson = <T>(rel: string): T | undefined => {
-  try {
-    return JSON.parse(nodeFs.readFileSync(nodePath.join(dataDir, rel), "utf8")) as T;
-  } catch {
-    return undefined;
-  }
-};
+const ApiTagS = Schema.Struct({ name: Schema.String, text: Schema.String });
+const ApiSourceS = Schema.Struct({
+  file: Schema.String,
+  line: Schema.Number,
+  url: Schema.optional(Schema.String),
+});
+const ApiSymbolS = Schema.Struct({
+  entry: Schema.String,
+  name: Schema.String,
+  qualifiedName: Schema.String,
+  url: Schema.String,
+  kind: Schema.String,
+  signatures: Schema.Array(Schema.String),
+  typeText: Schema.optional(Schema.String),
+  sourceText: Schema.String,
+  summary: Schema.String,
+  rawComment: Schema.String,
+  tags: Schema.Array(ApiTagS),
+  category: Schema.optional(Schema.String),
+  linkTargets: Schema.Array(Schema.String),
+  docLinks: Schema.Record(Schema.String, Schema.String),
+  source: ApiSourceS,
+});
+const ApiSymbolRowS = Schema.Struct({
+  name: Schema.String,
+  qualifiedName: Schema.String,
+  kind: Schema.String,
+  summary: Schema.String,
+  url: Schema.String,
+});
+const ModuleInfoS = Schema.Struct({
+  slug: Schema.String,
+  entry: Schema.String,
+  count: Schema.Number,
+});
+const PackageInfoS = Schema.Struct({
+  slug: Schema.String,
+  name: Schema.String,
+  modules: Schema.Array(ModuleInfoS),
+});
+const IndexS = Schema.Struct({ packages: Schema.Array(PackageInfoS) });
+const ModuleSummaryS = Schema.Struct({
+  package: Schema.String,
+  entry: Schema.String,
+  symbols: Schema.Array(ApiSymbolRowS),
+});
+const LinkSymbolS = Schema.Struct({
+  name: Schema.String,
+  qualifiedName: Schema.String,
+  url: Schema.String,
+});
+const LinksS = Schema.Struct({ symbols: Schema.Array(LinkSymbolS) });
+const PathsS = Schema.Struct({
+  symbols: Schema.Array(Schema.Tuple([Schema.String, Schema.String, Schema.String])),
+});
+const DocLinksS = Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.String));
+const MetaS = Schema.Struct({ repoBaseUrl: Schema.optional(Schema.String) });
 
-export interface ApiTag {
-  readonly name: string;
-  readonly text: string;
-}
-export interface ApiSource {
-  readonly file: string; // repo-relative (for the source panel)
-  readonly line: number;
-  readonly url?: string; // GitHub blob URL (this package's repo), if known
-}
-// The full detail for one symbol's own page.
-export interface ApiSymbol {
-  readonly entry: string;
-  readonly name: string;
-  readonly qualifiedName: string;
-  readonly url: string;
-  readonly kind: string;
-  readonly signatures: ReadonlyArray<string>;
-  readonly typeText?: string;
-  readonly sourceText: string;
-  readonly summary: string;
-  readonly rawComment: string;
-  readonly tags: ReadonlyArray<ApiTag>;
-  readonly category?: string;
-  readonly linkTargets: ReadonlyArray<string>;
-  readonly docLinks: Readonly<Record<string, string>>; // {@link X} text -> resolved doc URL
-  readonly source: ApiSource;
-}
-// The light row for a module page (no signatures / source / comments).
-export interface ApiSymbolRow {
-  readonly name: string;
-  readonly qualifiedName: string;
-  readonly kind: string;
-  readonly summary: string;
-  readonly url: string;
-}
-export interface ModuleInfo {
-  readonly slug: string;
-  readonly entry: string;
-  readonly count: number;
-}
-export interface PackageInfo {
-  readonly slug: string;
-  readonly name: string;
-  readonly modules: ReadonlyArray<ModuleInfo>;
-}
-export interface ModuleSummary {
-  readonly package: string;
-  readonly entry: string;
-  readonly symbols: ReadonlyArray<ApiSymbolRow>;
-}
+export interface ApiTag extends Schema.Schema.Type<typeof ApiTagS> {}
+export interface ApiSource extends Schema.Schema.Type<typeof ApiSourceS> {}
+export interface ApiSymbol extends Schema.Schema.Type<typeof ApiSymbolS> {}
+export interface ApiSymbolRow extends Schema.Schema.Type<typeof ApiSymbolRowS> {}
+export interface ModuleInfo extends Schema.Schema.Type<typeof ModuleInfoS> {}
+export interface PackageInfo extends Schema.Schema.Type<typeof PackageInfoS> {}
+export interface ModuleSummary extends Schema.Schema.Type<typeof ModuleSummaryS> {}
+export interface LinkSymbol extends Schema.Schema.Type<typeof LinkSymbolS> {}
+
+// Read + JSON-decode a data file through effect/FileSystem; undefined when it's missing/malformed.
+const readJson = <S extends Schema.Top>(
+  rel: string,
+  schema: S,
+): Effect.Effect<S["Type"] | undefined, never, FileSystem.FileSystem | S["DecodingServices"]> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const text = yield* fs.readFileString(nodePath.join(dataDir, rel));
+    return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text);
+  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
 
 // A namespace entry -> its URL slug. Mirrors scripts/gen-api.ts (kept in sync).
 export const slugForEntry = (entry: string): string =>
   entry === "(top-level)" ? "top-level" : entry.replace(/\//g, "-");
 
-export const packages = (): ReadonlyArray<PackageInfo> =>
-  readJson<{ packages: ReadonlyArray<PackageInfo> }>("index.json")?.packages ?? [];
+export const packages = (): Effect.Effect<
+  ReadonlyArray<PackageInfo>,
+  never,
+  FileSystem.FileSystem
+> => readJson("index.json", IndexS).pipe(Effect.map((i) => i?.packages ?? []));
 
-export const packageBySlug = (slug: string): PackageInfo | undefined =>
-  packages().find((p) => p.slug === slug);
+export const packageBySlug = (
+  slug: string,
+): Effect.Effect<PackageInfo | undefined, never, FileSystem.FileSystem> =>
+  packages().pipe(Effect.map((ps) => ps.find((p) => p.slug === slug)));
 
-export const moduleSummary = (pkg: string, moduleSlug: string): ModuleSummary | undefined =>
-  readJson<ModuleSummary>(nodePath.join(pkg, `${moduleSlug}.json`));
+export const moduleSummary = (
+  pkg: string,
+  moduleSlug: string,
+): Effect.Effect<ModuleSummary | undefined, never, FileSystem.FileSystem> =>
+  readJson(nodePath.join(pkg, `${moduleSlug}.json`), ModuleSummaryS);
 
 export const symbolDetail = (
   pkg: string,
   moduleSlug: string,
   name: string,
-): ApiSymbol | undefined => readJson<ApiSymbol>(nodePath.join(pkg, moduleSlug, `${name}.json`));
+): Effect.Effect<ApiSymbol | undefined, never, FileSystem.FileSystem> =>
+  readJson(nodePath.join(pkg, moduleSlug, `${name}.json`), ApiSymbolS);
 
 // Every [pkg, module, symbol] triple — the static paths for the per-symbol route.
-export const symbolPaths = (): ReadonlyArray<readonly [string, string, string]> =>
-  readJson<{ symbols: ReadonlyArray<readonly [string, string, string]> }>("paths.json")?.symbols ??
-  [];
+export const symbolPaths = (): Effect.Effect<
+  ReadonlyArray<readonly [string, string, string]>,
+  never,
+  FileSystem.FileSystem
+> => readJson("paths.json", PathsS).pipe(Effect.map((p) => p?.symbols ?? []));
 
-export interface LinkSymbol {
-  readonly name: string;
-  readonly qualifiedName: string;
-  readonly url: string;
-}
 // The build-only global index used to resolve doc links (name/qualifiedName -> url).
-export const linkSymbols = (): ReadonlyArray<LinkSymbol> =>
-  readJson<{ symbols: ReadonlyArray<LinkSymbol> }>("links.json")?.symbols ?? [];
+export const linkSymbols = (): Effect.Effect<
+  ReadonlyArray<LinkSymbol>,
+  never,
+  FileSystem.FileSystem
+> => readJson("links.json", LinksS).pipe(Effect.map((l) => l?.symbols ?? []));
 
 // Resolved {@link} maps keyed by a symbol's declaration `file:line` — for hover link resolution.
-export const docLinksByLocation = (): Readonly<Record<string, Record<string, string>>> =>
-  readJson<Record<string, Record<string, string>>>("doclinks.json") ?? {};
+export const docLinksByLocation = (): Effect.Effect<
+  Readonly<Record<string, Record<string, string>>>,
+  never,
+  FileSystem.FileSystem
+> => readJson("doclinks.json", DocLinksS).pipe(Effect.map((d) => d ?? {}));
 
-export const repoBaseUrl = (): string =>
-  readJson<{ repoBaseUrl?: string }>("meta.json")?.repoBaseUrl ?? "";
+export const repoBaseUrl = (): Effect.Effect<string, never, FileSystem.FileSystem> =>
+  readJson("meta.json", MetaS).pipe(Effect.map((m) => m?.repoBaseUrl ?? ""));
 
-/** GitHub URL for a symbol's source line, or undefined when no repo base is known. */
-export const sourceUrl = (file: string, line: number): string | undefined => {
-  const base = repoBaseUrl();
-  return base ? `${base}/${file}#L${line}` : undefined;
-};
+// The full text of a symbol's source file (repo-relative), for the twoslash source panel. Read
+// through effect/FileSystem so the sync render pipeline never touches node:fs; undefined if missing.
+export const readSourceFile = (
+  relFile: string,
+): Effect.Effect<string | undefined, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.readFileString(nodePath.join(repoRoot, relFile));
+  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
