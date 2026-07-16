@@ -6,6 +6,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-16 — Impossible-states plan: assigned + area reserved (breaking OK)
+
+- **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away."
+- **Chose:** Approved [`impossible-states-proposal.md`](./impossible-states-proposal.md). Sequence **P2** (`makeNode` precise return types → `connect(bareNode)` becomes a compile error) → **P1** (brand the node so a node↔protocol wiring mistake can't be typed — the dashboard "connecting… forever" bug) → **P3/P5**; **P4** (loose-fields removal) last.
+- **Reserved — hands off (all other agents, incl. C):** `src/Resource.ts` node/client typing surface — `NodeKey` / `AnyNode` / `AddressedNode` / `makeNode` / `connect` / `connectHttp` / `connectSocket` / `clientLayer` / `socketClient` / `verifyConnection` — plus `NodeStatus` client wiring. C's protocol/dashboard work routes around this surface until the plan lands.
+- **Rejected / deferred:** `connectFleet` (reverted — a cast-free version isn't reachable given node-type erasure; not worth casts for sugar). P4 sequenced last (broadest blast radius).
+- **Supervisor impact:** This agent leads impossible-states end to end; P1 is coordinated *with* C but led here. Do not reassign the reserved surface.
+
 ## 2026-07-16 — No Em Dash + No AI Fingerprints; lean Creating a Resource
 
 - **Owner said:** Research sounding less like AI (verbosity, em dashes); then do the small plan.
