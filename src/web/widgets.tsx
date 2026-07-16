@@ -1424,9 +1424,12 @@ export const Deck = (props: {
   );
   // hidden measurer (fill + sections): fixed sections render their real (pure) content to be sized;
   // grow sections render a minHeight spacer, so their live/stateful content is never double-mounted.
+  // Zero-height + overflow-hidden so the stacked sections are clipped and add **nothing** to the
+  // container's scrollHeight (a tall absolute measurer otherwise makes the detail scroll on iOS).
+  // Block layout (not flex) so each child keeps its natural height for `offsetHeight`.
   const measurer =
     sections !== undefined ? (
-      <div aria-hidden className="pointer-events-none invisible absolute left-0 top-0 flex w-full flex-col gap-3">
+      <div aria-hidden className="pointer-events-none invisible absolute left-0 top-0 h-0 w-full overflow-hidden">
         {sections.map((s, i) => (
           <div
             key={s.key}
