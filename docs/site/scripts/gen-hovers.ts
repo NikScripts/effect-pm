@@ -19,6 +19,7 @@ import { createTransformerFactory, rendererRich } from "@shikijs/twoslash";
 import { createHighlighter } from "shiki";
 import { createTwoslasher } from "twoslash";
 import ts from "typescript";
+import { linkApiTypes, type ApiLinkResolver } from "../src/lib/api-linkify.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
@@ -53,6 +54,40 @@ const IndexS = Schema.Struct({
 const ModuleSummaryS = Schema.Struct({
   symbols: Schema.Array(Schema.Struct({ name: Schema.String })),
 });
+const LinksS = Schema.Struct({
+  symbols: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      qualifiedName: Schema.String,
+      url: Schema.String,
+    }),
+  ),
+});
+
+// Build the same unambiguous-term resolver as src/lib/api-links.ts from the global links index, so the
+// precomputed hovers get the exact api-typelinks the live render does.
+const buildResolver = (
+  symbols: ReadonlyArray<{ name: string; qualifiedName: string; url: string }>,
+): ApiLinkResolver => {
+  const count = new Map<string, number>();
+  const urlOf = new Map<string, string>();
+  const add = (term: string, url: string): void => {
+    count.set(term, (count.get(term) ?? 0) + 1);
+    if (!urlOf.has(term)) urlOf.set(term, url);
+  };
+  for (const s of symbols) {
+    add(s.qualifiedName, s.url);
+    if (s.name !== s.qualifiedName) add(s.name, s.url);
+  }
+  const link = new Map<string, string>();
+  for (const [term, n] of count) {
+    const url = urlOf.get(term);
+    if (n === 1 && url !== undefined) link.set(term, url);
+  }
+  return (qualifiedName, name, allowBare) =>
+    (qualifiedName !== undefined ? link.get(qualifiedName) : undefined) ??
+    (allowBare ? link.get(name) : undefined);
+};
 
 // Mirrors src/lib/api-data.ts + scripts/gen-api.ts (kept in sync): a case-insensitively-unique file key.
 const symbolFileKey = (name: string): string => {
@@ -152,6 +187,8 @@ const program = Effect.gen(function* () {
     createTwoslasher({ vfsRoot: repoRoot, compilerOptions }),
     rendererRich() as never,
   )({});
+  const links = yield* readJson(nodePath.join(dataDir, "links.json"), LinksS);
+  const resolve = buildResolver(links?.symbols ?? []);
 
   // Collect every documented symbol, grouped by its source file, so each file is twoslashed once.
   interface Sym {
@@ -219,6 +256,9 @@ const program = Effect.gen(function* () {
     }
     const pre = (hast.children ?? []).find((c: Hast) => c.tagName === "pre");
     const code = (pre?.children ?? []).find((c: Hast) => c.tagName === "code");
+    // Link every API-export type name in the hover popups (once per file, before slicing) — the same
+    // dotted-underline api-typelinks the live render produces for our own package.
+    if (code !== undefined) linkApiTypes(code, resolve);
     const lineEls: Array<Hast> = (code?.children ?? []).filter(
       (c: Hast) => c.type === "element" && String(c.properties?.class ?? "").includes("line"),
     );

@@ -17,6 +17,7 @@ import { toHast } from "mdast-util-to-hast";
 import prettier from "prettier";
 import { makeTypeExpander } from "./expandType";
 import { loadApiLinks, resolveApiLink } from "./api-links";
+import { classListOf, linkApiTypes } from "./api-linkify";
 import { docLinksByLocation } from "./api-data";
 import { runServer } from "./runtime";
 
@@ -190,10 +191,8 @@ const twoslasher = Object.assign(
 
 // HAST helpers to splice the expanded box into the popup, and a renderer that inserts it BETWEEN the
 // compact type box and the JSDoc-comments box.
-const classListOf = (n: any): string[] => {
-  const c = n?.properties?.class;
-  return Array.isArray(c) ? c : typeof c === "string" ? c.split(/\s+/) : [];
-};
+// find the first descendant with a class (classListOf + collectTokens + linkApiTypes now live in
+// ./api-linkify, shared with the build-time hover precompute).
 const findByClass = (node: any, cls: string): any => {
   if (!node || typeof node !== "object") return undefined;
   if (classListOf(node).includes(cls)) return node;
@@ -202,64 +201,6 @@ const findByClass = (node: any, cls: string): any => {
     if (found) return found;
   }
   return undefined;
-};
-const findAllByClass = (node: any, cls: string, out: any[]): void => {
-  if (!node || typeof node !== "object") return;
-  if (classListOf(node).includes(cls)) out.push(node);
-  for (const child of node.children ?? []) findAllByClass(child, cls, out);
-};
-
-// Stage 1 of API-docgen links: scan a hover's type-preview boxes (the compact "reg" type and the
-// expanded "pretty" type) for identifiers that match a known API export and turn them into dotted-
-// underlined links to that symbol's doc page — no nested hover, just the link. `effect` types (Schema,
-// Effect, …) aren't in our model, so they're left alone.
-const IDENT = /^[A-Za-z_$][\w$]*$/;
-// leaf token spans (a <span> whose only child is text), in document order, with parent + index so a
-// match can be wrapped in-place without changing sibling positions.
-const collectTokens = (
-  node: any,
-  out: Array<{ parent: any; idx: number; span: any; text: string }>,
-): void => {
-  const kids: any[] = node.children ?? [];
-  for (let idx = 0; idx < kids.length; idx++) {
-    const c = kids[idx];
-    if (c?.type !== "element") continue;
-    if (c.tagName === "span" && c.children?.length === 1 && c.children[0]?.type === "text") {
-      out.push({ parent: node, idx, span: c, text: c.children[0].value });
-    } else {
-      collectTokens(c, out);
-    }
-  }
-};
-const linkApiTypes = (popupEl: any): void => {
-  const boxes: any[] = [];
-  findAllByClass(popupEl, "twoslash-popup-code", boxes); // covers the compact box AND the expand box
-  for (const box of boxes) {
-    const tokens: Array<{ parent: any; idx: number; span: any; text: string }> = [];
-    collectTokens(box, tokens);
-    for (let i = 0; i < tokens.length; i++) {
-      const t = tokens[i];
-      // shiki bakes surrounding whitespace into token text — match on the trimmed identifier
-      const text = t.text.trim();
-      if (!IDENT.test(text)) continue;
-      // qualified `Namespace.export` when the two preceding tokens are `<ident>` `.`
-      const prev = tokens[i - 1]?.text?.trim();
-      const ns = tokens[i - 2]?.text?.trim();
-      const qualifiedName =
-        prev === "." && ns !== undefined && IDENT.test(ns) ? `${ns}.${text}` : undefined;
-      // don't bare-match a token that's itself a qualifier (next token is `.`) — it's a namespace
-      // (often an external one like `Schema`), not a standalone type reference
-      const allowBare = tokens[i + 1]?.text?.trim() !== ".";
-      const url = resolveApiLink(qualifiedName, text, allowBare);
-      if (url === undefined) continue;
-      t.parent.children[t.idx] = {
-        type: "element",
-        tagName: "a",
-        properties: { class: "api-typelink", href: url },
-        children: [t.span],
-      };
-    }
-  }
 };
 function insertExpand(this: any, hoverEl: any, code: string): void {
   const popup = findByClass(hoverEl, "twoslash-popup-container");
@@ -421,14 +362,14 @@ const renderer = {
     const code = splitExpand(info);
     const el = baseRenderer.nodeStaticInfo.call(this, info, node);
     if (code) try { insertExpand.call(this, el, code); } catch { /* keep plain popup */ }
-    try { linkApiTypes(el); } catch { /* links are best-effort */ }
+    try { linkApiTypes(el, resolveApiLink); } catch { /* links are best-effort */ }
     return el;
   },
   nodeQuery(this: any, info: any, node: any) {
     const code = splitExpand(info);
     const el = baseRenderer.nodeQuery.call(this, info, node);
     if (code) try { insertExpand.call(this, el, code); } catch { /* keep plain popup */ }
-    try { linkApiTypes(el); } catch { /* links are best-effort */ }
+    try { linkApiTypes(el, resolveApiLink); } catch { /* links are best-effort */ }
     return el;
   },
 };
