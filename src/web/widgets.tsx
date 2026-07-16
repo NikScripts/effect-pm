@@ -1227,18 +1227,229 @@ const Sparkline = (props: { readonly points: ReadonlyArray<number>; readonly col
   );
 };
 
-/** A reusable iOS-home-screen-style **paged card**: horizontal scroll-snap track + dot indicators.
- *  Presentational. Tap fires `onOpen` (a swipe scrolls instead and the click is suppressed); the
- *  root is a `div role="button"` so a horizontal scroller can nest cleanly. */
-export const PagedCard = (props: {
-  readonly pages: ReadonlyArray<React.ReactNode>;
-  readonly onOpen?: () => void;
-  readonly style?: React.CSSProperties;
-  /** Absolute overlay rendered over the card (the root is `relative`) — e.g. a degraded treatment. */
-  readonly overlay?: React.ReactNode;
-}): React.ReactElement => {
+/**
+ * One measured block in an **auto-paginated** {@link Deck}. The deck measures each section and packs
+ * them into as many pages as the viewport needs — a section that won't fit starts the next page, and
+ * everything that fits stays on one (no dots). @public
+ */
+export interface DeckSection {
+  /** Stable identity — used as the React key and to detect content changes for re-measuring. */
+  readonly key: string;
+  /** The block. **Fixed** sections (default) are rendered twice — once hidden to measure — so keep
+   *  content side-effect-free (no mount effects); prefer reading atoms in the parent and passing
+   *  plain JSX. Mark live/hook-heavy blocks (charts, logs) `grow` so they're measured as a spacer. */
+  readonly content: React.ReactNode;
+  /** Flex to fill the leftover height on its page (charts, logs, long lists). A grow section is
+   *  packed by {@link minHeight} and stretched beyond it; its content is never measured. */
+  readonly grow?: boolean;
+  /** Packing height for a `grow` section (default 160). The height it claims before stretching. */
+  readonly minHeight?: number;
+}
+
+const DECK_GAP = 12; // px — matches the `gap-3` between sections
+const DECK_GROW_MIN = 160; // default packing height for a grow section
+const DECK_DOTS = 20; // px reserved for the dot gutter (kept constant so packing doesn't oscillate)
+
+/** Greedily pack section heights into pages that each fit `avail`, returning groups of indices. A
+ *  section taller than a page still gets its own page (it scrolls within). */
+const packSections = (
+  heights: ReadonlyArray<number>,
+  avail: number,
+): ReadonlyArray<ReadonlyArray<number>> => {
+  const pages: Array<Array<number>> = [];
+  let cur: Array<number> = [];
+  let used = 0;
+  heights.forEach((h, i) => {
+    const next = cur.length === 0 ? h : used + DECK_GAP + h;
+    if (cur.length > 0 && next > avail) {
+      pages.push(cur);
+      cur = [i];
+      used = h;
+    } else {
+      cur.push(i);
+      used = next;
+    }
+  });
+  if (cur.length > 0) pages.push(cur);
+  return pages.length > 0 ? pages : [[]];
+};
+
+/** Track the active page (nearest child by scroll offset) and expose a smooth `scrollTo`. */
+const useDeckScroll = (): {
+  readonly ref: React.RefObject<HTMLDivElement | null>;
+  readonly active: number;
+  readonly onScroll: () => void;
+  readonly scrollTo: (i: number) => void;
+} => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(0);
+  const onScroll = React.useCallback((): void => {
+    const el = ref.current;
+    if (el === null) return;
+    // nearest page by element offset — robust to the inter-page gap (clientWidth math isn't).
+    let best = 0;
+    let bestD = Infinity;
+    Array.from(el.children).forEach((c, i) => {
+      if (c instanceof HTMLElement) {
+        const d = Math.abs(c.offsetLeft - el.scrollLeft);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+    });
+    setActive(best);
+  }, []);
+  const scrollTo = React.useCallback((i: number): void => {
+    const el = ref.current;
+    const child = el?.children[i];
+    if (el !== null && child instanceof HTMLElement) {
+      el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
+    }
+  }, []);
+  return { ref, active, onScroll, scrollTo };
+};
+
+/** The dot row — one filled dot per page, tap to jump. Hidden for a single page. */
+const DeckDots = (props: {
+  readonly count: number;
+  readonly active: number;
+  readonly onDot: (i: number) => void;
+  readonly className?: string;
+}): React.ReactElement | null =>
+  props.count > 1 ? (
+    <div className={cn("flex justify-center gap-1", props.className)}>
+      {Array.from({ length: props.count }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onDot(i);
+          }}
+          className={cn("size-1.5 rounded-full transition-colors", i === props.active ? "bg-foreground" : "bg-muted-foreground/40")}
+          aria-label={`page ${i + 1}`}
+        />
+      ))}
+    </div>
+  ) : null;
+
+/**
+ * A swipeable **deck** of pages: a horizontal scroll-snap track + dot indicators. Two forms:
+ *
+ * - **card** (default) — a tap-to-open grid card; pass explicit `pages`. Tap fires `onOpen`; a swipe
+ *   scrolls instead. Natural height.
+ * - **fill** (`fill`) — fills its flex parent (a detail body). Pass `sections` and it **auto-packs**
+ *   them into pages by measuring against the viewport (grow sections stretch to fill leftover space,
+ *   short all-fixed pages center); or pass explicit `pages` as an escape hatch.
+ *
+ * @public
+ */
+export const Deck = (props: {
+  /** Explicit pages (required for a card; an escape hatch for `fill`). */
+  readonly pages?: ReadonlyArray<React.ReactNode>;
+  /** Auto-paginated sections (fill only) — measured + packed into pages. */
+  readonly sections?: ReadonlyArray<DeckSection>;
+  /** Fill the flex parent (detail body) instead of sizing to content (grid card). */
+  readonly fill?: boolean;
+  /** Card tap-to-open (card form only). */
+  readonly onOpen?: () => void;
+  /** Absolute overlay over the deck (root is `relative`) — e.g. a degraded treatment. */
+  readonly overlay?: React.ReactNode;
+  readonly style?: React.CSSProperties;
+  readonly className?: string;
+}): React.ReactElement => {
+  const { ref, active, onScroll, scrollTo } = useDeckScroll();
+  const sections = props.sections;
+  const [groups, setGroups] = React.useState<ReadonlyArray<ReadonlyArray<number>>>(
+    () => (sections !== undefined ? [sections.map((_, i) => i)] : []),
+  );
+  const measureRefs = React.useRef<Array<HTMLDivElement | null>>([]);
+  const keysDep = sections?.map((s) => s.key).join("|");
+  React.useLayoutEffect(() => {
+    if (sections === undefined) return;
+    const el = ref.current;
+    if (el === null) return;
+    const remeasure = (): void => {
+      const avail = Math.max(1, el.clientHeight - DECK_DOTS);
+      const heights = sections.map((s, i) =>
+        s.grow === true ? s.minHeight ?? DECK_GROW_MIN : measureRefs.current[i]?.offsetHeight ?? 0,
+      );
+      setGroups(packSections(heights, avail));
+    };
+    remeasure();
+    const ro = new ResizeObserver(remeasure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [sections, ref, keysDep]);
+
+  const pageNodes: ReadonlyArray<React.ReactNode> =
+    props.pages ??
+    (sections !== undefined
+      ? groups.map((grp, gi) => {
+          const hasGrow = grp.some((si) => sections[si]?.grow === true);
+          return (
+            <div key={gi} className={cn("flex h-full flex-col gap-3", !hasGrow && "justify-center")}>
+              {grp.map((si) => {
+                const s = sections[si];
+                return s === undefined ? null : (
+                  <div key={s.key} className={s.grow === true ? "flex min-h-0 flex-1 flex-col" : "shrink-0"}>
+                    {s.content}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })
+      : []);
+
+  const track = (
+    <div
+      ref={ref}
+      onScroll={onScroll}
+      className={cn(
+        "flex snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        props.fill === true && "min-h-0 flex-1",
+      )}
+    >
+      {pageNodes.map((page, i) => (
+        <div key={i} className={cn("w-full shrink-0 snap-center", props.fill === true && "flex flex-col overflow-y-auto")}>
+          {page}
+        </div>
+      ))}
+    </div>
+  );
+  const dots = (
+    <DeckDots count={pageNodes.length} active={active} onDot={scrollTo} className={props.fill === true ? "h-5 shrink-0 items-center" : "mt-2"} />
+  );
+  // hidden measurer (fill + sections): fixed sections render their real (pure) content to be sized;
+  // grow sections render a minHeight spacer, so their live/stateful content is never double-mounted.
+  const measurer =
+    sections !== undefined ? (
+      <div aria-hidden className="pointer-events-none invisible absolute left-0 top-0 flex w-full flex-col gap-3">
+        {sections.map((s, i) => (
+          <div
+            key={s.key}
+            ref={(el) => {
+              measureRefs.current[i] = el;
+            }}
+          >
+            {s.grow === true ? <div style={{ height: s.minHeight ?? DECK_GROW_MIN }} /> : s.content}
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+  if (props.fill === true) {
+    return (
+      <div className={cn("relative flex min-h-0 flex-1 flex-col", props.className)} style={props.style}>
+        {measurer}
+        {track}
+        {dots}
+        {props.overlay}
+      </div>
+    );
+  }
   return (
     <div
       role="button"
@@ -1248,66 +1459,25 @@ export const PagedCard = (props: {
         if (e.key === "Enter" || e.key === " ") props.onOpen?.();
       }}
       style={props.style}
-      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
+      className={cn(
+        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none",
+        props.className,
+      )}
     >
-      <div
-        ref={ref}
-        onScroll={() => {
-          const el = ref.current;
-          if (el === null) return;
-          // nearest page by element offset — robust to the inter-page gap (clientWidth math isn't).
-          let best = 0;
-          let bestD = Infinity;
-          Array.from(el.children).forEach((c, i) => {
-            if (c instanceof HTMLElement) {
-              const d = Math.abs(c.offsetLeft - el.scrollLeft);
-              if (d < bestD) {
-                bestD = d;
-                best = i;
-              }
-            }
-          });
-          setActive(best);
-        }}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {props.pages.map((page, i) => (
-          <div key={i} className="w-full shrink-0 snap-center">{page}</div>
-        ))}
-      </div>
-      {props.pages.length > 1 ? (
-        <div className="mt-2 flex justify-center gap-1">
-          {props.pages.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                const el = ref.current;
-                const child = el?.children[i];
-                if (el !== null && child instanceof HTMLElement) {
-                  el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
-                }
-              }}
-              className={cn("size-1.5 rounded-full transition-colors", i === active ? "bg-foreground" : "bg-muted-foreground/40")}
-              aria-label={`page ${i + 1}`}
-            />
-          ))}
-        </div>
-      ) : null}
+      {track}
+      {dots}
       {props.overlay}
     </div>
   );
 };
 
 /**
- * A **fullscreen** paged detail shell — the full-height sibling of {@link PagedCard}. A standard
- * detail header (back + icon/title + optional badge + readiness banner) over a horizontally
- * swipeable track of full-height pages with dot indicators. Each page scrolls vertically on its own
- * when it overflows. Use it to give a resource more room than its grid card: page 1 the essentials,
- * later pages the extras (logs, per-node rosters, raw counters). One page → no dots. @public
+ * A **fullscreen detail** shell — a standard header (back + icon/title + optional badge + readiness
+ * banner) over an auto-paginating {@link Deck}. Hand it an ordered list of `sections` and it packs
+ * them into as many pages as the viewport needs (one → no dots); or pass explicit `pages` as an
+ * escape hatch. Gives a resource more room than its grid card. @public
  */
-export const FullscreenPager = (props: {
+export const DetailScreen = (props: {
   readonly title: string;
   readonly onBack: () => void;
   /** View-transition key — pass `res-${tag.key}` so the card↔detail morph matches the grid. */
@@ -1316,11 +1486,12 @@ export const FullscreenPager = (props: {
   readonly badge?: React.ReactNode;
   /** Renders a {@link ResourceReadinessBanner} for this tag (no-op when the tag has no node). */
   readonly readinessTag?: unknown;
-  readonly pages: ReadonlyArray<React.ReactNode>;
+  /** Auto-paginated content — the common case. */
+  readonly sections?: ReadonlyArray<DeckSection>;
+  /** Explicit pages — an escape hatch when you want a hard page break. */
+  readonly pages?: ReadonlyArray<React.ReactNode>;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(props.vtKey);
-  const ref = React.useRef<HTMLDivElement>(null);
-  const [active, setActive] = React.useState(0);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
@@ -1331,49 +1502,7 @@ export const FullscreenPager = (props: {
         {props.badge}
       </div>
       {props.readinessTag !== undefined ? <ResourceReadinessBanner tag={props.readinessTag} /> : null}
-      <div
-        ref={ref}
-        onScroll={() => {
-          const el = ref.current;
-          if (el === null) return;
-          let best = 0;
-          let bestD = Infinity;
-          Array.from(el.children).forEach((c, i) => {
-            if (c instanceof HTMLElement) {
-              const d = Math.abs(c.offsetLeft - el.scrollLeft);
-              if (d < bestD) {
-                bestD = d;
-                best = i;
-              }
-            }
-          });
-          setActive(best);
-        }}
-        className="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden landscape:min-h-0"
-      >
-        {props.pages.map((page, i) => (
-          <div key={i} className="flex w-full shrink-0 snap-center flex-col gap-3 overflow-y-auto">{page}</div>
-        ))}
-      </div>
-      {props.pages.length > 1 ? (
-        <div className="flex shrink-0 justify-center gap-1">
-          {props.pages.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => {
-                const el = ref.current;
-                const child = el?.children[i];
-                if (el !== null && child instanceof HTMLElement) {
-                  el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
-                }
-              }}
-              className={cn("size-1.5 rounded-full transition-colors", i === active ? "bg-foreground" : "bg-muted-foreground/40")}
-              aria-label={`page ${i + 1}`}
-            />
-          ))}
-        </div>
-      ) : null}
+      <Deck fill sections={props.sections} pages={props.pages} />
     </div>
   );
 };
@@ -1385,8 +1514,8 @@ const topEndpoints = (
 ): ReadonlyArray<{ readonly endpoint: string; readonly requests: number; readonly errors: number }> =>
   [...bundle].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
-/** An API-metrics resource as a grid card — a {@link PagedCard}: page 1 is throughput + health,
- *  page 2 is the busiest endpoints. Read-only. */
+/** An API-metrics resource as a grid card — a {@link Deck}: page 1 is throughput + health, page 2
+ *  is the busiest endpoints. Read-only. */
 export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -1437,7 +1566,7 @@ export const ApiCard = (props: {
       </div>
     );
   return (
-    <PagedCard
+    <Deck
       onOpen={() => props.onOpen(props.tag)}
       style={vt}
       pages={[page1, page2]}
@@ -2451,12 +2580,13 @@ export const RunResourceCard = (props: {
 };
 
 // ── Fullscreen detail pages for the newer kinds ──────────────────────────────
-// Each is a FullscreenPager: page 1 the essentials (bigger than the grid card), later pages the
-// extras that don't fit a card (logs, the full metric registry, per-node rosters).
+// Each is a DetailScreen fed an ordered list of `sections`; the Deck auto-packs them into pages by
+// measuring against the viewport. Live/hook-heavy blocks (charts, logs, long lists) are marked
+// `grow` so they stretch to fill and are measured as a spacer, not double-mounted.
 
 /**
- * Fullscreen detail for a **custom queue** — page 1 is the lanes + throughput chart + controls,
- * page 2 the live log stream. Fills the drill-in that the grid `CustomQueueCard` opens. @public
+ * Fullscreen detail for a **custom queue** — stats, lanes, controls, the throughput chart, and the
+ * live log stream, auto-paginated. Fills the drill-in that the grid `CustomQueueCard` opens. @public
  */
 export const CustomQueueDetail = (props: {
   readonly tag: CustomQueueTag;
@@ -2471,45 +2601,69 @@ export const CustomQueueDetail = (props: {
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
   const [locked, setLocked] = React.useState(true);
-  const overview = (
-    <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="pending" value={String(pending)} />
-        <Stat label="done" value={String(s?.completed ?? 0)} />
-        <Stat label="lanes" value={String(lanes.length)} />
-        <Stat label="phase" value={paused ? "paused" : s?.phase ?? "running"} />
-      </div>
-      <div className="rounded-xl border bg-card p-3">
-        <div className="mb-2 text-xs font-semibold text-muted-foreground">lanes</div>
-        <div className="flex flex-col gap-1.5">
-          {lanes.length === 0 ? (
-            <div className="text-xs text-muted-foreground">no lanes</div>
-          ) : (
-            lanes.map(([lane, count]) => <LaneRow key={lane} lane={lane} count={count} max={max} />)
-          )}
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "stats",
+      content: (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="pending" value={String(pending)} />
+          <Stat label="done" value={String(s?.completed ?? 0)} />
+          <Stat label="lanes" value={String(lanes.length)} />
+          <Stat label="phase" value={paused ? "paused" : s?.phase ?? "running"} />
         </div>
-      </div>
-      <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {paused ? (
-          <ActionButton atom={bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
-        ) : (
-          <ActionButton atom={bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
-        )}
-        <ActionButton atom={bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
-        <ActionButton atom={bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
-        <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
-      </div>
-    </>
-  );
+      ),
+    },
+    {
+      key: "lanes",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">lanes</div>
+          <div className="flex flex-col gap-1.5">
+            {lanes.length === 0 ? (
+              <div className="text-xs text-muted-foreground">no lanes</div>
+            ) : (
+              lanes.map(([lane, count]) => <LaneRow key={lane} lane={lane} count={count} max={max} />)
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "controls",
+      content: (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {paused ? (
+            <ActionButton atom={bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
+          ) : (
+            <ActionButton atom={bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
+          )}
+          <ActionButton atom={bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
+          <ActionButton atom={bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+          <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+        </div>
+      ),
+    },
+    {
+      key: "chart",
+      grow: true,
+      minHeight: 190,
+      content: <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>,
+    },
+    {
+      key: "logs",
+      grow: true,
+      minHeight: 200,
+      content: <LogStream bundle={bundle} className="h-full rounded-xl border bg-card" />,
+    },
+  ];
   return (
-    <FullscreenPager
+    <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
       badge={<Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
-      pages={[overview, <LogStream bundle={bundle} className="h-full rounded-xl border bg-card" />]}
+      sections={sections}
     />
   );
 };
@@ -2548,38 +2702,46 @@ export const TelemetryDetail = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   const sorted = [...metrics].sort((a, b) => a.id.localeCompare(b.id));
-  const overview = (
-    <>
-      <div className="rounded-xl border bg-card p-3">
-        <div className="mb-2 flex items-baseline gap-1.5">
-          <span className="text-3xl font-semibold tabular-nums text-foreground">{fleet}</span>
-          <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "overview",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">{fleet}</span>
+            <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+          </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+      ),
+    },
+    {
+      key: "metrics",
+      grow: true,
+      minHeight: 220,
+      content: (
+        <div className="flex h-full min-h-0 flex-col rounded-xl border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">{sorted.length} metrics (this node)</div>
+          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            {sorted.length === 0 ? (
+              <div className="text-xs text-muted-foreground">no metrics</div>
+            ) : (
+              sorted.map((d) => <MetricRow key={`${d._tag}:${d.id}`} datum={d} />)
+            )}
+          </div>
         </div>
-      </div>
-    </>
-  );
-  const metricList = (
-    <div className="flex min-h-0 flex-1 flex-col rounded-xl border bg-card p-3">
-      <div className="mb-2 text-xs font-semibold text-muted-foreground">{sorted.length} metrics (this node)</div>
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-        {sorted.length === 0 ? (
-          <div className="text-xs text-muted-foreground">no metrics</div>
-        ) : (
-          sorted.map((d) => <MetricRow key={`${d._tag}:${d.id}`} datum={d} />)
-        )}
-      </div>
-    </div>
-  );
+      ),
+    },
+  ];
   return (
-    <FullscreenPager
+    <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       badge={count !== undefined ? <Badge color="#94a3b8">{count} metrics</Badge> : undefined}
-      pages={[overview, metricList]}
+      sections={sections}
     />
   );
 };
@@ -2603,28 +2765,33 @@ export const ShardMapDetail = (props: {
   const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
-  const page = (
-    <div className="rounded-xl border bg-card p-3">
-      <div className="mb-2 flex items-baseline gap-1.5">
-        <span className="text-3xl font-semibold tabular-nums text-foreground">{size}</span>
-        <span className="text-xs text-muted-foreground">entries · fleet total</span>
-      </div>
-      <div className="mb-2 text-xs font-semibold text-muted-foreground">per shard</div>
-      <div className="flex flex-col gap-1.5">
-        {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
-      </div>
-      {local !== undefined ? (
-        <div className="mt-3 text-xs text-muted-foreground">this node holds <strong className="text-foreground">{local}</strong></div>
-      ) : null}
-    </div>
-  );
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "shards",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">{size}</span>
+            <span className="text-xs text-muted-foreground">entries · fleet total</span>
+          </div>
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">per shard</div>
+          <div className="flex flex-col gap-1.5">
+            {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+          </div>
+          {local !== undefined ? (
+            <div className="mt-3 text-xs text-muted-foreground">this node holds <strong className="text-foreground">{local}</strong></div>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
   return (
-    <FullscreenPager
+    <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       badge={<Badge color="#94a3b8">{rows.length} shard{rows.length === 1 ? "" : "s"}</Badge>}
-      pages={[page]}
+      sections={sections}
     />
   );
 };
@@ -2644,25 +2811,30 @@ export const FleetHealthDetail = (props: {
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
-  const page = (
-    <div className="rounded-xl border bg-card p-3">
-      <div className="mb-2 text-xs font-semibold text-muted-foreground">{rows.length} nodes</div>
-      <div className="flex flex-col gap-2">
-        {rows.length === 0 ? (
-          <div className="text-xs text-muted-foreground">connecting…</div>
-        ) : (
-          rows.map(([node, report]) => <FleetNodeRow key={node} node={node} report={report} />)
-        )}
-      </div>
-    </div>
-  );
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "roster",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">{rows.length} nodes</div>
+          <div className="flex flex-col gap-2">
+            {rows.length === 0 ? (
+              <div className="text-xs text-muted-foreground">connecting…</div>
+            ) : (
+              rows.map(([node, report]) => <FleetNodeRow key={node} node={node} report={report} />)
+            )}
+          </div>
+        </div>
+      ),
+    },
+  ];
   return (
-    <FullscreenPager
+    <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       badge={<Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>}
-      pages={[page]}
+      sections={sections}
     />
   );
 };
@@ -2684,35 +2856,48 @@ export const RunResourceDetail = (props: {
   const inFlight = s?.inFlight ?? 0;
   const completed = s?.completed ?? 0;
   const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : 0;
-  const page = (
-    <>
-      <div className="rounded-xl border bg-card p-3">
-        <div className="mb-1.5 flex items-baseline gap-1.5">
-          <span className="text-3xl font-semibold tabular-nums text-foreground">{inFlight}</span>
-          <span className="text-xs text-muted-foreground">in-flight · {s?.waiting ?? 0} waiting · limit {concurrency}</span>
+  const sections: ReadonlyArray<DeckSection> = [
+    {
+      key: "gauge",
+      content: (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="mb-1.5 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">{inFlight}</span>
+            <span className="text-xs text-muted-foreground">in-flight · {s?.waiting ?? 0} waiting · limit {concurrency}</span>
+          </div>
+          <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
         </div>
-        <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <Stat label="done" value={String(completed)} />
-        <Stat label="failed" value={String(s?.failed ?? 0)} />
-        <Stat label="interrupted" value={String(s?.interrupted ?? 0)} />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <Stat label="avg run" value={`${avgMs}ms`} />
-        <Stat label="total time" value={`${Math.round((s?.totalDurationMs ?? 0) / 1000)}s`} />
-        <Stat label="config v" value={String(s?.configVersion ?? 0)} />
-      </div>
-    </>
-  );
+      ),
+    },
+    {
+      key: "outcomes",
+      content: (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="done" value={String(completed)} />
+          <Stat label="failed" value={String(s?.failed ?? 0)} />
+          <Stat label="interrupted" value={String(s?.interrupted ?? 0)} />
+        </div>
+      ),
+    },
+    {
+      key: "timings",
+      content: (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="avg run" value={`${avgMs}ms`} />
+          <Stat label="total time" value={`${Math.round((s?.totalDurationMs ?? 0) / 1000)}s`} />
+          <Stat label="config v" value={String(s?.configVersion ?? 0)} />
+        </div>
+      ),
+    },
+  ];
   return (
-    <FullscreenPager
+    <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
       badge={<Badge color="#94a3b8">limit {concurrency}</Badge>}
-      pages={[page]}
+      sections={sections}
     />
   );
 };
