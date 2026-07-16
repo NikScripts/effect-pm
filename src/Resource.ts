@@ -3456,17 +3456,25 @@ const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
 // the server/CLI/backend transport; a browser dashboard opens many concurrent streams and starves at
 // the ~6-connection HTTP/1.1 cap, with no error. Point the mistake at {@link socketClient}. Fires via
 // the runtime logger (once), so it can't be a raw-console lint smell and stays quiet on the server.
-let httpClientBrowserWarned = false;
-const warnHttpClientInBrowser = Effect.suspend(() => {
-  if (typeof window === "undefined" || httpClientBrowserWarned) return Effect.void;
-  httpClientBrowserWarned = true;
-  return Effect.logWarning(
-    "Resource.httpClient is running in a browser. A dashboard opens many concurrent streams " +
-      "(each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 connections " +
-      "per origin — the rest are starved (no graphs, no logs, frozen cards). Use Resource.socketClient " +
-      "for the browser. See docs/observe/dashboard.md.",
-  );
-});
+/** The http client transport was built in a browser — it starves at the ~6-connection HTTP/1.1 cap and
+ *  ships a blank dashboard. `socketClient` is the browser transport. A hard failure, not a warning: the
+ *  starving transport is never the right choice in a browser. @internal */
+class HttpClientInBrowser extends Data.TaggedError("HttpClientInBrowser")<{}> {
+  override get message() {
+    return (
+      "Resource.protocolHttp / httpClient cannot run in a browser: a dashboard opens many concurrent " +
+      "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
+      "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
+      "Resource.socketClient / a socket-kind node for the browser. See docs/observe/dashboard.md."
+    );
+  }
+}
+
+// Fail loudly if an http client transport is built in a browser (window defined). No-op on the server /
+// in tests (`window` undefined). A die, not a log — the mistake ships a silently-broken dashboard.
+const dieIfHttpClientInBrowser = Effect.suspend(() =>
+  typeof window === "undefined" ? Effect.void : Effect.die(new HttpClientInBrowser()),
+);
 
 /**
  * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
@@ -3490,12 +3498,10 @@ const httpClient = <Self>(
   // a per-node shortcut = `connect` + {@link protocolHttp}. The url lives on the node by default
   // (decision 2 — the node carries how to reach it); `options.url` overrides; `"/rpc"` (same-origin)
   // is the final fallback, matching {@link httpServer}'s default path.
-  Layer.merge(
-    connectLayer(
-      node,
-      protocolHttp(options?.url ?? node.url ?? "/rpc", options?.serialization),
-    ),
-    Layer.effectDiscard(warnHttpClientInBrowser),
+  // the browser guard lives in `protocolHttp` (the root), so it applies here too.
+  connectLayer(
+    node,
+    protocolHttp(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
 
 // Normalize a `socketClient` url to `ws://` / `wss://`, resolved **lazily** (in the enclosing
@@ -3545,9 +3551,14 @@ export const protocolHttp = (
   url = "/rpc",
   serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
 ): Layer.Layer<RpcClient.Protocol> =>
-  RpcClient.layerProtocolHttp({ url }).pipe(
-    Layer.provide(serialization),
-    Layer.provide(FetchHttpClient.layer),
+  // guard at the root: `httpClient` / `clientHttp` / `connectHttp` all build on this, so the browser
+  // footgun is closed for every http-client path in one place.
+  Layer.merge(
+    RpcClient.layerProtocolHttp({ url }).pipe(
+      Layer.provide(serialization),
+      Layer.provide(FetchHttpClient.layer),
+    ),
+    Layer.effectDiscard(dieIfHttpClientInBrowser),
   );
 
 /**
