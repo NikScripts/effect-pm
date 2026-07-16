@@ -27,6 +27,7 @@ import {
   type ApiTag,
   type CommandAtom,
   type CustomQueueTag,
+  type FleetHealthTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -38,6 +39,7 @@ import {
   type NodeRef,
   isApiTag,
   isCustomQueueTag,
+  isFleetHealthTag,
   isProcessTag,
   isQueueTag,
   nodesOf,
@@ -49,6 +51,7 @@ import {
 import { kindOf as resourceKindOf, kind as resourceKind } from "../Resource";
 import { kind as queueKind } from "../QueueResource";
 import { kind as customQueueKind } from "../CustomQueueResource";
+import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -64,7 +67,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useCustomQueueBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -2132,6 +2135,63 @@ export const ResourceCard = (props: WidgetProps): React.ReactElement => {
 
 // Each built-in adapts a typed card to the registry's LeafTag props. Registered under its kind, so
 // the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
+/** One node's row in a fleet-health card: a coloured pip (reachable ok/degraded, or unreachable) +
+ *  the node name + its state. */
+const FleetNodeRow = (props: { readonly node: string; readonly report: NodeReport }): React.ReactElement => {
+  const color =
+    props.report._tag === "Unreachable"
+      ? "#ef4444"
+      : props.report.status === "degraded"
+        ? "#eab308"
+        : "#22c55e";
+  const label = props.report._tag === "Unreachable" ? "unreachable" : props.report.status;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{displayName(props.node)}</span>
+      <span className="shrink-0" style={{ color }}>{label}</span>
+    </div>
+  );
+};
+
+/** Fleet-status rollup colours — ok / degraded / partial (any node unreachable). */
+const FLEET_STATUS: Record<string, string> = { ok: "#22c55e", degraded: "#eab308", partial: "#ef4444" };
+
+/**
+ * The card for a **FleetHealth** resource — surfaces its two `fleet` fields: the `status` rollup
+ * (ok / degraded / partial) as the header badge, and the `byNode` map as a pip-per-node roster
+ * (Reachable ok/degraded, or Unreachable when a peer is down). Read-only. @public
+ */
+export const FleetHealthCard = (props: {
+  readonly tag: FleetHealthTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = useFleetHealthBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const byNodeR = useAtomValue(bundle.byNode);
+  const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>
+      </div>
+      <div className="flex flex-col gap-1">
+        {rows.length === 0 ? (
+          <div className="text-xs text-muted-foreground">connecting…</div>
+        ) : (
+          rows.map(([node, report]) => <FleetNodeRow key={node} node={node} report={report} />)
+        )}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </div>
+  );
+};
+
 const queueWidget: Widget = ({ tag, name, onOpen }) =>
   isQueueTag(tag) ? (
     <QueueCard tag={tag} name={name} onOpen={onOpen} />
@@ -2156,6 +2216,12 @@ const customQueueWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
+const fleetHealthWidget: Widget = ({ tag, name, onOpen }) =>
+  isFleetHealthTag(tag) ? (
+    <FleetHealthCard tag={tag} name={name} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
 
 /**
  * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
@@ -2173,6 +2239,7 @@ export const base: WidgetRegistry = withEntries(
     forKind(customQueueKind, customQueueWidget),
     forKind(processKind, processWidget),
     forKind(apiKind, apiWidget),
+    forKind(fleetHealthKind, fleetHealthWidget),
     forKind(resourceKind, ResourceCard),
   ],
 );

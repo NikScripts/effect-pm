@@ -17,6 +17,7 @@ import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResource";
+import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -135,6 +136,15 @@ interface CustomQueueService {
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
 /** A custom-queue tag — yieldable for its live service. @public */
 export type CustomQueueTag<R = never> = Effect.Effect<CustomQueueService, never, R> & { readonly key: string };
+
+/** The structural shape of a **fleet-health** resource's live service — a per-node health map + a
+ *  rollup status, both `fleet` effect fields (read-once, polled — no reactive ref). */
+interface FleetHealthService {
+  readonly byNode: Effect.Effect<Record<string, NodeReport>>;
+  readonly status: Effect.Effect<FleetStatus>;
+}
+/** A fleet-health tag — yieldable for its live service. @public */
+export type FleetHealthTag<R = never> = Effect.Effect<FleetHealthService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
@@ -179,6 +189,11 @@ export interface CustomQueueBundle {
   readonly resume: CommandAtom;
   readonly clear: CommandAtom;
   readonly shutdown: CommandAtom;
+}
+/** The atoms one **fleet-health** card needs — a polled per-node health map + rollup status. @public */
+export interface FleetHealthBundle {
+  readonly byNode: ValueAtom<Record<string, NodeReport>>;
+  readonly status: ValueAtom<FleetStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
@@ -298,6 +313,9 @@ export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
  *  primary kinds; a custom queue dispatches by its exact kind key). @public */
 export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
   resourceKindOf(m) === customQueueKind;
+/** Fleet-health guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
+export const isFleetHealthTag = (m: unknown): m is FleetHealthTag =>
+  resourceKindOf(m) === fleetHealthKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -535,6 +553,33 @@ export const customQueueBundle = <R, ER>(
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
     shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const fleetHealthBundleCache = new WeakMap<object, Map<string, FleetHealthBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **fleet-health** tag. `byNode` / `status` are
+ *  `fleet` effect fields (a server-side peer fold, no reactive ref), so they're **polled** on a tick —
+ *  the first read fires immediately, then every ~2s. @public */
+export const fleetHealthBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: FleetHealthTag<R>,
+): FleetHealthBundle => {
+  const cache = cacheFor(fleetHealthBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const read = Effect.flatMap(tag, (h) => Effect.all({ byNode: h.byNode, status: h.status }));
+  const poll = runtime.atom(
+    Stream.fromEffect(read).pipe(
+      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
+    ),
+  );
+  const bundle: FleetHealthBundle = {
+    byNode: Atom.mapResult(poll, (a) => a.byNode),
+    status: Atom.mapResult(poll, (a) => a.status),
   };
   cache.set(tag.key, bundle);
   return bundle;

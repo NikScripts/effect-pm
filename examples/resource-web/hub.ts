@@ -18,6 +18,7 @@ import * as CustomQueueResource from "../../src/CustomQueueResource";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
+import * as FleetHealth from "../../src/FleetHealth";
 
 const importJob = Schema.Struct({ id: Schema.String });
 
@@ -46,6 +47,12 @@ export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
   activeByNode: Resource.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
 }).pipe(
   Resource.distributed([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
+) {}
+
+// A **fleet-health** mesh across the three nodes — each instance reports its own readiness; `byNode`
+// folds every peer's (Reachable / Unreachable), `status` rolls that up. Dogfoods the FleetHealth widget.
+export class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+  Resource.distributed([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
@@ -112,6 +119,7 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   ImportJobs,
   ScoresApi,
   WorkerPool,
+  MeshHealth,
 }) {}
 
 /** The hub the dashboard renders. */
@@ -150,6 +158,7 @@ const appLayer = Layer.mergeAll(
   // one on WnbaNode. `client(tag, node)` resolves the transport from that node, so the requirement is
   // the node (satisfied by wnbaTransport), enforced at compile time.
   Resource.client(WorkerPool, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */

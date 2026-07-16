@@ -17,6 +17,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Resource from "../../src/Resource";
 import { serve as queueEntry } from "../../src/QueueResource";
 import * as CustomQueueResource from "../../src/CustomQueueResource";
+import * as FleetHealth from "../../src/FleetHealth";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
@@ -25,7 +26,7 @@ import * as Store from "../../src/Store";
 import * as QueueResource from "../../src/QueueResource";
 import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
+import { BoxScoreQueue, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
 
 const WNBA_PORT = HOST_PORTS.wnba;
@@ -276,8 +277,10 @@ const wnbaNode = Resource.wsServer([
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
   Resource.serve(WorkerPool, workerPoolImpl(5)),
+  FleetHealth.serve(MeshHealth),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
+  Layer.provide(Resource.peersLayer(MeshHealth, WnbaNode)),
   // peers dial websocket too — one knob, matching the server's own wire (default would be http → 404
   // against a ws-only /rpc). The peer urls stay on the Nodes; this only chooses how to reach them.
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
@@ -295,8 +298,10 @@ const liveNode = Resource.wsServer([
     polling: Polling.spaced(Duration.seconds(2)),
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
+  FleetHealth.serve(MeshHealth),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
+  Layer.provide(Resource.peersLayer(MeshHealth, LiveNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(LiveStore.layerMemory),
@@ -319,8 +324,10 @@ const statsNode = Resource.wsServer([
     autoStart: true,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
+  FleetHealth.serve(MeshHealth),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
+  Layer.provide(Resource.peersLayer(MeshHealth, StatsNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(StatsStore.layerMemory),

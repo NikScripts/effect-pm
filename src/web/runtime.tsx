@@ -12,6 +12,8 @@ import {
   type ApiTag,
   type CustomQueueBundle,
   type CustomQueueTag,
+  type FleetHealthBundle,
+  type FleetHealthTag,
   type NodeBundle,
   type NodeRef,
   type ProcessBundle,
@@ -20,6 +22,7 @@ import {
   type QueueTag,
   apiBundle,
   customQueueBundle,
+  fleetHealthBundle,
   nodeStatusBundle,
   processBundle,
   queueBundle,
@@ -50,6 +53,10 @@ export const useQueueBundle = (tag: QueueTag): QueueBundle => queueBundle(useRun
 /** Atom bundle for a custom-queue tag, memoized per runtime+tag. @public */
 export const useCustomQueueBundle = (tag: CustomQueueTag): CustomQueueBundle =>
   customQueueBundle(useRuntime(), tag);
+
+/** Atom bundle for a fleet-health tag, memoized per runtime+tag. @public */
+export const useFleetHealthBundle = (tag: FleetHealthTag): FleetHealthBundle =>
+  fleetHealthBundle(useRuntime(), tag);
 
 /** Atom bundle for a process tag, memoized per runtime+tag. @public */
 export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundle(useRuntime(), tag);
