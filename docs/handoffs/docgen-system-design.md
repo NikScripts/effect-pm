@@ -138,7 +138,27 @@ clean · tests per layer · commit+push per step · branch from `integration`.
     `typeToString` doesn't accept it — and reaching internals needs a cast (forbidden). A full `ts.Type`
     walker works but is TypeDoc-scale and unnecessary given typeToTypeNode.
   - ⇒ `TypePrinter` = `typeToTypeNode` + a small node-walk printer with plain-text fallback + `LinkResolver`.
-- P2/P3/P4: pending (service wrapping, render application, cross-package) — lower risk, resolution proven.
+- **P2 — service architecture: VALIDATED.** `Context.Service<Self, Shape>()("key")` cleanly wraps the
+  (stateful) compiler: `TsProgram` (checker + source files) and `SymbolIndex` (location→url) as sync
+  layers, `LinkResolver` as `Layer.effect` depending on both, `Option` for results. Wired with
+  `Layer.provideMerge`/`mergeAll`, resolved 459 refs through `Effect.gen` — identical to the raw spike.
+  The design's service graph works as drawn; no fighting the compiler.
+- **P3 — render application: shiki CARRIES the links (D1 = map-onto-shiki CONFIRMED).** shiki's
+  `TokenBase` exposes `offset` and the `span` transformer receives the token, so a transformer wraps
+  each token whose offset matches a resolved identifier: `Key`→Context/Key, `Scope`→Scope/Scope,
+  `NoInfer`→Types/NoInfer rendered as links in the source. NO custom renderer needed. Open tuning:
+  token-boundary alignment (5/10 tokens matched on first pass — match by offset RANGE, and account for
+  the twoslash preamble shift, both mechanical).
+- **P4 — cross-package: WORKS, with one config detail.** A `platform-node` token → `effect` page
+  (`FileSystem`→effect/FileSystem/FileSystem, `Layer`→effect/Layer/Layer) resolves ONLY when the
+  program's `paths` map `effect`/`@effect/*` imports to the `repos/effect` SOURCE the model was built
+  from (else they resolve into node_modules — undocumented). ⇒ `TsProgram` layer must set those paths
+  (or build one program spanning all documented packages). The global `SymbolIndex` handles the rest.
+
+**Phase 1 verdict: every risk retired.** The whole approach is proven — resolution is exact and cheap,
+the TypePrinter is small (typeToTypeNode), Effect composes over the compiler, shiki carries the links,
+cross-package works. Ready for Phase 2 (build the real `TsProgram`/`SymbolIndex`/`LinkResolver` services
+with tests). D1 locked as map-onto-shiki.
 
 ## Decisions log
 
