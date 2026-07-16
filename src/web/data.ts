@@ -8,9 +8,8 @@
  * engine or `Resource.client` over http; the widgets don't care which).
  *
  */
-import { DateTime, Duration, Effect, Layer, Option, type Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
 import { client, nodeOf, kindOf as resourceKindOf, type NodeKey, type Subscribable } from "../Resource";
 import * as LogEntry from "../LogEntry";
@@ -803,10 +802,12 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
 // so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
 // requirement — the same contained boundary assertion `Resource.client` makes for node-bearing tags.
+// The 2-arg `client(tag, node)` form reads the node's value and unwraps its transport — the sanctioned
+// way to point a nodeless tag (NodeStatus) at a specific node. (The node is exposed at runtime via
+// `connect`, so we erase its identity to `never` — the same contained boundary assertion Resource.client
+// makes for node-bearing tags.)
 const nodeStatusClient = (node: NodeKey<unknown>) =>
-  client(NodeStatus.Tag).pipe(
-    Layer.provide(Layer.effect(RpcClient.Protocol, node as NodeKey<never>)),
-  );
+  client(NodeStatus.Tag, node as NodeKey<never>);
 
 /** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
  *  reserved `NodeStatus` resource over that node's transport. */
