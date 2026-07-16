@@ -14,6 +14,8 @@ import {
   type CustomQueueTag,
   type FleetHealthBundle,
   type FleetHealthTag,
+  type TelemetryBundle,
+  type TelemetryTag,
   type NodeBundle,
   type NodeRef,
   type ProcessBundle,
@@ -23,6 +25,7 @@ import {
   apiBundle,
   customQueueBundle,
   fleetHealthBundle,
+  telemetryBundle,
   nodeStatusBundle,
   processBundle,
   queueBundle,
@@ -57,6 +60,10 @@ export const useCustomQueueBundle = (tag: CustomQueueTag): CustomQueueBundle =>
 /** Atom bundle for a fleet-health tag, memoized per runtime+tag. @public */
 export const useFleetHealthBundle = (tag: FleetHealthTag): FleetHealthBundle =>
   fleetHealthBundle(useRuntime(), tag);
+
+/** Atom bundle for a telemetry tag, memoized per runtime+tag. @public */
+export const useTelemetryBundle = (tag: TelemetryTag): TelemetryBundle =>
+  telemetryBundle(useRuntime(), tag);
 
 /** Atom bundle for a process tag, memoized per runtime+tag. @public */
 export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundle(useRuntime(), tag);

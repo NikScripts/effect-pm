@@ -28,6 +28,7 @@ import {
   type CommandAtom,
   type CustomQueueTag,
   type FleetHealthTag,
+  type TelemetryTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -40,6 +41,7 @@ import {
   isApiTag,
   isCustomQueueTag,
   isFleetHealthTag,
+  isTelemetryTag,
   isProcessTag,
   isQueueTag,
   nodesOf,
@@ -52,6 +54,7 @@ import { kindOf as resourceKindOf, kind as resourceKind } from "../Resource";
 import { kind as queueKind } from "../QueueResource";
 import { kind as customQueueKind } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
+import { kind as telemetryKind } from "../Telemetry";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -67,7 +70,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -2192,6 +2195,61 @@ export const FleetHealthCard = (props: {
   );
 };
 
+/** One node's in-flight as a labelled bar — for the telemetry card's per-node breakdown. */
+const TelemetryNodeRow = (props: {
+  readonly node: string;
+  readonly count: number;
+  readonly max: number;
+}): React.ReactElement => (
+  <div className="flex items-center gap-2 text-xs">
+    <span className="w-16 shrink-0 truncate text-muted-foreground">{displayName(props.node)}</span>
+    <Bar value={props.count} max={props.max} color="#3b82f6" />
+    <span className="w-6 shrink-0 text-right tabular-nums text-foreground">{props.count}</span>
+  </div>
+);
+
+/**
+ * The card for a **Telemetry** resource — surfaces its fleet folds: `fleetInFlight` (in-flight across
+ * the whole fleet) as the headline number, `inFlightByNode` as a bar-per-node breakdown, plus this
+ * node's live metric count (from `snapshot`). Read-only. @public
+ */
+export const TelemetryCard = (props: {
+  readonly tag: TelemetryTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = useTelemetryBundle(props.tag);
+  const fleetR = useAtomValue(bundle.fleetInFlight);
+  const byNodeR = useAtomValue(bundle.inFlightByNode);
+  const countR = useAtomValue(bundle.metricCount);
+  const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const count = AsyncResult.isSuccess(countR) ? countR.value : undefined;
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  return (
+    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        {count !== undefined ? (
+          <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+            {count} metrics
+          </span>
+        ) : null}
+      </div>
+      <div className="mb-3 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{fleet}</span>
+        <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {rows.map(([node, n]) => <TelemetryNodeRow key={node} node={node} count={n} max={max} />)}
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </div>
+  );
+};
+
 const queueWidget: Widget = ({ tag, name, onOpen }) =>
   isQueueTag(tag) ? (
     <QueueCard tag={tag} name={name} onOpen={onOpen} />
@@ -2222,6 +2280,12 @@ const fleetHealthWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
+const telemetryWidget: Widget = ({ tag, name, onOpen }) =>
+  isTelemetryTag(tag) ? (
+    <TelemetryCard tag={tag} name={name} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
 
 /**
  * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
@@ -2240,6 +2304,7 @@ export const base: WidgetRegistry = withEntries(
     forKind(processKind, processWidget),
     forKind(apiKind, apiWidget),
     forKind(fleetHealthKind, fleetHealthWidget),
+    forKind(telemetryKind, telemetryWidget),
     forKind(resourceKind, ResourceCard),
   ],
 );
