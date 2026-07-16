@@ -1,10 +1,5 @@
 import { ApiSymbolCard } from "../../../../components/ApiSymbol.js";
-import {
-  readSourceFile,
-  symbolDetail,
-  symbolPaths,
-  symbolSourceHtml,
-} from "../../../../lib/api-data.js";
+import { readSourceFile, symbolDetail, symbolSourceHtml } from "../../../../lib/api-data.js";
 import { loadHighlighter } from "../../../../lib/highlight.js";
 import { runServer } from "../../../../lib/runtime.js";
 
@@ -45,10 +40,8 @@ export default async function ApiSymbolPage({
   );
 }
 
-export const getConfig = async () =>
-  import.meta.env.DEV
-    ? ({ render: "dynamic" } as const)
-    : ({
-        render: "static",
-        staticPaths: (await runServer(symbolPaths())).map(([p, m, sym]) => [p, m, sym] as const),
-      } as const);
+// Rendered on demand (SSR), never pre-rendered: there are 5000+ symbol pages, each with a heavy
+// twoslash source panel — statically pre-rendering them all overflows the build's serializer (V8
+// string cap) and produces a multi-GB dist. Served dynamically, the data is read per request (cwd
+// paths in api-data resolve in the running server).
+export const getConfig = async () => ({ render: "dynamic" }) as const;

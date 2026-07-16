@@ -4,13 +4,17 @@
 // server component. Schemas are the SSOT — the exported interfaces derive from them.
 
 import * as nodePath from "node:path";
-import { fileURLToPath } from "node:url";
 import { Effect, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 
-const dataDir = fileURLToPath(new URL("../../api-data/", import.meta.url));
-const hoversDir = fileURLToPath(new URL("../../api-hovers/", import.meta.url)); // gen-hovers sidecars
-const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url)); // docs/site/src/lib -> repo root
+// Resolve the data dirs from the working directory (docs/site in both `waku dev` and `waku build`),
+// NOT import.meta.url: in a production build the bundled module's URL points into dist/, so a
+// URL-relative path misses api-data/api-hovers entirely and every api page renders empty. cwd is
+// stable and correct in both modes.
+const siteRoot = process.cwd();
+const dataDir = nodePath.join(siteRoot, "api-data");
+const hoversDir = nodePath.join(siteRoot, "api-hovers"); // gen-hovers sidecars
+const repoRoot = nodePath.resolve(siteRoot, "../.."); // docs/site -> repo root
 
 const ApiTagS = Schema.Struct({ name: Schema.String, text: Schema.String });
 const ApiSourceS = Schema.Struct({
