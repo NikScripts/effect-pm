@@ -58,26 +58,31 @@ export const ApiSymbolRow = ({ s, href }: { s: Row; href: string }): React.React
 export const ApiSymbolCard = ({
   s,
   fileText,
+  sourceHtml,
 }: {
   s: Sym;
   fileText?: string; // the whole source file — provided (by the page) only for our own package
+  sourceHtml?: string; // precomputed twoslash HTML — provided for effect-smol deps (gen-hovers)
 }): React.ReactElement => {
   const sigs = s.signatures.length > 0 ? s.signatures : s.typeText !== undefined ? [s.typeText] : [];
   const lead = docLead(s.rawComment);
   const sourceLines = s.sourceText.split("\n").length;
-  // With the file text (our package): twoslash the source cut to this declaration. Without it
-  // (external deps): plain highlight — it can't twoslash under our config and the build cost isn't
-  // worth it.
+  // Source panel, in preference order: precomputed twoslash HTML (effect-smol deps), a live twoslash
+  // of the file text (our own package), else plain highlight.
   const sourceView =
-    fileText !== undefined
-      ? (highlightSourceWithHovers(
-          fileText,
-          s.source.file,
-          s.source.line,
-          s.source.line + sourceLines - 1,
-          s.docLinks,
-        ) ?? highlightToReact(s.sourceText, "ts"))
-      : highlightToReact(s.sourceText, "ts");
+    sourceHtml !== undefined ? (
+      <div className="twoslash-precomputed" dangerouslySetInnerHTML={{ __html: sourceHtml }} />
+    ) : fileText !== undefined ? (
+      (highlightSourceWithHovers(
+        fileText,
+        s.source.file,
+        s.source.line,
+        s.source.line + sourceLines - 1,
+        s.docLinks,
+      ) ?? highlightToReact(s.sourceText, "ts"))
+    ) : (
+      highlightToReact(s.sourceText, "ts")
+    );
   const chips = [
     ...(s.category !== undefined ? [{ cls: "api-chip-cat", text: s.category }] : []),
     ...s.linkTargets.map((t) => ({ cls: "api-chip-link", text: t })),

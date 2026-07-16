@@ -1,5 +1,10 @@
 import { ApiSymbolCard } from "../../../../components/ApiSymbol.js";
-import { readSourceFile, symbolDetail, symbolPaths } from "../../../../lib/api-data.js";
+import {
+  readSourceFile,
+  symbolDetail,
+  symbolPaths,
+  symbolSourceHtml,
+} from "../../../../lib/api-data.js";
 import { loadHighlighter } from "../../../../lib/highlight.js";
 import { runServer } from "../../../../lib/runtime.js";
 
@@ -22,10 +27,11 @@ export default async function ApiSymbolPage({
       </p>
     );
   await loadHighlighter();
-  // Read the source file for the twoslash panel — our package only; deps (repos/*) stay plain.
-  const fileText = s.source.file.startsWith("repos/")
-    ? undefined
-    : await runServer(readSourceFile(s.source.file));
+  // Source panel: our own package twoslashes live from the file text; effect-smol deps (repos/*) use
+  // the precomputed twoslash HTML from gen-hovers (twoslashing them live is too slow per symbol).
+  const isDep = s.source.file.startsWith("repos/");
+  const fileText = isDep ? undefined : await runServer(readSourceFile(s.source.file));
+  const sourceHtml = isDep ? await runServer(symbolSourceHtml(pkg, module, symbol)) : undefined;
   return (
     <>
       <title>{`${s.qualifiedName} — API — effect-pm`}</title>
@@ -33,7 +39,7 @@ export default async function ApiSymbolPage({
         <p className="api-back">
           <a href={`/api/${pkg}/${module}`}>← {s.entry}</a>
         </p>
-        <ApiSymbolCard s={s} fileText={fileText} />
+        <ApiSymbolCard s={s} fileText={fileText} sourceHtml={sourceHtml} />
       </article>
     </>
   );

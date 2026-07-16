@@ -9,6 +9,7 @@ import { Effect, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 
 const dataDir = fileURLToPath(new URL("../../api-data/", import.meta.url));
+const hoversDir = fileURLToPath(new URL("../../api-hovers/", import.meta.url)); // gen-hovers sidecars
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url)); // docs/site/src/lib -> repo root
 
 const ApiTagS = Schema.Struct({ name: Schema.String, text: Schema.String });
@@ -162,4 +163,18 @@ export const readSourceFile = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     return yield* fs.readFileString(nodePath.join(repoRoot, relFile));
+  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
+
+// Precomputed twoslash source-panel HTML for a symbol (scripts/gen-hovers.ts), for effect-smol
+// packages whose source can't twoslash cheaply at render time. undefined when there's no sidecar.
+export const symbolSourceHtml = (
+  pkg: string,
+  moduleSlug: string,
+  name: string,
+): Effect.Effect<string | undefined, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.readFileString(
+      nodePath.join(hoversDir, pkg, moduleSlug, `${symbolFileKey(name)}.src.html`),
+    );
   }).pipe(Effect.catch(() => Effect.succeed(undefined)));
