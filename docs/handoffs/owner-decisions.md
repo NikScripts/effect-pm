@@ -6,13 +6,21 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
-## 2026-07-15 — Tutorials & Documentation goals (compound + language)
+## 2026-07-16 — No Em Dash + No AI Fingerprints; lean Creating a Resource
 
-- **Owner said:** Upgrade narrative docs and integrate nine named goals (The Spine, Make the Invisible Visible, Earn the Abstraction, Naming Is Pedagogy, Minimal Deltas, Present-Tense / Imperative / Affirmative, One Door / Staircase, No Simply, Sharp Edges In Place) into standards.
-- **Chose:** Codify as named rules under Narrative docs in [`docs/standards/documentation.md`](../standards/documentation.md) (review cites by name). Spine = Resource (Tag / Contract / Implementation / Layer / Handle). Fold former show-don't-tell / glossary / capitalize into the named set. Upgrade Introduction, Core Concepts, Creating a Resource, Queues opener to compound on that spine.
-- **Rejected / deferred:** Full rewrite of every guide in one pass; new site chrome for the goals.
-- **Supervisor impact:** Agent 1 on `cursor/docs-corpus-phase3-ce05`; sync to `integration`.
+- **Owner said:** Research sounding less like AI (verbosity, em dashes); then do the small plan.
+- **Chose:** Additive Documentation rules *No Em Dash* (must) and *No AI Fingerprints* (should). Rewrite Creating a Resource lean against them. Corpus-wide dash sweep later.
+- **Rejected / deferred:** Full book voice pass; deleting older Narrative rules.
+- **Supervisor impact:** Agent 1; sync to `integration`.
 
+## 2026-07-15 — Tutorials & Documentation goals (add alongside, don't replace)
+
+- **Owner said:** Integrate the nine narrative goals into standards; undo the earlier rewrite; talk first; start small — add rules, keep existing Narrative rules.
+- **Chose:** Append *The Spine* … *Sharp Edges, In Place* under Narrative docs in [`documentation.md`](../standards/documentation.md). Keep Show don't tell / glossary / capitalize / verified / handoff. No narrative page rewrites in this step.
+- **Rejected / deferred:** Replacing existing rules; upgrading Introduction / Creating a Resource until a later agreed pass.
+- **Supervisor impact:** Agent 1; sync to `integration`.
+
+## 2026-07-15 — Examples book priority (over legacy recipe ports)
 
 - **Owner said:** Pair every example file with a near-identical Twoslash doc; hub page in sidebar only; example docs grouped by module with `#` anchors; Agent 1 chooses priority vs legacy.
 - **Chose:** **Examples book first** ([`agent-01-examples-book.md`](./agent-01-examples-book.md)). Do **not** promote `toolkit-by-example` to Guides. Forms batch first; site glob + hide example docs from “More” = Agent B note.

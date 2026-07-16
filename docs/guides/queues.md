@@ -3,20 +3,18 @@
 
 A **queue** takes a stream of items and drains them through a worker effect — one
 item at a time, or many in parallel, with priority, de-duplication, retries, and
-back-pressure. In this toolkit a queue is a [**Resource**](/docs/glossary#resource): you
-declare it once, and everywhere you `yield* MyQueue` you get a single
-[**Handle**](/docs/glossary#handle) that does *everything* — enqueue work, watch it drain, and
-steer it — through the same value.
+back-pressure. In this toolkit a queue is a **resource**: you declare it once, and
+everywhere you `yield* MyQueue` you get a single handle that does *everything* —
+enqueue work, watch it drain, and steer it — through the same value.
 
-That Handle is the whole surface. There is no separate "producer" and "admin"
+That handle is the whole surface. There is no separate "producer" and "admin"
 API: the code that enqueues an email can also pause the queue, read how many are
-pending, and subscribe to every completion. And because it is a Resource, the
-Handle reads identically whether the queue runs in this process or across the
-network — only the [**Layer**](/docs/glossary#layer) that provides it changes.
+pending, and subscribe to every completion. And because it's a resource, the
+handle reads identically whether the queue runs in this process or across the
+network — only the layer that provides it changes.
 
 This guide starts at the start: the smallest queue that works, then each piece it
-was built from — minimal deltas on the same spine the
-[Introduction](/docs/) named.
+was built from.
 
 ## Your first queue
 

@@ -120,6 +120,24 @@ export const StatusBadge = (props: { readonly phase: string; readonly paused: bo
   return <Badge color={s.color}>{s.label}</Badge>;
 };
 
+/** Running / stopped pill for a process — from its live `supervising` flag. Shared by the process
+ *  card and its detail header. @public */
+export const ProcessStatusBadge = (props: { readonly supervising: boolean | undefined }): React.ReactElement => (
+  <Badge color={props.supervising === true ? "#22c55e" : "#94a3b8"}>
+    {props.supervising === true ? "running" : "stopped"}
+  </Badge>
+);
+
+/** Health pill for an API-metrics resource — green / amber / red by error rate ({@link apiHealth}).
+ *  Shared by the API card and its detail header. @public */
+export const ApiStatusBadge = (props: {
+  readonly requests: number;
+  readonly errors: number;
+}): React.ReactElement => {
+  const health = apiHealth(props.requests, props.errors);
+  return <Badge color={health.color}>{health.label}</Badge>;
+};
+
 const Bar = (props: { readonly value: number; readonly max: number; readonly color: string }): React.ReactElement => (
   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
     <div
@@ -195,6 +213,23 @@ const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): Re
   );
 };
 
+/** Invisible: reads ONE node's `NodeStatus` and reports how many of the group's leaves **on that
+ *  node** are degraded, so {@link GroupCard} can sum them for its aggregate badge. A child-level hook
+ *  (not a `.map` over the node list) keeps a constant hook order if a group ever gains/loses a node —
+ *  the same Rules-of-Hooks pattern {@link HealthBoard} uses. */
+const NodeDegradedProbe = (props: {
+  readonly node: NodeRef;
+  readonly leafKeys: ReadonlySet<string>;
+  readonly onCount: (id: string, count: number) => void;
+}): null => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const count = (s?.resources ?? []).filter((x) => !x.ready && props.leafKeys.has(x.key)).length;
+  const { onCount, node } = props;
+  React.useEffect(() => onCount(node.id, count), [onCount, node.id, count]);
+  return null;
+};
+
 /** A subgroup as a grid widget — tap opens it as its own page (drill-down). */
 export const GroupCard = (props: {
   readonly node: GroupNode;
@@ -208,16 +243,50 @@ export const GroupCard = (props: {
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
   // The display name of a member is the key it sits under in this node — map member identity → key.
   const nameOf = new Map<unknown, string>(Object.entries(Group.members(props.node)).map(([k, m]) => [m, k]));
+  // Aggregate readiness across the group's leaves — which may span several nodes. Each node reports its
+  // degraded-leaf count up (via a hidden probe); the badge shows the total, only when non-zero.
+  const nodes = nodesOf(props.node);
+  const leafKeys = React.useMemo(
+    () => new Set(leafTags(props.node).map(tagWireKey).filter((k): k is string => k !== undefined)),
+    [props.node],
+  );
+  const [counts, setCounts] = React.useState<ReadonlyMap<string, number>>(() => new Map());
+  const report = React.useCallback((id: string, count: number): void => {
+    setCounts((prev) => {
+      if (prev.get(id) === count) return prev;
+      const next = new Map(prev);
+      next.set(id, count);
+      return next;
+    });
+  }, []);
+  const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
   return (
     <button
       type="button"
       onClick={() => props.onOpen(props.node)}
       style={vt}
-      className="flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
+      className="relative flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
+      {nodes.map((node) => (
+        <NodeDegradedProbe key={node.id} node={node} leafKeys={leafKeys} onCount={report} />
+      ))}
+      {degraded > 0 ? (
+        <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-amber-500" />
+      ) : null}
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
-        <span className="text-xs text-muted-foreground">{leafTags(props.node).length} resources</span>
+        <strong className="min-w-0 flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
+        {degraded > 0 ? (
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-medium text-amber-50"
+            style={{ backgroundColor: "rgba(146,64,14,0.95)" }}
+          >
+            {degraded} of {leafTags(props.node).length} degraded
+          </span>
+        ) : (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {leafTags(props.node).length} resources
+          </span>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         {leaves.map((tag) => <MemberRow key={tag.key} tag={tag} name={nameOf.get(tag) ?? displayName(tag.key)} />)}
@@ -255,6 +324,20 @@ const DegradedOverlayInner = (props: {
 }): React.ReactElement | null => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const stale = useStale(s?.uptimeMillis);
+  // Node stopped responding: dim the frozen card + say so. Priority over "degraded" — once the stream
+  // is dead, the last readiness is itself stale, so "not responding" is the honest signal.
+  if (stale) {
+    return (
+      <>
+        <div className="pointer-events-none absolute inset-0 rounded-xl bg-background/55 ring-1 ring-slate-500" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-xl bg-slate-700/95 px-2 py-1 text-[0.72rem] font-medium text-slate-100">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-slate-300" />
+          <span className="min-w-0 flex-1 truncate">not responding — showing last update</span>
+        </div>
+      </>
+    );
+  }
   const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
   if (readiness === undefined || readiness.ready) return null; // ready / still loading → no overlay
   return (
@@ -275,9 +358,10 @@ const DegradedOverlayInner = (props: {
   );
 };
 
-/** Shown ONLY when a resource is not ready: an amber ring on its card + a strip with the root cause,
- *  read from its node's `NodeStatus` (SSOT). Overlaid (absolute, no layout shift) at the `Cell` level,
- *  so it works for every card type. Nothing while ready, loading, or nodeless. @public */
+/** The card **problem overlay**, read from the resource's node `NodeStatus` (SSOT): a slate dim +
+ *  "not responding" when the node's heartbeat stalls (its data is frozen), else an amber ring +
+ *  "degraded — <cause>" when the resource isn't ready. Absolute (no layout shift), works for every
+ *  card type; nothing while live-and-ready, loading, or nodeless. @public */
 export const DegradedOverlay = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = resourceNodeRef(props.tag);
   if (node === undefined) return null;
@@ -618,27 +702,68 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
 };
 
 /** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
+/** Effect log levels, low→high — for the min-level filter. Unknown levels rank as `info`. */
+const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, warning: 3, error: 4, fatal: 5 };
+const levelRank = (level: string): number => LEVEL_RANK[level.toLowerCase()] ?? 2;
+const MIN_LEVELS = ["all", "info", "warn", "error"] as const;
+
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
   readonly className?: string;
 }): React.ReactElement => {
   const r = useAtomValue(props.bundle.logs);
   React.useEffect(() => dlog("logs", asyncTag(r)), [r]);
-  const logs: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
+  const all: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
+  // client-side filter: substring match on the message + a minimum level
+  const [query, setQuery] = React.useState("");
+  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("all");
+  const needle = query.trim().toLowerCase();
+  const floor = min === "all" ? 0 : levelRank(min);
+  const logs = all.filter(
+    (l) => levelRank(l.level) >= floor && (needle === "" || l.message.toLowerCase().includes(needle)),
+  );
+  const filtered = needle !== "" || min !== "all";
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
     if (el !== null) el.scrollTop = el.scrollHeight;
   }, [logs.length]);
   return (
-    <div ref={ref} className={cn("overflow-auto text-xs", props.className)}>
-      {logs.map((l) => (
-        <div key={l.id} className="flex gap-2 px-2 py-0.5">
-          <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
-          <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
-          <span className="break-all">{l.message}</span>
-        </div>
-      ))}
+    <div className={cn("flex flex-col text-xs", props.className)}>
+      <div className="flex items-center gap-2 border-b px-2 py-1">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="filter logs…"
+          className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs outline-none placeholder:text-muted-foreground"
+        />
+        <select
+          value={min}
+          onChange={(e) => setMin(e.target.value as (typeof MIN_LEVELS)[number])}
+          className="shrink-0 rounded border bg-transparent px-1 py-0.5 text-xs"
+          aria-label="minimum log level"
+        >
+          {MIN_LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>{lvl === "all" ? "all levels" : `${lvl}+`}</option>
+          ))}
+        </select>
+        {filtered ? (
+          <span className="shrink-0 tabular-nums text-muted-foreground">{logs.length}/{all.length}</span>
+        ) : null}
+      </div>
+      <div ref={ref} className="min-h-0 flex-1 overflow-auto py-1">
+        {logs.length === 0 ? (
+          <div className="px-2 py-1 text-muted-foreground">{all.length === 0 ? "no logs yet" : "no lines match"}</div>
+        ) : (
+          logs.map((l) => (
+            <div key={l.id} className="flex gap-2 px-2 py-0.5">
+              <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
+              <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
+              <span className="break-all">{l.message}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
@@ -665,9 +790,7 @@ export const ProcessCard = (props: {
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
-          {s?.supervising === true ? "running" : "stopped"}
-        </Badge>
+        <ProcessStatusBadge supervising={s?.supervising} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>{s?.armed === true ? "armed" : "disarmed"}</span>
@@ -1121,7 +1244,7 @@ export const ApiCard = (props: {
       <div className="flex items-center gap-2">
         <span>🌐</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={health.color}>{health.label}</Badge>
+        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span><strong className="text-foreground">{(m?.throughputPerSec ?? 0).toFixed(1)}</strong> req/s</span>
@@ -1355,6 +1478,31 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
+/** ~3× the 2s `NodeStatus` heartbeat: no fresh status in this long → the node's stream is dead and
+ *  the shown values are frozen (last-known, not live). */
+const STALE_MS = 6000;
+
+/** True once a node's heartbeat has stopped. `NodeStatus.changes` re-emits every ~2s, so `beat` (its
+ *  `uptimeMillis`) advances each tick; when it stops advancing the age climbs past {@link STALE_MS}
+ *  and a frozen card can say so instead of looking live. Only a **genuine new heartbeat** (an advanced
+ *  `uptimeMillis`) refreshes the timer — the drop-to-`undefined` + reconnect-retry churn a dying
+ *  stream emits is ignored, so that churn can't masquerade as liveness. A 1s timer re-checks the age
+ *  even when nothing new arrives. */
+const useStale = (beat: number | undefined): boolean => {
+  const last = React.useRef({ beat, at: now() });
+  React.useEffect(() => {
+    if (beat !== undefined && beat !== last.current.beat) {
+      last.current = { beat, at: now() };
+    }
+  }, [beat]);
+  const [, retick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const id = setInterval(retick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now() - last.current.at > STALE_MS;
+};
+
 /** Format an uptime span (ms) compactly. */
 const fmtUptime = (ms: number): string => {
   const s = Math.floor(ms / 1000);
@@ -1421,14 +1569,16 @@ const NodePip = (props: {
 }): React.ReactElement => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const stale = useStale(s?.uptimeMillis);
   React.useEffect(() => {
     if (AsyncResult.isFailure(r)) dlog("node", props.node.id, "FAILURE", Cause.pretty(r.cause));
     else dlog("node", props.node.id, asyncTag(r));
   }, [r, props.node.id]);
+  // stale → a pulsing grey pip, so a lost node reads as "not responding" instead of its frozen colour.
   return (
     <span
-      className="rounded-full"
-      style={{ width: props.size, height: props.size, backgroundColor: nodeColor(s) }}
+      className={cn("rounded-full", stale && "animate-pulse")}
+      style={{ width: props.size, height: props.size, backgroundColor: stale ? "#64748b" : nodeColor(s) }}
     />
   );
 };
@@ -1839,6 +1989,35 @@ export const NodeDetail = (props: {
 // Widget registry — the built-in set
 // ============================================================================
 
+/** A resource's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
+ *  **amber** one when not — the UI's ready/degraded colours (`#22c55e` / `#eab308`, as the readiness
+ *  pips). Reads its node's `NodeStatus` — the SSOT the overlay uses. */
+const ReadinessDotInner = (props: {
+  readonly tag: unknown;
+  readonly node: NodeRef;
+}): React.ReactElement => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  const ready = readiness === undefined || readiness.ready; // loading/unknown → ready (empty)
+  return (
+    <span
+      className="size-3.5 shrink-0 rounded-full border"
+      style={ready ? { borderColor: "#22c55e" } : { borderColor: "#eab308", backgroundColor: "#eab308" }}
+      aria-label={ready ? "ready" : "degraded"}
+      title={ready ? "ready" : (readiness?.detail ?? "degraded")}
+    />
+  );
+};
+
+/** The plain-resource readiness dot — an empty badge when ready, filled when degraded. Nothing for a
+ *  nodeless tag (no node computes its readiness). @public */
+export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactElement | null => {
+  const node = resourceNodeRef(props.tag);
+  if (node === undefined) return null;
+  return <ReadinessDotInner tag={props.tag} node={node} />;
+};
+
 /**
  * Basic fallback card — a resource whose kind has no registered widget (a bare `…/Resource`, or an
  * unregistered kind). Shows the resource's name, its kind, and a degraded banner; a richer card is
@@ -1849,7 +2028,8 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
     <CardContent className="p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-medium text-foreground">{props.name}</span>
-        <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
+        {/* no operational status ref → the readiness dot fills the status slot (same as ResourceCard) */}
+        <ReadinessDot tag={props.tag} />
       </div>
       <ResourceReadinessBanner tag={props.tag} />
     </CardContent>
@@ -1868,7 +2048,7 @@ export const ResourceCard = (props: WidgetProps): React.ReactElement => {
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
           <span className="flex-1 truncate font-medium text-foreground">{props.name}</span>
-          <Badge>{displayName(resourceKindOf(props.tag) ?? resourceKind)}</Badge>
+          <ReadinessDot tag={props.tag} />
         </div>
         {node !== undefined ? (
           <div className="mt-2 text-[0.8rem] text-muted-foreground">{displayName(node.id)}</div>

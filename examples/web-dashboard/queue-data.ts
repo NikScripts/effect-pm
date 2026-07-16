@@ -9,6 +9,7 @@
  */
 import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
+import { RpcClient } from "effect/unstable/rpc";
 import * as Resource from "../../src/Resource";
 import { specOf } from "../../src/Resource";
 import * as Group from "../../src/Group";
@@ -88,14 +89,26 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 const dropletTransport = Resource.socketClient(Droplet, { url: dropletRpc });
 const miniTransport = Resource.socketClient(MiniNode, { url: miniUrl });
 
+// The nodeless NodeStatus client needs the ambient `RpcClient.Protocol`. The node tag's value IS that
+// protocol (post-`connect`), and the node is exposed in `appLayer` below, so read it via
+// `Layer.effect(RpcClient.Protocol, node)` — the same pattern the HealthBoard uses. (Providing the
+// node's *transport* here instead left the client's `RpcClient.Protocol` unsatisfied.)
 const nodeStatusLayer = (resourceKey: string) =>
   Resource.client(NodeStatus.Tag).pipe(
-    Layer.provide(nodeOf(resourceKey) === "mini" ? miniTransport : dropletTransport),
+    Layer.provide(
+      Layer.effect(RpcClient.Protocol, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet),
+    ),
   );
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
+  // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself —
+  // whose value is the `RpcClient.Protocol` (post-`connect`) — is in the runtime context. The
+  // HealthBoard's per-node `NodeStatus` reads it (`Layer.effect(RpcClient.Protocol, node)`); without
+  // this, that node isn't resolvable and the node status hangs on "connecting…".
+  dropletTransport,
+  miniTransport,
   Resource.client(Mail).pipe(Layer.provide(dropletTransport)),
   Resource.client(Jobs).pipe(Layer.provide(dropletTransport)),
   Resource.client(Billing).pipe(Layer.provide(dropletTransport)),
@@ -108,7 +121,7 @@ export const appLayer = Layer.mergeAll(
   Resource.client(Daily).pipe(Layer.provide(dropletTransport)),
   Resource.client(Weekly).pipe(Layer.provide(dropletTransport)),
   // KeyRotation lives on the Mini node — its own transport, not the Droplet.
-  Resource.client(KeyRotation).pipe(Layer.provide(Resource.socketClient(MiniNode, { url: miniUrl }))),
+  Resource.client(KeyRotation).pipe(Layer.provide(miniTransport)),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */

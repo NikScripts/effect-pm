@@ -9,8 +9,6 @@
  */
 import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import * as Socket from "effect/unstable/socket/Socket";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as queueEntry } from "../../src/QueueResource";
@@ -109,19 +107,15 @@ const serveLayer = Resource.wsServer([
   Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );
 
-// loopback client transport: ONE Droplet-node transport the producers share (the single
-// /rpc endpoint, procedures group-prefixed). It MUST match the server's protocol — the server
-// serves `{ protocol: "websocket" }` above, so the producer speaks WebSocket too. (Using the http
-// protocol here fails silently — `q.add` errors with "empty HTTP response from RPC server" and the
-// producer's `Effect.ignore` swallows it, so nothing is ever enqueued and the dashboard shows empty
-// queues. That mismatch was this example's "no live data" bug.)
+// loopback client transport: ONE Droplet-node transport the producers share (the single /rpc
+// endpoint, procedures group-prefixed). It MUST match the server's protocol — the server is a
+// `wsServer` above, so the producer dials WebSocket via `Resource.protocolWebsocket`. (Dialing http
+// against a ws server fails per-call — `q.add` → "empty HTTP response from RPC server" — and the
+// producer's `Effect.ignore` swallows it, so nothing enqueues and the dashboard shows empty queues.
+// That mismatch was this example's original "no live data" bug.)
 const loopback = Resource.connect(
   Droplet,
-  RpcClient.layerProtocolSocket().pipe(
-    Layer.provide(RpcSerialization.layerNdjson),
-    Layer.provide(Socket.layerWebSocket(`ws://localhost:${PORT}/rpc`)),
-    Layer.provide(Socket.layerWebSocketConstructorGlobal),
-  ),
+  Resource.protocolWebsocket(`ws://localhost:${PORT}/rpc`),
 );
 const clientLayer = Layer.mergeAll(
   Resource.client(Mail).pipe(Layer.provide(loopback)),

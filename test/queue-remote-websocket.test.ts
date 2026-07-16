@@ -36,10 +36,10 @@ const clientHttp = (port: number) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const wsServer = (config: QueueLayerConfig<Item, void, never, never>) =>
-  Resource.httpServer([QueueResource.serveMemory(WsQueue, config)], {
-    protocol: "websocket",
-  }).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const serveWs = (config: QueueLayerConfig<Item, void, never, never>) =>
+  Resource.wsServer([QueueResource.serveMemory(WsQueue, config)]).pipe(
+    Layer.provideMerge(NodeHttpServer.layerTest),
+  );
 
 // run `use` against the ws server, wired with `clientLayer(port)` for its transport.
 const withServer = <A, E>(
@@ -54,7 +54,7 @@ const withServer = <A, E>(
       Effect.provide(Resource.client(WsQueue).pipe(Layer.provide(clientLayer(port)))),
       Effect.scoped,
     );
-  }).pipe(Effect.provide(wsServer(config)), Effect.scoped);
+  }).pipe(Effect.provide(serveWs(config)), Effect.scoped);
 
 it("status.changes streams live over WebSocket as the engine processes", () =>
   Effect.runPromise(
