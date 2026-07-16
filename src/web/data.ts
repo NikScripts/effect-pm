@@ -436,6 +436,19 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
   return m;
 };
 
+/** A **polled** atom for effect (non-stream) resource fields: read once immediately, then re-read on
+ *  a fixed tick. The read side of the mesh-factory bundles (FleetHealth / Telemetry / ShardMap). */
+const pollAtom = <R, ER, A>(
+  runtime: DashboardRuntime<R, ER>,
+  read: Effect.Effect<A, never, R>,
+  interval: Duration.Duration = Duration.seconds(2),
+) =>
+  runtime.atom(
+    Stream.fromEffect(read).pipe(
+      Stream.concat(Stream.tick(interval).pipe(Stream.mapEffect(() => read))),
+    ),
+  );
+
 const resourceLogsAtom = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   resourceKey: string,
@@ -632,11 +645,7 @@ export const fleetHealthBundle = <R, ER>(
   if (existing !== undefined) return existing;
 
   const read = Effect.flatMap(tag, (h) => Effect.all({ byNode: h.byNode, status: h.status }));
-  const poll = runtime.atom(
-    Stream.fromEffect(read).pipe(
-      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
-    ),
-  );
+  const poll = pollAtom(runtime, read);
   const bundle: FleetHealthBundle = {
     byNode: Atom.mapResult(poll, (a) => a.byNode),
     status: Atom.mapResult(poll, (a) => a.status),
@@ -661,11 +670,7 @@ export const telemetryBundle = <R, ER>(
   const read = Effect.flatMap(tag, (t) =>
     Effect.all({ snapshot: t.snapshot, inFlightByNode: t.inFlightByNode, fleetInFlight: t.fleetInFlight }),
   );
-  const poll = runtime.atom(
-    Stream.fromEffect(read).pipe(
-      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
-    ),
-  );
+  const poll = pollAtom(runtime, read);
   const bundle: TelemetryBundle = {
     metricCount: Atom.mapResult(poll, (a) => a.snapshot.metrics.length),
     inFlightByNode: Atom.mapResult(poll, (a) => a.inFlightByNode),
@@ -692,11 +697,7 @@ export const shardMapBundle = <R, ER>(
   const read = Effect.flatMap(tag, (m) =>
     Effect.all({ size: m.size, sizeByNode: m.sizeByNode, sizeLocal: m.sizeLocal }),
   );
-  const poll = runtime.atom(
-    Stream.fromEffect(read).pipe(
-      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
-    ),
-  );
+  const poll = pollAtom(runtime, read);
   const bundle: ShardMapBundle = {
     size: Atom.mapResult(poll, (a) => a.size),
     sizeByNode: Atom.mapResult(poll, (a) => ({ ...a.sizeByNode })),
