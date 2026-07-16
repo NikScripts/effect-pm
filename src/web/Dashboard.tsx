@@ -27,16 +27,19 @@ import {
   kindOf,
   leafByKey,
   leafTags,
+  nodesOf,
   processBundle,
   queueBundle,
+  tagWireKey,
 } from "./data";
+import * as Group from "../Group";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";
-import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRuntime } from "./runtime";
+import { RuntimeProvider, useApiBundle, useNodeBundle, useProcessBundle, useQueueBundle, useRuntime } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
 import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
-import { WidgetsProvider, type WidgetRegistry } from "./widget-registry";
+import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -44,6 +47,24 @@ import { DebugConsole } from "./debug-console";
 const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
 const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
 const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
+
+/** Invisible: reads one node's `NodeStatus` and reports the keys of its **not-ready** resources, so the
+ *  grid can float degraded members to the top. A child-level hook (not a `.map` over the node list)
+ *  keeps a constant hook order even if a group gains/loses a node. */
+const DegradedKeysProbe = (props: {
+  readonly node: NodeRef;
+  readonly onKeys: (id: string, keys: ReadonlyArray<string>) => void;
+}): null => {
+  const r = useAtomValue(useNodeBundle(props.node).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const keys = (s?.resources ?? []).filter((x) => !x.ready).map((x) => x.key);
+  const { onKeys, node } = props;
+  const joined = keys.join("|");
+  React.useEffect(() => {
+    onKeys(node.id, joined === "" ? [] : joined.split("|"));
+  }, [onKeys, node.id, joined]);
+  return null;
+};
 
 /** The log box — one named element ("log-panel") shared by the inline detail panel and the
  *  fullscreen logs page, so navigating between them morphs it via a view transition. */
@@ -278,6 +299,43 @@ const DashboardInner = (props: {
   const title = trail
     .map((g, i) => (i === 0 ? displayName(g.key) : keys[i - 1] ?? displayName(g.key)))
     .join(" / ");
+  // ── degraded-first sort ──────────────────────────────────────────────────
+  // Hidden probes report each node's not-ready resource keys (constant hook order); when the toggle is
+  // on, members that are (or contain) a degraded resource float to the top, stable otherwise.
+  const sortNodes = nodesOf(group);
+  const [degradedKeysByNode, setDegradedKeysByNode] = React.useState<
+    ReadonlyMap<string, ReadonlyArray<string>>
+  >(() => new Map());
+  const reportDegradedKeys = React.useCallback((id: string, keys: ReadonlyArray<string>): void => {
+    setDegradedKeysByNode((prev) => {
+      const next = new Map(prev);
+      next.set(id, keys);
+      return next;
+    });
+  }, []);
+  const degradedKeys = React.useMemo(
+    () => new Set([...degradedKeysByNode.values()].flat()),
+    [degradedKeysByNode],
+  );
+  const [degradedFirst, setDegradedFirst] = React.useState(false);
+  const memberDegraded = (member: unknown): boolean => {
+    if (isLeafTag(member)) return degradedKeys.has(member.key);
+    if (Group.isGroup(member)) {
+      return leafTags(member).some((t) => {
+        const k = tagWireKey(t);
+        return k !== undefined && degradedKeys.has(k);
+      });
+    }
+    return false;
+  };
+  const memberEntries = Object.entries(group.members);
+  const orderedMembers = degradedFirst
+    ? memberEntries
+        .map((entry, i) => ({ entry, i }))
+        .sort((a, b) => Number(memberDegraded(b.entry[1])) - Number(memberDegraded(a.entry[1])) || a.i - b.i)
+        .map((x) => x.entry)
+    : memberEntries;
+
   const countCircle = (
     /* resource count as a small circle, the number knocked out as negative space */
     <span
@@ -308,12 +366,29 @@ const DashboardInner = (props: {
         ) : (
           <h1 className="m-0 flex-1 text-lg font-semibold">⬢ {title}</h1>
         )}
+        {/* float degraded resources up — offered only when something's actually degraded. */}
+        {degradedKeys.size > 0 ? (
+          <button
+            type="button"
+            onClick={() => transition("res-sort", () => setDegradedFirst((v) => !v))}
+            aria-pressed={degradedFirst}
+            title="float degraded resources to the top"
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] transition-colors ${
+              degradedFirst ? "border-amber-500 text-amber-400" : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            degraded first
+          </button>
+        ) : null}
         {countCircle}
         {/* node-status die — all nodes the dashboard's resources are bound to (the root group). */}
         <NodeBar group={props.group} onOpen={props.onOpenHealth} />
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-        {Object.entries(group.members).map(([name, member]) => (
+        {sortNodes.map((node) => (
+          <DegradedKeysProbe key={`probe-${node.id}`} node={node} onKeys={reportDegradedKeys} />
+        ))}
+        {orderedMembers.map(([name, member]) => (
           <Cell
             key={name}
             name={name}
