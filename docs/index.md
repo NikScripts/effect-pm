@@ -3,13 +3,13 @@
 
 **Build cross-runtime Services on Effect.**
 
-An Effect Service lives inside one runtime. A *cross-runtime Service* does not: define it once, run
-it on one runtime, and call it from another over RPC with the same typed Handle.
+An Effect Service lives inside one runtime. A *cross-runtime Service* isn't bound to one: define it
+once, run it on one runtime, and call it from another over RPC with the same typed Handle.
 
 A real app runs as more than one runtime: a worker draining a queue here, a scheduler filling it
 there. Wiring those together normally means one side owns a Resource and the others reach it through
-a hand-rolled HTTP client. Cross-runtime Services drop that split. Every Resource is reached with the
-same typed Handle, wherever it runs.
+a hand-rolled HTTP client. A cross-runtime Service skips that client: every Resource is reached with
+the same typed Handle, wherever it runs.
 
 Here are two Resources (a queue and a scheduled process) on two runtimes, working together.
 
@@ -25,9 +25,9 @@ class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {} // a
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-[`Resource.httpServer(serve)`](/docs/resource) is platform-agnostic. It needs an HTTP server
-provided, and that provide is where you pick your runtime. Define it **once** as a small helper.
-Swapping `NodeHttpServer` for Bun, Deno, or an edge runtime is the only line that changes:
+[`Resource.httpServer(serve)`](/docs/resource) is platform-agnostic; you pick a runtime only when you
+provide it an HTTP server. Define that provide **once**, as a small helper, and swapping
+`NodeHttpServer` for Bun, Deno, or an edge runtime becomes the only line that changes:
 
 {.twoslash}
 ``` ts
@@ -43,7 +43,7 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
   )
 ```
 
-The **worker runtime** is one pipe. [`QueueResource.serve`](/docs/queues) gives `Emails` its worker
+The **worker runtime** is one pipe: [`QueueResource.serve`](/docs/queues) gives `Emails` its worker
 (the `effect` that drains each job), piped onto port 3001:
 
 {.twoslash}
@@ -67,8 +67,8 @@ const worker = QueueResource
 // worker: Layer. Provide it to a runtime to run the queue on :3001
 ```
 
-The **scheduler runtime** runs `Digest` every hour. Each run **enqueues into `Emails`**, a queue that
-lives on the *other* runtime, reached by port:
+The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`**, a queue
+that lives on the *other* runtime, reached by port:
 
 {.twoslash}
 ``` ts
@@ -95,7 +95,7 @@ const scheduler = Process.layer(Digest, {
 
 `Digest` runs on the scheduler, `Emails` on the worker. Inside the process, `yield* Emails` and
 `emails.add(…)` read as if the two shared one process. **Two Resources, two runtimes, one program.**
-Move a runtime to another machine and only its port becomes a url. Nothing else changes.
+Move a runtime to another machine and only its port becomes a url; nothing else changes.
 
 ## Operate Them Live
 
@@ -151,7 +151,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 ) {}
 ```
 
-Serve a droplet with the mesh discharge (local shard plus peer clients from one materialization):
+Discharge the mesh to serve a droplet (local shard plus peer clients from one materialization):
 
 {.twoslash}
 ``` ts
@@ -183,7 +183,8 @@ const east = ShardMap.serve(Sessions).pipe(
 )
 ```
 
-From any Node, a caller asks. Ownership and the cross-Node hop stay inside the Resource:
+From any Node, a caller asks for a session; ownership and the cross-Node hop stay inside the
+Resource:
 
 {.twoslash}
 ``` ts
@@ -204,15 +205,13 @@ const program = Effect.gen(function* () {
 })
 ```
 
-An unreachable owner degrades to a miss instead of blocking. **Every instance is an equal:** reached,
-and reaching others, through the same Tag.
+An unreachable owner degrades to a miss instead of blocking, because **every instance is an equal**:
+reached, and reaching others, through the same Tag.
 
 ## Build Your Own
 
-`Emails`, `Digest`, and `Sessions` all sit on one primitive you use directly. A Resource is a
-**Contract** plus an **Implementation**.
-
-Describe the Contract (methods and their schemas):
+`Emails`, `Digest`, and `Sessions` all sit on one primitive you use directly: a Resource, which is a
+**Contract** plus an **Implementation**. Start with the Contract, its methods and their schemas:
 
 {.twoslash}
 ``` ts
@@ -226,7 +225,7 @@ class Counter extends Resource.Tag<Counter>()("app/Counter", {
 }) {}
 ```
 
-Give it an Implementation:
+Then give it an Implementation:
 
 {.twoslash}
 ``` ts
@@ -248,7 +247,7 @@ const counterImpl = Effect.gen(function* () {
 })
 ```
 
-It is now a cross-runtime Service like any built-in. The **same Tag**, provided three ways:
+It is now a cross-runtime Service like any built-in, the **same Tag** provided three ways:
 
 {.twoslash}
 ``` ts
