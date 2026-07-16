@@ -48,7 +48,9 @@ describe("CustomQueueResource.make", () => {
       yield* queue.add("b");
       yield* queue.add("c", "batch");
       const sizes = yield* queue.sizes;
-      expect(sizes).toEqual({ urgent: 1, "1": 1, batch: 1 });
+      // every configured lane reported, empty ones as 0 (lane "2" here) — a stable key set that
+      // doesn't reflow when a lane drains, matching the default high/normal/low projection.
+      expect(sizes).toEqual({ urgent: 1, "1": 1, "2": 0, batch: 1 });
       const status = yield* queue.status.get;
       expect(status.sizes).toEqual(sizes);
       expect(status.phase).toBe("running");

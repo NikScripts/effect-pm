@@ -49,6 +49,7 @@ import {
   Clock,
   Context,
   Data,
+  Duration,
   Effect,
   Fiber,
   Function as Fn,
@@ -63,7 +64,14 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
+import {
+  FetchHttpClient,
+  Headers,
+  HttpClient,
+  HttpRouter,
+  HttpServer,
+  HttpServerResponse,
+} from "effect/unstable/http";
 import * as Socket from "effect/unstable/socket/Socket";
 import type { Simplify } from "effect/Types";
 import {
@@ -1739,10 +1747,32 @@ type NodeProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
  */
 export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
 
+/**
+ * The transport a {@link Node} speaks, in Effect's client vocabulary: `"http"` (`RpcClient.
+ * layerProtocolHttp`) or `"socket"` (`RpcClient.layerProtocolSocket`, over a WebSocket in the browser).
+ * Stamped on the node so the topology is self-describing about *how* to reach it — `connect`/`client`
+ * derive the transport from it, and a server asserts it at serve time. Inferred from a `ws(s)://` url;
+ * otherwise declare it explicitly.
+ *
+ * @public
+ */
+export type ProtocolKind = "http" | "socket";
+
 /** A {@link Resource.Node} erased — a {@link NodeKey} that also carries its own transport `url`
- *  (decision 2), so a tag's `distributed` set is self-describing and {@link peersLayer} can reach each
- *  one. An element of a tag's fleet. @public */
-export type AnyNode = NodeKey<unknown> & { readonly url: string | undefined };
+ *  (decision 2) and {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
+ *  *where* AND *how* to reach each one, and {@link peersLayer} can reach it. An element of a tag's
+ *  fleet. @public */
+export type AnyNode = NodeKey<unknown> & {
+  readonly url: string | undefined;
+  readonly kind: ProtocolKind | undefined;
+};
+
+/** An {@link AnyNode} that has fully declared its transport — both `url` and `kind` are present, so
+ *  {@link Resource.connect} can derive the client from it with no protocol argument. @public */
+export type AddressedNode<HSelf> = NodeKey<HSelf> & {
+  readonly url: string;
+  readonly kind: ProtocolKind;
+};
 
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
  *  don't collide in one context. @internal */
@@ -3331,31 +3361,48 @@ export const forwardClient = <S extends Spec>(
  *
  * ```ts
  * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
- * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc
- * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is
+ * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "http"
+ * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "http"
+ * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "socket" (inferred from ws url)
+ * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // same-origin path, explicit kind
  * ```
  *
  * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
- * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url }` for an explicit endpoint.
- * The node carries it so {@link peersLayer} / {@link httpClient} reach the node with no separate url —
- * ship only the tag: {@link Resource.client} reads the node to resolve where to connect, and a
- * consumer wires the transport once with {@link Resource.connect}.
+ * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url, kind }` for an explicit
+ * endpoint. The node also carries its {@link ProtocolKind} `kind` — inferred `"socket"` from a
+ * `ws(s)://` url, `"http"` from an http target, or set explicitly (needed for a same-origin `"/rpc"`
+ * path that a browser resolves to ws). The node carries both so the topology is self-describing about
+ * *where* AND *how*: ship only the tag and {@link Resource.connect}`(node)` derives the transport with
+ * no protocol argument, {@link Resource.client} reads the node to resolve where to connect, and
+ * {@link peersLayer} reaches the fleet.
  *
  * @public
  */
 const makeNode = <Self>(
   name: string,
-  target?: number | string | { readonly url?: string },
+  target?: number | string | { readonly url?: string; readonly kind?: ProtocolKind },
 ) => {
+  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
+  // bad string); an explicit `{ url }` is used verbatim.
+  const url =
+    target === undefined
+      ? undefined
+      : typeof target === "object"
+        ? target.url
+        : resolveHttpTarget(target);
+  // `kind` is the SSOT for *how* to reach the node: an explicit `{ kind }` wins; otherwise a `ws(s)://`
+  // url is a socket and any other resolved url is http. Left `undefined` only when the url is (a bare
+  // `Node("x")` with no address) — then a caller must supply the transport at `connect` explicitly.
+  const kind: ProtocolKind | undefined =
+    (typeof target === "object" ? target.kind : undefined) ??
+    (url === undefined
+      ? undefined
+      : url.startsWith("ws://") || url.startsWith("wss://")
+        ? "socket"
+        : "http");
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
-    // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
-    // bad string); an explicit `{ url }` is used verbatim.
-    url:
-      target === undefined
-        ? undefined
-        : typeof target === "object"
-          ? target.url
-          : resolveHttpTarget(target),
+    url,
+    kind,
   });
   return Object.assign(node, {
     /**
@@ -3556,6 +3603,188 @@ const socketClient = <Self>(
     node,
     protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
+
+/** Deriving a transport from a node that never declared one — a bare `Resource.Node("x")` has no
+ *  `url`/`kind`, so `connect(node)` can't know how to reach it. Fails loudly instead of guessing. @internal */
+class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
+  readonly node: string;
+}> {
+  override get message() {
+    return (
+      `Node "${this.node}" declares no url/kind, so a transport can't be derived from it. ` +
+      `Give the node an address (e.g. Resource.Node("${this.node}", 3001) or { url, kind }), ` +
+      `or pass a protocol explicitly: Resource.connect(node, protocol).`
+    );
+  }
+}
+
+/** Build the client `Protocol` a node declares — {@link protocolHttp} or {@link protocolWebsocket},
+ *  keyed off its {@link ProtocolKind}. The topology (not the caller) decides the transport, so the
+ *  http↔socket mismatch can't be introduced here. Fails loudly on an unaddressed node. */
+const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
+  if (node.url === undefined || node.kind === undefined) {
+    throw new UnaddressedNode({ node: node.key });
+  }
+  return node.kind === "socket" ? protocolWebsocket(node.url) : protocolHttp(node.url);
+};
+
+/**
+ * Wire a {@link Node}'s transport — the transport-agnostic primitive, **dual**:
+ *
+ * ```ts
+ * MyNode.pipe(Resource.connect)              // derive the transport from the node's declared kind + url
+ * MyNode.pipe(Resource.connect(protocol))    // data-last: an explicit RpcClient.Protocol
+ * Resource.connect(MyNode)                    // data-first, derived (needs an AddressedNode)
+ * Resource.connect(MyNode, protocol)          // data-first, explicit
+ * ```
+ *
+ * The derived forms read the node's {@link ProtocolKind} — so a node that declares `kind: "socket"`
+ * dials a socket and one that declares `"http"` dials http; picking the wrong transport isn't
+ * expressible. `MyNode.pipe(Resource.connect)` only type-checks for an {@link AddressedNode} (a node
+ * with both `url` and `kind`); a bare node is a compile error pointing you to declare its address or
+ * pass a protocol.
+ *
+ * @public
+ */
+export const connect: {
+  // Order matters: TS selects the LAST matching overload when the function is used as a bare value
+  // (`node.pipe(connect)`), so the node→Layer form is last to make the pipe form resolve to it; direct
+  // calls still match top-down by arg count / shape.
+  <Self, RIn>(
+    node: NodeKey<Self>,
+    protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
+  ): Layer.Layer<Self, never, RIn>;
+  <RIn>(
+    protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
+  ): <Self>(node: NodeKey<Self>) => Layer.Layer<Self, never, RIn>;
+  <Self>(
+    node: NodeKey<Self> & { readonly url?: string; readonly kind?: ProtocolKind },
+  ): Layer.Layer<Self>;
+} = Fn.dual(
+  // data-first when there are two args, or when the single arg is a node (not a protocol layer).
+  (args: IArguments) => args.length >= 2 || !Layer.isLayer(args[0]),
+  (
+    node: AnyNode,
+    protocol?: Layer.Layer<RpcClient.Protocol, never, unknown>,
+  ): Layer.Layer<unknown, never, unknown> =>
+    connectLayer(node, protocol ?? protocolForNode(node)),
+);
+
+/**
+ * Wire a node over **http** — Effect's `layerProtocolHttp` transport, {@link connect} pinned to
+ * `kind: "http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
+ * `MyNode.pipe(Resource.connectHttp(url))` overrides it.
+ *
+ * @public
+ */
+export const connectHttp: {
+  // data-last first, node form last — so the bare pipe (`node.pipe(connectHttp)`) resolves to the node
+  // overload (TS picks the last for a bare value); `connectHttp(url)` still matches the string overload.
+  (url: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
+  <Self>(node: NodeKey<Self> & { readonly url?: string }): Layer.Layer<Self>;
+} = Fn.dual(
+  (args: IArguments) => typeof args[0] !== "string",
+  (
+    node: NodeKey<unknown> & { readonly url?: string },
+    url?: string,
+  ): Layer.Layer<unknown> => connectLayer(node, protocolHttp(url ?? node.url ?? "/rpc")),
+);
+
+/**
+ * Wire a node over a **socket** — Effect's `layerProtocolSocket` transport (a WebSocket in the
+ * browser), {@link connect} pinned to `kind: "socket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
+ * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Resource.connectSocket(url))` overrides it.
+ *
+ * @public
+ */
+export const connectSocket: {
+  // data-last first, node form last — see connectHttp.
+  (url: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
+  <Self>(node: NodeKey<Self> & { readonly url?: string }): Layer.Layer<Self>;
+} = Fn.dual(
+  (args: IArguments) => typeof args[0] !== "string",
+  (
+    node: NodeKey<unknown> & { readonly url?: string },
+    url?: string,
+  ): Layer.Layer<unknown> => connectLayer(node, protocolWebsocket(url ?? node.url ?? "/rpc")),
+);
+
+/**
+ * A remote {@link Node} that didn't answer at its declared address — down, wrong port/url, or (for a
+ * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
+ * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.
+ *
+ * @public
+ */
+export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
+  readonly node: string;
+  readonly url: string;
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return `Node "${this.node}" did not respond at ${this.url} — is it running, and are the url and kind right?`;
+  }
+}
+
+// Reachability probes (transport-native, one bounded connection). Socket: reachable if the ws stays
+// open past a short window (`run` errors fast if it can't connect). Http: reachable if the url answers
+// at all (any response — an RPC server may 4xx a bare GET, which still proves it's up).
+// Build each transport layer as a Context in a local scope and provide *that* (not the Layer) — the
+// `strictEffectProvide`-clean form for a library helper that isn't an app entry point.
+const probeSocketReachable = (url: string, window: Duration.Duration) =>
+  Effect.gen(function* () {
+    const ctx = yield* Layer.build(Socket.layerWebSocketConstructorGlobal);
+    const socket = yield* Socket.makeWebSocket(Effect.sync(() => toWebSocketUrl(url))).pipe(
+      Effect.provide(ctx),
+    );
+    yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
+  }).pipe(Effect.scoped);
+
+const probeHttpReachable = (url: string, timeout: Duration.Input) =>
+  Effect.gen(function* () {
+    const ctx = yield* Layer.build(FetchHttpClient.layer);
+    yield* HttpClient.get(url).pipe(Effect.asVoid, Effect.timeout(timeout), Effect.provide(ctx));
+  }).pipe(Effect.scoped);
+
+/**
+ * **Verify a node is reachable, eagerly** — a fail-fast startup check for a remote {@link Node}. Opens
+ * one bounded connection to the node's declared `url`/`kind` and fails with {@link NodeUnreachable} if
+ * it doesn't answer, so a client refuses to start against a down / misaddressed backend instead of
+ * hanging or failing opaquely at the first RPC. Complements {@link Resource.connect} (which derives the
+ * transport from the node so the wrong protocol can't be *dialed*): `connect` prevents mis-wiring,
+ * `verifyConnection` catches a peer that isn't there.
+ *
+ * ```ts
+ * yield* Resource.verifyConnection(Droplet);                     // NodeUnreachable if the Droplet is down
+ * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
+ * yield* Resource.verifyConnection(Droplet, { url: "/rpc" });    // runtime url (bare node, e.g. a browser)
+ * ```
+ *
+ * The `url` resolves `options.url` → the node's own `url`; `kind` is the node's, else inferred from the
+ * effective url's scheme (`ws(s)://` → socket, else http). Scope: a **reachability** check (F3). It does
+ * not distinguish a protocol *mismatch* on the http side (a socket server answers an http probe) —
+ * `connect` already makes the client dial the node's declared kind; a `socket` node pointed at a
+ * non-socket server surfaces here as unreachable.
+ *
+ * @public
+ */
+export const verifyConnection = (
+  node: NodeKey<unknown> & { readonly url?: string; readonly kind?: ProtocolKind },
+  options?: { readonly timeout?: Duration.Input; readonly url?: string },
+): Effect.Effect<void, NodeUnreachable> => {
+  const url = options?.url ?? node.url;
+  if (url === undefined) {
+    return Effect.die(new UnaddressedNode({ node: node.key }));
+  }
+  const kind: ProtocolKind =
+    node.kind ?? (url.startsWith("ws://") || url.startsWith("wss://") ? "socket" : "http");
+  const timeout = options?.timeout ?? "3 seconds";
+  const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
+  // map per-branch (not on the ternary union) so both branches unify to `Effect<void, NodeUnreachable>`.
+  return kind === "socket"
+    ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
+    : probeHttpReachable(url, timeout).pipe(fail);
+};
 
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
@@ -4240,7 +4469,6 @@ export {
   makeTag as Tag,
   tagFor,
   makeNode as Node,
-  connectLayer as connect,
   httpClient,
   socketClient,
   instance,

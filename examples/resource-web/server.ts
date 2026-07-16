@@ -16,6 +16,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Resource from "../../src/Resource";
 import { serve as queueEntry } from "../../src/QueueResource";
+import * as CustomQueueResource from "../../src/CustomQueueResource";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
@@ -24,7 +25,7 @@ import * as Store from "../../src/Store";
 import * as QueueResource from "../../src/QueueResource";
 import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, HOST_PORTS, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
+import { BoxScoreQueue, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
 
 const WNBA_PORT = HOST_PORTS.wnba;
@@ -234,6 +235,7 @@ class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveSto
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
   StatsNode.logs,
   QueueResource.store(PlayByPlayQueue),
+  CustomQueueResource.store(ImportJobs),
 ) {}
 
 // Dogfood durable registration journals: after the live-score poller has logged a few times, read
@@ -307,6 +309,15 @@ const statsNode = Resource.wsServer([
     effect: importWorker,
     concurrency: 3,
   }),
+  // a custom queue with named lanes (hot/warm/cold); its store facet lives in StatsStore (above), so
+  // `serve` (not serveMemory) — one Store.Storage per node, shared like the queue's.
+  CustomQueueResource.serve(ImportJobs, {
+    levelCount: 3,
+    namedLevels: { hot: 0, warm: 1, cold: 2 },
+    concurrency: 1, // drain slower than we fill, so the named lanes carry a visible backlog
+    effect: importWorker,
+    autoStart: true,
+  }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
@@ -334,6 +345,19 @@ const wnbaNodeProgram = Effect.gen(function* () {
 
 const statsNodeProgram = Effect.gen(function* () {
   yield* loadQueue(yield* PlayByPlayQueue, "pbp");
+  // feed the custom queue across its named lanes so the CustomQueueCard shows live per-lane bars.
+  const imports = yield* ImportJobs;
+  const lanes = ["hot", "warm", "cold"] as const;
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      let n = 0;
+      while (true) {
+        const lane = lanes[yield* Random.nextIntBetween(0, lanes.length)] ?? "warm";
+        yield* imports.add({ id: `imp-${n++}` }, lane);
+        yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(60, 220)));
+      }
+    }),
+  );
   return yield* Effect.never;
 }).pipe(Effect.provide(statsNode));
 

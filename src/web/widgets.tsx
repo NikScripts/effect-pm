@@ -26,6 +26,7 @@ import {
   type ApiPoint,
   type ApiTag,
   type CommandAtom,
+  type CustomQueueTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -36,6 +37,7 @@ import {
   type ScheduleEntry,
   type NodeRef,
   isApiTag,
+  isCustomQueueTag,
   isProcessTag,
   isQueueTag,
   nodesOf,
@@ -46,6 +48,7 @@ import {
 } from "./data";
 import { kindOf as resourceKindOf, kind as resourceKind } from "../Resource";
 import { kind as queueKind } from "../QueueResource";
+import { kind as customQueueKind } from "../CustomQueueResource";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -61,7 +64,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useNodeBundle, useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -193,6 +196,74 @@ export const QueueCard = (props: {
         <PrioRow p="high" count={sizes.high} max={max} />
         <PrioRow p="normal" count={sizes.normal} max={max} />
         <PrioRow p="low" count={sizes.low} max={max} />
+      </div>
+      <DegradedOverlay tag={props.tag} />
+    </button>
+  );
+};
+
+/** One named lane as a labelled bar — the custom-queue counterpart to `PrioRow` (fixed high/normal/low);
+ *  lanes are arbitrary, so the label is the lane name. */
+const LaneRow = (props: {
+  readonly lane: string;
+  readonly count: number;
+  readonly max: number;
+}): React.ReactElement => (
+  <div className="flex items-center gap-2 text-xs">
+    <span className="w-16 shrink-0 truncate text-muted-foreground">{props.lane}</span>
+    <Bar value={props.count} max={props.max} color="#3b82f6" />
+    <span className="w-8 shrink-0 text-right">{props.count}</span>
+  </div>
+);
+
+/** Custom-queue phase colours (running / draining / off) — its phase set differs from a queue's. */
+const CQ_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
+
+/**
+ * A **custom queue** as a grid card — the {@link QueueCard} sibling for `CustomQueueResource`: same
+ * pending / done / phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar
+ * each instead of the fixed high/normal/low priorities. @public
+ */
+export const CustomQueueCard = (props: {
+  readonly tag: CustomQueueTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  readonly selected?: boolean;
+  readonly onOpen: (tag: CustomQueueTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const r = useAtomValue(useCustomQueueBundle(props.tag).status);
+  const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
+  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
+  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
+  const max = Math.max(1, ...lanes.map(([, n]) => n));
+  const paused = s?.paused === true;
+  return (
+    <button
+      type="button"
+      onClick={() => props.onOpen(props.tag)}
+      style={vt}
+      className={cn(
+        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        props.selected === true && "border-primary",
+      )}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>
+          {paused ? "paused" : s?.phase ?? "running"}
+        </Badge>
+      </div>
+      <div className="mb-2 flex justify-between text-xs text-muted-foreground">
+        <span>pending <strong className="text-foreground">{pending}</strong></span>
+        <span>{s?.completed ?? 0} done</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {lanes.length === 0 ? (
+          <div className="text-xs text-muted-foreground">no lanes</div>
+        ) : (
+          lanes.slice(0, 5).map(([lane, count]) => <LaneRow key={lane} lane={lane} count={count} max={max} />)
+        )}
       </div>
       <DegradedOverlay tag={props.tag} />
     </button>
@@ -2079,6 +2150,12 @@ const apiWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
+const customQueueWidget: Widget = ({ tag, name, onOpen }) =>
+  isCustomQueueTag(tag) ? (
+    <CustomQueueCard tag={tag} name={name} onOpen={onOpen} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
 
 /**
  * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
@@ -2093,6 +2170,7 @@ export const base: WidgetRegistry = withEntries(
   },
   [
     forKind(queueKind, queueWidget),
+    forKind(customQueueKind, customQueueWidget),
     forKind(processKind, processWidget),
     forKind(apiKind, apiWidget),
     forKind(resourceKind, ResourceCard),

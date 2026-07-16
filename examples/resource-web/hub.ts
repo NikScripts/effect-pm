@@ -14,6 +14,7 @@ import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Resource from "../../src/Resource";
 import * as QueueResource from "../../src/QueueResource";
+import * as CustomQueueResource from "../../src/CustomQueueResource";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
@@ -90,6 +91,14 @@ export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}
+// A **custom queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
+// the CustomQueueResource widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
+export class ImportJobs extends CustomQueueResource.Tag<ImportJobs>()("wnba/ImportJobs", {
+  payload: importJob,
+  levelCount: 3,
+  namedLevels: { hot: 0, warm: 1, cold: 2 },
+  node: StatsNode,
+}) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
   node: WnbaNode,
 }) {}
@@ -100,6 +109,7 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   ScoresDb,
   BoxScoreQueue,
   PlayByPlayQueue,
+  ImportJobs,
   ScoresApi,
   WorkerPool,
 }) {}
@@ -133,6 +143,7 @@ const appLayer = Layer.mergeAll(
   Resource.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
   Resource.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
   Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
+  Resource.client(ImportJobs).pipe(Layer.provide(statsTransport)),
   Resource.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
   Resource.client(ScoresDb).pipe(Layer.provide(wnbaTransport)),
   // WorkerPool is a *nodeless* multi-node tag, so the client names which instance to read — here the
