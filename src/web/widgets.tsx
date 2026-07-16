@@ -2653,17 +2653,72 @@ export const CustomQueueDetail = (props: {
   );
 };
 
-/** One metric datum as a row — id + kind + its reading (count / gauge value / histogram count). */
-const MetricRow = (props: { readonly datum: MetricDatum }): React.ReactElement => {
-  const d = props.datum;
-  const value = d._tag === "Gauge" ? d.value : d._tag === "Counter" ? d.count : d.count;
+/** The attribute chips that distinguish one series of a metric — e.g. `queue=BoxScoreQueue`,
+ *  `priority=high`. This is what makes same-named metrics from different resources legible. */
+const MetricSeriesLabels = (props: {
+  readonly labels: Readonly<Record<string, string>>;
+}): React.ReactElement => {
+  const entries = Object.entries(props.labels).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) {
+    return <span className="text-[0.65rem] italic text-muted-foreground/60">(no labels)</span>;
+  }
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="min-w-0 flex-1 truncate text-foreground">{d.id}</span>
-      <span className="shrink-0 rounded border px-1 text-[0.65rem] text-muted-foreground">{d._tag.toLowerCase()}</span>
-      <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">{value}</span>
-    </div>
+    <span className="flex flex-wrap items-center gap-1">
+      {entries.map(([k, v]) => (
+        <span key={k} className="rounded border border-border/60 px-1 text-[0.6rem] text-muted-foreground">
+          <span className="opacity-50">{k}=</span>
+          {k === "queue" || k === "resource" ? displayName(v) : v}
+        </span>
+      ))}
+    </span>
   );
+};
+
+/** The reading for one datum: counter total, gauge value, or histogram observation count + mean. */
+const metricReading = (d: MetricDatum): string => {
+  if (d._tag === "Gauge") return d.value.toLocaleString();
+  if (d._tag === "Counter") return d.count.toLocaleString();
+  const avg = d.count > 0 ? Math.round(d.sum / d.count) : 0;
+  return `n=${d.count.toLocaleString()} · avg ${avg}`;
+};
+
+/** One metric **name** and its series: the id + kind once, then a labelled row per series (so the
+ *  three `queue_completed_total`s read as three queues, not mystery repeats). */
+const MetricGroup = (props: {
+  readonly id: string;
+  readonly kind: string;
+  readonly series: ReadonlyArray<MetricDatum>;
+}): React.ReactElement => (
+  <div className="flex flex-col gap-1 border-b border-border/40 py-1.5 first:pt-0">
+    <div className="flex items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{props.id}</span>
+      <span className="shrink-0 rounded border px-1 text-[0.6rem] text-muted-foreground">{props.kind}</span>
+    </div>
+    {props.series.map((d, i) => (
+      <div key={i} className="flex items-center gap-2 pl-2">
+        <MetricSeriesLabels labels={d.labels} />
+        <span className="min-w-2 flex-1" />
+        <span className="shrink-0 tabular-nums text-[0.7rem] text-muted-foreground">{metricReading(d)}</span>
+      </div>
+    ))}
+  </div>
+);
+
+/** Group metric series by id (stable, id-sorted; series ordered by their labels). */
+const groupMetrics = (
+  metrics: ReadonlyArray<MetricDatum>,
+): ReadonlyArray<readonly [string, ReadonlyArray<MetricDatum>]> => {
+  const byId = new Map<string, Array<MetricDatum>>();
+  for (const d of metrics) {
+    const arr = byId.get(d.id);
+    if (arr === undefined) byId.set(d.id, [d]);
+    else arr.push(d);
+  }
+  const labelKey = (d: MetricDatum): string =>
+    Object.entries(d.labels).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join(",");
+  return [...byId.entries()]
+    .map(([id, series]) => [id, [...series].sort((a, b) => labelKey(a).localeCompare(labelKey(b)))] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
 };
 
 /**
@@ -2682,7 +2737,7 @@ export const TelemetryDetail = (props: {
   const metrics = useAtomOr(bundle.metrics, []);
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
-  const sorted = [...metrics].sort((a, b) => a.id.localeCompare(b.id));
+  const groups = groupMetrics(metrics);
   const sections: ReadonlyArray<DeckSection> = [
     {
       key: "overview",
@@ -2704,12 +2759,16 @@ export const TelemetryDetail = (props: {
       minHeight: 220,
       content: (
         <div className="flex h-full min-h-0 flex-col rounded-xl border bg-card p-3">
-          <div className="mb-2 text-xs font-semibold text-muted-foreground">{sorted.length} metrics (this node)</div>
-          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-            {sorted.length === 0 ? (
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">
+            {groups.length} metrics · {metrics.length} series <span className="font-normal text-muted-foreground/70">(this node)</span>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {groups.length === 0 ? (
               <div className="text-xs text-muted-foreground">no metrics</div>
             ) : (
-              sorted.map((d) => <MetricRow key={`${d._tag}:${d.id}`} datum={d} />)
+              groups.map(([id, series]) => (
+                <MetricGroup key={id} id={id} kind={series[0]?._tag.toLowerCase() ?? ""} series={series} />
+              ))
             )}
           </div>
         </div>
