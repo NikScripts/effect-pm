@@ -7,8 +7,8 @@ An Effect Service lives inside one runtime. A *cross-runtime Service* isn't boun
 once, run it on one runtime, and call it from another, with the same typed Handle.
 
 A real app runs as more than one runtime: a worker draining a queue here, a scheduler filling it
-there. Every Resource is reached with the same typed Handle no matter which runtime calls it, so the
-worker and the scheduler don't each need their own hand-rolled HTTP client to talk to it.
+there. Every Resource is reached with the same typed Handle no matter which runtime calls it, with no
+hand-rolled HTTP client per consumer.
 
 Here are two Resources (a queue and a scheduled process) on two runtimes, working together.
 
