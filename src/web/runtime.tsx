@@ -16,6 +16,8 @@ import {
   type FleetHealthTag,
   type TelemetryBundle,
   type TelemetryTag,
+  type ShardMapBundle,
+  type ShardMapTag,
   type NodeBundle,
   type NodeRef,
   type ProcessBundle,
@@ -26,6 +28,7 @@ import {
   customQueueBundle,
   fleetHealthBundle,
   telemetryBundle,
+  shardMapBundle,
   nodeStatusBundle,
   processBundle,
   queueBundle,
@@ -64,6 +67,10 @@ export const useFleetHealthBundle = (tag: FleetHealthTag): FleetHealthBundle =>
 /** Atom bundle for a telemetry tag, memoized per runtime+tag. @public */
 export const useTelemetryBundle = (tag: TelemetryTag): TelemetryBundle =>
   telemetryBundle(useRuntime(), tag);
+
+/** Atom bundle for a shard-map tag, memoized per runtime+tag. @public */
+export const useShardMapBundle = (tag: ShardMapTag): ShardMapBundle =>
+  shardMapBundle(useRuntime(), tag);
 
 /** Atom bundle for a process tag, memoized per runtime+tag. @public */
 export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundle(useRuntime(), tag);

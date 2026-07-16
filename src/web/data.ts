@@ -19,6 +19,7 @@ import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot } from "../Telemetry";
+import { kind as shardMapKind } from "../ShardMap";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -156,6 +157,16 @@ interface TelemetryService {
 }
 /** A telemetry tag — yieldable for its live service. @public */
 export type TelemetryTag<R = never> = Effect.Effect<TelemetryService, never, R> & { readonly key: string };
+
+/** The structural shape of a **shard-map** resource's live service — `sizeLocal` (this node's entry
+ *  count, leaf) plus the fleet folds `sizeByNode` / `size`. All effect fields (polled). */
+interface ShardMapService {
+  readonly sizeLocal: Effect.Effect<number>;
+  readonly sizeByNode: Effect.Effect<Readonly<Record<string, number>>>;
+  readonly size: Effect.Effect<number>;
+}
+/** A shard-map tag — yieldable for its live service. @public */
+export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
@@ -212,6 +223,13 @@ export interface TelemetryBundle {
   readonly metricCount: ValueAtom<number>;
   readonly inFlightByNode: ValueAtom<Record<string, number>>;
   readonly fleetInFlight: ValueAtom<number>;
+}
+/** The atoms one **shard-map** card needs — polled fleet size total + per-node entry map + this node's
+ *  local count. Read-only. @public */
+export interface ShardMapBundle {
+  readonly size: ValueAtom<number>;
+  readonly sizeByNode: ValueAtom<Record<string, number>>;
+  readonly sizeLocal: ValueAtom<number>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
@@ -337,6 +355,9 @@ export const isFleetHealthTag = (m: unknown): m is FleetHealthTag =>
 /** Telemetry guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
   resourceKindOf(m) === telemetryKind;
+/** Shard-map guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
+export const isShardMapTag = (m: unknown): m is ShardMapTag =>
+  resourceKindOf(m) === shardMapKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -631,6 +652,36 @@ export const telemetryBundle = <R, ER>(
     metricCount: Atom.mapResult(poll, (a) => a.snapshot.metrics.length),
     inFlightByNode: Atom.mapResult(poll, (a) => a.inFlightByNode),
     fleetInFlight: Atom.mapResult(poll, (a) => a.fleetInFlight),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const shardMapBundleCache = new WeakMap<object, Map<string, ShardMapBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **shard-map** tag. `size` / `sizeByNode` (fleet
+ *  folds) + `sizeLocal` (leaf) are effect fields — **polled** on a tick (first read immediate, then
+ *  ~2s). @public */
+export const shardMapBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: ShardMapTag<R>,
+): ShardMapBundle => {
+  const cache = cacheFor(shardMapBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const read = Effect.flatMap(tag, (m) =>
+    Effect.all({ size: m.size, sizeByNode: m.sizeByNode, sizeLocal: m.sizeLocal }),
+  );
+  const poll = runtime.atom(
+    Stream.fromEffect(read).pipe(
+      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
+    ),
+  );
+  const bundle: ShardMapBundle = {
+    size: Atom.mapResult(poll, (a) => a.size),
+    sizeByNode: Atom.mapResult(poll, (a) => ({ ...a.sizeByNode })),
+    sizeLocal: Atom.mapResult(poll, (a) => a.sizeLocal),
   };
   cache.set(tag.key, bundle);
   return bundle;

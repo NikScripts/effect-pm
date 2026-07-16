@@ -29,6 +29,7 @@ import {
   type CustomQueueTag,
   type FleetHealthTag,
   type TelemetryTag,
+  type ShardMapTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -42,6 +43,7 @@ import {
   isCustomQueueTag,
   isFleetHealthTag,
   isTelemetryTag,
+  isShardMapTag,
   isProcessTag,
   isQueueTag,
   nodesOf,
@@ -55,6 +57,7 @@ import { kind as queueKind } from "../QueueResource";
 import { kind as customQueueKind } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind } from "../Telemetry";
+import { kind as shardMapKind } from "../ShardMap";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -70,7 +73,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle, useTelemetryBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -2195,8 +2198,8 @@ export const FleetHealthCard = (props: {
   );
 };
 
-/** One node's in-flight as a labelled bar — for the telemetry card's per-node breakdown. */
-const TelemetryNodeRow = (props: {
+/** One node's count as a labelled bar — the per-node breakdown for the telemetry + shard-map cards. */
+const NodeCountRow = (props: {
   readonly node: string;
   readonly count: number;
   readonly max: number;
@@ -2243,8 +2246,51 @@ export const TelemetryCard = (props: {
         <span className="text-xs text-muted-foreground">in-flight · fleet total</span>
       </div>
       <div className="flex flex-col gap-1.5">
-        {rows.map(([node, n]) => <TelemetryNodeRow key={node} node={node} count={n} max={max} />)}
+        {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
       </div>
+      <DegradedOverlay tag={props.tag} />
+    </div>
+  );
+};
+
+/**
+ * The card for a **ShardMap** resource — a partitioned key/value mesh. Surfaces its fleet folds:
+ * `size` (entries across the whole fleet) as the headline, `sizeByNode` as a bar-per-node breakdown,
+ * plus this node's own shard (`sizeLocal`) as a footnote. Read-only. @public
+ */
+export const ShardMapCard = (props: {
+  readonly tag: ShardMapTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = useShardMapBundle(props.tag);
+  const sizeR = useAtomValue(bundle.size);
+  const byNodeR = useAtomValue(bundle.sizeByNode);
+  const localR = useAtomValue(bundle.sizeLocal);
+  const size = AsyncResult.isSuccess(sizeR) ? sizeR.value : 0;
+  const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
+  const local = AsyncResult.isSuccess(localR) ? localR.value : undefined;
+  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  return (
+    <div className="relative flex flex-col rounded-xl border bg-card p-3" style={vt}>
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+          {rows.length} shard{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="mb-3 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{size}</span>
+        <span className="text-xs text-muted-foreground">entries · fleet total</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
+      </div>
+      {local !== undefined ? (
+        <div className="mt-2 text-[0.7rem] text-muted-foreground">this node holds {local}</div>
+      ) : null}
       <DegradedOverlay tag={props.tag} />
     </div>
   );
@@ -2286,6 +2332,12 @@ const telemetryWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
+const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
+  isShardMapTag(tag) ? (
+    <ShardMapCard tag={tag} name={name} />
+  ) : (
+    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
+  );
 
 /**
  * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
@@ -2305,6 +2357,7 @@ export const base: WidgetRegistry = withEntries(
     forKind(apiKind, apiWidget),
     forKind(fleetHealthKind, fleetHealthWidget),
     forKind(telemetryKind, telemetryWidget),
+    forKind(shardMapKind, shardMapWidget),
     forKind(resourceKind, ResourceCard),
   ],
 );

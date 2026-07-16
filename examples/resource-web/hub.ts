@@ -20,8 +20,10 @@ import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
+import * as ShardMap from "../../src/ShardMap";
 
 const importJob = Schema.Struct({ id: Schema.String });
+const session = Schema.Struct({ id: Schema.String, user: Schema.String });
 
 // Three remote machines (see `server.ts`): the box-score queue on `WnbaNode`, the live-score poller
 // on `LiveNode`, the play-by-play queue on `StatsNode` — so the dashboard's node die shows three
@@ -61,6 +63,14 @@ export class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
 export class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
   Resource.distributed([WnbaNode, LiveNode, StatsNode]),
 ) {}
+
+// A **shard-map** mesh — active game sessions partitioned across the three nodes by `consistentHash`.
+// `sizeLocal` is this node's shard; `sizeByNode` / `size` are fleet folds. Dogfoods the ShardMap widget.
+export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
+  key: Schema.String,
+  value: session,
+  keyOf: (s) => s.id,
+}).pipe(Resource.distributed([WnbaNode, LiveNode, StatsNode])) {}
 
 // A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
@@ -128,6 +138,7 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   WorkerPool,
   MeshHealth,
   FleetMetrics,
+  Sessions,
 }) {}
 
 /** The hub the dashboard renders. */
@@ -168,6 +179,7 @@ const appLayer = Layer.mergeAll(
   Resource.client(WorkerPool, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   Resource.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   Resource.client(FleetMetrics, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(Sessions, WnbaNode).pipe(Layer.provide(wnbaTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */
