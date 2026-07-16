@@ -324,6 +324,20 @@ const DegradedOverlayInner = (props: {
 }): React.ReactElement | null => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const stale = useStale(s?.uptimeMillis);
+  // Node stopped responding: dim the frozen card + say so. Priority over "degraded" — once the stream
+  // is dead, the last readiness is itself stale, so "not responding" is the honest signal.
+  if (stale) {
+    return (
+      <>
+        <div className="pointer-events-none absolute inset-0 rounded-xl bg-background/55 ring-1 ring-slate-500" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 rounded-b-xl bg-slate-700/95 px-2 py-1 text-[0.72rem] font-medium text-slate-100">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-slate-300" />
+          <span className="min-w-0 flex-1 truncate">not responding — showing last update</span>
+        </div>
+      </>
+    );
+  }
   const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
   if (readiness === undefined || readiness.ready) return null; // ready / still loading → no overlay
   return (
@@ -344,9 +358,10 @@ const DegradedOverlayInner = (props: {
   );
 };
 
-/** Shown ONLY when a resource is not ready: an amber ring on its card + a strip with the root cause,
- *  read from its node's `NodeStatus` (SSOT). Overlaid (absolute, no layout shift) at the `Cell` level,
- *  so it works for every card type. Nothing while ready, loading, or nodeless. @public */
+/** The card **problem overlay**, read from the resource's node `NodeStatus` (SSOT): a slate dim +
+ *  "not responding" when the node's heartbeat stalls (its data is frozen), else an amber ring +
+ *  "degraded — <cause>" when the resource isn't ready. Absolute (no layout shift), works for every
+ *  card type; nothing while live-and-ready, loading, or nodeless. @public */
 export const DegradedOverlay = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = resourceNodeRef(props.tag);
   if (node === undefined) return null;
@@ -1422,6 +1437,31 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
+/** ~3× the 2s `NodeStatus` heartbeat: no fresh status in this long → the node's stream is dead and
+ *  the shown values are frozen (last-known, not live). */
+const STALE_MS = 6000;
+
+/** True once a node's heartbeat has stopped. `NodeStatus.changes` re-emits every ~2s, so `beat` (its
+ *  `uptimeMillis`) advances each tick; when it stops advancing the age climbs past {@link STALE_MS}
+ *  and a frozen card can say so instead of looking live. Only a **genuine new heartbeat** (an advanced
+ *  `uptimeMillis`) refreshes the timer — the drop-to-`undefined` + reconnect-retry churn a dying
+ *  stream emits is ignored, so that churn can't masquerade as liveness. A 1s timer re-checks the age
+ *  even when nothing new arrives. */
+const useStale = (beat: number | undefined): boolean => {
+  const last = React.useRef({ beat, at: now() });
+  React.useEffect(() => {
+    if (beat !== undefined && beat !== last.current.beat) {
+      last.current = { beat, at: now() };
+    }
+  }, [beat]);
+  const [, retick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const id = setInterval(retick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now() - last.current.at > STALE_MS;
+};
+
 /** Format an uptime span (ms) compactly. */
 const fmtUptime = (ms: number): string => {
   const s = Math.floor(ms / 1000);
@@ -1488,14 +1528,16 @@ const NodePip = (props: {
 }): React.ReactElement => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const stale = useStale(s?.uptimeMillis);
   React.useEffect(() => {
     if (AsyncResult.isFailure(r)) dlog("node", props.node.id, "FAILURE", Cause.pretty(r.cause));
     else dlog("node", props.node.id, asyncTag(r));
   }, [r, props.node.id]);
+  // stale → a pulsing grey pip, so a lost node reads as "not responding" instead of its frozen colour.
   return (
     <span
-      className="rounded-full"
-      style={{ width: props.size, height: props.size, backgroundColor: nodeColor(s) }}
+      className={cn("rounded-full", stale && "animate-pulse")}
+      style={{ width: props.size, height: props.size, backgroundColor: stale ? "#64748b" : nodeColor(s) }}
     />
   );
 };
