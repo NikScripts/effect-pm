@@ -3,12 +3,12 @@
 
 **Build cross-runtime Services on Effect.**
 
-An Effect Service lives inside one runtime. A *cross-runtime Service* isn't bound to one: define it
-once, run it on one runtime, and call it from another, with the same typed Handle.
+An Effect Service lives inside one runtime. A *cross-runtime Service* isn't bound to a runtime: define
+it once, run it on one, and call it from another, with the same typed Handle.
 
-Most apps run as more than one runtime: a worker draining a queue here, a scheduler filling it
-there. Every Resource is reached with the same typed Handle no matter which runtime calls it, with no
-hand-rolled HTTP client per consumer.
+Take a web server and a batch job that runs overnight: two runtimes, each with its own memory and
+its own lifecycle. The only way one reaches the other is over the network, normally through a
+hand-written client.
 
 Here are two Resources (a queue and a scheduled process) on two runtimes, working together.
 
