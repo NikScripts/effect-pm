@@ -18,9 +18,10 @@ import { NodeServices } from "@effect/platform-node";
 // Reuse the LIVE render pipeline (dual-preview expand, markdown-rendered JSDoc, api-typelinks) so the
 // precomputed effect hovers are identical to our own package's — one renderer, no drift.
 import { highlightToHast, loadHighlighter } from "../src/lib/highlight.js";
+import { moduleSummary, packages, symbolDetail } from "../src/lib/api-data.js";
+import { symbolFileKey } from "../src/lib/api-slugs.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
-const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 // Sidecars live OUTSIDE api-data (which gen-api wipes every run) so the content-hash cache survives:
 // a pinned submodule's files never change, so after the first pass every file is skipped.
 const hoversDir = nodePath.join(repoRoot, "docs/site/api-hovers");
@@ -31,35 +32,6 @@ class FileError extends Data.TaggedError("FileError")<{
   readonly cause: unknown;
 }> {}
 
-// --- the slice of the model this step needs (a symbol's source location + declaration text) ---
-const SourceS = Schema.Struct({
-  file: Schema.String,
-  line: Schema.Number,
-});
-const SymbolS = Schema.Struct({
-  name: Schema.String,
-  sourceText: Schema.String,
-  source: SourceS,
-});
-const IndexS = Schema.Struct({
-  packages: Schema.Array(
-    Schema.Struct({
-      slug: Schema.String,
-      modules: Schema.Array(Schema.Struct({ slug: Schema.String })),
-    }),
-  ),
-});
-const ModuleSummaryS = Schema.Struct({
-  symbols: Schema.Array(Schema.Struct({ name: Schema.String })),
-});
-// Mirrors src/lib/api-data.ts + scripts/gen-api.ts (kept in sync): a case-insensitively-unique file key.
-const symbolFileKey = (name: string): string => {
-  const lower = name.toLowerCase();
-  if (lower === name) return name;
-  const upper = [...name].flatMap((c, i) => (c !== c.toLowerCase() ? [i] : []));
-  return `${lower}-${upper.join("-")}`;
-};
-
 // --- IO through effect/FileSystem (never node:fs) ---
 const readJson = <S extends Schema.Top>(
   path: string,
@@ -69,7 +41,7 @@ const readJson = <S extends Schema.Top>(
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(path);
     return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text);
-  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
+  }).pipe(Effect.orElseSucceed(() => undefined));
 
 const writeText = (path: string, text: string): Effect.Effect<void, FileError, FileSystem.FileSystem> =>
   Effect.flatMap(FileSystem.FileSystem, (fs) =>
@@ -80,7 +52,7 @@ const writeText = (path: string, text: string): Effect.Effect<void, FileError, F
 
 const readFile = (path: string): Effect.Effect<string | undefined, never, FileSystem.FileSystem> =>
   Effect.flatMap(FileSystem.FileSystem, (fs) => fs.readFileString(path)).pipe(
-    Effect.catch(() => Effect.succeed(undefined)),
+    Effect.orElseSucceed(() => undefined),
   );
 
 // --- HAST helpers (no hast-util-to-html dep — hand-serialize the shiki/twoslash tree) ---
@@ -122,20 +94,20 @@ const MAX_HOVER_LINES = 160; // above this a declaration's span is pathological 
 
 const program = Effect.gen(function* () {
   const wanted = process.argv.slice(2);
-  const index = yield* readJson(nodePath.join(dataDir, "index.json"), IndexS);
-  if (index === undefined) {
-    yield* Console.error("no api-data/index.json — run gen-api first");
-    return;
-  }
   // Only the effect-smol packages: their source lives under repos/ and needs the precompute.
-  const pkgs = index.packages
+  const pkgs = (yield* packages())
     .filter((p) => p.slug !== "effect-pm")
     .filter((p) => wanted.length === 0 || wanted.includes(p.slug));
+  if (pkgs.length === 0) {
+    yield* Console.error("no effect packages in api-data — run gen-api first");
+    return;
+  }
 
   // Ready the shared highlighter + api-link / doc-link data (the same load the live render does).
   yield* Effect.promise(() => loadHighlighter());
 
-  // Collect every documented symbol, grouped by its source file, so each file is twoslashed once.
+  // Collect every documented symbol (via the same readers the site uses), grouped by its source file
+  // so each file is twoslashed once.
   interface Sym {
     readonly pkg: string;
     readonly moduleSlug: string;
@@ -146,15 +118,9 @@ const program = Effect.gen(function* () {
   const byFile = new Map<string, Array<Sym>>();
   for (const pkg of pkgs) {
     for (const module of pkg.modules) {
-      const summary = yield* readJson(
-        nodePath.join(dataDir, pkg.slug, `${module.slug}.json`),
-        ModuleSummaryS,
-      );
+      const summary = yield* moduleSummary(pkg.slug, module.slug);
       for (const row of summary?.symbols ?? []) {
-        const detail = yield* readJson(
-          nodePath.join(dataDir, pkg.slug, module.slug, `${symbolFileKey(row.name)}.json`),
-          SymbolS,
-        );
+        const detail = yield* symbolDetail(pkg.slug, module.slug, row.name);
         if (detail === undefined) continue;
         const arr = byFile.get(detail.source.file) ?? [];
         arr.push({
@@ -190,9 +156,9 @@ const program = Effect.gen(function* () {
     const input = ["// @noErrors", `// @filename: ${relFile}`, fileText].join("\n");
     // The shared render pipeline — twoslash + dual-preview expand + markdown JSDoc + api-typelinks —
     // exactly what the live render gives our own package.
-    const hast: Hast = yield* Effect.sync(() =>
+    const hast: Hast = yield* Effect.try(() =>
       highlightToHast(input, "ts", { twoslash: true }),
-    ).pipe(Effect.catch(() => Effect.succeed(undefined)));
+    ).pipe(Effect.orElseSucceed(() => undefined));
     if (hast === undefined) {
       missed += syms.length;
       continue;
