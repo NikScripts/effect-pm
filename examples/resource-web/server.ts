@@ -17,6 +17,10 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Resource from "../../src/Resource";
 import { serve as queueEntry } from "../../src/QueueResource";
 import * as CustomQueueResource from "../../src/CustomQueueResource";
+import * as FleetHealth from "../../src/FleetHealth";
+import * as Telemetry from "../../src/Telemetry";
+import * as ShardMap from "../../src/ShardMap";
+import * as RunResource from "../../src/RunResource";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
@@ -25,7 +29,7 @@ import * as Store from "../../src/Store";
 import * as QueueResource from "../../src/QueueResource";
 import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsNode, WnbaNode, WorkerPool } from "./hub";
+import { BoxScoreQueue, FetchGate, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
 
 const WNBA_PORT = HOST_PORTS.wnba;
@@ -230,6 +234,7 @@ class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaSto
 class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
   LiveNode.logs,
   Process.store(LiveScorePoller),
+  RunResource.store(FetchGate),
 ) {}
 
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
@@ -276,8 +281,16 @@ const wnbaNode = Resource.wsServer([
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
   Resource.serve(WorkerPool, workerPoolImpl(5)),
+  FleetHealth.serve(MeshHealth),
+  Telemetry.serve(FleetMetrics),
+  // the sessions shard-map, served on all three nodes; `peersLayer` lets each instance reach the
+  // others so `size` / `sizeByNode` fold across the fleet and routed `put` reaches the owning shard.
+  ShardMap.serve(Sessions),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
+  Layer.provide(Resource.peersLayer(MeshHealth, WnbaNode)),
+  Layer.provide(Resource.peersLayer(FleetMetrics, WnbaNode)),
+  Layer.provide(Resource.peersLayer(Sessions, WnbaNode)),
   // peers dial websocket too — one knob, matching the server's own wire (default would be http → 404
   // against a ws-only /rpc). The peer urls stay on the Nodes; this only chooses how to reach them.
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
@@ -295,8 +308,28 @@ const liveNode = Resource.wsServer([
     polling: Polling.spaced(Duration.seconds(2)),
   }),
   Resource.serve(WorkerPool, workerPoolImpl(3)),
+  FleetHealth.serve(MeshHealth),
+  Telemetry.serve(FleetMetrics),
+  ShardMap.serve(Sessions),
+  // a bounded-concurrency run gate (4 permits) over a simulated box-score fetch — a slow effect that
+  // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the RunResourceCard shows
+  // live in-flight / done / failed counters.
+  RunResource.serve(FetchGate, {
+    concurrency: 4,
+    effect: (url: string) =>
+      Effect.gen(function* () {
+        yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(300, 900)));
+        if ((yield* Random.nextIntBetween(0, 8)) === 0) {
+          return yield* Effect.fail(`fetch timed out: ${url}`);
+        }
+        return yield* Random.nextIntBetween(1_000, 40_000);
+      }),
+  }),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
+  Layer.provide(Resource.peersLayer(MeshHealth, LiveNode)),
+  Layer.provide(Resource.peersLayer(FleetMetrics, LiveNode)),
+  Layer.provide(Resource.peersLayer(Sessions, LiveNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(LiveStore.layerMemory),
@@ -319,8 +352,14 @@ const statsNode = Resource.wsServer([
     autoStart: true,
   }),
   Resource.serve(WorkerPool, workerPoolImpl(4)),
+  FleetHealth.serve(MeshHealth),
+  Telemetry.serve(FleetMetrics),
+  ShardMap.serve(Sessions),
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
+  Layer.provide(Resource.peersLayer(MeshHealth, StatsNode)),
+  Layer.provide(Resource.peersLayer(FleetMetrics, StatsNode)),
+  Layer.provide(Resource.peersLayer(Sessions, StatsNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(StatsStore.layerMemory),
@@ -334,12 +373,45 @@ const statsNode = Resource.wsServer([
 const liveNodeProgram = Effect.gen(function* () {
   const poller = yield* LiveScorePoller;
   yield* poller.schedule.set(pollerWindows);
+  // Drive the run gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
+  // and the RunResourceCard's in-flight gauge sits near its limit. Each run's failure is swallowed
+  // here (the gate already tallies it) so the producer fiber keeps going.
+  const gate = yield* FetchGate;
+  let g = 0;
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      while (true) {
+        yield* Effect.forkScoped(Effect.ignore(gate.run(`box/${g++}`)));
+        yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(90, 200)));
+      }
+    }),
+  );
   return yield* Effect.never;
 }).pipe(Effect.provide(liveNode));
 
 // Serve the box-score queue AND keep it fed, so its widgets show live load.
 const wnbaNodeProgram = Effect.gen(function* () {
   yield* loadQueue(yield* BoxScoreQueue, "box");
+  // feed the sessions shard-map — routed `put` (key via `keyOf`) lands each session on its owning
+  // node, so the ShardMapCard's per-node bars spread; occasionally end a session so it churns.
+  const sessions = yield* Sessions;
+  const live: Array<string> = [];
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      let n = 0;
+      while (true) {
+        if (live.length > 24 && (yield* Random.nextIntBetween(0, 3)) === 0) {
+          const id = live.shift();
+          if (id !== undefined) yield* sessions.delete(id);
+        } else {
+          const id = `sess-${n++}`;
+          yield* sessions.put({ id, user: `fan-${id}` });
+          live.push(id);
+        }
+        yield* Effect.sleep(Duration.millis(yield* Random.nextIntBetween(80, 260)));
+      }
+    }),
+  );
   return yield* Effect.never;
 }).pipe(Effect.provide(wnbaNode));
 

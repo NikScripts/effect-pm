@@ -17,6 +17,10 @@ import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
 import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResource";
+import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
+import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
+import { kind as shardMapKind } from "../ShardMap";
+import { kind as runKind, type RunGateStatus } from "../RunResource";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -135,6 +139,43 @@ interface CustomQueueService {
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
 /** A custom-queue tag — yieldable for its live service. @public */
 export type CustomQueueTag<R = never> = Effect.Effect<CustomQueueService, never, R> & { readonly key: string };
+
+/** The structural shape of a **fleet-health** resource's live service — a per-node health map + a
+ *  rollup status, both `fleet` effect fields (read-once, polled — no reactive ref). */
+interface FleetHealthService {
+  readonly byNode: Effect.Effect<Record<string, NodeReport>>;
+  readonly status: Effect.Effect<FleetStatus>;
+}
+/** A fleet-health tag — yieldable for its live service. @public */
+export type FleetHealthTag<R = never> = Effect.Effect<FleetHealthService, never, R> & { readonly key: string };
+
+/** The structural shape of a **telemetry** resource's live service — this node's metric `snapshot`
+ *  (leaf) plus the fleet folds `inFlightByNode` / `fleetInFlight`. All effect fields (polled). */
+interface TelemetryService {
+  readonly snapshot: Effect.Effect<typeof MetricsSnapshot.Type>;
+  readonly inFlightByNode: Effect.Effect<Record<string, number>>;
+  readonly fleetInFlight: Effect.Effect<number>;
+}
+/** A telemetry tag — yieldable for its live service. @public */
+export type TelemetryTag<R = never> = Effect.Effect<TelemetryService, never, R> & { readonly key: string };
+
+/** The structural shape of a **shard-map** resource's live service — `sizeLocal` (this node's entry
+ *  count, leaf) plus the fleet folds `sizeByNode` / `size`. All effect fields (polled). */
+interface ShardMapService {
+  readonly sizeLocal: Effect.Effect<number>;
+  readonly sizeByNode: Effect.Effect<Readonly<Record<string, number>>>;
+  readonly size: Effect.Effect<number>;
+}
+/** A shard-map tag — yieldable for its live service. @public */
+export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & { readonly key: string };
+
+/** The structural shape of a **run-gate** resource's live service — a reactive `status` ref carrying
+ *  the live concurrency counters (waiting / in-flight / completed / failed / interrupted / duration). */
+interface RunService {
+  readonly status: Subscribable<RunGateStatus>;
+}
+/** A run-gate tag — yieldable for its live service. @public */
+export type RunTag<R = never> = Effect.Effect<RunService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
@@ -179,6 +220,32 @@ export interface CustomQueueBundle {
   readonly resume: CommandAtom;
   readonly clear: CommandAtom;
   readonly shutdown: CommandAtom;
+}
+/** The atoms one **fleet-health** card needs — a polled per-node health map + rollup status. @public */
+export interface FleetHealthBundle {
+  readonly byNode: ValueAtom<Record<string, NodeReport>>;
+  readonly status: ValueAtom<FleetStatus>;
+}
+/** The atoms one **telemetry** card needs — the polled fleet in-flight total + per-node map, plus this
+ *  node's metric count (from the snapshot). Read-only. @public */
+export interface TelemetryBundle {
+  readonly metricCount: ValueAtom<number>;
+  readonly inFlightByNode: ValueAtom<Record<string, number>>;
+  readonly fleetInFlight: ValueAtom<number>;
+  /** This node's full metric registry (id + kind + reading) — the detail page's per-metric list. */
+  readonly metrics: ValueAtom<ReadonlyArray<MetricDatum>>;
+}
+/** The atoms one **shard-map** card needs — polled fleet size total + per-node entry map + this node's
+ *  local count. Read-only. @public */
+export interface ShardMapBundle {
+  readonly size: ValueAtom<number>;
+  readonly sizeByNode: ValueAtom<Record<string, number>>;
+  readonly sizeLocal: ValueAtom<number>;
+}
+/** The atoms one **run-gate** card needs — the live status (concurrency counters) streamed from the
+ *  reactive `status` ref. Read-only. @public */
+export interface RunBundle {
+  readonly status: ValueAtom<RunGateStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
@@ -298,6 +365,18 @@ export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
  *  primary kinds; a custom queue dispatches by its exact kind key). @public */
 export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
   resourceKindOf(m) === customQueueKind;
+/** Fleet-health guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
+export const isFleetHealthTag = (m: unknown): m is FleetHealthTag =>
+  resourceKindOf(m) === fleetHealthKind;
+/** Telemetry guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
+export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
+  resourceKindOf(m) === telemetryKind;
+/** Shard-map guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
+export const isShardMapTag = (m: unknown): m is ShardMapTag =>
+  resourceKindOf(m) === shardMapKind;
+/** Run-gate guard — its own stamped kind (dispatched by exact kind key). @public */
+export const isRunTag = (m: unknown): m is RunTag =>
+  resourceKindOf(m) === runKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -535,6 +614,113 @@ export const customQueueBundle = <R, ER>(
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
     shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const fleetHealthBundleCache = new WeakMap<object, Map<string, FleetHealthBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **fleet-health** tag. `byNode` / `status` are
+ *  `fleet` effect fields (a server-side peer fold, no reactive ref), so they're **polled** on a tick —
+ *  the first read fires immediately, then every ~2s. @public */
+export const fleetHealthBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: FleetHealthTag<R>,
+): FleetHealthBundle => {
+  const cache = cacheFor(fleetHealthBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const read = Effect.flatMap(tag, (h) => Effect.all({ byNode: h.byNode, status: h.status }));
+  const poll = runtime.atom(
+    Stream.fromEffect(read).pipe(
+      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
+    ),
+  );
+  const bundle: FleetHealthBundle = {
+    byNode: Atom.mapResult(poll, (a) => a.byNode),
+    status: Atom.mapResult(poll, (a) => a.status),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const telemetryBundleCache = new WeakMap<object, Map<string, TelemetryBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **telemetry** tag. `snapshot` (leaf) +
+ *  `inFlightByNode` / `fleetInFlight` (fleet folds) are effect fields — **polled** on a tick (first
+ *  read immediate, then ~2s). @public */
+export const telemetryBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: TelemetryTag<R>,
+): TelemetryBundle => {
+  const cache = cacheFor(telemetryBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const read = Effect.flatMap(tag, (t) =>
+    Effect.all({ snapshot: t.snapshot, inFlightByNode: t.inFlightByNode, fleetInFlight: t.fleetInFlight }),
+  );
+  const poll = runtime.atom(
+    Stream.fromEffect(read).pipe(
+      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
+    ),
+  );
+  const bundle: TelemetryBundle = {
+    metricCount: Atom.mapResult(poll, (a) => a.snapshot.metrics.length),
+    inFlightByNode: Atom.mapResult(poll, (a) => a.inFlightByNode),
+    fleetInFlight: Atom.mapResult(poll, (a) => a.fleetInFlight),
+    metrics: Atom.mapResult(poll, (a) => a.snapshot.metrics),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const shardMapBundleCache = new WeakMap<object, Map<string, ShardMapBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **shard-map** tag. `size` / `sizeByNode` (fleet
+ *  folds) + `sizeLocal` (leaf) are effect fields — **polled** on a tick (first read immediate, then
+ *  ~2s). @public */
+export const shardMapBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: ShardMapTag<R>,
+): ShardMapBundle => {
+  const cache = cacheFor(shardMapBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const read = Effect.flatMap(tag, (m) =>
+    Effect.all({ size: m.size, sizeByNode: m.sizeByNode, sizeLocal: m.sizeLocal }),
+  );
+  const poll = runtime.atom(
+    Stream.fromEffect(read).pipe(
+      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
+    ),
+  );
+  const bundle: ShardMapBundle = {
+    size: Atom.mapResult(poll, (a) => a.size),
+    sizeByNode: Atom.mapResult(poll, (a) => ({ ...a.sizeByNode })),
+    sizeLocal: Atom.mapResult(poll, (a) => a.sizeLocal),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+const runBundleCache = new WeakMap<object, Map<string, RunBundle>>();
+
+/** Build (once per runtime+tag) the atom bundle for a **run-gate** tag — subscribes to the reactive
+ *  `status` ref (streamed, like the queue/process cards). @public */
+export const runBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: RunTag<R>,
+): RunBundle => {
+  const cache = cacheFor(runBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+
+  const bundle: RunBundle = {
+    status: runtime.atom(Stream.unwrap(Effect.map(tag, (r) => r.status.changes))),
   };
   cache.set(tag.key, bundle);
   return bundle;
