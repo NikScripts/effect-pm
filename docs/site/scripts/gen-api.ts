@@ -79,6 +79,22 @@ const pkgNameOf = (parsed: unknown): string =>
     ? parsed.name
     : pkgSlug;
 
+// The `effect` / `@effect/*` packages effect-pm actually depends on (runtime + peer). We document only
+// these — the wider monorepo (ai/atom/other-sql/browser/bun) is surface a consumer of effect-pm never
+// touches. Derived from OUR package.json so it tracks the deps automatically.
+const effectDepsOf = (parsed: unknown): ReadonlySet<string> => {
+  const names = new Set<string>();
+  if (typeof parsed !== "object" || parsed === null) return names;
+  for (const [section, deps] of Object.entries(parsed)) {
+    if (section !== "dependencies" && section !== "peerDependencies") continue;
+    if (typeof deps !== "object" || deps === null) continue;
+    for (const name of Object.keys(deps)) {
+      if (name === "effect" || name.startsWith("@effect/")) names.add(name);
+    }
+  }
+  return names;
+};
+
 // One named error per failure mode (Principles → Errors are values).
 class FileError extends Data.TaggedError("FileError")<{
   readonly path: string;
@@ -564,9 +580,10 @@ const program = Effect.gen(function* () {
   const effectRef = (yield* git("-C", "repos/effect", "rev-parse", "HEAD")) || "main";
   const effectRepoBaseUrl = `https://github.com/Effect-TS/effect-smol/blob/${effectRef}`;
   const effectPkgDirs = yield* enumerateEffectPkgDirs;
-  const effectSpecs = yield* Effect.forEach(effectPkgDirs, (d) =>
-    specForEffectPkg(d, effectRepoBaseUrl),
-  );
+  const effectDeps = effectDepsOf(parsed);
+  const effectSpecs = (
+    yield* Effect.forEach(effectPkgDirs, (d) => specForEffectPkg(d, effectRepoBaseUrl))
+  ).filter((s) => effectDeps.has(s.name));
 
   const allSpecs: ReadonlyArray<PkgConfig> = [
     {

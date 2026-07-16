@@ -40,8 +40,8 @@ export default async function ApiSymbolPage({
   );
 }
 
-// Rendered on demand (SSR), never pre-rendered: there are 5000+ symbol pages, each with a heavy
-// twoslash source panel — statically pre-rendering them all overflows the build's serializer (V8
-// string cap) and produces a multi-GB dist. Served dynamically, the data is read per request (cwd
-// paths in api-data resolve in the running server).
+// Rendered on demand (SSR), never pre-rendered: even scoped to effect + platform-node +
+// sql-sqlite-node, effect core alone is ~3900 symbol pages with heavy twoslash source panels.
+// Statically pre-rendering them overflows the build's serializer (V8 string cap) and produces a
+// multi-GB dist. Served dynamically, the data is read per request (cwd paths resolve in the server).
 export const getConfig = async () => ({ render: "dynamic" }) as const;
