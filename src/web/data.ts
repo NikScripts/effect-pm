@@ -151,6 +151,9 @@ export type FleetHealthTag<R = never> = Effect.Effect<FleetHealthService, never,
 /** The structural shape of a **telemetry** resource's live service — this node's metric `snapshot`
  *  (leaf) plus the fleet folds `inFlightByNode` / `fleetInFlight`. All effect fields (polled). */
 interface TelemetryService {
+  /** This node's metric registry as a **live stream** (a PubSub) — the metric list/count ride this,
+   *  no polling. The fleet folds below are effect-only (cross-peer aggregates, nothing to emit on). */
+  readonly live: Stream.Stream<typeof MetricsSnapshot.Type>;
   readonly snapshot: Effect.Effect<typeof MetricsSnapshot.Type>;
   readonly inFlightByNode: Effect.Effect<Record<string, number>>;
   readonly fleetInFlight: Effect.Effect<number>;
@@ -667,15 +670,18 @@ export const telemetryBundle = <R, ER>(
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  const read = Effect.flatMap(tag, (t) =>
-    Effect.all({ snapshot: t.snapshot, inFlightByNode: t.inFlightByNode, fleetInFlight: t.fleetInFlight }),
+  // Metric list + count ride this node's `live` snapshot **stream** — no polling.
+  const live = runtime.atom(Stream.unwrap(Effect.map(tag, (t) => t.live)));
+  // The fleet in-flight folds are cross-peer aggregates with no change stream, so they still poll.
+  const foldRead = Effect.flatMap(tag, (t) =>
+    Effect.all({ inFlightByNode: t.inFlightByNode, fleetInFlight: t.fleetInFlight }),
   );
-  const poll = pollAtom(runtime, read);
+  const poll = pollAtom(runtime, foldRead);
   const bundle: TelemetryBundle = {
-    metricCount: Atom.mapResult(poll, (a) => a.snapshot.metrics.length),
+    metricCount: Atom.mapResult(live, (s) => s.metrics.length),
+    metrics: Atom.mapResult(live, (s) => s.metrics),
     inFlightByNode: Atom.mapResult(poll, (a) => a.inFlightByNode),
     fleetInFlight: Atom.mapResult(poll, (a) => a.fleetInFlight),
-    metrics: Atom.mapResult(poll, (a) => a.snapshot.metrics),
   };
   cache.set(tag.key, bundle);
   return bundle;
