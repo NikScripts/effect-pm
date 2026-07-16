@@ -1419,8 +1419,10 @@ export const Deck = (props: {
       ))}
     </div>
   );
+  // fill: pull the dot row down into the bottom safe-area padding with a negative margin so it sits
+  // near the screen edge — the track keeps its reserved `DECK_DOTS` height (no stretch change).
   const dots = (
-    <DeckDots count={pageNodes.length} active={active} onDot={scrollTo} className={props.fill === true ? "h-5 shrink-0 items-center" : "mt-2"} />
+    <DeckDots count={pageNodes.length} active={active} onDot={scrollTo} className={props.fill === true ? "h-5 shrink-0 items-center mt-3 -mb-3" : "mt-2"} />
   );
   // hidden measurer (fill + sections): fixed sections render their real (pure) content to be sized;
   // grow sections render a minHeight spacer, so their live/stateful content is never double-mounted.
