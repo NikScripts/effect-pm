@@ -21,7 +21,11 @@
 **REMAINING (C-coupled follow-ups, well-specified now that the topology exists):**
 - **§8.3 serve-time `ProtocolKindMismatch`** — `wsServer`/`httpServer` assert each served tag's node `kind`. Coupled: `serverImpl` handles opaque `serve` layers and would need to read each served tag's bound node.
 - **§4.1/§4.2a reactive remap** — `MissingClientProtocol` (absent ambient protocol) and `ProtocolMismatch` (the "empty HTTP response" first-call defect). Coupled: the client-building / `forwardClient` path.
-- **§4.3/§8.4 `verify` handshake (F3/F4)** — still gated on the open investigation: does Effect's `RpcClient`/`RpcServer` expose a transport-level handshake to ride, or is a host-health ping verb required? Decides whether F3 verify is nearly free or a later phase. **F4 (`contractHash`) deferred** to land with the host-health resource.
+- **§4.3/§8.4 `verify` handshake (F3/F4)** — investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
+  - **F1/F3 verify is free and self-contained** — await `onConnect` / send one `Ping`, bounded by a timeout → `NodeUnreachable` (no Pong) or `ProtocolMismatch` (transport opened but handshake rejected — http↔ws). **No server-side application verb, works against any Effect RPC server today.** This unblocks **default-on `verify` for remote tags** (no host-health prerequisite).
+  - **Socket vs http nuance:** socket is persistent (built-in ping timeouts / `onConnect`, verify nearly passive); http is stateless, so http-verify is one explicit `Ping` round-trip at connect.
+  - **F4 (`contractHash`)** rides the `initialMessage` channel (`RpcServer` exposes `initialMessage: Effect<Option<unknown>>` to read a client's connect payload). Server-read exists; client-send needs a bit more — **still deferred** to land with host-health, but the mechanism is confirmed real.
+  - **Buildable shape:** `connect(node, { verify })` awaits `onConnect` / Pings the transport, times out → `NodeUnreachable`, classifies connected-but-rejected → `ProtocolMismatch`. All on primitives Effect already ships.
 
 ---
 
