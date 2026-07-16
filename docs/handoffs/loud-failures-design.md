@@ -87,3 +87,53 @@ This is the part that isn't in `Resource.ts` and doesn't collide with any active
 1. **Verify default:** opt-in (`{ verify: true }`) vs. default-on for `clientHttp`/`socketClient` (the batteries-included wrappers) where a round-trip is acceptable?
 2. **`contractHash` home:** fold F4 into the deferred host-health resource, or a lighter standalone handshake verb?
 3. **Scope for a first PR:** just 4.1 + 4.2(a) + §5.1–5.2 (all low-risk, mostly mine), deferring the handshake (4.3) to a C-owned follow-up? That's my recommendation — it ships the fail-loud story for the two *proven* bugs without new server surface.
+
+---
+
+## 8. Topology-driven verify — the SSOT reframe (supersedes the per-connect flag)
+
+The framing in §4 treated `verify` as a per-*call* decision ("should this connect check?"). That's wrong. Whether a resource has a counterpart to shake with, who that counterpart is, and how to reach it are all **declared topology**, and the library already declares most of it:
+
+- A tag binds to a node: `QueueResource.Tag(...)({ payload, node: Droplet })`.
+- A node carries its address: `Resource.Node("droplet", 7777)` → `url` via `resolveHttpTarget` (fails loudly on a bad string — `makeNode`, `src/Resource.ts:3346`).
+- A fleet is declared: `.pipe(Resource.distributed(NodeA, NodeB, …))`; `peers` reaches the rest.
+
+The **one fact that's missing** is the node's *protocol kind* (http vs ws). Today the kind is chosen at `connect` time (`protocolHttp` vs `protocolWebsocket`), not recorded on the node — which is *exactly* why bug #1 was possible: nothing declared "Droplet speaks ws," so nothing could notice the producer dialed http. Add `kind` to the node and the topology becomes self-describing; verify becomes a *derived behavior* of it, not a flag.
+
+### 8.1 Stamp `kind` on the `Node`
+`Resource.Node("droplet", { url, kind: "websocket" })` (or inferred — see open question). The node becomes the single source of truth for *where* and *how* to reach it, mirroring how it already owns *where* (and already fails loudly on a bad url).
+
+### 8.2 Design F1 out on the client (don't merely detect it)
+Because the node declares its kind, `connect(node)` / `client(tag)` **derive** the transport from the node instead of the caller picking `protocolHttp`/`protocolWebsocket`. The producer bug becomes **impossible**: `connect(Droplet)` reads `kind: "websocket"` and dials ws. This is the same instinct as `warnHttpClientInBrowser` (the library already nudges on a likely-wrong transport) — promoted from "warn" to "can't express the wrong thing."
+
+### 8.3 Assert F1 on the server at serve time
+`wsServer([...])` / `httpServer([...])` assert every served tag's node declares the matching kind → a loud `ProtocolKindMismatch` at **serve startup** if someone serves an http-declared node over ws. Both sides now honor one SSOT fact and can't silently disagree — the mismatch fails at boot on whichever side is misconfigured.
+
+### 8.4 What the runtime handshake (verify) is left to do
+With F1 designed out by the topology, the handshake only covers what SSOT can't know statically:
+- **F3 `NodeUnreachable`** — is the declared node actually answering?
+- **F4 `ContractMismatch`** — is the *deployed* contract the one this tag expects? (`contractHash`, itself derivable from the tag = SSOT; a mismatch means one deploy is stale.)
+
+### 8.5 Who handshakes / who to expect / who not — all derived
+- Tag bound to a **remote node** (`{ node }`) or a **fleet** (`distributed`) → participates; its counterpart(s) are the declared node(s).
+- **Local** tag (no node, engine in-process) → no counterpart, verify is a no-op / not offered.
+
+No per-call guessing: the guest list *is* the declared topology.
+
+### 8.6 Default, revisited
+The strongest "don't default" argument was "we don't know who to ping / whether it has a verb." Once the counterpart is **declared**, that objection evaporates. Revised position: **the F3/F4 handshake is default-on for tags with a declared remote node, and a no-op for local tags** — with a per-connect override for the exceptions:
+- `{ verify: "reject" }` — fail-fast entry point (server-to-server, CLI).
+- `{ verify: "status" }` — resilient UI: connect succeeds, reason flows via `NodeStatus`.
+- `{ verify: false }` — opt out (e.g. a test against a deliberately-absent server).
+
+The per-connect flag from §4 is demoted to this *override*, not the primary surface. (The reactive remap of §4.1/4.2a stays unconditional regardless — free, always-on legibility.)
+
+### 8.7 The API addition, restated
+The core addition is **not** `{ verify }` on `connect`. It is:
+1. **`kind`** (and later **`contractHash`**) on `Resource.Node` → the topology is self-describing.
+2. **`connect`/`client` derive transport from the node** → F1 designed out on the client.
+3. **`wsServer`/`httpServer` assert node kind at serve** → F1 loud on the server.
+4. **verify = derived F3/F4 handshake** over the declared counterpart, default-on for remote tags, with a per-connect override.
+
+### 8.8 New open question
+**`kind`: explicit vs inferred.** Do you write `Resource.Node(..., { kind: "websocket" })` (simplest, explicit SSOT), or does binding a served group to `wsServer([...])` *infer* and stamp the node's kind (less to type, but needs the server and node co-declared, and the client — a separate deploy — must still read it explicitly)? Explicit-on-the-node is my lean: it's the one place both a remote client and the server can read the same fact without sharing server code.
