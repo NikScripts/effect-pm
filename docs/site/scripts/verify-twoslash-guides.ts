@@ -53,7 +53,7 @@ for (const rel of pages) {
         failed += 1;
         console.error(`\nFAIL ${rel} block #${i}`);
         for (const e of errors) {
-          console.error(`  ${e.code ?? ""} ${e.text ?? e.message ?? e}`);
+          console.error(`  ${e.code ?? ""} ${e.text ?? String(e)}`);
         }
       } else {
         console.log(`ok  ${rel} block #${i}`);

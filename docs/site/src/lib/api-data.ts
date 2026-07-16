@@ -93,6 +93,19 @@ const readJson = <S extends Schema.Top>(
 export const slugForEntry = (entry: string): string =>
   entry === "(top-level)" ? "top-level" : entry.replace(/\//g, "-");
 
+// An export name -> its on-disk data-file key. Export names can differ only by case (a type `Foo` and
+// a value `foo` in one module); on a case-insensitive filesystem `Foo.json` and `foo.json` are the
+// SAME file, so one clobbers the other. Encode a case-insensitively-unique key: lowercase the name and
+// append the uppercase-letter positions (joined by `-`, which no identifier contains). Pure-lowercase
+// names are unchanged. The URL keeps the real name; only the file uses this key. Mirrors
+// scripts/gen-api.ts (kept in sync).
+export const symbolFileKey = (name: string): string => {
+  const lower = name.toLowerCase();
+  if (lower === name) return name;
+  const upper = [...name].flatMap((c, i) => (c !== c.toLowerCase() ? [i] : []));
+  return `${lower}-${upper.join("-")}`;
+};
+
 export const packages = (): Effect.Effect<
   ReadonlyArray<PackageInfo>,
   never,
@@ -115,7 +128,7 @@ export const symbolDetail = (
   moduleSlug: string,
   name: string,
 ): Effect.Effect<ApiSymbol | undefined, never, FileSystem.FileSystem> =>
-  readJson(nodePath.join(pkg, moduleSlug, `${name}.json`), ApiSymbolS);
+  readJson(nodePath.join(pkg, moduleSlug, `${symbolFileKey(name)}.json`), ApiSymbolS);
 
 // Every [pkg, module, symbol] triple — the static paths for the per-symbol route.
 export const symbolPaths = (): Effect.Effect<
