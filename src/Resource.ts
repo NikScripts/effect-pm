@@ -49,6 +49,7 @@ import {
   Clock,
   Context,
   Data,
+  Duration,
   Effect,
   Fiber,
   Function as Fn,
@@ -63,7 +64,14 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
+import {
+  FetchHttpClient,
+  Headers,
+  HttpClient,
+  HttpRouter,
+  HttpServer,
+  HttpServerResponse,
+} from "effect/unstable/http";
 import * as Socket from "effect/unstable/socket/Socket";
 import type { Simplify } from "effect/Types";
 import {
@@ -3700,6 +3708,83 @@ export const connectSocket: {
     url?: string,
   ): Layer.Layer<unknown> => connectLayer(node, protocolWebsocket(url ?? node.url ?? "/rpc")),
 );
+
+/**
+ * A remote {@link Node} that didn't answer at its declared address — down, wrong port/url, or (for a
+ * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
+ * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.
+ *
+ * @public
+ */
+export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
+  readonly node: string;
+  readonly url: string;
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return `Node "${this.node}" did not respond at ${this.url} — is it running, and are the url and kind right?`;
+  }
+}
+
+// Reachability probes (transport-native, one bounded connection). Socket: reachable if the ws stays
+// open past a short window (`run` errors fast if it can't connect). Http: reachable if the url answers
+// at all (any response — an RPC server may 4xx a bare GET, which still proves it's up).
+// Build each transport layer as a Context in a local scope and provide *that* (not the Layer) — the
+// `strictEffectProvide`-clean form for a library helper that isn't an app entry point.
+const probeSocketReachable = (url: string, window: Duration.Duration) =>
+  Effect.gen(function* () {
+    const ctx = yield* Layer.build(Socket.layerWebSocketConstructorGlobal);
+    const socket = yield* Socket.makeWebSocket(Effect.sync(() => toWebSocketUrl(url))).pipe(
+      Effect.provide(ctx),
+    );
+    yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
+  }).pipe(Effect.scoped);
+
+const probeHttpReachable = (url: string, timeout: Duration.Input) =>
+  Effect.gen(function* () {
+    const ctx = yield* Layer.build(FetchHttpClient.layer);
+    yield* HttpClient.get(url).pipe(Effect.asVoid, Effect.timeout(timeout), Effect.provide(ctx));
+  }).pipe(Effect.scoped);
+
+/**
+ * **Verify a node is reachable, eagerly** — a fail-fast startup check for a remote {@link Node}. Opens
+ * one bounded connection to the node's declared `url`/`kind` and fails with {@link NodeUnreachable} if
+ * it doesn't answer, so a client refuses to start against a down / misaddressed backend instead of
+ * hanging or failing opaquely at the first RPC. Complements {@link Resource.connect} (which derives the
+ * transport from the node so the wrong protocol can't be *dialed*): `connect` prevents mis-wiring,
+ * `verifyConnection` catches a peer that isn't there.
+ *
+ * ```ts
+ * yield* Resource.verifyConnection(Droplet);                     // NodeUnreachable if the Droplet is down
+ * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
+ * yield* Resource.verifyConnection(Droplet, { url: "/rpc" });    // runtime url (bare node, e.g. a browser)
+ * ```
+ *
+ * The `url` resolves `options.url` → the node's own `url`; `kind` is the node's, else inferred from the
+ * effective url's scheme (`ws(s)://` → socket, else http). Scope: a **reachability** check (F3). It does
+ * not distinguish a protocol *mismatch* on the http side (a socket server answers an http probe) —
+ * `connect` already makes the client dial the node's declared kind; a `socket` node pointed at a
+ * non-socket server surfaces here as unreachable.
+ *
+ * @public
+ */
+export const verifyConnection = (
+  node: NodeKey<unknown> & { readonly url?: string; readonly kind?: ProtocolKind },
+  options?: { readonly timeout?: Duration.Input; readonly url?: string },
+): Effect.Effect<void, NodeUnreachable> => {
+  const url = options?.url ?? node.url;
+  if (url === undefined) {
+    return Effect.die(new UnaddressedNode({ node: node.key }));
+  }
+  const kind: ProtocolKind =
+    node.kind ?? (url.startsWith("ws://") || url.startsWith("wss://") ? "socket" : "http");
+  const timeout = options?.timeout ?? "3 seconds";
+  const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
+  // map per-branch (not on the ternary union) so both branches unify to `Effect<void, NodeUnreachable>`.
+  return kind === "socket"
+    ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
+    : probeHttpReachable(url, timeout).pipe(fail);
+};
 
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
