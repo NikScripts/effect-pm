@@ -60,6 +60,9 @@ importers:
         specifier: 1.0.0-beta.3
         version: 1.0.0-beta.3(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(react-dom@19.2.7(react@19.2.7))(react-server-dom-webpack@19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.108.4(esbuild@0.28.1)))(react@19.2.7)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)
     devDependencies:
+      '@effect/language-service':
+        specifier: ^0.86.2
+        version: 0.86.6
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -96,6 +99,10 @@ packages:
   '@djot/djot@0.3.2':
     resolution: {integrity: sha512-joMKR24B8rxueyFiJbpZAqEiypjvOyzTxzkhyr0q5mM/sUBaOD3unna/9IxtOotFugViyYlkIRaiXg3xM//zxg==}
     engines: {node: '>=17.0.0'}
+    hasBin: true
+
+  '@effect/language-service@0.86.6':
+    resolution: {integrity: sha512-uwXbp+lWzt60bZnm6lG6S5DWy0m6TthUzV2hcQoiS6NzieEDm07tuBakscxOXoO+AU9+yTH+0TSIa9mEDt9dFA==}
     hasBin: true
 
   '@effect/platform-node-shared@4.0.0-beta.98':
@@ -2393,6 +2400,8 @@ packages:
 snapshots:
 
   '@djot/djot@0.3.2': {}
+
+  '@effect/language-service@0.86.6': {}
 
   '@effect/platform-node-shared@4.0.0-beta.98(effect@4.0.0-beta.98)':
     dependencies:

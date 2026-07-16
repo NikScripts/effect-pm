@@ -16,7 +16,26 @@
     "baseUrl": ".",
     "paths": {
       "@pm/*": ["../../src/*"]
-    }
+    },
+    // Effect language-service diagnostics (editor + `effect-language-service` CLI). Standalone package,
+    // so the plugin is declared here rather than inherited from the root tsconfig. This is a browser/
+    // React layer with Effect tooling underneath (src/lib, scripts), so it runs the SAME relaxed
+    // ruleset as src/web / the React example apps — raw `Date`/`console`/`setTimeout`, DOM `async`
+    // handlers, `new Promise`, and `node:*` (pure path math in build scripts) are correct here, so the
+    // matching purity diagnostics are off; every other Effect rule stays on for the lib/scripts code.
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "globalTimers": "off",
+          "globalDate": "off",
+          "globalConsole": "off",
+          "newPromise": "off",
+          "asyncFunction": "off",
+          "nodeBuiltinImport": "off"
+        }
+      }
+    ]
   },
-  "include": ["src", "waku.config.ts"]
+  "include": ["src", "waku.config.ts", "scripts"]
 }
