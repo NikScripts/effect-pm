@@ -1730,13 +1730,20 @@ export type ReadinessOf<Service> = (
 // ── node: the transport for a resource, carried in the Tag ──
 
 /**
- * The value of a {@link Node} service: the RPC client transport `Protocol` for that node.
- * `Resource.connect(...)` produces a layer providing exactly this (re-keyed under the node),
- * and {@link Resource.client} feeds it to `RpcClient.make` as the `RpcClient.Protocol`.
+ * The value of a {@link Node} service: a **wrapper** holding the RPC client transport `Protocol` for
+ * that node — deliberately NOT the bare `RpcClient.Protocol` service. Wrapping makes a node's value
+ * type-distinct from an ambient protocol, which closes a real type hole: without it, a node's value is
+ * structurally identical to `RpcClient.Protocol`, so `client(tag).pipe(Layer.provide(node))` (a node
+ * supplied where an ambient protocol is required) collapses the requirement to `never` and type-checks
+ * as fully wired — then throws "Service not found: RpcClient/Protocol" at runtime (the dashboard's
+ * "connecting… forever" bug). With the wrapper that wiring fails to compile; the only forms that
+ * compile are the correct ones — `connect` (wraps) and `client(tag, node)` (unwraps).
  *
  * @internal
  */
-type NodeProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
+interface NodeProtocol {
+  readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>;
+}
 
 /**
  * The Context key of a {@link Node} (`HSelf` = its identity): a service whose value is the
@@ -3434,7 +3441,10 @@ const connectLayer = <Self, RIn>(
   node: NodeKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
 ): Layer.Layer<Self, never, RIn> =>
-  Layer.effect(node, RpcClient.Protocol).pipe(Layer.provide(protocol));
+  // wrap the ambient protocol into the node's value shape (`{ protocol }`) — see NodeProtocol.
+  Layer.effect(node, Effect.map(RpcClient.Protocol, (protocol) => ({ protocol }))).pipe(
+    Layer.provide(protocol),
+  );
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
  * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
@@ -4222,7 +4232,7 @@ function clientLayer<Self, S extends Spec>(
   const layer = Layer.effect(
     tag,
     Effect.flatMap(
-      Effect.flatMap(nodeKey, (protocol) =>
+      Effect.flatMap(nodeKey, ({ protocol }) =>
         Effect.provideService(
           RpcClient.make(group),
           RpcClient.Protocol,
