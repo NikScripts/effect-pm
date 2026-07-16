@@ -13,7 +13,7 @@ describe("SymbolIndex", () => {
       const index = yield* SymbolIndex.SymbolIndex;
       expect(index.urlAt("src/Layer.ts", 54)).toStrictEqual(Option.some("/api/effect/Layer/Layer"));
       expect(index.urlAt("src/Scope.ts", 12)).toStrictEqual(Option.some("/api/effect/Scope/Scope"));
-    }).pipe(Effect.provide(SymbolIndex.layer(entries))),
+    }).pipe(Effect.provide(SymbolIndex.layer(entries)))
   );
 
   it.effect("is none for an unknown location or a near-miss line", () =>
@@ -21,7 +21,7 @@ describe("SymbolIndex", () => {
       const index = yield* SymbolIndex.SymbolIndex;
       expect(Option.isNone(index.urlAt("src/Layer.ts", 55))).toBe(true);
       expect(Option.isNone(index.urlAt("src/Other.ts", 54))).toBe(true);
-    }).pipe(Effect.provide(SymbolIndex.layer(entries))),
+    }).pipe(Effect.provide(SymbolIndex.layer(entries)))
   );
 
   it.effect("last entry wins for a duplicated location", () =>
@@ -33,8 +33,8 @@ describe("SymbolIndex", () => {
         SymbolIndex.layer([
           { file: "src/Dup.ts", line: 1, url: "/a" },
           { file: "src/Dup.ts", line: 1, url: "/b" },
-        ]),
-      ),
-    ),
+        ])
+      )
+    )
   );
 });

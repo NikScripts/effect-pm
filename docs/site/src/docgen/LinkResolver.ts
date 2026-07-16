@@ -1,0 +1,106 @@
+/**
+ * Compiler-accurate link resolution — the IDE's "go to definition", not name-matching. Given an
+ * identifier node, resolve it to the EXACT symbol it references (through aliases, imports, scope) and
+ * map that symbol's declaration back to its doc URL via the {@link SymbolIndex}. Cross-module and
+ * colliding names (`Array`, `Error`) and a module's own type all resolve correctly — the checker
+ * already did the work the name-heuristic could only guess at.
+ *
+ * Returns none — by nature, not failure — for type parameters (local, no page), built-ins
+ * (`string`, `Exclude` — lib.d.ts), and symbols outside the documented set.
+ *
+ * @since 1.0.0
+ */
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as nodePath from "node:path";
+import ts from "typescript";
+import * as SymbolIndex from "./SymbolIndex.js";
+import * as TsProgram from "./TsProgram.js";
+
+const TypeId = "~docgen/LinkResolver";
+
+/**
+ * Resolves an identifier node to the doc URL of the symbol it references.
+ *
+ * @category models
+ * @since 1.0.0
+ */
+export interface LinkResolver {
+  readonly [TypeId]: typeof TypeId;
+  /** The doc URL the identifier at `node` points at, or none. */
+  readonly resolve: (node: ts.Node) => Option.Option<string>;
+}
+
+/**
+ * The `LinkResolver` service tag.
+ *
+ * @category tags
+ * @since 1.0.0
+ */
+export const LinkResolver: Context.Service<LinkResolver, LinkResolver> =
+  Context.Service("docgen/LinkResolver");
+
+/**
+ * Options for {@link layer}: `repoRoot` makes a resolved declaration's absolute path repo-relative, to
+ * match the {@link SymbolIndex.Entry} keys (the model records repo-relative paths).
+ *
+ * @category models
+ * @since 1.0.0
+ */
+export interface Options {
+  readonly repoRoot: string;
+}
+
+// A variable declaration's `const`/`export` keyword lives on the enclosing statement, so climb to it —
+// that's the line the model recorded (the extractor uses the same rule).
+const declNode = (decl: ts.Declaration): ts.Node =>
+  ts.isVariableDeclaration(decl) && ts.isVariableDeclarationList(decl.parent)
+    ? decl.parent.parent
+    : decl;
+
+const resolveWith = (
+  checker: ts.TypeChecker,
+  index: SymbolIndex.SymbolIndex,
+  repoRoot: string
+): ((node: ts.Node) => Option.Option<string>) => {
+  return (node) => {
+    const initial = checker.getSymbolAtLocation(node);
+    if (initial === undefined) return Option.none();
+    const symbol =
+      (initial.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(initial) : initial;
+    // Type parameters resolve to their `<A>` declaration (inside some symbol's span) but are local
+    // placeholders with no page — skip, else `Layer<ROut, E>`'s params would link to Layer itself.
+    if ((symbol.flags & ts.SymbolFlags.TypeParameter) !== 0) return Option.none();
+    for (const decl of symbol.getDeclarations() ?? []) {
+      const owner = declNode(decl);
+      const source = owner.getSourceFile();
+      const rel = nodePath.relative(repoRoot, source.fileName);
+      const line = source.getLineAndCharacterOfPosition(owner.getStart()).line + 1;
+      const url = index.urlAt(rel, line);
+      if (Option.isSome(url)) return url;
+    }
+    return Option.none();
+  };
+};
+
+/**
+ * A {@link LinkResolver} over the current {@link TsProgram} and {@link SymbolIndex}.
+ *
+ * @category layers
+ * @since 1.0.0
+ */
+export const layer = (
+  options: Options
+): Layer.Layer<LinkResolver, never, TsProgram.TsProgram | SymbolIndex.SymbolIndex> =>
+  Layer.effect(LinkResolver)(
+    Effect.gen(function* () {
+      const program = yield* TsProgram.TsProgram;
+      const index = yield* SymbolIndex.SymbolIndex;
+      return {
+        [TypeId]: TypeId,
+        resolve: resolveWith(program.checker, index, options.repoRoot),
+      };
+    })
+  );
