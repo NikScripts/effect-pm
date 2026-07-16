@@ -205,7 +205,7 @@ export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
   const idx = buildTermIndex();
   termRegex = idx.regex;
   termToSlug = idx.termToSlug;
-  autoLink = meta.id !== "glossary"; // the glossary never links its own terms
+  autoLink = false; // glossary auto-linking disabled for now (re-enable: `meta.id !== "glossary"`)
   seedManualLinks(doc);
   return { element: toReact(doc), meta, toc: buildToc(doc) };
 };
