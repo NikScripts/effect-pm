@@ -1,8 +1,27 @@
 # Design: loud, eager transport failures
 
-**Status:** proposal, awaiting owner sign-off. No code yet.
+**Status:** IN PROGRESS on `feat/loud-failures`. Topology core (§8.1–8.2) SHIPPED + tested; error-surfacing (§4 remap, §8.3 serve assertion) and verify (§4.3/§8.4) remain — see §9.
 **Author intent:** kill the recurring "silent wiring failure" bug class at the library level.
 **Ownership note:** the runtime changes live in `src/Resource.ts` (the protocol/connect API — Agent C's zone), so §4.1–4.3 are a **spec to co-own with C**. The verification harness (§5) touches only `test/` + example smoke scripts and is **independently ownable** — it can land first and would have caught both motivating bugs on its own.
+
+---
+
+## 9. Build status — locked decisions & what shipped
+
+**Locked naming (Effect-perfect).** `type ProtocolKind = "http" | "socket"` — Effect's *client* vocabulary (`RpcClient.layerProtocolHttp` / `layerProtocolSocket`), consistent with the existing `socketClient`. Connect family: `connect` / `connectHttp` / `connectSocket` (NOT `connectWs`). Deferred alignment (separate pass, touches C's server surface): `protocolWebsocket → protocolSocket` (client helper) and `wsServer → websocketServer` (Effect server = `layerProtocolWebsocket`).
+
+**SHIPPED on `feat/loud-failures`** (each step: full typecheck + effect-LSP 0/0 both configs + full 501-test suite green):
+- **Step 1 — `ProtocolKind` on `Resource.Node`.** `kind` inferred `"socket"` from a `ws(s)://` url / `"http"` from a resolved http target, or explicit `{ url, kind }`. `AnyNode` gains `kind`; new `AddressedNode<HSelf>` type. The node is now SSOT for *where* + *how*.
+- **Step 2 — dual `connect` + `connectHttp`/`connectSocket`.** `MyNode.pipe(Resource.connect)` derives the transport from the node's `kind` → **F1 (http↔socket mismatch) is designed out on the client**; a node with no address fails loudly (`UnaddressedNode`, with a remediation message) at connect, not opaquely at first call. Full form set: bare/derived pipe, `connect(protocol)` data-last, `connect(node)`/`connect(node, protocol)` data-first, and the two kind shortcuts. Proven e2e streaming over a real **ws AND http** server; `Resource.client(tag)` resolves the tag's bound node (so the HealthBoard-class "ambient protocol not threaded" wiring is handled too).
+
+**Key implementation decisions:**
+- **Overload order:** the node→Layer form is declared **last** in each dual, because TS selects the last overload for a function used as a bare value (`node.pipe(connect)`); direct calls resolve top-down. Documented in-code.
+- **Loud fail is runtime, not compile-time.** `connect(node)` accepts any node and throws `UnaddressedNode` at call for a bare one, rather than a type-level `AddressedNode` gate. A compile-time gate would require overloading `makeNode` to return precise per-target url/kind types, which entangles the complex `store`/`logs` getter types — deferred as a possible refinement. Runtime throw is still eager + loud (at connect, not first RPC).
+
+**REMAINING (C-coupled follow-ups, well-specified now that the topology exists):**
+- **§8.3 serve-time `ProtocolKindMismatch`** — `wsServer`/`httpServer` assert each served tag's node `kind`. Coupled: `serverImpl` handles opaque `serve` layers and would need to read each served tag's bound node.
+- **§4.1/§4.2a reactive remap** — `MissingClientProtocol` (absent ambient protocol) and `ProtocolMismatch` (the "empty HTTP response" first-call defect). Coupled: the client-building / `forwardClient` path.
+- **§4.3/§8.4 `verify` handshake (F3/F4)** — still gated on the open investigation: does Effect's `RpcClient`/`RpcServer` expose a transport-level handshake to ride, or is a host-health ping verb required? Decides whether F3 verify is nearly free or a later phase. **F4 (`contractHash`) deferred** to land with the host-health resource.
 
 ---
 
