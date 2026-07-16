@@ -123,6 +123,23 @@ IO · typed `Data.TaggedError` errors · services as `Context.Service`, layers f
 line · PascalCase only for type/class/namespace, camelCase values · `effect-language-service diagnostics`
 clean · tests per layer · commit+push per step · branch from `integration`.
 
+## Phase 1 findings
+
+- **P1 — TypePrinter: FEASIBLE (the make-or-break, answered positively).**
+  - Resolution is trivial and exact — `getSymbolAtLocation` → dealias → skip type-params → declaration
+    line → `locations` map → url. Every named ref that resolved, resolved correctly (0 false positives).
+  - The winning technique: **`checker.typeToTypeNode(type, enclosing, flags)`** returns a full-grammar
+    synthesized `TypeNode` (overloads, function sigs, generics, unions — everything the compiler prints),
+    and **every `TypeReferenceNode` on it resolves via `getSymbolAtLocation` (20/20 on `Effect.map`)**.
+    So the printer is: walk the node, emit text, resolve each `TypeReferenceNode`'s `typeName` → link;
+    fall back to `ts.createPrinter().printNode()` (plain text) for node kinds we don't specially handle
+    (D3 subset+fallback — graceful, expand as needed).
+  - Rejected paths: the symbol-tracking `EmitTextWriter` is INTERNAL (not in the public `.d.ts`) and
+    `typeToString` doesn't accept it — and reaching internals needs a cast (forbidden). A full `ts.Type`
+    walker works but is TypeDoc-scale and unnecessary given typeToTypeNode.
+  - ⇒ `TypePrinter` = `typeToTypeNode` + a small node-walk printer with plain-text fallback + `LinkResolver`.
+- P2/P3/P4: pending (service wrapping, render application, cross-package) — lower risk, resolution proven.
+
 ## Decisions log
 
 - **2026-07-16 — architecture approved.** Service decomposition (TsProgram · SymbolIndex · LinkResolver ·
