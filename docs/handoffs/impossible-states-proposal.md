@@ -1,6 +1,6 @@
 # Proposal: make illegal states unrepresentable
 
-**Status:** proposal for review. Breaking changes are in scope (owner approved).
+**Status (2026-07-16):** clean wins SHIPPED to integration. **P1** (node↔protocol wiring bug → compile error) and **P5** (browser http transport dies) merged. **P2** skipped (needs a cast — `makeNode` typing complexity, same wall as reverted `connectFleet`; narrow win the runtime throw already covers). **P4** was ALREADY ENFORCED (loose-fields payload shorthand already rejected — mis-scoped here). **P3** deferred (`serverImpl` sees opaque serve layers → coupled). See `api-changes-2026-07-16.md`. Breaking changes were in scope (owner approved).
 **Principle:** *the wrong thing shouldn't compile; the risky thing should be loud; the common thing should be one line.* This proposal is about the first clause — converting runtime footguns into compile errors.
 
 Each item below shows **the wrong code that compiles today**, the change that makes it **not compile**, the breaking impact, and who owns it.

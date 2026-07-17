@@ -3477,10 +3477,11 @@ const dieIfHttpClientInBrowser = Effect.suspend(() =>
 );
 
 /**
- * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
- * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
- * and re-keys it under the node. Serialization defaults to {@link defaultSerialization}
- * (ndjson), matching {@link httpServer}'s default so the two sides agree by construction.
+ * Wire a {@link Node}'s transport over **http** — the server/CLI/backend case. Builds the http client
+ * `Protocol` (Fetch + serialization) from a `url` and re-keys it under the node. Serialization defaults
+ * to {@link defaultSerialization} (ndjson), matching {@link httpServer}'s default so the two sides agree
+ * by construction. **In a browser this fails hard** (`HttpClientInBrowser`) — http starves at the
+ * ~6-connection cap; use {@link socketClient} there.
  *
  * ```ts
  * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
@@ -3597,8 +3598,8 @@ const serverProtocolWebsocket = (
  * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
  * {@link httpClient}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
  * multiplexed connection**, so a dashboard never trips the browser's ~6-connection-per-origin
- * HTTP/1.1 limit that starves streams over {@link httpClient} (past ~6 live streams: no graphs, no
- * logs, some resources blank). The server must serve `protocol: "websocket"` — see {@link httpServer}.
+ * HTTP/1.1 limit that starves streams over {@link httpClient} (in a browser {@link httpClient} now
+ * fails hard — see its note). The server must be a {@link wsServer}.
  *
  * The `url` may be a same-origin **path** (`"/rpc"` — resolved against the page `location`, so the
  * browser follows its own host + scheme, `http→ws` / `https→wss`), an `http(s)://` url (scheme
