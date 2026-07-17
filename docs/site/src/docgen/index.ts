@@ -9,7 +9,9 @@
  *
  * @since 1.0.0
  */
+export * as Extractor from "./Extractor.js";
 export * as LinkResolver from "./LinkResolver.js";
 export * as Model from "./Model.js";
+export * as Slug from "./Slug.js";
 export * as SymbolIndex from "./SymbolIndex.js";
 export * as TsProgram from "./TsProgram.js";
