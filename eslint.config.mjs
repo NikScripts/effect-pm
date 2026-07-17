@@ -15,12 +15,24 @@ export default [
     ignores: [
       "dist/**",
       "node_modules/**",
-      "repos/**"
+      "repos/**",
+      // Agent worktrees live here; without ignoring them (and pinning tsconfigRootDir below) their
+      // nested repo checkout adds a second candidate root and typescript-eslint fails to parse anything.
+      ".claude/**"
     ]
   },
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
     files: ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts"],
+    languageOptions: {
+      ...config.languageOptions,
+      parserOptions: {
+        ...config.languageOptions?.parserOptions,
+        // Pin the root explicitly: a `.claude/worktrees/*` checkout otherwise makes tsconfigRootDir
+        // ambiguous and every file fails to parse (the enforcer silently stops running).
+        tsconfigRootDir: import.meta.dirname
+      }
+    },
     rules: {
       ...config.rules,
       "@typescript-eslint/no-explicit-any": "off",
@@ -55,7 +67,8 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         ...pluginReact.configs.flat.recommended.languageOptions?.parserOptions,
-        ecmaFeatures: { jsx: true }
+        ecmaFeatures: { jsx: true },
+        tsconfigRootDir: import.meta.dirname
       },
       globals: {
         ...globals.browser,
