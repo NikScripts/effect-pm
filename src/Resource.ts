@@ -3452,28 +3452,25 @@ const connectLayer = <Self, RIn>(
 const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
 
-// One-time nudge when {@link httpClient} builds in a browser — the silent footgun. `httpClient` is
-// the server/CLI/backend transport; a browser dashboard opens many concurrent streams and starves at
-// the ~6-connection HTTP/1.1 cap, with no error. Point the mistake at {@link socketClient}. Fires via
-// the runtime logger (once), so it can't be a raw-console lint smell and stays quiet on the server.
+const httpClientInBrowserMessage =
+  "Resource.protocolHttp / httpClient cannot run in a browser: a dashboard opens many concurrent " +
+  "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
+  "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
+  "Resource.socketClient / a socket-kind node for the browser. See docs/observe/dashboard.md.";
+
 /** The http client transport was built in a browser — it starves at the ~6-connection HTTP/1.1 cap and
  *  ships a blank dashboard. `socketClient` is the browser transport. A hard failure, not a warning: the
  *  starving transport is never the right choice in a browser. @internal */
-class HttpClientInBrowser extends Data.TaggedError("HttpClientInBrowser")<{}> {
-  override get message() {
-    return (
-      "Resource.protocolHttp / httpClient cannot run in a browser: a dashboard opens many concurrent " +
-      "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
-      "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
-      "Resource.socketClient / a socket-kind node for the browser. See docs/observe/dashboard.md."
-    );
-  }
-}
+class HttpClientInBrowser extends Data.TaggedError("HttpClientInBrowser")<{
+  readonly message: string;
+}> {}
 
 // Fail loudly if an http client transport is built in a browser (window defined). No-op on the server /
 // in tests (`window` undefined). A die, not a log — the mistake ships a silently-broken dashboard.
 const dieIfHttpClientInBrowser = Effect.suspend(() =>
-  typeof window === "undefined" ? Effect.void : Effect.die(new HttpClientInBrowser()),
+  typeof window === "undefined"
+    ? Effect.void
+    : Effect.die(new HttpClientInBrowser({ message: httpClientInBrowserMessage })),
 );
 
 /**
