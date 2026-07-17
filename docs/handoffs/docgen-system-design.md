@@ -1,7 +1,7 @@
 # Docgen system — design doc (LIVING; we work from this)
 
-Status: **Phase 1 (prototypes) ✅ · Phase 2 (core services) ✅ · Phase 3 (Extractor) IN PROGRESS —
-Model + Extractor.symbol done; module-walk + {@link} pass remain. See HANDOFF section below.**
+Status: **Phase 1 (prototypes) ✅ · Phase 2 (core services) ✅ · Phase 3 (Extractor) ✅ — byte-identical
+gate PASSED on the full corpus via scripts/gen-api-next.ts. Next: Phase 4 (renderers). See HANDOFF below.**
 Owner: Nik. Author: pairing session. Branch: **`docs/standards-corpus`** — the docgen replaces the
 linking internals of the API reference, which is unmerged on this branch, so it CANNOT branch from
 `integration` (would lack the prerequisite gen-api/api-data). Related work stays on one branch.
@@ -170,15 +170,34 @@ green. Work in `docs/site` (its own package: `cd docs/site` for all commands).
 `docs/site/src/docgen/`
 - `TsProgram.ts` — service: one `ts.Program` + checker over entry files (`checker`, `sourceFile`, `sourceFiles`).
 - `SymbolIndex.ts` — service: `location (repo-rel file + line) → url`, built from `Entry` values.
+  A location claimed by two DIFFERENT urls is ambiguous → `urlAt` returns none (no link beats a wrong link).
 - `LinkResolver.ts` — service: `resolve(node) → Option<Url>` over `TsProgram` + `SymbolIndex` (the proven
-  compiler resolution; dealias, skip type-params, declNode line, relativize to `repoRoot`).
-- `Model.ts` — Schema SSOT (`Symbol`, `Source`, `Tag`, `Entry`), derived interfaces. Field order matches
-  gen-api output → byte-identical target.
-- `Extractor.ts` — service: `symbol(namespace, exportSym) → Option<Model.Symbol>` (gen-api's `toApi`,
-  per symbol). `docLinks` left `{}` (second pass, TODO).
+  compiler resolution; dealias, skip type-params, declNode line, relativize to `repoRoot`). Only
+  module-scope declarations resolve — a parameter/local/member shares its statement's LINE (e.g.
+  `export const rollup = (byNode: …)`) and must NOT get the enclosing export's page.
+- `Model.ts` — Schema SSOT (schemas `tag`/`source`/`symbol`/`entry` camelCase per house naming; derived
+  `Tag`/`Source`/`Symbol`/`Entry` interfaces). Field order matches gen-api output → byte-identical.
+- `Extractor.ts` — service, COMPLETE: `symbol(namespace, exportSym) → Option<Model.Symbol>` (gen-api's
+  `toApi`) AND `package(entryPoints) → Effect<ReadonlyArray<Model.Entry>>` — the module walk (subpath +
+  barrel `export * as` groups, `preferRename`, namespaced dedup, sorting) plus the `{@link}` second pass
+  (builds a per-package `SymbolIndex`, provides `LinkResolver` internally, fills `docLinks`).
+  KEY semantics: index locations are deduped PER RESOLVED SYMBOL in extraction order, last wins — a
+  symbol re-exported under two namespaces (`Predicate.isTupleOf` / `Tuple.isTupleOf`) has two pages but
+  one declaration line; gen-api's symbol-keyed map resolves to the last-extracted page.
 - `Slug.ts` — canonical `slugForEntry`/`symbolFileKey`; `src/lib/api-slugs.ts` re-exports it.
 - `index.ts` — barrel (`export * as` each).
-`docs/site/test/docgen/` — `@effect/vitest` suites + `fixtures/`. 14 tests.
+`docs/site/scripts/gen-api-next.ts` — the D4 bridge: gen-api's writer verbatim, extraction via the
+services, writes `api-data-next/`. Any writer change must land in BOTH scripts until Phase 5 cutover.
+`docs/site/test/docgen/` — `@effect/vitest` suites + `fixtures/` (incl. a fixture package for the walk).
+24 tests.
+
+### Phase 3 gate — PASSED (2026-07-16)
+```
+cd docs/site
+npx tsx scripts/gen-api.ts && npx tsx scripts/gen-api-next.ts && diff -r api-data api-data-next
+```
+Byte-identical across the FULL corpus (effect-pm + effect + platform-node + sql-sqlite-node, ~24 MB).
+Re-run this whenever the Extractor/LinkResolver/SymbolIndex change.
 
 ### The gate ritual — run ALL before every commit (this is non-negotiable)
 ```
@@ -198,19 +217,7 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
 - NO `as` casts, NO `!` non-null (use `Option`/guards). `Option` for absence. Schema = SSOT.
 - One field per line; PascalCase only for type/class/namespace, camelCase values. printWidth 100.
 
-### Immediate next task: finish the `Extractor`
-Reference is `docs/site/scripts/gen-api.ts` (the working extractor to port from). Add to `Extractor`:
-1. **Module walk** — from `extractPackage`/`makeExtractor` in gen-api: find the `export * as NS` namespaces
-   + subpath entries, `getExportsOfModule`, `preferRename` (public rename beats internal name), the
-   top-level bare exports, the `(top-level)` grouping, the module dedup (`namespaced` set). Produce
-   `ReadonlyArray<Model.Entry>` per package. Fixtures with a barrel + a namespace.
-2. **`{@link}` second pass** — gen-api's `resolveDocLinks`: after every symbol has a URL, walk each
-   symbol's JSDoc `{@link}` nodes and resolve via the checker. REUSE `LinkResolver` (that's the point —
-   it's the same compiler resolution). Build a `SymbolIndex` from the extracted symbols, provide it, then
-   resolve. Fill `Model.Symbol.docLinks`.
-Gate for the whole Extractor: **byte-identical `api-data` vs gen-api** (generate both, `diff -r`).
-
-### Then Phase 4 (renderers) — findings already de-risk these
+### Immediate next task: Phase 4 (renderers) — findings already de-risk these
 - `TypePrinter` — `checker.typeToTypeNode(type, enclosing, flags)` → walk the node, emit text, resolve
   each `TypeReferenceNode.typeName` via `LinkResolver` → link; fall back to `ts.createPrinter().printNode()`
   for node kinds you don't special-case (P1). Depends on `LinkResolver`.
@@ -220,6 +227,8 @@ Gate for the whole Extractor: **byte-identical `api-data` vs gen-api** (generate
   (P4), else cross-package refs hit node_modules.
 
 ### Then Phase 5 (integrate) — replace, don't rebuild
+`gen-api-next.ts` already IS the integrated generator; Phase 5 = rename it over `gen-api.ts`, wire
+`gen-hovers.ts` + the render (`highlight.ts`) to the services, delete the prototype extractor.
 Wire the services into `scripts/gen-api.ts` + `scripts/gen-hovers.ts` + the render (`highlight.ts`); delete
 the name-heuristic (`api-links.ts` + `api-linkify.ts`) LAST. Gate: byte-identical model + the site build
 still green. NOTE the deploy constraints: data paths resolve from `process.cwd()` (docs/site), NOT
@@ -238,3 +247,17 @@ static via the literal `/api/effect-pm/…` route. See `[[api-reference-docs]]`.
 - **Branch: stay on `docs/standards-corpus`** (docgen depends on the unmerged API reference here).
 - **`scripts/api-resolve.ts` (the proven-resolution draft) deleted** — its logic is captured here and in
   the P2/P4 findings; it will be rebuilt properly as the `LinkResolver` service in Phase 2 (no dead code).
+- **2026-07-16 — Phase 3 complete; byte-identical gate PASSED (full corpus).** Decisions made:
+  - **docLinks scope: per-package index** (matches gen-api's per-package map, required for the gate).
+    Cross-package `{@link}` linking is a deliberate POST-gate enhancement, not a freebie.
+  - **Index dedup: per resolved symbol, extraction order, last wins** — multi-namespace re-exports
+    (two pages, one declaration) resolve to the last-extracted page, exactly as gen-api.
+  - **Ambiguity: a location claimed by two different urls → `urlAt` none** (protects renderers from
+    wrong links; upstream per-symbol dedup keeps legitimate duplicates out of this path).
+  - **LinkResolver resolves module-scope declarations only** — parameters/locals/members share their
+    statement's line and previously stole the enclosing export's page (caught by the gate on
+    `FleetHealth.rollup`'s `{@link byNode}`).
+  - **Model schema consts renamed camelCase** (`tag`/`source`/`symbol`/`entry`) per the house naming
+    rule; the derived interfaces stay PascalCase.
+  - **D4 realized as `scripts/gen-api-next.ts`** — writer copied verbatim; keep both scripts in sync
+    until the Phase 5 cutover deletes the prototype.
