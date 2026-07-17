@@ -54,7 +54,9 @@ const keyOf = (file: string, line: number): string => `${file}#${line}`;
 
 /**
  * A {@link SymbolIndex} over the given entries. One URL per location (a declaration maps to a single
- * page); duplicate locations keep the last.
+ * page). A location claimed by two DIFFERENT URLs is ambiguous — two symbols share a statement (e.g.
+ * `const a = 1, b = 2` both climb to it) — and `urlAt` returns none for it: an unlinked reference
+ * beats a link to the wrong page. Re-registering the same URL is not a conflict.
  *
  * @category layers
  * @since 1.0.0
@@ -62,9 +64,18 @@ const keyOf = (file: string, line: number): string => `${file}#${line}`;
 export const layer = (entries: Iterable<Entry>): Layer.Layer<SymbolIndex> =>
   Layer.sync(SymbolIndex)(() => {
     const byLocation = new Map<string, string>();
-    for (const entry of entries) byLocation.set(keyOf(entry.file, entry.line), entry.url);
+    const ambiguous = new Set<string>();
+    for (const entry of entries) {
+      const key = keyOf(entry.file, entry.line);
+      const existing = byLocation.get(key);
+      if (existing !== undefined && existing !== entry.url) ambiguous.add(key);
+      byLocation.set(key, entry.url);
+    }
     return {
       [TypeId]: TypeId,
-      urlAt: (file, line) => Option.fromNullishOr(byLocation.get(keyOf(file, line))),
+      urlAt: (file, line) => {
+        const key = keyOf(file, line);
+        return ambiguous.has(key) ? Option.none() : Option.fromNullishOr(byLocation.get(key));
+      },
     };
   });

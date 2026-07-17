@@ -44,6 +44,26 @@ const findRef = (sf: ts.SourceFile, name: string): ts.Node => {
   return found;
 };
 
+// the identifier of the first `<name>.…` property access in the source (a value USE, not a type)
+const findUsage = (sf: ts.SourceFile, name: string): ts.Node => {
+  let found: ts.Node | undefined;
+  const visit = (node: ts.Node): void => {
+    if (found !== undefined) return;
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === name
+    ) {
+      found = node.expression;
+      return;
+    }
+    node.forEachChild(visit);
+  };
+  visit(sf);
+  if (found === undefined) throw new Error(`no usage of '${name}' in fixture`);
+  return found;
+};
+
 const provided = (index: Layer.Layer<SymbolIndex.SymbolIndex>) =>
   LinkResolver.layer({ repoRoot }).pipe(
     Layer.provideMerge(
@@ -82,5 +102,21 @@ describe("LinkResolver", () => {
       const ref = findRef(sf, "Target");
       expect(Option.isNone(resolver.resolve(ref))).toBe(true);
     }).pipe(Effect.provide(provided(empty)))
+  );
+
+  it.effect("returns none for a parameter even when its line is indexed", () =>
+    Effect.gen(function* () {
+      const program = yield* TsProgram.TsProgram;
+      const resolver = yield* LinkResolver.LinkResolver;
+      const sf = Option.getOrThrow(program.sourceFile(fixture));
+      // `holder.target` in the body of `use` — the parameter is declared on the SAME line the
+      // index maps to `use`'s page; a parameter must not resolve to it
+      const ref = findUsage(sf, "holder");
+      expect(Option.isNone(resolver.resolve(ref))).toBe(true);
+    }).pipe(
+      Effect.provide(
+        provided(SymbolIndex.layer([{ file: "resolve-fixture.ts", line: 8, url: "/api/test/use" }]))
+      )
+    )
   );
 });

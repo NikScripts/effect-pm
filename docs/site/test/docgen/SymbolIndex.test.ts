@@ -24,15 +24,29 @@ describe("SymbolIndex", () => {
     }).pipe(Effect.provide(SymbolIndex.layer(entries)))
   );
 
-  it.effect("last entry wins for a duplicated location", () =>
+  it.effect("is none for a location claimed by two different urls (ambiguous)", () =>
     Effect.gen(function* () {
       const index = yield* SymbolIndex.SymbolIndex;
-      expect(index.urlAt("src/Dup.ts", 1)).toStrictEqual(Option.some("/b"));
+      expect(Option.isNone(index.urlAt("src/Dup.ts", 1))).toBe(true);
     }).pipe(
       Effect.provide(
         SymbolIndex.layer([
           { file: "src/Dup.ts", line: 1, url: "/a" },
           { file: "src/Dup.ts", line: 1, url: "/b" },
+        ])
+      )
+    )
+  );
+
+  it.effect("re-registering the same url at a location is not a conflict", () =>
+    Effect.gen(function* () {
+      const index = yield* SymbolIndex.SymbolIndex;
+      expect(index.urlAt("src/Same.ts", 1)).toStrictEqual(Option.some("/a"));
+    }).pipe(
+      Effect.provide(
+        SymbolIndex.layer([
+          { file: "src/Same.ts", line: 1, url: "/a" },
+          { file: "src/Same.ts", line: 1, url: "/a" },
         ])
       )
     )

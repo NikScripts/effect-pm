@@ -60,6 +60,13 @@ const declNode = (decl: ts.Declaration): ts.Node =>
     ? decl.parent.parent
     : decl;
 
+// Only an export-shaped declaration can carry a doc page: after the climb it must sit directly in a
+// source file (or a `namespace` block). A parameter, local, or member shares its STATEMENT's line —
+// `export const rollup = (byNode: …)` puts `byNode` on `rollup`'s line — and a line-keyed lookup
+// would hand back the enclosing export's page for it; a symbol-keyed map never would, so skip them.
+const isDeclarationSite = (owner: ts.Node): boolean =>
+  !ts.isSourceFile(owner) && (ts.isSourceFile(owner.parent) || ts.isModuleBlock(owner.parent));
+
 const resolveWith = (
   checker: ts.TypeChecker,
   index: SymbolIndex.SymbolIndex,
@@ -75,6 +82,7 @@ const resolveWith = (
     if ((symbol.flags & ts.SymbolFlags.TypeParameter) !== 0) return Option.none();
     for (const decl of symbol.getDeclarations() ?? []) {
       const owner = declNode(decl);
+      if (!isDeclarationSite(owner)) continue;
       const source = owner.getSourceFile();
       const rel = nodePath.relative(repoRoot, source.fileName);
       const line = source.getLineAndCharacterOfPosition(owner.getStart()).line + 1;
