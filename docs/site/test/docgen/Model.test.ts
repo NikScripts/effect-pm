@@ -20,7 +20,7 @@ const sample = {
 
 describe("Model", () => {
   it("decodes a symbol (Schema is the SSOT)", () => {
-    const decoded = Schema.decodeUnknownSync(Model.Symbol)(sample);
+    const decoded = Schema.decodeUnknownSync(Model.symbol)(sample);
     expect(decoded.qualifiedName).toBe("Layer.layer");
     expect(decoded.tags).toStrictEqual([{ name: "since", text: "4.0.0" }]);
     expect(decoded.source.line).toBe(54);
@@ -28,20 +28,20 @@ describe("Model", () => {
   });
 
   it("round-trips JSON without drift", () => {
-    const decoded = Schema.decodeUnknownSync(Model.Symbol)(sample);
-    const encoded = Schema.encodeSync(Model.Symbol)(decoded);
+    const decoded = Schema.decodeUnknownSync(Model.symbol)(sample);
+    const encoded = Schema.encodeSync(Model.symbol)(decoded);
     expect(encoded).toStrictEqual(sample);
   });
 
   it("rejects a malformed symbol", () => {
     // source.line must be a number
     expect(() =>
-      Schema.decodeUnknownSync(Model.Symbol)({
+      Schema.decodeUnknownSync(Model.symbol)({
         ...sample,
         source: { file: "x", line: "nope" },
       })
     ).toThrow();
     // missing required fields
-    expect(() => Schema.decodeUnknownSync(Model.Symbol)({ entry: "x" })).toThrow();
+    expect(() => Schema.decodeUnknownSync(Model.symbol)({ entry: "x" })).toThrow();
   });
 });

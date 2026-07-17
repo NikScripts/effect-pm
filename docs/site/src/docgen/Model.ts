@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema";
  * @category model
  * @since 1.0.0
  */
-export const Tag = Schema.Struct({
+export const tag = Schema.Struct({
   name: Schema.String,
   text: Schema.String,
 });
@@ -25,7 +25,7 @@ export const Tag = Schema.Struct({
  * @category model
  * @since 1.0.0
  */
-export interface Tag extends Schema.Schema.Type<typeof Tag> {}
+export interface Tag extends Schema.Schema.Type<typeof tag> {}
 
 /**
  * Where a symbol is declared — repo-relative file, 1-based line, and a "view source" URL.
@@ -33,7 +33,7 @@ export interface Tag extends Schema.Schema.Type<typeof Tag> {}
  * @category model
  * @since 1.0.0
  */
-export const Source = Schema.Struct({
+export const source = Schema.Struct({
   file: Schema.String,
   line: Schema.Number,
   url: Schema.optional(Schema.String),
@@ -45,7 +45,7 @@ export const Source = Schema.Struct({
  * @category model
  * @since 1.0.0
  */
-export interface Source extends Schema.Schema.Type<typeof Source> {}
+export interface Source extends Schema.Schema.Type<typeof source> {}
 
 /**
  * One documented export — everything a symbol page needs. `docLinks` and `source.url` are filled after
@@ -54,7 +54,7 @@ export interface Source extends Schema.Schema.Type<typeof Source> {}
  * @category model
  * @since 1.0.0
  */
-export const Symbol = Schema.Struct({
+export const symbol = Schema.Struct({
   entry: Schema.String, // the namespace this symbol is grouped under ("(top-level)" for bare exports)
   name: Schema.String, // the bare export name
   qualifiedName: Schema.String, // how you reach it: `Namespace.name`, or just `name` at top level
@@ -65,11 +65,11 @@ export const Symbol = Schema.Struct({
   sourceText: Schema.String, // the export's actual source (the declaration as written), shown verbatim
   summary: Schema.String, // resolved doc summary (previews / search)
   rawComment: Schema.String, // raw /** … */ with {@link} intact (the site re-renders this)
-  tags: Schema.Array(Tag),
+  tags: Schema.Array(tag),
   category: Schema.optional(Schema.String),
   linkTargets: Schema.Array(Schema.String), // {@link X} names referenced
   docLinks: Schema.Record(Schema.String, Schema.String), // {@link X} -> resolved doc URL (compiler-resolved)
-  source: Source,
+  source,
 });
 
 /**
@@ -78,7 +78,7 @@ export const Symbol = Schema.Struct({
  * @category model
  * @since 1.0.0
  */
-export interface Symbol extends Schema.Schema.Type<typeof Symbol> {}
+export interface Symbol extends Schema.Schema.Type<typeof symbol> {}
 
 /**
  * One module entry — a namespace (or `(top-level)` for bare exports) and its symbols.
@@ -86,9 +86,9 @@ export interface Symbol extends Schema.Schema.Type<typeof Symbol> {}
  * @category model
  * @since 1.0.0
  */
-export const Entry = Schema.Struct({
+export const entry = Schema.Struct({
   entry: Schema.String,
-  symbols: Schema.Array(Symbol),
+  symbols: Schema.Array(symbol),
 });
 
 /**
@@ -97,4 +97,4 @@ export const Entry = Schema.Struct({
  * @category model
  * @since 1.0.0
  */
-export interface Entry extends Schema.Schema.Type<typeof Entry> {}
+export interface Entry extends Schema.Schema.Type<typeof entry> {}
