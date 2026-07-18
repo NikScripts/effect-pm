@@ -37,7 +37,7 @@ describe("Node ProtocolKind — ipc", () => {
   it("infers ipc from { path }, leaves url undefined", () => {
     const path = "/tmp/example.sock";
     class Local extends Resource.Node<Local>("ipc/local", { path }) {}
-    expect(Local.kind).toBe("ipc");
+    expect(Local.kind).toBe("IpcSocket");
     expect(Local.path).toBe(path);
     expect(Local.url).toBeUndefined();
   });
@@ -45,9 +45,9 @@ describe("Node ProtocolKind — ipc", () => {
   it("honors explicit kind with path", () => {
     class Explicit extends Resource.Node<Explicit>("ipc/explicit", {
       path: "/tmp/x.sock",
-      kind: "ipc",
+      kind: "IpcSocket",
     }) {}
-    expect(Explicit.kind).toBe("ipc");
+    expect(Explicit.kind).toBe("IpcSocket");
     expect(Explicit.path).toBe("/tmp/x.sock");
   });
 });

@@ -29,7 +29,7 @@ describe("LookupNode", () => {
     const path = "/tmp/lookup-example.sock";
     const node = Lookup.LookupNode("lookup/example", { path });
     expect(Lookup.isLookupNode(node)).toBe(true);
-    expect(node.kind).toBe("ipc");
+    expect(node.kind).toBe("IpcSocket");
     expect(node.path).toBe(path);
   });
 });
@@ -50,7 +50,7 @@ describe("Lookup identity claim", () => {
               new Lookup.ClaimRequest({
                 key: "app/Mail",
                 nodeKey: "worker-a",
-                kind: "ipc",
+                kind: "IpcSocket",
                 path: "/tmp/worker-a.sock",
               }),
             );
@@ -62,7 +62,7 @@ describe("Lookup identity claim", () => {
                 new Lookup.ClaimRequest({
                   key: "app/Mail",
                   nodeKey: "worker-b",
-                  kind: "ipc",
+                  kind: "IpcSocket",
                   path: "/tmp/worker-b.sock",
                 }),
               )
@@ -124,7 +124,7 @@ describe("Lookup.layerDefaultLocal", () => {
               new Lookup.ClaimRequest({
                 key: "k",
                 nodeKey: "n",
-                kind: "ipc",
+                kind: "IpcSocket",
                 path: "/tmp/n.sock",
               }),
             );

@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-18 — ProtocolKind tag rename (X5)
+
+- **Owner said:** Fix the kind strings; multi-protocol Nodes whenever it best fits later.
+- **Chose (X5 LOCKED):** `ProtocolKind = "Http" | "WebSocket" | "IpcSocket"`. Eng rename on tip. Multi-protocol (X1) deferred.
+- **Rejected / deferred:** Keeping lowercase `"http"|"socket"|"ipc"`; Effect’s `Websocket` spelling (owner: `WebSocket`); multi-protocol in this change.
+- **Supervisor impact:** Breaking kind-string rename; apps that wrote explicit `kind: "socket"` etc. must update.
+
 ## 2026-07-18 — Lookup bootstrap L1 locked; identity Eng unlocked
 
 - **Owner said:** Tiered lookup — safest split-brain = OS bind on-box; explicit where defaults impossible; “Let’s go.”

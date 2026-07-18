@@ -297,38 +297,18 @@ Tests: `test/resource-ipc.test.ts`.
 | **X2** | Product rename away from “Resource” | **Parked** |
 | **X3** | Docs: handoff-only vs draft guide now | Handoff SSOT now |
 | **X4** | `Protocol` as Node **type param** | **Rejected as idea** (owner): value-level `kind` + address is SSOT — typing protocol twice drifts. Not a formal bake-row lock; do not re-propose. |
-| **X5** | Protocol kind strings → `_tag`-style names following Effect layers | **THOUGHT** — see [Protocol tags](#protocol-tags-thought--naming). Not locked; would be a breaking rename from `"http" \| "socket" \| "ipc"`. |
+| **X5** | Protocol kind strings → `_tag`-style names | **LOCKED** — `"Http" \| "WebSocket" \| "IpcSocket"` (multi-protocol Node still later / X1) |
 
-### Protocol tags (THOUGHT — naming)
+### Protocol tags (X5 — **LOCKED** 2026-07-18)
 
-Owner: prefer descriptive tags like `_tag: "WebSocket"`; nobody types `ProtocolKind` out. Effect layer names are confusing but **follow them as best we can**.
+Owner: descriptive tags; follow Effect layers as best we can; **`IpcSocket`** for UDS; **`WebSocket`** spelling (not Effect’s `Websocket`).
 
-Effect (pinned `effect` package) actually has:
+```ts
+export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
+```
 
-| Side | Layer | Rough meaning |
-|------|-------|----------------|
-| Client | `RpcClient.layerProtocolHttp` | HTTP RPC |
-| Client | `RpcClient.layerProtocolSocket` | framed RPC over a duplex socket (**also** what we use under WS *and* UDS) |
-| Client | `RpcClient.layerProtocolWorker` | worker |
-| Server | `RpcServer.layerProtocolHttp` | HTTP RPC |
-| Server | `RpcServer.layerProtocolWebsocket` | WebSocket RPC (Effect spelling: **Websocket**) |
-| Server | `RpcServer.layerProtocolSocketServer` | raw socket server (UDS/TCP) |
-| Server | `RpcServer.layerProtocolStdio` | stdio |
-| Server | `RpcServer.layerProtocolWorkerRunner` | worker runner |
-
-Today we ship `"http" | "socket" | "ipc"` where `"socket"` means **WebSocket** (and our helper is already `protocolWebsocket`). That fights both English and server layer names.
-
-**Rename lean (THOUGHT — not locked as a bake row; owner picks below):**
-
-| Role | Follow | Tag sketch | Notes |
-|------|--------|------------|--------|
-| HTTP | `layerProtocolHttp` | `"Http"` | Clear |
-| Browser / WS | `layerProtocolWebsocket` | `"Websocket"` (Effect spelling) or `"WebSocket"` | Still open which spelling |
-| Same-machine UDS | Socket+path (no `layerProtocolIpc`) | **`"IpcSocket"`** | Owner: clarity over bare `Ipc` / overloaded `Socket` |
-
-Apps still mostly never write the tag — inference from `url` / `path` stays SSOT. Named export type (if kept) becomes a union of those tags; could be `_tag` fields later if we move to ADT addresses.
-
-**Do not Eng rename until explicitly unlocked** (breaks Node `kind`, tests, docs, changeset).
+Inference unchanged: `{ path }` → `IpcSocket`, `ws(s)://` → `WebSocket`, other url/port → `Http`.  
+Multi-protocol Node (endpoint set / `_tag` ADT) remains **X1 later** — not this rename.
 
 ---
 
@@ -506,3 +486,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner: UDS tag **`IpcSocket`** for clarity; Singleton: **`andNode` disabled**, override OK but **only one Node** at a time. Still not formal LOCKED rows / not Eng’d.
 - **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
 - **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerDefaultLocal / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
+- **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.

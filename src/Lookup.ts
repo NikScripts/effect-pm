@@ -26,7 +26,7 @@ import * as internal from "./internal/lookup";
  */
 export class Endpoint extends Schema.Class<Endpoint>("LookupEndpoint")({
   nodeKey: Schema.String,
-  kind: Schema.Literals(["http", "socket", "ipc"]),
+  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
   url: Schema.optionalKey(Schema.String),
   path: Schema.optionalKey(Schema.String),
 }) {}
@@ -39,7 +39,7 @@ export class Endpoint extends Schema.Class<Endpoint>("LookupEndpoint")({
 export class ClaimRequest extends Schema.Class<ClaimRequest>("LookupClaimRequest")({
   key: Schema.String,
   nodeKey: Schema.String,
-  kind: Schema.Literals(["http", "socket", "ipc"]),
+  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
   url: Schema.optionalKey(Schema.String),
   path: Schema.optionalKey(Schema.String),
 }) {}
@@ -213,7 +213,7 @@ export const layer = (
   node: AnyNode & { readonly key: string },
   options?: { readonly unlink?: boolean },
 ) => {
-  if (node.kind === "ipc" && node.path !== undefined) {
+  if (node.kind === "IpcSocket" && node.path !== undefined) {
     return layerIpc(node.path, options);
   }
   throw new LookupUnaddressed({ node: node.key });

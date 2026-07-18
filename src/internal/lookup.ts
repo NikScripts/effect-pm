@@ -11,7 +11,7 @@ import { Effect, Option, Ref } from "effect";
 /** Wire-shaped endpoint stored in the registry. @internal */
 export type StoredEndpoint = {
   readonly nodeKey: string;
-  readonly kind: "http" | "socket" | "ipc";
+  readonly kind: "Http" | "WebSocket" | "IpcSocket";
   readonly url?: string;
   readonly path?: string;
 };

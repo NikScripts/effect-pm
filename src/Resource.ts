@@ -1756,18 +1756,19 @@ interface NodeProtocol {
 export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
 
 /**
- * The transport a {@link Node} speaks:
- * - `"http"` — `RpcClient.layerProtocolHttp` (servers / CLIs)
- * - `"socket"` — WebSocket (`layerProtocolSocket` over WS; browsers)
- * - `"ipc"` — Unix-domain socket (same-machine multi-process; see {@link ipcServer})
+ * The transport a {@link Node} speaks — tag-style names (apps rarely type this alias; they write
+ * the literals or get inference from `url` / `path`):
+ * - `"Http"` — `RpcClient.layerProtocolHttp` (servers / CLIs)
+ * - `"WebSocket"` — browser WS (`layerProtocolWebsocket` / client `layerProtocolSocket` over WS)
+ * - `"IpcSocket"` — Unix-domain socket (same-machine; see {@link ipcServer})
  *
  * Stamped on the node so the topology is self-describing about *how* to reach it — `connect`/`client`
- * derive the transport from it. Inferred from a `ws(s)://` url, an http target, or `{ path }` → ipc;
- * otherwise declare it explicitly.
+ * derive the transport from it. Inferred from a `ws(s)://` url, an http target, or `{ path }` →
+ * IpcSocket; otherwise declare it explicitly.
  *
  * @public
  */
-export type ProtocolKind = "http" | "socket" | "ipc";
+export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
 
 /** A {@link Resource.Node} erased — transport address (`url` and/or Unix `path`) plus
  *  {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
@@ -1779,7 +1780,7 @@ export type AnyNode = NodeKey<unknown> & {
 };
 
 /** An {@link AnyNode} that can derive {@link Resource.connect} with no protocol argument —
- *  `kind` set, and either a `url` (http/socket) or a Unix `path` (ipc). @public */
+ *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public */
 export type AddressedNode<HSelf> = NodeKey<HSelf> & {
   readonly kind: ProtocolKind;
   readonly url: string | undefined;
@@ -3184,7 +3185,7 @@ export interface IpcServerOptions {
  * A **Unix-domain** RPC server — same-machine sibling of {@link httpServer} / {@link wsServer}.
  * Speaks Effect's raw socket RPC protocol (`RpcServer.layerProtocolSocketServer`) over a
  * filesystem path — no HTTP, no WebSocket upgrade. Clients connect with {@link connectIpc}
- * or a node whose {@link ProtocolKind} is `"ipc"` (`Resource.Node("x", { path })`).
+ * or a node whose {@link ProtocolKind} is `"IpcSocket"` (`Resource.Node("x", { path })`).
  *
  * ```ts
  * class Worker extends Resource.Node<Worker>("worker", { path: "/tmp/worker.sock" }) {}
@@ -3538,16 +3539,16 @@ export const forwardClient = <S extends Spec>(
  *
  * ```ts
  * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
- * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "http"
- * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "http"
- * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "socket" (inferred from ws url)
- * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // same-origin path, explicit kind
- * class Local extends Resource.Node<Local>("local", { path: "/tmp/local.sock" }) {} // kind "ipc" (Unix domain)
+ * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "Http"
+ * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "Http"
+ * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
+ * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
+ * class Local extends Resource.Node<Local>("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
  * ```
  *
  * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
  * → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for an explicit
- * endpoint, or `{ path }` for a **Unix-domain** socket (`kind: "ipc"`). The node carries
+ * endpoint, or `{ path }` for a **Unix-domain** socket (`kind: "IpcSocket"`). The node carries
  * {@link ProtocolKind} so the topology is self-describing about *where* AND *how*:
  * {@link Resource.connect}`(node)` derives the transport with no protocol argument.
  *
@@ -3576,17 +3577,17 @@ const makeNode = <Self>(
         : typeof target === "object"
           ? target.url
           : resolveHttpTarget(target);
-  // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` → ipc,
-  // `ws(s)://` → socket, any other url → http. Bare `Node("x")` leaves kind undefined.
+  // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` →
+  // IpcSocket, `ws(s)://` → WebSocket, any other url → Http. Bare `Node("x")` leaves kind undefined.
   const kind: ProtocolKind | undefined =
     (typeof target === "object" && target !== null ? target.kind : undefined) ??
     (path !== undefined
-      ? "ipc"
+      ? "IpcSocket"
       : url === undefined
         ? undefined
         : url.startsWith("ws://") || url.startsWith("wss://")
-          ? "socket"
-          : "http");
+          ? "WebSocket"
+          : "Http");
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     url,
     path,
@@ -3845,7 +3846,7 @@ const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
   if (node.kind === undefined) {
     throw new UnaddressedNode({ node: node.key });
   }
-  if (node.kind === "ipc") {
+  if (node.kind === "IpcSocket") {
     if (node.path === undefined) {
       throw new UnaddressedNode({ node: node.key });
     }
@@ -3854,7 +3855,7 @@ const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
   if (node.url === undefined) {
     throw new UnaddressedNode({ node: node.key });
   }
-  return node.kind === "socket" ? protocolWebsocket(node.url) : protocolHttp(node.url);
+  return node.kind === "WebSocket" ? protocolWebsocket(node.url) : protocolHttp(node.url);
 };
 
 /**
@@ -3867,11 +3868,11 @@ const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
  * Resource.connect(MyNode, protocol)          // data-first, explicit
  * ```
  *
- * The derived forms read the node's {@link ProtocolKind} — so a node that declares `kind: "socket"`
- * dials a socket and one that declares `"http"` dials http; picking the wrong transport isn't
+ * The derived forms read the node's {@link ProtocolKind} — so a node that declares `kind: "WebSocket"`
+ * dials WS and one that declares `"Http"` dials http; picking the wrong transport isn't
  * expressible. `MyNode.pipe(Resource.connect)` only type-checks for an {@link AddressedNode} (a node
- * with both `url` and `kind`); a bare node is a compile error pointing you to declare its address or
- * pass a protocol.
+ * with both `url`/`path` and `kind`); a bare node is a compile error pointing you to declare its
+ * address or pass a protocol.
  *
  * @public
  */
@@ -3905,7 +3906,7 @@ export const connect: {
 
 /**
  * Wire a node over **http** — Effect's `layerProtocolHttp` transport, {@link connect} pinned to
- * `kind: "http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
+ * `kind: "Http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
  * `MyNode.pipe(Resource.connectHttp(url))` overrides it.
  *
  * @public
@@ -3924,8 +3925,8 @@ export const connectHttp: {
 );
 
 /**
- * Wire a node over a **socket** — Effect's `layerProtocolSocket` transport (a WebSocket in the
- * browser), {@link connect} pinned to `kind: "socket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
+ * Wire a node over a **WebSocket** — Effect's `layerProtocolSocket` transport (WS in the
+ * browser), {@link connect} pinned to `kind: "WebSocket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
  * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Resource.connectSocket(url))` overrides it.
  *
  * @public
@@ -3943,8 +3944,8 @@ export const connectSocket: {
 );
 
 /**
- * Wire a node over **ipc** — Unix-domain socket RPC ({@link protocolIpc}), {@link connect} pinned
- * to `kind: "ipc"`. Dual: `MyNode.pipe(Resource.connectIpc)` uses the node's own `path`;
+ * Wire a node over **IpcSocket** — Unix-domain socket RPC ({@link protocolIpc}), {@link connect}
+ * pinned to `kind: "IpcSocket"`. Dual: `MyNode.pipe(Resource.connectIpc)` uses the node's own `path`;
  * `MyNode.pipe(Resource.connectIpc(path))` overrides it.
  *
  * @public
@@ -4055,17 +4056,17 @@ export const verifyConnection = (
   const kind: ProtocolKind | undefined =
     node.kind ??
     (options?.path !== undefined || node.path !== undefined
-      ? "ipc"
+      ? "IpcSocket"
       : options?.url !== undefined || node.url !== undefined
         ? (options?.url ?? node.url)!.startsWith("ws://") ||
             (options?.url ?? node.url)!.startsWith("wss://")
-          ? "socket"
-          : "http"
+          ? "WebSocket"
+          : "Http"
         : undefined);
   if (kind === undefined) {
     return Effect.die(new UnaddressedNode({ node: node.key }));
   }
-  if (kind === "ipc") {
+  if (kind === "IpcSocket") {
     const path = options?.path ?? node.path;
     if (path === undefined) {
       return Effect.die(new UnaddressedNode({ node: node.key }));
@@ -4090,7 +4091,7 @@ export const verifyConnection = (
   }
   const timeout = options?.timeout ?? "3 seconds";
   const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
-  return kind === "socket"
+  return kind === "WebSocket"
     ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
     : probeHttpReachable(url, timeout).pipe(fail);
 };
