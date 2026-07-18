@@ -363,6 +363,15 @@ Owner rethink: maybe **singletons and managers are the same thing** — identity
 | Manager streams → lookup LB | THOUGHT — optional later |
 | `Node<…, Managing>` facet | Cooling — identity-by-key may replace it |
 
+**Do we need value-level “resources it manages”? (THOUGHT — owner ask):**
+
+- **Identity / dedupe:** no — by **key** only. Losers become clients of the winner for that key.
+- **Constructor args:** a value list of managed Tags is **not required** for that. It would force value imports and package edges we were trying to avoid with `import type` on Node catalogs.
+- **Type info is enough** for the interesting compile story: e.g. `Singleton` / manager typed with the `R`s it coordinates (`Manager<Self, Mail | Jobs>` or similar). Impl / layer build can **optionally** enforce (must have peers/clients for those `R`s) the same way `listen` may prove `ROut` — when we want that check, not because identity needs it.
+- **Runtime advertisement** of “I advise on Mail” (for lookup LB streams) can come from what you **register/stream**, or from a type-driven serve helper — still not a mandatory ctor bag of Tag values.
+
+Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); managed `R`s = **type params** (+ optional enforce at impl). Drop required value-level manages list unless a later Eng need appears.
+
 **Do not Eng managers/singletons/lookup yet** — bake until the collapse (or split) is locked.
 
 ### `serve` → `expose` (OPEN / C5)
@@ -397,3 +406,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner: one idea at a time (related Qs OK). C1 discussion: Tags may carry node sets; class-extends-pipe pristine base; `nodes` overwrite + `andNode` add; reject agent’s “home” framing; multi-node nodeless already shipped via `distributed`. Placement / LB → manager sketches → owner: managers = Resources (`Resource.Manager` sketch), algorithm is yours not a fixed `leastWork`; no Protocol type param on Node; multi-manager compile limits across runtimes hurt; possible mix-up of **lookup/DNS** vs managers; self-electing lookup node so no mandatory separate DNS process; ask about `serve`→`expose`. Owner: **note as thoughts; careful what is locked.** Doc marks updated: C*/D* OPEN; only I1–I5 LOCKED.
 - **2026-07-18 (bake)** — Owner THOUGHT: managers **stream** to the lookup which node should get work; lookup does load balancing for clients. Still not locked.
 - **2026-07-18 (bake)** — Owner THOUGHTS: lookup catches duplicate managers (first wins, error + original address); Manager ctor = single node + resources it manages; Node ctor `lookup` param (self or point at lookup node); layer swap dupe→client for original; generalize lookup as **identity server**; `Resource.Singleton` first (build/test before managers); maybe Singleton ≡ Manager; **dedupe by key only** (not by what you manage — multiple manager kinds OK). Still not locked.
+- **2026-07-18 (bake)** — Owner ask: need value-level “resources it manages”, or type info only? THOUGHT lean: **types (+ optional impl enforce)**; identity stays key-only; no mandatory ctor Tag list. Still not locked.
