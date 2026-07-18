@@ -318,48 +318,52 @@ Gap: `distributed` + peers/ShardMap answer folds and sticky keys; nothing answer
 
 Early sketches (client-side random / RR / balancedClient) are **THOUGHTS only**. Owner pushed further: placement should be able to use **fleet-aware logic inside the mesh**, not only dumb client pick.
 
-### Resource managers (THOUGHT — under rethink)
+### Lookup as identity server + singletons (THOUGHT — active)
 
-Sketches discussed:
+Owner direction consolidating (still **not locked**):
 
-- Managers are **Resources**, with their own constructor (sketch: `Resource.Manager` instead of `Resource.Tag`) and maybe extra features later.
-- A manager does **not** specially mean `leastWork` — it runs **whatever algorithm you coded** (least work, sticky, custom, …).
-- Node typing sketch evolved then partially walked back:
-  - Idea: `Node<Self, Served, Managing>` plus runtime `serves[]` / `manages[]`.
-  - **No** `Protocol` type param (see X4).
-  - Multiple managers: compile-time only helps **one build**; cross-runtime you need runtime ads / verification. Owner dislikes not catching duplicates at compile; may mean the concept is **mixing address lookup with resource managers**.
-
-**Do not Eng managers yet.** Concept may be split or replaced by lookup (next).
-
-### Lookup / “DNS” vs managers (THOUGHT — active rethink)
-
-Owner concern: we may be mixing **where to dial** (address / membership lookup) with **resource managers** (app-level algorithms over a fleet).
-
-Sketch:
-
-- Something like a **DNS / lookup service**: tell the client which Node to use for a resource (or for a named fleet).
-- Essentially discovery, but **don’t require** starting a separate dedicated server.
-- Self-election sketch: each node looks; if **no lookup server** is present, **one node takes the lookup job**.
-
-**Managers stream into lookup (THOUGHT — owner 2026-07-18):**
+Lookup is not only “DNS for addresses” — it can be the **identity server**: register resource instances by **key**, reject duplicates, point losers at the winner.
 
 ```text
-Manager(s) on fleet nodes  --stream advice/metrics-->  Lookup
-Client  --"where for Mail?"-->  Lookup  --picks Node using streams-->  Client dials that Node
+Process starts Resource with key K on Node A
+  → claims at Lookup: "I am K at A"
+  → first claim wins; Lookup records { key: K, node: A, address }
+
+Later process starts same key K on Node B
+  → Lookup: Duplicate { key: K, original: A (address) }
+  → B's layer **swaps** to a **client** of the original (A)
 ```
 
-- Managers stay ordinary Resources (algorithm is yours); they **push** “which node should get work” (or the inputs for that) to the lookup.
-- Lookup owns **client-facing placement**: membership/address **plus** load balancing fed by those streams.
-- Clients talk to **lookup**, not to managers, for “which Node.”
-- Many managers become OK: they are producers into one lookup view; uniqueness pressure moves to **lookup** (one dial target for “where”), which matches the self-elected single lookup sketch better than “exactly one manager.”
+**Who is the lookup node (THOUGHT):**
 
-Unresolved under this sketch:
+- Default: first node that finds none takes the job (self-elect).
+- Or explicit: Node constructor gets a **lookup** param — mark this Node as lookup, **or** pass the Node that is lookup (so others know where to claim).
 
-- Stream payload: ready-made `{ prefer: nodeKey }` vs raw metrics lookup aggregates.
-- Stale/dead manager streams — timeout, remove weight, fall back to round-robin / any serve.
-- Lookup failover (self-elect next) — in-memory LB state is lost unless replayed from manager streams.
-- Whether lookup is built-in vs a special Resource; whether discovery registry and lookup are the same process.
-- Compile-time: prove at most one lookup in a **local** graph; cross-runtime still runtime ads (“who is lookup”).
+**Layer swap (THOUGHT):** yes, in principle — a serve/local layer that fails identity claim becomes `client(Tag, originalNode)` (or equivalent) so the process still `yield* Tag` against the winner. Needs Eng design: claim at layer build / scope init; typed error carrying original address; no silent double-serve.
+
+**`Resource.Singleton` (THOUGHT):** constructor/flavor that always goes through identity claim. If dupe → client layer. Owner lean: **build and test this before managers**, because managers may be a thin extension of the same mechanism.
+
+**Dedupe key (THOUGHT — owner):** dedupe by **resource key** only. Do **not** dedupe by “what you manage.” Multiple different manager Resources for the same fleet resource can coexist if they have **different keys**.
+
+### Managers vs singletons (THOUGHT — collapsing?)
+
+Earlier manager sketches:
+
+- Managers are Resources; dev chooses which Nodes **expose** them.
+- Lookup catches **duplicate managers**: first wins; duplicate gets error + address of original (same as singleton identity).
+- Manager constructor sketch: require a **single Node** + the **resources (plural)** it manages.
+- Managers may **stream** placement advice into lookup for client-facing LB.
+
+Owner rethink: maybe **singletons and managers are the same thing** — identity-by-key at lookup. “Manager” might just be a singleton that *happens* to coordinate other resources (and maybe streams advice). Claiming ownership of other resources in the type/constructor may be unnecessary if we don’t dedupe on that axis.
+
+| Idea | Status |
+|------|--------|
+| Identity / Singleton first | THOUGHT — preferred Eng order if this lands |
+| Manager = Singleton + “manages[]” metadata | THOUGHT — maybe drop manages[] for dedupe |
+| Manager streams → lookup LB | THOUGHT — optional later |
+| `Node<…, Managing>` facet | Cooling — identity-by-key may replace it |
+
+**Do not Eng managers/singletons/lookup yet** — bake until the collapse (or split) is locked.
 
 ### `serve` → `expose` (OPEN / C5)
 
@@ -379,8 +383,9 @@ Prior LEAN was “separate pass, don’t block catalog.” Still **OPEN** — no
 Owner: lock API design in **bake sessions** — short owner↔agent passes; write **LOCKED** rows into this file + a careful `owner-decisions.md` entry only when truly locked; then Eng.
 
 **In flight:** C1 (Tags + node sets) — thoughts captured; not locked.  
-**Then:** C2–C5, then D1–D4 (discovery may absorb lookup rethink).  
-**Optional later:** `stdio` / `worker` first-class; manager / lookup design once split is clear.
+**Then:** C2–C5; discovery / **identity lookup** / Singleton (D* may widen).  
+**Suggested Eng order if identity lands (THOUGHT only):** identity lookup + Singleton (claim / dupe→client) **before** any Manager sugar — Manager may collapse into Singleton.  
+**Optional later:** `stdio` / `worker` first-class; manager streams for LB.
 
 ---
 
@@ -391,3 +396,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18** — Owner: **build IPC**, then lock plan/API; bring back bake sessions. Phase 1 Eng shipped (`ipc` kind, `{ path }`, `ipcServer` / `connectIpc` / `protocolIpc` / `ipcClient`, tests). I1–I5 locked. Bake sessions noted for C*/D*.
 - **2026-07-18 (bake)** — Owner: one idea at a time (related Qs OK). C1 discussion: Tags may carry node sets; class-extends-pipe pristine base; `nodes` overwrite + `andNode` add; reject agent’s “home” framing; multi-node nodeless already shipped via `distributed`. Placement / LB → manager sketches → owner: managers = Resources (`Resource.Manager` sketch), algorithm is yours not a fixed `leastWork`; no Protocol type param on Node; multi-manager compile limits across runtimes hurt; possible mix-up of **lookup/DNS** vs managers; self-electing lookup node so no mandatory separate DNS process; ask about `serve`→`expose`. Owner: **note as thoughts; careful what is locked.** Doc marks updated: C*/D* OPEN; only I1–I5 LOCKED.
 - **2026-07-18 (bake)** — Owner THOUGHT: managers **stream** to the lookup which node should get work; lookup does load balancing for clients. Still not locked.
+- **2026-07-18 (bake)** — Owner THOUGHTS: lookup catches duplicate managers (first wins, error + original address); Manager ctor = single node + resources it manages; Node ctor `lookup` param (self or point at lookup node); layer swap dupe→client for original; generalize lookup as **identity server**; `Resource.Singleton` first (build/test before managers); maybe Singleton ≡ Manager; **dedupe by key only** (not by what you manage — multiple manager kinds OK). Still not locked.
