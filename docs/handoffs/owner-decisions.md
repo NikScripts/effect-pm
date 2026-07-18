@@ -6,12 +6,20 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-18 — Lookup bootstrap L1 locked; identity Eng unlocked
+
+- **Owner said:** Tiered lookup — safest split-brain = OS bind on-box; explicit where defaults impossible; “Let’s go.”
+- **Chose (L1 LOCKED):** Same-machine default via well-known local bind (OS exclusivity); cross-network **no** self-elect — explicit `LookupNode`. Failover re-elect out of v1. Dial-fail serve policy still open. See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) L1.
+- **Eng unlocked:** First slice — `Lookup` module (LookupNode, default-local ipc, identity claim first-wins / Duplicate + original). Singleton layer-swap / nodeless client / manager streams still bake or follow-on Eng.
+- **Rejected / deferred:** Cross-network elect; seamless lookup failover in v1.
+- **Supervisor impact:** Identity lookup Eng on tip; C* still OPEN.
+
 ## 2026-07-18 — Catalog bake in progress (thoughts, not locks)
 
 - **Owner said:** One idea at a time; note discussions as thoughts; be careful what is actually locked. C1 chat: Tags can carry node sets; class-extends-pipe; overwrite/add helpers; no “home”; managers-as-Resources under rethink vs DNS/lookup self-election; `serve`→`expose` asked; no Protocol type param on Node (value is SSOT).
-- **Chose:** **Nothing new LOCKED.** Capture in [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) bake-thoughts section. Prior C1 lean “nodeless by default” marked superseded-as-lean / OPEN. Only Phase 1 **I1–I5** remain locked for this program.
-- **Rejected / deferred:** Treating manager / lookup / `nodes` API sketches as Eng-ready; Protocol as Node type param (do not re-propose).
-- **Supervisor impact:** Continue bake; no catalog Eng until C* rows lock.
+- **Chose:** At time of entry, nothing beyond I1–I5 locked. **Superseded same day by L1 lock** (above). C1 and most bake thoughts remain unlocked.
+- **Rejected / deferred:** Treating manager / `nodes` API sketches as Eng-ready; Protocol as Node type param (do not re-propose).
+- **Supervisor impact:** Was continue bake; now L1 Eng unlocked.
 
 ## 2026-07-18 — IPC Unix socket Phase 1 + bake sessions
 

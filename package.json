@@ -96,6 +96,10 @@
       "types": "./dist/ShardMap.d.ts",
       "default": "./dist/ShardMap.js"
     },
+    "./Lookup": {
+      "types": "./dist/Lookup.d.ts",
+      "default": "./dist/Lookup.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"

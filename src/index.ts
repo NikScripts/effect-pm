@@ -159,6 +159,7 @@ export {
 // `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Node`
 // pull only what's used. Import `* as Resource` from the subpath, or `{ Resource }` from here.
 export * as Resource from "./Resource";
+export * as Lookup from "./Lookup";
 export type {
   AnyLocalMethod,
   AnyMethod,

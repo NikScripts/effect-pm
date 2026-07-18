@@ -267,14 +267,27 @@ Tests: `test/resource-ipc.test.ts`.
 | **C4** | Value-import Tags into node package allowed? | **OPEN** — old LEAN: yes as option; `import type` preferred |
 | **C5** | Serve-family rename (`serve` → `expose`?) same program as catalog? | **OPEN** — owner asked; old LEAN was separate pass |
 
-### Block Phase 3 (discovery) — **OPEN** (after catalog shape; may merge with lookup thoughts)
+### Block Phase 3 (discovery / identity lookup)
 
 | # | Decision | Status |
 |---|----------|--------|
-| **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **OPEN** — old LEAN: filesystem dir |
+| **L1** | Tiered lookup bootstrap | **LOCKED** (owner 2026-07-18) — see below |
+| **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **Superseded in part by L1** — local default = well-known `IpcSocket` bind (OS exclusivity); cross-network = explicit `LookupNode` |
 | **D2** | Discovery TTL / liveness | **OPEN** — old LEAN: RPC ping once connected |
 | **D3** | `peersLayer`: discovery opt-in vs replace static `distributed` | **OPEN** — old LEAN: opt-in |
 | **D4** | N instances of one Tag | **OPEN** — old LEAN: still `client(Tag, node)` |
+
+#### L1 — Tiered lookup bootstrap (**LOCKED**)
+
+| Topology | Policy |
+|----------|--------|
+| **Same machine** | Default OK — compete for a well-known local bind (`IpcSocket` path and/or localhost port). **OS bind exclusivity** resolves the race (`EADDRINUSE`); not gossip election. |
+| **Across network** | **No self-elect.** Explicit `LookupNode` (address required). |
+
+- Explicit required wherever local defaults are impossible (encode in layers/types as Eng progresses).
+- Failover / re-elect = same race again — **not** in v1 scope; restart same slot / same explicit address; claimants re-claim on boot.
+- Dial/claim failure when lookup unreachable: **needs more thought** — lean don’t serve Singleton by default; knobs later. **Not locked.**
+- `LookupNode` constructor, nodeless clients, check-in map, manager LB streams — **Eng / further bake**; L1 only locks the tiered bootstrap rule.
 
 ### Cross-cutting — **OPEN** / parked
 
@@ -492,3 +505,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner: prefer `_tag`-style protocol names (e.g. `"WebSocket"`); follow Effect layer names as best we can; noted nobody types `ProtocolKind` out. X5 thought added — not locked / not Eng’d.
 - **2026-07-18 (bake)** — Owner: UDS tag **`IpcSocket`** for clarity; Singleton: **`andNode` disabled**, override OK but **only one Node** at a time. Still not formal LOCKED rows / not Eng’d.
 - **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
+- **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerDefaultLocal / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.

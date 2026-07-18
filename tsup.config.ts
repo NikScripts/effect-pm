@@ -32,6 +32,7 @@ export default defineConfig([
       Telemetry: "src/Telemetry.ts",
       FleetHealth: "src/FleetHealth.ts",
       ShardMap: "src/ShardMap.ts",
+      Lookup: "src/Lookup.ts",
       DynamicConfig: "src/DynamicConfig.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       HttpApiResource: "src/HttpApiResource.ts",
