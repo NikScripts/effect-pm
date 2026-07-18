@@ -298,6 +298,21 @@ Tests: `test/resource-ipc.test.ts`.
 | **X3** | Docs: handoff-only vs draft guide now | Handoff SSOT now |
 | **X4** | `Protocol` as Node **type param** | **Rejected as idea** (owner): value-level `kind` + address is SSOT — typing protocol twice drifts. Not a formal bake-row lock; do not re-propose. |
 | **X5** | Protocol kind strings → `_tag`-style names | **LOCKED** — `"Http" \| "WebSocket" \| "IpcSocket"` (multi-protocol Node still later / X1) |
+| **S1** | Identity-claiming Resources (was “Singleton”) | **LOCKED** (owner: “good enough for now”) — see below |
+
+#### S1 — Identity pipe (**LOCKED** 2026-07-18)
+
+| Decision | Lock |
+|----------|------|
+| Surface | **`Resource.identity` pipe** on any Resource / Process / Queue Tag (same pattern as `withReadiness` / `distributed`). Optional `Resource.Singleton` sugar = Tag+pipe only — not required. |
+| Name | Blessed: **`identity`**. (“singleton” avoided as primary — overloaded.) |
+| Where stamped | **On the handle**, not layer-only. |
+| Layer / serve | **`Resource.layer` / `serve` / `*Server` honor the stamp** — claim then local serve **or** client-of-winner. No separate `singletonLayer` as main API. |
+| Self address (v1) | Dialable **self Node / endpoint required at layer/serve** (check-in / address-less later). |
+| Lookup down | **Fail-closed** — do not serve locally; orphan-serve opt-in later if ever. |
+| Node set | At most **one** Node on an identity handle; overwrite OK; **`andNode` disabled**. |
+
+**Eng:** not started — unlock when ready. Depends on shipped Lookup.claim.
 
 ### Protocol tags (X5 — **LOCKED** 2026-07-18)
 

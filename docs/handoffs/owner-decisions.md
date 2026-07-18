@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-18 — Identity pipe S1 (“good enough for now”)
+
+- **Owner said:** Pipe on any resource/process constructor (don’t need Singleton ctor); maybe better name; layer vs handle footgun; agent recs; “Good enough for now.”
+- **Chose (S1 LOCKED):** `Resource.identity` pipe on toolkit Tags; stamp on handle; `layer`/`serve` honor claim→serve-or-client; no layer-only primary; fail-closed if Lookup down; self endpoint at layer v1; optional Singleton sugar only. See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) S1.
+- **Rejected / deferred:** Layer-only identity flag as main API; always-lookup on every non-identity serve; Manager Eng before identity pipe; orphan-serve default.
+- **Supervisor impact:** Identity Eng unlocked when owner says go; Lookup.claim already on tip.
+
 ## 2026-07-18 — ProtocolKind tag rename (X5)
 
 - **Owner said:** Fix the kind strings; multi-protocol Nodes whenever it best fits later.
