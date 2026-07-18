@@ -83,6 +83,7 @@ import {
   RpcServer,
 } from "effect/unstable/rpc";
 import { combineByNode, combineQuery } from "./MultiNode";
+import { unlinkBestEffort } from "./internal/ipcPath";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import { builtInNodeStoreContract } from "./internal/store/nodeStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
@@ -1755,30 +1756,34 @@ interface NodeProtocol {
 export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
 
 /**
- * The transport a {@link Node} speaks, in Effect's client vocabulary: `"http"` (`RpcClient.
- * layerProtocolHttp`) or `"socket"` (`RpcClient.layerProtocolSocket`, over a WebSocket in the browser).
+ * The transport a {@link Node} speaks:
+ * - `"http"` — `RpcClient.layerProtocolHttp` (servers / CLIs)
+ * - `"socket"` — WebSocket (`layerProtocolSocket` over WS; browsers)
+ * - `"ipc"` — Unix-domain socket (same-machine multi-process; see {@link ipcServer})
+ *
  * Stamped on the node so the topology is self-describing about *how* to reach it — `connect`/`client`
- * derive the transport from it, and a server asserts it at serve time. Inferred from a `ws(s)://` url;
+ * derive the transport from it. Inferred from a `ws(s)://` url, an http target, or `{ path }` → ipc;
  * otherwise declare it explicitly.
  *
  * @public
  */
-export type ProtocolKind = "http" | "socket";
+export type ProtocolKind = "http" | "socket" | "ipc";
 
-/** A {@link Resource.Node} erased — a {@link NodeKey} that also carries its own transport `url`
- *  (decision 2) and {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
- *  *where* AND *how* to reach each one, and {@link peersLayer} can reach it. An element of a tag's
- *  fleet. @public */
+/** A {@link Resource.Node} erased — transport address (`url` and/or Unix `path`) plus
+ *  {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
+ *  *where* AND *how* to reach each one. @public */
 export type AnyNode = NodeKey<unknown> & {
   readonly url: string | undefined;
+  readonly path: string | undefined;
   readonly kind: ProtocolKind | undefined;
 };
 
-/** An {@link AnyNode} that has fully declared its transport — both `url` and `kind` are present, so
- *  {@link Resource.connect} can derive the client from it with no protocol argument. @public */
+/** An {@link AnyNode} that can derive {@link Resource.connect} with no protocol argument —
+ *  `kind` set, and either a `url` (http/socket) or a Unix `path` (ipc). @public */
 export type AddressedNode<HSelf> = NodeKey<HSelf> & {
-  readonly url: string;
   readonly kind: ProtocolKind;
+  readonly url: string | undefined;
+  readonly path: string | undefined;
 };
 
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
@@ -3158,6 +3163,171 @@ export function wsServer(
   return serverImpl(serverProtocolWebsocket, servesOrOptions, maybeOptions);
 }
 
+/** Options for {@link ipcServer} — Unix-domain RPC (same-machine). @public */
+export interface IpcServerOptions {
+  /** Filesystem path for the Unix-domain listen socket (required). */
+  readonly path: string;
+  readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  /**
+   * Node log key for auto-mounted {@link NodeStatus} durable `logs.query`.
+   * When omitted, inferred from served tags' bound {@link Node} when all share one key.
+   */
+  readonly node?: string | { readonly key: string };
+  /**
+   * Best-effort `unlink` of `path` before bind and when the server scope closes (default `true`).
+   * Clears stale `.sock` files from a previous crash so listen does not fail with EADDRINUSE.
+   */
+  readonly unlink?: boolean;
+}
+
+/**
+ * A **Unix-domain** RPC server — same-machine sibling of {@link httpServer} / {@link wsServer}.
+ * Speaks Effect's raw socket RPC protocol (`RpcServer.layerProtocolSocketServer`) over a
+ * filesystem path — no HTTP, no WebSocket upgrade. Clients connect with {@link connectIpc}
+ * or a node whose {@link ProtocolKind} is `"ipc"` (`Resource.Node("x", { path })`).
+ *
+ * ```ts
+ * class Worker extends Resource.Node<Worker>("worker", { path: "/tmp/worker.sock" }) {}
+ *
+ * const live = Resource.ipcServer(
+ *   [Resource.serve(Jobs, jobsImpl)],
+ *   { path: Worker.path! },
+ * )
+ * ```
+ *
+ * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route
+ * (no HTTP listener) — probe readiness via NodeStatus over RPC.
+ *
+ * @public
+ */
+export function ipcServer<Serve extends Layer.Layer<any, any, any>>(
+  serve: Serve,
+  options: IpcServerOptions,
+): Layer.Layer<Layer.Success<Serve>, never, Layer.Services<Serve>>;
+export function ipcServer<
+  Serves extends readonly [
+    Layer.Layer<any, any, any>,
+    ...ReadonlyArray<Layer.Layer<any, any, any>>,
+  ],
+>(
+  serves: Serves,
+  options: IpcServerOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  never,
+  Layer.Services<Serves[number]>
+>;
+export function ipcServer(
+  serves: Layer.Layer<any, any, any> | ReadonlyArray<Layer.Layer<any, any, any>>,
+  options: IpcServerOptions,
+): Layer.Layer<never, never, unknown> {
+  const list = Array.isArray(serves) ? serves : [serves];
+  return ipcServerBase(options).pipe(
+    Layer.provideMerge(mergeLayers(list)),
+    Layer.provide(servedResourcesLayer),
+  ) as unknown as Layer.Layer<never, never, unknown>;
+}
+
+/** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
+const ipcServerBase = (
+  options: IpcServerOptions,
+): Layer.Layer<never, never, ServedResources> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const registry = yield* ServedResources;
+      const entries = yield* registry.all;
+      if (entries.length === 0) {
+        return yield* Effect.die(
+          new Error(
+            "Resource.ipcServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+          ),
+        );
+      }
+      const startedAt = yield* Clock.currentTimeMillis;
+      const readiness = Effect.forEach(entries, (entry) =>
+        Effect.map(entry.readiness, (result) => ({
+          key: entry.groupId,
+          kind: entry.kind,
+          ready: result.ready,
+          ...(result.detail !== undefined ? { detail: result.detail } : {}),
+        })),
+      );
+      const optionNodeKey =
+        options.node === undefined
+          ? undefined
+          : typeof options.node === "string"
+            ? options.node
+            : options.node.key;
+      const boundKeys = [
+        ...new Set(
+          entries.flatMap((entry) =>
+            entry.nodeLogKey === undefined ? [] : [entry.nodeLogKey],
+          ),
+        ),
+      ];
+      const inferredNodeKey =
+        optionNodeKey ?? (boundKeys.length === 1 ? boundKeys[0] : undefined);
+      const { nodeStatusServeEntry } = yield* Effect.promise(
+        () => import("./internal/nodeStatusResource"),
+      );
+      const nodeEntry = nodeStatusServeEntry({
+        startedAt,
+        resourceCount: entries.length,
+        readiness,
+        ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
+      });
+      const nodeTag = nodeEntry.tag;
+      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
+        ? nodeEntry.impl
+        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
+      const nodeFlat = flattenImpl(nodeImpl, nodeTag[specSym]);
+      const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
+      for (const [key, member] of Object.entries(nodeFlat)) {
+        nodeHandlers[wireTag(nodeTag.groupId, key)] = (payload) =>
+          invokeWireMethod(member, nodeTag[specSym][key] as AnyMethod, payload);
+      }
+      const merged = [...entries.map((entry) => entry.group), nodeTag[groupSym]].reduce(
+        (acc, group) => acc.merge(group),
+      );
+      const { NodeFileSystem, NodeSocketServer } = yield* Effect.promise(
+        () => import("@effect/platform-node"),
+      );
+      const doUnlink = options.unlink !== false;
+      // Build FileSystem once for path hygiene (Context provide — not Layer provide mid-graph).
+      const fsCtx = doUnlink
+        ? yield* Layer.build(NodeFileSystem.layer)
+        : undefined;
+      if (fsCtx !== undefined) {
+        yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
+      }
+      const rpc = RpcServer.layer(merged).pipe(
+        Layer.provide(
+          nodeTag[groupSym].toLayer(
+            nodeHandlers as unknown as Parameters<
+              (typeof nodeTag)[typeof groupSym]["toLayer"]
+            >[0],
+          ),
+        ),
+        Layer.provide(RpcServer.layerProtocolSocketServer),
+        Layer.provide(options.serialization ?? defaultSerialization),
+        Layer.provide(
+          NodeSocketServer.layer({ path: options.path }).pipe(Layer.orDie),
+        ),
+      );
+      return fsCtx !== undefined
+        ? rpc.pipe(
+            Layer.provideMerge(
+              Layer.effectDiscard(
+                Effect.addFinalizer(() =>
+                  Effect.provide(unlinkBestEffort(options.path), fsCtx),
+                ),
+              ),
+            ),
+          )
+        : rpc;
+    }),
+  ) as unknown as Layer.Layer<never, never, ServedResources>;
+
 /**
  * Provide one dependency `Layer` to several {@link serve} layers at once — sugar for
  * `Layer.mergeAll(resources).pipe(Layer.provide(dependency))`. Reads as "these resources, on this
@@ -3372,43 +3542,54 @@ export const forwardClient = <S extends Spec>(
  * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "http"
  * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "socket" (inferred from ws url)
  * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // same-origin path, explicit kind
+ * class Local extends Resource.Node<Local>("local", { path: "/tmp/local.sock" }) {} // kind "ipc" (Unix domain)
  * ```
  *
  * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
- * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url, kind }` for an explicit
- * endpoint. The node also carries its {@link ProtocolKind} `kind` — inferred `"socket"` from a
- * `ws(s)://` url, `"http"` from an http target, or set explicitly (needed for a same-origin `"/rpc"`
- * path that a browser resolves to ws). The node carries both so the topology is self-describing about
- * *where* AND *how*: ship only the tag and {@link Resource.connect}`(node)` derives the transport with
- * no protocol argument, {@link Resource.client} reads the node to resolve where to connect, and
- * {@link peersLayer} reaches the fleet.
+ * → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for an explicit
+ * endpoint, or `{ path }` for a **Unix-domain** socket (`kind: "ipc"`). The node carries
+ * {@link ProtocolKind} so the topology is self-describing about *where* AND *how*:
+ * {@link Resource.connect}`(node)` derives the transport with no protocol argument.
  *
  * @public
  */
 const makeNode = <Self>(
   name: string,
-  target?: number | string | { readonly url?: string; readonly kind?: ProtocolKind },
+  target?:
+    | number
+    | string
+    | {
+        readonly url?: string;
+        readonly path?: string;
+        readonly kind?: ProtocolKind;
+      },
 ) => {
+  const path =
+    typeof target === "object" && target !== null ? target.path : undefined;
   // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
-  // bad string); an explicit `{ url }` is used verbatim.
+  // bad string); an explicit `{ url }` is used verbatim. IPC nodes omit `url`.
   const url =
-    target === undefined
+    path !== undefined
       ? undefined
-      : typeof target === "object"
-        ? target.url
-        : resolveHttpTarget(target);
-  // `kind` is the SSOT for *how* to reach the node: an explicit `{ kind }` wins; otherwise a `ws(s)://`
-  // url is a socket and any other resolved url is http. Left `undefined` only when the url is (a bare
-  // `Node("x")` with no address) — then a caller must supply the transport at `connect` explicitly.
+      : target === undefined
+        ? undefined
+        : typeof target === "object"
+          ? target.url
+          : resolveHttpTarget(target);
+  // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` → ipc,
+  // `ws(s)://` → socket, any other url → http. Bare `Node("x")` leaves kind undefined.
   const kind: ProtocolKind | undefined =
-    (typeof target === "object" ? target.kind : undefined) ??
-    (url === undefined
-      ? undefined
-      : url.startsWith("ws://") || url.startsWith("wss://")
-        ? "socket"
-        : "http");
+    (typeof target === "object" && target !== null ? target.kind : undefined) ??
+    (path !== undefined
+      ? "ipc"
+      : url === undefined
+        ? undefined
+        : url.startsWith("ws://") || url.startsWith("wss://")
+          ? "socket"
+          : "http");
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     url,
+    path,
     kind,
   });
   return Object.assign(node, {
@@ -3624,24 +3805,53 @@ const socketClient = <Self>(
   );
 
 /** Deriving a transport from a node that never declared one — a bare `Resource.Node("x")` has no
- *  `url`/`kind`, so `connect(node)` can't know how to reach it. Fails loudly instead of guessing. @internal */
+ *  address/`kind`, so `connect(node)` can't know how to reach it. Fails loudly instead of guessing. @internal */
 class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
   readonly node: string;
 }> {
   override get message() {
     return (
-      `Node "${this.node}" declares no url/kind, so a transport can't be derived from it. ` +
-      `Give the node an address (e.g. Resource.Node("${this.node}", 3001) or { url, kind }), ` +
+      `Node "${this.node}" declares no address/kind, so a transport can't be derived from it. ` +
+      `Give the node an address (e.g. Resource.Node("${this.node}", 3001), { url, kind }, or { path }), ` +
       `or pass a protocol explicitly: Resource.connect(node, protocol).`
     );
   }
 }
 
-/** Build the client `Protocol` a node declares — {@link protocolHttp} or {@link protocolWebsocket},
- *  keyed off its {@link ProtocolKind}. The topology (not the caller) decides the transport, so the
- *  http↔socket mismatch can't be introduced here. Fails loudly on an unaddressed node. */
+/**
+ * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
+ * (`NodeSocket.layerNet({ path })`). Same-machine counterpart to {@link protocolHttp} /
+ * {@link protocolWebsocket}. @public
+ */
+export const protocolIpc = (
+  path: string,
+  serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
+): Layer.Layer<RpcClient.Protocol> =>
+  Layer.unwrap(
+    Effect.promise(() => import("@effect/platform-node")).pipe(
+      Effect.map(({ NodeSocket }) =>
+        RpcClient.layerProtocolSocket().pipe(
+          Layer.provide(serialization),
+          Layer.provide(NodeSocket.layerNet({ path })),
+          Layer.orDie,
+        ),
+      ),
+    ),
+  );
+
+/** Build the client `Protocol` a node declares — keyed off its {@link ProtocolKind}.
+ *  Fails loudly on an unaddressed node. */
 const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
-  if (node.url === undefined || node.kind === undefined) {
+  if (node.kind === undefined) {
+    throw new UnaddressedNode({ node: node.key });
+  }
+  if (node.kind === "ipc") {
+    if (node.path === undefined) {
+      throw new UnaddressedNode({ node: node.key });
+    }
+    return protocolIpc(node.path);
+  }
+  if (node.url === undefined) {
     throw new UnaddressedNode({ node: node.key });
   }
   return node.kind === "socket" ? protocolWebsocket(node.url) : protocolHttp(node.url);
@@ -3677,7 +3887,11 @@ export const connect: {
     protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
   ): <Self>(node: NodeKey<Self>) => Layer.Layer<Self, never, RIn>;
   <Self>(
-    node: NodeKey<Self> & { readonly url?: string; readonly kind?: ProtocolKind },
+    node: NodeKey<Self> & {
+      readonly url?: string;
+      readonly path?: string;
+      readonly kind?: ProtocolKind;
+    },
   ): Layer.Layer<Self>;
 } = Fn.dual(
   // data-first when there are two args, or when the single arg is a node (not a protocol layer).
@@ -3727,6 +3941,49 @@ export const connectSocket: {
     url?: string,
   ): Layer.Layer<unknown> => connectLayer(node, protocolWebsocket(url ?? node.url ?? "/rpc")),
 );
+
+/**
+ * Wire a node over **ipc** — Unix-domain socket RPC ({@link protocolIpc}), {@link connect} pinned
+ * to `kind: "ipc"`. Dual: `MyNode.pipe(Resource.connectIpc)` uses the node's own `path`;
+ * `MyNode.pipe(Resource.connectIpc(path))` overrides it.
+ *
+ * @public
+ */
+export const connectIpc: {
+  (path: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
+  <Self>(node: NodeKey<Self> & { readonly path?: string }): Layer.Layer<Self>;
+} = Fn.dual(
+  (args: IArguments) => typeof args[0] !== "string",
+  (
+    node: NodeKey<unknown> & { readonly path?: string },
+    path?: string,
+  ): Layer.Layer<unknown> => {
+    const sock = path ?? node.path;
+    if (sock === undefined) {
+      throw new UnaddressedNode({ node: node.key });
+    }
+    return connectLayer(node, protocolIpc(sock));
+  },
+);
+
+/**
+ * Per-node ipc shortcut — {@link connect} + {@link protocolIpc} (same-machine Unix socket).
+ *
+ * @public
+ */
+const ipcClient = <Self>(
+  node: NodeKey<Self> & { readonly path?: string },
+  options?: {
+    readonly path?: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self> => {
+  const sock = options?.path ?? node.path;
+  if (sock === undefined) {
+    throw new UnaddressedNode({ node: node.key });
+  }
+  return connectLayer(node, protocolIpc(sock, options?.serialization));
+};
 
 /**
  * A remote {@link Node} that didn't answer at its declared address — down, wrong port/url, or (for a
@@ -3788,18 +4045,51 @@ const probeHttpReachable = (url: string, timeout: Duration.Input) =>
  * @public
  */
 export const verifyConnection = (
-  node: NodeKey<unknown> & { readonly url?: string; readonly kind?: ProtocolKind },
-  options?: { readonly timeout?: Duration.Input; readonly url?: string },
+  node: NodeKey<unknown> & {
+    readonly url?: string;
+    readonly path?: string;
+    readonly kind?: ProtocolKind;
+  },
+  options?: { readonly timeout?: Duration.Input; readonly url?: string; readonly path?: string },
 ): Effect.Effect<void, NodeUnreachable> => {
+  const kind: ProtocolKind | undefined =
+    node.kind ??
+    (options?.path !== undefined || node.path !== undefined
+      ? "ipc"
+      : options?.url !== undefined || node.url !== undefined
+        ? (options?.url ?? node.url)!.startsWith("ws://") ||
+            (options?.url ?? node.url)!.startsWith("wss://")
+          ? "socket"
+          : "http"
+        : undefined);
+  if (kind === undefined) {
+    return Effect.die(new UnaddressedNode({ node: node.key }));
+  }
+  if (kind === "ipc") {
+    const path = options?.path ?? node.path;
+    if (path === undefined) {
+      return Effect.die(new UnaddressedNode({ node: node.key }));
+    }
+    const timeout = options?.timeout ?? "3 seconds";
+    const window = Duration.millis(Math.min(Duration.toMillis(timeout), 500));
+    return Effect.gen(function* () {
+      const { NodeSocket } = yield* Effect.promise(() => import("@effect/platform-node"));
+      const socket = yield* NodeSocket.makeNet({ path });
+      yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
+    }).pipe(
+      Effect.scoped,
+      Effect.mapError(
+        (cause: unknown) =>
+          new NodeUnreachable({ node: node.key, url: path, cause }),
+      ),
+    );
+  }
   const url = options?.url ?? node.url;
   if (url === undefined) {
     return Effect.die(new UnaddressedNode({ node: node.key }));
   }
-  const kind: ProtocolKind =
-    node.kind ?? (url.startsWith("ws://") || url.startsWith("wss://") ? "socket" : "http");
   const timeout = options?.timeout ?? "3 seconds";
   const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
-  // map per-branch (not on the ternary union) so both branches unify to `Effect<void, NodeUnreachable>`.
   return kind === "socket"
     ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
     : probeHttpReachable(url, timeout).pipe(fail);
@@ -4490,6 +4780,7 @@ export {
   makeNode as Node,
   httpClient,
   socketClient,
+  ipcClient,
   instance,
   localLayer as layer,
   serveInstances,

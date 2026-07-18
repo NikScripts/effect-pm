@@ -223,15 +223,28 @@ Managing Layers + Fleets & Peers; optional serve-family neutral names if locked.
 
 ## API decisions (lock by phase)
 
-### Block Phase 1 (IPC) — lock these first
+### Block Phase 1 (IPC) — **LOCKED + SHIPPED** (Eng 2026-07-18)
 
-| # | Decision | Lean |
-|---|----------|------|
-| **I1** | Kind name: `"ipc"` vs reuse `"socket"` for raw UDS (keep `"socket"` = WebSocket only) | **`"ipc"`** — don’t overload browser WS |
-| **I2** | Address shape on Node: `{ path }`, bare path string, or `unix:///…` url | **`{ path }`** (+ maybe bare string ending in `.sock`) |
-| **I3** | Server helper name: `ipcServer` vs `unixServer` vs one `socketServer` for TCP+UDS | **`ipcServer`** — same-machine story; TCP localhost can wait |
-| **I4** | Path lifecycle: auto-`unlink` before bind / on scope close? | **unlink on scope close + best-effort before bind** (document stale-file) |
-| **I5** | Windows: named pipes now or Unix-only v1? | **Unix-only v1**; Windows follow-up |
+| # | Decision | Locked |
+|---|----------|--------|
+| **I1** | Kind name | **`"ipc"`** — `"socket"` stays WebSocket only |
+| **I2** | Address shape on Node | **`{ path }`** → infers `kind: "ipc"`; `url` left undefined |
+| **I3** | Server helper | **`Resource.ipcServer(serves, { path })`** |
+| **I4** | Path lifecycle | **unlink before bind + on scope close** (`unlink: false` to opt out) |
+| **I5** | Windows named pipes | **Unix-only v1**; same `ipc` kind later |
+
+Shipped API:
+
+```ts
+class Worker extends Resource.Node<Worker>("worker", { path: "/tmp/worker.sock" }) {}
+Resource.ipcServer([Resource.serve(Jobs, jobsImpl)], { path: Worker.path! })
+Resource.connect(Worker)       // derives ipc
+Resource.connectIpc(Worker)    // explicit
+Resource.protocolIpc(path)
+Resource.ipcClient(Worker)
+```
+
+Tests: `test/resource-ipc.test.ts`.
 
 ### Block Phase 2 (catalog) — can wait until IPC is green
 
@@ -268,7 +281,18 @@ Still open until owner ticks Phase-0 rows. Priority: **I1–I5**, then Eng Phase
 
 ---
 
+## Bake sessions (bring back)
+
+Owner: lock remaining API design in **bake sessions** — short, focused owner↔agent passes that tick one decision table row at a time (same style as Phase 1 I1–I5), write the lock into this file + `owner-decisions.md`, then Eng.
+
+**Next bake (Phase 2 catalog):** C1–C5  
+**Then bake (Phase 3 discovery):** D1–D4  
+**Optional:** `stdio` / `worker` first-class — separate bake, not blocking catalog.
+
+---
+
 ## Session log
 
 - **2026-07-18** — Owner: Node `ROut` catalog, type-only imports to avoid bundling contracts, serve validates Node handle, discovery + UDS for seamless same-machine mesh; peers must be thought through; document ideas; “obviously the next step.” Clarified: shipped Node never had definition-time resource list — catalog is new. `import type` breaks Node→contract cycle only one way.
 - **2026-07-18** — Owner: ignore Host history; make a plan/order; **Unix socket tested first** before complex catalog/discovery; many API decisions still to make. Eng order rewritten Phase 1 IPC → 2 catalog → 3 discovery → 4 docs; decisions split by what they block.
+- **2026-07-18** — Owner: **build IPC**, then lock plan/API; bring back bake sessions. Phase 1 Eng shipped (`ipc` kind, `{ path }`, `ipcServer` / `connectIpc` / `protocolIpc` / `ipcClient`, tests). I1–I5 locked. Bake sessions noted for C*/D*.

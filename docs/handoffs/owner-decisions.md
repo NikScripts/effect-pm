@@ -6,12 +6,19 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-18 — IPC Unix socket Phase 1 + bake sessions
+
+- **Owner said:** Build IPC first; then lock plan/API details; bring back bake sessions.
+- **Chose:** Ship `"ipc"` ProtocolKind + `{ path }` Node address + `ipcServer` / `connectIpc` / `protocolIpc` / `ipcClient` (Unix-only v1; unlink before bind + on close). Phase 1 decisions I1–I5 locked in [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md). Remaining catalog/discovery locks (C*/D*) via **bake sessions**.
+- **Rejected / deferred:** Overloading `"socket"` for UDS; Windows named pipes in v1; catalog/`ROut`/discovery in this slice.
+- **Supervisor impact:** IPC Eng on tip; next = bake C1–C5 before catalog Eng.
+
 ## 2026-07-18 — Node catalog (`ROut`) + discovery (design direction)
 
 - **Owner said:** Node should take optional `ROut` (union of resource handles); serve/listen validates catalog at compile time; type-only imports avoid bundling contracts; same-machine discovery (esp. Unix sockets) so peers share catalogs without stamping Node on every Tag; document it; this is the next library step for seamless cross-runtime. Product rename away from “Resource” parked.
-- **Chose (design only):** Living design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) — `Node<Self, ROut = never>`, nodeless Tags by default, `listen` / `clientsFor` / local discovery; peers = topology (static `distributed` **or** discovery) + per-Node catalog. Clarified: shipped Node never had definition-time resource list — catalog is new, not a restore.
-- **Rejected / deferred:** Eng until owner unlocks open questions in that file; multi-protocol Node endpoints; becoming Cluster membership/rebalance.
-- **Supervisor impact:** Design handoff on bus; no agent Eng until unlock. Coordinate with Agent E Resource surface when Eng starts.
+- **Chose (design only):** Living design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) — `Node<Self, ROut = never>`, nodeless Tags by default, `listen` / `clientsFor` / local discovery; peers = topology (static `distributed` **or** discovery) + per-Node catalog. Clarified: shipped Node never had definition-time resource list — catalog is new, not a restore. **Update:** Phase 1 IPC Eng unlocked/shipped same day.
+- **Rejected / deferred:** multi-protocol Node endpoints; becoming Cluster membership/rebalance.
+- **Supervisor impact:** Design handoff on bus; IPC first; catalog Eng after bake locks.
 
 ## 2026-07-16 — Impossible-states plan: assigned + area reserved (breaking OK)
 

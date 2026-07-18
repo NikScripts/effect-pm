@@ -2,7 +2,7 @@ import { Duration, Effect, Layer, Schema, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, expect, it } from "vitest";
-import { QueueResource } from "../src";
+import * as QueueResource from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 
 // `Resource.connect` and its `connectHttp` / `connectSocket` shortcuts are dual (data-first + pipeable
@@ -11,17 +11,22 @@ import * as Resource from "../src/Resource";
 // the dispatch mechanics, the ProtocolKind stamping, and that a node-derived ws client round-trips.
 
 describe("Node ProtocolKind inference", () => {
-  it("infers socket from a ws url, http from a port, honors an explicit kind, leaves a bare node blank", () => {
+  it("infers socket from a ws url, http from a port, ipc from path, honors explicit kind, leaves a bare node blank", () => {
     class WsUrl extends Resource.Node<WsUrl>("cd/ws", { url: "wss://x/rpc" }) {}
     class Port extends Resource.Node<Port>("cd/port", 3001) {}
     class Explicit extends Resource.Node<Explicit>("cd/explicit", { url: "/rpc", kind: "socket" }) {}
+    class Ipc extends Resource.Node<Ipc>("cd/ipc", { path: "/tmp/cd.sock" }) {}
     class Bare extends Resource.Node<Bare>("cd/bare") {}
     expect(WsUrl.kind).toBe("socket");
     expect(Port.kind).toBe("http");
     expect(Port.url).toBe("http://localhost:3001/rpc");
     expect(Explicit.kind).toBe("socket");
+    expect(Ipc.kind).toBe("ipc");
+    expect(Ipc.path).toBe("/tmp/cd.sock");
+    expect(Ipc.url).toBeUndefined();
     expect(Bare.kind).toBeUndefined();
     expect(Bare.url).toBeUndefined();
+    expect(Bare.path).toBeUndefined();
   });
 });
 
