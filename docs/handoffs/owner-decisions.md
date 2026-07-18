@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-18 — Node catalog (`ROut`) + discovery (design direction)
+
+- **Owner said:** Node should take optional `ROut` (union of resource handles); serve/listen validates catalog at compile time; type-only imports avoid bundling contracts; same-machine discovery (esp. Unix sockets) so peers share catalogs without stamping Node on every Tag; document it; this is the next library step for seamless cross-runtime. Product rename away from “Resource” parked.
+- **Chose (design only):** Living design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) — `Node<Self, ROut = never>`, nodeless Tags by default, `listen` / `clientsFor` / local discovery; peers = topology (static `distributed` **or** discovery) + per-Node catalog. Clarified: shipped Node never had definition-time resource list — catalog is new, not a restore.
+- **Rejected / deferred:** Eng until owner unlocks open questions in that file; multi-protocol Node endpoints; becoming Cluster membership/rebalance.
+- **Supervisor impact:** Design handoff on bus; no agent Eng until unlock. Coordinate with Agent E Resource surface when Eng starts.
+
 ## 2026-07-16 — Impossible-states plan: assigned + area reserved (breaking OK)
 
 - **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away." (Later: unlock P4 + expand the reservation to the tag-config schema-input surface.)
