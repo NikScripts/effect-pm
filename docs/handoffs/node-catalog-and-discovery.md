@@ -414,9 +414,15 @@ Nodeless client
 
 **Layer swap (THOUGHT):** yes, in principle — a serve/local layer that fails identity claim becomes `client(Tag, originalNode)` (or equivalent) so the process still `yield* Tag` against the winner. Needs Eng design: claim at layer build / scope init; typed error carrying original address; no silent double-serve.
 
-**`Resource.Singleton` (THOUGHT):** constructor/flavor that always goes through identity claim. If dupe → client layer. Owner lean: **build and test this before managers**, because managers may be a thin extension of the same mechanism.
+**Identity-claiming Resources (THOUGHT — evolving):**
 
-**Singleton × node set (THOUGHT — owner):** Singletons are **one Node at a time**. `Resource.nodes` (or equivalent) may **override** that single Node; **`andNode` is disabled** for singletons (compile and/or runtime) — you cannot grow a multi-node set on a singleton handle. Multi-node fleets stay on ordinary Tags + `distributed` / `nodes` / `andNode`.
+- Not only a separate `Resource.Singleton` ctor — prefer **`Resource.<pipe>` on any Resource/Process/Queue Tag** (like `withReadiness` / `distributed`), so identity applies to the whole toolkit surface.
+- Optional `Resource.Singleton` sugar can remain as Tag+pipe if useful; not required.
+- Name: “singleton” is overloaded — candidates `identity` / `unique` / `exclusive` (see bake recommendations below).
+- If dupe at claim → layer becomes **client** of winner.
+- Build/test identity-claim path **before** managers (managers may collapse into the same mechanism).
+
+**Identity × node set (THOUGHT — owner):** Identity-stamped handles are **one Node at a time**. `Resource.nodes` (or equivalent) may **override** that single Node; **`andNode` is disabled** (compile and/or runtime). Multi-node fleets stay on ordinary Tags + `distributed` / `nodes` / `andNode`.
 
 **Dedupe key (THOUGHT — owner):** dedupe by **resource key** only. Do **not** dedupe by “what you manage.” Multiple different manager Resources for the same fleet resource can coexist if they have **different keys**.
 
@@ -487,3 +493,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
 - **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerDefaultLocal / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
 - **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.
+- **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean recorded in chat (not locked): pipe on handle + `Resource.layer`/`serve` honor stamp; name lean `identity` or `unique`; no layer-only primary; fail-closed if Lookup down; self endpoint at layer v1.
