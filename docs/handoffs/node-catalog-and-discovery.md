@@ -305,13 +305,13 @@ Effect (pinned `effect` package) actually has:
 
 Today we ship `"http" | "socket" | "ipc"` where `"socket"` means **WebSocket** (and our helper is already `protocolWebsocket`). That fights both English and server layer names.
 
-**Rename lean (THOUGHT — not locked):**
+**Rename lean (THOUGHT — not locked as a bake row; owner picks below):**
 
 | Role | Follow | Tag sketch | Notes |
 |------|--------|------------|--------|
 | HTTP | `layerProtocolHttp` | `"Http"` | Clear |
-| Browser / WS | `layerProtocolWebsocket` | `"Websocket"` (Effect spelling) or owner’s `"WebSocket"` | Prefer Effect’s **Websocket** if we swear “follow layers”; owner wrote WebSocket |
-| Same-machine UDS | no `layerProtocolIpc` — we use Socket+path | `"Socket"` vs keep `"Ipc"` | Effect’s client name **Socket** is overloaded (WS framing uses it too). `"Ipc"` is ours and clearer for `{ path }`; `"Socket"` matches `layerProtocolSocketServer` |
+| Browser / WS | `layerProtocolWebsocket` | `"Websocket"` (Effect spelling) or `"WebSocket"` | Still open which spelling |
+| Same-machine UDS | Socket+path (no `layerProtocolIpc`) | **`"IpcSocket"`** | Owner: clarity over bare `Ipc` / overloaded `Socket` |
 
 Apps still mostly never write the tag — inference from `url` / `path` stays SSOT. Named export type (if kept) becomes a union of those tags; could be `_tag` fields later if we move to ADT addresses.
 
@@ -374,6 +374,8 @@ Later process starts same key K on Node B
 **Layer swap (THOUGHT):** yes, in principle — a serve/local layer that fails identity claim becomes `client(Tag, originalNode)` (or equivalent) so the process still `yield* Tag` against the winner. Needs Eng design: claim at layer build / scope init; typed error carrying original address; no silent double-serve.
 
 **`Resource.Singleton` (THOUGHT):** constructor/flavor that always goes through identity claim. If dupe → client layer. Owner lean: **build and test this before managers**, because managers may be a thin extension of the same mechanism.
+
+**Singleton × node set (THOUGHT — owner):** Singletons are **one Node at a time**. `Resource.nodes` (or equivalent) may **override** that single Node; **`andNode` is disabled** for singletons (compile and/or runtime) — you cannot grow a multi-node set on a singleton handle. Multi-node fleets stay on ordinary Tags + `distributed` / `nodes` / `andNode`.
 
 **Dedupe key (THOUGHT — owner):** dedupe by **resource key** only. Do **not** dedupe by “what you manage.” Multiple different manager Resources for the same fleet resource can coexist if they have **different keys**.
 
@@ -440,3 +442,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner THOUGHTS: lookup catches duplicate managers (first wins, error + original address); Manager ctor = single node + resources it manages; Node ctor `lookup` param (self or point at lookup node); layer swap dupe→client for original; generalize lookup as **identity server**; `Resource.Singleton` first (build/test before managers); maybe Singleton ≡ Manager; **dedupe by key only** (not by what you manage — multiple manager kinds OK). Still not locked.
 - **2026-07-18 (bake)** — Owner ask: need value-level “resources it manages”, or type info only? THOUGHT lean: **types (+ optional impl enforce)**; identity stays key-only; no mandatory ctor Tag list. Still not locked.
 - **2026-07-18 (bake)** — Owner: prefer `_tag`-style protocol names (e.g. `"WebSocket"`); follow Effect layer names as best we can; noted nobody types `ProtocolKind` out. X5 thought added — not locked / not Eng’d.
+- **2026-07-18 (bake)** — Owner: UDS tag **`IpcSocket`** for clarity; Singleton: **`andNode` disabled**, override OK but **only one Node** at a time. Still not formal LOCKED rows / not Eng’d.
