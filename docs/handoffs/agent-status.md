@@ -28,7 +28,7 @@
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. **Node catalog (`ROut`) + discovery** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); **Phase 1 IPC shipped**; next = bake-session locks C1–C5 then catalog Eng
+4. **Node catalog (`ROut`) + discovery** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); **Phase 1 IPC shipped (I1–I5 LOCKED)**; C*/D* **OPEN** (bake thoughts only — Tags/node sets, managers vs lookup/DNS, `serve`→`expose`); **no catalog Eng** until locks
 5. Store-layer `(scopeKey, lineId)` memo — **deferred**
 6. Fail-loud Soft when AppStore lacks engine registration — **parked** (Agent 3 out of scope unless unlocked)
 7. `main` merge + `pnpm run version` — still deferred

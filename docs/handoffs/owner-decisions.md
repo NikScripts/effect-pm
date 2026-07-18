@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-18 — Catalog bake in progress (thoughts, not locks)
+
+- **Owner said:** One idea at a time; note discussions as thoughts; be careful what is actually locked. C1 chat: Tags can carry node sets; class-extends-pipe; overwrite/add helpers; no “home”; managers-as-Resources under rethink vs DNS/lookup self-election; `serve`→`expose` asked; no Protocol type param on Node (value is SSOT).
+- **Chose:** **Nothing new LOCKED.** Capture in [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) bake-thoughts section. Prior C1 lean “nodeless by default” marked superseded-as-lean / OPEN. Only Phase 1 **I1–I5** remain locked for this program.
+- **Rejected / deferred:** Treating manager / lookup / `nodes` API sketches as Eng-ready; Protocol as Node type param (do not re-propose).
+- **Supervisor impact:** Continue bake; no catalog Eng until C* rows lock.
+
 ## 2026-07-18 — IPC Unix socket Phase 1 + bake sessions
 
 - **Owner said:** Build IPC first; then lock plan/API details; bring back bake sessions.
