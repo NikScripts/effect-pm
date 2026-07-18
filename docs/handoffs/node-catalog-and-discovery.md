@@ -160,29 +160,115 @@ IPC / Unix socket protocol kind stays a **transport** add-on; discovery makes it
 
 ---
 
-## Open questions (don’t Eng until locked)
+## Eng order (owner 2026-07-18: Unix socket first)
 
-1. **Blessed default:** Tags nodeless + Node-first clients/discovery — yes/no?  
-2. **`listen` vs keeping `httpServer`/`wsServer`:** sugar over transport, or replace?  
-3. **Registry format** for same-machine: directory of JSON files vs length-prefixed UDS bus vs parent-injected?  
-4. **Partial catalogs:** may a process expose a runtime subset of `ROut`? (lean: no — `ROut` = promise)  
-5. **N instances of one Tag:** discovery gives Nodes; `client(Tag, whichNode)` still required for instance identity  
-6. **Serve-family rename** (`expose` / `gateway`) — same program or separate?  
-7. **Docs home:** living guide chapter vs handoff-only until Eng?
+Ship **transport proof before catalog/discovery**. Complex API locks gate later slices only.
+
+```text
+Phase 0  API decisions that block each phase (below)
+    │
+Phase 1  IPC / Unix domain socket  ← first Eng
+    │    ProtocolKind + address path + ipcServer/connectIpc + tests
+    │
+Phase 2  Node catalog types        ← after Phase-2 locks
+    │    Node<Self, ROut>, listen proves ROut, clientsFor
+    │
+Phase 3  Local discovery           ← after Phase-3 locks
+    │    registry + peersLayer discovery mode + same-machine example
+    │
+Phase 4  Docs polish + serve rename (if not done earlier)
+```
+
+### Phase 1 — IPC / UDS (do first)
+
+**Goal:** two processes (or test parent+child) speak Effect RPC over a Unix socket path, same serve/client ergonomics as http/ws.
+
+**Minimal surface (mirror existing):**
+
+```ts
+// conceptual — names TBD in Phase-0 locks for IPC only
+class Worker extends Resource.Node<Worker>("app/Worker", {
+  path: "/tmp/worker.sock",  // or path string overload
+}) {}
+
+Resource.ipcServer([Resource.serve(Jobs, jobsImpl)])  // listen on node path / options.path
+Resource.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
+// or Resource.connectIpc(Worker) / connectIpc(path)
+```
+
+**Implementation sketch (Effect already has the bits):**
+
+- Server: `RpcServer.layerProtocolSocketServer` + `NodeSocketServer.layer({ path })`
+- Client: `RpcClient.layerProtocolSocket` + `NodeSocket.layerNet({ path })`
+- Serialization: same ndjson default as http/ws
+- Tests: e2e RPC (unary + stream) over a temp sock path; second bind → `EADDRINUSE`; stale sock file story documented
+
+**Out of Phase 1:** `ROut`, discovery, peersLayer changes, serve→expose rename, multi-protocol Node.
+
+**Touches:** `ProtocolKind`, `makeNode` address parsing, `protocolForNode` / `connect*`, new `ipcServer` (or shared raw-socket server helper), tests. Coordinate with whoever owns `src/Resource.ts` node/client surface (Agent E reservation history).
+
+### Phase 2 — Node catalog (`ROut`)
+
+`Node<Self, ROut = never>`, `listen` proves catalog, `clientsFor`, runtime `serves[]` from expose list. Tags nodeless-by-default only if Phase-0 lock says so.
+
+### Phase 3 — Discovery + peers
+
+Local registry, discover → connect → clients from `serves[]`, `peersLayer` accepts static **or** discovered topology. Pays off Phase 1 IPC.
+
+### Phase 4 — Docs / rename hygiene
+
+Managing Layers + Fleets & Peers; optional serve-family neutral names if locked.
 
 ---
 
-## Suggested Eng slices (when unlocked)
+## API decisions (lock by phase)
 
-1. **Design lock** — this file + owner answers to open questions.  
-2. **`Node<Self, ROut>` + `listen` prove** — types + tests; no discovery yet.  
-3. **`clientsFor`** — static catalog clients.  
-4. **IPC protocol kind** — UDS listen/connect helpers.  
-5. **Local discovery** — registry + `peersLayer` discovery mode.  
-6. **Docs** — Managing Layers / Fleets & Peers rewrite; examples (two processes, one machine, zero Tag `{ node }`).
+### Block Phase 1 (IPC) — lock these first
+
+| # | Decision | Lean |
+|---|----------|------|
+| **I1** | Kind name: `"ipc"` vs reuse `"socket"` for raw UDS (keep `"socket"` = WebSocket only) | **`"ipc"`** — don’t overload browser WS |
+| **I2** | Address shape on Node: `{ path }`, bare path string, or `unix:///…` url | **`{ path }`** (+ maybe bare string ending in `.sock`) |
+| **I3** | Server helper name: `ipcServer` vs `unixServer` vs one `socketServer` for TCP+UDS | **`ipcServer`** — same-machine story; TCP localhost can wait |
+| **I4** | Path lifecycle: auto-`unlink` before bind / on scope close? | **unlink on scope close + best-effort before bind** (document stale-file) |
+| **I5** | Windows: named pipes now or Unix-only v1? | **Unix-only v1**; Windows follow-up |
+
+### Block Phase 2 (catalog) — can wait until IPC is green
+
+| # | Decision | Lean |
+|---|----------|------|
+| **C1** | Blessed default: Tags nodeless + Node-first? | **Yes** |
+| **C2** | `listen(node, exposes)` vs keep `httpServer`/`wsServer`/`ipcServer` as transport sugar that *optionally* takes a catalog Node | **Keep transport servers; `listen` = catalog-aware wrap** |
+| **C3** | Partial catalogs (runtime subset of `ROut`)? | **No** — `ROut` is a promise |
+| **C4** | Value-import Tags into node package allowed? | **Yes as option; `import type` preferred** |
+| **C5** | Serve-family rename (`expose` / `gateway`) in same program as catalog? | **Separate** — don’t block catalog on rename |
+
+### Block Phase 3 (discovery) — after catalog shape exists
+
+| # | Decision | Lean |
+|---|----------|------|
+| **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **Filesystem dir** under runtime state (simplest, Effect `FileSystem`) |
+| **D2** | Discovery TTL / liveness: sock exists vs heartbeat file vs RPC ping | **RPC ping / verify** once connected; registry file = claim |
+| **D3** | `peersLayer`: discovery opt-in vs replace static `distributed` | **Opt-in** — static remains for fixed fleets / ShardMap v1 |
+| **D4** | N instances of one Tag | **Still `client(Tag, node)`** — discovery doesn’t erase instance identity |
+
+### Cross-cutting (schedule anytime, don’t block Phase 1)
+
+| # | Decision | Lean |
+|---|----------|------|
+| **X1** | Multi-protocol Node (endpoint set) | **Later** — one kind per Node until discovery exists |
+| **X2** | Product rename away from “Resource” | **Parked** |
+| **X3** | Docs: handoff-only until Eng ships vs draft guide now | **Handoff SSOT now; guide when Phase 1–2 land** |
+
+---
+
+## Open questions (legacy list — superseded by phase table above)
+
+Still open until owner ticks Phase-0 rows. Priority: **I1–I5**, then Eng Phase 1.
 
 ---
 
 ## Session log
 
 - **2026-07-18** — Owner: Node `ROut` catalog, type-only imports to avoid bundling contracts, serve validates Node handle, discovery + UDS for seamless same-machine mesh; peers must be thought through; document ideas; “obviously the next step.” Clarified: shipped Node never had definition-time resource list — catalog is new. `import type` breaks Node→contract cycle only one way.
+- **2026-07-18** — Owner: ignore Host history; make a plan/order; **Unix socket tested first** before complex catalog/discovery; many API decisions still to make. Eng order rewritten Phase 1 IPC → 2 catalog → 3 discovery → 4 docs; decisions split by what they block.
