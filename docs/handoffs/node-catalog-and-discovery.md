@@ -330,7 +330,7 @@ Multi-protocol Node (endpoint set / `_tag` ADT) remains **X1 later** — not thi
 ## Bake thoughts (2026-07-18) — Tags, managers, lookup
 
 > Everything below is **THOUGHT** / plan sketch unless marked otherwise.  
-> **Actually LOCKED in this program so far:** Phase 1 **I1–I5** only.
+> **Actually LOCKED in this program so far:** Phase 1 **I1–I5**, **L1**, **X5**, **S1** (see tables above).
 
 ### Tags + node sets (C1 bake — unfinished)
 

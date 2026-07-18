@@ -1873,6 +1873,17 @@ export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired
 }> {}
 
 /**
+ * Identity-stamped Tags may carry at most one Node (S1). Multi-node fleets use ordinary Tags +
+ * {@link distributed} / peers — not identity.
+ *
+ * @public
+ */
+export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
+  readonly tag: string;
+  readonly nodeCount: number;
+}> {}
+
+/**
  * Options for {@link layer} / {@link serve} when the tag is {@link identity}-stamped.
  *
  * @public
@@ -1883,6 +1894,16 @@ export type IdentityLayerOptions = {
    * when present. Required when the tag is nodeless.
    */
   readonly self?: AnyNode;
+};
+
+/** Throw when an identity Tag would carry more than one fleet Node. @internal */
+const assertIdentityNodeCount = (
+  tag: { readonly key: string },
+  nodes: ReadonlyArray<AnyNode>,
+): void => {
+  if (nodes.length > 1) {
+    throw new IdentityMultiNode({ tag: tag.key, nodeCount: nodes.length });
+  }
 };
 
 /** A resource tag identifier — {@link Context.Service} tags carry `Service` and `Spec`. @internal */
@@ -4354,8 +4375,13 @@ export const distributed: {
   ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T =>
-    Object.assign(tag, { [nodesSym]: nodes }),
+  <T extends ResourceTag<any, any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T => {
+    // S1: identity handles are one Node at a time — multi-node fleets stay on non-identity Tags.
+    if (isIdentity(tag)) {
+      assertIdentityNodeCount(tag, nodes);
+    }
+    return Object.assign(tag, { [nodesSym]: nodes });
+  },
 );
 
 /**
@@ -4387,8 +4413,19 @@ export const distributedOf = <Self, S extends Spec>(
  */
 export const identity = <T extends PipeableTag>(
   tag: T,
-): T & { readonly [identitySym]: true } =>
-  Object.assign(tag, { [identitySym]: true as const });
+): T & { readonly [identitySym]: true } => {
+  // S1: refuse identity on a Tag that already carries a multi-node fleet.
+  if (
+    (typeof tag === "object" || typeof tag === "function") &&
+    tag !== null &&
+    "key" in tag
+  ) {
+    const fleet =
+      (tag as { readonly [nodesSym]?: ReadonlyArray<AnyNode> })[nodesSym] ?? [];
+    assertIdentityNodeCount(tag as { readonly key: string }, fleet);
+  }
+  return Object.assign(tag, { [identitySym]: true as const });
+};
 
 /**
  * True when `tag` was piped through {@link identity}.

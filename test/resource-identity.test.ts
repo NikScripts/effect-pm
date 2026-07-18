@@ -24,6 +24,43 @@ describe("Resource.identity", () => {
     expect(Resource.isIdentity(Mail)).toBe(true);
   });
 
+  it("rejects multi-node distributed on an identity Tag (S1)", () => {
+    class A extends Resource.Node<A>("identity/multi-a", {
+      path: "/tmp/identity-multi-a.sock",
+    }) {}
+    class B extends Resource.Node<B>("identity/multi-b", {
+      path: "/tmp/identity-multi-b.sock",
+    }) {}
+    class Solo extends Resource.Tag<Solo>()("identity/Solo", {
+      ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+    }).pipe(Resource.identity) {}
+
+    expect(() => Solo.pipe(Resource.distributed([A, B]))).toThrow(
+      Resource.IdentityMultiNode,
+    );
+
+    class Fleet extends Resource.Tag<Fleet>()("identity/Fleet", {
+      ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+    }).pipe(Resource.distributed([A, B])) {}
+
+    expect(() => Fleet.pipe(Resource.identity)).toThrow(
+      Resource.IdentityMultiNode,
+    );
+  });
+
+  it("allows a single-node fleet overwrite on identity", () => {
+    class One extends Resource.Node<One>("identity/one", {
+      path: "/tmp/identity-one.sock",
+    }) {}
+    class Solo extends Resource.Tag<Solo>()("identity/SoloOne", {
+      ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+    }).pipe(Resource.identity) {}
+
+    const stamped = Solo.pipe(Resource.distributed([One]));
+    expect(Resource.isIdentity(stamped)).toBe(true);
+    expect(Resource.distributedOf(stamped)).toHaveLength(1);
+  });
+
   it("fails closed without a dialable self", () =>
     Effect.runPromise(
       Effect.gen(function* () {
