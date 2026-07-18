@@ -341,12 +341,25 @@ Sketch:
 - Essentially discovery, but **don’t require** starting a separate dedicated server.
 - Self-election sketch: each node looks; if **no lookup server** is present, **one node takes the lookup job**.
 
-Open tension (unresolved):
+**Managers stream into lookup (THOUGHT — owner 2026-07-18):**
 
-- Lookup (membership + address + maybe “who serves X”) vs Manager (custom placement algorithm Resource).
-- Whether lookup is a built-in capability, a special Resource, or the discovery registry by another name.
-- How self-election stays simple without becoming Cluster leader election.
-- How much we can still prove at **compile** time within one graph vs must verify at **runtime** across processes.
+```text
+Manager(s) on fleet nodes  --stream advice/metrics-->  Lookup
+Client  --"where for Mail?"-->  Lookup  --picks Node using streams-->  Client dials that Node
+```
+
+- Managers stay ordinary Resources (algorithm is yours); they **push** “which node should get work” (or the inputs for that) to the lookup.
+- Lookup owns **client-facing placement**: membership/address **plus** load balancing fed by those streams.
+- Clients talk to **lookup**, not to managers, for “which Node.”
+- Many managers become OK: they are producers into one lookup view; uniqueness pressure moves to **lookup** (one dial target for “where”), which matches the self-elected single lookup sketch better than “exactly one manager.”
+
+Unresolved under this sketch:
+
+- Stream payload: ready-made `{ prefer: nodeKey }` vs raw metrics lookup aggregates.
+- Stale/dead manager streams — timeout, remove weight, fall back to round-robin / any serve.
+- Lookup failover (self-elect next) — in-memory LB state is lost unless replayed from manager streams.
+- Whether lookup is built-in vs a special Resource; whether discovery registry and lookup are the same process.
+- Compile-time: prove at most one lookup in a **local** graph; cross-runtime still runtime ads (“who is lookup”).
 
 ### `serve` → `expose` (OPEN / C5)
 
@@ -377,3 +390,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18** — Owner: ignore Host history; make a plan/order; **Unix socket tested first** before complex catalog/discovery; many API decisions still to make. Eng order rewritten Phase 1 IPC → 2 catalog → 3 discovery → 4 docs; decisions split by what they block.
 - **2026-07-18** — Owner: **build IPC**, then lock plan/API; bring back bake sessions. Phase 1 Eng shipped (`ipc` kind, `{ path }`, `ipcServer` / `connectIpc` / `protocolIpc` / `ipcClient`, tests). I1–I5 locked. Bake sessions noted for C*/D*.
 - **2026-07-18 (bake)** — Owner: one idea at a time (related Qs OK). C1 discussion: Tags may carry node sets; class-extends-pipe pristine base; `nodes` overwrite + `andNode` add; reject agent’s “home” framing; multi-node nodeless already shipped via `distributed`. Placement / LB → manager sketches → owner: managers = Resources (`Resource.Manager` sketch), algorithm is yours not a fixed `leastWork`; no Protocol type param on Node; multi-manager compile limits across runtimes hurt; possible mix-up of **lookup/DNS** vs managers; self-electing lookup node so no mandatory separate DNS process; ask about `serve`→`expose`. Owner: **note as thoughts; careful what is locked.** Doc marks updated: C*/D* OPEN; only I1–I5 LOCKED.
+- **2026-07-18 (bake)** — Owner THOUGHT: managers **stream** to the lookup which node should get work; lookup does load balancing for clients. Still not locked.
