@@ -284,6 +284,38 @@ Tests: `test/resource-ipc.test.ts`.
 | **X2** | Product rename away from “Resource” | **Parked** |
 | **X3** | Docs: handoff-only vs draft guide now | Handoff SSOT now |
 | **X4** | `Protocol` as Node **type param** | **Rejected as idea** (owner): value-level `kind` + address is SSOT — typing protocol twice drifts. Not a formal bake-row lock; do not re-propose. |
+| **X5** | Protocol kind strings → `_tag`-style names following Effect layers | **THOUGHT** — see [Protocol tags](#protocol-tags-thought--naming). Not locked; would be a breaking rename from `"http" \| "socket" \| "ipc"`. |
+
+### Protocol tags (THOUGHT — naming)
+
+Owner: prefer descriptive tags like `_tag: "WebSocket"`; nobody types `ProtocolKind` out. Effect layer names are confusing but **follow them as best we can**.
+
+Effect (pinned `effect` package) actually has:
+
+| Side | Layer | Rough meaning |
+|------|-------|----------------|
+| Client | `RpcClient.layerProtocolHttp` | HTTP RPC |
+| Client | `RpcClient.layerProtocolSocket` | framed RPC over a duplex socket (**also** what we use under WS *and* UDS) |
+| Client | `RpcClient.layerProtocolWorker` | worker |
+| Server | `RpcServer.layerProtocolHttp` | HTTP RPC |
+| Server | `RpcServer.layerProtocolWebsocket` | WebSocket RPC (Effect spelling: **Websocket**) |
+| Server | `RpcServer.layerProtocolSocketServer` | raw socket server (UDS/TCP) |
+| Server | `RpcServer.layerProtocolStdio` | stdio |
+| Server | `RpcServer.layerProtocolWorkerRunner` | worker runner |
+
+Today we ship `"http" | "socket" | "ipc"` where `"socket"` means **WebSocket** (and our helper is already `protocolWebsocket`). That fights both English and server layer names.
+
+**Rename lean (THOUGHT — not locked):**
+
+| Role | Follow | Tag sketch | Notes |
+|------|--------|------------|--------|
+| HTTP | `layerProtocolHttp` | `"Http"` | Clear |
+| Browser / WS | `layerProtocolWebsocket` | `"Websocket"` (Effect spelling) or owner’s `"WebSocket"` | Prefer Effect’s **Websocket** if we swear “follow layers”; owner wrote WebSocket |
+| Same-machine UDS | no `layerProtocolIpc` — we use Socket+path | `"Socket"` vs keep `"Ipc"` | Effect’s client name **Socket** is overloaded (WS framing uses it too). `"Ipc"` is ours and clearer for `{ path }`; `"Socket"` matches `layerProtocolSocketServer` |
+
+Apps still mostly never write the tag — inference from `url` / `path` stays SSOT. Named export type (if kept) becomes a union of those tags; could be `_tag` fields later if we move to ADT addresses.
+
+**Do not Eng rename until explicitly unlocked** (breaks Node `kind`, tests, docs, changeset).
 
 ---
 
@@ -407,3 +439,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner THOUGHT: managers **stream** to the lookup which node should get work; lookup does load balancing for clients. Still not locked.
 - **2026-07-18 (bake)** — Owner THOUGHTS: lookup catches duplicate managers (first wins, error + original address); Manager ctor = single node + resources it manages; Node ctor `lookup` param (self or point at lookup node); layer swap dupe→client for original; generalize lookup as **identity server**; `Resource.Singleton` first (build/test before managers); maybe Singleton ≡ Manager; **dedupe by key only** (not by what you manage — multiple manager kinds OK). Still not locked.
 - **2026-07-18 (bake)** — Owner ask: need value-level “resources it manages”, or type info only? THOUGHT lean: **types (+ optional impl enforce)**; identity stays key-only; no mandatory ctor Tag list. Still not locked.
+- **2026-07-18 (bake)** — Owner: prefer `_tag`-style protocol names (e.g. `"WebSocket"`); follow Effect layer names as best we can; noted nobody types `ProtocolKind` out. X5 thought added — not locked / not Eng’d.
