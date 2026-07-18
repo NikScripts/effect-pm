@@ -366,10 +366,58 @@ Later process starts same key K on Node B
   → B's layer **swaps** to a **client** of the original (A)
 ```
 
-**Who is the lookup node (THOUGHT):**
+**Who is the lookup node (THOUGHT — expanded 2026-07-18):**
 
-- Default: first node that finds none takes the job (self-elect).
-- Or explicit: Node constructor gets a **lookup** param — mark this Node as lookup, **or** pass the Node that is lookup (so others know where to claim).
+Owner push: maybe `Resource.LookupNode` (own constructor). Address-less / “nodeless” clients check in with lookup only; serving Nodes register into a map; managers stream LB data into that map. Defaults only where protocol/topology allows (localhost port / well-known `IpcSocket`); **explicit required where defaults are impossible** (cross-network).
+
+##### Split brain — safest race handling (agent analysis, not locked)
+
+Cross-network “two processes both elect” cannot be solved by politeness — without a shared exclusivity primitive you get two lookups. Safest policy is **tiered**:
+
+| Topology | Elect / default? | Exclusivity |
+|----------|------------------|-------------|
+| **Same machine** (`IpcSocket` well-known path, or localhost port bind) | Default OK | **OS bind wins** — second `listen`/`bind` fails (`EADDRINUSE`). That *is* the race resolver; no gossip election. Stale sock file: reuse Phase-1 unlink-before-bind carefully so unlink→bind stays one critical section per process; still only one binder succeeds. |
+| **Across network** | **No self-elect** | **Explicit LookupNode address required.** Two remote electors = split brain by definition unless we take on consensus (out of scope / Cluster-shaped). |
+
+Detecting “two lookups both reachable” (misconfig: two explicit addresses, or local default + a second manual lookup) is a **verify/warn** problem, not something elect can fix. Clients should use one configured/default dial target.
+
+**Failover:** re-electing after lookup death **reopens the same race** (and drops in-memory identity/LB until re-claim). Possible later; v1 lean = lookup restart is ops (same bind slot / same explicit address); Singletons re-claim on boot. Don’t pretend seamless leader failover without owning the race.
+
+##### Bootstrap + “explicit when defaults impossible” (owner ask: can we?)
+
+**Yes.** Encode as layers/types roughly:
+
+- `Lookup.layerDefaultLocal` (name sketch) — only legal for local defaults (`IpcSocket` path and/or `127.0.0.1:port`); implements bind-exclusive serve **or** dial that slot.
+- `LookupNode("…", { url | path })` / `Resource.LookupNode` — **address required** for non-default topologies.
+- Starting a graph that needs lookup with **neither** a local default applicable **nor** an explicit LookupNode → **compile or layer-build error**, not silent elect across the LAN.
+
+Protocol matters: http localhost port and `IpcSocket` path are defaultable; arbitrary remote http/ws is not.
+
+##### Dial / claim failure when lookup unreachable (owner: needs more thought)
+
+Sketch on the table (not locked):
+
+- **Default:** do **not** serve the Singleton locally if claim can’t complete (avoid silent double-serve).
+- **Config:** opt into “run locally anyway” and/or “error hard” — exact matrix still open.
+- “Run locally by default” is the dangerous one if two partitions each serve K.
+
+##### `LookupNode` + address-less / nodeless clients (owner)
+
+```text
+LookupNode (explicit or default-local bind)
+  ↑ check-in / register          ↑ claim Singleton keys
+Serving Nodes (may be address-less until advertised?)
+  → lookup builds map: nodeKey → address, serves[], …
+Managers (singletons?) stream LB advice into lookup
+Nodeless client
+  → only knows Lookup (default or explicit)
+  → asks for nodes/addresses for resources it uses
+  → dials winners
+```
+
+- **Address-less Nodes** (prior night): a Node need not bake a stable client-facing address at definition if lookup is how others find it — it checks in with address at runtime.
+- **Nodeless client** (name TBD): no Node stamp on Tags; dependency is **Lookup** (+ defaults for local). This is the blessed same-machine story if default `IpcSocket`/localhost lookup exists.
+- Replaces much of “stamp distributed on every Tag” for discovery-shaped apps; static `distributed` remains for fixed fleets / no lookup.
 
 **Layer swap (THOUGHT):** yes, in principle — a serve/local layer that fails identity claim becomes `client(Tag, originalNode)` (or equivalent) so the process still `yield* Tag` against the winner. Needs Eng design: claim at layer build / scope init; typed error carrying original address; no silent double-serve.
 
@@ -443,3 +491,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner ask: need value-level “resources it manages”, or type info only? THOUGHT lean: **types (+ optional impl enforce)**; identity stays key-only; no mandatory ctor Tag list. Still not locked.
 - **2026-07-18 (bake)** — Owner: prefer `_tag`-style protocol names (e.g. `"WebSocket"`); follow Effect layer names as best we can; noted nobody types `ProtocolKind` out. X5 thought added — not locked / not Eng’d.
 - **2026-07-18 (bake)** — Owner: UDS tag **`IpcSocket`** for clarity; Singleton: **`andNode` disabled**, override OK but **only one Node** at a time. Still not formal LOCKED rows / not Eng’d.
+- **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
