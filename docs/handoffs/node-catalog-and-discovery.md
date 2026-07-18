@@ -312,7 +312,7 @@ Tests: `test/resource-ipc.test.ts`.
 | Lookup down | **Fail-closed** — do not serve locally; orphan-serve opt-in later if ever. |
 | Node set | At most **one** Node on an identity handle; overwrite OK; **`andNode` disabled**. |
 
-**Eng:** not started — unlock when ready. Depends on shipped Lookup.claim.
+**Eng:** shipped — `Resource.identity` pipe; `layer` / `serve` claim then local or client-of-winner.
 
 ### Protocol tags (X5 — **LOCKED** 2026-07-18)
 
@@ -508,4 +508,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
 - **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerDefaultLocal / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
 - **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.
-- **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean recorded in chat (not locked): pipe on handle + `Resource.layer`/`serve` honor stamp; name lean `identity` or `unique`; no layer-only primary; fail-closed if Lookup down; self endpoint at layer v1.
+- **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean; owner “good enough for now.” **S1 LOCKED.**

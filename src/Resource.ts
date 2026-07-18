@@ -91,6 +91,8 @@ import {
   withRegistrationJournal,
   type StoreScopeTag,
 } from "./internal/store/registration";
+// Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
+import type { Identity as LookupIdentity } from "./Lookup";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -1698,6 +1700,11 @@ export const nodeSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/node",
 );
 
+/** Marks a Tag as identity-claiming ({@link identity} pipe) — layer/serve claim at Lookup first. @internal */
+export const identitySym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/identity",
+);
+
 // ── readiness: a derived view of a resource's status, aggregated into node /health + NodeStatus ──
 
 /**
@@ -1852,7 +1859,31 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   readonly [selfNodeSym]: Context.Key<SelfNodeId<Self>, string>;
   /** The fleet — the tag's `distributed` set, if declared (via {@link distributed}); else `undefined`. */
   readonly [nodesSym]?: ReadonlyArray<AnyNode>;
+  /** Set when the tag was piped through {@link identity} — layer/serve claim at Lookup first. */
+  readonly [identitySym]?: true;
 }
+
+/**
+ * Identity-claiming resources need a dialable {@link Node} (or explicit `self`) at layer/serve.
+ *
+ * @public
+ */
+export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired")<{
+  readonly tag: string;
+}> {}
+
+/**
+ * Options for {@link layer} / {@link serve} when the tag is {@link identity}-stamped.
+ *
+ * @public
+ */
+export type IdentityLayerOptions = {
+  /**
+   * This process's dialable Node (claim endpoint). Defaults to the tag's bound {@link Node}
+   * when present. Required when the tag is nodeless.
+   */
+  readonly self?: AnyNode;
+};
 
 /** A resource tag identifier — {@link Context.Service} tags carry `Service` and `Spec`. @internal */
 type TagIdentifier = { readonly Service: unknown };
@@ -2593,6 +2624,128 @@ const buildLocalContext = <Self>(
     ).pipe(Context.add(cap, { granted: true }));
   });
 
+/** Dialable self for an identity claim — kind + url or path. @internal */
+const isDialableSelf = (
+  self: AnyNode,
+): self is AnyNode & { readonly kind: ProtocolKind; readonly key: string } => {
+  if (self.kind === undefined || typeof self.key !== "string") {
+    return false;
+  }
+  if (self.kind === "IpcSocket") {
+    return self.path !== undefined;
+  }
+  return self.url !== undefined;
+};
+
+/** Resolve claim endpoint Node from options or the tag's bound node. @internal */
+const resolveIdentitySelf = (
+  tag: unknown,
+  options: IdentityLayerOptions | undefined,
+): AnyNode | undefined =>
+  options?.self ?? (nodeOf(tag) as AnyNode | undefined);
+
+/**
+ * Client layer dialing a Lookup winner's {@link Endpoint} — used when identity claim loses.
+ * @internal
+ */
+const clientLayerForEndpoint = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  endpoint: {
+    readonly nodeKey: string;
+    readonly kind: ProtocolKind;
+    readonly url?: string;
+    readonly path?: string;
+  },
+): Layer.Layer<Self> => {
+  const target =
+    endpoint.kind === "IpcSocket"
+      ? { path: endpoint.path as string, kind: "IpcSocket" as const }
+      : { url: endpoint.url as string, kind: endpoint.kind };
+  const node = makeNode(endpoint.nodeKey, target);
+  return clientLayer(tag, node).pipe(
+    Layer.provide(connect(node)),
+  ) as Layer.Layer<Self>;
+};
+
+/**
+ * Claim `tag.key` at Lookup — won → `onWon` layer; lost → client of `original`.
+ * Fail-closed: requires {@link LookupIdentity}; missing/unaddressed self → {@link IdentitySelfRequired}.
+ * @internal
+ */
+const identityClaimLayer = <Self, S extends Spec, A, E, R>(
+  tag: ResourceTag<Self, S>,
+  options: IdentityLayerOptions | undefined,
+  onWon: Layer.Layer<A, E, R>,
+): Layer.Layer<A | Self, E | IdentitySelfRequired, R | LookupIdentity> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const self = resolveIdentitySelf(tag, options);
+      if (self === undefined || !isDialableSelf(self)) {
+        return yield* new IdentitySelfRequired({ tag: tag.key });
+      }
+      const Lookup = yield* Effect.promise(() => import("./Lookup"));
+      const identity = yield* Lookup.Identity;
+      const outcome = yield* identity
+        .claim(
+          new Lookup.ClaimRequest({
+            key: tag.key,
+            nodeKey: self.key,
+            kind: self.kind,
+            ...(self.url !== undefined ? { url: self.url } : {}),
+            ...(self.path !== undefined ? { path: self.path } : {}),
+          }),
+        )
+        .pipe(
+          Effect.map((endpoint) => ({ _tag: "Won" as const, endpoint })),
+          Effect.catchTag("DuplicateIdentity", (duplicate) =>
+            Effect.succeed({
+              _tag: "Lost" as const,
+              original: duplicate.original,
+            }),
+          ),
+        );
+      if (outcome._tag === "Won") {
+        return onWon;
+      }
+      return clientLayerForEndpoint(tag, outcome.original) as Layer.Layer<
+        A | Self,
+        E,
+        R
+      >;
+    }),
+  ) as Layer.Layer<A | Self, E | IdentitySelfRequired, R | LookupIdentity>;
+
+/** Plain local layer — no identity claim. @internal */
+const localLayerPlain = <Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> => {
+  // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
+  const build = Effect.flatMap(
+    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
+    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
+  );
+  return Layer.effectContext(build) as Layer.Layer<
+    Self | Local<Self>,
+    never,
+    Exclude<R, Scope.Scope>
+  >;
+};
+
+function localLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
+  impl: ImplOf<S>,
+  options?: IdentityLayerOptions,
+): Layer.Layer<Self | Local<Self>, IdentitySelfRequired, LookupIdentity>;
+function localLayer<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
+  impl: Effect.Effect<ImplOf<S>, never, R>,
+  options?: IdentityLayerOptions,
+): Layer.Layer<
+  Self | Local<Self>,
+  IdentitySelfRequired,
+  Exclude<R, Scope.Scope> | LookupIdentity
+>;
 function localLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S>,
@@ -2604,17 +2757,21 @@ function localLayer<Self, S extends Spec, R>(
 function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> {
-  // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
-  const build = Effect.flatMap(
-    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
-    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
-  );
-  return Layer.effectContext(build) as Layer.Layer<
-    Self | Local<Self>,
-    never,
-    Exclude<R, Scope.Scope>
-  >;
+  options?: IdentityLayerOptions,
+): Layer.Layer<
+  Self | Local<Self>,
+  IdentitySelfRequired,
+  Exclude<R, Scope.Scope> | LookupIdentity
+> {
+  const plain = localLayerPlain(tag, impl);
+  if (!isIdentity(tag)) {
+    return plain as Layer.Layer<
+      Self | Local<Self>,
+      IdentitySelfRequired,
+      Exclude<R, Scope.Scope> | LookupIdentity
+    >;
+  }
+  return identityClaimLayer(tag, options, plain);
 }
 
 /**
@@ -2853,9 +3010,13 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  * Use the **`Effect` form** when the impl needs a capability to build (resolve `peers` / a pool once; the
  * members close over it) — `R` is discharged here, shared by both the grant and the handlers.
  *
+ * When `tag` is {@link identity}-stamped, claims at Lookup first (see {@link layer}): winner serves
+ * locally; loser becomes a client of the winner (no handlers). Pass dialable `options.self` when the
+ * tag has no bound {@link Node}.
+ *
  * @public
  */
-export const serve = <Self, S extends Spec, R = never>(
+const servePlain = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
   impl:
     | ImplOf<S>
@@ -2866,8 +3027,9 @@ export const serve = <Self, S extends Spec, R = never>(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
       if (isBuiltResource(built)) {
         const bundle = built as BuiltResource<S, R>;
+        // Plain local — identity claim (if any) already happened in {@link serve}.
         return Layer.merge(
-          localLayer(tag, grantLocal(tag, bundle)),
+          localLayerPlain(tag, grantLocal(tag, bundle)),
           serveRemote(tag, bundle as any) as unknown as Layer.Layer<
             HandlerContextOf<S>,
             never,
@@ -2877,7 +3039,7 @@ export const serve = <Self, S extends Spec, R = never>(
       }
       const granted = built as ImplOf<S>;
       return Layer.merge(
-        localLayer(tag, granted),
+        localLayerPlain(tag, granted),
         // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
         // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
         // `R` was discharged by the Effect form above, so the handlers are requirement-free.
@@ -2889,6 +3051,27 @@ export const serve = <Self, S extends Spec, R = never>(
       );
     }),
   );
+
+export const serve = <Self, S extends Spec, R = never>(
+  tag: ResourceTag<Self, S>,
+  impl:
+    | ImplOf<S>
+    | BuiltResource<S, R>
+    | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
+  options?: IdentityLayerOptions,
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
+  const plain = servePlain(tag, impl);
+  if (!isIdentity(tag)) {
+    return plain;
+  }
+  // Identity path requires Lookup.Identity at runtime (fail-closed). Kept off the public
+  // `R` channel so plain `serve` stays TS2589-free (ResourceTag & identity brand blows up).
+  return identityClaimLayer(tag, options, plain) as Layer.Layer<
+    Self | Local<Self> | HandlerContextOf<S>,
+    never,
+    R
+  >;
+};
 
 /** Options for {@link httpServer}. @public */
 export interface HttpServerOptions {
@@ -4185,6 +4368,38 @@ export const distributed: {
 export const distributedOf = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
 ): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
+
+/**
+ * Mark a Tag as **identity-claiming** (S1): {@link layer} / {@link serve} claim the resource key at
+ * Lookup first — winner runs the local impl; loser becomes a client of the winner's endpoint.
+ * Requires {@link LookupIdentity} in the layer graph (fail-closed if Lookup is down).
+ *
+ * Pipe onto any Resource / Process / Queue tag (same shape as {@link withReadiness}):
+ *
+ * ```ts
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(Resource.identity) {}
+ *
+ * // winner / loser both compose the same way — only Lookup decides:
+ * Resource.serve(Mail, impl, { self: ThisNode }).pipe(Layer.provide(Lookup.client(lookupNode)))
+ * ```
+ *
+ * @public
+ */
+export const identity = <T extends PipeableTag>(
+  tag: T,
+): T & { readonly [identitySym]: true } =>
+  Object.assign(tag, { [identitySym]: true as const });
+
+/**
+ * True when `tag` was piped through {@link identity}.
+ *
+ * @public
+ */
+export const isIdentity = (tag: unknown): boolean =>
+  (typeof tag === "object" || typeof tag === "function") &&
+  tag !== null &&
+  identitySym in (tag as object) &&
+  (tag as { readonly [identitySym]?: true })[identitySym] === true;
 
 /**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
