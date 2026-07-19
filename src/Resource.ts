@@ -4919,11 +4919,24 @@ export const isIdentity = (tag: unknown): boolean =>
   (tag as { readonly [identitySym]?: true })[identitySym] === true;
 
 /**
- * Nodeless client via Lookup (D7): resolve identity claim, else directory `nodesServing`.
- * Exactly one dial target required — missing or ambiguous → {@link LookupClientError}.
+ * **Lookup-resolved nodeless client** (D7) — you do **not** pass a {@link Node}; Lookup
+ * chooses the dial target. Contrast {@link client}`(Tag, node)`, where **you** name the Node.
+ *
+ * Resolution order: {@link Lookup.Identity}`resolve(tag.key)`, else
+ * {@link Lookup.Directory}`nodesServing(tag.key)`. **Fail-closed:** missing or more than one
+ * directory row → {@link LookupClientError} (no silent pick). Soft / multi-replica pick is
+ * **not** this API (D4 OPEN) — use `client(Tag, node)`, peers, or an explicit Node from the
+ * directory when N>1.
+ *
+ * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); shipped name is
+ * `lookupClient` with the same fail-closed contract.
  *
  * ```ts
+ * // Lookup finds the sole Mail endpoint (identity winner or one directory row):
  * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+ *
+ * // You already know the Node — prefer explicit dial:
+ * Resource.client(Mail, East).pipe(Layer.provide(Resource.connect(East)))
  * ```
  *
  * @public
