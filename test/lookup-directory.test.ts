@@ -1,4 +1,4 @@
-import { Clock, Context, Duration, Effect, Exit, Layer, Schema } from "effect";
+import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";

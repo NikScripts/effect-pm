@@ -300,15 +300,18 @@ const incumbentAlive = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
+  // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
   const probe = Effect.gen(function* () {
-    const status = yield* NodeStatus.Tag;
-    yield* status.ping;
-  }).pipe(
-    Effect.provide(Resource.client(NodeStatus.Tag, target)),
-    Effect.provide(Resource.connect(target)),
-    Effect.scoped,
-    Effect.timeout(Duration.seconds(2)),
-  );
+    const ctx = yield* Layer.build(
+      Resource.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Resource.connect(target)),
+      ),
+    );
+    yield* Effect.gen(function* () {
+      const status = yield* NodeStatus.Tag;
+      yield* status.ping;
+    }).pipe(Effect.provide(ctx));
+  }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(2)));
   return Effect.map(Effect.exit(probe), Exit.isSuccess);
 };
 
@@ -416,7 +419,7 @@ export const directoryAdvertiseLayer = (
   node: AnyNode & { readonly key: string },
   serves: ReadonlyArray<string>,
 ): Layer.Layer<never, IncumbentAlive> =>
-  Layer.scopedDiscard(
+  Layer.effectDiscard(
     Effect.gen(function* () {
       const dirOpt = yield* Effect.serviceOption(Directory);
       if (Option.isNone(dirOpt)) {
