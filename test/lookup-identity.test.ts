@@ -13,8 +13,8 @@ const tmpSock = (label: string) =>
 /** Server Context first, then client — avoids listen/connect race. */
 const withLookup = <A, E>(
   server: Layer.Layer<never>,
-  client: Layer.Layer<Lookup.Identity>,
-  use: Effect.Effect<A, E, Lookup.Identity>,
+  client: Layer.Layer<Lookup.Identity | Lookup.Directory>,
+  use: Effect.Effect<A, E, Lookup.Identity | Lookup.Directory>,
 ) =>
   Effect.gen(function* () {
     const serverCtx = yield* Layer.build(server);

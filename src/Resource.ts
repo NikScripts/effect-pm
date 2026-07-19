@@ -3134,6 +3134,12 @@ export interface HttpServerOptions {
    * bound {@link Node} when all share one key.
    */
   readonly node?: string | { readonly key: string };
+  /**
+   * Soft Lookup directory advertise after serve registration (`Resource.listen` only).
+   *
+   * @internal
+   */
+  readonly advertiseNode?: AnyNode & { readonly key: string };
 }
 
 /** A server RPC-protocol builder — {@link serverProtocolHttp} or {@link serverProtocolWebsocket}. */
@@ -3237,11 +3243,35 @@ const httpServerBase = (
           );
         }),
       );
-      return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
+      const served = HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
         Layer.provideMerge(options?.serialization ?? defaultSerialization),
       );
+      const advertise = yield* directoryAdvertiseMerge(
+        options?.advertiseNode,
+        entries,
+      );
+      return served.pipe(Layer.provideMerge(advertise));
     }),
   ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
+
+/**
+ * Soft Lookup directory advertise layer after serve registration (`listen` via `advertiseNode`).
+ * @internal
+ */
+const directoryAdvertiseMerge = (
+  advertiseNode: (AnyNode & { readonly key: string }) | undefined,
+  entries: ReadonlyArray<ServedResource>,
+): Effect.Effect<Layer.Layer<never>> => {
+  if (advertiseNode === undefined) {
+    return Effect.succeed(Layer.empty);
+  }
+  const serves = entries.map((entry) => entry.groupId);
+  return Effect.map(
+    Effect.promise(() => import("./Lookup")),
+    (Lookup) =>
+      Lookup.directoryAdvertiseLayer(advertiseNode, serves) as Layer.Layer<never>,
+  );
+};
 
 // Array form of `Layer.mergeAll` (which needs a non-empty *tuple*): fold the list into one layer. The
 // `httpServer` overload guarantees a non-empty list; untyped plumbing behind that typed overload.
@@ -3412,6 +3442,12 @@ export interface IpcServerOptions {
    * Clears stale `.sock` files from a previous crash so listen does not fail with EADDRINUSE.
    */
   readonly unlink?: boolean;
+  /**
+   * Soft Lookup directory advertise after serve registration (`Resource.listen` only).
+   *
+   * @internal
+   */
+  readonly advertiseNode?: AnyNode & { readonly key: string };
 }
 
 /**
@@ -3507,7 +3543,8 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
 
 /**
  * Catalog-proving server entry (C2): require serve layers that cover the node's `ROut`, then
- * dispatch to {@link ipcServer} / {@link wsServer} / {@link httpServer} from `node.kind`.
+ * dispatch to ipc / ws / http transport from `node.kind`. When {@link Lookup.Directory} is
+ * provided, advertises derived `serves[]` and unregisters on clean scope close (D5/D6).
  *
  * Http / WebSocket still need the caller to `Layer.provide(NodeHttpServer.layer(...))` — bind port
  * is not `node.url` (dial address). Ipc uses `node.path` for bind and dial.
@@ -3521,7 +3558,7 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  * const live = Resource.listen(Worker, [
  *   Resource.serve(Jobs, jobsImpl),
  *   Resource.serve(Emails, emailsImpl),
- * ])
+ * ]).pipe(Layer.provide(Lookup.clientDefaultLocal()))
  * ```
  *
  * Escape hatch without a catalog: keep calling `httpServer` / `wsServer` / `ipcServer` directly.
@@ -3546,9 +3583,10 @@ export function listen(
   options?: ListenOptions,
 ): Layer.Layer<never, never, unknown> {
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
+  const advertiseNode = node as AnyNode & { readonly key: string };
   const httpOpts: HttpServerOptions | undefined =
     options === undefined
-      ? undefined
+      ? { advertiseNode }
       : {
           ...(options.path !== undefined ? { path: options.path } : {}),
           ...(options.serialization !== undefined
@@ -3556,7 +3594,10 @@ export function listen(
             : {}),
           ...(options.health !== undefined ? { health: options.health } : {}),
           ...(options.node !== undefined ? { node: options.node } : {}),
+          advertiseNode,
         };
+  // Catalog listen: transport + soft Lookup directory advertise (D5/D6). Raw `*Server`
+  // helpers stay advertise-free unless `advertiseNode` is passed. Directory absent ⇒ local-only.
   if (node.kind === "IpcSocket") {
     if (node.path === undefined) {
       throw new UnaddressedNode({ node: node.key });
@@ -3568,6 +3609,7 @@ export function listen(
         ? { serialization: options.serialization }
         : {}),
       ...(options?.node !== undefined ? { node: options.node } : {}),
+      advertiseNode,
     });
   }
   if (node.kind === "WebSocket") {
@@ -3711,17 +3753,24 @@ const ipcServerBase = (
           NodeSocketServer.layer({ path: options.path }).pipe(Layer.orDie),
         ),
       );
-      return fsCtx !== undefined
-        ? rpc.pipe(
-            Layer.provideMerge(
-              Layer.effectDiscard(
-                Effect.addFinalizer(() =>
-                  Effect.provide(unlinkBestEffort(options.path), fsCtx),
+      const withUnlink =
+        fsCtx !== undefined
+          ? rpc.pipe(
+              Layer.provideMerge(
+                Layer.effectDiscard(
+                  Effect.addFinalizer(() =>
+                    Effect.provide(unlinkBestEffort(options.path), fsCtx),
+                  ),
                 ),
               ),
-            ),
-          )
-        : rpc;
+            )
+          : rpc;
+      // After serve registration (+ socket bind layer composed): soft Lookup advertise.
+      const advertise = yield* directoryAdvertiseMerge(
+        options.advertiseNode,
+        entries,
+      );
+      return withUnlink.pipe(Layer.provideMerge(advertise));
     }),
   ) as unknown as Layer.Layer<never, never, ServedResources>;
 

@@ -6,18 +6,22 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — Phase-3 directory slice LOCKED + Eng unlocked
+
+- **Owner said:** “lol yes” to write leans then lock subset + unlock smallest Eng (advertise/list, unregister, `livenessReplace`).
+- **Chose (LOCKED — directory slice):**
+  - **D5:** Node directory on the **same Lookup server** as `Identity.claim`, **separate RPCs**.
+  - **D6:** Duplicate `nodeKey` → default **`livenessReplace`**; **unregister** on clean listen close; **`serves[]` from listen** serve list.
+  - **D2:** Conflict probe = existing **NodeStatus `ping`** (timeout ⇒ dead); no v1 heartbeats.
+- **Still LEAN:** Prototypes / `NodeServer` / bare `distributed` / `peersLayer` directory read (D3/D7); `askIncumbent` handoff preset.
+- **Rejected / deferred:** Separate discovery process; default `lastWins` orphan; http default Lookup v1.
+- **Supervisor impact:** Eng unlocked on tip for Lookup directory + listen advertise/unregister wiring. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — Phase-3 discovery / prototype bake (LEAN — owner agreed)
 
 - **Owner said:** Bake Phase 3 with details/code; clarify claim vs directory; first-wins already shipped for identity; duplicate advertise / handoff presets; agree leans; write to handoff as LEAN.
-- **Chose (LEAN, not formal LOCKED rows):**
-  - **Directory** on the **same Lookup server** as `Identity.claim`, **separate RPCs** (`advertise` / list-by-serves — names TBD). Do not overload `claim` for fleets.
-  - **`serves[]`** derived from `listen` / `NodeServer` serve list; **unregister** on clean listen scope close.
-  - Duplicate `nodeKey` advertise default **`livenessReplace`** (RPC ping = existing **NodeStatus/readiness**); **`askIncumbent`** opt-in later; **`reject`** for strict roles; **not** default orphan `lastWins`.
-  - **Prototype** + **`make(name, addr)`** (address required); wire key `prototypeKey#name` / dynamic `#suffix`; **`NodeServer<N>`** type-only for **any** Node with `ROut`; app shape data-first `Resource.listen(clone, serves)`.
-  - Address-less **non-prototype** Node = singleton via **claim**; bare `.pipe(Resource.distributed)` ≡ `nodes([])`; `peersLayer` reads directory when membership empty.
-  - v1 Lookup default **ipc only**; local http without Lookup = fixed concrete `nodes`.
-- **Rejected / deferred:** Directory as a separate service process; default last-wins orphan; auto `client(Tag)` LB across N instances; http default Lookup in v1; compile-time Prototype⇒Lookup brand (layer-build first).
-- **Supervisor impact:** No Eng until owner marks LOCKED / unlocks a slice. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) Phase-3 bake section.
+- **Chose (LEAN):** Prototype / `make(name, addr)` / `NodeServer<N>`; bare `distributed` ≡ `nodes([])`; address-less non-proto via claim; ipc default only; etc. (see catalog handoff Phase-3 bake).
+- **Supervisor impact:** Superseded in part by directory LOCKED entry above; prototype Eng still gated on LEAN.
 
 ## 2026-07-19 — Catalog C2 / C3 / C4 locked (continue bake)
 

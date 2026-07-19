@@ -1,18 +1,21 @@
 /**
- * Lookup — identity server for resource keys (first claim wins).
+ * Lookup — identity claims (first wins) + node directory (advertise / list).
  *
  * Same-machine default: bind a well-known {@link Resource} `ipc` path (OS exclusivity).
  * Cross-network: pass an explicit {@link LookupNode} with an address — no self-elect (L1).
  *
- * v1 surface: **claim** over IPC (first wins / {@link DuplicateIdentity}). Resolve/getClaim,
- * nodeless clients, check-in maps, manager LB streams, and Singleton layer-swap are follow-ons.
+ * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
+ * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
+ *   `nodeKey` uses **livenessReplace**: ping incumbent {@link NodeStatus} `ping`; alive →
+ *   {@link IncumbentAlive}; dead/unreachable → replace row.
  *
  * @module Lookup
  * @since 0.8.0
  */
-import { Data, Effect, Layer, Schema } from "effect";
+import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
 import type { AnyNode, ProtocolKind } from "./Resource";
+import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
 
 // ============================================================================
@@ -20,7 +23,7 @@ import * as internal from "./internal/lookup";
 // ============================================================================
 
 /**
- * Where a winning claimant lives — node key + transport address.
+ * Where a winning claimant / advertised node lives — node key + transport address.
  *
  * @public
  */
@@ -58,6 +61,69 @@ export class DuplicateIdentity extends Schema.TaggedErrorClass<DuplicateIdentity
 ) {}
 
 /**
+ * Directory row — dial target plus resource keys this node serves (`listen` catalog).
+ *
+ * @public
+ */
+export class DirectoryEntry extends Schema.Class<DirectoryEntry>("LookupDirectoryEntry")({
+  nodeKey: Schema.String,
+  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
+  url: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
+  serves: Schema.Array(Schema.String),
+}) {}
+
+/**
+ * Advertise / refresh a directory row.
+ *
+ * @public
+ */
+export class AdvertiseRequest extends Schema.Class<AdvertiseRequest>(
+  "LookupAdvertiseRequest",
+)({
+  nodeKey: Schema.String,
+  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
+  url: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
+  serves: Schema.Array(Schema.String),
+}) {}
+
+/**
+ * Unregister payload — remove a directory row by `nodeKey`.
+ *
+ * @public
+ */
+export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
+  "LookupUnregisterRequest",
+)({
+  nodeKey: Schema.String,
+}) {}
+
+/**
+ * List nodes that advertised a given resource key in `serves`.
+ *
+ * @public
+ */
+export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
+  "LookupNodesServingRequest",
+)({
+  resourceKey: Schema.String,
+}) {}
+
+/**
+ * Advertise rejected — an incumbent with the same `nodeKey` still answers NodeStatus ping.
+ *
+ * @public
+ */
+export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
+  "IncumbentAlive",
+  {
+    nodeKey: Schema.String,
+    incumbent: DirectoryEntry,
+  },
+) {}
+
+/**
  * {@link LookupNode} has no dialable address (need `{ path }` / url, or use {@link layerDefaultLocal}).
  *
  * @public
@@ -67,10 +133,10 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
 }> {}
 
 // ============================================================================
-// Contract
+// Contracts
 // ============================================================================
 
-/** Canonical kind stamped on {@link Identity}. @public */
+/** Canonical kind stamped on Lookup resources. @public */
 export const kind = "@nikscripts/effect-pm/Lookup";
 
 const identitySpec = {
@@ -85,13 +151,48 @@ const identitySpec = {
 };
 
 /**
- * Lookup identity service — claim / resolve resource keys.
+ * Lookup identity service — claim resource keys (first wins).
  *
  * @public
  */
 export class Identity extends Resource.Tag<Identity>()(
   "@nikscripts/effect-pm/Lookup/Identity",
   identitySpec,
+  { kind },
+) {}
+
+const directorySpec = {
+  advertise: Resource.effectFn({
+    payload: AdvertiseRequest,
+    success: DirectoryEntry,
+    error: IncumbentAlive,
+  }).annotate({
+    description:
+      "Register or refresh a node directory row. Same dial target refreshes serves; " +
+      "a different dial target runs livenessReplace (NodeStatus.ping on the incumbent).",
+  }),
+  unregister: Resource.effectFn({
+    payload: UnregisterRequest,
+    success: Schema.Boolean,
+  }).annotate({
+    description: "Remove a directory row by nodeKey (clean listen scope close).",
+  }),
+  nodesServing: Resource.effectFn({
+    payload: NodesServingRequest,
+    success: Schema.Array(DirectoryEntry),
+  }).annotate({
+    description: "List advertised nodes whose serves[] includes resourceKey.",
+  }),
+};
+
+/**
+ * Lookup node directory — advertise / unregister / list by served resource key.
+ *
+ * @public
+ */
+export class Directory extends Resource.Tag<Directory>()(
+  "@nikscripts/effect-pm/Lookup/Directory",
+  directorySpec,
   { kind },
 ) {}
 
@@ -141,10 +242,25 @@ export const isLookupNode = (
   node !== null &&
   (node as { readonly isLookupNode?: boolean }).isLookupNode === true;
 
+// ============================================================================
+// Codec helpers
+// ============================================================================
+
 const toEndpoint = (stored: internal.StoredEndpoint): Endpoint =>
   new Endpoint({
     nodeKey: stored.nodeKey,
     kind: stored.kind,
+    ...(stored.url !== undefined ? { url: stored.url } : {}),
+    ...(stored.path !== undefined ? { path: stored.path } : {}),
+  });
+
+const toDirectoryEntry = (
+  stored: internal.StoredDirectoryEntry,
+): DirectoryEntry =>
+  new DirectoryEntry({
+    nodeKey: stored.nodeKey,
+    kind: stored.kind,
+    serves: [...stored.serves],
     ...(stored.url !== undefined ? { url: stored.url } : {}),
     ...(stored.path !== undefined ? { path: stored.path } : {}),
   });
@@ -156,14 +272,54 @@ const storedFromClaim = (req: ClaimRequest): internal.StoredEndpoint => ({
   ...(req.path !== undefined ? { path: req.path } : {}),
 });
 
-/** Identity impl over a fresh in-memory registry. */
-const identityServeLayer = () =>
+const storedFromAdvertise = (
+  req: AdvertiseRequest,
+): internal.StoredDirectoryEntry => ({
+  nodeKey: req.nodeKey,
+  kind: req.kind,
+  serves: [...req.serves],
+  ...(req.url !== undefined ? { url: req.url } : {}),
+  ...(req.path !== undefined ? { path: req.path } : {}),
+});
+
+/** Ping incumbent via NodeStatus.ping — true if reachable within timeout. */
+const incumbentAlive = (
+  entry: internal.StoredDirectoryEntry,
+): Effect.Effect<boolean> => {
+  const target =
+    entry.kind === "IpcSocket" && entry.path !== undefined
+      ? Resource.Node(`@pm/lookup-ping/${entry.nodeKey}`, {
+          path: entry.path,
+        })
+      : entry.url !== undefined
+        ? Resource.Node(`@pm/lookup-ping/${entry.nodeKey}`, {
+            url: entry.url,
+            kind: entry.kind,
+          })
+        : undefined;
+  if (target === undefined) {
+    return Effect.succeed(false);
+  }
+  const probe = Effect.gen(function* () {
+    const status = yield* NodeStatus.Tag;
+    yield* status.ping;
+  }).pipe(
+    Effect.provide(Resource.client(NodeStatus.Tag, target)),
+    Effect.provide(Resource.connect(target)),
+    Effect.scoped,
+    Effect.timeout(Duration.seconds(2)),
+  );
+  return Effect.map(Effect.exit(probe), Exit.isSuccess);
+};
+
+/** Identity + Directory impl over one shared in-memory registry pair. */
+const lookupServeLayers = () =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const registry = yield* internal.makeRegistry();
-      return Resource.serve(Identity, {
+      const registries = yield* internal.makeRegistries();
+      const identity = Resource.serve(Identity, {
         claim: (req: ClaimRequest) =>
-          registry.claim(req.key, storedFromClaim(req)).pipe(
+          registries.claims.claim(req.key, storedFromClaim(req)).pipe(
             Effect.flatMap((outcome) =>
               outcome._tag === "Duplicate"
                 ? Effect.fail(
@@ -176,11 +332,38 @@ const identityServeLayer = () =>
             ),
           ),
       });
+      const directory = Resource.serve(Directory, {
+        advertise: (req: AdvertiseRequest) =>
+          Effect.gen(function* () {
+            const next = storedFromAdvertise(req);
+            const prior = yield* registries.directory.get(req.nodeKey);
+            if (Option.isSome(prior)) {
+              if (!internal.sameDialTarget(prior.value, next)) {
+                const alive = yield* incumbentAlive(prior.value);
+                if (alive) {
+                  return yield* new IncumbentAlive({
+                    nodeKey: req.nodeKey,
+                    incumbent: toDirectoryEntry(prior.value),
+                  });
+                }
+              }
+            }
+            const stored = yield* registries.directory.set(next);
+            return toDirectoryEntry(stored);
+          }),
+        unregister: (req: UnregisterRequest) =>
+          registries.directory.remove(req.nodeKey),
+        nodesServing: (req: NodesServingRequest) =>
+          registries.directory.nodesServing(req.resourceKey).pipe(
+            Effect.map((entries) => entries.map(toDirectoryEntry)),
+          ),
+      });
+      return Layer.mergeAll(identity, directory);
     }),
   );
 
 /**
- * Serve {@link Identity} on a Unix-domain path (same-machine lookup).
+ * Serve {@link Identity} + {@link Directory} on a Unix-domain path (same-machine lookup).
  *
  * @public
  */
@@ -188,7 +371,7 @@ export const layerIpc = (
   path: string,
   options?: { readonly unlink?: boolean },
 ) =>
-  Resource.ipcServer([identityServeLayer()], {
+  Resource.ipcServer([lookupServeLayers()], {
     path,
     ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
   });
@@ -205,7 +388,7 @@ export const layerDefaultLocal = (options?: {
 }) => layerIpc(options?.path ?? defaultIpcPath, options);
 
 /**
- * Serve {@link Identity} on an addressed {@link LookupNode} (ipc `{ path }` in v1).
+ * Serve Lookup on an addressed {@link LookupNode} (ipc `{ path }` in v1).
  *
  * @public
  */
@@ -220,21 +403,63 @@ export const layer = (
 };
 
 /**
- * Client for {@link Identity} via an ipc {@link LookupNode} / Node with `{ path }`.
+ * Soft directory advertise for {@link Resource.listen}: when {@link Directory} is in the
+ * environment, register `node` with the given `serves` keys and {@link unregister} on scope
+ * close. No-op when Directory is absent (local-only listen).
+ *
+ * `serves` is derived from the listen serve list (group ids) after registration. Duplicate
+ * `nodeKey` with a live incumbent fails the layer with {@link IncumbentAlive}.
+ *
+ * @public
+ */
+export const directoryAdvertiseLayer = (
+  node: AnyNode & { readonly key: string },
+  serves: ReadonlyArray<string>,
+): Layer.Layer<never, IncumbentAlive> =>
+  Layer.scopedDiscard(
+    Effect.gen(function* () {
+      const dirOpt = yield* Effect.serviceOption(Directory);
+      if (Option.isNone(dirOpt)) {
+        return;
+      }
+      const kind = node.kind;
+      if (kind === undefined) {
+        return;
+      }
+      yield* dirOpt.value.advertise(
+        new AdvertiseRequest({
+          nodeKey: node.key,
+          kind,
+          serves: [...serves],
+          ...(typeof node.path === "string" ? { path: node.path } : {}),
+          ...(typeof node.url === "string" ? { url: node.url } : {}),
+        }),
+      );
+      yield* Effect.addFinalizer(() =>
+        dirOpt.value
+          .unregister(new UnregisterRequest({ nodeKey: node.key }))
+          .pipe(Effect.ignore),
+      );
+    }),
+  );
+
+/**
+ * Client for {@link Identity} + {@link Directory} via an ipc {@link LookupNode}.
  *
  * @public
  */
 export const client = (
   node: AnyNode & { readonly path?: string },
-): Layer.Layer<Identity> => {
+): Layer.Layer<Identity | Directory> => {
   if (node.path === undefined) {
     throw new LookupUnaddressed({
       node: "key" in node && typeof node.key === "string" ? node.key : "lookup",
     });
   }
-  return Resource.client(Identity, node).pipe(
-    Layer.provide(Resource.connectIpc(node)),
-  );
+  return Layer.mergeAll(
+    Resource.client(Identity, node),
+    Resource.client(Directory, node),
+  ).pipe(Layer.provide(Resource.connectIpc(node)));
 };
 
 /**
@@ -244,7 +469,7 @@ export const client = (
  */
 export const clientDefaultLocal = (options?: {
   readonly path?: string;
-}): Layer.Layer<Identity> => {
+}): Layer.Layer<Identity | Directory> => {
   const path = options?.path ?? defaultIpcPath;
   const node = LookupNode("effect-pm/Lookup/default", { path });
   return client(node);

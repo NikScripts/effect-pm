@@ -322,12 +322,12 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 |---|----------|--------|
 | **L1** | Tiered lookup bootstrap | **LOCKED** (owner 2026-07-18) — see below |
 | **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **Superseded in part by L1** — local default = well-known `IpcSocket` bind (OS exclusivity); cross-network = explicit `LookupNode` |
-| **D2** | Discovery TTL / liveness | **LEAN (owner agreed)** — see Phase-3 bake below; conflict ping = NodeStatus/readiness |
-| **D3** | `peersLayer` + empty / `distributed` membership | **LEAN (owner agreed)** — empty + distributed ⇒ read node directory; fixed `nodes([…])` still lists **who** (addresses may need directory if address-less) |
-| **D4** | N instances of one Tag | **OPEN** — `client(Tag)` stays set-of-one; multi-instance = peers / explicit Node (no silent LB) |
-| **D5** | Node directory vs `Identity.claim` | **LEAN (owner agreed)** — same Lookup **server**, **separate** advertise/list RPCs |
-| **D6** | Duplicate `nodeKey` on advertise | **LEAN (owner agreed)** — default `livenessReplace`; handoff presets later |
-| **D7** | Prototypes / `NodeServer` / address-less Nodes | **LEAN (owner agreed)** — see Phase-3 bake below |
+| **D2** | Discovery TTL / liveness | **LOCKED** (2026-07-19) — conflict ping = NodeStatus/`ping`; no v1 heartbeat tax |
+| **D3** | `peersLayer` + empty / `distributed` membership | **LEAN** — empty + distributed ⇒ read node directory; fixed `nodes([…])` still lists **who** |
+| **D4** | N instances of one Tag | **OPEN** — `client(Tag)` stays set-of-one; multi-instance = peers / explicit Node |
+| **D5** | Node directory vs `Identity.claim` | **LOCKED** (2026-07-19) — same Lookup server, separate advertise/list RPCs |
+| **D6** | Duplicate `nodeKey` on advertise | **LOCKED** (2026-07-19) — default `livenessReplace`; unregister on clean close; `serves[]` from listen |
+| **D7** | Prototypes / `NodeServer` / address-less Nodes | **LEAN** — see Phase-3 bake below |
 
 #### L1 — Tiered lookup bootstrap (**LOCKED**)
 
@@ -341,17 +341,18 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 - Dial/claim failure when lookup unreachable: **needs more thought** — lean don’t serve Singleton by default; knobs later. **Not locked.**
 - `LookupNode` constructor, nodeless clients, check-in map, manager LB streams — **Eng / further bake**; L1 only locks the tiered bootstrap rule.
 
-#### Phase-3 bake — node directory, prototypes, handoff (**LEAN** 2026-07-19, owner agreed)
+#### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> Not Eng’d. Do not treat as LOCKED unless a row below is later marked LOCKED.  
-> App composition style: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers — not Node duals as the prototype helper shape.
+> **LOCKED for Eng (directory slice):** D2/D5/D6 — same Lookup server + advertise/list RPCs; `livenessReplace` via NodeStatus `ping`; unregister on clean close; `serves[]` from listen.  
+> **Still LEAN:** D3/D7 prototypes / bare `distributed` / `NodeServer` / `peersLayer` wiring.  
+> App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 **Two Lookup surfaces (do not conflate)**
 
 | Surface | Status | Job |
 |---------|--------|-----|
 | **`Identity.claim`** | **Shipped** | First-wins exclusivity for a **resource key** (Tag `identity` / address-less Node keys). Loser policy today for Tags: client-of-winner. |
-| **Node directory** (`advertise` / `nodesServing` — names TBD) | **LEAN** | Many rows: `{ nodeKey, kind, path\|url, serves[] }`. Fleets / dynamic prototypes / `peersLayer` membership. |
+| **Node directory** (`advertise` / `unregister` / `nodesServing`) | **Eng (tip)** | Many rows: `{ nodeKey, kind, path\|url, serves[] }`. Fleets / dynamic prototypes / `peersLayer` membership. |
 
 - **Same Lookup server process** as claim (one default ipc sock / dial-or-become). **Separate RPCs** — do not overload `claim` for fleets.
 - v1 Lookup **default** remains **ipc only** (local http fleets: fixed `nodes` or explicit `LookupNode`).
@@ -403,7 +404,7 @@ Resource.listen(East, serves) // named clone or concrete node
 - Empty membership + `distributed` ⇒ `peersLayer` reads the **node directory**. Fixed `nodes([A,B])` lists **who**; if members are address-less, addresses still come from Lookup/directory.
 - `client(Tag)` stays **set-of-one** (D4 OPEN for picker/LB).
 
-**Eng:** not started for directory / Prototype / `NodeServer` / bare `distributed`.
+**Eng:** directory slice on tip — `Lookup.Directory` + `Resource.listen` advertise/unregister. Still not started: Prototype / `NodeServer` / bare `distributed` / `peersLayer` directory read.
 
 ### Cross-cutting — **OPEN** / parked
 
