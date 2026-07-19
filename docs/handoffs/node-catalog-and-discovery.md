@@ -324,7 +324,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **Superseded in part by L1** — local default = well-known `IpcSocket` bind (OS exclusivity); cross-network = explicit `LookupNode` |
 | **D2** | Discovery TTL / liveness | **LOCKED** (2026-07-19) — conflict ping = NodeStatus/`ping`; no v1 heartbeat tax |
 | **D3** | `peersLayer` + empty / `distributed` membership | **LOCKED** (2026-07-19) — see below |
-| **D4** | N instances of one Tag | **OPEN** — `client(Tag)` stays set-of-one; multi-instance = peers / explicit Node |
+| **D4** | N instances of one Tag | **OPEN** — bake in progress (soft pick); see § D4 below |
 | **D5** | Node directory vs `Identity.claim` | **LOCKED** (2026-07-19) — same Lookup server, separate advertise/list RPCs |
 | **D6** | Duplicate `nodeKey` on advertise | **LOCKED** (2026-07-19) — default `livenessReplace`; unregister on clean close; `serves[]` from listen |
 | **D7** | Prototypes / `NodeServer` / address-less Nodes | **LOCKED** (2026-07-19) — address-less + bootstrap + `lookupClient` + Prototype class `make`; see below |
@@ -455,9 +455,85 @@ mailWorker("w2")
 - Identity: **no `{ self }`** — bound Node on Tag and/or listen Node.
 - `NodeServer<N>` type alias — LEAN name OK; serve-list typing already via `listen` C3.
 - Fleet fields ⇒ `distributed` / `nodes` before mesh APIs. Empty stamped set ⇒ directory (**D3 LOCKED**).
-- `client(Tag)` stays **set-of-one** (D4 OPEN).
+- `client(Tag)` stays **set-of-one** until D4 locks otherwise.
 
-**Eng:** directory + D7 + D3 + `Node.Prototype` (`.make` / `.instance`) on tip.
+**Eng:** directory + D7 + D3 + `Node.Prototype` (`.make` / `.instance` / `.listen`) on tip.
+
+#### D4 — soft pick when N>1 (**OPEN** — bake 2026-07-19)
+
+**Shipped (do not change without lock):**
+
+| API | Behavior |
+|-----|----------|
+| `lookupClient(Tag)` | Identity resolve → else directory; **0 or >1 → `LookupClientError`** |
+| `client(Tag)` | Set-of-one on Tag’s Node set |
+| `client(Tag, node)` | Explicit dial |
+| `peersLayer` + `combineQuery` | Fleet fold — not “pick one replica” |
+
+**Gap:** ordinary “dial **one** of N directory replicas” without naming a Node — workers from `Proto.listen` make N>1 common.
+
+**Not this bake:** manager/LB streams into Lookup (later); changing bare `lookupClient` to silent pick (**rejected** by prior lock).
+
+##### Surface options
+
+**A — Opt-in on `lookupClient` (LEAN)**
+
+```ts
+// bare stays fail-closed (SHIPPED)
+Resource.lookupClient(Mail)
+
+// N>1: caller opts into a pick strategy
+Resource.lookupClient(Mail, { pick: "first" })
+Resource.lookupClient(Mail, { pick: "random" })
+Resource.lookupClient(Mail, {
+  pick: (rows) => rows[0]!, // or Effect-returning picker
+})
+```
+
+| Case | Behavior (lean) |
+|------|-----------------|
+| Identity hit | Same as today — winner endpoint; ignore `pick` |
+| 0 rows | `LookupClientError({ reason: "missing" })` |
+| 1 row | Dial it (`pick` unused) |
+| N>1, no `pick` | `LookupClientError({ reason: "ambiguous" })` — SHIPPED |
+| N>1 + `pick` | Dial chosen row |
+
+**B — Separate API (sketch)**
+
+```ts
+Resource.lookupClient(Mail)           // fail-closed
+Resource.lookupClientAny(Mail)        // or softLookupClient — always soft?
+```
+
+Splits the name; “any” hides the strategy; easy to misuse as default.
+
+**C — Defer entirely to managers (sketch)**
+
+No client-side pick until Lookup streams placement. Leaves `Proto.listen` fleets without a nodeless single-dial path.
+
+**Agent lean: A** — keep fail-closed default; soft pick is explicit and typed at the call site.
+
+##### Sub-decisions (after surface)
+
+| # | Question | Lean |
+|---|----------|------|
+| D4.1 | Surface = A / B / C? | **A** |
+| D4.2 | Built-in strategies? | v1: `"first"` (+ optional custom fn). `"random"` needs `Random` — later or Effect-picker only |
+| D4.3 | Picker sync vs `Effect`? | Sync `(rows) => DirectoryEntry` first; Effect later if needed |
+| D4.4 | Does `pick` apply when Identity resolves? | **No** — identity is unique by key |
+| D4.5 | `client(Tag)` multi-set soft pick? | **Out of v1** — keep set-of-one; multi-instance = lookup + pick / explicit Node / peers |
+| D4.6 | Sticky / session affinity? | **Out** — managers later |
+
+```ts
+// Goal sketch after lock (A + first/custom):
+type LookupPick =
+  | "first"
+  | ((rows: ReadonlyArray<DirectoryEntry>) => DirectoryEntry)
+
+Resource.lookupClient(Mail, { pick: "first" }).pipe(
+  Layer.provide(Lookup.bootstrapDefaultLocal()),
+)
+```
 
 ### Cross-cutting — **OPEN** / parked
 
@@ -692,3 +768,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — Owner: Prototype must nest as `Resource.Node.Prototype` (not top-level). Rename Eng’d; top-level removed.
 - **2026-07-19** — Owner: bake sketch `unsafeLookupClient` = shipped `lookupClient` (fail-closed); keep name without `unsafe` if docs are clear. Locked in handoff + TSDoc. D4 soft pick still separate/OPEN.
 - **2026-07-19** — Owner “Good” → **`Prototype.listen(serves) → (suffix?) => Layer` LOCKED:** Layer-only return; keep `instance()`; no named-clone `.listen`.
+- **2026-07-19** — Owner “Next” → **D4 bake opened** (soft pick when N>1). Lean **A:** opt-in `{ pick }` on `lookupClient`; bare stays fail-closed. Awaiting owner lock on surface.
