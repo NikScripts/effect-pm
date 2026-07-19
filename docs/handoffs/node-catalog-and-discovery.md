@@ -214,7 +214,7 @@ Resource.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
 - Serialization: same ndjson default as http/ws
 - Tests: e2e RPC (unary + stream) over a temp sock path; second bind → `EADDRINUSE`; stale sock file story documented
 
-**Out of Phase 1:** `ROut`, discovery, peersLayer changes, serve→expose rename, multi-protocol Node.
+**Out of Phase 1:** `ROut`, discovery, peersLayer changes, multi-protocol Node.
 
 **Touches:** `ProtocolKind`, `makeNode` address parsing, `protocolForNode` / `connect*`, new `ipcServer` (or shared raw-socket server helper), tests. Coordinate with whoever owns `src/Resource.ts` node/client surface (Agent E reservation history).
 
