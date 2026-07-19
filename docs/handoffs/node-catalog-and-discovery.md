@@ -401,13 +401,10 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 class MailWorker extends Resource.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
 class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
 
-// Dynamic — many workers; listen mints path (+ suffix when omitted); no Identity.claim
-Resource.listen(MailWorker.instance(), [Resource.serve(Mail, impl)]).pipe(
-  Layer.provide(Lookup.bootstrapDefaultLocal()),
-)
-Resource.listen(MailWorker.instance("w1"), [Resource.serve(Mail, impl)]).pipe(
-  Layer.provide(Lookup.bootstrapDefaultLocal()),
-)
+// Dynamic — curry serves once; factory takes suffix (auto when omitted)
+const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+mailWorker().pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+mailWorker("w1").pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 
 class Worker extends Resource.Node<Worker, Mail>("app/Worker") {} // address-less (claim)
 Resource.listen(Worker, [Resource.serve(Mail, impl)]).pipe(
@@ -427,6 +424,23 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 | Claim | **None** — many instances may run; directory `livenessReplace` still applies on duplicate `nodeKey`. |
 | Catalog | Same `ROut` brand as the Prototype. |
 | Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node (D4 OPEN). |
+| Spawn ergonomics | **`Proto.listen(serves) → (suffix?) => Layer`** — curry serve list; sugar over `Resource.listen(instance(suffix), serves)`. Returns **Layer only** (`ListenNode` in built context). Keep **`instance()`** public. Named clones stay `Resource.listen(East, serves)` — no `East.listen`. |
+
+#### `Prototype.listen` factory (**LOCKED** 2026-07-19)
+
+| Decision | Lock |
+|----------|------|
+| API | `MailWorker.listen([serve…])` → `(suffix?: string) => Layer` |
+| Semantics | Same as `Resource.listen(MailWorker.instance(suffix), serves)` — ephemeral ipc, `#suffix`, no claim, advertise |
+| Return | **Layer only** — after `Layer.build`, instance Node is {@link ListenNode} in context |
+| `instance()` | Stays **public** (peers `self`, escape hatch) |
+| Named clones | Unchanged — `Resource.listen(East, serves)`; no per-clone `.listen` |
+
+```ts
+const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+mailWorker()
+mailWorker("w2")
+```
 
 #### `lookupClient` naming (**LOCKED** 2026-07-19)
 
@@ -676,3 +690,5 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — Owner “Okay” → **D3 LOCKED + Eng:** bare `Resource.distributed` ≡ `nodes([])`; empty stamped set → `peersLayer` reads `Directory.nodesServing`; fixed `nodes([…])` unchanged.
 - **2026-07-19** — Owner “Continue” → **dynamic `Node.Prototype.instance` LOCKED + Eng:** ephemeral ipc + `#suffix`, no claim; `askIncumbent` / D4 still later.
 - **2026-07-19** — Owner: Prototype must nest as `Resource.Node.Prototype` (not top-level). Rename Eng’d; top-level removed.
+- **2026-07-19** — Owner: bake sketch `unsafeLookupClient` = shipped `lookupClient` (fail-closed); keep name without `unsafe` if docs are clear. Locked in handoff + TSDoc. D4 soft pick still separate/OPEN.
+- **2026-07-19** — Owner “Good” → **`Prototype.listen(serves) → (suffix?) => Layer` LOCKED:** Layer-only return; keep `instance()`; no named-clone `.listen`.

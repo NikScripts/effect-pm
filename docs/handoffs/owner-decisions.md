@@ -6,6 +6,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — `Prototype.listen(serves)` factory LOCKED
+
+- **Owner said:** Rewrite `Resource.listen(Proto.instance(…), serves)` into curried `Proto.listen(serves)` → `(suffix?) => Layer`; agreed lean (Layer-only, keep `instance()`, no named-clone `.listen`) — “Good.”
+- **Chose (LOCKED):**
+  - `Node.Prototype.listen(serves[, options])` → `(suffix?: string) => Layer` — sugar over `Resource.listen(instance(suffix), serves)`.
+  - Return **Layer only**; minted Node available as `ListenNode` after `Layer.build`.
+  - **`instance()` stays public**; named clones keep `Resource.listen(East, serves)`.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — `lookupClient` name (= bake `unsafeLookupClient`)
 
 - **Owner said:** The Lookup-or-die nodeless client was sketched as `unsafeLookupClient`; keep without `unsafe` if docs are clear — agent’s call.

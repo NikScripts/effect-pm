@@ -18,7 +18,7 @@ class Jobs extends Resource.Tag<Jobs>()("inst/Jobs", {
 
 const jobsImpl = (n: number) => ({ jobs: Effect.succeed(n) });
 
-describe("Resource.Node.Prototype.instance", () => {
+describe("Resource.Node.Prototype.instance / .listen", () => {
   it("stamps isDynamicInstance and optional #suffix wire key", () => {
     class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
       "inst/MailWorker",
@@ -34,6 +34,38 @@ describe("Resource.Node.Prototype.instance", () => {
     expect(named.instanceSuffix).toBe("w1");
     expect(MailWorker.isPrototype).toBe(true);
   });
+
+  it("Prototype.listen curries serves; ListenNode is in built context", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("proto-listen");
+        const lookupNode = Lookup.LookupNode("inst/proto-listen", {
+          path: lookupPath,
+        });
+        class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
+          "inst/CurryWorker",
+        ) {}
+        const lookupClient = Lookup.client(lookupNode);
+        yield* Layer.build(Lookup.layer(lookupNode));
+
+        const mailWorker = MailWorker.listen([
+          Resource.serve(Jobs, jobsImpl(9)),
+        ]);
+        const ctx = yield* Layer.build(
+          mailWorker("w2").pipe(Layer.provide(lookupClient)),
+        );
+        const node = Context.get(ctx, Resource.ListenNode);
+        expect(node.key).toBe("inst/CurryWorker#w2");
+        expect(node.path).toBeDefined();
+        expect(node.kind).toBe("IpcSocket");
+
+        const n = yield* Effect.gen(function* () {
+          const jobs = yield* Jobs;
+          return yield* jobs.jobs;
+        }).pipe(Effect.provide(ctx));
+        expect(n).toBe(9);
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+    ));
 
   it("listen mints path + suffix, advertises, and serves without claim", () =>
     Effect.runPromise(
@@ -51,15 +83,14 @@ describe("Resource.Node.Prototype.instance", () => {
         const lookupCtx = yield* Layer.build(lookupClient);
         const lookup = Context.merge(lookupServer, lookupCtx);
 
+        const worker = MailWorker.listen([Resource.serve(Jobs, jobsImpl(3))])
+        // second factory with different impl — same Prototype, own curry
+        const workerB = MailWorker.listen([Resource.serve(Jobs, jobsImpl(5))])
         const a = yield* Layer.build(
-          Resource.listen(MailWorker.instance(), [
-            Resource.serve(Jobs, jobsImpl(3)),
-          ]).pipe(Layer.provide(lookupClient)),
+          worker().pipe(Layer.provide(lookupClient)),
         );
         const b = yield* Layer.build(
-          Resource.listen(MailWorker.instance(), [
-            Resource.serve(Jobs, jobsImpl(5)),
-          ]).pipe(Layer.provide(lookupClient)),
+          workerB().pipe(Layer.provide(lookupClient)),
         );
 
         const dir = Context.get(lookup, Lookup.Directory);
@@ -126,15 +157,20 @@ describe("Resource.Node.Prototype.instance", () => {
         const lookupCtx = yield* Layer.build(lookupClient);
         const lookup = Context.merge(lookupServer, lookupCtx);
 
-        const west = PoolWorker.instance("west");
         const east = PoolWorker.instance("east");
+        const westLive = PoolWorker.listen([
+          Resource.serve(FleetJobs, fleetImpl(5)).pipe(
+            Layer.provide(Resource.peersFrom(FleetJobs, {})),
+          ),
+        ]);
+        const eastLive = PoolWorker.listen([
+          Resource.serve(FleetJobs, fleetImpl(2)).pipe(
+            Layer.provide(Resource.peersLayer(FleetJobs, east)),
+          ),
+        ]);
 
         const westCtx = yield* Layer.build(
-          Resource.listen(west, [
-            Resource.serve(FleetJobs, fleetImpl(5)).pipe(
-              Layer.provide(Resource.peersFrom(FleetJobs, {})),
-            ),
-          ]).pipe(Layer.provide(lookupClient)),
+          westLive("west").pipe(Layer.provide(lookupClient)),
         );
 
         const peersCtx = yield* Layer.build(
@@ -149,11 +185,7 @@ describe("Resource.Node.Prototype.instance", () => {
         expect(peerKeys).not.toContain("inst/PoolWorker#east");
 
         const eastCtx = yield* Layer.build(
-          Resource.listen(east, [
-            Resource.serve(FleetJobs, fleetImpl(2)).pipe(
-              Layer.provide(Resource.peersLayer(FleetJobs, east)),
-            ),
-          ]).pipe(Layer.provide(lookupClient)),
+          eastLive("east").pipe(Layer.provide(lookupClient)),
         );
 
         // instance() is address-less until listen — dial the advertised path.

@@ -3595,7 +3595,7 @@ export function listen<
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
   options?: ListenOptions,
 ): Layer.Layer<
-  Layer.Success<Serves[number]>,
+  Layer.Success<Serves[number]> | ListenNode,
   never,
   Layer.Services<Serves[number]>
 >;
@@ -3725,7 +3725,7 @@ const ephemeralIpcPath = (nodeKey: string): Effect.Effect<string> =>
 const withListenNode = <A, E, R>(
   node: AnyNode,
   server: Layer.Layer<A, E, R>,
-): Layer.Layer<A, E, R> =>
+): Layer.Layer<A | ListenNode, E, R> =>
   server.pipe(Layer.provideMerge(Layer.succeed(ListenNode, node)));
 
 /** Concrete transport dispatch for {@link listen} (address already required). @internal */
@@ -4993,9 +4993,10 @@ export const lookupClient = <Self, S extends Spec>(
  * class MailWorker extends Resource.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * // Named clone with a fixed address (class ctor):
  * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
- * // Dynamic instance — ephemeral ipc at listen; many `prototypeKey#suffix`; no claim:
- * Resource.listen(MailWorker.instance(), [Resource.serve(Mail, impl)])
- * Resource.listen(MailWorker.instance("w1"), [Resource.serve(Mail, impl)])
+ * // Dynamic instances — curry serves once; factory takes suffix (auto when omitted):
+ * const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+ * mailWorker()
+ * mailWorker("w1")
  * ```
  *
  * @public
@@ -5003,8 +5004,19 @@ export const lookupClient = <Self, S extends Spec>(
 const makePrototype = <Self, ROut = never>(
   name: string,
   options?: { readonly kind?: ProtocolKind },
-) =>
-  Object.assign(Context.Service<Self, Record<string, never>>()(name), {
+) => {
+  const instance = (suffix?: string) => {
+    const key =
+      suffix !== undefined && suffix.length > 0 ? `${name}#${suffix}` : name;
+    return Object.assign(makeNode<Self, ROut>(key), {
+      isDynamicInstance: true as const,
+      dynamicPrototypeKey: name,
+      ...(suffix !== undefined && suffix.length > 0
+        ? { instanceSuffix: suffix }
+        : {}),
+    });
+  };
+  return Object.assign(Context.Service<Self, Record<string, never>>()(name), {
     isPrototype: true as const,
     kind: options?.kind,
     url: undefined as undefined,
@@ -5015,21 +5027,34 @@ const makePrototype = <Self, ROut = never>(
       target: { readonly path: string } | { readonly url: string },
     ) => makeNode(`${name}#${cloneName}`, target),
     /**
-     * Dynamic instance Node for {@link listen} — wire key `prototypeKey#suffix`, ephemeral
-     * ipc path at listen, **no** Identity claim (many may run). Omit `suffix` to mint one.
+     * Dynamic instance Node — wire key `prototypeKey#suffix`, for {@link listen} /
+     * {@link peersLayer} `self`. Prefer {@link makePrototype}'s `.listen(serves)` to spawn.
+     * Omit `suffix` to mint one at listen.
      */
-    instance: (suffix?: string) => {
-      const key =
-        suffix !== undefined && suffix.length > 0 ? `${name}#${suffix}` : name;
-      return Object.assign(makeNode<Self, ROut>(key), {
-        isDynamicInstance: true as const,
-        dynamicPrototypeKey: name,
-        ...(suffix !== undefined && suffix.length > 0
-          ? { instanceSuffix: suffix }
-          : {}),
-      });
-    },
+    instance,
+    /**
+     * Curry a serve list into a dynamic-instance factory (sugar over
+     * `Resource.listen(proto.instance(suffix), serves)`). Returns a **Layer** only —
+     * after `Layer.build`, the minted Node is {@link ListenNode} in context.
+     */
+    listen: <Serves extends ServeLayerList>(
+      serves: Serves & ServesForCatalog<Exclude<ROut, undefined>, Serves>,
+      listenOptions?: ListenOptions,
+    ): ((
+      suffix?: string,
+    ) => Layer.Layer<
+      Layer.Success<Serves[number]> | ListenNode,
+      never,
+      Layer.Services<Serves[number]>
+    >) =>
+      (suffix?: string) => {
+        // Explicit type args — avoid re-inferring `Serves` from the already-proven
+        // intersection (nested `ServesForCatalog` would otherwise fail to unify).
+        const node = instance(suffix);
+        return listen<typeof node, Serves>(node, serves, listenOptions);
+      },
   });
+};
 
 /**
  * Declare a **node** (concrete address) or a {@link makePrototype | Prototype} template.
