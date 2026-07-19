@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — Catalog C2 / C3 / C4 locked (continue bake)
+
+- **Owner said:** Continue (after C5); prior steers — full `ROut`; `import type` to avoid Tag↔Node cycles; C2 lean keep `*Server` + `listen`.
+- **Chose:** **C2** = `listen` proves catalog then dispatches to kept `httpServer`/`wsServer`/`ipcServer`; http/ws bind still caller-provided. **C3** = full `ROut` required. **C4** = `import type` for `ROut`.
+- **Rejected / deferred:** Replacing `*Server`; partial catalogs; cross-package Tag value→Node for `ROut`.
+- **Supervisor impact:** Eng shipped on tip — `Node<Self, ROut>`, `listen`, `clientsFor`.
+
 ## 2026-07-19 — Serve-list naming C5 (one name: `serve`)
 
 - **Owner said:** Want one name — `server`, `expose`, or something else; choose well; follow v4 and standards.

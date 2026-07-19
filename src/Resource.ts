@@ -1794,6 +1794,31 @@ export type AddressedNode<HSelf> = NodeKey<HSelf> & {
   readonly path: string | undefined;
 };
 
+/**
+ * Type-only catalog brand on a {@link Node} — `ROut` is erased at runtime (C2 / C4).
+ *
+ * @internal
+ */
+export const catalogSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/catalog",
+);
+
+/**
+ * A {@link Node} with typed catalog `ROut` (union of resource handles). Prefer
+ * `import type` for those handles (C4). Use with {@link listen} / {@link clientsFor}.
+ *
+ * Catalog members must be structurally distinct types (different specs / service shapes) —
+ * identical Tag shapes collapse in TypeScript, so `Jobs | Emails` cannot prove C3.
+ *
+ * @public
+ */
+export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
+  readonly url: string | undefined;
+  readonly path: string | undefined;
+  readonly kind: ProtocolKind | undefined;
+  readonly [catalogSym]?: ROut;
+};
+
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
  *  don't collide in one context. @internal */
 export interface PeersId<Self> {
@@ -3437,6 +3462,169 @@ export function ipcServer(
   ) as unknown as Layer.Layer<never, never, unknown>;
 }
 
+/**
+ * Non-empty serve-layer list for {@link listen} / `*Server`.
+ * R is `never` (not `any`) so an array literal is not contextually typed into
+ * `Layer.Services = any` (which breaks `Layer.build` / Effect context checks).
+ *
+ * @internal
+ */
+type ServeLayerList = readonly [
+  Layer.Layer<any, any, never>,
+  ...ReadonlyArray<Layer.Layer<any, any, never>>,
+];
+
+/**
+ * C3: every member of `ROut` must appear in the merged serve `Layer.Success`.
+ * (`never` catalog ⇒ no proof — transport dispatch only.)
+ *
+ * Tuple-wrap the `extends` check so a union `ROut` is not checked distributively
+ * (`Jobs | Emails extends Jobs` would otherwise accept a Jobs-only serve list).
+ *
+ * @internal
+ */
+type ServesForCatalog<ROut, Serves extends ServeLayerList> = [ROut] extends [
+  never,
+]
+  ? Serves
+  : [ROut] extends [Layer.Success<Serves[number]>]
+    ? Serves
+    : never;
+
+/** Options for {@link listen} — rpc path / health / ipc unlink; not the Http bind port (C2). @public */
+export type ListenOptions = {
+  readonly path?: HttpRouter.PathInput;
+  readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  readonly health?: { readonly path?: HttpRouter.PathInput };
+  readonly node?: string | { readonly key: string };
+  readonly unlink?: boolean;
+};
+
+/** `ROut` stamped on a {@link CatalogNode}, or `never` when undeclared. @internal */
+type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
+  ? Exclude<R, undefined>
+  : never;
+
+/**
+ * Catalog-proving server entry (C2): require serve layers that cover the node's `ROut`, then
+ * dispatch to {@link ipcServer} / {@link wsServer} / {@link httpServer} from `node.kind`.
+ *
+ * Http / WebSocket still need the caller to `Layer.provide(NodeHttpServer.layer(...))` — bind port
+ * is not `node.url` (dial address). Ipc uses `node.path` for bind and dial.
+ *
+ * ```ts
+ * import type { Jobs, Emails } from "@app/contracts"
+ * class Worker extends Resource.Node<Worker, Jobs | Emails>("app/Worker", {
+ *   path: "/tmp/worker.sock",
+ * }) {}
+ *
+ * const live = Resource.listen(Worker, [
+ *   Resource.serve(Jobs, jobsImpl),
+ *   Resource.serve(Emails, emailsImpl),
+ * ])
+ * ```
+ *
+ * Escape hatch without a catalog: keep calling `httpServer` / `wsServer` / `ipcServer` directly.
+ *
+ * @public
+ */
+export function listen<
+  Node extends AnyNode & { readonly [catalogSym]?: unknown },
+  Serves extends ServeLayerList,
+>(
+  node: Node,
+  serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
+  options?: ListenOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  never,
+  Layer.Services<Serves[number]>
+>;
+export function listen(
+  node: AnyNode,
+  serves: Layer.Layer<any, any, never> | ServeLayerList,
+  options?: ListenOptions,
+): Layer.Layer<never, never, unknown> {
+  const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
+  const httpOpts: HttpServerOptions | undefined =
+    options === undefined
+      ? undefined
+      : {
+          ...(options.path !== undefined ? { path: options.path } : {}),
+          ...(options.serialization !== undefined
+            ? { serialization: options.serialization }
+            : {}),
+          ...(options.health !== undefined ? { health: options.health } : {}),
+          ...(options.node !== undefined ? { node: options.node } : {}),
+        };
+  if (node.kind === "IpcSocket") {
+    if (node.path === undefined) {
+      throw new UnaddressedNode({ node: node.key });
+    }
+    return ipcServer(list, {
+      path: node.path,
+      ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
+      ...(options?.serialization !== undefined
+        ? { serialization: options.serialization }
+        : {}),
+      ...(options?.node !== undefined ? { node: options.node } : {}),
+    });
+  }
+  if (node.kind === "WebSocket") {
+    return wsServer(list, httpOpts);
+  }
+  if (node.kind === "Http") {
+    return httpServer(list, httpOpts);
+  }
+  throw new UnaddressedNode({ node: node.key });
+}
+
+/**
+ * Union of Tag `Self` identifiers from a {@link clientsFor} tag list.
+ * Shallow {@link PipeableTag} only — `ResourceTag<…>` here reopens TS2589 under stock tsc.
+ *
+ * @internal
+ */
+type ServicesOfTags<Tags extends ReadonlyArray<PipeableTag>> =
+  Tags[number] extends Context.Key<infer S, any> ? S : never;
+
+/**
+ * Client layers for a catalog node's `ROut` (C2) — one {@link connect}, no repeated node in
+ * each `client` line. Pass the Tag values that make up `ROut` (they must cover it).
+ *
+ * ```ts
+ * Resource.clientsFor(Worker, Jobs, Emails)
+ * // Layer<Jobs | Emails> — transport from Worker bundled
+ * ```
+ *
+ * @public
+ */
+
+export const clientsFor = <
+  // Same as {@link listen}: Node classes keep `kind?: ProtocolKind`; dialability is runtime.
+  Node extends AnyNode & {
+    readonly [catalogSym]?: unknown;
+  },
+  const Tags extends readonly [PipeableTag, ...ReadonlyArray<PipeableTag>],
+>(
+  node: Node,
+  // Tuple-wrap — same non-distributive rule as {@link ServesForCatalog}.
+  ...tags: [CatalogROut<Node>] extends [ServicesOfTags<Tags>] ? Tags : never
+): Layer.Layer<ServicesOfTags<Tags>> => {
+  const clients = tags.map((tag) =>
+    clientLayer(
+      tag as ResourceTag<any, any>,
+      node as NodeKey<unknown>,
+    ),
+  ) as [
+    Layer.Layer<any, never, any>,
+    ...Array<Layer.Layer<any, never, any>>,
+  ];
+  return Layer.mergeAll(...clients).pipe(
+    Layer.provide(connect(node as AnyNode)),
+  ) as Layer.Layer<ServicesOfTags<Tags>>;
+};
+
 /** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
 const ipcServerBase = (
   options: IpcServerOptions,
@@ -3743,7 +3931,8 @@ export const forwardClient = <S extends Spec>(
 
 /**
  * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
- * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service:
+ * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service.
+ * Optional catalog type param `ROut` (C2) — prefer `import type` for those handles (C4):
  *
  * ```ts
  * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
@@ -3752,6 +3941,8 @@ export const forwardClient = <S extends Spec>(
  * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
  * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
  * class Local extends Resource.Node<Local>("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
+ * import type { Jobs, Emails } from "@app/contracts"
+ * class AppWorker extends Resource.Node<AppWorker, Jobs | Emails>("app/Worker", { path: "/tmp/w.sock" }) {}
  * ```
  *
  * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
@@ -3762,7 +3953,7 @@ export const forwardClient = <S extends Spec>(
  *
  * @public
  */
-const makeNode = <Self>(
+const makeNode = <Self, ROut = never>(
   name: string,
   target?:
     | number
@@ -3801,6 +3992,8 @@ const makeNode = <Self>(
     path,
     kind,
   });
+  // Stamp catalog brand without a cast — preserves Context.Service constructability
+  // (`class X extends Resource.Node()`); `ROut` stays type-only at the value (C2 / C4).
   return Object.assign(node, {
     /**
      * Node-wide durable log registration — same as {@link store}`(this node)`.
@@ -3809,6 +4002,7 @@ const makeNode = <Self>(
     get logs() {
       return store(node);
     },
+    [catalogSym]: undefined as ROut | undefined,
   });
 };
 
@@ -3819,10 +4013,10 @@ const makeNode = <Self>(
  * bound to this node; provide one `Resource.connect(...)` per node an app talks to.
  *
  * ```ts
- * const EdgeLive = Resource.connect(EdgeNode, RpcClient.layerProtocolWebsocket({ url }).pipe(
- *   Layer.provide(RpcSerialization.layerNdjson),
- *   Layer.provide(socketLayer),
- * ));
+ * const EdgeLive = Resource.connect(
+ *   EdgeNode,
+ *   Resource.protocolWebsocket("ws://edge/rpc"),
+ * );
  * ```
  *
  * @public

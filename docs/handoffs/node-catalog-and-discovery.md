@@ -262,10 +262,32 @@ Tests: `test/resource-ipc.test.ts`.
 | # | Decision | Status |
 |---|----------|--------|
 | **C1** | How Tags carry Nodes (set / bake / pipe / nodeless) | **LOCKED** (owner 2026-07-19) — see below |
-| **C2** | `listen(node, serveLayers)` vs keep `httpServer`/`wsServer`/`ipcServer` as transport sugar | **OPEN** — old LEAN: keep transport servers; `listen` = catalog wrap |
-| **C3** | Partial catalogs (runtime subset of `ROut`)? | **OPEN** — owner lean: require full `ROut` (not locked) |
-| **C4** | Value-import Tags into node package allowed? | **OPEN** — lean: `import type` for `ROut` (avoid Tag↔Node cycles) |
+| **C2** | `listen(node, serveLayers)` vs keep `httpServer`/`wsServer`/`ipcServer` as transport sugar | **LOCKED** — see below |
+| **C3** | Partial catalogs (runtime subset of `ROut`)? | **LOCKED** — full `ROut` required |
+| **C4** | Value-import Tags into node package allowed? | **LOCKED** — `import type` for `ROut` |
 | **C5** | One name for the serve-list verb (`serve` / `expose` / …) | **LOCKED** — **`serve`** (see below) |
+
+#### C2 — `listen` + keep `*Server` (**LOCKED** 2026-07-19)
+
+| Decision | Lock |
+|----------|------|
+| Blessed catalog entry | **`Resource.listen(node, serveLayers)`** — proves `ROut`, then dispatches to `ipcServer` / `wsServer` / `httpServer` from `node.kind` |
+| Transport servers | **Keep** `httpServer` / `wsServer` / `ipcServer` public (escape hatch; what `listen` calls) |
+| Http / WebSocket bind | **Not** inferred from `node.url` alone — caller still provides `NodeHttpServer.layer` (bind ≠ dial). Ipc: `node.path` is bind+dial |
+| Serve list | `Resource.serve` / engine `*.serve` layers only (C5) |
+| Clients | **`Resource.clientsFor(node, …tags)`** — one bundled `connect`; tags must cover `ROut` |
+
+**Eng (2026-07-19):** shipped — `Node<Self, ROut>`, `listen`, `clientsFor`; tests `resource-listen.test.ts` / `.test-d.ts`.
+
+#### C3 — Full catalog (**LOCKED** 2026-07-19)
+
+`listen` must provide **every** member of `ROut` (`ROut extends` merged serve `Layer.Success`). Partial omit is a type error. Optional features ⇒ different `ROut` / Node, not a hole. Extra serves beyond `ROut` allowed (wider Success).
+
+Catalog `ROut` members must be **structurally distinct** types (different specs) — identical Tag shapes collapse in TypeScript, so C3 cannot prove a partial list.
+
+#### C4 — `import type` for `ROut` (**LOCKED** 2026-07-19)
+
+Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing Tags into a node package is only for colocated packages — **not** when a Tag value-imports the Node (cycle). Cross-package Tag→Node stamps stay at the app composition root.
 
 #### C5 — One name: `serve` (**LOCKED** 2026-07-19)
 
@@ -541,3 +563,5 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19 (bake)** — Owner lean B; questions on distributed purpose, identity failover, `andNode`; **“Locked.” C1 LOCKED** (one set, nodes/andNode, client set-of-one, no identity→fleet failover).
 - **2026-07-19** — **C1 Eng shipped:** `Resource.nodes` / `andNode` / `nodesOf`; `{ node }` ≡ set-of-one; `distributed` alias; identity multi still `IdentityMultiNode`.
 - **2026-07-19 (bake)** — Owner: one name for serve/expose/server — choose well. **C5 LOCKED:** keep **`serve`**; reject `expose` and verb-`server`.
+- **2026-07-19 (bake)** — Owner: “Continue.” **C2/C3/C4 LOCKED** — `listen`+keep `*Server`; full `ROut`; `import type` for `ROut`. Eng next.
+- **2026-07-19** — **C2–C4 Eng shipped:** `Node<Self, ROut>`, `Resource.listen`, `Resource.clientsFor`; ipc runtime + type tests.
