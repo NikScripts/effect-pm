@@ -48,6 +48,15 @@ export class ClaimRequest extends Schema.Class<ClaimRequest>("LookupClaimRequest
 }) {}
 
 /**
+ * Resolve payload — look up a winning claim by resource key (nodeless clients).
+ *
+ * @public
+ */
+export class ResolveRequest extends Schema.Class<ResolveRequest>("LookupResolveRequest")({
+  key: Schema.String,
+}) {}
+
+/**
  * Another process already owns this resource key — `original` is where to dial.
  *
  * @public
@@ -152,6 +161,13 @@ const identitySpec = {
   }).annotate({
     description:
       "First claim for `key` wins and returns the endpoint; later claims fail with DuplicateIdentity.",
+  }),
+  resolve: Resource.effectFn({
+    payload: ResolveRequest,
+    success: Schema.Option(Endpoint),
+  }).annotate({
+    description:
+      "Read the winning endpoint for `key` without claiming (nodeless / lookupClient).",
   }),
 };
 
@@ -339,6 +355,10 @@ const lookupServeLayers = () =>
                 : Effect.succeed(toEndpoint(outcome.endpoint)),
             ),
           ),
+        resolve: (req: ResolveRequest) =>
+          registries.claims.resolve(req.key).pipe(
+            Effect.map(Option.map(toEndpoint)),
+          ),
       });
       const directory = Resource.serve(Directory, {
         advertise: (req: AdvertiseRequest) =>
@@ -494,4 +514,24 @@ export const clientDefaultLocal = (options?: {
   const path = options?.path ?? defaultIpcPath;
   const node = LookupNode("effect-pm/Lookup/default", { path });
   return client(node);
+};
+
+/**
+ * Bind-or-dial the same-machine default Lookup path (D7).
+ * First process serves Identity+Directory; later processes dial it (`Layer.catchCause`).
+ *
+ * @public
+ */
+export const bootstrapDefaultLocal = (options?: {
+  readonly path?: string;
+  readonly unlink?: boolean;
+}): Layer.Layer<Identity | Directory> => {
+  const path = options?.path ?? defaultIpcPath;
+  // Bind-or-dial: try serve first. Default `unlink: false` so a second process cannot
+  // unlink-steal a live Lookup sock (stale socks: pass `unlink: true` or use a fresh path).
+  return layerIpc(path, {
+    unlink: options?.unlink ?? false,
+  }).pipe(
+    Layer.catchCause(() => clientDefaultLocal({ path })),
+  ) as Layer.Layer<Identity | Directory>;
 };

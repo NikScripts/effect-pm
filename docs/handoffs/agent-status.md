@@ -28,7 +28,7 @@
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2 **C1–C5** LOCKED + Eng on tip; Phase-3 **directory slice Eng on tip** (D2/D5/D6); Prototype / bare `distributed` / `NodeServer` still **LEAN**; D4 picker / managers / X1 still OPEN
+4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2 **C1–C5** + Phase-3 directory + **D7 vertical** Eng on tip; D3 bare `distributed` / peersLayer directory + dynamic `instance` still **LEAN**; D4 picker / managers / X1 still OPEN
 5. Store-layer `(scopeKey, lineId)` memo — **deferred**
 6. Fail-loud Soft when AppStore lacks engine registration — **parked** (Agent 3 out of scope unless unlocked)
 7. `main` merge + `pnpm run version` — still deferred

@@ -327,7 +327,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **D4** | N instances of one Tag | **OPEN** — `client(Tag)` stays set-of-one; multi-instance = peers / explicit Node |
 | **D5** | Node directory vs `Identity.claim` | **LOCKED** (2026-07-19) — same Lookup server, separate advertise/list RPCs |
 | **D6** | Duplicate `nodeKey` on advertise | **LOCKED** (2026-07-19) — default `livenessReplace`; unregister on clean close; `serves[]` from listen |
-| **D7** | Prototypes / `NodeServer` / address-less Nodes | **LEAN** — see Phase-3 bake below |
+| **D7** | Prototypes / `NodeServer` / address-less Nodes | **LOCKED** (2026-07-19) — address-less + bootstrap + `lookupClient` + Prototype class `make`; see below |
 
 #### L1 — Tiered lookup bootstrap (**LOCKED**)
 
@@ -343,8 +343,8 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> **LOCKED for Eng (directory slice):** D2/D5/D6 — same Lookup server + advertise/list RPCs; `livenessReplace` via NodeStatus `ping`; unregister on clean close; `serves[]` from listen.  
-> **Still LEAN:** D3/D7 prototypes / bare `distributed` / `NodeServer` / `peersLayer` wiring.  
+> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** — address-less `listen` mint/claim; drop identity `{ self }`; `bootstrapDefaultLocal`; `lookupClient` + `Identity.resolve`; `Prototype.make` → class.  
+> **Still LEAN:** D3 bare `distributed` / directory-backed `peersLayer`; dynamic `instance`; `askIncumbent`.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 **Two Lookup surfaces (do not conflate)**
@@ -376,35 +376,33 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **`reject`** | Strict never-steal |
 | **`lastWins`** (orphan first) | **Not** the default |
 
-**Node kinds (LEAN)**
+**Node kinds (D7 — LOCKED vertical; dynamic instance still LEAN)**
 
 | Kind | Address | Multiplicity | Lookup |
 |------|---------|--------------|--------|
 | Concrete `Node(key, addr)` | In source | One binder per address | Not required for dial |
-| Address-less **non-prototype** `Node(key)` | At layer | **One** per `Node.key` — **`claim`**; dupe must not keep serving | Required |
-| **Prototype** | None on proto | Template: catalog `ROut` (+ optional default kind) | Dynamic path needs directory |
-| **Named clone** `Proto.make(name, addr)` | **Required** 2nd arg | One per name+address; wire key `prototypeKey#name` | Not required for dial |
-| **Dynamic instance** | Ephemeral bind then advertise | Many `prototypeKey#suffix` | Directory required (fail like identity if missing) |
-
-**App shapes (LEAN)**
+| Address-less **non-prototype** `Node(key)` | Minted at `listen` (ipc) | **One** per `Node.key` — **`claim`**; lose → fail Layer | Required |
+| **Prototype** | None on proto | Template: catalog `ROut` | n/a until cloned |
+| **Named clone** `class X extends Proto.make(name, addr) {}` | **Required** 2nd arg | One per name+address; wire key `prototypeKey#name` | Optional for dial |
+| **Dynamic instance** | Ephemeral bind then advertise | Many `prototypeKey#suffix` | **LEAN** (not this Eng) |
 
 ```ts
-// NodeServer — type-only; any Node with ROut (not proto-only)
-const serves: Resource.NodeServer<MailWorker> = [
-  Resource.serve(Mail, mailImpl),
-  Resource.serve(Jobs, jobsImpl),
-]
-Resource.listen(East, serves) // named clone or concrete node
+class MailWorker extends Resource.Prototype<MailWorker, Mail>("app/MailWorker") {}
+class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
 
-// dynamic — instance then listen (preferred over listen(Prototype) minting)
-// Resource.Node.instance(MailWorker) → self; Resource.listen(self, serves)
+class Worker extends Resource.Node<Worker, Mail>("app/Worker") {} // address-less
+Resource.listen(Worker, [Resource.serve(Mail, impl)]).pipe(
+  Layer.provide(Lookup.bootstrapDefaultLocal()),
+)
+Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 ```
 
-- Fleet fields on a Tag ⇒ must `.pipe(Resource.distributed)` or `.pipe(Resource.nodes([…]))` before **mesh** APIs (`peersLayer`, …) — not on bare `layer`/`serve`.
-- Empty membership + `distributed` ⇒ `peersLayer` reads the **node directory**. Fixed `nodes([A,B])` lists **who**; if members are address-less, addresses still come from Lookup/directory.
-- `client(Tag)` stays **set-of-one** (D4 OPEN for picker/LB).
+- Identity: **no `{ self }`** — bound Node on Tag and/or listen Node.
+- `NodeServer<N>` type alias — LEAN name OK; serve-list typing already via `listen` C3.
+- Fleet fields ⇒ `distributed` / `nodes` before mesh APIs. Empty + `distributed` ⇒ directory (**D3 LEAN**).
+- `client(Tag)` stays **set-of-one** (D4 OPEN).
 
-**Eng:** directory slice on tip — `Lookup.Directory` + `Resource.listen` advertise/unregister. Still not started: Prototype / `NodeServer` / bare `distributed` / `peersLayer` directory read.
+**Eng:** directory shipped; D7 vertical on tip (this change).
 
 ### Cross-cutting — **OPEN** / parked
 
@@ -425,7 +423,7 @@ Resource.listen(East, serves) // named clone or concrete node
 | Name | Blessed: **`identity`**. (“singleton” avoided as primary — overloaded.) |
 | Where stamped | **On the handle**, not layer-only. |
 | Layer / serve | **`Resource.layer` / `serve` / `*Server` honor the stamp** — claim then local serve **or** client-of-winner. No separate `singletonLayer` as main API. |
-| Self address (v1) | Dialable **self Node / endpoint required at layer/serve** (check-in / address-less later). |
+| Self address | Dialable **bound Node** on Tag (`nodes` / `{ node }`) and/or **listen Node** (incl. minted address-less). **No `{ self }` bag.** |
 | Lookup down | **Fail-closed** — do not serve locally; orphan-serve opt-in later if ever. |
 | Node set | At most **one** Node on an identity handle; overwrite OK; **`andNode` disabled**. |
 

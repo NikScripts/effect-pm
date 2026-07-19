@@ -92,7 +92,10 @@ import {
   type StoreScopeTag,
 } from "./internal/store/registration";
 // Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
-import type { Identity as LookupIdentity } from "./Lookup";
+import type {
+  Directory as LookupDirectory,
+  Identity as LookupIdentity,
+} from "./Lookup";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -1889,7 +1892,8 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
 }
 
 /**
- * Identity-claiming resources need a dialable {@link Node} (or explicit `self`) at layer/serve.
+ * Identity-claiming resources need a dialable Node — Tag-bound (`nodes` / `{ node }`) and/or
+ * the {@link ListenNode} from {@link listen} (including minted address-less Nodes).
  *
  * @public
  */
@@ -1909,17 +1913,41 @@ export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
 }> {}
 
 /**
- * Options for {@link layer} / {@link serve} when the tag is {@link identity}-stamped.
+ * Address-less {@link listen} lost the `Node.key` claim — another process owns this Node.
+ * Winner endpoint is in `original` (dial via {@link lookupClient} / `client`).
  *
  * @public
  */
-export type IdentityLayerOptions = {
-  /**
-   * This process's dialable Node (claim endpoint). Defaults to the tag's bound {@link Node}
-   * when present. Required when the tag is nodeless.
-   */
-  readonly self?: AnyNode;
-};
+export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost")<{
+  readonly node: string;
+  readonly original: {
+    readonly nodeKey: string;
+    readonly kind: ProtocolKind;
+    readonly url?: string;
+    readonly path?: string;
+  };
+}> {}
+
+/**
+ * {@link lookupClient} could not pick exactly one dial target for the Tag.
+ *
+ * @public
+ */
+export class LookupClientError extends Data.TaggedError("LookupClientError")<{
+  readonly tag: string;
+  readonly reason: "missing" | "ambiguous";
+  readonly count: number;
+}> {}
+
+/**
+ * The Node {@link listen} is binding (concrete or minted address-less). Identity claims prefer
+ * this over a Tag-bound Node when present.
+ *
+ * @public
+ */
+export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
+  "@nikscripts/effect-pm/Resource/ListenNode",
+) {}
 
 /** Throw when an identity Tag would carry more than one fleet Node. @internal */
 const assertIdentityNodeCount = (
@@ -2687,13 +2715,6 @@ const isDialableSelf = (
   return self.url !== undefined;
 };
 
-/** Resolve claim endpoint Node from options or the tag's bound node. @internal */
-const resolveIdentitySelf = (
-  tag: unknown,
-  options: IdentityLayerOptions | undefined,
-): AnyNode | undefined =>
-  options?.self ?? (nodeOf(tag) as AnyNode | undefined);
-
 /**
  * Client layer dialing a Lookup winner's {@link Endpoint} — used when identity claim loses.
  * @internal
@@ -2719,17 +2740,20 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
 
 /**
  * Claim `tag.key` at Lookup — won → `onWon` layer; lost → client of `original`.
- * Fail-closed: requires {@link LookupIdentity}; missing/unaddressed self → {@link IdentitySelfRequired}.
+ * Endpoint from {@link ListenNode} (listen) or the Tag's bound Node — no `{ self }` bag.
+ * Fail-closed: requires {@link LookupIdentity}; missing/unaddressed → {@link IdentitySelfRequired}.
  * @internal
  */
 const identityClaimLayer = <Self, S extends Spec, A, E, R>(
   tag: ResourceTag<Self, S>,
-  options: IdentityLayerOptions | undefined,
   onWon: Layer.Layer<A, E, R>,
 ): Layer.Layer<A | Self, E | IdentitySelfRequired, R | LookupIdentity> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const self = resolveIdentitySelf(tag, options);
+      const listenOpt = yield* Effect.serviceOption(ListenNode);
+      const self = Option.isSome(listenOpt)
+        ? listenOpt.value
+        : (nodeOf(tag) as AnyNode | undefined);
       if (self === undefined || !isDialableSelf(self)) {
         return yield* new IdentitySelfRequired({ tag: tag.key });
       }
@@ -2785,12 +2809,10 @@ const localLayerPlain = <Self, S extends Spec, R>(
 function localLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
   impl: ImplOf<S>,
-  options?: IdentityLayerOptions,
 ): Layer.Layer<Self | Local<Self>, IdentitySelfRequired, LookupIdentity>;
 function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
   impl: Effect.Effect<ImplOf<S>, never, R>,
-  options?: IdentityLayerOptions,
 ): Layer.Layer<
   Self | Local<Self>,
   IdentitySelfRequired,
@@ -2807,7 +2829,6 @@ function localLayer<Self, S extends Spec, R>(
 function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-  options?: IdentityLayerOptions,
 ): Layer.Layer<
   Self | Local<Self>,
   IdentitySelfRequired,
@@ -2821,7 +2842,7 @@ function localLayer<Self, S extends Spec, R>(
       Exclude<R, Scope.Scope> | LookupIdentity
     >;
   }
-  return identityClaimLayer(tag, options, plain);
+  return identityClaimLayer(tag, plain);
 }
 
 /**
@@ -3108,7 +3129,6 @@ export const serve = <Self, S extends Spec, R = never>(
     | ImplOf<S>
     | BuiltResource<S, R>
     | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
-  options?: IdentityLayerOptions,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
   const plain = servePlain(tag, impl);
   if (!isIdentity(tag)) {
@@ -3116,7 +3136,7 @@ export const serve = <Self, S extends Spec, R = never>(
   }
   // Identity path requires Lookup.Identity at runtime (fail-closed). Kept off the public
   // `R` channel so plain `serve` stays TS2589-free (ResourceTag & identity brand blows up).
-  return identityClaimLayer(tag, options, plain) as Layer.Layer<
+  return identityClaimLayer(tag, plain) as Layer.Layer<
     Self | Local<Self> | HandlerContextOf<S>,
     never,
     R
@@ -3582,8 +3602,87 @@ export function listen(
   node: AnyNode,
   serves: Layer.Layer<any, any, never> | ServeLayerList,
   options?: ListenOptions,
-): Layer.Layer<never, UnaddressedNode, unknown> {
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
+  if (isPrototypeNode(node)) {
+    return unaddressedLayer(node.key);
+  }
+  // Address-less non-prototype: mint ipc path, claim node.key, then bind (D7).
+  if (
+    node.path === undefined &&
+    node.url === undefined &&
+    (node.kind === undefined || node.kind === "IpcSocket")
+  ) {
+    return Layer.unwrap(
+      Effect.gen(function* () {
+        const path = yield* ephemeralIpcPath(node.key);
+        const addressed = Object.assign(makeNode(node.key, { path }), {
+          [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
+            catalogSym
+          ],
+        }) as AnyNode & { readonly key: string };
+        const Lookup = yield* Effect.promise(() => import("./Lookup"));
+        const identity = yield* Lookup.Identity;
+        const outcome = yield* identity
+          .claim(
+            new Lookup.ClaimRequest({
+              key: node.key,
+              nodeKey: node.key,
+              kind: "IpcSocket",
+              path,
+            }),
+          )
+          .pipe(
+            Effect.map((endpoint) => ({ _tag: "Won" as const, endpoint })),
+            Effect.catchTag("DuplicateIdentity", (duplicate) =>
+              Effect.succeed({
+                _tag: "Lost" as const,
+                original: duplicate.original,
+              }),
+            ),
+          );
+        if (outcome._tag === "Lost") {
+          return yield* new AddressLessClaimLost({
+            node: node.key,
+            original: outcome.original,
+          });
+        }
+        return withListenNode(
+          addressed,
+          listenTransport(addressed, list, options),
+        );
+      }),
+    ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  }
+  return withListenNode(node, listenTransport(node, list, options));
+}
+
+/** True when `node` was built with {@link Prototype}. @internal */
+const isPrototypeNode = (node: unknown): boolean =>
+  (typeof node === "object" || typeof node === "function") &&
+  node !== null &&
+  (node as { readonly isPrototype?: boolean }).isPrototype === true;
+
+/** Ephemeral Unix socket path for address-less {@link listen}. @internal */
+const ephemeralIpcPath = (nodeKey: string): Effect.Effect<string> =>
+  Effect.map(Clock.currentTimeMillis, (now) => {
+    const safe = nodeKey.replace(/[/\\]/g, "-");
+    return `/tmp/effect-pm-${safe}-${now}.sock`;
+  });
+
+/** Stamp {@link ListenNode} so identity `serve` claims use the listen endpoint. @internal */
+const withListenNode = <A, E, R>(
+  node: AnyNode,
+  server: Layer.Layer<A, E, R>,
+): Layer.Layer<A, E, R> =>
+  server.pipe(Layer.provideMerge(Layer.succeed(ListenNode, node)));
+
+/** Concrete transport dispatch for {@link listen} (address already required). @internal */
+const listenTransport = (
+  node: AnyNode,
+  list: ServeLayerList,
+  options: ListenOptions | undefined,
+): Layer.Layer<never, UnaddressedNode, unknown> => {
   const advertiseNode = node as AnyNode & { readonly key: string };
   const httpOpts: HttpServerOptions | undefined =
     options === undefined
@@ -3597,8 +3696,6 @@ export function listen(
           ...(options.node !== undefined ? { node: options.node } : {}),
           advertiseNode,
         };
-  // Catalog listen: transport + soft Lookup directory advertise (D5/D6). Raw `*Server`
-  // helpers stay advertise-free unless `advertiseNode` is passed. Directory absent ⇒ local-only.
   if (node.kind === "IpcSocket") {
     if (node.path === undefined) {
       return unaddressedLayer(node.key);
@@ -3620,7 +3717,7 @@ export function listen(
     return httpServer(list, httpOpts);
   }
   return unaddressedLayer(node.key);
-}
+};
 
 /**
  * Union of Tag `Self` identifiers from a {@link clientsFor} tag list.
@@ -4726,8 +4823,11 @@ export const distributedOf = nodesOf;
  * ```ts
  * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(Resource.identity) {}
  *
- * // winner / loser both compose the same way — only Lookup decides:
- * Resource.serve(Mail, impl, { self: ThisNode }).pipe(Layer.provide(Lookup.client(lookupNode)))
+ * // bind a Node on the Tag (or listen with ListenNode) — Lookup decides winner/loser:
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec, { node: ThisNode }).pipe(
+ *   Resource.identity,
+ * ) {}
+ * Resource.serve(Mail, impl).pipe(Layer.provide(Lookup.client(lookupNode)))
  * ```
  *
  * @public
@@ -4758,6 +4858,85 @@ export const isIdentity = (tag: unknown): boolean =>
   tag !== null &&
   identitySym in (tag as object) &&
   (tag as { readonly [identitySym]?: true })[identitySym] === true;
+
+/**
+ * Nodeless client via Lookup (D7): resolve identity claim, else directory `nodesServing`.
+ * Exactly one dial target required — missing or ambiguous → {@link LookupClientError}.
+ *
+ * ```ts
+ * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+ * ```
+ *
+ * @public
+ */
+export const lookupClient = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Layer.Layer<
+  Self,
+  LookupClientError,
+  LookupIdentity | LookupDirectory
+> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const Lookup = yield* Effect.promise(() => import("./Lookup"));
+      const identity = yield* Lookup.Identity;
+      const resolved = yield* identity.resolve(
+        new Lookup.ResolveRequest({ key: tag.key }),
+      );
+      if (Option.isSome(resolved)) {
+        return clientLayerForEndpoint(tag, resolved.value);
+      }
+      const directory = yield* Lookup.Directory;
+      const entries = yield* directory.nodesServing(
+        new Lookup.NodesServingRequest({ resourceKey: tag.key }),
+      );
+      if (entries.length === 0) {
+        return yield* new LookupClientError({
+          tag: tag.key,
+          reason: "missing",
+          count: 0,
+        });
+      }
+      const [entry, ...rest] = entries;
+      if (entry === undefined || rest.length > 0) {
+        return yield* new LookupClientError({
+          tag: tag.key,
+          reason: "ambiguous",
+          count: entries.length,
+        });
+      }
+      return clientLayerForEndpoint(tag, entry);
+    }),
+  ) as Layer.Layer<
+    Self,
+    LookupClientError,
+    LookupIdentity | LookupDirectory
+  >;
+
+/**
+ * Prototype Node template (D7) — no address; clone with `.make` into a constructible Node:
+ *
+ * ```ts
+ * class MailWorker extends Resource.Prototype<MailWorker, Mail>("app/MailWorker") {}
+ * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
+ * ```
+ *
+ * @public
+ */
+export function Prototype<Self, ROut = never>(
+  name: string,
+  options?: { readonly kind?: ProtocolKind },
+) {
+  return Object.assign(Context.Service<Self, Record<string, never>>()(name), {
+    isPrototype: true as const,
+    kind: options?.kind,
+    url: undefined as undefined,
+    path: undefined as undefined,
+    [catalogSym]: undefined as ROut | undefined,
+    make: (cloneName: string, target: { readonly path: string } | { readonly url: string }) =>
+      makeNode(`${name}#${cloneName}`, target),
+  });
+}
 
 /**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /

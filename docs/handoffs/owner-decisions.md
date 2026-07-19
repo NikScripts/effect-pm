@@ -6,6 +6,18 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — D7 vertical LOCKED (address-less / bootstrap / lookupClient)
+
+- **Owner said:** Nail goal APIs; drop `{ self }` (treat like any Node); `Prototype.make` → **class**; “if questions need context/code, else build.”
+- **Chose (LOCKED — D7 vertical):**
+  - Address-less `Node(key)` at `listen` → mint ephemeral **ipc** path; **claim `node.key`**; win → bind+advertise; lose → fail Layer (winner endpoint in error); no silent double-serve.
+  - Identity claim endpoint = **Tag’s bound Node** (`nodes` / `{ node }`) or **listen’s Node** (minted) — **remove `{ self }` bag**.
+  - `Lookup.bootstrapDefaultLocal` — bind-or-dial default ipc (OS exclusivity).
+  - `Resource.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
+  - `Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
+- **Still LEAN / later:** bare `distributed`; directory-backed `peersLayer` (D3); `askIncumbent`; dynamic `instance`; D4 picker/LB.
+- **Supervisor impact:** Eng unlocked on tip for this vertical. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — Phase-3 directory slice LOCKED + Eng unlocked
 
 - **Owner said:** “lol yes” to write leans then lock subset + unlock smallest Eng (advertise/list, unregister, `livenessReplace`).

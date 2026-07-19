@@ -4,6 +4,7 @@ import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
 
 // S1 — identity-stamped Tags claim at Lookup; winner serves, loser becomes client.
+// Claim endpoint = ListenNode (listen) or Tag-bound Node — no `{ self }` bag.
 
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
@@ -61,7 +62,7 @@ describe("Resource.identity", () => {
     expect(Resource.distributedOf(stamped)).toHaveLength(1);
   });
 
-  it("fails closed without a dialable self", () =>
+  it("fails closed without a dialable bound Node or ListenNode", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("noself-lookup");
@@ -88,7 +89,6 @@ describe("Resource.identity", () => {
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("claim-lookup");
         const winnerPath = yield* tmpSock("claim-winner");
-        const loserPath = yield* tmpSock("claim-loser");
 
         const lookupNode = Lookup.LookupNode("identity/claim-lookup", {
           path: lookupPath,
@@ -97,23 +97,23 @@ describe("Resource.identity", () => {
           path: winnerPath,
         }) {}
         class LoserNode extends Resource.Node<LoserNode>("identity/loser", {
-          path: loserPath,
+          path: "/tmp/identity-loser-unused.sock",
         }) {}
 
         const lookupClient = Lookup.client(lookupNode);
 
-        // Lookup server first, then winner serve (claims + listens), then loser layer.
+        // Winner: listen stamps ListenNode for identity claim
         const lookupCtx = yield* Layer.build(Lookup.layer(lookupNode));
         const winnerCtx = yield* Layer.build(
-          Resource.ipcServer(
-            [Resource.serve(Mail, mailImpl, { self: WinnerNode })],
-            { path: winnerPath },
-          ).pipe(Layer.provide(lookupClient)),
+          Resource.listen(WinnerNode, [
+            Resource.serve(Mail, mailImpl),
+          ]).pipe(Layer.provide(lookupClient)),
         );
+
+        // Loser: Tag-bound Node is the claim endpoint (nodes mutates the handle in place)
+        void Resource.nodes(Mail, [LoserNode]);
         const loserCtx = yield* Layer.build(
-          Resource.layer(Mail, mailImpl, { self: LoserNode }).pipe(
-            Layer.provide(lookupClient),
-          ),
+          Resource.layer(Mail, mailImpl).pipe(Layer.provide(lookupClient)),
         );
 
         const n = yield* Effect.gen(function* () {
