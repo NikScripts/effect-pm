@@ -19,7 +19,7 @@ class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
 class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Resource.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 
 const peerOk = {

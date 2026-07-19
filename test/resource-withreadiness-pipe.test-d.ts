@@ -81,6 +81,6 @@ class FleetNodeB extends Resource.Node<FleetNodeB>("pipe-depth/fleet-b", {
 
 class Fleeted extends Resource.Tag<Fleeted>()("pipe-depth/Fleeted", databaseSpec).pipe(
   Resource.withReadiness(databaseReadiness),
-  Resource.distributed([FleetNodeA, FleetNodeB]),
+  Resource.nodes([FleetNodeA, FleetNodeB]),
 ) {}
 void Fleeted;

@@ -12,7 +12,7 @@ class SelfNode extends Resource.Node<SelfNode>("peers-lazy/Self") {}
 class PeerNode extends Resource.Node<PeerNode>("peers-lazy/Peer") {}
 class Fleet extends Resource.Tag<Fleet>()("peers-lazy/Fleet", {
   n: Resource.ref(Schema.Number), // the trigger — a value field
-}).pipe(Resource.distributed([SelfNode, PeerNode])) {}
+}).pipe(Resource.nodes([SelfNode, PeerNode])) {}
 
 it("peersLayer with a value field boots against a DOWN peer (no build deadlock)", () =>
   Effect.runPromise(

@@ -10,7 +10,7 @@ class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
 class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([DropletEast, DropletWest]),
+  Resource.nodes([DropletEast, DropletWest]),
 ) {}
 
 type Spec = Resource.SpecOf<typeof MeshHealth>;

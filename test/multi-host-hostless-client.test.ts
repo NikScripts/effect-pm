@@ -10,7 +10,7 @@ class DbNode extends Resource.Node<DbNode>("nodeless-client/DbNode") {}
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("nodeless-client/FleetDatabase", {
   status: Resource.effect(Schema.Boolean),
 }).pipe(
-  Resource.distributed([DbNode]),
+  Resource.nodes([DbNode]),
 ) {}
 
 const Server = Resource.httpServer([

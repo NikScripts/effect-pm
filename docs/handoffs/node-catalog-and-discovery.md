@@ -309,12 +309,12 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | `client(Tag)` | When set size is **exactly 1** (sync `nodeSym` to that Node). Size ≠ 1 → need `client(Tag, node)` or ambient Protocol. |
 | API | `Resource.nodes([...])` **overwrites**; `Resource.andNode(node)` **appends one**. |
 | Ctor sugar | `{ node: X }` ≡ `nodes([X])` (keep). |
-| Alias | `distributed` / `distributedOf` remain as aliases of `nodes` / `nodesOf` (**shipped**). **LEAN (bake):** bare `.pipe(Resource.distributed)` ≡ `nodes([])` (discoverable / empty membership); list form stays `Resource.nodes([...])`. |
+| Alias | `distributedOf` ≡ `nodesOf`. **`distributed`** is the **discoverable** stamp only: bare `.pipe(Resource.distributed)` ≡ `nodes([])`. Fixed fleets use `Resource.nodes([…])` (list form is not on `distributed` — keeps `class extends … .pipe(Resource.distributed)` identity-shaped). |
 | Identity | Multi-set **disabled** (`IdentityMultiNode`); overwrite to size ≤ 1 OK; `andNode` that would exceed 1 fails. |
 | Dial-fail | Identity does **not** fall back across a node list (identity has no multi set). Multi-node try-next / LB = later bake. |
 | Pipe | Mutate in place (same as today’s `distributed` / `withReadiness`). Copy-on-pipe deferred. |
 
-**Eng:** shipped — `nodes` / `andNode` / `nodesOf`; `{ node }` set-of-one; `distributed` alias; set-of-one syncs `nodeSym`. Bare-`distributed` split is **LEAN only** (not Eng’d).
+**Eng:** shipped — `nodes` / `andNode` / `nodesOf`; `{ node }` set-of-one; bare `distributed` ≡ `nodes([])`; set-of-one syncs `nodeSym`. **D3:** empty stamped set ⇒ directory-backed `peersLayer`.
 
 ### Block Phase 3 (discovery / identity lookup)
 
@@ -323,7 +323,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **L1** | Tiered lookup bootstrap | **LOCKED** (owner 2026-07-18) — see below |
 | **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **Superseded in part by L1** — local default = well-known `IpcSocket` bind (OS exclusivity); cross-network = explicit `LookupNode` |
 | **D2** | Discovery TTL / liveness | **LOCKED** (2026-07-19) — conflict ping = NodeStatus/`ping`; no v1 heartbeat tax |
-| **D3** | `peersLayer` + empty / `distributed` membership | **LEAN** — empty + distributed ⇒ read node directory; fixed `nodes([…])` still lists **who** |
+| **D3** | `peersLayer` + empty / `distributed` membership | **LOCKED** (2026-07-19) — see below |
 | **D4** | N instances of one Tag | **OPEN** — `client(Tag)` stays set-of-one; multi-instance = peers / explicit Node |
 | **D5** | Node directory vs `Identity.claim` | **LOCKED** (2026-07-19) — same Lookup server, separate advertise/list RPCs |
 | **D6** | Duplicate `nodeKey` on advertise | **LOCKED** (2026-07-19) — default `livenessReplace`; unregister on clean close; `serves[]` from listen |
@@ -343,9 +343,20 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** — address-less `listen` mint/claim; drop identity `{ self }`; `bootstrapDefaultLocal`; `lookupClient` + `Identity.resolve`; `Prototype.make` → class.  
-> **Still LEAN:** D3 bare `distributed` / directory-backed `peersLayer`; dynamic `instance`; `askIncumbent`.  
+> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** (bare `distributed` / directory-backed `peersLayer`).  
+> **Still LEAN:** dynamic `instance`; `askIncumbent`.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
+
+#### D3 — directory-backed peers (**LOCKED** 2026-07-19)
+
+| Decision | Lock |
+|----------|------|
+| Bare stamp | `.pipe(Resource.distributed)` ≡ `nodes([])` — declares an **empty** Node set (discoverable). |
+| List stamp | `Resource.nodes([A,B])` — fixed membership (**who**). |
+| Undeclared | `nodesSym` absent → `peersLayer` keeps today’s empty static peers (not directory). |
+| `peersLayer` empty set | Membership from Lookup **`Directory.nodesServing(tag.key)`** at layer build; exclude `self`; dial by entry `kind` (`IpcSocket`→path, else url + `peerProtocolRef`). |
+| Directory absent | Soft empty peer map (same soft pattern as advertise) — provide `Lookup.client` / bootstrap for a real mesh. |
+| Fixed set | Unchanged — `options.nodes` or non-empty stamped set; no directory read. |
 
 **Two Lookup surfaces (do not conflate)**
 
@@ -399,10 +410,10 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 
 - Identity: **no `{ self }`** — bound Node on Tag and/or listen Node.
 - `NodeServer<N>` type alias — LEAN name OK; serve-list typing already via `listen` C3.
-- Fleet fields ⇒ `distributed` / `nodes` before mesh APIs. Empty + `distributed` ⇒ directory (**D3 LEAN**).
+- Fleet fields ⇒ `distributed` / `nodes` before mesh APIs. Empty stamped set ⇒ directory (**D3 LOCKED**).
 - `client(Tag)` stays **set-of-one** (D4 OPEN).
 
-**Eng:** directory shipped; D7 vertical on tip (this change).
+**Eng:** directory + D7 + D3 on tip.
 
 ### Cross-cutting — **OPEN** / parked
 
@@ -632,3 +643,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19 (bake)** — Owner: “Continue.” **C2/C3/C4 LOCKED** — `listen`+keep `*Server`; full `ROut`; `import type` for `ROut`. Eng next.
 - **2026-07-19** — **C2–C4 Eng shipped:** `Node<Self, ROut>`, `Resource.listen`, `Resource.clientsFor`; ipc runtime + type tests.
 - **2026-07-19 (bake)** — Phase-3 discovery/prototype/directory leans (owner agreed): same Lookup server + separate advertise RPCs; `livenessReplace` + NodeStatus ping; unregister on close; `serves[]` from listen; Prototype / `make(name,addr)` / `NodeServer<N>`; bare `distributed` ≡ `nodes([])`. Written as **LEAN** (not Eng’d). See Phase-3 bake section.
+- **2026-07-19** — Owner “Okay” → **D3 LOCKED + Eng:** bare `Resource.distributed` ≡ `nodes([])`; empty stamped set → `peersLayer` reads `Directory.nodesServing`; fixed `nodes([…])` unchanged.

@@ -32,7 +32,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Resource.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 
 /** Sticky partition so the demo always lands seat traffic on East / West visibly. */

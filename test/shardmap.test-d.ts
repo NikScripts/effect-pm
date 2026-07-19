@@ -18,7 +18,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([DropletEast])) {}
+}).pipe(Resource.nodes([DropletEast])) {}
 
 type Mesh = Resource.PeersId<Sessions> | Resource.SelfNodeId<Sessions>;
 

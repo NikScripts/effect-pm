@@ -23,7 +23,7 @@ class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral")
 const fleetNodes = [DropletEast, DropletWest, DropletCentral] as const;
 
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([...fleetNodes]),
+  Resource.nodes([...fleetNodes]),
 ) {}
 
 /** Stamp this node's registry with a demo in-flight gauge. */

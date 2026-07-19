@@ -36,13 +36,13 @@ describe("Resource.identity", () => {
       ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Resource.identity) {}
 
-    expect(() => Solo.pipe(Resource.distributed([A, B]))).toThrow(
+    expect(() => Solo.pipe(Resource.nodes([A, B]))).toThrow(
       Resource.IdentityMultiNode,
     );
 
     class Fleet extends Resource.Tag<Fleet>()("identity/Fleet", {
       ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
-    }).pipe(Resource.distributed([A, B])) {}
+    }).pipe(Resource.nodes([A, B])) {}
 
     expect(() => Fleet.pipe(Resource.identity)).toThrow(
       Resource.IdentityMultiNode,
@@ -57,7 +57,7 @@ describe("Resource.identity", () => {
       ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Resource.identity) {}
 
-    const stamped = Solo.pipe(Resource.distributed([One]));
+    const stamped = Solo.pipe(Resource.nodes([One]));
     expect(Resource.isIdentity(stamped)).toBe(true);
     expect(Resource.distributedOf(stamped)).toHaveLength(1);
   });

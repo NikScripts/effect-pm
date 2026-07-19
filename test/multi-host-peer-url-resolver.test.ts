@@ -10,7 +10,7 @@ class PeerNode extends Resource.Node<PeerNode>("resolver/PeerNode") {}
 class Fleet extends Resource.Tag<Fleet>()("resolver/Fleet", {
   count: Resource.effect(Schema.Number),
 }).pipe(
-  Resource.distributed([SelfNode, PeerNode]),
+  Resource.nodes([SelfNode, PeerNode]),
 ) {}
 
 // the PeerNode instance, served on a test server (count = 7)

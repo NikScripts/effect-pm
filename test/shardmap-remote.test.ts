@@ -16,7 +16,7 @@ class SM extends ShardMap.Tag<SM>()("shardconf/SM", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([Node1])) {}
+}).pipe(Resource.nodes([Node1])) {}
 
 const served = ShardMap.serve(SM).pipe(Layer.provide(Resource.peersLayer(SM, Node1)));
 

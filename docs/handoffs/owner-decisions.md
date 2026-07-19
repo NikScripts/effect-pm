@@ -6,6 +6,18 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — D3 LOCKED (bare `distributed` / directory-backed peers)
+
+- **Owner said:** “Okay” (proceed with recommended next slice after D7).
+- **Chose (LOCKED — D3):**
+  - Bare `.pipe(Resource.distributed)` ≡ `nodes([])` (discoverable empty membership); identity-shaped pipe (not a list dual).
+  - Fixed fleets stay on `Resource.nodes([…])` (former `distributed([…])` call sites migrated).
+  - `peersLayer` with a **stamped empty** Node set reads Lookup `Directory.nodesServing(tag.key)` at build; exclude self; dial by directory entry kind (ipc path / url).
+  - Undeclared tags (no `nodesSym`) stay empty static peers — not directory.
+  - Directory absent → soft empty peer map (provide Lookup client for a real mesh).
+- **Still LEAN / later:** `askIncumbent`; dynamic `instance`; D4 picker/LB.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — D7 vertical LOCKED (address-less / bootstrap / lookupClient)
 
 - **Owner said:** Nail goal APIs; drop `{ self }` (treat like any Node); `Prototype.make` → **class**; “if questions need context/code, else build.”
@@ -15,7 +27,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - `Lookup.bootstrapDefaultLocal` — bind-or-dial default ipc (OS exclusivity).
   - `Resource.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
   - `Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
-- **Still LEAN / later:** bare `distributed`; directory-backed `peersLayer` (D3); `askIncumbent`; dynamic `instance`; D4 picker/LB.
+- **Still LEAN / later:** ~~bare `distributed` / D3~~ → **LOCKED** (see D3 entry); `askIncumbent`; dynamic `instance`; D4 picker/LB.
 - **Supervisor impact:** Eng unlocked on tip for this vertical. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — Phase-3 directory slice LOCKED + Eng unlocked
@@ -25,7 +37,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - **D5:** Node directory on the **same Lookup server** as `Identity.claim`, **separate RPCs**.
   - **D6:** Duplicate `nodeKey` → default **`livenessReplace`**; **unregister** on clean listen close; **`serves[]` from listen** serve list.
   - **D2:** Conflict probe = existing **NodeStatus `ping`** (timeout ⇒ dead); no v1 heartbeats.
-- **Still LEAN:** Prototypes / `NodeServer` / bare `distributed` / `peersLayer` directory read (D3/D7); `askIncumbent` handoff preset.
+- **Still LEAN:** `askIncumbent` handoff preset; dynamic `instance` / `NodeServer` name sugar. (D3/D7 Eng’d — see later entries.)
 - **Rejected / deferred:** Separate discovery process; default `lastWins` orphan; http default Lookup v1.
 - **Supervisor impact:** Eng unlocked on tip for Lookup directory + listen advertise/unregister wiring. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 

@@ -47,7 +47,7 @@ describe("FleetHealth.rollup", () => {
 
 describe("FleetHealth", () => {
   class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-    Resource.distributed([DropletEast, DropletWest]),
+    Resource.nodes([DropletEast, DropletWest]),
   ) {}
 
   const peerLocal = (status: "ok" | "degraded", ready: boolean) => ({

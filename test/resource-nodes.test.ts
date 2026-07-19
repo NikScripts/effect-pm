@@ -55,9 +55,13 @@ describe("Resource.nodes / andNode (C1)", () => {
     expect(Resource.nodeOf(withB)).toBeUndefined();
   });
 
-  it("distributed is an alias of nodes", () => {
-    expect(Resource.distributed).toBe(Resource.nodes);
+  it("distributedOf aliases nodesOf; bare distributed stamps empty set", () => {
     expect(Resource.distributedOf).toBe(Resource.nodesOf);
+    class Mail extends Resource.Tag<Mail>()("nodes/MailBare", {
+      ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+    }).pipe(Resource.distributed) {}
+    expect(Resource.nodesOf(Mail)).toEqual([]);
+    expect(Resource.distributedOf(Mail)).toEqual([]);
   });
 
   it("identity rejects andNode that would exceed one Node", () => {

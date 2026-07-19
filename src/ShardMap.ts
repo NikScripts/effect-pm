@@ -16,7 +16,7 @@
  *   key: Schema.String,
  *   value: Schema.Struct({ id: Schema.String, userId: Schema.String }),
  *   keyOf: (s) => s.id,
- * }).pipe(Resource.distributed([DropletEast, DropletWest])) {}
+ * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
  *
  * @module ShardMap
  */
@@ -291,7 +291,7 @@ export interface ShardMapSchemas<
  *   key: SessionId,
  *   value: Session,
  *   keyOf: (s) => s.id,
- * }).pipe(Resource.distributed([DropletEast, DropletWest])) {}
+ * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
  *
  * @public
  */

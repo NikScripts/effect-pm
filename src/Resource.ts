@@ -4715,7 +4715,8 @@ export const clientHttp = <Self, S extends Spec>(
 /**
  * Stamp a Tag's **Node set** (C1) — overwrites. Size **1** also syncs {@link nodeSym} so
  * {@link client}`(Tag)` works; size ≠ 1 clears `nodeSym` (use `client(Tag, node)`). Identity Tags
- * may only carry ≤ 1 Node ({@link IdentityMultiNode}).
+ * may only carry ≤ 1 Node ({@link IdentityMultiNode}). Empty `nodes([])` is discoverable
+ * membership (same as bare {@link distributed}); {@link peersLayer} reads Lookup directory.
  *
  * ```ts
  * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
@@ -4799,11 +4800,16 @@ export const nodesOf = <Self, S extends Spec>(
 ): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
 
 /**
- * Alias of {@link nodes} — declare a resource's fleet for {@link peersLayer} / ShardMap.
+ * Stamp a **discoverable** empty Node set (D3) — `.pipe(Resource.distributed)` ≡
+ * {@link nodes}`([])`. {@link peersLayer} then reads Lookup `Directory.nodesServing`.
+ *
+ * For a **fixed** fleet list, use {@link nodes}`([A, B])` (not this pipe). Identity-shaped
+ * like {@link identity} so `class extends Tag(…).pipe(Resource.distributed)` type-checks.
  *
  * @public
  */
-export const distributed = nodes;
+export const distributed = <T extends PipeableTag>(tag: T): T =>
+  nodes(tag as unknown as ResourceTag<any, any, any>, []) as unknown as T;
 
 /**
  * Alias of {@link nodesOf}.
@@ -5011,6 +5017,23 @@ export const layerPeerProtocol = (
   builder: PeerProtocolBuilder,
 ): Layer.Layer<never> => Layer.succeedContext(Context.make(peerProtocolRef, builder));
 
+/** Build a lazy peer client from an already-chosen protocol layer. @internal */
+const buildPeerClientWithProtocol = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  protocol: Layer.Layer<RpcClient.Protocol>,
+): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    // build the chosen protocol into the enclosing scope, then feed its value to the client (a value
+    // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
+    const context = yield* Layer.build(protocol);
+    const client: unknown = yield* Effect.provideService(
+      RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
+      RpcClient.Protocol,
+      Context.get(context, RpcClient.Protocol),
+    );
+    return buildPeerService(tag, client);
+  });
+
 /** Build a lazy client to one peer node, dialing its `url` with the injected {@link peerProtocolRef}
  *  builder (http by default). Fully lazy — see {@link buildPeerService} (nothing connects until a fold
  *  reads a field). */
@@ -5019,17 +5042,38 @@ const buildPeerClient = <Self, S extends Spec>(
   url: string,
 ): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    // build the chosen protocol into the enclosing scope, then feed its value to the client (a value
-    // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
     const buildProtocol = yield* peerProtocolRef;
-    const context = yield* Layer.build(buildProtocol(url));
-    const client: unknown = yield* Effect.provideService(
-      RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
-      RpcClient.Protocol,
-      Context.get(context, RpcClient.Protocol),
-    );
-    return buildPeerService(tag, client);
+    return yield* buildPeerClientWithProtocol(tag, buildProtocol(url));
   });
+
+/**
+ * Dial a peer from a directory row or static Node address — kind-aware (D3).
+ * Prefer `url` when set (honors `options.url` overrides + {@link peerProtocolRef});
+ * WebSocket kind uses {@link protocolWebsocket}. Else IpcSocket/`path` → {@link protocolIpc}.
+ * @internal
+ */
+const buildPeerClientAt = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  target: {
+    readonly key: string;
+    readonly kind?: ProtocolKind;
+    readonly url?: string;
+    readonly path?: string;
+  },
+): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> => {
+  if (target.url !== undefined) {
+    if (target.kind === "WebSocket") {
+      return buildPeerClientWithProtocol(tag, protocolWebsocket(target.url));
+    }
+    return buildPeerClient(tag, target.url);
+  }
+  if (target.path !== undefined) {
+    return buildPeerClientWithProtocol(tag, protocolIpc(target.path));
+  }
+  return Effect.die(
+    new Error(`Resource.peersLayer: peer "${target.key}" has no dial target`),
+  );
+};
 
 /**
  * The resource's **peer clients** — the OTHER nodes' full services, keyed by node — for a resource's
@@ -5088,18 +5132,23 @@ export const selfNodeLayer = <Self, S extends Spec>(
 
 /**
  * Provide the {@link peers} capability on **this** node: connect every OTHER node in the tag's
- * {@link distributed} set and expose them as the peer clients. Also provides the {@link selfNode}
- * capability (this node's key) for `byNode`-style folds. The **opt-in mesh** — add it to a node's serve
- * only where the resource's own logic reaches across nodes. `self` is the node you are, so you're
- * excluded from your own peer set.
+ * {@link distributed} / {@link nodes} set and expose them as the peer clients. Also provides the
+ * {@link selfNode} capability (this node's key) for `byNode`-style folds. The **opt-in mesh** — add
+ * it to a node's serve only where the resource's own logic reaches across nodes. `self` is the node
+ * you are, so you're excluded from your own peer set.
  *
- * **Peer urls:** each {@link Node}'s own `url` is the default (the standard practice — the node carries
- * how to reach it). Pass `options.url` to **override** per node — an env-specific port, a tunnel, or a
- * value from Effect `Config` — falling back to `Node.url` when the resolver returns `undefined`. A node
- * with no url from either source is **skipped** (never a throw), so a partial mesh degrades cleanly. The
- * resolver's error and requirements flow to the layer (typed): a `Config`-backed resolver surfaces a
- * `ConfigError` as a typed layer-build failure — fail-fast on a misconfigured url — or return `undefined`
- * (e.g. via `Config.option`) to skip that peer instead.
+ * **Membership (D3):**
+ * - **Fixed** — non-empty `options.nodes` or stamped `nodes([…])` / `distributed([…])`.
+ * - **Directory** — stamped **empty** set (bare `.pipe(Resource.distributed)` / `nodes([])`): read
+ *   Lookup `Directory.nodesServing(tag.key)` at layer build. Soft empty map when Directory is absent.
+ * - **Undeclared** — no `nodesSym` and no `options.nodes` → empty static peers (not directory).
+ *
+ * **Peer addresses:** each {@link Node}'s own `url` / `path` is the default. Pass `options.url` to
+ * **override** the url per node — an env-specific port, a tunnel, or a value from Effect `Config` —
+ * falling back to `Node.url` when the resolver returns `undefined`. A node with no dialable address
+ * is **skipped** (never a throw), so a partial mesh degrades cleanly. IpcSocket peers dial via
+ * {@link protocolIpc} when only `path` is set. The resolver's error and requirements flow to the
+ * layer (typed).
  *
  * @public
  */
@@ -5108,7 +5157,8 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
   self: AnyNode,
   options?: {
     /** The fleet (including `self`) — supply it **at the use site** so a shared resource can be defined
-     *  node-free and exported; falls back to the tag's baked-in {@link distributed} set when omitted. */
+     *  node-free and exported; falls back to the tag's baked-in {@link distributed} set when omitted.
+     *  An explicit empty array is directory-backed (same as bare {@link distributed}). */
     readonly nodes?: ReadonlyArray<AnyNode>;
     readonly url?: (node: AnyNode) => Effect.Effect<string | undefined, EIn, RIn>;
   },
@@ -5117,25 +5167,90 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
     Layer.effect(
       tag[peersSym],
       Effect.gen(function* () {
-        // fleet from the use site (`options.nodes`) or the tag's baked set; drop self to get the peers.
-        const fleet = options?.nodes ?? tag[nodesSym] ?? [];
+        const stamped =
+          options?.nodes !== undefined ? options.nodes : tag[nodesSym];
+
+        // D3: stamped empty set → Lookup directory membership (soft if Directory absent).
+        if (stamped !== undefined && stamped.length === 0) {
+          const Lookup = yield* Effect.promise(() => import("./Lookup"));
+          const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+          if (Option.isNone(dirOpt)) {
+            return {} as Record<string, PeerServiceOf<S>>;
+          }
+          const rows = yield* dirOpt.value.nodesServing(
+            new Lookup.NodesServingRequest({ resourceKey: tag.key }),
+          );
+          type DialTarget = {
+            readonly key: string;
+            readonly kind: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+          };
+          const dialable: Array<DialTarget> = [];
+          for (const row of rows) {
+            if (row.nodeKey === self.key) continue;
+            if (row.kind === "IpcSocket" && row.path !== undefined) {
+              dialable.push({
+                key: row.nodeKey,
+                kind: row.kind,
+                path: row.path,
+              });
+              continue;
+            }
+            if (row.url !== undefined) {
+              dialable.push({
+                key: row.nodeKey,
+                kind: row.kind,
+                url: row.url,
+              });
+            }
+          }
+          const discovered = yield* Effect.forEach(dialable, (target) =>
+            Effect.map(
+              buildPeerClientAt(tag, target),
+              (client) => [target.key, client] as const,
+            ),
+          );
+          return Object.fromEntries(discovered) as unknown as Record<
+            string,
+            PeerServiceOf<S>
+          >;
+        }
+
+        // Fixed fleet (or undeclared → []); drop self to get the peers.
+        const fleet = stamped ?? [];
         const others = fleet.filter((node) => node.key !== self.key);
-        // the node's own url is the default; an optional resolver overrides it, falling back to the url.
-        const resolveUrl = (node: AnyNode): Effect.Effect<string | undefined, EIn, RIn> =>
+        const resolveUrl = (
+          node: AnyNode,
+        ): Effect.Effect<string | undefined, EIn, RIn> =>
           options?.url === undefined
             ? Effect.succeed(node.url)
             : Effect.map(options.url(node), (override) => override ?? node.url);
         const resolved = yield* Effect.forEach(others, (node) =>
-          Effect.map(resolveUrl(node), (url) => ({ key: node.key, url })),
+          Effect.map(resolveUrl(node), (url) => ({
+            key: node.key,
+            kind: node.kind,
+            url,
+            path: node.path,
+          })),
         );
         const entries = yield* Effect.forEach(
-          // a node with no url anywhere is skipped — a partial mesh, not a failure
+          // no dialable address → skip (partial mesh); ipc path counts when url absent
           resolved.filter(
-            (entry): entry is { readonly key: string; readonly url: string } =>
-              entry.url !== undefined,
+            (entry) =>
+              entry.url !== undefined ||
+              (entry.kind === "IpcSocket" && entry.path !== undefined),
           ),
-          ({ key, url }) =>
-            Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
+          (target) =>
+            Effect.map(
+              buildPeerClientAt(tag, {
+                key: target.key,
+                kind: target.kind,
+                ...(target.url !== undefined ? { url: target.url } : {}),
+                ...(target.path !== undefined ? { path: target.path } : {}),
+              }),
+              (client) => [target.key, client] as const,
+            ),
         );
         // Boundary: each peer client is a full `ServiceOf<S>` — a width-supertype of the leaf
         // `PeerServiceOf<S>` the capability exposes — but the mapped types don't reduce under a generic

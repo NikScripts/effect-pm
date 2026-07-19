@@ -119,7 +119,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  *
  * ```ts
  * class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
- *   Resource.distributed([DropletEast, DropletWest]),
+ *   Resource.nodes([DropletEast, DropletWest]),
  * ) {}
  * ```
  *

@@ -23,7 +23,7 @@ class NodeB extends Resource.Node<NodeB>("ws-peers/B", { url: `http://127.0.0.1:
 class Pool extends Resource.Tag<Pool>()("ws-peers/Pool", {
   active: Resource.effect(Schema.Number),
   fleetActive: Resource.effect(Schema.Number).pipe(Resource.fleet),
-}).pipe(Resource.distributed([NodeA, NodeB])) {}
+}).pipe(Resource.nodes([NodeA, NodeB])) {}
 
 const impl = (own: number) =>
   Effect.gen(function* () {
