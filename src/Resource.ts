@@ -3607,6 +3607,27 @@ export function listen(
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
+  // Dynamic Prototype.instance — mint suffix (if needed) + ipc path; no Identity.claim.
+  if (isDynamicInstanceNode(node)) {
+    return Layer.unwrap(
+      Effect.gen(function* () {
+        const protoKey = dynamicPrototypeKeyOf(node);
+        const suffix =
+          dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
+        const wireKey = `${protoKey}#${suffix}`;
+        const path = yield* ephemeralIpcPath(wireKey);
+        const addressed = Object.assign(makeNode(wireKey, { path }), {
+          [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
+            catalogSym
+          ],
+        }) as AnyNode & { readonly key: string };
+        return withListenNode(
+          addressed,
+          listenTransport(addressed, list, options),
+        );
+      }),
+    ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  }
   // Address-less non-prototype: mint ipc path, claim node.key, then bind (D7).
   if (
     node.path === undefined &&
@@ -3662,6 +3683,35 @@ const isPrototypeNode = (node: unknown): boolean =>
   (typeof node === "object" || typeof node === "function") &&
   node !== null &&
   (node as { readonly isPrototype?: boolean }).isPrototype === true;
+
+/** True when `node` came from {@link Prototype}.instance. @internal */
+const isDynamicInstanceNode = (node: unknown): boolean =>
+  (typeof node === "object" || typeof node === "function") &&
+  node !== null &&
+  (node as { readonly isDynamicInstance?: boolean }).isDynamicInstance === true;
+
+/** Prototype key stamped by {@link Prototype}.instance. @internal */
+const dynamicPrototypeKeyOf = (node: AnyNode): string => {
+  const proto = (node as { readonly dynamicPrototypeKey?: string })
+    .dynamicPrototypeKey;
+  return typeof proto === "string" && proto.length > 0 ? proto : node.key;
+};
+
+/** Optional suffix from {@link Prototype}.instance(suffix). @internal */
+const dynamicInstanceSuffixOf = (node: AnyNode): string | undefined => {
+  const suffix = (node as { readonly instanceSuffix?: string }).instanceSuffix;
+  return typeof suffix === "string" && suffix.length > 0 ? suffix : undefined;
+};
+
+/** Process-local seq so same-ms dynamic instances get distinct wire keys. @internal */
+let dynamicInstanceSeq = 0;
+
+/** Mint `prototypeKey#<millis>-<seq>` suffix for {@link Prototype}.instance(). @internal */
+const uniqueInstanceSuffix = (): Effect.Effect<string> =>
+  Effect.map(Clock.currentTimeMillis, (now) => {
+    dynamicInstanceSeq += 1;
+    return `${now}-${dynamicInstanceSeq}`;
+  });
 
 /** Ephemeral Unix socket path for address-less {@link listen}. @internal */
 const ephemeralIpcPath = (nodeKey: string): Effect.Effect<string> =>
@@ -4920,11 +4970,15 @@ export const lookupClient = <Self, S extends Spec>(
   >;
 
 /**
- * Prototype Node template (D7) — no address; clone with `.make` into a constructible Node:
+ * Prototype Node template (D7) — no address until cloned:
  *
  * ```ts
  * class MailWorker extends Resource.Prototype<MailWorker, Mail>("app/MailWorker") {}
+ * // Named clone with a fixed address (class ctor):
  * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
+ * // Dynamic instance — ephemeral ipc at listen; many `prototypeKey#suffix`; no claim:
+ * Resource.listen(MailWorker.instance(), [Resource.serve(Mail, impl)])
+ * Resource.listen(MailWorker.instance("w1"), [Resource.serve(Mail, impl)])
  * ```
  *
  * @public
@@ -4941,6 +4995,21 @@ export function Prototype<Self, ROut = never>(
     [catalogSym]: undefined as ROut | undefined,
     make: (cloneName: string, target: { readonly path: string } | { readonly url: string }) =>
       makeNode(`${name}#${cloneName}`, target),
+    /**
+     * Dynamic instance Node for {@link listen} — wire key `prototypeKey#suffix`, ephemeral
+     * ipc path at listen, **no** Identity claim (many may run). Omit `suffix` to mint one.
+     */
+    instance: (suffix?: string) => {
+      const key =
+        suffix !== undefined && suffix.length > 0 ? `${name}#${suffix}` : name;
+      return Object.assign(makeNode<Self, ROut>(key), {
+        isDynamicInstance: true as const,
+        dynamicPrototypeKey: name,
+        ...(suffix !== undefined && suffix.length > 0
+          ? { instanceSuffix: suffix }
+          : {}),
+      });
+    },
   });
 }
 

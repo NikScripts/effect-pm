@@ -6,6 +6,17 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — Dynamic `Prototype.instance` LOCKED
+
+- **Owner said:** “Continue” (after D3).
+- **Chose (LOCKED):**
+  - `Proto.instance()` / `Proto.instance(suffix)` → Node for `listen` (value, not class ctor).
+  - Wire key `prototypeKey#suffix`; omitted suffix minted at listen; always ephemeral ipc path.
+  - **No** `Identity.claim` (many winners); directory advertise + `livenessReplace` on dupe `nodeKey`.
+  - Multi-instance client picker stays **D4 OPEN** (`lookupClient` fail-closed on ambiguous).
+- **Still LEAN / later:** `askIncumbent`; D4 picker/LB; X1 multi-protocol.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — D3 LOCKED (bare `distributed` / directory-backed peers)
 
 - **Owner said:** “Okay” (proceed with recommended next slice after D7).
@@ -15,7 +26,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - `peersLayer` with a **stamped empty** Node set reads Lookup `Directory.nodesServing(tag.key)` at build; exclude self; dial by directory entry kind (ipc path / url).
   - Undeclared tags (no `nodesSym`) stay empty static peers — not directory.
   - Directory absent → soft empty peer map (provide Lookup client for a real mesh).
-- **Still LEAN / later:** `askIncumbent`; dynamic `instance`; D4 picker/LB.
+- **Still LEAN / later:** `askIncumbent`; ~~dynamic `instance`~~ → **LOCKED**; D4 picker/LB.
 - **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — D7 vertical LOCKED (address-less / bootstrap / lookupClient)
