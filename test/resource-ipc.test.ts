@@ -22,7 +22,7 @@ const echoImpl = {
 /** Server listens before the ipc client dials. */
 const withIpc = <A, E, R>(
   server: Layer.Layer<never, never, R>,
-  client: Layer.Layer<Echo, never, never>,
+  client: Layer.Layer<Echo, Resource.UnaddressedNode, never>,
   use: Effect.Effect<A, E, Echo>,
 ) =>
   Effect.gen(function* () {

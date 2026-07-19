@@ -12,8 +12,11 @@ const tmpSock = (label: string) =>
   });
 
 const withLookup = <A, E>(
-  server: Layer.Layer<never>,
-  client: Layer.Layer<Lookup.Identity | Lookup.Directory>,
+  server: Layer.Layer<never, Lookup.LookupUnaddressed>,
+  client: Layer.Layer<
+    Lookup.Identity | Lookup.Directory,
+    Lookup.LookupUnaddressed
+  >,
   use: Effect.Effect<A, E, Lookup.Identity | Lookup.Directory>,
 ) =>
   Effect.gen(function* () {

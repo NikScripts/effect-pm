@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Exit, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
@@ -36,9 +36,21 @@ describe("connect dual dispatch", () => {
     expect(built.every((e) => Effect.isEffect(e))).toBe(true);
   });
 
-  it("deriving from a bare (unaddressed) node fails loudly, not silently", () => {
-    // the node never declared a url/kind — connect can't guess a transport, so it throws with a
-    // remediation message rather than building a layer that fails opaquely at the first call.
-    expect(() => Resource.connect(BareNode as never)).toThrow(/UnaddressedNode|url|kind/i);
-  });
+  it("deriving from a bare (unaddressed) node fails the Layer with UnaddressedNode", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const layer = Resource.connect(
+          BareNode as Resource.AnyNode & {
+            readonly url?: string;
+            readonly path?: string;
+            readonly kind?: Resource.ProtocolKind;
+          },
+        );
+        const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          expect(String(exit.cause)).toMatch(/UnaddressedNode|url|kind/i);
+        }
+      }),
+    ));
 });

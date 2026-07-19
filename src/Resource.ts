@@ -3461,8 +3461,9 @@ export interface IpcServerOptions {
  *
  * const live = Resource.ipcServer(
  *   [Resource.serve(Jobs, jobsImpl)],
- *   { path: Worker.path! },
+ *   { path: "/tmp/worker.sock" },
  * )
+ * // or Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)])
  * ```
  *
  * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route
@@ -3581,7 +3582,7 @@ export function listen(
   node: AnyNode,
   serves: Layer.Layer<any, any, never> | ServeLayerList,
   options?: ListenOptions,
-): Layer.Layer<never, never, unknown> {
+): Layer.Layer<never, UnaddressedNode, unknown> {
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
   const advertiseNode = node as AnyNode & { readonly key: string };
   const httpOpts: HttpServerOptions | undefined =
@@ -3600,7 +3601,7 @@ export function listen(
   // helpers stay advertise-free unless `advertiseNode` is passed. Directory absent ⇒ local-only.
   if (node.kind === "IpcSocket") {
     if (node.path === undefined) {
-      throw new UnaddressedNode({ node: node.key });
+      return unaddressedLayer(node.key);
     }
     return ipcServer(list, {
       path: node.path,
@@ -3618,7 +3619,7 @@ export function listen(
   if (node.kind === "Http") {
     return httpServer(list, httpOpts);
   }
-  throw new UnaddressedNode({ node: node.key });
+  return unaddressedLayer(node.key);
 }
 
 /**
@@ -4070,10 +4071,10 @@ const makeNode = <Self, ROut = never>(
  *
  * @public
  */
-const connectLayer = <Self, RIn>(
+const connectLayer = <Self, E, RIn>(
   node: NodeKey<Self>,
-  protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
-): Layer.Layer<Self, never, RIn> =>
+  protocol: Layer.Layer<RpcClient.Protocol, E, RIn>,
+): Layer.Layer<Self, E, RIn> =>
   // wrap the ambient protocol into the node's value shape (`{ protocol }`) — see NodeProtocol.
   Layer.effect(node, Effect.map(RpcClient.Protocol, (protocol) => ({ protocol }))).pipe(
     Layer.provide(protocol),
@@ -4256,9 +4257,14 @@ const socketClient = <Self>(
     protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
 
-/** Deriving a transport from a node that never declared one — a bare `Resource.Node("x")` has no
- *  address/`kind`, so `connect(node)` can't know how to reach it. Fails loudly instead of guessing. @internal */
-class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
+/**
+ * Deriving a transport from a node that never declared one — a bare `Resource.Node("x")` has no
+ * address/`kind`, so `connect` / `listen` can't know how to reach it. Surfaces on the Layer / Effect
+ * error channel (never a sync `throw`).
+ *
+ * @public
+ */
+export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
   readonly node: string;
 }> {
   override get message() {
@@ -4269,6 +4275,17 @@ class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
     );
   }
 }
+
+/** Fail a Layer build with {@link UnaddressedNode} — Effect error channel, not sync throw. @internal */
+const unaddressedLayer = <A = never>(
+  node: string,
+): Layer.Layer<A, UnaddressedNode> =>
+  Layer.unwrap(
+    Effect.map(
+      Effect.fail(new UnaddressedNode({ node })),
+      (impossible: never): Layer.Layer<A> => impossible,
+    ),
+  );
 
 /**
  * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
@@ -4292,21 +4309,25 @@ export const protocolIpc = (
   );
 
 /** Build the client `Protocol` a node declares — keyed off its {@link ProtocolKind}.
- *  Fails loudly on an unaddressed node. */
-const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
+ *  Unaddressed nodes fail the Layer error channel ({@link UnaddressedNode}). */
+const protocolForNode = (
+  node: AnyNode,
+): Layer.Layer<RpcClient.Protocol, UnaddressedNode> => {
   if (node.kind === undefined) {
-    throw new UnaddressedNode({ node: node.key });
+    return unaddressedLayer(node.key);
   }
   if (node.kind === "IpcSocket") {
     if (node.path === undefined) {
-      throw new UnaddressedNode({ node: node.key });
+      return unaddressedLayer(node.key);
     }
     return protocolIpc(node.path);
   }
   if (node.url === undefined) {
-    throw new UnaddressedNode({ node: node.key });
+    return unaddressedLayer(node.key);
   }
-  return node.kind === "WebSocket" ? protocolWebsocket(node.url) : protocolHttp(node.url);
+  return node.kind === "WebSocket"
+    ? protocolWebsocket(node.url)
+    : protocolHttp(node.url);
 };
 
 /**
@@ -4344,14 +4365,14 @@ export const connect: {
       readonly path?: string;
       readonly kind?: ProtocolKind;
     },
-  ): Layer.Layer<Self>;
+  ): Layer.Layer<Self, UnaddressedNode>;
 } = Fn.dual(
   // data-first when there are two args, or when the single arg is a node (not a protocol layer).
   (args: IArguments) => args.length >= 2 || !Layer.isLayer(args[0]),
   (
     node: AnyNode,
     protocol?: Layer.Layer<RpcClient.Protocol, never, unknown>,
-  ): Layer.Layer<unknown, never, unknown> =>
+  ): Layer.Layer<unknown, UnaddressedNode, unknown> =>
     connectLayer(node, protocol ?? protocolForNode(node)),
 );
 
@@ -4403,16 +4424,18 @@ export const connectSocket: {
  */
 export const connectIpc: {
   (path: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
-  <Self>(node: NodeKey<Self> & { readonly path?: string }): Layer.Layer<Self>;
+  <Self>(
+    node: NodeKey<Self> & { readonly path?: string },
+  ): Layer.Layer<Self, UnaddressedNode>;
 } = Fn.dual(
   (args: IArguments) => typeof args[0] !== "string",
   (
     node: NodeKey<unknown> & { readonly path?: string },
     path?: string,
-  ): Layer.Layer<unknown> => {
+  ): Layer.Layer<unknown, UnaddressedNode> => {
     const sock = path ?? node.path;
     if (sock === undefined) {
-      throw new UnaddressedNode({ node: node.key });
+      return unaddressedLayer(node.key);
     }
     return connectLayer(node, protocolIpc(sock));
   },
@@ -4429,10 +4452,10 @@ const ipcClient = <Self>(
     readonly path?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self> => {
+): Layer.Layer<Self, UnaddressedNode> => {
   const sock = options?.path ?? node.path;
   if (sock === undefined) {
-    throw new UnaddressedNode({ node: node.key });
+    return unaddressedLayer(node.key);
   }
   return connectLayer(node, protocolIpc(sock, options?.serialization));
 };
@@ -4503,24 +4526,24 @@ export const verifyConnection = (
     readonly kind?: ProtocolKind;
   },
   options?: { readonly timeout?: Duration.Input; readonly url?: string; readonly path?: string },
-): Effect.Effect<void, NodeUnreachable> => {
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
+  const effectiveUrl = options?.url ?? node.url;
   const kind: ProtocolKind | undefined =
     node.kind ??
     (options?.path !== undefined || node.path !== undefined
       ? "IpcSocket"
-      : options?.url !== undefined || node.url !== undefined
-        ? (options?.url ?? node.url)!.startsWith("ws://") ||
-            (options?.url ?? node.url)!.startsWith("wss://")
+      : effectiveUrl !== undefined
+        ? effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
           ? "WebSocket"
           : "Http"
         : undefined);
   if (kind === undefined) {
-    return Effect.die(new UnaddressedNode({ node: node.key }));
+    return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
   if (kind === "IpcSocket") {
     const path = options?.path ?? node.path;
     if (path === undefined) {
-      return Effect.die(new UnaddressedNode({ node: node.key }));
+      return Effect.fail(new UnaddressedNode({ node: node.key }));
     }
     const timeout = options?.timeout ?? "3 seconds";
     const window = Duration.millis(Math.min(Duration.toMillis(timeout), 500));
@@ -4538,7 +4561,7 @@ export const verifyConnection = (
   }
   const url = options?.url ?? node.url;
   if (url === undefined) {
-    return Effect.die(new UnaddressedNode({ node: node.key }));
+    return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
   const timeout = options?.timeout ?? "3 seconds";
   const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));

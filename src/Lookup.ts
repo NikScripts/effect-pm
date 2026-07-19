@@ -128,6 +128,11 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
  *
  * @public
  */
+/**
+ * Lookup node has no dialable address — Layer error channel (not a sync throw).
+ *
+ * @public
+ */
 export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
   readonly node: string;
 }> {}
@@ -395,14 +400,25 @@ export const layerDefaultLocal = (options?: {
  *
  * @public
  */
+/** Fail a Layer build with {@link LookupUnaddressed}. @internal */
+const lookupUnaddressedLayer = <A = never>(
+  node: string,
+): Layer.Layer<A, LookupUnaddressed> =>
+  Layer.unwrap(
+    Effect.map(
+      Effect.fail(new LookupUnaddressed({ node })),
+      (impossible: never): Layer.Layer<A> => impossible,
+    ),
+  );
+
 export const layer = (
   node: AnyNode & { readonly key: string },
   options?: { readonly unlink?: boolean },
-) => {
+): Layer.Layer<never, LookupUnaddressed> => {
   if (node.kind === "IpcSocket" && node.path !== undefined) {
     return layerIpc(node.path, options);
   }
-  throw new LookupUnaddressed({ node: node.key });
+  return lookupUnaddressedLayer(node.key);
 };
 
 /**
@@ -453,16 +469,18 @@ export const directoryAdvertiseLayer = (
  */
 export const client = (
   node: AnyNode & { readonly path?: string },
-): Layer.Layer<Identity | Directory> => {
+): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   if (node.path === undefined) {
-    throw new LookupUnaddressed({
-      node: "key" in node && typeof node.key === "string" ? node.key : "lookup",
-    });
+    return lookupUnaddressedLayer(
+      "key" in node && typeof node.key === "string" ? node.key : "lookup",
+    );
   }
+  const path = node.path;
+  // Path overload of connectIpc — no UnaddressedNode on the error channel.
   return Layer.mergeAll(
     Resource.client(Identity, node),
     Resource.client(Directory, node),
-  ).pipe(Layer.provide(Resource.connectIpc(node)));
+  ).pipe(Layer.provide(node.pipe(Resource.connectIpc(path))));
 };
 
 /**
@@ -472,7 +490,7 @@ export const client = (
  */
 export const clientDefaultLocal = (options?: {
   readonly path?: string;
-}): Layer.Layer<Identity | Directory> => {
+}): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
   const node = LookupNode("effect-pm/Lookup/default", { path });
   return client(node);
