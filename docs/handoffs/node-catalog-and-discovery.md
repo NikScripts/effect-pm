@@ -428,6 +428,16 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 | Catalog | Same `ROut` brand as the Prototype. |
 | Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node (D4 OPEN). |
 
+#### `lookupClient` naming (**LOCKED** 2026-07-19)
+
+| Decision | Lock |
+|----------|------|
+| Job | Nodeless client: **Lookup** picks the dial target (Identity resolve → directory `nodesServing`). |
+| vs `client(Tag, node)` | Explicit Node — caller names where to dial. |
+| Fail-closed | 0 or &gt;1 directory rows → `LookupClientError` — **no** silent multi-replica pick. |
+| Name | Shipped **`Resource.lookupClient`**. Bake sketch `unsafeLookupClient` (“trust Lookup or die”) is the **same** contract — keep the non-`unsafe` name; TSDoc/handoff must say so. |
+| Not D4 | Soft pick when N&gt;1 is a **separate** OPEN bake (not this API). |
+
 - Identity: **no `{ self }`** — bound Node on Tag and/or listen Node.
 - `NodeServer<N>` type alias — LEAN name OK; serve-list typing already via `listen` C3.
 - Fleet fields ⇒ `distributed` / `nodes` before mesh APIs. Empty stamped set ⇒ directory (**D3 LOCKED**).

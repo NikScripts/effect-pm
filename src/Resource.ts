@@ -1929,7 +1929,8 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
 }> {}
 
 /**
- * {@link lookupClient} could not pick exactly one dial target for the Tag.
+ * {@link lookupClient} could not resolve **exactly one** dial target for the Tag
+ * (`missing` = none; `ambiguous` = more than one directory row).
  *
  * @public
  */

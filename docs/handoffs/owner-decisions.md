@@ -6,6 +6,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — `lookupClient` name (= bake `unsafeLookupClient`)
+
+- **Owner said:** The Lookup-or-die nodeless client was sketched as `unsafeLookupClient`; keep without `unsafe` if docs are clear — agent’s call.
+- **Chose (LOCKED):** Keep **`Resource.lookupClient`**. Same contract as the sketch: Lookup resolves the dial target; missing/ambiguous → fail (`LookupClientError`); not a silent N&gt;1 pick. TSDoc + handoff state the rename from `unsafeLookupClient`. Soft multi-replica pick remains **D4 OPEN**.
+- **Supervisor impact:** Docs/TSDoc clarify on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — `Resource.Node.Prototype` (nest under Node)
 
 - **Owner said:** Top-level `Resource.Prototype` is wrong if it’s a Node — expected `Resource.Node.Prototype`.
