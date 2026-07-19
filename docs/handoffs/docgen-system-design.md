@@ -1,7 +1,8 @@
 # Docgen system — design doc (LIVING; we work from this)
 
 Status: **Phase 1 (prototypes) ✅ · Phase 2 (core services) ✅ · Phase 3 (Extractor) ✅ — byte-identical
-gate PASSED on the full corpus via scripts/gen-api-next.ts. Next: Phase 4 (renderers). See HANDOFF below.**
+gate PASSED on the full corpus via scripts/gen-api-next.ts · Phase 4: TypePrinter ✅ —
+HoverRenderer/SourceRenderer next. See HANDOFF below.**
 Owner: Nik. Author: pairing session. Branch: **`docs/standards-corpus`** — the docgen replaces the
 linking internals of the API reference, which is unmerged on this branch, so it CANNOT branch from
 `integration` (would lack the prerequisite gen-api/api-data). Related work stays on one branch.
@@ -185,11 +186,18 @@ green. Work in `docs/site` (its own package: `cd docs/site` for all commands).
   symbol re-exported under two namespaces (`Predicate.isTupleOf` / `Tuple.isTupleOf`) has two pages but
   one declaration line; gen-api's symbol-keyed map resolves to the last-extracted page.
 - `Slug.ts` — canonical `slugForEntry`/`symbolFileKey`; `src/lib/api-slugs.ts` re-exports it.
+- `TypePrinter.ts` — service, Phase 4: `printType(type, enclosing)` / `printNode(node)` →
+  `ReadonlyArray<Part>` (`{ text, url: Option }`, adjacent unlinked runs merged). `typeToTypeNode`
+  with alias-preserving NodeBuilderFlags → recursive walker (references, typeof, import-type
+  unwrapped, unions/intersections, tuples incl. named/rest/optional, functions/constructors,
+  conditionals/infer, type literals, template literals, predicates, operators, indexed access) →
+  `ts.createPrinter` plain-text fallback for the rest (mapped types, literals, keywords). Qualified
+  names resolve as a unit, falling back to the rightmost identifier.
 - `index.ts` — barrel (`export * as` each).
 `docs/site/scripts/gen-api-next.ts` — the D4 bridge: gen-api's writer verbatim, extraction via the
 services, writes `api-data-next/`. Any writer change must land in BOTH scripts until Phase 5 cutover.
 `docs/site/test/docgen/` — `@effect/vitest` suites + `fixtures/` (incl. a fixture package for the walk).
-24 tests.
+30 tests.
 
 ### Phase 3 gate — PASSED (2026-07-16)
 ```
@@ -218,9 +226,9 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
 - One field per line; PascalCase only for type/class/namespace, camelCase values. printWidth 100.
 
 ### Immediate next task: Phase 4 (renderers) — findings already de-risk these
-- `TypePrinter` — `checker.typeToTypeNode(type, enclosing, flags)` → walk the node, emit text, resolve
-  each `TypeReferenceNode.typeName` via `LinkResolver` → link; fall back to `ts.createPrinter().printNode()`
-  for node kinds you don't special-case (P1). Depends on `LinkResolver`.
+- ~~`TypePrinter`~~ ✅ DONE (2026-07-19) — as designed: `typeToTypeNode` + walker + printer fallback,
+  6 tests (linked function type, union, plain type params, built-in generic, mapped fallback,
+  parsed-node print). Re-verified the P1 spike before building: synthesized refs resolve 3/3.
 - `HoverRenderer` / `SourceRenderer` — map links onto shiki via a `span` transformer keyed on
   `token.offset` (P3). Tune: match by offset RANGE (not just start), and subtract the twoslash preamble
   shift. `LinkResolver` needs a `TsProgram` whose `paths` map `effect`/`@effect/*` → `repos/effect/…/src`

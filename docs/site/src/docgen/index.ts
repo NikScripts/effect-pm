@@ -15,3 +15,4 @@ export * as Model from "./Model.js";
 export * as Slug from "./Slug.js";
 export * as SymbolIndex from "./SymbolIndex.js";
 export * as TsProgram from "./TsProgram.js";
+export * as TypePrinter from "./TypePrinter.js";
