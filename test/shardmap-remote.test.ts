@@ -38,8 +38,13 @@ const remote = <A, E>(
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = address._tag === "TcpAddress" ? address.port : 0;
+      // C1: distributed([Node1]) is set-of-one — dial via that Node (not ambient Protocol).
       return yield* op.pipe(
-        Effect.provide(Resource.client(SM).pipe(Layer.provide(proto(clientKind, port)))),
+        Effect.provide(
+          Resource.client(SM, Node1).pipe(
+            Layer.provide(Resource.connect(Node1, proto(clientKind, port))),
+          ),
+        ),
         Effect.scoped,
       );
     }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))),

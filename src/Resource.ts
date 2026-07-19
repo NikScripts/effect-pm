@@ -1857,7 +1857,7 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
    *  as (the same key its peers are keyed by). Provided by {@link peersLayer} / {@link selfNodeLayer},
    *  read via {@link selfNode}. */
   readonly [selfNodeSym]: Context.Key<SelfNodeId<Self>, string>;
-  /** The fleet — the tag's `distributed` set, if declared (via {@link distributed}); else `undefined`. */
+  /** The Node set (C1), if declared via {@link nodes} / `{ node }` / {@link distributed}; else `undefined`. */
   readonly [nodesSym]?: ReadonlyArray<AnyNode>;
   /** Set when the tag was piped through {@link identity} — layer/serve claim at Lookup first. */
   readonly [identitySym]?: true;
@@ -2400,6 +2400,10 @@ const buildInstanceTag = <Self, S extends Spec>(
     [groupSym]: group,
     [localCapSym]: localCap,
     [nodeSym]: node,
+    // C1: `{ node: X }` ≡ set-of-one — keep nodeSym + nodesSym in sync at construction.
+    ...(node !== undefined
+      ? { [nodesSym]: [node as AnyNode] as ReadonlyArray<AnyNode> }
+      : {}),
     // Every tag carries a kind: the typed factories pass their own; a bare tag defaults to `kind`.
     [kindSym]: kindOverride ?? kind,
     [readinessSym]: undefined,
@@ -4346,54 +4350,105 @@ export const clientHttp = <Self, S extends Spec>(
 // ── multi-node: the fleet + peer clients ──
 
 /**
- * Declare a resource's **fleet** — the nodes it's served on — piped onto the tag (like
- * {@link withReadiness}). Variadic; each {@link Node} carries its own url (decision 2), so the tag is
- * self-describing. Read by {@link peersLayer} to reach the other nodes.
+ * Stamp a Tag's **Node set** (C1) — overwrites. Size **1** also syncs {@link nodeSym} so
+ * {@link client}`(Tag)` works; size ≠ 1 clears `nodeSym` (use `client(Tag, node)`). Identity Tags
+ * may only carry ≤ 1 Node ({@link IdentityMultiNode}).
  *
  * ```ts
- * class Database extends Resource.Tag<Database>()("app/Database", spec).pipe(
- *   Resource.distributed(NwslNode, EbwslNode, WnbaNode),
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
+ *   Resource.nodes([WorkerA]),
+ * ) {}
+ * class Pool extends Resource.Tag<Pool>()("app/Pool", spec).pipe(
+ *   Resource.nodes([A, B, C]),
  * ) {}
  * ```
  *
+ * Append with {@link andNode}. `{ node: X }` on the Tag ctor is sugar for `nodes([X])`.
+ *
  * @public
  */
-export const distributed: {
-  // data-last (pipe): mirrors `withReadiness` — the data-first overloads (which infer `Self`/`S` and
-  // return the *specific* tag) are what let a class `extends … .pipe(distributed(...))` resolve without
-  // recursing on its own type, so `distributed` is `Fn.dual` too (not a bare curry).
+export const nodes: {
   <T extends PipeableTag>(
-    nodes: ReadonlyArray<AnyNode>,
+    nodeSet: ReadonlyArray<AnyNode>,
   ): (tag: T) => T;
   <Self, S extends Spec, HSelf>(
     tag: NodeBoundTag<Self, S, HSelf>,
-    nodes: ReadonlyArray<AnyNode>,
+    nodeSet: ReadonlyArray<AnyNode>,
   ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
     tag: ResourceTag<Self, S>,
-    nodes: ReadonlyArray<AnyNode>,
+    nodeSet: ReadonlyArray<AnyNode>,
   ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T => {
-    // S1: identity handles are one Node at a time — multi-node fleets stay on non-identity Tags.
+  <T extends ResourceTag<any, any, any>>(
+    tag: T,
+    nodeSet: ReadonlyArray<AnyNode>,
+  ): T => {
     if (isIdentity(tag)) {
-      assertIdentityNodeCount(tag, nodes);
+      assertIdentityNodeCount(tag, nodeSet);
     }
-    return Object.assign(tag, { [nodesSym]: nodes });
+    // Size 1 → client(Tag); otherwise nodeless for client (explicit node / ambient Protocol).
+    const node =
+      nodeSet.length === 1 ? (nodeSet[0] as NodeKey<unknown>) : undefined;
+    return Object.assign(tag, {
+      [nodesSym]: nodeSet,
+      [nodeSym]: node,
+    });
   },
 );
 
 /**
- * Read a tag's {@link distributed} fleet — the nodes it was declared on, or `[]` when undeclared.
- * Factories that hash-partition across the pack use this instead of reaching through private symbols.
+ * Append one {@link Node} to a Tag's set (C1). Prefer this over `nodes([..., x])` when adding.
+ * Identity Tags refuse a second Node ({@link IdentityMultiNode}).
+ *
+ * ```ts
+ * class PoolPlus extends PoolBase.pipe(Resource.andNode(StatsNode)) {}
+ * ```
+ *
+ * @public
+ */
+export const andNode: {
+  <T extends PipeableTag>(node: AnyNode): (tag: T) => T;
+  <Self, S extends Spec, HSelf>(
+    tag: NodeBoundTag<Self, S, HSelf>,
+    node: AnyNode,
+  ): NodeBoundTag<Self, S, HSelf>;
+  <Self, S extends Spec>(
+    tag: ResourceTag<Self, S>,
+    node: AnyNode,
+  ): ResourceTag<Self, S>;
+} = Fn.dual(
+  2,
+  <T extends ResourceTag<any, any, any>>(tag: T, node: AnyNode): T => {
+    const current = tag[nodesSym] ?? [];
+    return nodes(tag, [...current, node]) as T;
+  },
+);
+
+/**
+ * Read a Tag's Node set (C1), or `[]` when undeclared.
+ *
+ * @public
+ */
+export const nodesOf = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
+
+/**
+ * Alias of {@link nodes} — declare a resource's fleet for {@link peersLayer} / ShardMap.
+ *
+ * @public
+ */
+export const distributed = nodes;
+
+/**
+ * Alias of {@link nodesOf}.
  *
  * @public
  * @since 1.0.0
  */
-export const distributedOf = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
+export const distributedOf = nodesOf;
 
 /**
  * Mark a Tag as **identity-claiming** (S1): {@link layer} / {@link serve} claim the resource key at

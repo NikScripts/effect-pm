@@ -257,15 +257,30 @@ Resource.ipcClient(Worker)
 
 Tests: `test/resource-ipc.test.ts`.
 
-### Block Phase 2 (catalog) — **OPEN** (bake in progress; prior leans outdated)
+### Block Phase 2 (catalog)
 
 | # | Decision | Status |
 |---|----------|--------|
-| **C1** | How Tags carry Nodes (set / bake / pipe / nodeless) | **OPEN** — see [Bake thoughts § Tags + node sets](#bake-thoughts-2026-07-18--tags-managers-lookup). Prior lean “nodeless by default” is **superseded as lean**; not replaced by a lock yet. |
+| **C1** | How Tags carry Nodes (set / bake / pipe / nodeless) | **LOCKED** (owner 2026-07-19) — see below |
 | **C2** | `listen(node, exposes)` vs keep `httpServer`/`wsServer`/`ipcServer` as transport sugar | **OPEN** — old LEAN: keep transport servers; `listen` = catalog wrap |
 | **C3** | Partial catalogs (runtime subset of `ROut`)? | **OPEN** — old LEAN: No |
 | **C4** | Value-import Tags into node package allowed? | **OPEN** — old LEAN: yes as option; `import type` preferred |
 | **C5** | Serve-family rename (`serve` → `expose`?) same program as catalog? | **OPEN** — owner asked; old LEAN was separate pass |
+
+#### C1 — Tag Node sets (**LOCKED** 2026-07-19)
+
+| Decision | Lock |
+|----------|------|
+| Model | **One set** on the handle (`nodesSym`). No privileged “home” Node. |
+| `client(Tag)` | When set size is **exactly 1** (sync `nodeSym` to that Node). Size ≠ 1 → need `client(Tag, node)` or ambient Protocol. |
+| API | `Resource.nodes([...])` **overwrites**; `Resource.andNode(node)` **appends one**. |
+| Ctor sugar | `{ node: X }` ≡ `nodes([X])` (keep). |
+| Alias | `distributed` / `distributedOf` remain as aliases of `nodes` / `nodesOf`. |
+| Identity | Multi-set **disabled** (`IdentityMultiNode`); overwrite to size ≤ 1 OK; `andNode` that would exceed 1 fails. |
+| Dial-fail | Identity does **not** fall back across a node list (identity has no multi set). Multi-node try-next / LB = later bake. |
+| Pipe | Mutate in place (same as today’s `distributed` / `withReadiness`). Copy-on-pipe deferred. |
+
+**Eng:** shipped — `nodes` / `andNode` / `nodesOf`; `{ node }` set-of-one; `distributed` alias; set-of-one syncs `nodeSym`.
 
 ### Block Phase 3 (discovery / identity lookup)
 
@@ -512,3 +527,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.
 - **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean; owner “good enough for now.” **S1 LOCKED.**
 - **2026-07-18** — **S1 Eng shipped:** `Resource.identity` pipe; `layer`/`serve` claim→local-or-client; `IdentitySelfRequired` / `IdentityMultiNode`; tests over ipc Lookup. Next bake: **C1**.
+- **2026-07-19 (bake)** — Owner lean B; questions on distributed purpose, identity failover, `andNode`; **“Locked.” C1 LOCKED** (one set, nodes/andNode, client set-of-one, no identity→fleet failover).

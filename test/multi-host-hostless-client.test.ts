@@ -4,7 +4,8 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
-// a nodeless multi-node tag (no `{ node }`) — the fleet is on the tag, but the tag names no single node.
+// Set-of-one fleet via distributed/nodes — C1 syncs nodeSym so client(Tag) would bind DbNode;
+// this test still names the node explicitly: client(tag, node).
 class DbNode extends Resource.Node<DbNode>("nodeless-client/DbNode") {}
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("nodeless-client/FleetDatabase", {
   status: Resource.effect(Schema.Boolean),

@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — Tag Node sets C1 (Option B)
+
+- **Owner said:** Lean B; identity/distributed multi disabled; asked what distributed buys; failover if identity unreachable; `andNode(Node)` vs `nodes([Node])`; then “Locked.”
+- **Chose (C1 LOCKED):** One Node set on the handle; `nodes([...])` overwrite + `andNode(node)` append; `{ node }` ≡ set-of-one; `client(Tag)` when size === 1; `distributed` alias; identity multi-set forbidden; identity dial-fail does **not** try other nodes; pipe mutates (copy-on-pipe deferred). See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) C1.
+- **Rejected / deferred:** Privileged home Node; identity→fleet failover; multi-node client try-next / LB (later); copy-on-pipe (later).
+- **Supervisor impact:** C1 Eng unlocked on tip; C2–C5 still OPEN.
+
 ## 2026-07-18 — Identity pipe S1 (“good enough for now”)
 
 - **Owner said:** Pipe on any resource/process constructor (don’t need Singleton ctor); maybe better name; layer vs handle footgun; agent recs; “Good enough for now.”
