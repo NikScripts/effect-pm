@@ -198,9 +198,9 @@ describe("address-less listen", () => {
   );
 });
 
-describe("Resource.Prototype.make", () => {
+describe("Resource.Node.Prototype.make", () => {
   it("creates a constructible Node class with #name wire key", () => {
-    class MailWorker extends Resource.Prototype<MailWorker, Jobs>(
+    class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
       "d7/MailWorker",
     ) {}
     class East extends MailWorker.make("East", {

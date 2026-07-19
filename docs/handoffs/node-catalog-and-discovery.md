@@ -343,7 +343,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **dynamic `Prototype.instance`**.  
+> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **`Resource.Node.Prototype`** (`.make` / `.instance`).  
 > **Still LEAN:** `askIncumbent`.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
@@ -398,7 +398,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **Dynamic instance** `Proto.instance(suffix?)` | Minted at `listen` (ipc) | **Many** `prototypeKey#suffix` — **no claim**; advertise only | Directory for mesh / peers |
 
 ```ts
-class MailWorker extends Resource.Prototype<MailWorker, Mail>("app/MailWorker") {}
+class MailWorker extends Resource.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
 class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
 
 // Dynamic — many workers; listen mints path (+ suffix when omitted); no Identity.claim
@@ -416,11 +416,12 @@ Resource.listen(Worker, [Resource.serve(Mail, impl)]).pipe(
 Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 ```
 
-#### Dynamic `Prototype.instance` (**LOCKED** 2026-07-19)
+#### Dynamic `Node.Prototype.instance` (**LOCKED** 2026-07-19)
 
 | Decision | Lock |
 |----------|------|
-| API | `Proto.instance()` / `Proto.instance(suffix)` on a {@link Prototype} — returns a Node value for `listen` (not a class ctor; unlike `make`). |
+| Nesting | Prototype is a **Node kind** — `Resource.Node.Prototype` (not a top-level `Resource.Prototype`). |
+| API | `Proto.instance()` / `Proto.instance(suffix)` on a `Node.Prototype` — returns a Node value for `listen` (not a class ctor; unlike `make`). |
 | Wire key | `prototypeKey#suffix`. Omitted suffix → minted at `listen` (`<millis>-<seq>`). |
 | Address | Always ephemeral ipc path at `listen` (no address arg — fixed addresses stay on `make`). |
 | Claim | **None** — many instances may run; directory `livenessReplace` still applies on duplicate `nodeKey`. |
@@ -432,7 +433,7 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
 - Fleet fields ⇒ `distributed` / `nodes` before mesh APIs. Empty stamped set ⇒ directory (**D3 LOCKED**).
 - `client(Tag)` stays **set-of-one** (D4 OPEN).
 
-**Eng:** directory + D7 + D3 + `Prototype.instance` on tip.
+**Eng:** directory + D7 + D3 + `Node.Prototype` (`.make` / `.instance`) on tip.
 
 ### Cross-cutting — **OPEN** / parked
 
@@ -663,4 +664,5 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — **C2–C4 Eng shipped:** `Node<Self, ROut>`, `Resource.listen`, `Resource.clientsFor`; ipc runtime + type tests.
 - **2026-07-19 (bake)** — Phase-3 discovery/prototype/directory leans (owner agreed): same Lookup server + separate advertise RPCs; `livenessReplace` + NodeStatus ping; unregister on close; `serves[]` from listen; Prototype / `make(name,addr)` / `NodeServer<N>`; bare `distributed` ≡ `nodes([])`. Written as **LEAN** (not Eng’d). See Phase-3 bake section.
 - **2026-07-19** — Owner “Okay” → **D3 LOCKED + Eng:** bare `Resource.distributed` ≡ `nodes([])`; empty stamped set → `peersLayer` reads `Directory.nodesServing`; fixed `nodes([…])` unchanged.
-- **2026-07-19** — Owner “Continue” → **dynamic `Prototype.instance` LOCKED + Eng:** ephemeral ipc + `#suffix`, no claim; `askIncumbent` / D4 still later.
+- **2026-07-19** — Owner “Continue” → **dynamic `Node.Prototype.instance` LOCKED + Eng:** ephemeral ipc + `#suffix`, no claim; `askIncumbent` / D4 still later.
+- **2026-07-19** — Owner: Prototype must nest as `Resource.Node.Prototype` (not top-level). Rename Eng’d; top-level removed.

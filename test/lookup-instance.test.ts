@@ -4,7 +4,7 @@ import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
 
-// Dynamic Prototype.instance — many prototypeKey#suffix; ephemeral ipc; no claim.
+// Dynamic Node.Prototype.instance — many prototypeKey#suffix; ephemeral ipc; no claim.
 
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
@@ -18,9 +18,9 @@ class Jobs extends Resource.Tag<Jobs>()("inst/Jobs", {
 
 const jobsImpl = (n: number) => ({ jobs: Effect.succeed(n) });
 
-describe("Resource.Prototype.instance", () => {
+describe("Resource.Node.Prototype.instance", () => {
   it("stamps isDynamicInstance and optional #suffix wire key", () => {
-    class MailWorker extends Resource.Prototype<MailWorker, Jobs>(
+    class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
       "inst/MailWorker",
     ) {}
     const auto = MailWorker.instance();
@@ -42,7 +42,7 @@ describe("Resource.Prototype.instance", () => {
         const lookupNode = Lookup.LookupNode("inst/lookup", {
           path: lookupPath,
         });
-        class MailWorker extends Resource.Prototype<MailWorker, Jobs>(
+        class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
           "inst/WorkerA",
         ) {}
 
@@ -106,7 +106,7 @@ describe("Resource.Prototype.instance", () => {
           fleetJobs: Resource.effect(Schema.Number).pipe(Resource.fleet),
         }).pipe(Resource.distributed) {}
 
-        class PoolWorker extends Resource.Prototype<PoolWorker, FleetJobs>(
+        class PoolWorker extends Resource.Node.Prototype<PoolWorker, FleetJobs>(
           "inst/PoolWorker",
         ) {}
 

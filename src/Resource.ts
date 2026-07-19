@@ -3607,7 +3607,7 @@ export function listen(
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
-  // Dynamic Prototype.instance — mint suffix (if needed) + ipc path; no Identity.claim.
+  // Dynamic Node.Prototype.instance — mint suffix (if needed) + ipc path; no Identity.claim.
   if (isDynamicInstanceNode(node)) {
     return Layer.unwrap(
       Effect.gen(function* () {
@@ -3678,26 +3678,26 @@ export function listen(
   return withListenNode(node, listenTransport(node, list, options));
 }
 
-/** True when `node` was built with {@link Prototype}. @internal */
+/** True when `node` was built with {@link Node}.Prototype. @internal */
 const isPrototypeNode = (node: unknown): boolean =>
   (typeof node === "object" || typeof node === "function") &&
   node !== null &&
   (node as { readonly isPrototype?: boolean }).isPrototype === true;
 
-/** True when `node` came from {@link Prototype}.instance. @internal */
+/** True when `node` came from {@link Node}.Prototype.instance. @internal */
 const isDynamicInstanceNode = (node: unknown): boolean =>
   (typeof node === "object" || typeof node === "function") &&
   node !== null &&
   (node as { readonly isDynamicInstance?: boolean }).isDynamicInstance === true;
 
-/** Prototype key stamped by {@link Prototype}.instance. @internal */
+/** Prototype key stamped by {@link Node}.Prototype.instance. @internal */
 const dynamicPrototypeKeyOf = (node: AnyNode): string => {
   const proto = (node as { readonly dynamicPrototypeKey?: string })
     .dynamicPrototypeKey;
   return typeof proto === "string" && proto.length > 0 ? proto : node.key;
 };
 
-/** Optional suffix from {@link Prototype}.instance(suffix). @internal */
+/** Optional suffix from {@link Node}.Prototype.instance(suffix). @internal */
 const dynamicInstanceSuffixOf = (node: AnyNode): string | undefined => {
   const suffix = (node as { readonly instanceSuffix?: string }).instanceSuffix;
   return typeof suffix === "string" && suffix.length > 0 ? suffix : undefined;
@@ -3706,7 +3706,7 @@ const dynamicInstanceSuffixOf = (node: AnyNode): string | undefined => {
 /** Process-local seq so same-ms dynamic instances get distinct wire keys. @internal */
 let dynamicInstanceSeq = 0;
 
-/** Mint `prototypeKey#<millis>-<seq>` suffix for {@link Prototype}.instance(). @internal */
+/** Mint `prototypeKey#<millis>-<seq>` suffix for {@link Node}.Prototype.instance(). @internal */
 const uniqueInstanceSuffix = (): Effect.Effect<string> =>
   Effect.map(Clock.currentTimeMillis, (now) => {
     dynamicInstanceSeq += 1;
@@ -4129,7 +4129,8 @@ export const forwardClient = <S extends Spec>(
 /**
  * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
  * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service.
- * Optional catalog type param `ROut` (C2) — prefer `import type` for those handles (C4):
+ * Optional catalog type param `ROut` (C2) — prefer `import type` for those handles (C4).
+ * Templates (no address until cloned) live on {@link Node}.Prototype:
  *
  * ```ts
  * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
@@ -4140,6 +4141,7 @@ export const forwardClient = <S extends Spec>(
  * class Local extends Resource.Node<Local>("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
  * import type { Jobs, Emails } from "@app/contracts"
  * class AppWorker extends Resource.Node<AppWorker, Jobs | Emails>("app/Worker", { path: "/tmp/w.sock" }) {}
+ * class MailWorker extends Resource.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * ```
  *
  * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
@@ -4970,10 +4972,11 @@ export const lookupClient = <Self, S extends Spec>(
   >;
 
 /**
- * Prototype Node template (D7) — no address until cloned:
+ * Prototype Node template (D7) — a Node kind, nested on {@link Node} as `Resource.Node.Prototype`.
+ * No address until cloned:
  *
  * ```ts
- * class MailWorker extends Resource.Prototype<MailWorker, Mail>("app/MailWorker") {}
+ * class MailWorker extends Resource.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * // Named clone with a fixed address (class ctor):
  * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
  * // Dynamic instance — ephemeral ipc at listen; many `prototypeKey#suffix`; no claim:
@@ -4983,18 +4986,20 @@ export const lookupClient = <Self, S extends Spec>(
  *
  * @public
  */
-export function Prototype<Self, ROut = never>(
+const makePrototype = <Self, ROut = never>(
   name: string,
   options?: { readonly kind?: ProtocolKind },
-) {
-  return Object.assign(Context.Service<Self, Record<string, never>>()(name), {
+) =>
+  Object.assign(Context.Service<Self, Record<string, never>>()(name), {
     isPrototype: true as const,
     kind: options?.kind,
     url: undefined as undefined,
     path: undefined as undefined,
     [catalogSym]: undefined as ROut | undefined,
-    make: (cloneName: string, target: { readonly path: string } | { readonly url: string }) =>
-      makeNode(`${name}#${cloneName}`, target),
+    make: (
+      cloneName: string,
+      target: { readonly path: string } | { readonly url: string },
+    ) => makeNode(`${name}#${cloneName}`, target),
     /**
      * Dynamic instance Node for {@link listen} — wire key `prototypeKey#suffix`, ephemeral
      * ipc path at listen, **no** Identity claim (many may run). Omit `suffix` to mint one.
@@ -5011,7 +5016,15 @@ export function Prototype<Self, ROut = never>(
       });
     },
   });
-}
+
+/**
+ * Declare a **node** (concrete address) or a {@link makePrototype | Prototype} template.
+ *
+ * @public
+ */
+export const Node: typeof makeNode & {
+  readonly Prototype: typeof makePrototype;
+} = Object.assign(makeNode, { Prototype: makePrototype });
 
 /**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
@@ -5714,7 +5727,7 @@ export const runForEachTagScoped: {
 export {
   makeTag as Tag,
   tagFor,
-  makeNode as Node,
+  // Node (+ Node.Prototype) exported above as `export const Node`
   httpClient,
   socketClient,
   ipcClient,

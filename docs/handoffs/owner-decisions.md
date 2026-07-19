@@ -6,11 +6,17 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
-## 2026-07-19 — Dynamic `Prototype.instance` LOCKED
+## 2026-07-19 — `Resource.Node.Prototype` (nest under Node)
+
+- **Owner said:** Top-level `Resource.Prototype` is wrong if it’s a Node — expected `Resource.Node.Prototype`.
+- **Chose:** Prototype is a **Node kind** — `Resource.Node.Prototype` (+ `.make` / `.instance`). Top-level `Resource.Prototype` removed (no shim).
+- **Supervisor impact:** Rename on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — Dynamic `Node.Prototype.instance` LOCKED
 
 - **Owner said:** “Continue” (after D3).
 - **Chose (LOCKED):**
-  - `Proto.instance()` / `Proto.instance(suffix)` → Node for `listen` (value, not class ctor).
+  - `Node.Prototype.instance()` / `instance(suffix)` → Node for `listen` (value, not class ctor).
   - Wire key `prototypeKey#suffix`; omitted suffix minted at listen; always ephemeral ipc path.
   - **No** `Identity.claim` (many winners); directory advertise + `livenessReplace` on dupe `nodeKey`.
   - Multi-instance client picker stays **D4 OPEN** (`lookupClient` fail-closed on ambiguous).
@@ -37,8 +43,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - Identity claim endpoint = **Tag’s bound Node** (`nodes` / `{ node }`) or **listen’s Node** (minted) — **remove `{ self }` bag**.
   - `Lookup.bootstrapDefaultLocal` — bind-or-dial default ipc (OS exclusivity).
   - `Resource.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
-  - `Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
-- **Still LEAN / later:** ~~bare `distributed` / D3~~ → **LOCKED** (see D3 entry); `askIncumbent`; dynamic `instance`; D4 picker/LB.
+  - `Node.Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
+- **Still LEAN / later:** ~~bare `distributed` / D3~~ → **LOCKED** (see D3 entry); `askIncumbent`; ~~dynamic `instance`~~ → **LOCKED**; D4 picker/LB.
 - **Supervisor impact:** Eng unlocked on tip for this vertical. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — Phase-3 directory slice LOCKED + Eng unlocked

@@ -2,9 +2,9 @@
 "@nikscripts/effect-pm": minor
 ---
 
-**Dynamic `Prototype.instance`** — many ephemeral workers from one prototype.
+**`Resource.Node.Prototype`** — Node-family templates + dynamic instances.
 
-- `Proto.instance()` / `Proto.instance(suffix)` → Node for `Resource.listen` (not a class ctor).
-- Wire key `prototypeKey#suffix` (suffix minted at listen when omitted); always ephemeral ipc path.
-- **No** `Identity.claim` — many instances may run; directory advertise + `livenessReplace` on dupe keys.
-- Multi-instance `lookupClient` stays fail-closed (D4 picker still open); use peers / explicit Node.
+- Nesting: `Resource.Node.Prototype` (not top-level `Resource.Prototype`).
+- `.make(name, addr)` → constructible named clone (`prototypeKey#name`).
+- `.instance()` / `.instance(suffix)` → listen Node; ephemeral ipc; **no** Identity claim; many may run.
+- Multi-instance `lookupClient` stays fail-closed (D4 picker still open).

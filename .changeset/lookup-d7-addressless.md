@@ -9,4 +9,5 @@
 - `Resource.lookupClient(Tag)` — fail-closed dial via resolve then `nodesServing`.
 - Address-less `Resource.listen(Node)` — mint ephemeral ipc path, claim `Node.key`, advertise; lose → `AddressLessClaimLost`.
 - Identity claim endpoint = `ListenNode` or Tag-bound Node — **`{ self }` removed**.
-- `Resource.Prototype` + `.make(name, addr)` → constructible Node (`class East extends Proto.make(...) {}`).
+- `Resource.Node.Prototype` + `.make(name, addr)` → constructible Node (`class East extends Proto.make(...) {}`).
+  (Prototype nests on `Node` — not a top-level `Resource.Prototype`.)
