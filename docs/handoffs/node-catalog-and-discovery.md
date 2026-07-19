@@ -309,12 +309,12 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | `client(Tag)` | When set size is **exactly 1** (sync `nodeSym` to that Node). Size ≠ 1 → need `client(Tag, node)` or ambient Protocol. |
 | API | `Resource.nodes([...])` **overwrites**; `Resource.andNode(node)` **appends one**. |
 | Ctor sugar | `{ node: X }` ≡ `nodes([X])` (keep). |
-| Alias | `distributed` / `distributedOf` remain as aliases of `nodes` / `nodesOf`. |
+| Alias | `distributed` / `distributedOf` remain as aliases of `nodes` / `nodesOf` (**shipped**). **LEAN (bake):** bare `.pipe(Resource.distributed)` ≡ `nodes([])` (discoverable / empty membership); list form stays `Resource.nodes([...])`. |
 | Identity | Multi-set **disabled** (`IdentityMultiNode`); overwrite to size ≤ 1 OK; `andNode` that would exceed 1 fails. |
 | Dial-fail | Identity does **not** fall back across a node list (identity has no multi set). Multi-node try-next / LB = later bake. |
 | Pipe | Mutate in place (same as today’s `distributed` / `withReadiness`). Copy-on-pipe deferred. |
 
-**Eng:** shipped — `nodes` / `andNode` / `nodesOf`; `{ node }` set-of-one; `distributed` alias; set-of-one syncs `nodeSym`.
+**Eng:** shipped — `nodes` / `andNode` / `nodesOf`; `{ node }` set-of-one; `distributed` alias; set-of-one syncs `nodeSym`. Bare-`distributed` split is **LEAN only** (not Eng’d).
 
 ### Block Phase 3 (discovery / identity lookup)
 
@@ -322,9 +322,12 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 |---|----------|--------|
 | **L1** | Tiered lookup bootstrap | **LOCKED** (owner 2026-07-18) — see below |
 | **D1** | Registry: filesystem dir vs UDS bus vs parent-injected env | **Superseded in part by L1** — local default = well-known `IpcSocket` bind (OS exclusivity); cross-network = explicit `LookupNode` |
-| **D2** | Discovery TTL / liveness | **OPEN** — old LEAN: RPC ping once connected |
-| **D3** | `peersLayer`: discovery opt-in vs replace static `distributed` | **OPEN** — old LEAN: opt-in |
-| **D4** | N instances of one Tag | **OPEN** — old LEAN: still `client(Tag, node)` |
+| **D2** | Discovery TTL / liveness | **LEAN (owner agreed)** — see Phase-3 bake below; conflict ping = NodeStatus/readiness |
+| **D3** | `peersLayer` + empty / `distributed` membership | **LEAN (owner agreed)** — empty + distributed ⇒ read node directory; fixed `nodes([…])` still lists **who** (addresses may need directory if address-less) |
+| **D4** | N instances of one Tag | **OPEN** — `client(Tag)` stays set-of-one; multi-instance = peers / explicit Node (no silent LB) |
+| **D5** | Node directory vs `Identity.claim` | **LEAN (owner agreed)** — same Lookup **server**, **separate** advertise/list RPCs |
+| **D6** | Duplicate `nodeKey` on advertise | **LEAN (owner agreed)** — default `livenessReplace`; handoff presets later |
+| **D7** | Prototypes / `NodeServer` / address-less Nodes | **LEAN (owner agreed)** — see Phase-3 bake below |
 
 #### L1 — Tiered lookup bootstrap (**LOCKED**)
 
@@ -337,6 +340,70 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 - Failover / re-elect = same race again — **not** in v1 scope; restart same slot / same explicit address; claimants re-claim on boot.
 - Dial/claim failure when lookup unreachable: **needs more thought** — lean don’t serve Singleton by default; knobs later. **Not locked.**
 - `LookupNode` constructor, nodeless clients, check-in map, manager LB streams — **Eng / further bake**; L1 only locks the tiered bootstrap rule.
+
+#### Phase-3 bake — node directory, prototypes, handoff (**LEAN** 2026-07-19, owner agreed)
+
+> Not Eng’d. Do not treat as LOCKED unless a row below is later marked LOCKED.  
+> App composition style: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers — not Node duals as the prototype helper shape.
+
+**Two Lookup surfaces (do not conflate)**
+
+| Surface | Status | Job |
+|---------|--------|-----|
+| **`Identity.claim`** | **Shipped** | First-wins exclusivity for a **resource key** (Tag `identity` / address-less Node keys). Loser policy today for Tags: client-of-winner. |
+| **Node directory** (`advertise` / `nodesServing` — names TBD) | **LEAN** | Many rows: `{ nodeKey, kind, path\|url, serves[] }`. Fleets / dynamic prototypes / `peersLayer` membership. |
+
+- **Same Lookup server process** as claim (one default ipc sock / dial-or-become). **Separate RPCs** — do not overload `claim` for fleets.
+- v1 Lookup **default** remains **ipc only** (local http fleets: fixed `nodes` or explicit `LookupNode`).
+- Directory **`serves[]`**: **derived** from the serve layers passed to `listen` / `NodeServer` (not a second hand list).
+- **Unregister** directory row on clean `listen` scope close (if advertised). Crashes: stale row until conflict + liveness or Lookup restart.
+
+**First-wins — what’s figured**
+
+| Race | Figured? |
+|------|----------|
+| Who hosts Lookup | **Yes (L1)** — OS bind |
+| Who owns identity key `K` | **Yes (shipped claim map)** |
+| Who may advertise fleet `nodeKey`s | **Not claim** — many winners for dynamic `#suffix`; named keys use dupe policy below |
+
+**Duplicate `nodeKey` on advertise**
+
+| Preset | v1 |
+|--------|-----|
+| **`livenessReplace`** (default) | Ping incumbent via existing **NodeStatus / readiness** RPC; timeout/fail ⇒ replace row; alive ⇒ reject second |
+| **`askIncumbent`** | Opt-in handoff later (ask first to yield / drain) |
+| **`reject`** | Strict never-steal |
+| **`lastWins`** (orphan first) | **Not** the default |
+
+**Node kinds (LEAN)**
+
+| Kind | Address | Multiplicity | Lookup |
+|------|---------|--------------|--------|
+| Concrete `Node(key, addr)` | In source | One binder per address | Not required for dial |
+| Address-less **non-prototype** `Node(key)` | At layer | **One** per `Node.key` — **`claim`**; dupe must not keep serving | Required |
+| **Prototype** | None on proto | Template: catalog `ROut` (+ optional default kind) | Dynamic path needs directory |
+| **Named clone** `Proto.make(name, addr)` | **Required** 2nd arg | One per name+address; wire key `prototypeKey#name` | Not required for dial |
+| **Dynamic instance** | Ephemeral bind then advertise | Many `prototypeKey#suffix` | Directory required (fail like identity if missing) |
+
+**App shapes (LEAN)**
+
+```ts
+// NodeServer — type-only; any Node with ROut (not proto-only)
+const serves: Resource.NodeServer<MailWorker> = [
+  Resource.serve(Mail, mailImpl),
+  Resource.serve(Jobs, jobsImpl),
+]
+Resource.listen(East, serves) // named clone or concrete node
+
+// dynamic — instance then listen (preferred over listen(Prototype) minting)
+// Resource.Node.instance(MailWorker) → self; Resource.listen(self, serves)
+```
+
+- Fleet fields on a Tag ⇒ must `.pipe(Resource.distributed)` or `.pipe(Resource.nodes([…]))` before **mesh** APIs (`peersLayer`, …) — not on bare `layer`/`serve`.
+- Empty membership + `distributed` ⇒ `peersLayer` reads the **node directory**. Fixed `nodes([A,B])` lists **who**; if members are address-less, addresses still come from Lookup/directory.
+- `client(Tag)` stays **set-of-one** (D4 OPEN for picker/LB).
+
+**Eng:** not started for directory / Prototype / `NodeServer` / bare `distributed`.
 
 ### Cross-cutting — **OPEN** / parked
 
@@ -565,3 +632,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19 (bake)** — Owner: one name for serve/expose/server — choose well. **C5 LOCKED:** keep **`serve`**; reject `expose` and verb-`server`.
 - **2026-07-19 (bake)** — Owner: “Continue.” **C2/C3/C4 LOCKED** — `listen`+keep `*Server`; full `ROut`; `import type` for `ROut`. Eng next.
 - **2026-07-19** — **C2–C4 Eng shipped:** `Node<Self, ROut>`, `Resource.listen`, `Resource.clientsFor`; ipc runtime + type tests.
+- **2026-07-19 (bake)** — Phase-3 discovery/prototype/directory leans (owner agreed): same Lookup server + separate advertise RPCs; `livenessReplace` + NodeStatus ping; unregister on close; `serves[]` from listen; Prototype / `make(name,addr)` / `NodeServer<N>`; bare `distributed` ≡ `nodes([])`. Written as **LEAN** (not Eng’d). See Phase-3 bake section.
