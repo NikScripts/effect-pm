@@ -25,7 +25,7 @@ Today cross-runtime works but is **composition-heavy**:
 - Node carries **one** `url` + **one** `ProtocolKind` → one `RpcClient.Protocol`.
 - Tags optionally stamp `{ node }` or `.pipe(distributed([...]))`.
 - Clients: `connect(Node)` once, then `client(Tag)` / `client(Tag, Node)` per contract.
-- Serve list lives on `httpServer` / `wsServer([...expose])`, **not** on the Node type.
+- Serve list lives on `httpServer` / `wsServer([...serve])`, **not** on the Node type.
 - Peers: **fixed** membership via `distributed` + `peersLayer` (no discovery).
 
 The gap: **a Node does not type-declare what it serves**, and **peers don’t learn catalogs at runtime**. Same-machine multi-process feels like a lot of wiring for what should be “these runtimes find each other and offer Services.”
@@ -69,7 +69,7 @@ class Worker extends Resource.Node<Worker, Jobs | Emails>(
 ) {}
 ```
 
-- **`ROut`** = union of resource **handles** (service types), not a value bag of Tags at runtime unless we also materialize `serves: string[]` from the expose list.
+- **`ROut`** = union of resource **handles** (service types), not a value bag of Tags at runtime unless we also materialize `serves: string[]` from the serve list.
 - **Optional bundling:** value-importing Tags into the node package is allowed when you want a single package that owns both catalog and contracts — not required. Prefer `import type` + contracts package for monorepos.
 
 ### 2. Break the circle
@@ -86,13 +86,13 @@ class Worker extends Resource.Node<Worker, Jobs | Emails>(
 
 ```ts
 const WorkerLive = Resource.listen(Worker, [
-  Resource.expose(Jobs, jobsImpl),
-  Resource.expose(Emails, emailsImpl),
+  Resource.serve(Jobs, jobsImpl),
+  Resource.serve(Emails, emailsImpl),
 ])
 // Layer must provide Jobs | Emails (Worker’s ROut) — compile-time
 ```
 
-Runtime `serves: ["app/Jobs", "app/Emails"]` should be **derived from the same expose list** so discovery can’t drift from `ROut`.
+Runtime `serves: ["app/Jobs", "app/Emails"]` should be **derived from the same serve list** so discovery can’t drift from `ROut`.
 
 ### 4. `clientsFor(Node)`
 
@@ -134,7 +134,7 @@ With catalog + discovery, peers become a **two-layer** story:
 
 Blessed same-machine path:
 
-1. Each process: `listen(SelfNode, [expose…])` (+ publish to registry).  
+1. Each process: `listen(SelfNode, [serve…])` (+ publish to registry).  
 2. Mesh: `discover` → map of peer Nodes (+ catalogs).  
 3. `peersLayer` (evolved): build peer clients from **discovered Nodes**, not only from `distributed([...])` on each Tag.  
 4. A Tag that needs a sibling leaf still marks `Resource.fleet` fields; membership comes from topology, not from stamping every Tag with every Node.
@@ -160,8 +160,8 @@ If a Node advertises multiple endpoints (`http` / `socket` / `ipc`), peers need 
 | Piece | Intent |
 |-------|--------|
 | `Node<Self, ROut = never>(key, address?)` | Address + optional catalog type param |
-| `listen(node, exposes[])` | Server mount; proves `ROut` |
-| `expose` / rename of today’s serve-entry | Placement on a listen list (neutral name TBD with serve→expose pass) |
+| `listen(node, serveLayers[])` | Catalog mount; proves `ROut` (uses `serve` layers — C5) |
+| `serve` / `serveRemote` | Core verbs (C5 LOCKED — no `expose`) |
 | `clientsFor(node)` | Layer providing clients for `ROut` |
 | `discover` / `Discovery` layer | Local registry → peer Nodes + `serves[]` |
 | `peersLayer` evolution | Static distributed **or** discovery-backed topology |
@@ -262,10 +262,22 @@ Tests: `test/resource-ipc.test.ts`.
 | # | Decision | Status |
 |---|----------|--------|
 | **C1** | How Tags carry Nodes (set / bake / pipe / nodeless) | **LOCKED** (owner 2026-07-19) — see below |
-| **C2** | `listen(node, exposes)` vs keep `httpServer`/`wsServer`/`ipcServer` as transport sugar | **OPEN** — old LEAN: keep transport servers; `listen` = catalog wrap |
-| **C3** | Partial catalogs (runtime subset of `ROut`)? | **OPEN** — old LEAN: No |
-| **C4** | Value-import Tags into node package allowed? | **OPEN** — old LEAN: yes as option; `import type` preferred |
-| **C5** | Serve-family rename (`serve` → `expose`?) same program as catalog? | **OPEN** — owner asked; old LEAN was separate pass |
+| **C2** | `listen(node, serveLayers)` vs keep `httpServer`/`wsServer`/`ipcServer` as transport sugar | **OPEN** — old LEAN: keep transport servers; `listen` = catalog wrap |
+| **C3** | Partial catalogs (runtime subset of `ROut`)? | **OPEN** — owner lean: require full `ROut` (not locked) |
+| **C4** | Value-import Tags into node package allowed? | **OPEN** — lean: `import type` for `ROut` (avoid Tag↔Node cycles) |
+| **C5** | One name for the serve-list verb (`serve` / `expose` / …) | **LOCKED** — **`serve`** (see below) |
+
+#### C5 — One name: `serve` (**LOCKED** 2026-07-19)
+
+| Decision | Lock |
+|----------|------|
+| Blessed name | **`serve`** — `Resource.serve` / `QueueResource.serve` / `Process.serve` / … |
+| Rejected | **`expose`** (alias or rename); inventing a third synonym |
+| Why not `server` | Collides with transport `httpServer` / `wsServer` / `ipcServer` and Effect `RpcServer` |
+| Why `serve` | Already the standards four-verb axis (`layer` / `serve` / `serveRemote` / `client`); list slots on `*Server` / future `listen` are those layers — one word, one job |
+| Sibling | **`serveRemote`** stays (served-only) — different verb on the same axis, not a second name for `serve` |
+
+**Eng:** none — keep shipped `serve`; scrub provisional `expose` from catalog sketches.
 
 #### C1 — Tag Node sets (**LOCKED** 2026-07-19)
 
@@ -487,10 +499,9 @@ Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); m
 
 **Do not Eng managers/singletons/lookup yet** — bake until the collapse (or split) is locked.
 
-### `serve` → `expose` (OPEN / C5)
+### `serve` naming (C5 — **LOCKED**)
 
-Owner asked: should we rename `serve` to something like `expose`?  
-Prior LEAN was “separate pass, don’t block catalog.” Still **OPEN** — not locked. Catalog API sketches in this doc already say `expose` provisionally.
+One name: **`serve`**. No `expose`, no alias. Transport stays `httpServer` / `wsServer` / `ipcServer` (different axis). See C5 table above.
 
 ### Eng / bake process (owner)
 
@@ -529,3 +540,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18** — **S1 Eng shipped:** `Resource.identity` pipe; `layer`/`serve` claim→local-or-client; `IdentitySelfRequired` / `IdentityMultiNode`; tests over ipc Lookup. Next bake: **C1**.
 - **2026-07-19 (bake)** — Owner lean B; questions on distributed purpose, identity failover, `andNode`; **“Locked.” C1 LOCKED** (one set, nodes/andNode, client set-of-one, no identity→fleet failover).
 - **2026-07-19** — **C1 Eng shipped:** `Resource.nodes` / `andNode` / `nodesOf`; `{ node }` ≡ set-of-one; `distributed` alias; identity multi still `IdentityMultiNode`.
+- **2026-07-19 (bake)** — Owner: one name for serve/expose/server — choose well. **C5 LOCKED:** keep **`serve`**; reject `expose` and verb-`server`.

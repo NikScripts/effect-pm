@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — Serve-list naming C5 (one name: `serve`)
+
+- **Owner said:** Want one name — `server`, `expose`, or something else; choose well; follow v4 and standards.
+- **Chose (C5 LOCKED):** **`serve`** only (`Resource.serve` / engine `*.serve`). Reject `expose` (alias or rename). Reject using `server` as the verb (collides with `httpServer` / `wsServer` / `ipcServer` / Effect `RpcServer`). `serveRemote` remains the served-only sibling on the four-verb axis.
+- **Rejected / deferred:** `expose`; dual spellings; renaming transport `*Server` helpers.
+- **Supervisor impact:** Catalog/`listen` sketches use `serve` layers only; no rename Eng.
+
 ## 2026-07-19 — Tag Node sets C1 (Option B)
 
 - **Owner said:** Lean B; identity/distributed multi disabled; asked what distributed buys; failover if identity unreachable; `andNode(Node)` vs `nodes([Node])`; then “Locked.”
