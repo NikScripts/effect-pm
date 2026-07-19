@@ -107,7 +107,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
         }
         expect(new Set(rows.map((r) => r.nodeKey)).size).toBe(2);
 
-        // lookupClient stays fail-closed when many instances serve the Tag (D4).
+        // Bare lookupClient stays fail-closed when many instances serve the Tag.
         const exit = yield* Effect.exit(
           Layer.build(
             Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
@@ -118,10 +118,39 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
           expect(String(exit.cause)).toContain("LookupClientError");
         }
 
-        yield* Effect.sync(() => {
-          void a;
-          void b;
-        });
+        // D4 — opt-in pick dials one replica.
+        const soft = yield* Layer.build(
+          Resource.lookupClient(Jobs, { pick: "first" }).pipe(
+            Layer.provide(lookupClient),
+          ),
+        );
+        const n = yield* Effect.gen(function* () {
+          const jobs = yield* Jobs;
+          return yield* jobs.jobs;
+        }).pipe(
+          Effect.provide(
+            Context.merge(lookup, Context.merge(a, Context.merge(b, soft))),
+          ),
+        );
+        expect([3, 5]).toContain(n);
+
+        // Custom picker selects the Jobs=5 worker by ListenNode key.
+        const nodeB = Context.get(b, Resource.ListenNode);
+        const softB = yield* Layer.build(
+          Resource.lookupClient(Jobs, {
+            pick: (rows) =>
+              rows.find((r) => r.nodeKey === nodeB.key) ?? rows[0]!,
+          }).pipe(Layer.provide(lookupClient)),
+        );
+        const nB = yield* Effect.gen(function* () {
+          const jobs = yield* Jobs;
+          return yield* jobs.jobs;
+        }).pipe(
+          Effect.provide(
+            Context.merge(lookup, Context.merge(a, Context.merge(b, softB))),
+          ),
+        );
+        expect(nB).toBe(5);
       }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(25))),
     ));
 

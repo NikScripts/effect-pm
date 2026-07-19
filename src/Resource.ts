@@ -94,6 +94,7 @@ import {
 // Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
 import type {
   Directory as LookupDirectory,
+  DirectoryEntry as LookupDirectoryEntry,
   Identity as LookupIdentity,
 } from "./Lookup";
 
@@ -1930,7 +1931,7 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
 
 /**
  * {@link lookupClient} could not resolve **exactly one** dial target for the Tag
- * (`missing` = none; `ambiguous` = more than one directory row).
+ * (`missing` = none; `ambiguous` = more than one directory row and no {@link LookupClientOptions.pick}).
  *
  * @public
  */
@@ -1939,6 +1940,27 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
   readonly reason: "missing" | "ambiguous";
   readonly count: number;
 }> {}
+
+/**
+ * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4).
+ * `"first"` = `rows[0]`; custom sync fn returns the dial target.
+ *
+ * @public
+ */
+export type LookupClientPick =
+  | "first"
+  | ((
+      rows: ReadonlyArray<LookupDirectoryEntry>,
+    ) => LookupDirectoryEntry);
+
+/**
+ * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous.
+ *
+ * @public
+ */
+export type LookupClientOptions = {
+  readonly pick?: LookupClientPick;
+};
 
 /**
  * The Node {@link listen} is binding (concrete or minted address-less). Identity claims prefer
@@ -4919,21 +4941,25 @@ export const isIdentity = (tag: unknown): boolean =>
   (tag as { readonly [identitySym]?: true })[identitySym] === true;
 
 /**
- * **Lookup-resolved nodeless client** (D7) — you do **not** pass a {@link Node}; Lookup
+ * **Lookup-resolved nodeless client** (D7/D4) — you do **not** pass a {@link Node}; Lookup
  * chooses the dial target. Contrast {@link client}`(Tag, node)`, where **you** name the Node.
  *
  * Resolution order: {@link Lookup.Identity}`resolve(tag.key)`, else
- * {@link Lookup.Directory}`nodesServing(tag.key)`. **Fail-closed:** missing or more than one
- * directory row → {@link LookupClientError} (no silent pick). Soft / multi-replica pick is
- * **not** this API (D4 OPEN) — use `client(Tag, node)`, peers, or an explicit Node from the
- * directory when N>1.
+ * {@link Lookup.Directory}`nodesServing(tag.key)`.
  *
- * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); shipped name is
- * `lookupClient` with the same fail-closed contract.
+ * **Fail-closed by default:** missing or more than one directory row →
+ * {@link LookupClientError}. Opt into soft pick with `{ pick: "first" }` or a sync
+ * `(rows) => DirectoryEntry` (D4). Identity resolve ignores `pick` (unique by key).
+ *
+ * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
+ * `lookupClient(Tag)` keeps that fail-closed contract.
  *
  * ```ts
- * // Lookup finds the sole Mail endpoint (identity winner or one directory row):
+ * // Sole endpoint (identity winner or one directory row):
  * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+ *
+ * // N>1 replicas — opt-in pick (still fail on 0):
+ * Resource.lookupClient(Mail, { pick: "first" })
  *
  * // You already know the Node — prefer explicit dial:
  * Resource.client(Mail, East).pipe(Layer.provide(Resource.connect(East)))
@@ -4943,6 +4969,7 @@ export const isIdentity = (tag: unknown): boolean =>
  */
 export const lookupClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
+  options?: LookupClientOptions,
 ): Layer.Layer<
   Self,
   LookupClientError,
@@ -4969,15 +4996,19 @@ export const lookupClient = <Self, S extends Spec>(
           count: 0,
         });
       }
-      const [entry, ...rest] = entries;
-      if (entry === undefined || rest.length > 0) {
+      if (entries.length === 1) {
+        return clientLayerForEndpoint(tag, entries[0]!);
+      }
+      const pick = options?.pick;
+      if (pick === undefined) {
         return yield* new LookupClientError({
           tag: tag.key,
           reason: "ambiguous",
           count: entries.length,
         });
       }
-      return clientLayerForEndpoint(tag, entry);
+      const chosen = pick === "first" ? entries[0]! : pick(entries);
+      return clientLayerForEndpoint(tag, chosen);
     }),
   ) as Layer.Layer<
     Self,

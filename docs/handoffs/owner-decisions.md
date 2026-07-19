@@ -6,6 +6,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-19 — D4 soft pick LOCKED (`lookupClient` `{ pick }`)
+
+- **Owner said:** “Good” (to lean A after D4 bake).
+- **Chose (LOCKED):**
+  - Opt-in **`Resource.lookupClient(Tag, { pick })`** — `"first"` or sync `(rows) => DirectoryEntry`.
+  - Bare `lookupClient(Tag)` stays **fail-closed** on 0 / >1.
+  - Identity resolve hit ignores `pick`; `client(Tag)` stays set-of-one.
+  - Out of v1: `"random"`, Effect picker, sticky affinity, manager LB.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — `Prototype.listen(serves)` factory LOCKED
 
 - **Owner said:** Rewrite `Resource.listen(Proto.instance(…), serves)` into curried `Proto.listen(serves)` → `(suffix?) => Layer`; agreed lean (Layer-only, keep `instance()`, no named-clone `.listen`) — “Good.”
