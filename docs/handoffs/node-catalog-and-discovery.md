@@ -343,8 +343,8 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **`Resource.Node.Prototype`** (`.make` / `.instance`).  
-> **Still LEAN:** `askIncumbent`.  
+> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`**.  
+> **Baking:** `askIncumbent` (see § below). Managers / X1 still OPEN.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 #### D3 — directory-backed peers (**LOCKED** 2026-07-19)
@@ -382,10 +382,80 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 | Preset | v1 |
 |--------|-----|
-| **`livenessReplace`** (default) | Ping incumbent via existing **NodeStatus / readiness** RPC; timeout/fail ⇒ replace row; alive ⇒ reject second |
-| **`askIncumbent`** | Opt-in handoff later (ask first to yield / drain) |
-| **`reject`** | Strict never-steal |
+| **`livenessReplace`** (default) | **SHIPPED** — ping incumbent via **NodeStatus.ping**; timeout/fail ⇒ replace row; alive ⇒ `IncumbentAlive` |
+| **`askIncumbent`** | **LEAN / baking** — opt-in; ask live incumbent to yield before reject (see § askIncumbent) |
+| **`reject`** | Strict never-steal (dead still replaceable? OPEN) |
 | **`lastWins`** (orphan first) | **Not** the default |
+
+#### `askIncumbent` advertise policy (**OPEN** — bake 2026-07-19)
+
+**Shipped today (fact):**
+
+```ts
+// Same nodeKey + different dial target:
+//   ping incumbent → alive → IncumbentAlive (layer/advertise fails)
+//                 → dead/unreachable → replace directory row
+Lookup.directoryAdvertiseLayer(node, serves) // always livenessReplace
+```
+
+**Gap:** rolling restart / takeover of a **named** Node (`Worker` / `Proto.make("East", …)`) while the old process is still up — today the newcomer is hard-rejected until the old process dies or unregisters.
+
+**Not this bake:** manager LB streams; queue/work drain across processes; changing default away from `livenessReplace`.
+
+##### Job (lean)
+
+When policy is `askIncumbent` and the incumbent is **alive**, Lookup **asks it to yield** (cooperative). If it yields (unregisters / accepts), newcomer’s advertise succeeds. If it refuses or times out → same as today: `IncumbentAlive`. Dead incumbent still replaced (same as livenessReplace).
+
+##### Surface options
+
+**A — Policy on advertise / listen (LEAN)**
+
+```ts
+// listen opts (or AdvertiseRequest field) — default stays livenessReplace
+Resource.listen(East, [Resource.serve(Mail, impl)], {
+  onConflict: "askIncumbent", // | "livenessReplace" | "reject"
+})
+
+// Lookup.advertise path mirrors the same tag when callers advertise by hand
+```
+
+**B — Lookup server global default (sketch)**
+
+```ts
+Lookup.layer(node, { onConflict: "askIncumbent" })
+```
+
+Forces one policy for all advertisers — less flexible for mixed fleets.
+
+**C — Park (sketch)**
+
+Keep only `livenessReplace` until managers own handoff. Named-Node rolling restart = kill old first / wait for unregister.
+
+**Agent lean: A** — opt-in at the advertise/listen site; default unchanged.
+
+##### Yield mechanism (after A)
+
+| # | Question | Lean |
+|---|----------|------|
+| AI.1 | Surface = A / B / C? | **A** |
+| AI.2 | Who dials the ask? | **Lookup server** (has incumbent endpoint; newcomer shouldn’t need to) |
+| AI.3 | RPC | Add **`NodeStatus.yield`** (or `askYield`) — reserved resource every node already serves |
+| AI.4 | Yield meaning v1 | Cooperative: incumbent **unregisters** its directory row (and may interrupt listen scope). **No** in-flight work drain |
+| AI.5 | Refuse / timeout | → **`IncumbentAlive`** (fail-closed; no steal) |
+| AI.6 | `reject` preset | Alive → always `IncumbentAlive`; dead → still replace (same liveness probe) — or strict never-replace? lean: dead still replace |
+
+```ts
+// Goal sketch after lock:
+// NodeStatus gains:
+yield: Resource.effect(Schema.Boolean) // true = accepted yield
+
+// Lookup advertise when onConflict: "askIncumbent":
+//   same dial → refresh serves (unchanged)
+//   different dial + dead → replace
+//   different dial + alive → client(NodeStatus).yield on incumbent
+//     true → set newcomer row
+//     false / timeout / error → IncumbentAlive
+```
 
 **Node kinds (D7 + dynamic instance — LOCKED)**
 
@@ -714,3 +784,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — Owner “Good” → **`Prototype.listen(serves) → (suffix?) => Layer` LOCKED:** Layer-only return; keep `instance()`; no named-clone `.listen`.
 - **2026-07-19** — Owner “Next” → **D4 bake opened** (soft pick when N>1). Lean **A:** opt-in `{ pick }` on `lookupClient`; bare stays fail-closed.
 - **2026-07-19** — Owner “Good” → **D4 LOCKED:** `lookupClient(Tag, { pick: "first" \| fn })`; bare fail-closed; identity ignores pick; `client(Tag)` set-of-one unchanged.
+- **2026-07-19** — Owner “Okay next” → **`askIncumbent` bake opened.** Lean **A:** `onConflict` on listen/advertise; Lookup asks `NodeStatus.yield`; timeout → `IncumbentAlive`. Awaiting owner lock.
