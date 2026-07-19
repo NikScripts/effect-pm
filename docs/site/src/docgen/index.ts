@@ -9,10 +9,13 @@
  *
  * @since 1.0.0
  */
+export * as Annotate from "./Annotate.js";
 export * as Extractor from "./Extractor.js";
+export * as HoverRenderer from "./HoverRenderer.js";
 export * as LinkResolver from "./LinkResolver.js";
 export * as Model from "./Model.js";
 export * as Slug from "./Slug.js";
+export * as SourceRenderer from "./SourceRenderer.js";
 export * as SymbolIndex from "./SymbolIndex.js";
 export * as TsProgram from "./TsProgram.js";
 export * as TypePrinter from "./TypePrinter.js";

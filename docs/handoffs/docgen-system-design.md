@@ -1,8 +1,8 @@
 # Docgen system — design doc (LIVING; we work from this)
 
 Status: **Phase 1 (prototypes) ✅ · Phase 2 (core services) ✅ · Phase 3 (Extractor) ✅ — byte-identical
-gate PASSED on the full corpus via scripts/gen-api-next.ts · Phase 4: TypePrinter ✅ —
-HoverRenderer/SourceRenderer next. See HANDOFF below.**
+gate PASSED on the full corpus via scripts/gen-api-next.ts · Phase 4 (renderers) ✅ — TypePrinter +
+Annotate + SourceRenderer + HoverRenderer. Next: Phase 5 (integrate). See HANDOFF below.**
 Owner: Nik. Author: pairing session. Branch: **`docs/standards-corpus`** — the docgen replaces the
 linking internals of the API reference, which is unmerged on this branch, so it CANNOT branch from
 `integration` (would lack the prerequisite gen-api/api-data). Related work stays on one branch.
@@ -193,11 +193,30 @@ green. Work in `docs/site` (its own package: `cd docs/site` for all commands).
   conditionals/infer, type literals, template literals, predicates, operators, indexed access) →
   `ts.createPrinter` plain-text fallback for the rest (mapped types, literals, keywords). Qualified
   names resolve as a unit, falling back to the rightmost identifier.
+- `Annotate.ts` — PURE render application (P3, no service): `Link` = `[start,end)` offset range + url
+  into a display text; `fromParts(parts)` (printed-type links), `realign(links, source, formatted)`
+  (character-alignment remap so prettier reformatting keeps links — whitespace/separator chars are
+  elastic, none when texts truly differ), `transformer({links, shift?, className?})` = the shiki
+  transformer: `span` hook, token `[offset, offset+len)` overlapping a link → the token element
+  BECOMES an `<a class="api-typelink">` (`shift` subtracts a twoslash-preamble offset). NOTE: shiki
+  bakes leading whitespace into tokens, so an anchor can start with a space (parity with the old
+  popup linkifier).
+- `SourceRenderer.ts` — service (TsProgram + LinkResolver): `links({file, startLine, endLine})` →
+  `Option<ReadonlyArray<Annotate.Link>>` — every identifier in the 1-based inclusive span resolved
+  through the LinkResolver, offsets span-relative; none for an unknown file/out-of-range span
+  (loud, never a silent `[]`). A declaration's own name self-links when indexed (page links to
+  itself — filter at render if unwanted).
+- `HoverRenderer.ts` — service (TsProgram + TypePrinter): `hover(symbol)` → `Option<Hover>`
+  (`{parts, text, links}`). Type ALIAS → prints the declaration's RHS node (parsed source, refs all
+  resolve); interface/class → declared type = bare self-reference, DELIBERATELY unlinked (the node
+  builder attaches no symbol to the synthesized self-name — found while testing; a hover shouldn't
+  link the symbol it describes anyway); value export → type at the declaration. Reformat display
+  text with `Annotate.realign` to keep links.
 - `index.ts` — barrel (`export * as` each).
 `docs/site/scripts/gen-api-next.ts` — the D4 bridge: gen-api's writer verbatim, extraction via the
 services, writes `api-data-next/`. Any writer change must land in BOTH scripts until Phase 5 cutover.
 `docs/site/test/docgen/` — `@effect/vitest` suites + `fixtures/` (incl. a fixture package for the walk).
-30 tests.
+42 tests (Annotate's exercise REAL shiki renders + REAL prettier reformatting).
 
 ### Phase 3 gate — PASSED (2026-07-16)
 ```
@@ -225,14 +244,19 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
 - NO `as` casts, NO `!` non-null (use `Option`/guards). `Option` for absence. Schema = SSOT.
 - One field per line; PascalCase only for type/class/namespace, camelCase values. printWidth 100.
 
-### Immediate next task: Phase 4 (renderers) — findings already de-risk these
-- ~~`TypePrinter`~~ ✅ DONE (2026-07-19) — as designed: `typeToTypeNode` + walker + printer fallback,
-  6 tests (linked function type, union, plain type params, built-in generic, mapped fallback,
-  parsed-node print). Re-verified the P1 spike before building: synthesized refs resolve 3/3.
-- `HoverRenderer` / `SourceRenderer` — map links onto shiki via a `span` transformer keyed on
-  `token.offset` (P3). Tune: match by offset RANGE (not just start), and subtract the twoslash preamble
-  shift. `LinkResolver` needs a `TsProgram` whose `paths` map `effect`/`@effect/*` → `repos/effect/…/src`
-  (P4), else cross-package refs hit node_modules.
+### Phase 4 (renderers) — ✅ DONE (2026-07-19)
+- ~~`TypePrinter`~~ ✅ — as designed: `typeToTypeNode` + walker + printer fallback, 6 tests (linked
+  function type, union, plain type params, built-in generic, mapped fallback, parsed-node print).
+  Re-verified the P1 spike before building: synthesized refs resolve 3/3.
+- ~~`HoverRenderer` / `SourceRenderer`~~ ✅ — split as `Annotate` (pure link application: shiki
+  `span` transformer w/ offset-RANGE match + `shift` for the twoslash preamble + `realign` for
+  prettier reformats) + `SourceRenderer` (span identifier links) + `HoverRenderer` (symbol hover
+  parts). Verified against REAL shiki 4.3.1 (`span` hook receives `token.offset` — confirmed in the
+  installed types) and REAL prettier. NEW finding (locked in decisions): a declared type's
+  synthesized SELF-reference carries no symbol — `getSymbolAtLocation` returns undefined for it
+  (only nested refs resolve, which P1 measured); alias hovers therefore print the parsed RHS node.
+- Phase 5 REMINDER (P4): the production `TsProgram` needs `paths` mapping `effect`/`@effect/*` →
+  `repos/effect/…/src`, else cross-package refs hit node_modules and link nowhere.
 
 ### Then Phase 5 (integrate) — replace, don't rebuild
 `gen-api-next.ts` already IS the integrated generator; Phase 5 = rename it over `gen-api.ts`, wire
@@ -269,3 +293,17 @@ static via the literal `/api/effect-pm/…` route. See `[[api-reference-docs]]`.
     rule; the derived interfaces stay PascalCase.
   - **D4 realized as `scripts/gen-api-next.ts`** — writer copied verbatim; keep both scripts in sync
     until the Phase 5 cutover deletes the prototype.
+- **2026-07-19 — Phase 4 complete (TypePrinter · Annotate · SourceRenderer · HoverRenderer).**
+  Decisions made:
+  - **Renderers = data + a pure transformer, not HTML assemblers.** Services produce `Link` ranges /
+    `Part` runs; `Annotate.transformer` maps them onto the EXISTING shiki pipeline (D1 as locked).
+    Phase 5 wires the transformer into `highlight.ts`/`gen-hovers.ts` — no custom renderer.
+  - **Anchors are whole tokens** — shiki bakes leading whitespace into a token, and the token
+    element becomes the `<a>`; parity with the old popup linkifier's whole-span wrapping.
+  - **A declared type's synthesized self-reference has no symbol** (checker returns undefined from
+    `getSymbolAtLocation`; nested references resolve fine). Consequences: type-alias hovers print
+    the parsed RHS node; interface/class hovers show the bare self-name UNLINKED (also the right
+    UX — a hover never links the symbol it describes).
+  - **Reformatting keeps links via `Annotate.realign`** (character alignment, whitespace/separator
+    elastic) — de-risks Phase 5's prettier-formatted popup types; none on real divergence, a
+    dropped link over a wrong link.

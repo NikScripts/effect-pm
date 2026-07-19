@@ -9,3 +9,4 @@ export const pick = (flag: boolean): Target | undefined => (flag ? { id: 1 } : u
 export const remap = <T>(value: T): { [K in keyof T]: T[K] } => value;
 export const identity = <A>(value: A): A => value;
 export const targets = (): ReadonlyArray<Target> => [];
+export type MaybeTarget = Target | undefined;
