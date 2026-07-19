@@ -352,6 +352,8 @@ Multi-protocol Node (endpoint set / `_tag` ADT) remains **X1 later** — not thi
 
 **Still OPEN for C1:** exact API names (`nodes` vs keep `distributed`), copy-on-pipe vs today’s mutate-in-place `distributed`, whether definition `{ node }` is just set-of-one sugar, and the formal lock sentence.
 
+**Owner lean (2026-07-19, not locked):** **Option B** — one set on the handle; `client(Tag)` when set size is 1. Confirmed: `nodes`/`distributed` multi-set **disabled** on identity (already `IdentityMultiNode`). Open: identity dial-fail → try other nodes? (agent note: identity handles have no multi set — failover belongs to multi-node `client(Tag)` / nodeless+lookup, not identity+fleet). API lean: `nodes([...])` overwrite; `andNode(Node)` add-one (prefer over `nodes([x])` when appending a single).
+
 ### Single-connect over a multi-node set (THOUGHT)
 
 Gap: `distributed` + peers/ShardMap answer folds and sticky keys; nothing answers “ordinary `client(Tag)`, pick **one** replica.”
@@ -509,3 +511,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerDefaultLocal / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
 - **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.
 - **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean; owner “good enough for now.” **S1 LOCKED.**
+- **2026-07-18** — **S1 Eng shipped:** `Resource.identity` pipe; `layer`/`serve` claim→local-or-client; `IdentitySelfRequired` / `IdentityMultiNode`; tests over ipc Lookup. Next bake: **C1**.
