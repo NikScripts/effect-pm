@@ -220,7 +220,7 @@ Resource.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
 
 ### Phase 2 — Node catalog (`ROut`)
 
-`Node<Self, ROut = never>` (names provisional), `listen` proves catalog, `clientsFor`, runtime `serves[]` from expose/serve list. Tag↔Node default is **C1 OPEN** — see bake thoughts. Do not assume “nodeless by default” is locked.
+`Node<Self, ROut = never>` (names provisional), `listen` proves catalog, `clientsFor`, runtime `serves[]` from the serve list (C5: verb is `serve`). Tag↔Node is **C1 LOCKED**.
 
 ### Phase 3 — Discovery + peers
 
