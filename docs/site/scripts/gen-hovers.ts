@@ -20,6 +20,7 @@ import { NodeServices } from "@effect/platform-node";
 import { highlightToHast, loadHighlighter } from "../src/lib/highlight.js";
 import { loadSourceLinks, sourceLinksFor } from "../src/lib/api-source-links.js";
 import { moduleSummary, packages, symbolDetail } from "../src/lib/api-data.js";
+import { hastToHtml } from "../src/lib/hast-html.js";
 import { symbolFileKey } from "../src/lib/api-slugs.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -59,27 +60,9 @@ const readFile = (path: string): Effect.Effect<string | undefined, never, FileSy
     Effect.orElseSucceed(() => undefined)
   );
 
-// --- HAST helpers (no hast-util-to-html dep — hand-serialize the shiki/twoslash tree) ---
+// --- HAST helpers (serializer shared with the live render: src/lib/hast-html.ts) ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
 type Hast = any;
-const VOID = new Set(["br", "hr", "img", "input", "col", "wbr"]);
-const escText = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const escAttr = (s: string): string => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-const toHtml = (n: Hast): string => {
-  if (n.type === "text") return escText(String(n.value));
-  if (n.type === "root") return (n.children ?? []).map(toHtml).join("");
-  if (n.type !== "element") return "";
-  const attrs = Object.entries(n.properties ?? {})
-    .map(([k, v]) => {
-      const name = k === "className" ? "class" : k;
-      const val = Array.isArray(v) ? v.join(" ") : String(v);
-      return ` ${name}="${escAttr(val)}"`;
-    })
-    .join("");
-  if (VOID.has(n.tagName)) return `<${n.tagName}${attrs}>`;
-  return `<${n.tagName}${attrs}>${(n.children ?? []).map(toHtml).join("")}</${n.tagName}>`;
-};
 // The text a reader actually SEES on a line — the twoslash popovers are hidden until hover, so exclude
 // them; used to content-anchor the declaration's first line against the real source (robust to any
 // directive-stripping line offset).
@@ -231,8 +214,8 @@ const program = Effect.gen(function* () {
       }
       const slice = lineEls.slice(start, start + n);
       const preClass = String(pre?.properties?.class ?? "shiki");
-      const inner = slice.map((l, i) => toHtml(l) + (i < slice.length - 1 ? "\n" : "")).join("");
-      const html = `<pre class="${escAttr(preClass)}"><code>${inner}</code></pre>`;
+      const inner = slice.map((l, i) => hastToHtml(l) + (i < slice.length - 1 ? "\n" : "")).join("");
+      const html = `<pre class="${preClass.replace(/"/g, "&quot;")}"><code>${inner}</code></pre>`;
       yield* writeText(
         nodePath.join(hoversDir, sym.pkg, sym.moduleSlug, `${symbolFileKey(sym.name)}.src.html`),
         html

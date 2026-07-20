@@ -25,6 +25,7 @@ import {
   symbolIndexEntries,
 } from "./api-source-links";
 import * as Annotate from "../docgen/Annotate.js";
+import { hastToHtml } from "./hast-html.js";
 import { runServer } from "./runtime";
 
 // Compiler-resolved {@link} maps, keyed by a symbol's declaration `file:line` (see gen-api). Hovers
@@ -639,6 +640,15 @@ const hastToReact = (node: any): React.ReactNode => {
     if (k === "class" || k === "className") props.className = Array.isArray(v) ? v.join(" ") : v;
     else if (k === "style") props.style = toStyle(v as string);
     else props[ATTR_RENAME[k] ?? k] = Array.isArray(v) ? v.join(" ") : v;
+  }
+  // Inert popup templates go out as dangerouslySetInnerHTML: React-rendered <template> CHILDREN
+  // hydrate against content the browser parser moved into template.content — a guaranteed
+  // mismatch that made React regenerate the whole (multi-MB) tree client-side, which is exactly
+  // what a phone can't afford. innerHTML content is left alone by hydration, and setting it on a
+  // template populates .content.
+  if (node.tagName === "template") {
+    props.dangerouslySetInnerHTML = { __html: (node.children ?? []).map(hastToHtml).join("") };
+    return React.createElement(node.tagName, props);
   }
   return React.createElement(node.tagName, props, (node.children ?? []).map(hastToReact));
 };
