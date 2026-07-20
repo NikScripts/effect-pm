@@ -176,9 +176,35 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
     readonly expanded?: string;
     readonly expandedLinks?: ReadonlyArray<Annotate.Link>; // offsets into `expanded`
     readonly ownerLoc?: string;
+    readonly ownerUrl?: string; // the hovered symbol's OWN doc page (its declaration in the index)
     readonly typeText?: string;
     readonly typeLinks?: ReadonlyArray<Annotate.Link>;
   }
+
+  // location "file:line" → doc url, built lazily from getLocations (loads after construction).
+  let ownerIndex: Map<string, string> | undefined;
+  let ownerIndexSize = -1;
+  const ownerUrlOf = (loc: string): string | undefined => {
+    const entries = opts.getLocations?.() ?? [];
+    if (ownerIndex === undefined || entries.length !== ownerIndexSize) {
+      ownerIndex = new Map(entries.map((entry) => [`${entry.file}:${entry.line}`, entry.url]));
+      ownerIndexSize = entries.length;
+    }
+    return ownerIndex.get(loc);
+  };
+
+  // Only a module-scope declaration site owns a page — a parameter/local/member shares its
+  // statement's LINE and must not claim the enclosing export's page (the LinkResolver's rule).
+  const pageOwner = (decl: ts.Declaration): ts.Node | undefined => {
+    const owner =
+      ts.isVariableDeclaration(decl) && ts.isVariableDeclarationList(decl.parent)
+        ? decl.parent.parent
+        : decl;
+    return !ts.isSourceFile(owner) &&
+      (ts.isSourceFile(owner.parent) || ts.isModuleBlock(owner.parent))
+      ? owner
+      : undefined;
+  };
 
   // The docgen TypePrinter over THIS program — rebuilt per block (the program changes with the
   // swapped file), resolving through the same location index the source panels use.
@@ -225,13 +251,21 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
       let typeText: string | undefined;
       let typeLinks: ReadonlyArray<Annotate.Link> | undefined;
 
-      // owner location: the declaration of the hovered symbol (keys the {@link} map)
+      // owner location: the declaration of the hovered symbol (keys the {@link} map), and its own
+      // doc page when the index documents that declaration (the popup-head link on mobile)
       const sym = checker.getSymbolAtLocation(node);
       const decl = sym?.getDeclarations()?.[0];
+      let ownerUrl: string | undefined;
       if (decl !== undefined) {
         const f = decl.getSourceFile();
+        const rel = nodePath.relative(opts.vfsRoot, f.fileName);
         const line = f.getLineAndCharacterOfPosition(decl.getStart()).line + 1;
-        ownerLoc = `${nodePath.relative(opts.vfsRoot, f.fileName)}:${line}`;
+        ownerLoc = `${rel}:${line}`;
+        const owner = pageOwner(decl);
+        if (owner !== undefined) {
+          const ownerLine = f.getLineAndCharacterOfPosition(owner.getStart()).line + 1;
+          ownerUrl = ownerUrlOf(`${rel}:${ownerLine}`);
+        }
       }
 
       // the hover type as OUR compiler prints it, with exact link ranges (use-site enclosing:
@@ -299,7 +333,7 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
       }
 
       if (expanded !== undefined || ownerLoc !== undefined || typeText !== undefined) {
-        out.set(offset, { expanded, expandedLinks, ownerLoc, typeText, typeLinks });
+        out.set(offset, { expanded, expandedLinks, ownerLoc, ownerUrl, typeText, typeLinks });
       }
     }
     return out;

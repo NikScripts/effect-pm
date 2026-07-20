@@ -114,6 +114,10 @@ const hoverExpandLinks = new WeakMap<object, ReadonlyArray<Annotate.Link>>();
 const simpleHead =
   /^(?:(?:const|let|var|function|type|interface|class|namespace|enum)\s+)?[\w$.]+\??:\s$/;
 const maxSubstituteLength = 2000;
+// The declaration NAME at the start of a (prefix-stripped) hover text — declaration keywords are
+// skipped, so `type Protocol = …` yields `Protocol`.
+const declName =
+  /^(?:(?:import|export|declare|const|let|var|function|class|interface|type|namespace|enum|abstract|new)\s+)*([\w$.]+)/;
 
 // Sentinel wrapping our expansion inside `node.docs` (a field that survives to the renderer, unlike
 // arbitrary props). The renderer splits it off and wedges it as its own box between the type and the
@@ -244,29 +248,44 @@ const twoslasher = Object.assign(
           if (simpleHead.test(head0)) h.text = `${prefix0}${head0}${info.typeText}`;
         }
         h.text = formatHoverType(h.text);
-        if (info?.typeText === undefined || info.typeLinks === undefined) return;
-        // h.text = [(prefix) ][head: ][body]; our parts print the TYPE (the body). Realign onto
-        // the body, then displace into BOX coordinates: rendererRich strips the "(property) "
-        // prefix from the displayed box, so only the head precedes the body there.
+        // Box coordinates: rendererRich strips the "(property) " prefix from the displayed box.
         const m = /^(\([a-z ]+\)\s+)?([\s\S]+)$/.exec(h.text);
         const rest = m?.[2] ?? h.text;
-        const head = declHead(rest);
-        const body = rest.slice(head.length);
-        const displace = head.length;
-        Option.match(Annotate.realign(info.typeLinks, info.typeText, body), {
-          onNone: () => {},
-          onSome: (links) => {
-            if (links.length === 0) return;
-            hoverPopupLinks.set(
-              h,
-              links.map((link) => ({
-                start: link.start + displace,
-                end: link.end + displace,
-                url: link.url,
-              }))
-            );
-          },
-        });
+        const popupLinks: Array<Annotate.Link> = [];
+        // The hovered symbol's OWN page, linked on the declaration NAME in the box head — on touch
+        // devices the in-code anchor is inert (the tap opens the preview), so this is the mobile
+        // navigation path: `type Protocol = …` links `Protocol`.
+        if (info?.ownerUrl !== undefined) {
+          const name = declName.exec(rest);
+          if (name !== null && name[1] !== undefined) {
+            const start = name[0].length - name[1].length;
+            popupLinks.push({
+              start,
+              end: start + name[1].length,
+              url: info.ownerUrl,
+            });
+          }
+        }
+        // Our parts print the TYPE (the body after the declaration head) — realign onto it, then
+        // displace into box coordinates.
+        if (info?.typeText !== undefined && info.typeLinks !== undefined) {
+          const head = declHead(rest);
+          const body = rest.slice(head.length);
+          const displace = head.length;
+          Option.match(Annotate.realign(info.typeLinks, info.typeText, body), {
+            onNone: () => {},
+            onSome: (links) => {
+              for (const link of links) {
+                popupLinks.push({
+                  start: link.start + displace,
+                  end: link.end + displace,
+                  url: link.url,
+                });
+              }
+            },
+          });
+        }
+        if (popupLinks.length > 0) hoverPopupLinks.set(h, popupLinks);
       });
     } catch {
       // Expansion is best-effort: on any failure keep the plain (compact) twoslash hovers.

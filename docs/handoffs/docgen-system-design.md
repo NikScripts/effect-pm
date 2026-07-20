@@ -320,6 +320,13 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
     formatted string; other symbols realign HoverRenderer parts onto typeText. Stack now exposes
     hover/resolver/program (HoverRenderer + TypePrinter layers added).
   - {@link} CHIPS on symbol cards navigate via s.docLinks.
+  - MOBILE model (owner feedback: taps were navigating instead of opening previews): on touch
+    devices (`@media (hover: none)`) an in-code anchor UNDER a preview is `pointer-events: none` —
+    the tap opens the preview (TwoslashHover island) — and the symbol's page link moves INTO the
+    preview: the declaration NAME in the box head links to the hover's own page (`type Protocol =
+    …` links `Protocol`; expandType `ownerUrl`, guarded by the LinkResolver's declaration-site
+    rule so a parameter/local never claims the enclosing export's page — caught live on `byNode`).
+    Desktop keeps both: hover previews + direct token links.
   - ⚠ OPEN capture-rate lead (the one real limiter): the node builder attaches symbols ONLY to
     references whose names are in scope at the `enclosing` node — a use site in another file
     misses most library-internal names, so popup/expand links for library shapes are partial.

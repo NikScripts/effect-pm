@@ -453,6 +453,12 @@ pre.shiki { background: transparent; }
   cursor: pointer;
 }
 .api-typelink:hover { border-bottom-color: var(--primary); }
+/* Touch devices: a tap on a linked token that HAS a preview must OPEN the preview, not navigate —
+   the symbol's page link lives on the declaration name inside the preview instead (see
+   highlight.ts). Links inside the popup, and linked tokens without a preview, stay tappable. */
+@media (hover: none) {
+  .twoslash-hover > a.api-typelink { pointer-events: none; }
+}
 .twoslash-popup-container {
   position: absolute;
   bottom: calc(100% + 0.4rem);
