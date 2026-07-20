@@ -1,3 +1,4 @@
+import { PageMeta } from "../../components/PageMeta.js";
 import { packages } from "../../lib/api-data.js";
 import { runServer } from "../../lib/runtime.js";
 
@@ -6,7 +7,10 @@ export default async function ApiIndex() {
   const pkgs = await runServer(packages());
   return (
     <>
-      <title>API Reference — effect-pm</title>
+      <PageMeta
+        title="API Reference — effect-pm"
+        description="Compiler-accurate API reference for effect-pm and its effect dependencies."
+      />
       <article className="prose">
         <h1>API Reference</h1>
         <p>

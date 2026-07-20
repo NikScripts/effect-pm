@@ -15,7 +15,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const groups = await navGroups();
   return (
     <>
-      <meta name="description" content="Official documentation for @nikscripts/effect-pm" />
+      {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
+          duplicate them (React 19 hoists but does not dedupe meta by name) */}
       {/* Override Waku's default viewport: `viewport-fit=cover` lets the page paint under
           the notch/safe-area, so html's dark background fills it instead of white. */}
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

@@ -1,4 +1,5 @@
 import { ApiSymbolRow } from "../../../../components/ApiSymbol.js";
+import { PageMeta } from "../../../../components/PageMeta.js";
 import { moduleSummary, packages } from "../../../../lib/api-data.js";
 import { groupSymbols } from "../../../../lib/api-groups.js";
 import { runServer } from "../../../../lib/runtime.js";
@@ -18,7 +19,14 @@ export default async function ApiModulePage({ pkg, module }: { pkg: string; modu
   const sectioned = groups.length > 1;
   return (
     <>
-      <title>{`${m.entry} — API — effect-pm`}</title>
+      <PageMeta
+        title={`${m.entry} — API — effect-pm`}
+        description={`API reference for the ${m.entry} module: ${
+          m.symbols.length
+        } exported symbols${
+          groups.length > 1 ? ` across ${groups.map((g) => g.label).join(", ")}` : ""
+        }.`}
+      />
       <article className="prose">
         <p className="api-back">
           <a href={`/api/${pkg}`}>← {m.package}</a>

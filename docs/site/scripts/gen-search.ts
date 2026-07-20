@@ -238,6 +238,35 @@ const program = Effect.gen(function* () {
     yield* write(`${path}.gz`, gzipSync(bytes, { level: 9 }));
     yield* write(`${path}.br`, brotliCompressSync(bytes));
   }
+  // sitemap.xml — the corpus already IS the site's URL universe (api symbols + modules, docs
+  // pages, glossary); strip anchors, add the handful of index routes. Absolute URLs are required
+  // by the spec, so emission is gated on DOCS_SITE_ORIGIN (set it in the deploy environment).
+  const origin = process.env.DOCS_SITE_ORIGIN;
+  if (origin !== undefined && origin !== "") {
+    const base = origin.replace(/\/$/, "");
+    const urls = new Set<string>(["/", "/search", "/api"]);
+    for (const d of docs) {
+      const path = d.url.split("#")[0] ?? "";
+      if (path !== "") urls.add(path);
+      const pkgMatch = /^\/api\/([^/]+)\//.exec(path);
+      if (pkgMatch !== null) urls.add(`/api/${pkgMatch[1]}`);
+    }
+    const xml = [
+      `<?xml version="1.0" encoding="UTF-8"?>`,
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+      ...[...urls].sort().map((u) => `  <url><loc>${base}${u}</loc></url>`),
+      `</urlset>`,
+      "",
+    ].join("\n");
+    const sitemapPath = nodePath.join(outDir, "..", "sitemap.xml");
+    yield* fs
+      .writeFileString(sitemapPath, xml)
+      .pipe(Effect.mapError((cause) => new FileError({ path: sitemapPath, cause })));
+    yield* Console.log(`sitemap: ${urls.size} urls -> ${sitemapPath}`);
+  } else {
+    yield* Console.log("sitemap: skipped (set DOCS_SITE_ORIGIN to emit absolute URLs)");
+  }
+
   const counts = docs.reduce<Record<string, number>>((acc, d) => {
     acc[d.type] = (acc[d.type] ?? 0) + 1;
     return acc;
