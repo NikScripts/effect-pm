@@ -19,7 +19,12 @@ class Jobs extends Resource.Tag<Jobs>()("nameless/Jobs", {
   jobs: Resource.effect(Schema.Number),
 }) {}
 
+class Emails extends Resource.Tag<Emails>()("nameless/Emails", {
+  emails: Resource.effect(Schema.String),
+}) {}
+
 const jobsImpl = { jobs: Effect.succeed(11) };
+const emailsImpl = { emails: Effect.succeed("ok") };
 
 describe("Node.listen([serve…]) nameless", () => {
   it.effect("mints address-less node + Lookup; clientLocal dials the served resource", () =>
@@ -47,6 +52,35 @@ describe("Node.listen([serve…]) nameless", () => {
       const listenNode = Context.get(serverCtx, Node.ListenNode);
       expect(listenNode.key.startsWith("effect-pm/anonymous#")).toBe(true);
       expect(typeof listenNode.path).toBe("string");
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("two resources on one nameless listen; both dial via clientLocal", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("pair");
+      const serverCtx = yield* Layer.build(
+        Node.listen(
+          [
+            Resource.serve(Jobs, jobsImpl),
+            Resource.serve(Emails, emailsImpl),
+          ],
+          { lookupPath, unlinkLookup: true },
+        ),
+      );
+      const clientCtx = yield* Layer.build(
+        Layer.mergeAll(
+          Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
+          Resource.clientLocal(Emails, { lookupPath, unlink: false }),
+        ),
+      );
+
+      const pair = yield* Effect.gen(function* () {
+        const jobs = yield* Jobs;
+        const emails = yield* Emails;
+        return [yield* jobs.jobs, yield* emails.emails] as const;
+      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
+
+      expect(pair).toEqual([11, "ok"]);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
