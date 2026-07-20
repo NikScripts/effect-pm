@@ -29,7 +29,25 @@ const browser = await chromium.launch();
   const href = await panel.locator(".search-hit").first().getAttribute("href");
   console.log("typeahead top:", firstHit.trim(), "->", href);
 
-  // Enter navigates to the full page
+  // matched terms are highlighted
+  const marks = await panel.locator(".search-hit mark").count();
+  if (marks === 0) fail("no <mark> highlights in typeahead hits");
+
+  // ↓ selects the first hit; Enter navigates TO it (not to /search)
+  await input.press("ArrowDown");
+  const activeHref = await panel.locator(".search-hit.is-active").getAttribute("href");
+  if (activeHref !== href) fail(`ArrowDown selected ${activeHref}, expected ${href}`);
+  await input.press("Enter");
+  await page.waitForURL(`**${href}`, { timeout: 15000 });
+  console.log("keyboard nav: ArrowDown+Enter ->", page.url().replace(base, ""));
+
+  // back to the panel for the Enter → full page path
+  await page.goto(`${base}/`, { waitUntil: "networkidle" });
+  await input.waitFor({ timeout: 15000 });
+  await input.fill("subscribable");
+  await panel.locator(".search-hit").first().waitFor({ timeout: 15000 });
+
+  // Enter with no selection → the full page
   await input.press("Enter");
   await page.waitForURL("**/search?q=subscribable", { timeout: 15000 });
   await page.locator(".search-page .search-section").first().waitFor({ timeout: 15000 });

@@ -8,10 +8,10 @@ import {
   searchSections,
   searchType,
   type SearchDoc,
-  type SearchHit,
   type SearchIndex,
 } from "../lib/search-core.js";
 import { loadSearchIndex } from "./search-client.js";
+import { HitRow } from "./SearchHit.js";
 
 const sectionMeta = [
   { key: "api", label: "API Reference", type: "api" },
@@ -21,22 +21,6 @@ const sectionMeta = [
 
 const isType = (s: string | null): s is SearchDoc["type"] =>
   s === "api" || s === "page" || s === "glossary";
-
-const Hit = ({ hit }: { hit: SearchHit }): React.ReactElement => (
-  <a className="search-hit" href={hit.doc.url}>
-    <span className="search-hit-title">
-      {hit.doc.title}
-      {hit.doc.kind !== undefined ? (
-        <span className={`api-kind api-kind-${hit.doc.kind}`}>{hit.doc.kind}</span>
-      ) : null}
-      {hit.doc.pkg !== undefined ? <span className="search-hit-ctx">{hit.doc.pkg}</span> : null}
-      {hit.doc.context !== undefined ? (
-        <span className="search-hit-ctx">{hit.doc.context}</span>
-      ) : null}
-    </span>
-    {hit.doc.summary !== "" ? <span className="search-hit-sum">{hit.doc.summary}</span> : null}
-  </a>
-);
 
 export function SearchResults(): React.ReactElement {
   const [query, setQuery] = React.useState("");
@@ -84,7 +68,7 @@ export function SearchResults(): React.ReactElement {
               </a>
             </div>
             {searchType(index, q, only, 50).map((hit) => (
-              <Hit hit={hit} key={hit.doc.id} />
+              <HitRow hit={hit} query={q} showPkg key={hit.doc.id} />
             ))}
           </section>
         ) : (
@@ -102,7 +86,7 @@ export function SearchResults(): React.ReactElement {
                     <a href={`/search?q=${encodeURIComponent(q)}&type=${type}`}>show all</a>
                   </div>
                   {hits.map((hit) => (
-                    <Hit hit={hit} key={hit.doc.id} />
+                    <HitRow hit={hit} query={q} showPkg key={hit.doc.id} />
                   ))}
                 </section>
               );

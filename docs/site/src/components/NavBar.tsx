@@ -13,7 +13,7 @@
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
 import { GroupedNav } from "./GroupedNav.js";
-import { SearchPanel } from "../islands/SearchPanel.js";
+import { SearchPanel, type SearchPanelControl } from "../islands/SearchPanel.js";
 
 const MENU_ID = "menu-toggle";
 
@@ -70,6 +70,7 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
   const [query, setQuery] = React.useState("");
   const cbRef = React.useRef<HTMLInputElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const panelRef = React.useRef<SearchPanelControl | null>(null);
 
   const close = (): void => {
     const cb = cbRef.current;
@@ -150,7 +151,9 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              // Enter → the full results page; the panel below is the small preview.
+              // the panel gets first claim (↑/↓ selection, Enter on a selected hit) …
+              if (panelRef.current?.handleKey(e) === true) return;
+              // … otherwise Enter → the full results page; the panel below is the small preview.
               if (e.key === "Enter" && query.trim() !== "") {
                 close();
                 window.location.assign(`/search?q=${encodeURIComponent(query.trim())}`);
@@ -159,7 +162,7 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
             placeholder="Search docs and API…"
             aria-label="Search docs and API"
           />
-          <SearchPanel query={query} onNavigate={close} />
+          <SearchPanel query={query} onNavigate={close} controlRef={panelRef} />
           <GroupedNav groups={groups} query={query} onNavigate={close} />
         </div>
       </div>

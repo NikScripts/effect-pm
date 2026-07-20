@@ -1105,7 +1105,8 @@ a.api-src:hover { color: var(--primary); }
 .search-section-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0.35rem 0.85rem 0.15rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; }
 .search-section-head a { font-size: 0.72rem; text-transform: none; letter-spacing: 0; }
 .search-hit { display: block; padding: 0.32rem 0.85rem; text-decoration: none; color: inherit; border-radius: 6px; }
-.search-hit:hover, .search-hit:focus-visible { background: color-mix(in oklab, var(--primary) 10%, transparent); }
+.search-hit:hover, .search-hit:focus-visible, .search-hit.is-active { background: color-mix(in oklab, var(--primary) 10%, transparent); }
+.search-hit mark { background: color-mix(in oklab, var(--primary) 24%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 .search-hit-title { display: flex; align-items: center; gap: 0.45rem; font-size: 0.86rem; font-weight: 550; font-family: var(--mono, ui-monospace, monospace); }
 .search-hit-ctx { font-size: 0.7rem; opacity: 0.6; font-family: inherit; font-weight: normal; }
 .search-hit-sum { display: block; font-size: 0.76rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
