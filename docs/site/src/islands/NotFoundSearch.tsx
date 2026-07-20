@@ -1,23 +1,34 @@
 "use client";
 
-// Desktop search entry: the sidebar's input + typeahead panel. The mobile overlay has its own
-// input (NavBar); both render the same SearchPanel so results never differ between layouts.
+// The 404 page's working half: derive a search query from the dead URL's last segment and run
+// the real typeahead over it, so a broken link becomes a near-miss list instead of a dead end.
 
 import * as React from "react";
 import { SearchPanel, type SearchPanelControl } from "./SearchPanel.js";
 
-export function SidebarSearch(): React.ReactElement {
+const queryFromPath = (pathname: string): string => {
+  const segment =
+    pathname
+      .split("/")
+      .filter((s) => s !== "")
+      .pop() ?? "";
+  return decodeURIComponent(segment)
+    .replace(/\.[a-z]+$/, "")
+    .split(/[-_.]+/)
+    .join(" ")
+    .trim();
+};
+
+export function NotFoundSearch(): React.ReactElement {
   const [query, setQuery] = React.useState("");
   const panelRef = React.useRef<SearchPanelControl | null>(null);
-  // the shortcut hint renders post-hydration only (platform sniff can't happen on the server)
-  const [hint, setHint] = React.useState("");
+
   React.useEffect(() => {
-    setHint(/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K");
+    setQuery(queryFromPath(window.location.pathname));
   }, []);
 
   return (
-    <div className="sidebar-search">
-      {hint !== "" && query === "" ? <kbd className="search-kbd">{hint}</kbd> : null}
+    <div className="sidebar-search notfound-search">
       <input
         className="menu-search"
         type="search"
@@ -28,12 +39,11 @@ export function SidebarSearch(): React.ReactElement {
           if (e.key === "Enter" && query.trim() !== "") {
             window.location.assign(`/search?q=${encodeURIComponent(query.trim())}`);
           }
-          if (e.key === "Escape") setQuery("");
         }}
         placeholder="Search docs and API…"
         aria-label="Search docs and API"
       />
-      <SearchPanel query={query} onNavigate={() => setQuery("")} controlRef={panelRef} />
+      <SearchPanel query={query} controlRef={panelRef} />
     </div>
   );
 }

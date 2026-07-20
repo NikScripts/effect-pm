@@ -10,6 +10,7 @@
 //     factor from the reference graph — types only, where declaration references mean something.
 //   - exact dominance: an exact name/title match multiplies AFTER everything else, so popularity
 //     can only break near-ties, never beat the thing you literally typed (the `retry` lesson).
+//   - one index per doc type (api/page/glossary) + query-side synonyms (`ws` → websocket).
 
 import MiniSearch from "minisearch";
 
@@ -64,12 +65,15 @@ const kindWeight: Record<string, number> = {
 // signal for types and a weak one for functions (Effect.retry has 0 declaration refs).
 const typeish = new Set(["interface", "class", "type", "namespace", "module"]);
 
+// One MiniSearch per doc type: sections never need cross-type filtering, term statistics stay
+// within a type (an API-heavy corpus can't skew page ranking), and the per-type corpus chunks
+// can index independently as they arrive.
 export interface SearchIndex {
-  readonly mini: MiniSearch<SearchDoc>;
+  readonly minis: { readonly [T in SearchDoc["type"]]: MiniSearch<SearchDoc> };
   readonly byId: ReadonlyMap<string, SearchDoc>;
 }
 
-export const buildIndex = (docs: ReadonlyArray<SearchDoc>): SearchIndex => {
+const miniFor = (docs: ReadonlyArray<SearchDoc>): MiniSearch<SearchDoc> => {
   const mini = new MiniSearch<SearchDoc>({
     fields: ["title", "name", "summary", "text", "context"],
     storeFields: ["type", "title", "url", "summary", "kind", "pkg", "name", "refs", "context"],
@@ -81,10 +85,35 @@ export const buildIndex = (docs: ReadonlyArray<SearchDoc>): SearchIndex => {
     },
   });
   mini.addAll([...docs]);
-  return {
-    mini,
-    byId: new Map(docs.map((d) => [d.id, d])),
-  };
+  return mini;
+};
+
+export const buildIndex = (docs: ReadonlyArray<SearchDoc>): SearchIndex => ({
+  minis: {
+    api: miniFor(docs.filter((d) => d.type === "api")),
+    page: miniFor(docs.filter((d) => d.type === "page")),
+    glossary: miniFor(docs.filter((d) => d.type === "glossary")),
+  },
+  byId: new Map(docs.map((d) => [d.id, d])),
+});
+
+// Query-side synonyms — for abbreviations prefix search can't reach (`ws` never prefixes
+// `websocket`). Each match adds an expanded query; results merge by best score.
+const synonyms: Record<string, string> = {
+  ws: "websocket",
+  wss: "websocket",
+};
+
+const expandQuery = (q: string): ReadonlyArray<string> => {
+  const words = q.split(/\s+/);
+  const expanded = [q];
+  words.forEach((word, i) => {
+    const alias = synonyms[word.toLowerCase()];
+    if (alias !== undefined) {
+      expanded.push(words.map((w, j) => (j === i ? alias : w)).join(" "));
+    }
+  });
+  return expanded;
 };
 
 const docBoost = (fields: Record<string, unknown>): number => {
@@ -106,11 +135,22 @@ const search = (
   const q = query.trim();
   if (q === "") return [];
   const lowered = q.toLowerCase();
-  const results = index.mini.search(q, {
-    filter: (r) => r.type === type,
-    boostDocument: (_id, _term, fields) => docBoost(fields ?? {}),
-  });
-  return results
+  const best = new Map<string, { readonly id: string; readonly score: number }>();
+  for (const variant of expandQuery(q)) {
+    for (const r of index.minis[type].search(variant, {
+      boostDocument: (_id, _term, fields) => docBoost(fields ?? {}),
+    })) {
+      const id = String(r.id);
+      const seen = best.get(id);
+      if (seen === undefined || r.score > seen.score) {
+        best.set(id, {
+          id,
+          score: r.score,
+        });
+      }
+    }
+  }
+  return [...best.values()]
     .map((r) => {
       const doc = index.byId.get(String(r.id));
       if (doc === undefined) return undefined;

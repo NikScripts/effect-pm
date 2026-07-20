@@ -90,6 +90,48 @@ const browser = await chromium.launch();
   await page.close();
 }
 
+// --- Desktop: ⌘K shortcut, copy button, 404 ---
+{
+  const ctx = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+
+  await page.goto(`${base}/docs/core-concepts`, { waitUntil: "networkidle" });
+  // ⌘K focuses the sidebar search
+  await page.keyboard.press("Meta+KeyK");
+  const focused = await page
+    .locator(".sidebar-search input")
+    .evaluate((el) => document.activeElement === el);
+  if (!focused) fail("Meta+K did not focus the sidebar search");
+  console.log("cmd-k focuses sidebar search");
+
+  // API pages get the portaled copy button (guide .code-block pres render theirs server-side)
+  await page.goto(`${base}/api/effect-pm/Resource/ref`, { waitUntil: "networkidle" });
+  const pre = page
+    .locator("main pre")
+    .filter({ has: page.locator(".copy-btn") })
+    .first();
+  await pre.waitFor({ timeout: 15000 });
+  await pre.hover();
+  const btn = pre.locator(".copy-btn");
+  await btn.click();
+  await page.locator(".copy-btn[data-copied]").waitFor({ timeout: 5000 });
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  if (clip.trim() === "") fail("copy button copied nothing");
+  console.log("api copy button ok:", JSON.stringify(clip.slice(0, 40)));
+
+  // 404 page seeds a search from the dead path
+  await page.goto(`${base}/guides/subscribable-nope`, { waitUntil: "networkidle" });
+  const nf = page.locator(".notfound");
+  await nf.waitFor({ timeout: 15000 });
+  await page.locator(".notfound .search-hit").first().waitFor({ timeout: 15000 });
+  const nfTop = await page.locator(".notfound .search-hit-title").first().textContent();
+  console.log("404 suggestion top:", nfTop.trim());
+  if (errors.length > 0) fail(`shortcut/copy/404 page errors: ${errors.join(" | ")}`);
+  await ctx.close();
+}
+
 // --- iPhone: typeahead usable on touch ---
 {
   const ctx = await browser.newContext({ ...devices["iPhone 13"] });

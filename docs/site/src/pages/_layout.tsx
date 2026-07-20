@@ -7,6 +7,7 @@ import { Footer } from "../components/Footer.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
 import { SidebarSearch } from "../islands/SidebarSearch.js";
+import { CodeCopy } from "../islands/CodeCopy.js";
 
 // Root layout — owns all chrome. Nav is generated from the content manifest,
 // so adding a `.dj` file updates the nav with no edit here.
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <Footer />
       <TwoslashHover />
       <GlossaryHover data={glossaryEntries()} />
+      <CodeCopy />
     </>
   );
 }

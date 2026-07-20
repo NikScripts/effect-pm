@@ -108,6 +108,24 @@ describe("search-core", () => {
     expect(hits[0]?.doc.pkg).toBe("effect-pm");
   });
 
+  it("synonyms reach what prefix search can't (ws → websocket)", () => {
+    const docs: Array<SearchDoc> = [
+      {
+        id: "/api/effect-pm/Resource/protocolWebsocket",
+        type: "api",
+        title: "Resource.protocolWebsocket",
+        url: "/api/effect-pm/Resource/protocolWebsocket",
+        summary: "",
+        kind: "const",
+        pkg: "effect-pm",
+        name: "protocolWebsocket",
+      },
+    ];
+    const index = buildIndex(docs);
+    const hits = searchType(index, "ws", "api", 10);
+    expect(hits.some((h) => h.doc.name === "protocolWebsocket")).toBe(true);
+  });
+
   it("sections split by type", () => {
     const docs: Array<SearchDoc> = [
       {
@@ -145,9 +163,13 @@ describe("search-core", () => {
 
 // Pinned ranking cases over the REAL corpus — skipped when the generated index is absent
 // (fresh clone before docs:api). These are the spike's findings as regression tests.
-const corpusPath = fileURLToPath(new URL("../public/search/docs.json", import.meta.url));
-describe.skipIf(!existsSync(corpusPath))("search ranking (real corpus)", () => {
-  const docs: ReadonlyArray<SearchDoc> = JSON.parse(readFileSync(corpusPath, "utf8")).docs;
+const chunkPaths = ["api.json", "pages.json", "glossary.json"].map((f) =>
+  fileURLToPath(new URL(`../public/search/${f}`, import.meta.url))
+);
+describe.skipIf(chunkPaths.some((p) => !existsSync(p)))("search ranking (real corpus)", () => {
+  const docs: ReadonlyArray<SearchDoc> = chunkPaths.flatMap(
+    (p) => JSON.parse(readFileSync(p, "utf8")).docs
+  );
   const index = buildIndex(docs);
   const top = (q: string): string => searchType(index, q, "api", 1)[0]?.doc.title ?? "";
 

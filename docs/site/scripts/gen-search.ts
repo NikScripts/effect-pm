@@ -1,5 +1,6 @@
-// Generate the search-document corpus — ONE gitignored file (public/search/docs.json) the client
-// fetches lazily and the ranking wrapper (src/lib/search-core.ts) indexes. Engine-agnostic on
+// Generate the search-document corpus — gitignored per-type chunks (public/search/{api,pages,
+// glossary}.json + precompressed .gz/.br) the client fetches lazily and the ranking wrapper
+// (src/lib/search-core.ts) indexes. Engine-agnostic on
 // purpose: plain typed documents from the SSOT (api-data for symbols/modules, the docs tree for
 // pages at HEADING granularity, the glossary), so the engine can be swapped without regenerating
 // anything upstream. Runs AFTER gen-api (needs api-data).
@@ -8,6 +9,7 @@
 
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 import { Console, Data, Effect, Exit, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
@@ -16,7 +18,7 @@ import { slugify } from "../src/lib/slug-text.js";
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 const docsDir = nodePath.join(repoRoot, "docs");
-const outPath = nodePath.join(repoRoot, "docs/site/public/search/docs.json");
+const outDir = nodePath.join(repoRoot, "docs/site/public/search");
 
 // Content dirs that are chapters (url = /docs/<basename>). legacy/handoffs/site never index.
 const contentDirs = ["", "getting-started", "guides", "standards", "examples"];
@@ -216,11 +218,26 @@ const program = Effect.gen(function* () {
   }
 
   yield* fs
-    .makeDirectory(nodePath.dirname(outPath), { recursive: true })
-    .pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
-  yield* fs
-    .writeFileString(outPath, `${JSON.stringify({ docs })}\n`)
-    .pipe(Effect.mapError((cause) => new FileError({ path: outPath, cause })));
+    .makeDirectory(outDir, { recursive: true })
+    .pipe(Effect.mapError((cause) => new FileError({ path: outDir, cause })));
+  // One chunk per doc type: the panel loads all three in parallel; a type-narrowed results page
+  // fetches only its own. Precompressed variants sit beside each chunk so any static host / CDN
+  // that negotiates encoding can serve them without a compression tier.
+  const chunks: ReadonlyArray<readonly [string, ReadonlyArray<SearchDoc>]> = [
+    ["api.json", docs.filter((d) => d.type === "api")],
+    ["pages.json", docs.filter((d) => d.type === "page")],
+    ["glossary.json", docs.filter((d) => d.type === "glossary")],
+  ];
+  for (const [file, chunk] of chunks) {
+    const path = nodePath.join(outDir, file);
+    const json = `${JSON.stringify({ docs: chunk })}\n`;
+    const bytes = Buffer.from(json);
+    const write = (p: string, data: Uint8Array): Effect.Effect<void, FileError, never> =>
+      fs.writeFile(p, data).pipe(Effect.mapError((cause) => new FileError({ path: p, cause })));
+    yield* write(path, bytes);
+    yield* write(`${path}.gz`, gzipSync(bytes, { level: 9 }));
+    yield* write(`${path}.br`, brotliCompressSync(bytes));
+  }
   const counts = docs.reduce<Record<string, number>>((acc, d) => {
     acc[d.type] = (acc[d.type] ?? 0) + 1;
     return acc;
@@ -228,7 +245,7 @@ const program = Effect.gen(function* () {
   yield* Console.log(
     `search: ${docs.length} documents (${Object.entries(counts)
       .map(([k, v]) => `${k}:${v}`)
-      .join(" ")}) -> ${outPath}`
+      .join(" ")}) -> ${outDir} (api/pages/glossary + .gz/.br)`
   );
 });
 

@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "[ -f api-data/index.json ] && [ -z \"$DOCS_REGEN\" ] && (echo 'api-data present — fast dev start (DOCS_REGEN=1 pnpm dev to regenerate)' && tsx scripts/gen-search.ts) || (tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts)",
     "dev": "NODE_OPTIONS=--max-old-space-size=8192 waku dev --host 0.0.0.0 --port 5190",
-    "prebuild": "tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts",
+    "prebuild": "tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts && tsx scripts/check-links.ts",
     "build": "waku build",
     "preview": "waku start --host 0.0.0.0 --port 5190",
     "docs:manifest": "tsx scripts/gen-manifest.ts",
