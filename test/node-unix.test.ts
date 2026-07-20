@@ -11,17 +11,25 @@ const tmpSock = (label: string) =>
     return `/tmp/effect-pm-unix-${label}-${process.pid}-${now}.sock`;
   });
 
+class JobsAnon extends Resource.Tag<JobsAnon>()("unix/JobsAnon", {
+  jobs: Resource.effect(Schema.Number),
+}) {}
+
 describe("Node.unix", () => {
   it.effect("Tag+impl — ipc listen + Lookup; client(Tag) dials", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
+      const lookupPath = yield* tmpSock("bound-lookup");
       class Worker extends Node.Tag<Worker>("unix/Worker", { path }) {}
       class Jobs extends Resource.Tag<Jobs>()("unix/Jobs", {
         jobs: Resource.effect(Schema.Number),
       }).pipe(Resource.andNode(Worker)) {}
 
       const serverCtx = yield* Layer.build(
-        Node.unix(Jobs, { jobs: Effect.succeed(11) }),
+        Node.unix(Jobs, { jobs: Effect.succeed(11) }, {
+          lookupPath,
+          unlinkLookup: true,
+        }),
       );
       const clientCtx = yield* Layer.build(Resource.client(Jobs));
 
