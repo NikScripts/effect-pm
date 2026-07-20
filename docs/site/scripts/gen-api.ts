@@ -334,6 +334,7 @@ const program = Effect.gen(function* () {
           kind: s.kind,
           summary: s.summary,
           url: s.url,
+          ...(s.category !== undefined ? { category: s.category } : {}),
         }));
         yield* writeJson(nodePath.join(dataDir, spec.slug, `${nsSlug}.json`), {
           package: spec.slug,

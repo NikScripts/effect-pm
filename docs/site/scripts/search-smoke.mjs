@@ -121,6 +121,18 @@ const browser = await chromium.launch();
   if (clip.trim() === "") fail("copy button copied nothing");
   console.log("api copy button ok:", JSON.stringify(clip.slice(0, 40)));
 
+  // module pages render grouped sections with a jump TOC; a chip navigates to its section
+  await page.goto(`${base}/api/effect/Effect`, { waitUntil: "networkidle" });
+  await page.locator(".api-group-toc").waitFor({ timeout: 15000 });
+  const firstChip = page.locator(".api-group-toc a").first();
+  const chipLabel = (await firstChip.textContent()) ?? "";
+  await firstChip.click();
+  const anchored = await page.evaluate(() => window.location.hash !== "");
+  if (!anchored) fail("group TOC chip did not navigate to its anchor");
+  const heading = await page.locator(`${await firstChip.getAttribute("href")}`).count();
+  if (heading === 0) fail(`group anchor target missing for chip ${chipLabel}`);
+  console.log("module groups ok, first chip:", chipLabel.trim());
+
   // 404 page seeds a search from the dead path
   await page.goto(`${base}/guides/subscribable-nope`, { waitUntil: "networkidle" });
   const nf = page.locator(".notfound");

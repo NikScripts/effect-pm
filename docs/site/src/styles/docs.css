@@ -1113,6 +1113,33 @@ a.api-src:hover { color: var(--primary); }
 .search-all { display: block; padding: 0.5rem 0.85rem; border-top: 1px solid var(--border); font-size: 0.8rem; }
 .search-note { padding: 0.5rem 0.2rem; font-size: 0.85rem; opacity: 0.75; }
 .search-page .menu-search { width: 100%; margin: 0.6rem 0 1rem; }
+/* module-page symbol groups: jump chips under the title, section headers over the rows */
+.api-group-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.8rem 0 1.4rem;
+}
+.api-group-toc a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  font-size: 0.8rem;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.api-group-toc a:hover { border-color: var(--primary); }
+.api-group-title {
+  margin: 2.2rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.05rem;
+  border-bottom: 1px solid var(--border);
+}
+
 /* copy buttons on blocks WITHOUT a .code-block wrapper (API pages) — portaled into the pre by
    the CodeCopy island, same .copy-btn as everywhere else; the pre anchors + reveals it */
 pre { position: relative; }
