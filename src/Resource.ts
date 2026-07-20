@@ -106,8 +106,14 @@ import {
   Tag as makeNode,
   UnaddressedNode,
 } from "./internal/nodeCore";
+import {
+  bindNodeProtocolBuilders,
+  connectAddressed,
+  connectLayer,
+  unaddressedLayer,
+} from "./internal/nodeConnect";
 // Node listen/connect used only inside functions via dynamic import where needed;
-// clientLayerForEndpoint uses local clientLayer auto-connect for dialable endpoints.
+// clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -3290,30 +3296,6 @@ export const forwardClient = <S extends Spec>(
 
 // [extracted to Node module — was Resource.ts:4183-4261]
 
-/**
- * Wire a {@link Node}'s transport, **once**, from any RPC client `Protocol` layer — the
- * transport-agnostic primitive (use {@link httpClient} for the batteries-included http case).
- * Re-keys that `Protocol` under the node, so {@link Resource.client} resolves it for every tag
- * bound to this node; provide one `Resource.connect(...)` per node an app talks to.
- *
- * ```ts
- * const EdgeLive = Resource.connect(
- *   EdgeNode,
- *   Resource.protocolWebsocket("ws://edge/rpc"),
- * );
- * ```
- *
- * @public
- */
-const connectLayer = <Self, E, RIn>(
-  node: NodeKey<Self>,
-  protocol: Layer.Layer<RpcClient.Protocol, E, RIn>,
-): Layer.Layer<Self, E, RIn> =>
-  // wrap the ambient protocol into the node's value shape (`{ protocol }`) — see NodeProtocol.
-  Layer.effect(node, Effect.map(RpcClient.Protocol, (protocol) => ({ protocol }))).pipe(
-    Layer.provide(protocol),
-  );
-
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
  * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
  * client and server can't silently disagree on the codec. */
@@ -3494,19 +3476,6 @@ const socketClient = <Self>(
     protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
 
-// [extracted to Node module — was Resource.ts:4466-4484]
-
-/** Fail a Layer build with {@link UnaddressedNode} — Effect error channel, not sync throw. @internal */
-const unaddressedLayer = <A = never>(
-  node: string,
-): Layer.Layer<A, UnaddressedNode> =>
-  Layer.unwrap(
-    Effect.map(
-      Effect.fail(new UnaddressedNode({ node })),
-      (impossible: never): Layer.Layer<A> => impossible,
-    ),
-  );
-
 /**
  * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
  * (`NodeSocket.layerNet({ path })`). Same-machine counterpart to {@link protocolHttp} /
@@ -3528,17 +3497,12 @@ export const protocolIpc = (
     ),
   );
 
-/** Protocol for an {@link AddressedNode} — address fields are type-narrowed. */
-const protocolForDialable = (
-  node: AddressedNode<unknown>,
-): Layer.Layer<RpcClient.Protocol> => {
-  if (node.kind === "IpcSocket") {
-    return protocolIpc(node.path);
-  }
-  return node.kind === "WebSocket"
-    ? protocolWebsocket(node.url)
-    : protocolHttp(node.url);
-};
+// Shared dial helpers (Node.connect + client auto-connect) use these builders.
+bindNodeProtocolBuilders({
+  protocolHttp,
+  protocolWebsocket,
+  protocolIpc,
+});
 
 // [extracted to Node module — was Resource.ts:4539-4649]
 
@@ -4416,12 +4380,11 @@ function clientLayer<Self, S extends Spec>(
       (client) => buildClientService(tag, client),
     ),
   );
-  // Explicit 2nd-arg {@link AddressedNode}: bake connect so callers don't repeat
-  // `.pipe(Layer.provide(Node.connect(node)))`. Bare / tag-bound nodes stay fail-closed.
+  // Explicit 2nd-arg {@link AddressedNode}: bake the canonical connect Layer (WeakMap-memoized
+  // per Node class) so `client(A, W)` + `client(B, W)` share one MemoMap transport.
   if (node !== undefined && isAddressedNode(node as AnyNode)) {
-    const addressed = node as AddressedNode<unknown>;
     return layer.pipe(
-      Layer.provide(connectLayer(addressed, protocolForDialable(addressed))),
+      Layer.provide(connectAddressed(node as AddressedNode<unknown>)),
     ) as Layer.Layer<Self, never, RpcClient.Protocol>;
   }
   return layer as Layer.Layer<Self, never, RpcClient.Protocol>;

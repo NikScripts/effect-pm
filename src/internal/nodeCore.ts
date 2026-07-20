@@ -168,7 +168,7 @@ export const resolveHttpTarget = (target: number | string): string => {
 export type DialableTarget =
   | number
   | string
-  | { readonly path: string; readonly kind?: ProtocolKind }
+  | { readonly path: string; readonly kind?: "IpcSocket" }
   | { readonly url: string; readonly kind?: ProtocolKind };
 
 /** Loose target bag (may omit address — not an {@link AddressedNode}). @internal */
@@ -279,7 +279,7 @@ export function Tag<Self, ROut = never>(
 ): NodeTagClass<Self, ROut, BareAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
-  target: { readonly path: string; readonly kind?: ProtocolKind },
+  target: { readonly path: string; readonly kind?: "IpcSocket" },
 ): NodeTagClass<Self, ROut, IpcAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
@@ -388,7 +388,7 @@ export function Lookup<Self>(
 };
 export function Lookup<Self>(
   name: string,
-  target: { readonly path: string; readonly kind?: ProtocolKind },
+  target: { readonly path: string; readonly kind?: "IpcSocket" },
 ): NodeTagClass<Self, never, IpcAddress> & {
   readonly isLookupNode: true
 };

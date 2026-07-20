@@ -54,25 +54,25 @@ import type { AnyNode, ListenOptions } from "./internal/nodeCore"
 /**
  * Sugar: {@link listen} + {@link Lookup.bootstrapDefaultLocal} for same-machine demos.
  *
+ * Demo-only typing — catalog proof stays on {@link listen} / {@link clientsFor}.
+ *
  * @public
  */
 export const listenLocal = (
   node: AnyNode,
-  serves:
-    | Layer.Layer<any, any, never>
-    | readonly [Layer.Layer<any, any, never>, ...ReadonlyArray<Layer.Layer<any, any, never>>],
+  serves: Parameters<typeof listen>[1],
   options?: ListenOptions & {
     readonly lookupPath?: string
     readonly unlinkLookup?: boolean
   },
-): Layer.Layer<any, any, any> => {
+): Layer.Layer<never, unknown, unknown> => {
   const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {}
-  return listen(node, serves as any, listenOptions).pipe(
+  return listen(node, serves, listenOptions).pipe(
     Layer.provide(
       LookupMod.bootstrapDefaultLocal({
         ...(lookupPath !== undefined ? { path: lookupPath } : {}),
         ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
       }),
     ),
-  ) as Layer.Layer<any, any, any>
+  ) as Layer.Layer<never, unknown, unknown>
 }

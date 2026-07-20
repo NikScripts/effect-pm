@@ -39,6 +39,11 @@ describe("connect dual dispatch", () => {
     expect(built.every((e) => Effect.isEffect(e))).toBe(true);
   });
 
+  it("derived connect is referentially stable per Node class (MemoMap share)", () => {
+    // client(A,W) + client(B,W) + Node.connect(W) must be the *same* Layer object
+    expect(Node.connect(AddrNode)).toBe(Node.connect(AddrNode));
+  });
+
   it.effect("deriving from a bare (unaddressed) node fails the Layer with UnaddressedNode", () =>
     Effect.gen(function* () {
       // Public `connect` is gated on AddressedNode; exercise the runtime path via cast.

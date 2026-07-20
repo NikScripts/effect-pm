@@ -40,6 +40,12 @@ import type {
   IpcNodeTagClass,
   UrlNodeTagClass,
 } from "./nodeCore"
+import {
+  connectAddressed,
+  connectLayer,
+  protocolForNode,
+  unaddressedLayer,
+} from "./nodeConnect"
 
 /** Options for {@link httpServer}. @public */
 export interface HttpServerOptions {
@@ -682,7 +688,8 @@ type ServicesOfTags<Tags extends ReadonlyArray<Resource.PipeableTag>> =
  */
 
 export const clientsFor = <
-  // Dialable catalog node — each `client(tag, node)` auto-wires {@link connect}.
+  // Dialable catalog node — each `client(tag, node)` auto-wires the *same*
+  // memoized {@link connectAddressed} Layer (one MemoMap transport).
   Node extends AddressedNode<unknown> & {
     readonly [catalogSym]?: unknown;
   },
@@ -695,14 +702,16 @@ export const clientsFor = <
   const clients = tags.map((tag) =>
     Resource.client(
       tag as Resource.ResourceTag<any, any>,
-      node as NodeKey<unknown>,
+      // Keep AddressedNode — drives the auto-connect overload (not bare NodeKey).
+      node,
     ),
-  ) as [
-    Layer.Layer<any, never, any>,
-    ...Array<Layer.Layer<any, never, any>>,
-  ];
-  // Addressed `client(tag, node)` already provides connect; merge is fully wired.
-  return Layer.mergeAll(...clients) as Layer.Layer<ServicesOfTags<Tags>>;
+  );
+  return Layer.mergeAll(
+    ...(clients as unknown as [
+      Layer.Layer<any, never, any>,
+      ...Array<Layer.Layer<any, never, any>>,
+    ]),
+  ) as Layer.Layer<ServicesOfTags<Tags>>;
 };
 
 /** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
@@ -818,63 +827,24 @@ const ipcServerBase = (
     }),
   ) as unknown as Layer.Layer<never, never, Resource.ServedResources>;
 
-const connectLayer = <Self, E, RIn>(
-  node: NodeKey<Self>,
-  protocol: Layer.Layer<RpcClient.Protocol, E, RIn>,
-): Layer.Layer<Self, E, RIn> =>
-  // wrap the ambient protocol into the node's value shape (`{ protocol }`) — see NodeProtocol.
-  Layer.effect(node, Effect.map(RpcClient.Protocol, (protocol) => ({ protocol }))).pipe(
-    Layer.provide(protocol),
-  );
-
-/** Fail a Layer build with {@link UnaddressedNode} — Effect error channel, not sync throw. @internal */
-const unaddressedLayer = <A = never>(
-  node: string,
-): Layer.Layer<A, UnaddressedNode> =>
-  Layer.unwrap(
-    Effect.map(
-      Effect.fail(new UnaddressedNode({ node })),
-      (impossible: never): Layer.Layer<A> => impossible,
-    ),
-  );
-
-/** Build the client `Protocol` a node declares — keyed off its {@link ProtocolKind}.
- *  Unaddressed nodes fail the Layer error channel ({@link UnaddressedNode}). */
-const protocolForNode = (
-  node: AnyNode,
-): Layer.Layer<RpcClient.Protocol, UnaddressedNode> => {
-  if (node.kind === undefined) {
-    return unaddressedLayer(node.key);
-  }
-  if (node.kind === "IpcSocket") {
-    if (node.path === undefined) {
-      return unaddressedLayer(node.key);
-    }
-    return Resource.protocolIpc(node.path);
-  }
-  if (node.url === undefined) {
-    return unaddressedLayer(node.key);
-  }
-  return node.kind === "WebSocket"
-    ? Resource.protocolWebsocket(node.url)
-    : Resource.protocolHttp(node.url);
-};
-
 /**
  * Wire a {@link Node}'s transport — the transport-agnostic primitive, **dual**:
  *
  * ```ts
- * MyNode.pipe(Resource.connect)              // derive the transport from the node's declared kind + url
- * MyNode.pipe(Resource.connect(protocol))    // data-last: an explicit RpcClient.Protocol
- * Resource.connect(MyNode)                    // data-first, derived (needs an AddressedNode)
- * Resource.connect(MyNode, protocol)          // data-first, explicit
+ * MyNode.pipe(Node.connect)              // derive the transport from the node's declared kind + url
+ * MyNode.pipe(Node.connect(protocol))    // data-last: an explicit RpcClient.Protocol
+ * Node.connect(MyNode)                   // data-first, derived (needs an AddressedNode)
+ * Node.connect(MyNode, protocol)         // data-first, explicit
  * ```
  *
  * The derived forms read the node's {@link ProtocolKind} — so a node that declares `kind: "WebSocket"`
  * dials WS and one that declares `"Http"` dials http; picking the wrong transport isn't
- * expressible. `MyNode.pipe(Resource.connect)` only type-checks for an {@link AddressedNode} (a node
+ * expressible. `MyNode.pipe(Node.connect)` only type-checks for an {@link AddressedNode} (a node
  * with both `url`/`path` and `kind`); a bare node is a compile error pointing you to declare its
  * address or pass a protocol.
+ *
+ * Derived connect Layers are WeakMap-memoized per Node class so multiple
+ * `Resource.client(Tag, MyNode)` call sites share one MemoMap transport.
  *
  * @public
  */
@@ -889,16 +859,28 @@ export const connect: {
   <RIn>(
     protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
   ): <Self>(node: NodeKey<Self>) => Layer.Layer<Self, never, RIn>;
-  /** Derived transport — only {@link AddressedNode} (bare nodes are a compile error). */
-  <Self>(node: AddressedNode<Self>): Layer.Layer<Self, UnaddressedNode>;
+  /** Derived transport — only {@link AddressedNode}; error channel is empty (address proven). */
+  <Self>(node: AddressedNode<Self>): Layer.Layer<Self>;
 } = Fn.dual(
   // data-first when there are two args, or when the single arg is a node (not a protocol layer).
   (args: IArguments) => args.length >= 2 || !Layer.isLayer(args[0]),
   (
     node: AnyNode,
     protocol?: Layer.Layer<RpcClient.Protocol, never, unknown>,
-  ): Layer.Layer<unknown, UnaddressedNode, unknown> =>
-    connectLayer(node, protocol ?? protocolForNode(node)),
+  ): Layer.Layer<unknown, UnaddressedNode, unknown> => {
+    if (protocol !== undefined) {
+      return connectLayer(node, protocol);
+    }
+    // Addressed path — canonical memoized Layer (same object Resource.client auto-connect uses).
+    if (
+      (node.kind === "IpcSocket" && typeof node.path === "string") ||
+      ((node.kind === "Http" || node.kind === "WebSocket") &&
+        typeof node.url === "string")
+    ) {
+      return connectAddressed(node as AddressedNode<unknown>);
+    }
+    return connectLayer(node, protocolForNode(node));
+  },
 );
 
 /**
@@ -999,7 +981,7 @@ export const Prototype = <Self, ROut = never>(
   };
   function make(
     cloneName: string,
-    target: { readonly path: string; readonly kind?: ProtocolKind },
+    target: { readonly path: string; readonly kind?: "IpcSocket" },
   ): IpcNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
@@ -1008,7 +990,7 @@ export const Prototype = <Self, ROut = never>(
   function make(
     cloneName: string,
     target:
-      | { readonly path: string; readonly kind?: ProtocolKind }
+      | { readonly path: string; readonly kind?: "IpcSocket" }
       | { readonly url: string; readonly kind?: ProtocolKind },
   ): IpcNodeTagClass<Self, ROut> | UrlNodeTagClass<Self, ROut> {
     // Branch so each Tag call hits a dialable overload (not the loose union catch-all).
