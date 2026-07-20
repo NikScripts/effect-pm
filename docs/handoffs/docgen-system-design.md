@@ -326,7 +326,8 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
     preview: the declaration NAME in the box head links to the hover's own page (`type Protocol =
     …` links `Protocol`; expandType `ownerUrl`, guarded by the LinkResolver's declaration-site
     rule so a parameter/local never claims the enclosing export's page — caught live on `byNode`).
-    Desktop keeps both: hover previews + direct token links.
+    The EXPAND box head gets the same owner-name link (dual-preview parity). Desktop keeps both:
+    hover previews + direct token links.
   - ⚠ OPEN capture-rate lead (the one real limiter): the node builder attaches symbols ONLY to
     references whose names are in scope at the `enclosing` node — a use site in another file
     misses most library-internal names, so popup/expand links for library shapes are partial.

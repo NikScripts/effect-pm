@@ -219,18 +219,29 @@ const twoslasher = Object.assign(
         if (h.text.slice(head.length).trimStart().startsWith("{")) return;
         const prior = h.docs;
         h.docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
-        const expandedLinks = info?.expandedLinks;
-        if (expandedLinks !== undefined && expandedLinks.length > 0) {
-          // The expand box displays `head + expanded` verbatim — displace into box coordinates.
-          hoverExpandLinks.set(
-            h,
-            expandedLinks.map((link) => ({
-              start: link.start + head.length,
-              end: link.end + head.length,
-              url: link.url,
-            }))
-          );
+        // The expand box displays `head + expanded` verbatim: the declaration name in the head
+        // links to the hover's own page (mobile parity with the compact box), and the member-type
+        // links displace by the head.
+        const expandBoxLinks: Array<Annotate.Link> = [];
+        if (info?.ownerUrl !== undefined) {
+          const name = declName.exec(head);
+          if (name !== null && name[1] !== undefined) {
+            const start = name[0].length - name[1].length;
+            expandBoxLinks.push({
+              start,
+              end: start + name[1].length,
+              url: info.ownerUrl,
+            });
+          }
         }
+        for (const link of info?.expandedLinks ?? []) {
+          expandBoxLinks.push({
+            start: link.start + head.length,
+            end: link.end + head.length,
+            url: link.url,
+          });
+        }
+        if (expandBoxLinks.length > 0) hoverExpandLinks.set(h, expandBoxLinks);
       });
       // Format each hover's compact type AFTER expansion (which reads the raw text) so long types
       // break across lines in the popup — then realign OUR link ranges onto the formatted text.
