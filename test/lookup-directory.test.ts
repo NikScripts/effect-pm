@@ -171,9 +171,9 @@ describe("Lookup directory livenessReplace", () => {
 
       // listen advertises when Directory is provided
       const workerCtx = yield* Layer.build(
-        Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
-          Layer.provide(Lookup.client(lookupNode)),
-        ),
+        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+          bootstrapLookup: false,
+        }).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
       const dir = Context.get(lookupCtx, Lookup.Directory);
@@ -271,9 +271,9 @@ describe("Node.listen directory wire", () => {
 
       yield* Effect.gen(function* () {
         yield* Layer.build(
-          Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
-            Layer.provide(Lookup.client(lookupNode)),
-          ),
+        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+          bootstrapLookup: false,
+        }).pipe(Layer.provide(Lookup.client(lookupNode))),
         );
         const dir = Context.get(lookupCtx, Lookup.Directory);
         const during = yield* dir

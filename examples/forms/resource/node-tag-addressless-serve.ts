@@ -30,7 +30,7 @@ const lookupSock = Config.string("LOOKUP_SOCK").pipe(
 
 const program = Effect.gen(function* () {
   const path = yield* lookupSock
-  const live = Node.listenLocal(
+  const live = Node.unix(
     Worker,
     [Resource.serve(Jobs, { jobs: Effect.succeed(42) })],
     { lookupPath: path, unlinkLookup: true },

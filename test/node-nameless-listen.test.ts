@@ -3,10 +3,9 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
-import * as Lookup from "../src/Lookup";
 
 /**
- * Nameless serve list — `listen` leaves Lookup in `R`; `unix` bakes it in.
+ * Nameless ipc — `Node.unix([serve…])` mints path + Lookup.
  */
 
 const tmpSock = (label: string) =>
@@ -26,27 +25,15 @@ class Emails extends Resource.Tag<Emails>()("nameless/Emails", {
 const jobsImpl = { jobs: Effect.succeed(11) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-/** Provide Lookup inside unwrap — same nesting address-less listen expects. */
-const withLookup = <A, E, R>(
-  layer: Layer.Layer<A, E, R>,
-  path: string,
-): Layer.Layer<A, E, R> =>
-  Layer.unwrap(
-    Effect.sync(() =>
-      layer.pipe(
-        Layer.provide(
-          Lookup.bootstrapDefaultLocal({ path, unlink: true }),
-        ),
-      ),
-    ),
-  );
-
-describe("Node.listen nameless (Lookup in R)", () => {
-  it.effect("mints address-less node; caller provides Lookup", () =>
+describe("Node.unix nameless", () => {
+  it.effect("mints address-less node + Lookup; clientLocal dials", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
-        withLookup(Node.listen([Resource.serve(Jobs, jobsImpl)]), lookupPath),
+        Node.unix([Resource.serve(Jobs, jobsImpl)], {
+          lookupPath,
+          unlinkLookup: true,
+        }),
       );
       const clientCtx = yield* Layer.build(
         Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
@@ -68,7 +55,10 @@ describe("Node.listen nameless (Lookup in R)", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("one");
       const serverCtx = yield* Layer.build(
-        withLookup(Node.listen(Resource.serve(Jobs, jobsImpl)), lookupPath),
+        Node.unix(Resource.serve(Jobs, jobsImpl), {
+          lookupPath,
+          unlinkLookup: true,
+        }),
       );
       const clientCtx = yield* Layer.build(
         Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
@@ -80,9 +70,7 @@ describe("Node.listen nameless (Lookup in R)", () => {
       expect(n).toBe(11);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
-});
 
-describe("Node.unix nameless (Lookup baked in)", () => {
   it.effect("two resources; clientLocal dials both", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("pair");

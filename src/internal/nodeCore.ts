@@ -163,6 +163,11 @@ export type ListenOptions = {
 export type NamelessListenOptions = ListenOptions & {
   readonly lookupPath?: string;
   readonly unlinkLookup?: boolean;
+  /**
+   * When `false`, skip {@link Lookup.bootstrapDefaultLocal} — caller provides
+   * Identity / Directory (e.g. a custom Lookup server). Default `true`.
+   */
+  readonly bootstrapLookup?: boolean;
 };
 
 /**
@@ -523,14 +528,14 @@ export class ListenTagNodeRequired extends Data.TaggedError(
   override get message() {
     if (this.reason === "ambiguous") {
       return (
-        `Node.listen(${this.tag}, impl) saw ${String(this.count)} Nodes on the Tag — ` +
-        `use Node.listen(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
+        `Node.unix(${this.tag}, impl) saw ${String(this.count)} Nodes on the Tag — ` +
+        `use Node.unix(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
       );
     }
     return (
-      `Node.listen(${this.tag}, impl) needs a sole Node on the Tag ` +
+      `Node.unix(${this.tag}, impl) needs a sole Node on the Tag ` +
       `(Resource.andNode / nodes([X]) / { node }). ` +
-      `For anonymous transport use Node.listen(Resource.serve(${this.tag}, impl)).`
+      `For anonymous ipc use Node.unix(Resource.serve(${this.tag}, impl)).`
     );
   }
 }
@@ -550,7 +555,24 @@ export class UnixListenRequiresIpc extends Data.TaggedError(
   override get message() {
     return (
       `Node.unix requires an IpcSocket Node (Unix-domain path); ` +
-      `"${this.node}" is ${this.kind}. Use Node.listen for Http / WebSocket.`
+      `"${this.node}" is ${this.kind}. Use Node.http / Node.ws (or httpServer / wsServer) for those transports.`
+    );
+  }
+}
+
+/**
+ * {@link listen} no longer binds a transport. Use the protocol entry instead.
+ *
+ * @public
+ */
+export class ListenUseProtocol extends Data.TaggedError("ListenUseProtocol")<{
+  readonly protocol: "unix" | "http" | "ws";
+  readonly detail: string;
+}> {
+  override get message() {
+    return (
+      `Node.listen does not bind a transport (${this.detail}). ` +
+      `Use Node.${this.protocol}(…) for that protocol.`
     );
   }
 }

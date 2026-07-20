@@ -11,14 +11,13 @@ const tmpSock = (label: string) =>
     return `/tmp/effect-pm-listen-tag-${label}-${process.pid}-${now}.sock`;
   });
 
-/** Bypass NodeBoundTag overload so the runtime fail-closed path can be exercised. */
-const listenTagErased = Node.listen as unknown as (
+const unixTagErased = Node.unix as unknown as (
   tag: Resource.PipeableTag,
   impl: unknown,
-  options?: Node.ListenOptions,
-) => Layer.Layer<never, Node.ListenTagNodeRequired>;
+  options?: Node.NamelessListenOptions,
+) => Layer.Layer<never, Node.ListenTagNodeRequired | Node.UnixListenRequiresIpc>;
 
-describe("Node.listen(Tag, impl) sole-bound node", () => {
+describe("Node.unix(Tag, impl) sole-bound node", () => {
   it.effect("listens on the Tag's node; client(Tag) dials", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
@@ -28,7 +27,7 @@ describe("Node.listen(Tag, impl) sole-bound node", () => {
       }).pipe(Resource.andNode(Worker)) {}
 
       const serverCtx = yield* Layer.build(
-        Node.listen(Jobs, { jobs: Effect.succeed(11) }),
+        Node.unix(Jobs, { jobs: Effect.succeed(11) }),
       );
       const clientCtx = yield* Layer.build(Resource.client(Jobs));
 
@@ -49,29 +48,29 @@ describe("Node.listen(Tag, impl) sole-bound node", () => {
 
       const exit = yield* Effect.exit(
         Layer.build(
-          listenTagErased(Jobs, { jobs: Effect.succeed(1) }),
+          unixTagErased(Jobs, { jobs: Effect.succeed(1) }),
         ).pipe(Effect.scoped),
       );
       expectTaggedFailure(exit, "ListenTagNodeRequired");
     }).pipe(Effect.timeout(Duration.seconds(10))),
   );
 
-  it.effect("fails ListenTagNodeRequired when Tag has multiple Nodes", () =>
+  it.effect("Node.listen on ipc Node fails ListenUseProtocol", () =>
     Effect.gen(function* () {
-      const pathA = yield* tmpSock("a");
-      const pathB = yield* tmpSock("b");
-      class NodeA extends Node.Tag<NodeA>("listen-tag/A", { path: pathA }) {}
-      class NodeB extends Node.Tag<NodeB>("listen-tag/B", { path: pathB }) {}
-      class Jobs extends Resource.Tag<Jobs>()("listen-tag/MultiJobs", {
+      const path = yield* tmpSock("use-unix");
+      class Worker extends Node.Tag<Worker>("listen-tag/UseUnix", { path }) {}
+      class Jobs extends Resource.Tag<Jobs>()("listen-tag/UseUnixJobs", {
         jobs: Resource.effect(Schema.Number),
-      }).pipe(Resource.nodes([NodeA, NodeB])) {}
+      }) {}
 
       const exit = yield* Effect.exit(
         Layer.build(
-          listenTagErased(Jobs, { jobs: Effect.succeed(1) }),
+          Node.listen(Worker, [
+            Resource.serve(Jobs, { jobs: Effect.succeed(1) }),
+          ]),
         ).pipe(Effect.scoped),
       );
-      expectTaggedFailure(exit, "ListenTagNodeRequired");
+      expectTaggedFailure(exit, "ListenUseProtocol");
     }).pipe(Effect.timeout(Duration.seconds(10))),
   );
 });

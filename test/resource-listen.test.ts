@@ -33,7 +33,7 @@ describe("Node.listen + clientsFor (C2)", () => {
       ) {}
 
       const serverCtx = yield* Layer.build(
-        Node.listen(Worker, [
+        Node.unix(Worker, [
           Resource.serve(Jobs, jobsImpl),
           Resource.serve(Emails, emailsImpl),
         ]),

@@ -6,9 +6,10 @@
  * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
- * - {@link listen} — catalog listen; **no** protocol/Lookup bake-in (provide those yourself)
- * - {@link unix} — same shapes as listen, IPC + Lookup built in (same-machine batteries)
- * - {@link listenLocal} / {@link httpServer} / {@link wsServer} / {@link ipcServer} — aliases / transports
+ * - {@link listen} — neutral spine (Http/WS interim only; **no ipc** — use {@link unix})
+ * - {@link unix} — IpcSocket listen + Lookup batteries (nameless / Tag+impl / node+serves)
+ * - {@link listenLocal} — alias of `unix(node, serves)`
+ * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
  * - {@link clientsFor} — bundle clients for a catalog node's `ROut`
  *
@@ -23,6 +24,7 @@ export {
   AddressLessClaimLost,
   ListenNode,
   ListenTagNodeRequired,
+  ListenUseProtocol,
   UnixListenRequiresIpc,
   UnaddressedNode,
   NodeUnreachable,

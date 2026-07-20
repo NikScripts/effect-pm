@@ -11,7 +11,7 @@ class Jobs extends Resource.Tag<Jobs>()("listen-tag-d/Jobs", {
   jobs: Resource.effect(Schema.Number),
 }).pipe(Resource.andNode(Worker)) {}
 
-const bound = Node.listen(Jobs, { jobs: Effect.succeed(7) });
+const bound = Node.unix(Jobs, { jobs: Effect.succeed(7) });
 expectTypeOf(bound).toMatchTypeOf<
   Layer.Layer<Jobs | Resource.Local<Jobs> | Node.ListenNode, never, never>
 >();
@@ -20,5 +20,5 @@ class Nodeless extends Resource.Tag<Nodeless>()("listen-tag-d/Nodeless", {
   jobs: Resource.effect(Schema.Number),
 }) {}
 
-// @ts-expect-error nodeless Tag — use listen(serve) for anonymous transport
-Node.listen(Nodeless, { jobs: Effect.succeed(1) });
+// @ts-expect-error nodeless Tag — sole Node required
+Node.unix(Nodeless, { jobs: Effect.succeed(1) });
