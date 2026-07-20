@@ -12,7 +12,7 @@ const tmpSock = (label: string) =>
   });
 
 /** Bypass NodeBoundTag overload so the runtime fail-closed path can be exercised. */
-const listenTagErased = Node.listen as (
+const listenTagErased = Node.listen as unknown as (
   tag: Resource.PipeableTag,
   impl: unknown,
   options?: Node.ListenOptions,

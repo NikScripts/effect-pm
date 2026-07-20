@@ -584,13 +584,13 @@ export function listen(
   // Erase serve's ResourceTag generics here — naming them reopens TS2589.
   if (isResourceTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
-    const tagKey =
-      typeof (tag as { readonly key?: unknown }).key === "string"
-        ? (tag as { readonly key: string }).key
-        : "unknown";
+    const tagKey = (() => {
+      const key = (tag as unknown as { readonly key?: unknown }).key;
+      return typeof key === "string" ? key : "unknown";
+    })();
     const bound = Resource.nodeOf(tag);
     const fleet = Resource.nodesOf(
-      tag as Resource.ResourceTag<unknown, Resource.Spec>,
+      tag as unknown as Resource.ResourceTag<unknown, Resource.Spec>,
     );
     if (bound === undefined) {
       const error = new ListenTagNodeRequired({
