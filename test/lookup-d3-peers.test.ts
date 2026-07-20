@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // D3 — bare distributed ≡ nodes([]); peersLayer reads Directory when membership is empty.
 
@@ -40,10 +41,10 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
   });
 
   it("list form still stamps fixed membership", () => {
-    class East extends Resource.Node<East>("d3/East", {
+    class East extends Node.Tag<East>("d3/East", {
       path: "/tmp/d3-east.sock",
     }) {}
-    class West extends Resource.Node<West>("d3/West", {
+    class West extends Node.Tag<West>("d3/West", {
       path: "/tmp/d3-west.sock",
     }) {}
     class Fixed extends Resource.Tag<Fixed>()("d3/Fixed", {
@@ -62,11 +63,11 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
         const lookupPath = yield* tmpSock("lookup");
         const eastPath = yield* tmpSock("east");
         const westPath = yield* tmpSock("west");
-        const lookupNode = Lookup.LookupNode("d3/lookup", { path: lookupPath });
-        class East extends Resource.Node<East, Pool>("d3/East", {
+        const lookupNode = Node.Lookup("d3/lookup", { path: lookupPath });
+        class East extends Node.Tag<East, Pool>("d3/East", {
           path: eastPath,
         }) {}
-        class West extends Resource.Node<West, Pool>("d3/West", {
+        class West extends Node.Tag<West, Pool>("d3/West", {
           path: westPath,
         }) {}
 
@@ -77,7 +78,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
 
         // Leaf first so directory has West before East's peersLayer builds.
         const westCtx = yield* Layer.build(
-          Resource.listen(West, [
+          Node.listen(West, [
             Resource.serve(Pool, impl(5)).pipe(
               Layer.provide(Resource.peersFrom(Pool, {})),
             ),
@@ -103,7 +104,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
         expect(peerKeys).not.toContain(East.key);
 
         const eastCtx = yield* Layer.build(
-          Resource.listen(East, [
+          Node.listen(East, [
             Resource.serve(Pool, impl(2)).pipe(
               Layer.provide(Resource.peersLayer(Pool, East)),
             ),
@@ -117,7 +118,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
         }).pipe(
           Effect.provide(
             Resource.client(Pool, East).pipe(
-              Layer.provide(Resource.connect(East)),
+              Layer.provide(Node.connect(East)),
             ),
           ),
           Effect.scoped,
@@ -135,7 +136,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
   it("undeclared tag peersLayer stays empty without Directory (not discoverable)", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        class Lonely extends Resource.Node<Lonely>("d3/Lonely", {
+        class Lonely extends Node.Tag<Lonely>("d3/Lonely", {
           path: "/tmp/d3-lonely.sock",
         }) {}
         class Undeclared extends Resource.Tag<Undeclared>()("d3/Undeclared", {

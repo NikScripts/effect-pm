@@ -5,7 +5,7 @@
  * ## Node log key (durable bucket)
  *
  * The argument to {@link byNode} is the **node log key** — it **must** equal the
- * {@link Resource.Node} `.key` for that OS process (the same string {@link Resource.selfNode}
+ * {@link Node.Tag} `.key` for that OS process (the same string {@link Resource.selfNode}
  * returns). Register `Node.logs` on a {@link Store.Service}; the durable tail stamps
  * `annotations.node`. Use slash-separated paths (`billing/scores`).
  *
@@ -31,7 +31,7 @@
  * import * as Process from "@nikscripts/effect-pm/Process";
  * import * as Store from "@nikscripts/effect-pm/Store";
  *
- * class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+ * class BillingNode extends Node.Tag<BillingNode>("billing/scores") {}
  * class Daily extends Process.Tag<Daily>()("app/Daily") {}
  *
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -52,9 +52,10 @@ import type { LogSort } from "./internal/manager/logQuery";
 import { queryDurableNode, queryDurableScope } from "./internal/logs/durableRead";
 import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
+import * as Node from "./Node";
 
 /**
- * **Node log key** — durable bucket id for one runtime host. Must equal {@link Resource.Node} `.key`
+ * **Node log key** — durable bucket id for one runtime host. Must equal {@link Node.Tag} `.key`
  * (same string as {@link Resource.selfNode}). Stored as `annotations.node` on node-journal lines.
  *
  * @see `docs/LOGS.md` — Key catalog → Node log keys
@@ -73,13 +74,13 @@ export type NodeLogKey = string;
  */
 export type ResourceLogKey = string;
 
-/** Source carrying a **node log key** (`Resource.Node.key`). @public */
+/** Source carrying a **node log key** (`Node.Tag.key`). @public */
 export type NodeLogKeySource = { readonly key: NodeLogKey };
 
 /**
- * Resolve the **node log key** from a {@link Resource.Node} (or any `{ key }` source).
+ * Resolve the **node log key** from a {@link Node.Tag} (or any `{ key }` source).
  *
- * @param node - `Resource.Node` class or `{ key: NodeLogKey }`
+ * @param node - `Node.Tag` class or `{ key: NodeLogKey }`
  * @returns The node log key (`node.key`)
  *
  * @public

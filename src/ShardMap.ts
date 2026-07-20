@@ -29,11 +29,11 @@ import {
   Tag as resourceTag,
   type Local,
   type NodeBoundTag,
-  type NodeKey,
   type PeersId,
   type ResourceTag,
   type SelfNodeId,
 } from "./Resource";
+import type { NodeKey } from "./Node";
 import * as internal from "./internal/shardMap";
 import * as shardMapSql from "./internal/shardMapSql";
 

@@ -6,6 +6,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-20 — Node module extract LOCKED + Eng
+
+- **Owner said:** Extract Node from Resource/Lookup on tip (`cursor/bake-catalog-thoughts-906e`); Effect-true `import * as Node`; no shims; forms replace spawn demo.
+- **Chose (LOCKED):**
+  - Public module **`@nikscripts/effect-pm/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clientsFor` + catalog types.
+  - **Removed:** `Resource.Node`, `Lookup.LookupNode`, `Resource.listen` / `connect*` / `httpServer` / `wsServer` / `ipcServer` / `clientsFor` (no shims).
+  - **Stays Resource:** Tag/serve/layer/client, `lookupClient`, identity, nodes/andNode/distributed, peers, Spec builders; sugar `clientLocal`.
+  - **Stays Lookup:** Identity, Directory, layer, client, `bootstrapDefaultLocal`; sugar `Node.listenLocal`.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-19 — D4 soft pick LOCKED (`lookupClient` `{ pick }`)
 
 - **Owner said:** “Good” (to lean A after D4 bake).

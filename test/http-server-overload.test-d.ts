@@ -1,11 +1,11 @@
-import * as Resource from "../src/Resource";
 import { Layer } from "effect";
+import * as Node from "../src/Node";
 
 // A single serve layer is accepted directly (new overload) …
 declare const serve: Layer.Layer<"Emails", never, "Dep">;
-Resource.httpServer(serve);
-Resource.httpServer(serve, { path: "/rpc" });
+Node.httpServer(serve);
+Node.httpServer(serve, { path: "/rpc" });
 
 // … and the array form still works.
-Resource.httpServer([serve]);
-Resource.httpServer([serve, serve]);
+Node.httpServer([serve]);
+Node.httpServer([serve, serve]);

@@ -2,6 +2,7 @@ import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // D5/D6 — node directory on Lookup: advertise / nodesServing / unregister / livenessReplace.
 
@@ -38,7 +39,7 @@ describe("Lookup directory advertise / nodesServing", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("adv");
-        const node = Lookup.LookupNode("lookup/dir-adv", { path });
+        const node = Node.Lookup("lookup/dir-adv", { path });
 
         yield* withLookup(
           Lookup.layer(node),
@@ -82,7 +83,7 @@ describe("Lookup directory advertise / nodesServing", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("unreg");
-        const node = Lookup.LookupNode("lookup/dir-unreg", { path });
+        const node = Node.Lookup("lookup/dir-unreg", { path });
 
         yield* withLookup(
           Lookup.layer(node),
@@ -120,7 +121,7 @@ describe("Lookup directory advertise / nodesServing", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("refresh");
-        const node = Lookup.LookupNode("lookup/dir-refresh", { path });
+        const node = Node.Lookup("lookup/dir-refresh", { path });
 
         yield* withLookup(
           Lookup.layer(node),
@@ -159,11 +160,11 @@ describe("Lookup directory livenessReplace", () => {
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("live-lookup");
         const workerPath = yield* tmpSock("live-worker");
-        const lookupNode = Lookup.LookupNode("lookup/dir-live", {
+        const lookupNode = Node.Lookup("lookup/dir-live", {
           path: lookupPath,
         });
 
-        class Worker extends Resource.Node<Worker, Jobs>("lookup-dir/Worker", {
+        class Worker extends Node.Tag<Worker, Jobs>("lookup-dir/Worker", {
           path: workerPath,
         }) {}
 
@@ -173,7 +174,7 @@ describe("Lookup directory livenessReplace", () => {
 
         // listen advertises when Directory is provided
         const workerCtx = yield* Layer.build(
-          Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
+          Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
             Layer.provide(Lookup.client(lookupNode)),
           ),
         );
@@ -222,7 +223,7 @@ describe("Lookup directory livenessReplace", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("dead");
-        const node = Lookup.LookupNode("lookup/dir-dead", { path });
+        const node = Node.Lookup("lookup/dir-dead", { path });
 
         yield* withLookup(
           Lookup.layer(node),
@@ -254,17 +255,17 @@ describe("Lookup directory livenessReplace", () => {
     ));
 });
 
-describe("Resource.listen directory wire", () => {
+describe("Node.listen directory wire", () => {
   it("unregisters the directory row when the listen scope closes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("close-lookup");
         const workerPath = yield* tmpSock("close-worker");
-        const lookupNode = Lookup.LookupNode("lookup/dir-close", {
+        const lookupNode = Node.Lookup("lookup/dir-close", {
           path: lookupPath,
         });
 
-        class Worker extends Resource.Node<Worker, Jobs>("lookup-dir/CloseWorker", {
+        class Worker extends Node.Tag<Worker, Jobs>("lookup-dir/CloseWorker", {
           path: workerPath,
         }) {}
 
@@ -274,7 +275,7 @@ describe("Resource.listen directory wire", () => {
 
         yield* Effect.gen(function* () {
           yield* Layer.build(
-            Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
+            Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
               Layer.provide(Lookup.client(lookupNode)),
             ),
           );

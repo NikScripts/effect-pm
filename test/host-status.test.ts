@@ -6,6 +6,7 @@ import * as Resource from "../src/Resource";
 import * as NodeStatus from "../src/NodeStatus";
 import * as Logs from "../src/Logs";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
+import * as Node from "../src/Node";
 
 // A node serving one ordinary resource over `httpServer` must ALSO auto-serve its node status
 // (status / ping / logs.stream / logs.query) without the author wiring anything — driven over real http.
@@ -13,7 +14,7 @@ class Echo extends Resource.Tag<Echo>()("nodeStatus/Echo", {
   ping: Resource.effect(Schema.String),
 }) {}
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   Resource.serve(Echo, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 

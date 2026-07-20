@@ -1,16 +1,17 @@
 import { Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // C1 — unified Node set: nodes overwrite, andNode append, client(Tag) when size === 1.
 
-class NodeA extends Resource.Node<NodeA>("nodes/A", {
+class NodeA extends Node.Tag<NodeA>("nodes/A", {
   path: "/tmp/effect-pm-nodes-a.sock",
 }) {}
-class NodeB extends Resource.Node<NodeB>("nodes/B", {
+class NodeB extends Node.Tag<NodeB>("nodes/B", {
   path: "/tmp/effect-pm-nodes-b.sock",
 }) {}
-class NodeC extends Resource.Node<NodeC>("nodes/C", {
+class NodeC extends Node.Tag<NodeC>("nodes/C", {
   path: "/tmp/effect-pm-nodes-c.sock",
 }) {}
 
@@ -78,18 +79,18 @@ describe("Resource.nodes / andNode (C1)", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = `/tmp/effect-pm-nodes-client-${process.pid}.sock`;
-        class Worker extends Resource.Node<Worker>("nodes/Worker", { path }) {}
+        class Worker extends Node.Tag<Worker>("nodes/Worker", { path }) {}
         class Ping extends Resource.Tag<Ping>()("nodes/Ping", {
           ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
         }).pipe(Resource.nodes([Worker])) {}
 
         const serverCtx = yield* Layer.build(
-          Resource.ipcServer([Resource.serve(Ping, echoImpl)], { path }),
+          Node.ipcServer([Resource.serve(Ping, echoImpl)], { path }),
         );
         // Pipe `nodes` does not narrow to NodeBoundTag at the type level — name the node.
         const clientCtx = yield* Layer.build(
           Resource.client(Ping, Worker).pipe(
-            Layer.provide(Resource.connect(Worker)),
+            Layer.provide(Node.connect(Worker)),
           ),
         );
 

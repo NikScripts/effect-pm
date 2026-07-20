@@ -6,6 +6,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // What this guards: protocol is now an injected dependency, so `peersLayer` no longer hardcodes an
 // http peer client — it dials each peer with the builder from `layerPeerProtocol` (default
@@ -17,8 +18,8 @@ import * as Resource from "../src/Resource";
 const PORT_A = 7913;
 const PORT_B = 7914;
 
-class NodeA extends Resource.Node<NodeA>("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
-class NodeB extends Resource.Node<NodeB>("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
+class NodeA extends Node.Tag<NodeA>("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
+class NodeB extends Node.Tag<NodeB>("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
 
 class Pool extends Resource.Tag<Pool>()("ws-peers/Pool", {
   active: Resource.effect(Schema.Number),
@@ -43,13 +44,13 @@ const meshNode = (
   port: number,
   peerProtocol: Layer.Layer<never>,
 ) =>
-  Resource.httpServer([Resource.serve(Pool, impl(own))]).pipe(
+  Node.httpServer([Resource.serve(Pool, impl(own))]).pipe(
     Layer.provide(Resource.peersLayer(Pool, NodeA)),
     Layer.provide(peerProtocol),
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   );
 const leafNode = (own: number, port: number) =>
-  Resource.httpServer([Resource.serve(Pool, impl(own))]).pipe(
+  Node.httpServer([Resource.serve(Pool, impl(own))]).pipe(
     Layer.provide(Resource.peersFrom(Pool, {})),
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   );

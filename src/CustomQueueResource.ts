@@ -28,7 +28,6 @@ import { assertCustomQueueInstanceSpec } from "./internal/queueSpecAssert";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   HandlerContextOf,
-  NodeKey,
   ImplOf,
   Local,
   Method,
@@ -36,6 +35,7 @@ import type {
   NodeBoundTag,
   ResourceTag,
 } from "./Resource";
+import type { NodeKey } from "./Node";
 import { makeCustomQueueEffect } from "./internal/customQueueResource";
 import type {
   CustomQueueHandle,

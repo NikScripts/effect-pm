@@ -3,10 +3,11 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
-class SelfNode extends Resource.Node<SelfNode>("resolver/SelfNode") {}
+class SelfNode extends Node.Tag<SelfNode>("resolver/SelfNode") {}
 // PeerNode carries NO baked url — its url is a deploy concern the resolver supplies
-class PeerNode extends Resource.Node<PeerNode>("resolver/PeerNode") {}
+class PeerNode extends Node.Tag<PeerNode>("resolver/PeerNode") {}
 class Fleet extends Resource.Tag<Fleet>()("resolver/Fleet", {
   count: Resource.effect(Schema.Number),
 }).pipe(
@@ -14,7 +15,7 @@ class Fleet extends Resource.Tag<Fleet>()("resolver/Fleet", {
 ) {}
 
 // the PeerNode instance, served on a test server (count = 7)
-const PeerServer = Resource.httpServer([
+const PeerServer = Node.httpServer([
   Resource.serve(Fleet, { count: Effect.succeed(7) }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 

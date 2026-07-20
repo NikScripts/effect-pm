@@ -2,7 +2,7 @@
  * Lookup — identity claims (first wins) + node directory (advertise / list).
  *
  * Same-machine default: bind a well-known {@link Resource} `ipc` path (OS exclusivity).
- * Cross-network: pass an explicit {@link LookupNode} with an address — no self-elect (L1).
+ * Cross-network: pass an explicit {@link Node.Lookup} with an address — no self-elect (L1).
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
@@ -14,7 +14,9 @@
  */
 import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
-import type { AnyNode, ProtocolKind } from "./Resource";
+import type { AnyNode } from "./internal/nodeCore";
+import { Lookup as LookupNodeTag, Tag as NodeTag } from "./internal/nodeCore";
+import { connect, connectIpc, ipcServer } from "./internal/node";
 import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
 
@@ -218,7 +220,7 @@ export class Directory extends Resource.Tag<Directory>()(
 ) {}
 
 // ============================================================================
-// LookupNode + defaults (L1)
+// Defaults (L1) — Lookup Node ctor is {@link Node.Lookup}
 // ============================================================================
 
 /**
@@ -228,40 +230,6 @@ export class Directory extends Resource.Tag<Directory>()(
  * @public
  */
 export const defaultIpcPath = "/tmp/effect-pm-lookup.sock";
-
-/**
- * A {@link Resource.Node} marked as the identity/lookup server.
- *
- * Same-machine: `{ path }` (ipc). Cross-network: pass a full address — required; no elect (L1).
- *
- * @public
- */
-export const LookupNode = <Self>(
-  name: string,
-  target?:
-    | number
-    | string
-    | {
-        readonly url?: string;
-        readonly path?: string;
-        readonly kind?: ProtocolKind;
-      },
-): AnyNode & {
-  readonly isLookupNode: true;
-  readonly key: string;
-} => {
-  const node = Resource.Node<Self>(name, target);
-  return Object.assign(node, { isLookupNode: true as const });
-};
-
-/** True when `node` was built with {@link LookupNode}. @public */
-export const isLookupNode = (
-  node: unknown,
-): node is AnyNode & { readonly isLookupNode: true } =>
-  // Context.Service tags are callable functions — `typeof` is `"function"`, not `"object"`.
-  (typeof node === "object" || typeof node === "function") &&
-  node !== null &&
-  (node as { readonly isLookupNode?: boolean }).isLookupNode === true;
 
 // ============================================================================
 // Codec helpers
@@ -309,11 +277,11 @@ const incumbentAlive = (
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
-      ? Resource.Node(`@pm/lookup-ping/${entry.nodeKey}`, {
+      ? NodeTag(`@pm/lookup-ping/${entry.nodeKey}`, {
           path: entry.path,
         })
       : entry.url !== undefined
-        ? Resource.Node(`@pm/lookup-ping/${entry.nodeKey}`, {
+        ? NodeTag(`@pm/lookup-ping/${entry.nodeKey}`, {
             url: entry.url,
             kind: entry.kind,
           })
@@ -325,7 +293,7 @@ const incumbentAlive = (
   const probe = Effect.gen(function* () {
     const ctx = yield* Layer.build(
       Resource.client(NodeStatus.Tag, target).pipe(
-        Layer.provide(Resource.connect(target)),
+        Layer.provide(connect(target)),
       ),
     );
     yield* Effect.gen(function* () {
@@ -399,7 +367,7 @@ export const layerIpc = (
   path: string,
   options?: { readonly unlink?: boolean },
 ) =>
-  Resource.ipcServer([lookupServeLayers()], {
+  ipcServer([lookupServeLayers()], {
     path,
     ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
   });
@@ -500,7 +468,7 @@ export const client = (
   return Layer.mergeAll(
     Resource.client(Identity, node),
     Resource.client(Directory, node),
-  ).pipe(Layer.provide(node.pipe(Resource.connectIpc(path))));
+  ).pipe(Layer.provide(node.pipe(connectIpc(path))));
 };
 
 /**
@@ -512,7 +480,7 @@ export const clientDefaultLocal = (options?: {
   readonly path?: string;
 }): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
-  const node = LookupNode("effect-pm/Lookup/default", { path });
+  const node = LookupNodeTag("effect-pm/Lookup/default", { path });
   return client(node);
 };
 

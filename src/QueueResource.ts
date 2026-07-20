@@ -39,12 +39,13 @@ import { HistoryStore } from "./HistoryStore";
 import type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 import type {
   HandlerContextOf,
-  NodeKey,
   ImplOf,
   Local,
   NodeBoundTag,
   ResourceTag,
 } from "./Resource";
+import type { NodeKey } from "./Node";
+import * as Node from "./Node";
 // Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
 import {
   QueueItemCodecDescriptorSchema,
@@ -699,8 +700,8 @@ type QueueInstanceSpec<
  *
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
  * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec). Pass
- * `options.node` to bind the queue to a {@link Resource.Node} — the tag then carries its own
- * transport (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
+ * `options.node` to bind the queue to a {@link Node.Tag} — the tag then carries its own
+ * transport (ship only the tag; see {@link Resource.client} / {@link Node.connect}).
  *
  * @public
  */
@@ -1337,11 +1338,11 @@ export const layerMemory = <
  * requirement `R` is **preserved**, so a per-resource `Layer.provide` discharges it in isolation — the
  * queue's counterpart to {@link Resource.serveRemote}.
  *
- * Reach for this (with {@link Resource.httpServer}) for a pure gateway/edge that exposes the queue for
+ * Reach for this (with {@link Node.httpServer}) for a pure gateway/edge that exposes the queue for
  * remote clients but never consumes it locally; use {@link serve} when the serving node also drives it.
  *
  * ```ts
- * Resource.httpServer([
+ * Node.httpServer([
  *   QueueResource.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
  *   QueueResource.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
  * ]).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port })));
@@ -1394,7 +1395,7 @@ export const serveRemoteMemory = <
  * to {@link Resource.serve}; a served-**only** gateway uses {@link serveRemote}.
  *
  * ```ts
- * Resource.httpServer([
+ * Node.httpServer([
  *   QueueResource.serve(RosterQueue, { effect, itemSchema }),
  *   Process.serve(SeasonMatches, { effect }),
  * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));

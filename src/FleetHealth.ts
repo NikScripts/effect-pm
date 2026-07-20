@@ -28,11 +28,12 @@ import {
   effect,
   fleet,
   type NodeBoundTag,
-  type NodeKey,
   type PeersId,
   type ResourceTag,
   type SelfNodeId,
 } from "./Resource";
+import type { NodeKey } from "./Node";
+import * as Node from "./Node";
 
 // ============================================================================
 // Wire schema — Schema classes (Types & Naming → Prefer a class schema)
@@ -157,7 +158,7 @@ export const Tag = <Self>() => {
 /**
  * Options for {@link layer} / {@link serve} / {@link serveRemote}.
  *
- * Pass the **same** per-resource readiness Effect {@link Resource.httpServer} uses for `/health`
+ * Pass the **same** per-resource readiness Effect {@link Node.httpServer} uses for `/health`
  * when you want FleetHealth's leaf to match NodeStatus. Absent ⇒ empty resources / `ok`.
  *
  * @public
@@ -167,7 +168,7 @@ export interface FleetHealthOptions {
 }
 
 /** Identity node for a **non-meshed** FleetHealth instance. @internal */
-class FleetHealthAloneNode extends Resource.Node<FleetHealthAloneNode>(
+class FleetHealthAloneNode extends Node.Tag<FleetHealthAloneNode>(
   "@nikscripts/effect-pm/FleetHealth/alone",
 ) {}
 

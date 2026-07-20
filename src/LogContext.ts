@@ -2,7 +2,7 @@
  * Log **annotation keys** + per-scope annotation helpers for effect-pm log capture.
  *
  * Every captured {@link LogEntry} carries annotations keyed by {@link LogAnnotationKeys}. Values are
- * either a **node log key** (`Resource.Node.key`) or **lineage segment keys** (`Resource.Tag.key`).
+ * either a **node log key** (`Node.Tag.key`) or **lineage segment keys** (`Resource.Tag.key`).
  *
  * Full catalog: `docs/LOGS.md` — Annotation keys.
  *
@@ -18,7 +18,7 @@ import { Effect } from "effect";
  *
  * | Property | Annotation key (field name) | Value is |
  * |----------|----------------------------|----------|
- * | `node` | `"node"` | **node log key** (`Resource.Node.key`) |
+ * | `node` | `"node"` | **node log key** (`Node.Tag.key`) |
  * | `lineage` | `"@nikscripts/effect-pm/lineage"` | JSON array of **lineage segment keys** |
  * | `lineId` | `"@nikscripts/effect-pm/lineId"` | Stable id for one published relay line (memo / dedupe) |
  *
@@ -39,7 +39,7 @@ export const LogAnnotationKeys = {
  * Annotate every log line with a **node log key** value under annotation key {@link LogAnnotationKeys.node}.
  * Applied by node durable tails (`Node.logs` / `Resource.store(Node)` in `resource-web/server.ts`).
  *
- * @param node - **Node log key** value (`Resource.Node.key`).
+ * @param node - **Node log key** value (`Node.Tag.key`).
  *
  * @public
  */

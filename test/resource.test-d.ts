@@ -2,6 +2,7 @@ import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Resource from "../src/Resource";
 import type { ServiceOf } from "../src/Resource";
+import * as Node from "../src/Node";
 
 // ── Slice 1: spec → service-interface inference ──
 // (No `satisfies Spec`: it contextually widens each method's error channel to `unknown`.
@@ -206,8 +207,8 @@ void _procClients;
 
 // ── node in the tag: ship only the tag; the client resolves where to connect ──
 // A node-bearing tag carries its own transport. `Resource.client(tag)` then requires the
-// HOST (not the ambient Protocol), and `Resource.connect(Node, transport)` wires it once.
-class EdgeNode extends Resource.Node<EdgeNode>("test/edge") {}
+// HOST (not the ambient Protocol), and `Node.connect(Node, transport)` wires it once.
+class EdgeNode extends Node.Tag<EdgeNode>("test/edge") {}
 class Hosted extends Resource.Tag<Hosted>()("test/Hosted", 
   { ping: Resource.effect(Schema.String) },
   { node: EdgeNode },
@@ -218,8 +219,8 @@ const _nodeedClient: Layer.Layer<Hosted, never, EdgeNode> =
   Resource.client(Hosted);
 void _nodeedClient;
 
-// Resource.connect re-keys an RPC `Protocol` layer under the node.
-const _nodeLive: Layer.Layer<EdgeNode> = Resource.connect(EdgeNode, protocolLayer);
+// Node.connect re-keys an RPC `Protocol` layer under the node.
+const _nodeLive: Layer.Layer<EdgeNode> = Node.connect(EdgeNode, protocolLayer);
 void _nodeLive;
 
 // full wiring: client(Hosted) needs EdgeNode; node(EdgeNode, …) supplies it → R = never.
@@ -227,7 +228,7 @@ const _nodeedRun: Promise<string> = Effect.runPromise(
   Effect.flatMap(Hosted, (h) => h.ping).pipe(
     Effect.provide(
       Resource.client(Hosted).pipe(
-        Layer.provide(Resource.connect(EdgeNode, protocolLayer)),
+        Layer.provide(Node.connect(EdgeNode, protocolLayer)),
       ),
     ),
   ),

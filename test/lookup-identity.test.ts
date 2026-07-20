@@ -1,6 +1,7 @@
 import { Clock, Context, Duration, Effect, Exit, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Lookup from "../src/Lookup";
+import * as Node from "../src/Node";
 
 // L1 identity lookup over ipc — claim first-wins; OS bind exclusivity for default-local.
 
@@ -28,10 +29,10 @@ const withLookup = <A, E>(
   }).pipe(Effect.scoped);
 
 describe("LookupNode", () => {
-  it("is a Resource.Node with ipc from { path }", () => {
+  it("is a Node.Tag with ipc from { path }", () => {
     const path = "/tmp/lookup-example.sock";
-    const node = Lookup.LookupNode("lookup/example", { path });
-    expect(Lookup.isLookupNode(node)).toBe(true);
+    const node = Node.Lookup("lookup/example", { path });
+    expect(Node.isLookupNode(node)).toBe(true);
     expect(node.kind).toBe("IpcSocket");
     expect(node.path).toBe(path);
   });
@@ -42,7 +43,7 @@ describe("Lookup identity claim", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("claim");
-        const node = Lookup.LookupNode("lookup/claim", { path });
+        const node = Node.Lookup("lookup/claim", { path });
 
         yield* withLookup(
           Lookup.layer(node),

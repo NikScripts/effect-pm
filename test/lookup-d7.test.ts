@@ -2,6 +2,7 @@ import { Clock, Context, Duration, Effect, Exit, Layer, Option, Schema } from "e
 import { describe, expect, it } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // D7 — bootstrap, resolve, lookupClient, address-less listen, Prototype.make → class.
 
@@ -50,7 +51,7 @@ describe("Lookup.Identity.resolve", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("resolve");
-        const node = Lookup.LookupNode("d7/resolve", { path });
+        const node = Node.Lookup("d7/resolve", { path });
         const serverCtx = yield* Layer.build(Lookup.layer(node));
         const clientCtx = yield* Layer.build(Lookup.client(node));
         const ctx = Context.merge(serverCtx, clientCtx);
@@ -89,10 +90,10 @@ describe("Resource.lookupClient", () => {
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("lc-lookup");
         const workerPath = yield* tmpSock("lc-worker");
-        const lookupNode = Lookup.LookupNode("d7/lc-lookup", {
+        const lookupNode = Node.Lookup("d7/lc-lookup", {
           path: lookupPath,
         });
-        class Worker extends Resource.Node<Worker, Jobs>("d7/lc-worker", {
+        class Worker extends Node.Tag<Worker, Jobs>("d7/lc-worker", {
           path: workerPath,
         }) {}
 
@@ -102,7 +103,7 @@ describe("Resource.lookupClient", () => {
         const lookup = Context.merge(lookupServer, lookupCtx);
 
         const worker = yield* Layer.build(
-          Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
+          Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
             Layer.provide(lookupClient),
           ),
         );
@@ -135,15 +136,15 @@ describe("address-less listen", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const lookupPath = yield* tmpSock("al-lookup");
-          const lookupNode = Lookup.LookupNode("d7/al-lookup", {
+          const lookupNode = Node.Lookup("d7/al-lookup", {
             path: lookupPath,
           });
-          class Worker extends Resource.Node<Worker, Jobs>("d7/al-worker") {}
+          class Worker extends Node.Tag<Worker, Jobs>("d7/al-worker") {}
 
           const lookupClient = Lookup.client(lookupNode);
           const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
           const server = yield* Layer.build(
-            Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
+            Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
               Layer.provide(lookupClient),
             ),
           );
@@ -171,18 +172,18 @@ describe("address-less listen", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const lookupPath = yield* tmpSock("al2-lookup");
-          class Worker extends Resource.Node<Worker, Jobs>("d7/al2-worker") {}
+          class Worker extends Node.Tag<Worker, Jobs>("d7/al2-worker") {}
 
           const lookup = Lookup.bootstrapDefaultLocal({ path: lookupPath });
           const first = yield* Layer.build(
-            Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
+            Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
               Layer.provide(lookup),
             ),
           );
 
           const exit = yield* Effect.exit(
             Layer.build(
-              Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
+              Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
                 Layer.provide(lookup),
               ),
             ).pipe(Effect.scoped),
@@ -198,9 +199,9 @@ describe("address-less listen", () => {
   );
 });
 
-describe("Resource.Node.Prototype.make", () => {
+describe("Node.Prototype.make", () => {
   it("creates a constructible Node class with #name wire key", () => {
-    class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
+    class MailWorker extends Node.Prototype<MailWorker, Jobs>(
       "d7/MailWorker",
     ) {}
     class East extends MailWorker.make("East", {

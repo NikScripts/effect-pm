@@ -1,6 +1,7 @@
 import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // C2 — listen proves ROut then dispatches to ipcServer / *Server; clientsFor bundles connect.
 
@@ -21,24 +22,24 @@ class Emails extends Resource.Tag<Emails>()("listen/Emails", {
 const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-describe("Resource.listen + clientsFor (C2)", () => {
+describe("Node.listen + clientsFor (C2)", () => {
   it("listen on IpcSocket serves the catalog; clientsFor dials without repeating connect", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("catalog");
-        class Worker extends Resource.Node<Worker, Jobs | Emails>(
+        class Worker extends Node.Tag<Worker, Jobs | Emails>(
           "listen/Worker",
           { path },
         ) {}
 
         const serverCtx = yield* Layer.build(
-          Resource.listen(Worker, [
+          Node.listen(Worker, [
             Resource.serve(Jobs, jobsImpl),
             Resource.serve(Emails, emailsImpl),
           ]),
         );
         const clientCtx = yield* Layer.build(
-          Resource.clientsFor(Worker, Jobs, Emails),
+          Node.clientsFor(Worker, Jobs, Emails),
         );
 
         const pair = yield* Effect.gen(function* () {

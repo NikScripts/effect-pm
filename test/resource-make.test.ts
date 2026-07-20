@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // `Resource.make(tag, impl)` anchors a HOISTED impl to its contract at the definition site — inline impls
 // are already typed by layer/serve, but an extracted const loses that; make infers the tag's spec.
@@ -41,8 +42,8 @@ it("Resource.make is runtime identity + type-anchored", () => {
 class Fleet extends Resource.Tag<Fleet>()("make-test/Fleet", {
   n: Resource.effect(Schema.Number),
 }) {} // no `.distributed([…])`
-class NodeA extends Resource.Node<NodeA>("make-test/A") {}
-class NodeB extends Resource.Node<NodeB>("make-test/B") {}
+class NodeA extends Node.Tag<NodeA>("make-test/A") {}
+class NodeB extends Node.Tag<NodeB>("make-test/B") {}
 
 it("peersLayer sources the fleet from options.nodes (shared tag has no baked nodes)", () =>
   Effect.runPromise(

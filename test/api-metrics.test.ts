@@ -14,6 +14,7 @@ import * as ApiMetrics from "../src/ApiMetrics";
 import * as HttpApiResource from "../src/HttpApiResource";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 const ClientId = "test/api-metrics/client" as const;
 
@@ -153,7 +154,7 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
     },
     metrics: Stream.empty,
   };
-  const Server = Resource.httpServer([
+  const Server = Node.httpServer([
     Resource.serve(DemoMetrics, alphaImpl),
     Resource.serve(OtherMetrics, betaImpl),
   ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));

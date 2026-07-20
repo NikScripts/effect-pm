@@ -1,0 +1,47 @@
+/**
+ * @module examples/forms/resource/node-prototype
+ *
+ * **Node.Prototype** — `.make` named clone + `.listen(serves)` dynamic instance.
+ *
+ * ```bash
+ * pnpm exec tsx examples/forms/resource/node-prototype.ts
+ * ```
+ */
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
+import * as NodeServices from "@effect/platform-node/NodeServices"
+import { Effect, Layer, Schema } from "effect"
+import * as Lookup from "../../../src/Lookup"
+import * as Node from "../../../src/Node"
+import * as Resource from "../../../src/Resource"
+
+class Mail extends Resource.Tag<Mail>()("forms/Mail", {
+  pending: Resource.effect(Schema.Number),
+}) {}
+
+class MailWorker extends Node.Prototype<MailWorker, Mail>("forms/MailWorker") {}
+
+const program = Effect.gen(function* () {
+  const sock = `/tmp/effect-pm-forms-proto-${process.pid}.sock`
+  const lookup = Lookup.bootstrapDefaultLocal({
+    path: `/tmp/effect-pm-forms-proto-lookup-${process.pid}.sock`,
+    unlink: true,
+  })
+
+  // Named clone with a fixed address
+  class East extends MailWorker.make("East", { path: sock }) {}
+  const named = Node.listen(East, [
+    Resource.serve(Mail, { pending: Effect.succeed(3) }),
+  ]).pipe(Layer.provide(lookup))
+
+  // Dynamic instance factory
+  const spawn = MailWorker.listen([
+    Resource.serve(Mail, { pending: Effect.succeed(9) }),
+  ])
+  const dynamic = spawn("w1").pipe(Layer.provide(lookup))
+
+  yield* Layer.build(named)
+  yield* Layer.build(dynamic)
+  yield* Effect.logInfo("Prototype.make + Prototype.listen ok")
+}).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
+
+NodeRuntime.runMain(program)

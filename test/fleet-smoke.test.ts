@@ -5,6 +5,7 @@ import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import * as NodeStatus from "../src/NodeStatus";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Headless smoke of the dashboard's live data path — over WebSocket, the transport a browser dashboard
 // actually uses. A node serves two queues; a producer (a client, the sanctioned way) enqueues over the
@@ -23,7 +24,7 @@ interface Job {
 class Mail extends QueueResource.Tag<Mail>()("smoke/Mail", { payload: Job }) {}
 class Jobs extends QueueResource.Tag<Jobs>()("smoke/Jobs", { payload: Job }) {}
 
-const server = Resource.wsServer([
+const server = Node.wsServer([
   QueueResource.serveMemory(Mail, { effect: () => Effect.void }),
   QueueResource.serveMemory(Jobs, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));

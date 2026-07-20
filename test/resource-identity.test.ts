@@ -2,6 +2,7 @@ import { Clock, Context, Duration, Effect, Exit, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // S1 — identity-stamped Tags claim at Lookup; winner serves, loser becomes client.
 // Claim endpoint = ListenNode (listen) or Tag-bound Node — no `{ self }` bag.
@@ -26,10 +27,10 @@ describe("Resource.identity", () => {
   });
 
   it("rejects multi-node distributed on an identity Tag (S1)", () => {
-    class A extends Resource.Node<A>("identity/multi-a", {
+    class A extends Node.Tag<A>("identity/multi-a", {
       path: "/tmp/identity-multi-a.sock",
     }) {}
-    class B extends Resource.Node<B>("identity/multi-b", {
+    class B extends Node.Tag<B>("identity/multi-b", {
       path: "/tmp/identity-multi-b.sock",
     }) {}
     class Solo extends Resource.Tag<Solo>()("identity/Solo", {
@@ -50,7 +51,7 @@ describe("Resource.identity", () => {
   });
 
   it("allows a single-node fleet overwrite on identity", () => {
-    class One extends Resource.Node<One>("identity/one", {
+    class One extends Node.Tag<One>("identity/one", {
       path: "/tmp/identity-one.sock",
     }) {}
     class Solo extends Resource.Tag<Solo>()("identity/SoloOne", {
@@ -66,7 +67,7 @@ describe("Resource.identity", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const path = yield* tmpSock("noself-lookup");
-        const lookupNode = Lookup.LookupNode("identity/noself-lookup", { path });
+        const lookupNode = Node.Lookup("identity/noself-lookup", { path });
 
         const exit = yield* Effect.exit(
           Layer.build(
@@ -90,13 +91,13 @@ describe("Resource.identity", () => {
         const lookupPath = yield* tmpSock("claim-lookup");
         const winnerPath = yield* tmpSock("claim-winner");
 
-        const lookupNode = Lookup.LookupNode("identity/claim-lookup", {
+        const lookupNode = Node.Lookup("identity/claim-lookup", {
           path: lookupPath,
         });
-        class WinnerNode extends Resource.Node<WinnerNode>("identity/winner", {
+        class WinnerNode extends Node.Tag<WinnerNode>("identity/winner", {
           path: winnerPath,
         }) {}
-        class LoserNode extends Resource.Node<LoserNode>("identity/loser", {
+        class LoserNode extends Node.Tag<LoserNode>("identity/loser", {
           path: "/tmp/identity-loser-unused.sock",
         }) {}
 
@@ -105,7 +106,7 @@ describe("Resource.identity", () => {
         // Winner: listen stamps ListenNode for identity claim
         const lookupCtx = yield* Layer.build(Lookup.layer(lookupNode));
         const winnerCtx = yield* Layer.build(
-          Resource.listen(WinnerNode, [
+          Node.listen(WinnerNode, [
             Resource.serve(Mail, mailImpl),
           ]).pipe(Layer.provide(lookupClient)),
         );

@@ -4,22 +4,23 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, expect, it } from "vitest";
 import * as QueueResource from "../src/QueueResource";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
-// `Resource.connect` and its `connectHttp` / `connectSocket` shortcuts are dual (data-first + pipeable
+// `Node.connect` and its `connectHttp` / `connectSocket` shortcuts are dual (data-first + pipeable
 // data-last) AND, in the node-only form, derive the transport from the node's declared `kind` — so the
 // http↔socket mismatch that caused the dashboard's "no live data" bug can't be expressed. This proves
 // the dispatch mechanics, the ProtocolKind stamping, and that a node-derived ws client round-trips.
 
 describe("Node ProtocolKind inference", () => {
   it("infers WebSocket from a ws url, Http from a port, IpcSocket from path, honors explicit kind, leaves a bare node blank", () => {
-    class WsUrl extends Resource.Node<WsUrl>("cd/ws", { url: "wss://x/rpc" }) {}
-    class Port extends Resource.Node<Port>("cd/port", 3001) {}
-    class Explicit extends Resource.Node<Explicit>("cd/explicit", {
+    class WsUrl extends Node.Tag<WsUrl>("cd/ws", { url: "wss://x/rpc" }) {}
+    class Port extends Node.Tag<Port>("cd/port", 3001) {}
+    class Explicit extends Node.Tag<Explicit>("cd/explicit", {
       url: "/rpc",
       kind: "WebSocket",
     }) {}
-    class Ipc extends Resource.Node<Ipc>("cd/ipc", { path: "/tmp/cd.sock" }) {}
-    class Bare extends Resource.Node<Bare>("cd/bare") {}
+    class Ipc extends Node.Tag<Ipc>("cd/ipc", { path: "/tmp/cd.sock" }) {}
+    class Bare extends Node.Tag<Bare>("cd/bare") {}
     expect(WsUrl.kind).toBe("WebSocket");
     expect(Port.kind).toBe("Http");
     expect(Port.url).toBe("http://localhost:3001/rpc");
@@ -45,7 +46,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class HubNode extends Resource.Node<HubNode>("cd/hub") {}
+class HubNode extends Node.Tag<HubNode>("cd/hub") {}
 class HubQueue extends QueueResource.Tag<HubQueue>()("cd/HubQueue", {
   payload: Item,
   node: HubNode,
@@ -81,10 +82,10 @@ const withPortClient = (connectAt: (port: number) => Layer.Layer<HubNode>) =>
 it("a node-derived socket client streams status live over ws", () =>
   Effect.runPromise(
     withPortClient((port) =>
-      HubNode.pipe(Resource.connectSocket(`ws://127.0.0.1:${port}/rpc`)),
+      HubNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`)),
     ).pipe(
       Effect.provide(
-        Resource.wsServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+        Node.wsServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       ),
@@ -96,10 +97,10 @@ it("a node-derived socket client streams status live over ws", () =>
 it("a node-derived http client streams status live over http", () =>
   Effect.runPromise(
     withPortClient((port) =>
-      HubNode.pipe(Resource.connectHttp(`http://127.0.0.1:${port}/rpc`)),
+      HubNode.pipe(Node.connectHttp(`http://127.0.0.1:${port}/rpc`)),
     ).pipe(
       Effect.provide(
-        Resource.httpServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+        Node.httpServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       ),

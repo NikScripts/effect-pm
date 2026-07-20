@@ -6,6 +6,7 @@ import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
 import type { QueueLayerConfig } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // The full remote path: a REAL toolkit QueueResource engine served over http via
 // `httpServer([QueueResource.serveMemory(...)])`, driven by `Resource.client` over the wire. The same `yield* Tag`
@@ -32,7 +33,7 @@ const withServer = <A, E>(
   config: QueueLayerConfig<NumberItem, void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
 ) => {
-  const server = Resource.httpServer([
+  const server = Node.httpServer([
     QueueResource.serveMemory(RemoteQueue, config),
   ]).pipe(
     // server-side history backend for metrics backfill

@@ -3,7 +3,18 @@
 **Status:** **DESIGN** — living bake notes. Phase 1 IPC **LOCKED + SHIPPED**. Catalog / discovery / managers / lookup = mostly **thoughts** until explicitly locked in a bake row.  
 **Thesis:** Make cross-runtime **seamless, easier, safer** — Node address + typed service catalog; optional discovery for same-machine (esp. Unix sockets).  
 **Related:** [`transport-dependency-decisions.md`](./transport-dependency-decisions.md) · [`loud-failures-design.md`](./loud-failures-design.md) · [`docs/resources/fleets-and-peers.md`](../resources/fleets-and-peers.md)  
-**Naming note:** This doc still says “Resource” for the shipped module. Product rename (e.g. Unbounded services) is **parked** — don’t block this design on it.
+**Naming note:** Shipped surface is split: **`@nikscripts/effect-pm/Node`** (Tag / listen / connect / *Server) + **`Resource`** (Tag / serve / client / identity / nodes). Product rename (e.g. Unbounded services) is **parked**.
+
+### Node module — **LOCKED + Eng** (2026-07-20)
+
+| Export | Role |
+|--------|------|
+| `Node.Tag` / `Node.Prototype` / `Node.Lookup` | Node constructors (was `Resource.Node` / `.Prototype` / `Lookup.LookupNode`) |
+| `Node.listen` / `httpServer` / `wsServer` / `ipcServer` | Catalog-proving / transport servers |
+| `Node.connect*` / `clientsFor` | Dial helpers |
+| Types | `AnyNode`, `ProtocolKind`, `ListenNode`, `UnaddressedNode`, … |
+
+No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts`.
 
 ### How to read locks in this file
 

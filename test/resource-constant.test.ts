@@ -4,6 +4,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as PmNode from "../src/Node";
 
 // `constant` fields are PLAIN values (no yield*), resolved once at acquire — identical local and remote.
 
@@ -35,7 +36,7 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Node = Resource.httpServer([Resource.serve(Cfg, impl)]).pipe(
+const Node = PmNode.httpServer([Resource.serve(Cfg, impl)]).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 

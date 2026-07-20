@@ -4,6 +4,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as PmNode from "../src/Node";
 
 // `ref` fields surface as a `Subscribable`: `yield* p.x.get` (current value) + `p.x.changes` (stream),
 // uniform local and remote. The impl owns the `SubscriptionRef` (provided via `Resource.subscribable`).
@@ -38,7 +39,7 @@ it("ref.get reads the current value — REMOTE (same shape over the wire)", () =
   Effect.runPromise(
     Effect.gen(function* () {
       const cell = yield* SubscriptionRef.make(42);
-      const Node = Resource.httpServer([
+      const Node = PmNode.httpServer([
         Resource.serve(Live, { count: Resource.subscribable(cell) }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 

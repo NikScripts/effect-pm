@@ -7,6 +7,7 @@ import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
 import { Schema } from "effect";
 import { testBillingNodeKey } from "./fixtures/logKeys";
+import * as Node from "../src/Node";
 
 const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
@@ -19,7 +20,7 @@ class LogQueue extends QueueResource.Tag<LogQueue>()("test/logs-resource/Q", {
 
 class LogProc extends Process.Tag<LogProc>()("test/logs-resource/Proc").pipe(Process.schedule([])) {}
 
-class EnvNode extends Resource.Node<EnvNode>(testBillingNodeKey) {}
+class EnvNode extends Node.Tag<EnvNode>(testBillingNodeKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   EnvNode.logs,

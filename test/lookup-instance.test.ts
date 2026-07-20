@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Dynamic Node.Prototype.instance — many prototypeKey#suffix; ephemeral ipc; no claim.
 
@@ -18,9 +19,9 @@ class Jobs extends Resource.Tag<Jobs>()("inst/Jobs", {
 
 const jobsImpl = (n: number) => ({ jobs: Effect.succeed(n) });
 
-describe("Resource.Node.Prototype.instance / .listen", () => {
+describe("Node.Prototype.instance / .listen", () => {
   it("stamps isDynamicInstance and optional #suffix wire key", () => {
-    class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
+    class MailWorker extends Node.Prototype<MailWorker, Jobs>(
       "inst/MailWorker",
     ) {}
     const auto = MailWorker.instance();
@@ -39,10 +40,10 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("proto-listen");
-        const lookupNode = Lookup.LookupNode("inst/proto-listen", {
+        const lookupNode = Node.Lookup("inst/proto-listen", {
           path: lookupPath,
         });
-        class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
+        class MailWorker extends Node.Prototype<MailWorker, Jobs>(
           "inst/CurryWorker",
         ) {}
         const lookupClient = Lookup.client(lookupNode);
@@ -54,7 +55,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
         const ctx = yield* Layer.build(
           mailWorker("w2").pipe(Layer.provide(lookupClient)),
         );
-        const node = Context.get(ctx, Resource.ListenNode);
+        const node = Context.get(ctx, Node.ListenNode);
         expect(node.key).toBe("inst/CurryWorker#w2");
         expect(node.path).toBeDefined();
         expect(node.kind).toBe("IpcSocket");
@@ -71,10 +72,10 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("lookup");
-        const lookupNode = Lookup.LookupNode("inst/lookup", {
+        const lookupNode = Node.Lookup("inst/lookup", {
           path: lookupPath,
         });
-        class MailWorker extends Resource.Node.Prototype<MailWorker, Jobs>(
+        class MailWorker extends Node.Prototype<MailWorker, Jobs>(
           "inst/WorkerA",
         ) {}
 
@@ -135,7 +136,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
         expect([3, 5]).toContain(n);
 
         // Custom picker selects the Jobs=5 worker by ListenNode key.
-        const nodeB = Context.get(b, Resource.ListenNode);
+        const nodeB = Context.get(b, Node.ListenNode);
         const softB = yield* Layer.build(
           Resource.lookupClient(Jobs, {
             pick: (rows) =>
@@ -158,7 +159,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("peers-lookup");
-        const lookupNode = Lookup.LookupNode("inst/peers-lookup", {
+        const lookupNode = Node.Lookup("inst/peers-lookup", {
           path: lookupPath,
         });
         class FleetJobs extends Resource.Tag<FleetJobs>()("inst/FleetJobs", {
@@ -166,7 +167,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
           fleetJobs: Resource.effect(Schema.Number).pipe(Resource.fleet),
         }).pipe(Resource.distributed) {}
 
-        class PoolWorker extends Resource.Node.Prototype<PoolWorker, FleetJobs>(
+        class PoolWorker extends Node.Prototype<PoolWorker, FleetJobs>(
           "inst/PoolWorker",
         ) {}
 
@@ -228,7 +229,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
           .pipe(Effect.provide(lookup));
         const eastRow = rows.find((r) => r.nodeKey === east.key);
         expect(eastRow?.path).toBeDefined();
-        const dialEast = Resource.Node(east.key, {
+        const dialEast = Node.Tag(east.key, {
           path: eastRow?.path as string,
         });
 
@@ -239,7 +240,7 @@ describe("Resource.Node.Prototype.instance / .listen", () => {
         }).pipe(
           Effect.provide(
             Resource.client(FleetJobs, dialEast).pipe(
-              Layer.provide(Resource.connect(dialEast)),
+              Layer.provide(Node.connect(dialEast)),
             ),
           ),
           Effect.scoped,

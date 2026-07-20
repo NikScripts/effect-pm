@@ -4,9 +4,10 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Resource from "../src/Resource";
 import * as ShardMap from "../src/ShardMap";
 import * as Telemetry from "../src/Telemetry";
+import * as Node from "../src/Node";
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
 
 describe("Telemetry fleet elevation", () => {
   class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(

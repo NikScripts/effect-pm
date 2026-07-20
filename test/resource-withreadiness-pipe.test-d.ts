@@ -5,6 +5,7 @@
  */
 import { Effect, Schema } from "effect";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 const Status = Schema.Struct({
   connected: Schema.Boolean,
@@ -23,12 +24,12 @@ const databaseReadiness = (
     s.connected ? { ready: true as const, detail: `${s.latencyMs}ms` } : { ready: false as const },
   );
 
-class N1 extends Resource.Node<N1>("pipe-depth/n1") {}
-class N2 extends Resource.Node<N2>("pipe-depth/n2") {}
-class N3 extends Resource.Node<N3>("pipe-depth/n3") {}
-class N4 extends Resource.Node<N4>("pipe-depth/n4") {}
-class N5 extends Resource.Node<N5>("pipe-depth/n5") {}
-class N6 extends Resource.Node<N6>("pipe-depth/n6") {}
+class N1 extends Node.Tag<N1>("pipe-depth/n1") {}
+class N2 extends Node.Tag<N2>("pipe-depth/n2") {}
+class N3 extends Node.Tag<N3>("pipe-depth/n3") {}
+class N4 extends Node.Tag<N4>("pipe-depth/n4") {}
+class N5 extends Node.Tag<N5>("pipe-depth/n5") {}
+class N6 extends Node.Tag<N6>("pipe-depth/n6") {}
 
 class D1 extends Resource.Tag<D1>()("pipe-depth/D1", databaseSpec, { node: N1 }).pipe(
   Resource.withReadiness(databaseReadiness),
@@ -72,10 +73,10 @@ class First extends Resource.withReadiness(
 void First;
 
 // Stacked duals: withReadiness then distributed on a node-bound class.
-class FleetNodeA extends Resource.Node<FleetNodeA>("pipe-depth/fleet-a", {
+class FleetNodeA extends Node.Tag<FleetNodeA>("pipe-depth/fleet-a", {
   url: "http://127.0.0.1:1/rpc",
 }) {}
-class FleetNodeB extends Resource.Node<FleetNodeB>("pipe-depth/fleet-b", {
+class FleetNodeB extends Node.Tag<FleetNodeB>("pipe-depth/fleet-b", {
   url: "http://127.0.0.1:2/rpc",
 }) {}
 

@@ -5,12 +5,13 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as NodeStatus from "../src/NodeStatus";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
+import * as Node from "../src/Node";
 
 class Echo extends Resource.Tag<Echo>()("nodeStatus-ref/Echo", {
   ping: Resource.effect(Schema.String),
 }) {}
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   Resource.serve(Echo, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 

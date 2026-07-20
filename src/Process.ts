@@ -22,7 +22,7 @@
  *
  * ```ts
  * Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
- * Resource.httpServer([Process.serve(Tag, config)]).pipe(Layer.provide(AppStore.layerMemory))
+ * Node.httpServer([Process.serve(Tag, config)]).pipe(Layer.provide(AppStore.layerMemory))
  * ```
  *
  * ## Live `events` (persist == stream)
@@ -108,12 +108,13 @@ import type {
   Local,
   Method,
   NodeBoundTag,
-  NodeKey,
   RefField,
   ResourceTag,
   Spec,
   Subscribable,
 } from "./Resource";
+import type { NodeKey } from "./Node";
+import * as Node from "./Node";
 import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";
@@ -2079,7 +2080,7 @@ export type ProcessTagBuild<Self> = {
  * }) {}
  * ```
  *
- * Pass `options.node` to bind the process to a {@link Resource.Node}.
+ * Pass `options.node` to bind the process to a {@link Node.Tag}.
  *
  * @public
  */
@@ -2114,7 +2115,7 @@ export const Tag = <Self>() => {
 /**
  * Define a standalone {@link Schedule} resource — a reusable, RPC-capable window manager one or more
  * processes can be gated by (via `.pipe(`{@link schedule}`(ThisSchedule))`). Full CRUD; pass
- * `options.node` to bind it to a {@link Resource.Node}, like {@link Tag}.
+ * `options.node` to bind it to a {@link Node.Tag}, like {@link Tag}.
  *
  * ```ts
  * class SeasonSchedule extends Process.Schedule<SeasonSchedule>()("app/SeasonSchedule") {}
