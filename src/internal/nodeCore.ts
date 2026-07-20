@@ -58,13 +58,24 @@ export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
  */
 export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
 
-/** A {@link Tag} erased — transport address (`url` and/or Unix `path`) plus
- *  {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
- *  *where* AND *how* to reach each one. @public */
+/** The set of transports one {@link Tag} node speaks — a record keyed by {@link ProtocolKind}. A
+ *  single-protocol node has one entry; a multi-protocol node (the `{ http, ws }` shorthand or piped
+ *  {@link overHttp}/{@link overSocket}/{@link overIpc}) has several. `connect` selects one; the server
+ *  ({@link ProtocolKindMismatch}) asserts its transport is a member. @public */
+export interface Endpoints {
+  readonly Http?: { readonly url: string };
+  readonly WebSocket?: { readonly url: string };
+  readonly IpcSocket?: { readonly path: string };
+}
+
+/** A {@link Tag} erased — its transport `endpoints` set, plus the **primary** `url`/`path`/`kind` (the
+ *  first-declared endpoint, kept for single-protocol readers); a tag's `distributed` set is
+ *  self-describing about *where* AND *how* to reach each one. @public */
 export type AnyNode = NodeKey<unknown> & {
   readonly url: string | undefined;
   readonly path: string | undefined;
   readonly kind: ProtocolKind | undefined;
+  readonly endpoints?: Endpoints;
 };
 
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
@@ -459,10 +470,21 @@ export function Tag<Self, ROut = never>(
         : url.startsWith("ws://") || url.startsWith("wss://")
           ? "WebSocket"
           : "Http");
+  // The transport set — one entry from the resolved primary (multi-protocol shorthand / `over*` add
+  // more). `connect` selects from it; the server asserts its transport is a member.
+  const endpoints: Endpoints =
+    kind === "IpcSocket" && path !== undefined
+      ? { IpcSocket: { path } }
+      : kind === "WebSocket" && url !== undefined
+        ? { WebSocket: { url } }
+        : kind === "Http" && url !== undefined
+          ? { Http: { url } }
+          : {};
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     url,
     path,
     kind,
+    endpoints,
     ...(invalidTarget !== undefined
       ? { [invalidHttpTargetSym]: invalidTarget }
       : {}),
