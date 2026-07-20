@@ -158,38 +158,40 @@ const isPopup = (child: HastChild): boolean =>
  * @category constructors
  * @since 1.0.0
  */
+const containsPopup = (node: HastElement): boolean =>
+  node.children.some(
+    (child) => isPopup(child) || (child.type === "element" && containsPopup(child))
+  );
+
+const anchorInto = (node: HastElement, url: string, className: string): void => {
+  const popups: Array<HastChild> = [];
+  const linked: Array<HastChild> = [];
+  for (const child of node.children) (isPopup(child) ? popups : linked).push(child);
+  if (linked.length === 0) return;
+  // A lone element child still holding a popup deeper down (twoslash's hover wrapper) — descend,
+  // so the anchor ends up around the visible text only.
+  const lone = linked.length === 1 && linked[0].type === "element" ? linked[0] : undefined;
+  if (lone !== undefined && containsPopup(lone)) {
+    anchorInto(lone, url, className);
+    return;
+  }
+  node.children = [
+    ...popups,
+    {
+      type: "element",
+      tagName: "a",
+      properties: {
+        class: className,
+        href: url,
+      },
+      children: linked,
+    },
+  ];
+};
+
 export const transformer = (options: TransformerOptions): ShikiTransformer => {
   const shift = options.shift ?? 0;
   const className = options.className ?? "api-typelink";
-  const containsPopup = (node: HastElement): boolean =>
-    node.children.some(
-      (child) => isPopup(child) || (child.type === "element" && containsPopup(child))
-    );
-  const anchorInto = (node: HastElement, url: string): void => {
-    const popups: Array<HastChild> = [];
-    const linked: Array<HastChild> = [];
-    for (const child of node.children) (isPopup(child) ? popups : linked).push(child);
-    if (linked.length === 0) return;
-    // A lone element child still holding a popup deeper down (twoslash's hover wrapper) — descend,
-    // so the anchor ends up around the visible text only.
-    const lone = linked.length === 1 && linked[0].type === "element" ? linked[0] : undefined;
-    if (lone !== undefined && containsPopup(lone)) {
-      anchorInto(lone, url);
-      return;
-    }
-    node.children = [
-      ...popups,
-      {
-        type: "element",
-        tagName: "a",
-        properties: {
-          class: className,
-          href: url,
-        },
-        children: linked,
-      },
-    ];
-  };
   const wrap = (node: HastElement): void => {
     for (const child of node.children) {
       if (child.type === "element") wrap(child);
@@ -197,7 +199,7 @@ export const transformer = (options: TransformerOptions): ShikiTransformer => {
     const url = node.properties[marker];
     if (typeof url !== "string") return;
     delete node.properties[marker];
-    anchorInto(node, url);
+    anchorInto(node, url, className);
   };
   return {
     name: "docgen:links",
@@ -215,4 +217,83 @@ export const transformer = (options: TransformerOptions): ShikiTransformer => {
       wrap(hast);
     },
   };
+};
+
+// A leaf token: an element whose children are all text (shiki's token spans).
+const isLeafToken = (node: HastElement): boolean =>
+  node.children.length > 0 && node.children.every((child) => child.type === "text");
+
+const textOf = (node: HastElement): string =>
+  node.children.map((child) => (child.type === "text" ? child.value : "")).join("");
+
+/**
+ * Apply links to an ALREADY-rendered hast subtree by walking its visible text in document order —
+ * for rendered text that never had source offsets (a hover popup's type box). Unlike the
+ * render-time {@link transformer} (which anchors whole tokens), a leaf token's text is SPLIT at
+ * the link boundaries, so a coarse token (`BackupMetadata, SqlError` as one span) yields an anchor
+ * around exactly the linked run. `shift` is subtracted from the accumulated position (characters
+ * preceding the annotated text, e.g. a declaration head).
+ *
+ * @category combinators
+ * @since 1.0.0
+ */
+export const applyToHast = (root: HastElement, options: TransformerOptions): void => {
+  const shift = options.shift ?? 0;
+  const className = options.className ?? "api-typelink";
+  let offset = 0;
+  const visit = (node: HastElement): void => {
+    for (const child of node.children) {
+      if (child.type === "text") {
+        offset += child.value.length;
+        continue;
+      }
+      if (child.type !== "element") continue;
+      if (isPopup(child)) continue; // hidden content — not part of the visible text
+      if (isLeafToken(child)) {
+        const text = textOf(child);
+        const start = offset - shift;
+        const end = start + text.length;
+        offset += text.length;
+        const hit = options.links.find((link) => link.start < end && start < link.end);
+        if (hit === undefined) continue;
+        const from = Math.max(0, hit.start - start);
+        const to = Math.min(text.length, hit.end - start);
+        child.children = [
+          ...(from > 0
+            ? [
+                {
+                  type: "text" as const,
+                  value: text.slice(0, from),
+                },
+              ]
+            : []),
+          {
+            type: "element" as const,
+            tagName: "a",
+            properties: {
+              class: className,
+              href: hit.url,
+            },
+            children: [
+              {
+                type: "text" as const,
+                value: text.slice(from, to),
+              },
+            ],
+          },
+          ...(to < text.length
+            ? [
+                {
+                  type: "text" as const,
+                  value: text.slice(to),
+                },
+              ]
+            : []),
+        ];
+        continue;
+      }
+      visit(child);
+    }
+  };
+  visit(root);
 };

@@ -1,8 +1,8 @@
 # Docgen system — design doc (LIVING; we work from this)
 
-Status: **Phase 1 (prototypes) ✅ · Phase 2 (core services) ✅ · Phase 3 (Extractor) ✅ — byte-identical
-gate PASSED on the full corpus via scripts/gen-api-next.ts · Phase 4 (renderers) ✅ — TypePrinter +
-Annotate + SourceRenderer + HoverRenderer. Next: Phase 5 (integrate). See HANDOFF below.**
+Status: **Phases 1–4 ✅ · Phase 5 (integrate) ✅ — generator cut over, compiler links live in every
+render path, name-heuristic DELETED (zero-guess ruling). Remaining: Phase 6 (optional extraction) +
+follow-ups (expand-box links, popup realign hit-rate). See HANDOFF below.**
 Owner: Nik. Author: pairing session. Branch: **`docs/standards-corpus`** — the docgen replaces the
 linking internals of the API reference, which is unmerged on this branch, so it CANNOT branch from
 `integration` (would lack the prerequisite gen-api/api-data). Related work stays on one branch.
@@ -281,12 +281,29 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
   - `Annotate.transformer` is now TWO-PHASE: `span` hook only stamps a data-attr; a late `pre`
     pass wraps the token's visible children in the anchor and DESCENDS past twoslash's hover
     wrapper so popups stay OUTSIDE the link (found live: the popup was landing inside the anchor).
-- Step 3 (REMAINING) — replace the popup type-text linking (`linkApiTypes` name heuristic) with
-  compiler resolution, then delete `api-links.ts` + `api-linkify.ts` LAST. ⚠ CONSTRAINT to surface
-  before deleting: JSDoc inline-code PROSE linking (`linkifyCode`/`resolveDocRef` in highlight.ts)
-  has no compiler node to resolve — prose linking stays name-based (built from the model's
-  links.json) unless the owner accepts dropping it.
-Gate: byte-identical model + the site build still green. NOTE the deploy constraints: data paths
+- ~~Step 3 — ZERO-GUESS everywhere; heuristic deleted~~ ✅ (2026-07-19). OWNER RULING: no false
+  matches anywhere — a missing link always beats a guessed one. Realized as:
+  - `api-links.ts` + `api-linkify.ts` DELETED (with the `links.json` writer + reader — the
+    comparison scratch script now derives its own bucket). No name-bucket resolution remains.
+  - POPUPS: the compact type box links via compiler resolution — `expandType` now also returns each
+    hover's type printed by OUR TypePrinter (`typeText` + `typeLinks`, via
+    `TsProgram.fromProgram` over the expander's language-service program + the shared
+    SymbolIndex); `highlight.ts` REALIGNS those links onto the formatted display text
+    (`Annotate.realign`) and the renderer applies them to the box with `Annotate.applyToHast`
+    (walks rendered text in doc order, SPLITS leaf tokens at link boundaries). Realign-miss =
+    unlinked popup, by design.
+  - EXPANDER REWORK (the piece that made popup links real): when a block carries `// @filename:`,
+    the expander strips the wrapper directive lines and hosts the code AT THE REAL PATH — relative
+    imports resolve and self-declared symbols land on their true file:line (the SymbolIndex key).
+    Synthetic doc blocks keep the old virtual-file behavior. `ownerLoc` also got real.
+  - GOTCHA (cost a debugging round): `rendererRich` STRIPS the `"(property) "` prefix from the
+    displayed popup box while the twoslash node's `.text` keeps it — displacement into box
+    coordinates must count the declaration HEAD only, never the prefix.
+  - PROSE: JSDoc `{@link}` + inline-code resolve ONLY through the owner symbol's compiler-resolved
+    `docLinks` map (checker-resolved in the declaration's scope). Popup docs' inline-code is
+    unlinked (no owner map at render time) — acceptable under the ruling.
+Gate: model files unchanged (links.json sidecar removed) + the site build still green. NOTE the
+deploy constraints: data paths
 resolve from `process.cwd()` (docs/site), NOT `import.meta.url`; symbol pages are SSR (static-all
 overflows Waku's ~512 MB serializer); effect-pm is static via the literal `/api/effect-pm/…` route.
 See `[[api-reference-docs]]`.

@@ -15,11 +15,10 @@ import { createTwoslasher } from "twoslash";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toHast } from "mdast-util-to-hast";
 import prettier from "prettier";
+import * as Option from "effect/Option";
 import { makeTypeExpander } from "./expandType";
-import { loadApiLinks, resolveApiLink } from "./api-links";
-import { classListOf, linkApiTypes } from "./api-linkify";
 import { docLinksByLocation } from "./api-data";
-import { loadSourceLinks, sourceLinksFor } from "./api-source-links";
+import { loadSourceLinks, sourceLinksFor, symbolIndexEntries } from "./api-source-links";
 import * as Annotate from "../docgen/Annotate.js";
 import { runServer } from "./runtime";
 
@@ -89,7 +88,17 @@ const toFullOffset = (
 // the expansion in `node.docs` behind a sentinel and a custom `renderMarkdown` (below) turns it into a
 // highlighted code box. Best-effort: any failure just drops the expansion, never the page.
 const baseTwoslasher = createTwoslasher({ vfsRoot: repoRoot, compilerOptions });
-const expandTypes = makeTypeExpander({ compilerOptions, vfsRoot: repoRoot });
+const expandTypes = makeTypeExpander({
+  compilerOptions,
+  vfsRoot: repoRoot,
+  // The docgen location index — loaded by loadHighlighter (via loadSourceLinks), read lazily here.
+  getLocations: symbolIndexEntries,
+});
+
+// Zero-guess popup links: per hover node, OUR compiler-printed type links REALIGNED onto the
+// displayed (formatted) hover text — in whole-text coordinates, applied to the popup's compact
+// code box by the renderer below. Absent when the texts genuinely differ (no link beats a guess).
+const hoverPopupLinks = new WeakMap<object, ReadonlyArray<Annotate.Link>>();
 
 // Sentinel wrapping our expansion inside `node.docs` (a field that survives to the renderer, unlike
 // arbitrary props). The renderer splits it off and wedges it as its own box between the type and the
@@ -193,8 +202,34 @@ const twoslasher = Object.assign(
         h.docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
       });
       // Format each hover's compact type AFTER expansion (which reads the raw text) so long types
-      // break across lines in the popup.
-      for (const h of hovers) h.text = formatHoverType(h.text);
+      // break across lines in the popup — then realign OUR link ranges onto the formatted text.
+      hovers.forEach((h, i) => {
+        h.text = formatHoverType(h.text);
+        const info = expansions!.get(offsets[i]);
+        if (info?.typeText === undefined || info.typeLinks === undefined) return;
+        // h.text = [(prefix) ][head: ][body]; our parts print the TYPE (the body). Realign onto
+        // the body, then displace into BOX coordinates: rendererRich strips the "(property) "
+        // prefix from the displayed box, so only the head precedes the body there.
+        const m = /^(\([a-z ]+\)\s+)?([\s\S]+)$/.exec(h.text);
+        const rest = m?.[2] ?? h.text;
+        const head = declHead(rest);
+        const body = rest.slice(head.length);
+        const displace = head.length;
+        Option.match(Annotate.realign(info.typeLinks, info.typeText, body), {
+          onNone: () => {},
+          onSome: (links) => {
+            if (links.length === 0) return;
+            hoverPopupLinks.set(
+              h,
+              links.map((link) => ({
+                start: link.start + displace,
+                end: link.end + displace,
+                url: link.url,
+              }))
+            );
+          },
+        });
+      });
     } catch {
       // Expansion is best-effort: on any failure keep the plain (compact) twoslash hovers.
     }
@@ -206,8 +241,12 @@ const twoslasher = Object.assign(
 
 // HAST helpers to splice the expanded box into the popup, and a renderer that inserts it BETWEEN the
 // compact type box and the JSDoc-comments box.
-// find the first descendant with a class (classListOf + collectTokens + linkApiTypes now live in
-// ./api-linkify, shared with the build-time hover precompute).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+const classListOf = (n: any): string[] => {
+  const c = n?.properties?.class;
+  return Array.isArray(c) ? c : typeof c === "string" ? c.split(/\s+/) : [];
+};
+// find the first descendant with a class
 const findByClass = (node: any, cls: string): any => {
   if (!node || typeof node !== "object") return undefined;
   if (classListOf(node).includes(cls)) return node;
@@ -267,26 +306,19 @@ function preprocessJsdoc(md: string): string {
   );
 }
 
-// Stage 2 of API-docgen links. Link API export names that appear inside inline `code` spans in
-// JSDoc — the monospaced bits only, never plain prose — plus resolve `{@link X}` targets to real
-// doc URLs. Same qualified-first / unambiguous-bare rule as the type-preview links.
+// Link API export names that appear inside inline `code` spans in JSDoc — the monospaced bits
+// only, never plain prose. ZERO-GUESS: names resolve ONLY through the owner symbol's
+// compiler-resolved {@link} map (`resolveLink`) — the checker resolved those targets in the
+// declaration's own scope, so a match is exact; there is no global name bucket to guess from.
 const API_REF = /[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?/g;
-// A doc `{@link Target}` or an inline-code identifier -> its doc URL, or undefined. `Namespace.name`
-// resolves by qualified name; a bare name only when unambiguous.
-const resolveDocRef = (ref: string): string | undefined =>
-  ref.startsWith("/")
-    ? ref // already a resolved url (embedded into hover docs by embedDocLinks)
-    : ref.includes(".")
-    ? resolveApiLink(ref, "", false)
-    : resolveApiLink(undefined, ref, true);
-// Split inline-code text into HAST, wrapping any API-export name in a dotted-underline link.
-const linkifyCode = (text: string): any[] => {
+// Split inline-code text into HAST, wrapping any resolvable API-export name in a doc link.
+const linkifyCode = (text: string, resolveLink?: (target: string) => string | undefined): any[] => {
   const out: any[] = [];
   let last = 0;
   for (const m of text.matchAll(API_REF)) {
     const tok = m[0];
     const at = m.index ?? 0;
-    const url = resolveDocRef(tok);
+    const url = resolveLink?.(tok);
     if (url === undefined) continue;
     if (at > last) out.push({ type: "text", value: text.slice(last, at) });
     out.push({
@@ -338,13 +370,14 @@ function jsdocToHast(docs: string, resolveLink?: (target: string) => string | un
           children,
         };
       },
-      // inline `code` -> a <code>, with any API-export name inside it turned into a doc link. Only
-      // the monospaced content is scanned; plain prose is never touched.
+      // inline `code` -> a <code>, with any API-export name inside it turned into a doc link when
+      // the owner's compiler-resolved map knows it. Only the monospaced content is scanned; plain
+      // prose is never touched.
       inlineCode: (_state: any, node: any) => ({
         type: "element",
         tagName: "code",
         properties: {},
-        children: linkifyCode(String(node.value)),
+        children: linkifyCode(String(node.value), resolveLink),
       }),
       // `{@link …}` (rewritten to an `@link:` sentinel URL above) -> a REAL link when the target
       // resolves to an API symbol, otherwise a styled, non-navigating reference. Real markdown links
@@ -353,10 +386,10 @@ function jsdocToHast(docs: string, resolveLink?: (target: string) => string | un
         const children = state.all(node);
         const url = typeof node.url === "string" ? node.url : "";
         if (url.startsWith("@link:")) {
-          // Prefer the caller's precise, compiler-resolved map (context-aware, disambiguates bare
-          // names); fall back to the name-based resolver.
+          // Already-resolved urls (embedded by embedDocLinks) pass through; otherwise ONLY the
+          // caller's compiler-resolved map answers — an unresolved target renders styled, unlinked.
           const target = url.slice("@link:".length).trim();
-          const resolved = resolveLink?.(target) ?? resolveDocRef(target);
+          const resolved = target.startsWith("/") ? target : resolveLink?.(target);
           return resolved !== undefined
             ? {
                 type: "element",
@@ -397,6 +430,16 @@ const baseRenderer: any = rendererRich({
   renderMarkdown: renderJsdocMarkdown as never,
   renderMarkdownInline: renderJsdocInline as never,
 });
+// Apply the hover's realigned compiler links onto the popup's compact type box (the first
+// twoslash-popup-code — the expand box comes after it and stays unlinked for now).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+const applyPopupLinks = (info: any, el: any): void => {
+  const links = hoverPopupLinks.get(info);
+  if (links === undefined) return;
+  const box = findByClass(el, "twoslash-popup-code");
+  if (box === undefined) return;
+  Annotate.applyToHast(box, { links });
+};
 const renderer = {
   ...baseRenderer,
   nodeStaticInfo(this: any, info: any, node: any) {
@@ -409,7 +452,7 @@ const renderer = {
         /* keep plain popup */
       }
     try {
-      linkApiTypes(el, resolveApiLink);
+      applyPopupLinks(info, el);
     } catch {
       /* links are best-effort */
     }
@@ -425,7 +468,7 @@ const renderer = {
         /* keep plain popup */
       }
     try {
-      linkApiTypes(el, resolveApiLink);
+      applyPopupLinks(info, el);
     } catch {
       /* links are best-effort */
     }
@@ -445,7 +488,6 @@ export const loadHighlighter = async (): Promise<void> => {
     });
   }
   hoverDocLinks = await runServer(docLinksByLocation());
-  await loadApiLinks();
   await loadSourceLinks();
 };
 

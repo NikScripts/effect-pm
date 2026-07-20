@@ -83,6 +83,9 @@ export const loadSourceLinks = async (): Promise<void> => {
   loaded = true;
 };
 
+/** The loaded location entries ([] before {@link loadSourceLinks}) — the shared SymbolIndex feed. */
+export const symbolIndexEntries = (): ReadonlyArray<SymbolIndex.Entry> => locationEntries;
+
 // The package a repo-relative source file belongs to (its dir, repo-relative; "." = effect-pm).
 // Undefined for files outside the documented trees — no links rather than a wrong program.
 const packageDirOf = (relFile: string): string | undefined => {

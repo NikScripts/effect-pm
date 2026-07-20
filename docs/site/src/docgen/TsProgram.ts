@@ -52,6 +52,21 @@ export interface Options {
 }
 
 /**
+ * Wrap an EXISTING program — e.g. a language service's, whose lifecycle the caller manages — as a
+ * {@link TsProgram}, so the docgen services can run over it. Provide with
+ * `Layer.succeed(TsProgram)(fromProgram(program))`.
+ *
+ * @category constructors
+ * @since 1.0.0
+ */
+export const fromProgram = (program: ts.Program): TsProgram => ({
+  [TypeId]: TypeId,
+  checker: program.getTypeChecker(),
+  sourceFile: (fileName) => Option.fromNullishOr(program.getSourceFile(fileName)),
+  sourceFiles: program.getSourceFiles(),
+});
+
+/**
  * A {@link TsProgram} built from entry files + compiler options. Building the program is synchronous
  * but heavy — provide the layer once and share it across the run.
  *
@@ -59,13 +74,6 @@ export interface Options {
  * @since 1.0.0
  */
 export const layer = (options: Options): Layer.Layer<TsProgram> =>
-  Layer.sync(TsProgram)(() => {
-    const program = ts.createProgram([...options.entries], options.compilerOptions);
-    const checker = program.getTypeChecker();
-    return {
-      [TypeId]: TypeId,
-      checker,
-      sourceFile: (fileName) => Option.fromNullishOr(program.getSourceFile(fileName)),
-      sourceFiles: program.getSourceFiles(),
-    };
-  });
+  Layer.sync(TsProgram)(() =>
+    fromProgram(ts.createProgram([...options.entries], options.compilerOptions))
+  );

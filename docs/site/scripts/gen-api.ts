@@ -2,7 +2,7 @@
 // (TsProgram + Extractor.package: compiler-resolved signatures, module walk, {@link} second pass).
 // This IS the Phase 5 cutover of the D4 bridge (gen-api-next.ts): same writer, byte-identical
 // output, prototype extractor deleted. Writes docs/site/api-data/ (one file per symbol +
-// per-module summaries + index/paths/links/doclinks sidecars).
+// per-module summaries + index/paths/doclinks/locations sidecars).
 //
 //   tsx scripts/gen-api.ts [pkgSlug ...]     (no args = effect-pm + every documented effect dep)
 
@@ -306,7 +306,6 @@ const program = Effect.gen(function* () {
     modules: Array<{ slug: string; entry: string; count: number }>;
   }> = [];
   const paths: Array<readonly [string, string, string]> = [];
-  const links: Array<{ name: string; qualifiedName: string; url: string }> = [];
   const doclinks: Record<string, Record<string, string>> = {};
   // location → url, for the render-time SymbolIndex (compiler source links). Keyed by file#line
   // with the LAST write winning — the writer sees symbols in extraction order, so this reproduces
@@ -338,7 +337,6 @@ const program = Effect.gen(function* () {
         modules.push({ slug: nsSlug, entry: e.entry, count: e.symbols.length });
         for (const s of e.symbols) {
           paths.push([spec.slug, nsSlug, s.name]);
-          links.push({ name: s.name, qualifiedName: s.qualifiedName, url: s.url });
           if (Object.keys(s.docLinks).length > 0) {
             doclinks[`${s.source.file}:${s.source.line}`] = s.docLinks;
           }
@@ -357,7 +355,6 @@ const program = Effect.gen(function* () {
 
   yield* writeJson(nodePath.join(dataDir, "index.json"), { packages: pkgInfos });
   yield* writeJson(nodePath.join(dataDir, "paths.json"), { symbols: paths });
-  yield* writeJson(nodePath.join(dataDir, "links.json"), { symbols: links });
   yield* writeJson(nodePath.join(dataDir, "meta.json"), { repoBaseUrl });
   yield* writeJson(nodePath.join(dataDir, "doclinks.json"), doclinks);
   yield* writeJson(nodePath.join(dataDir, "locations.json"), {

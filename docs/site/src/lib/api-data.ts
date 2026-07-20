@@ -63,12 +63,6 @@ const ModuleSummaryS = Schema.Struct({
   entry: Schema.String,
   symbols: Schema.Array(ApiSymbolRowS),
 });
-const LinkSymbolS = Schema.Struct({
-  name: Schema.String,
-  qualifiedName: Schema.String,
-  url: Schema.String,
-});
-const LinksS = Schema.Struct({ symbols: Schema.Array(LinkSymbolS) });
 const PathsS = Schema.Struct({
   symbols: Schema.Array(Schema.Tuple([Schema.String, Schema.String, Schema.String])),
 });
@@ -88,7 +82,6 @@ export interface ApiSymbolRow extends Schema.Schema.Type<typeof ApiSymbolRowS> {
 export interface ModuleInfo extends Schema.Schema.Type<typeof ModuleInfoS> {}
 export interface PackageInfo extends Schema.Schema.Type<typeof PackageInfoS> {}
 export interface ModuleSummary extends Schema.Schema.Type<typeof ModuleSummaryS> {}
-export interface LinkSymbol extends Schema.Schema.Type<typeof LinkSymbolS> {}
 export interface SymbolLocation extends Schema.Schema.Type<typeof SymbolLocationS> {}
 
 // Read + JSON-decode a data file through effect/FileSystem; undefined when it's missing/malformed.
@@ -135,13 +128,6 @@ export const symbolPaths = (): Effect.Effect<
   never,
   FileSystem.FileSystem
 > => readJson("paths.json", PathsS).pipe(Effect.map((p) => p?.symbols ?? []));
-
-// The build-only global index used to resolve doc links (name/qualifiedName -> url).
-export const linkSymbols = (): Effect.Effect<
-  ReadonlyArray<LinkSymbol>,
-  never,
-  FileSystem.FileSystem
-> => readJson("links.json", LinksS).pipe(Effect.map((l) => l?.symbols ?? []));
 
 // Every documented declaration's location → its doc URL (deduped per line by the writer) — the
 // render-time SymbolIndex for compiler source links (src/lib/api-source-links.ts).
