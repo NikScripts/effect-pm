@@ -6,7 +6,7 @@
  * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
- * - {@link listen} / {@link httpServer} / {@link wsServer} / {@link ipcServer} — serve catalogs
+ * - {@link listen} / {@link listenLocal} / {@link httpServer} / {@link wsServer} / {@link ipcServer} — serve catalogs (incl. nameless `listen(Tag, impl)` / `listen([serve…])`)
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
  * - {@link clientsFor} — bundle clients for a catalog node's `ROut`
  *
@@ -32,6 +32,7 @@ export type {
   CatalogNode,
   DialableTarget,
   ListenOptions,
+  NamelessListenOptions,
 } from "./internal/nodeCore"
 export {
   Prototype,

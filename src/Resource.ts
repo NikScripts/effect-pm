@@ -493,24 +493,45 @@ const setPath = (
   node[last] = val;
 };
 
+/** Implementation of {@link local}'s callable form (`local<T>()`); the public value is the branded
+ *  {@link local} below (also usable **bare**). @internal */
+const localFn = <T>(defaultValue?: T): LocalMethod<T> => ({
+  [LocalMethodTypeId]: LocalMethodTypeId,
+  ...(defaultValue !== undefined ? { value: defaultValue } : {}),
+});
+
+/** Brand marking the **bare** {@link local} value (used without `()`): a valid {@link LocalMethod}
+ *  whose element type is supplied by the service interface position in a {@link fromService} contract.
+ *  Distinct from a called `local<T>()` so the contract can reject a bare local that has no interface
+ *  type to resolve from. @internal */
+const bareLocalSym: unique symbol = Symbol.for(
+  "~nikscripts/effect-pm/Resource/bareLocal",
+);
+
 /**
- * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
- * not in the wire contract; usable only when the local layer is provided.
- *
- * Pass an optional `default` so the call is not an empty `()` — it documents or seeds the
- * local value without changing the wire contract.
- *
- * ```ts
- * subscribe: Resource.local<(cb: (x: number) => void) => Effect.Effect<void>>(
- *   () => () => Effect.void,
- * ),
- * ```
+ * The **bare** {@link local} marker — `Resource.local` used *without* `()`. Valid only inside a
+ * {@link fromService} contract, where the service interface at that key supplies its type. Using it
+ * where no type can be resolved is a compile error (see {@link fromService}).
  *
  * @public
  */
-export const local = <T>(defaultValue?: T): LocalMethod<T> => ({
+export interface BareLocal {
+  readonly [LocalMethodTypeId]: typeof LocalMethodTypeId;
+  readonly [bareLocalSym]: true;
+}
+
+/**
+ * Declare a **local-only** member (see {@link LocalMethod}). Two forms:
+ *
+ * - `Resource.local<T>()` — the element type `T` given explicitly (for a plain {@link Tag} contract).
+ * - `Resource.local` — **bare**, no `()`; its type is taken from the service interface in a
+ *   {@link fromService} contract. Rejected where no interface type is available.
+ *
+ * @public
+ */
+export const local: typeof localFn & BareLocal = Object.assign(localFn, {
   [LocalMethodTypeId]: LocalMethodTypeId,
-  ...(defaultValue !== undefined ? { value: defaultValue } : {}),
+  [bareLocalSym]: true as const,
 });
 
 /**
@@ -1473,7 +1494,9 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
 // keeps the result identical for every concrete spec while letting it reduce under a generic
 // spec too.
 export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
-  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+  readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
+    ? InjectLocal<M, Self> // fromService local: interface-shaped, gains `Local`
+    : S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
     : S[K] extends { readonly _tag: "constant" }
       ? SuccessOf<AsMethod<S[K]>>
@@ -1485,6 +1508,124 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
             ? ServiceOf<S[K], Self> // nested group → nested service
             : never;
 }>;
+
+// ── fromService: an existing service interface as the source of truth ────────────────────────────
+
+/**
+ * Inject the {@link Local} capability into a service member's requirement channel — how a
+ * {@link fromService} local member surfaces. An `Effect`/`Stream`-returning member (or a function to
+ * one) keeps its shape and gains `Local<Self>` in its requirements; any other value is obtained via
+ * `Effect<T, never, Local<Self>>`. Regular (local) layers satisfy `Local`; a client layer can't, so
+ * calling a local on a client is a compile error.
+ *
+ * @public
+ */
+export type InjectLocal<T, Self> = T extends Effect.Effect<infer A, infer E, infer R>
+  ? Effect.Effect<A, E, R | Local<Self>>
+  : T extends Stream.Stream<infer A, infer E, infer R>
+    ? Stream.Stream<A, E, R | Local<Self>>
+    : T extends (...args: infer Args) => Effect.Effect<infer A, infer E, infer R>
+      ? (...args: Args) => Effect.Effect<A, E, R | Local<Self>>
+      : T extends (...args: infer Args) => Stream.Stream<infer A, infer E, infer R>
+        ? (...args: Args) => Stream.Stream<A, E, R | Local<Self>>
+        : Effect.Effect<T, never, Local<Self>>;
+
+/** @internal */
+declare const localNeedsTypeSym: unique symbol;
+
+/** The error surface a bare {@link local} resolves to when the service interface has no member at that
+ *  key — a required, unsatisfiable field, so the whole contract argument fails to type-check at the
+ *  call. @public */
+export interface LocalNeedsType<K extends PropertyKey> {
+  readonly [localNeedsTypeSym]: `Resource.local at '${K & string}' has no type — add '${K &
+    string}' to the service interface, or use local<T>()`;
+}
+
+/**
+ * Validate a {@link fromService} contract `C` against its service interface `I`: a **bare**
+ * {@link local} at a key absent from `I` (or with no `I` at all) becomes a {@link LocalNeedsType}
+ * error the user's value can't satisfy, so the contract argument is rejected **at the call site**.
+ * Every other entry (a wired method, an explicit `local<T>()`, a nested group) passes through.
+ *
+ * @public
+ */
+export type Validate<C, I> = {
+  readonly [K in keyof C]: C[K] extends BareLocal
+    ? K extends keyof I
+      ? C[K]
+      : LocalNeedsType<K>
+    : C[K] extends Spec
+      ? K extends keyof I
+        ? Validate<C[K], I[K]>
+        : LocalNeedsType<K>
+      : C[K] extends { readonly kind: MethodKind } // a wired method
+        ? K extends keyof I
+          ? WireHonors<SuccessOf<AsMethod<C[K]>>, IfaceSuccess<I[K]>> extends true
+            ? C[K]
+            : WireMismatch<K>
+          : C[K] // wired member absent from the interface — allowed (interface may be a subset view)
+        : C[K];
+};
+
+/** The success (element) type of a service interface member — the `A` of its returned `Effect`/`Stream`
+ *  (through a function), else the member itself. Used to check a wired contract member's schema against
+ *  the interface. @internal */
+type IfaceSuccess<T> = T extends (...args: any) => infer R
+  ? R extends Effect.Effect<infer A, any, any>
+    ? A
+    : R extends Stream.Stream<infer A, any, any>
+      ? A
+      : R
+  : T extends Effect.Effect<infer A, any, any>
+    ? A
+    : T extends Stream.Stream<infer A, any, any>
+      ? A
+      : T;
+
+/** Does a wired member's success `W` honor the interface's success promise `I` (is it assignable to
+ *  it)? Tuple-wrapped so neither side distributes. A schema subtype (e.g. `Array` for a `ReadonlyArray`
+ *  interface member) still honors it; a genuine mismatch (`string` for `number`) does not. @internal */
+type WireHonors<W, I> = [W] extends [I] ? true : false;
+
+/** @internal */
+declare const wireMismatchSym: unique symbol;
+
+/** The error surface a wired {@link fromService} member resolves to when its success schema disagrees
+ *  with the service interface at that key — rejected at the call, naming the key. @public */
+export interface WireMismatch<K extends PropertyKey> {
+  readonly [wireMismatchSym]: `Resource.fromService: wired member '${K &
+    string}' — its success type disagrees with the service interface`;
+}
+
+/** @internal */
+declare const fromLocalSym: unique symbol;
+
+/**
+ * A {@link fromService} local member as it sits in the **resolved** spec: a {@link LocalMethod} that
+ * additionally carries the service interface's member type `M`, so {@link ServiceOf} surfaces it via
+ * {@link InjectLocal} (its own `Effect`/function + `Local`) instead of the value-obtain
+ * {@link LocalEffect} a plain `local<T>()` gets. Type-only; at runtime it's an ordinary bare
+ * {@link local}. @public
+ */
+export interface FromLocalMethod<M> extends LocalMethod<M> {
+  readonly [fromLocalSym]: M;
+}
+
+/**
+ * Resolve a {@link fromService} contract `C` into a runnable {@link Spec}: each **bare** {@link local}
+ * becomes a {@link FromLocalMethod} carrying the service interface's type at that key, so the impl
+ * ({@link ImplOf}) and service ({@link ServiceOf}) both derive from `I`. Wired methods and explicit
+ * `local<T>()`s pass through unchanged. @public
+ */
+export type ResolveLocals<C, I> = {
+  readonly [K in keyof C]: C[K] extends BareLocal
+    ? FromLocalMethod<K extends keyof I ? I[K] : unknown>
+    : C[K] extends Spec
+      ? K extends keyof I
+        ? ResolveLocals<C[K], I[K]>
+        : C[K]
+      : C[K];
+};
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). @internal */
 type WireServiceOf<S extends Spec> = {
@@ -1535,7 +1676,9 @@ type PeerServiceOf<S extends Spec> = {
  * @public
  */
 export type ImplOf<S extends Spec> = {
-  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+  readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
+    ? M // fromService local: the impl provides the interface member itself
+    : S[K] extends LocalMethod<infer T>
     ? T
     : S[K] extends { readonly _tag: "ref" }
       ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
@@ -1710,6 +1853,12 @@ export const groupSym: unique symbol = Symbol.for(
 /** Where the per-resource local-capability key is stowed on a Tag. @internal */
 export const localCapSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/localCap",
+);
+/** Marks a tag built by {@link fromService} — its local members are interface-shaped (the impl's own
+ *  `Effect`/function, requiring {@link Local}), so {@link buildLocalContext} passes them through with
+ *  the cap rather than wrapping a raw value. Absent on standard tags. @internal */
+export const fromServiceSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/fromService",
 );
 /** Where a contract's **kind** (its canonical id, e.g. `@nikscripts/effect-pm/QueueResource`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
@@ -2368,11 +2517,18 @@ const claimGroupId = (groupId: string): void => {
 const buildInstanceTag = <Self, S extends Spec>(
   groupId: string,
   key: string,
-  spec: S,
+  // Runtime spec value — typed loosely as `Spec` so a caller (e.g. `fromService`) can present a
+  // *resolved* `S` at the type level while passing the raw contract value; `S` still flows precisely
+  // via `group` (`RpcGroupOf<S>`) and the explicit type args. Every caller passes `S` explicitly.
+  spec: Spec,
   group: RpcGroupOf<S>,
   description: string | undefined,
   node: NodeKey<unknown> | undefined,
   kindOverride: string | undefined,
+  // `fromService` marks its tags so `buildLocalContext` uses interface-shaped local semantics
+  // (pass the impl's own effect/function through, requiring `Local`) rather than the standard
+  // `local<T>()` obtain-a-value wrapping.
+  fromServiceMarker = false,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateResourceKey({ key });
@@ -2408,6 +2564,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [readinessSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
+    ...(fromServiceMarker ? { [fromServiceSym]: true as const } : {}),
   });
 };
 
@@ -2481,6 +2638,58 @@ const makeTag = <Self>() => {
       options?.description,
       options?.node,
       options?.kind,
+    );
+  }
+  return build;
+};
+
+/**
+ * Build a resource tag from an existing **service interface** as the single source of truth. The
+ * type parameter `I` is the interface; the contract gives a schema only for the members you want on
+ * the wire — every other interface member becomes a **local** (surfaced via {@link InjectLocal},
+ * carrying `Local<I>`). One merged handle, identical whether you hold the local layer or a client;
+ * the only difference is that a client can't call the locals (a compile error — unsatisfied
+ * `Local`).
+ *
+ * Locals are written **bare** — `Resource.local`, no `()` — and take their type from `I`. A bare
+ * local with no matching interface member is rejected at the call (see {@link Validate}).
+ *
+ * Two type parameters, like {@link Tag}: `Self` (the class — the tag's nominal identity, `Local`
+ * brand) and `I` (the service interface — a **standalone** type; passing the class itself as `I`
+ * would be a circular base reference).
+ *
+ * ```ts
+ * interface CounterShape {
+ *   readonly current: Effect.Effect<number>;            // local (no schema)
+ *   readonly add: (by: number) => Effect.Effect<number>; // wired
+ * }
+ * class Counter extends Resource.fromService<Counter, CounterShape>()("counter", {
+ *   current: Resource.local,
+ *   add: Resource.effectFn(Schema.Number, Schema.Number),
+ * }) {}
+ * ```
+ *
+ * @public
+ */
+export const fromService = <Self, I>() => {
+  function build<const C extends Spec>(
+    key: string,
+    contract: C & Validate<C, I>,
+    options?: { readonly description?: string; readonly kind?: string },
+  ): ResourceTag<Self, ResolveLocals<C, I>> {
+    // single resource: key doubles as the group id (its wire prefix). The contract *value* is the
+    // runtime spec (bare `local`s carry the LocalMethod brand); `S` is presented resolved at the type
+    // level so `ImplOf`/`FromServiceOf` derive local types from the interface `I`.
+    claimGroupId(key);
+    return buildInstanceTag<Self, ResolveLocals<C, I>>(
+      key,
+      key,
+      contract,
+      buildRpcGroup(key, flattenSpec(contract)),
+      options?.description,
+      undefined,
+      options?.kind,
+      true,
     );
   }
   return build;
@@ -2652,12 +2861,17 @@ const buildLocalContext = <Self>(
       Local<Self>,
       { readonly granted: true }
     >;
+    readonly [fromServiceSym]?: true;
   },
   builtImpl: Record<string, unknown>,
 ): Effect.Effect<Context.Context<unknown>> =>
   Effect.gen(function* () {
     const cap = tag[localCapSym];
     const spec = tag[specSym];
+    // `fromService` locals are interface-shaped: the impl provides the member's own `Effect` /
+    // `Stream` / function, which passes through (its `Local` requirement is satisfied by the granted
+    // cap in context). A standard `local<T>()` always obtains a raw value, so it's wrapped.
+    const fromServiceTag = tag[fromServiceSym] === true;
     const members = flattenImpl(builtImpl, spec);
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
@@ -2665,7 +2879,17 @@ const buildLocalContext = <Self>(
       // value); constant fields are resolved once here into a plain value; ref fields and other wire
       // members (their `Subscribable` / `Effect` / `Stream` / function) pass through unchanged.
       if (isLocalMethod(m)) {
-        setPath(service, key, Effect.as(cap, members[key]));
+        const member = members[key];
+        const interfaceShaped =
+          fromServiceTag &&
+          (Effect.isEffect(member) ||
+            Stream.isStream(member) ||
+            typeof member === "function");
+        setPath(
+          service,
+          key,
+          interfaceShaped ? member : Effect.as(cap, member),
+        );
       } else if (isConstantMethod(m)) {
         setPath(service, key, yield* (members[key] as Effect.Effect<unknown>));
       } else {

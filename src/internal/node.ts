@@ -31,6 +31,7 @@ import {
   InvalidHttpTarget,
   ListenNode,
   ListenOptions,
+  NamelessListenOptions,
   NodeKey,
   ProtocolKind,
   Tag,
@@ -479,22 +480,69 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  * Http / WebSocket still need the caller to `Layer.provide(NodeHttpServer.layer(...))` — bind port
  * is not `node.url` (dial address). Ipc uses `node.path` for bind and dial.
  *
+ * **Nameless** — pass only the serve list: mints an address-less node, claims at Lookup
+ * (D7), binds ipc, and bootstraps default Lookup (same machine). Callers dial with
+ * {@link Resource.clientLocal} (or directory/`lookupClient`).
+ *
  * ```ts
  * import type { Jobs, Emails } from "@app/contracts"
  * class Worker extends Tag<Worker, Jobs | Emails>("app/Worker", {
  *   path: "/tmp/worker.sock",
  * }) {}
  *
- * const live = Resource.listen(Worker, [
+ * const live = Node.listen(Worker, [
  *   Resource.serve(Jobs, jobsImpl),
  *   Resource.serve(Emails, emailsImpl),
  * ]).pipe(Layer.provide(Lookup.clientDefaultLocal()))
+ *
+ * // nameless — one resource (skips Resource.serve)
+ * const anon = Node.listen(Jobs, { jobs: Effect.succeed(7) })
+ *
+ * // nameless — several resources (still Resource.serve)
+ * const pair = Node.listen([
+ *   Resource.serve(Jobs, jobsImpl),
+ *   Resource.serve(Emails, emailsImpl),
+ * ])
  * ```
  *
  * Escape hatch without a catalog: keep calling `httpServer` / `wsServer` / `ipcServer` directly.
  *
  * @public
  */
+export function listen<
+  Self,
+  S extends Resource.Spec,
+  R = never,
+>(
+  tag: Resource.ResourceTag<Self, S>,
+  impl:
+    | Resource.ImplOf<S>
+    | Resource.BuiltResource<S, R>
+    | Effect.Effect<
+        Resource.ImplOf<S> | Resource.BuiltResource<S, R>,
+        never,
+        R
+      >,
+  options?: NamelessListenOptions,
+): // Same success as `listen(Resource.serve(tag, impl))` — avoid naming
+  // `HandlerContextOf` here (TS2589 under stock tsc when stacked on listen overloads).
+  Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
+export function listen<Serve extends Layer.Layer<never, any, never>>(
+  serve: Serve,
+  options?: NamelessListenOptions,
+): Layer.Layer<
+  Layer.Success<Serve> | ListenNode,
+  never,
+  Layer.Services<Serve>
+>;
+export function listen<Serves extends ServeLayerList>(
+  serves: Serves,
+  options?: NamelessListenOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]> | ListenNode,
+  never,
+  Layer.Services<Serves[number]>
+>;
 export function listen<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
   Serves extends ServeLayerList,
@@ -508,10 +556,45 @@ export function listen<
   Layer.Services<Serves[number]>
 >;
 export function listen(
-  node: AnyNode,
-  serves: Layer.Layer<never, any, never> | ServeLayerList,
-  options?: ListenOptions,
+  nodeOrServesOrTag:
+    | AnyNode
+    | Layer.Layer<never, any, never>
+    | ServeLayerList
+    | Resource.PipeableTag,
+  servesOrOptionsOrImpl?:
+    | Layer.Layer<never, any, never>
+    | ServeLayerList
+    | NamelessListenOptions
+    | ListenOptions
+    | object,
+  options?: ListenOptions | NamelessListenOptions,
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
+  // Nameless: `listen(Tag, impl, options?)` — wrap with Resource.serve.
+  // Erase serve's ResourceTag generics here — naming them reopens TS2589.
+  if (isResourceTagArg(nodeOrServesOrTag)) {
+    const serveErased = Resource.serve as unknown as (
+      tag: Resource.PipeableTag,
+      impl: unknown,
+    ) => Layer.Layer<never, never, never>;
+    return namelessListen(
+      [serveErased(nodeOrServesOrTag, servesOrOptionsOrImpl)] as ServeLayerList,
+      options as NamelessListenOptions | undefined,
+    );
+  }
+  // Nameless: `listen([serve…], options?)` / `listen(serve, options?)`
+  if (isServeArg(nodeOrServesOrTag)) {
+    const list = (
+      Array.isArray(nodeOrServesOrTag) ? nodeOrServesOrTag : [nodeOrServesOrTag]
+    ) as ServeLayerList;
+    return namelessListen(
+      list,
+      servesOrOptionsOrImpl as NamelessListenOptions | undefined,
+    );
+  }
+  const node = nodeOrServesOrTag;
+  const serves = servesOrOptionsOrImpl as
+    | Layer.Layer<never, any, never>
+    | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
@@ -586,6 +669,53 @@ export function listen(
   }
   return withListenNode(node, listenTransport(node, list, options));
 }
+
+/** True when the first `listen` arg is a {@link Resource.Tag} (has {@link Resource.specSym}). @internal */
+const isResourceTagArg = (u: unknown): u is Resource.PipeableTag =>
+  (typeof u === "object" || typeof u === "function") &&
+  u !== null &&
+  Resource.specSym in u;
+
+/** True when the first `listen` arg is a serve layer or non-empty serve list. @internal */
+const isServeArg = (
+  u: unknown,
+): u is Layer.Layer<never, any, never> | ServeLayerList => {
+  if (Layer.isLayer(u)) return true;
+  return (
+    Array.isArray(u) &&
+    u.length > 0 &&
+    Layer.isLayer(u[0])
+  );
+};
+
+/**
+ * Mint an address-less anonymous Node, run D7 listen (claim + ipc bind), and
+ * bootstrap default Lookup — the no-`Node.Tag` same-machine path.
+ *
+ * @internal
+ */
+const namelessListen = (
+  list: ServeLayerList,
+  options: NamelessListenOptions | undefined,
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> => {
+  const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {};
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      const suffix = yield* uniqueInstanceSuffix();
+      const key = `effect-pm/anonymous#${suffix}`;
+      const node = Tag(key);
+      const Lookup = yield* Effect.promise(() => import("../Lookup"));
+      return listen(node, list, listenOptions).pipe(
+        Layer.provide(
+          Lookup.bootstrapDefaultLocal({
+            ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+            ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
+          }),
+        ),
+      );
+    }),
+  ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+};
 
 /** True when `node` was built with {@link Node}.Prototype. @internal */
 const isPrototypeNode = (node: unknown): boolean =>

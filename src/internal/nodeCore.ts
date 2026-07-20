@@ -155,6 +155,17 @@ export type ListenOptions = {
 };
 
 /**
+ * Options for nameless {@link listen}`([serve…])` — {@link ListenOptions} plus Lookup
+ * bootstrap knobs (same as {@link Node.listenLocal}).
+ *
+ * @public
+ */
+export type NamelessListenOptions = ListenOptions & {
+  readonly lookupPath?: string;
+  readonly unlinkLookup?: boolean;
+};
+
+/**
  * {@link resolveHttpTarget} / a positional `Node.Tag(name, badString)` got a string that is
  * neither a port (`":3009"`), a port number, nor an `http(s)://` url. Surfaces on the
  * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
