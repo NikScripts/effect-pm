@@ -1097,3 +1097,26 @@ a.api-src:hover { color: var(--primary); }
   .twoslash-popup-code.tw-copied::after,
   .twoslash-popup-docs.tw-copied::after { animation: none; }
 }
+
+/* --- search (typeahead panel + full results page) --- */
+.search-panel { margin: 0.4rem 0 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
+.search-section { padding: 0.3rem 0 0.4rem; }
+.search-panel .search-section + .search-section { border-top: 1px solid var(--border); }
+.search-section-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0.35rem 0.85rem 0.15rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; }
+.search-section-head a { font-size: 0.72rem; text-transform: none; letter-spacing: 0; }
+.search-hit { display: block; padding: 0.32rem 0.85rem; text-decoration: none; color: inherit; border-radius: 6px; }
+.search-hit:hover, .search-hit:focus-visible { background: color-mix(in oklab, var(--primary) 10%, transparent); }
+.search-hit-title { display: flex; align-items: center; gap: 0.45rem; font-size: 0.86rem; font-weight: 550; font-family: var(--mono, ui-monospace, monospace); }
+.search-hit-ctx { font-size: 0.7rem; opacity: 0.6; font-family: inherit; font-weight: normal; }
+.search-hit-sum { display: block; font-size: 0.76rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-all { display: block; padding: 0.5rem 0.85rem; border-top: 1px solid var(--border); font-size: 0.8rem; }
+.search-note { padding: 0.5rem 0.2rem; font-size: 0.85rem; opacity: 0.75; }
+.search-page .menu-search { width: 100%; margin: 0.6rem 0 1rem; }
+/* desktop sidebar entry: tighter input, hits ellipsize into the narrow column */
+.sidebar-search { margin-bottom: 0.9rem; }
+.sidebar-search .menu-search { padding: 0.45rem 0.7rem; font-size: 0.85rem; }
+.sidebar-search .search-hit { padding: 0.28rem 0.6rem; }
+.sidebar-search .search-hit-title { display: block; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-search .search-hit-title .api-kind { margin-left: 0.35rem; }
+.search-page .search-section { margin-bottom: 1.2rem; }
+.search-page .search-hit-sum { white-space: normal; }

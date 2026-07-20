@@ -26,7 +26,8 @@ type Page =
 | ({ path: '/api/effect-pm/[module]/[symbol]' } & GetConfigResponse<typeof File_ApiEffectPmModuleSymbol_getConfig>)
 | ({ path: '/api' } & GetConfigResponse<typeof File_ApiIndex_getConfig>)
 | ({ path: '/docs/[chapter]' } & GetConfigResponse<typeof File_DocsChapter_getConfig>)
-| ({ path: '/' } & GetConfigResponse<typeof File_Index_getConfig>);
+| ({ path: '/' } & GetConfigResponse<typeof File_Index_getConfig>)
+| { path: '/search'; render: 'static' };
 
 // prettier-ignore
 declare module 'waku/router' {

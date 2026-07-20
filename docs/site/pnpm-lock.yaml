@@ -35,6 +35,9 @@ importers:
       mdast-util-to-hast:
         specifier: ^13.2.1
         version: 13.2.1
+      minisearch:
+        specifier: ^7.2.0
+        version: 7.2.0
       radix-ui:
         specifier: ^1.6.2
         version: 1.6.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2082,6 +2085,9 @@ packages:
         optional: true
       uglify-js:
         optional: true
+
+  minisearch@7.2.0:
+    resolution: {integrity: sha512-dqT2XBYUOZOiC5t2HRnwADjhNS2cecp9u+TJRiJ1Qp/f5qjkeT5APcGPjHw+bz89Ms8Jp+cG4AlE+QZ/QnDglg==}
 
   ms@2.0.0:
     resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
@@ -4581,6 +4587,8 @@ snapshots:
       webpack: 5.108.4(esbuild@0.28.1)
     optionalDependencies:
       esbuild: 0.28.1
+
+  minisearch@7.2.0: {}
 
   ms@2.0.0: {}
 

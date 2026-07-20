@@ -1,0 +1,93 @@
+import { chromium, devices } from "playwright";
+
+const base = "http://localhost:5190";
+const fail = (msg) => {
+  console.error("FAIL:", msg);
+  process.exit(1);
+};
+
+const browser = await chromium.launch();
+
+// --- Desktop: typeahead panel in the nav ---
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}/`, { waitUntil: "networkidle" });
+
+  const input = page.locator('.sidebar-search input[type="search"]');
+  await input.waitFor({ timeout: 15000 });
+  await input.fill("subscribable");
+
+  const panel = page.locator(".search-panel");
+  await panel.waitFor({ timeout: 15000 });
+  const heads = await panel.locator(".search-section-head span").allTextContents();
+  if (!heads.includes("API Reference")) fail(`typeahead sections: ${heads.join(", ")}`);
+  const firstHit = await panel.locator(".search-hit .search-hit-title").first().textContent();
+  if (!firstHit.includes("Resource.Subscribable"))
+    fail(`typeahead top hit for subscribable: ${firstHit}`);
+  const href = await panel.locator(".search-hit").first().getAttribute("href");
+  console.log("typeahead top:", firstHit.trim(), "->", href);
+
+  // Enter navigates to the full page
+  await input.press("Enter");
+  await page.waitForURL("**/search?q=subscribable", { timeout: 15000 });
+  await page.locator(".search-page .search-section").first().waitFor({ timeout: 15000 });
+  const pageTop = await page
+    .locator(".search-page .search-hit .search-hit-title")
+    .first()
+    .textContent();
+  if (!pageTop.includes("Resource.Subscribable")) fail(`/search top hit: ${pageTop}`);
+  console.log("full page top:", pageTop.trim());
+
+  // "show all" narrows to one section with type param
+  await page.locator('.search-section-head a[href*="type=api"]').first().click();
+  await page.waitForURL("**/search?q=subscribable&type=api", { timeout: 15000 });
+  await page.locator(".search-page .search-hit").first().waitFor({ timeout: 15000 });
+  const apiOnly = await page.locator(".search-page .search-section").count();
+  if (apiOnly !== 1) fail(`type=api should show 1 section, got ${apiOnly}`);
+  console.log("type=api narrowed OK");
+
+  if (errors.length > 0) fail(`desktop page errors: ${errors.join(" | ")}`);
+  await page.close();
+}
+
+// --- Direct URL load (shareable link) ---
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}/search?q=ref`, { waitUntil: "networkidle" });
+  await page.locator(".search-page .search-hit").first().waitFor({ timeout: 15000 });
+  const top = await page
+    .locator(".search-page .search-hit .search-hit-title")
+    .first()
+    .textContent();
+  if (!top.includes("Resource.ref")) fail(`/search?q=ref top: ${top}`);
+  console.log("direct /search?q=ref top:", top.trim());
+  const glossary = await page.locator(".search-section-head span").allTextContents();
+  console.log("sections on ref page:", glossary.join(", "));
+  if (errors.length > 0) fail(`direct-load page errors: ${errors.join(" | ")}`);
+  await page.close();
+}
+
+// --- iPhone: typeahead usable on touch ---
+{
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}/`, { waitUntil: "networkidle" });
+  await page.locator('label[aria-label="Search"]').tap();
+  const input = page.locator('input[placeholder="Search docs and API…"]').first();
+  await input.waitFor({ timeout: 15000 });
+  await input.fill("queue");
+  await page.locator(".search-panel .search-hit").first().waitFor({ timeout: 15000 });
+  const hit = await page.locator(".search-panel .search-hit-title").first().textContent();
+  console.log("mobile typeahead top for queue:", hit.trim());
+  if (errors.length > 0) fail(`mobile page errors: ${errors.join(" | ")}`);
+  await ctx.close();
+}
+
+await browser.close();
+console.log("SEARCH SMOKE PASS");

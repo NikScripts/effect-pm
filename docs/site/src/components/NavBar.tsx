@@ -13,24 +13,55 @@
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
 import { GroupedNav } from "./GroupedNav.js";
+import { SearchPanel } from "../islands/SearchPanel.js";
 
 const MENU_ID = "menu-toggle";
 
 const Icon = {
   search: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
       <circle cx="11" cy="11" r="7" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   ),
   menu: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
     </svg>
   ),
   close: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
 };
@@ -72,9 +103,17 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
 
   return (
     <>
-      <input ref={cbRef} type="checkbox" id={MENU_ID} className="menu-cb" aria-label="Toggle navigation menu" />
+      <input
+        ref={cbRef}
+        type="checkbox"
+        id={MENU_ID}
+        className="menu-cb"
+        aria-label="Toggle navigation menu"
+      />
       <header className="topbar">
-        <a className="brand" href="/">effect-pm</a>
+        <a className="brand" href="/">
+          effect-pm
+        </a>
         <div className="topbar-actions">
           <label htmlFor={MENU_ID} className="icon-btn" aria-label="Search">
             {Icon.search}
@@ -94,9 +133,17 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter chapters…"
-            aria-label="Filter chapters"
+            onKeyDown={(e) => {
+              // Enter → the full results page; the panel below is the small preview.
+              if (e.key === "Enter" && query.trim() !== "") {
+                close();
+                window.location.assign(`/search?q=${encodeURIComponent(query.trim())}`);
+              }
+            }}
+            placeholder="Search docs and API…"
+            aria-label="Search docs and API"
           />
+          <SearchPanel query={query} onNavigate={close} />
           <GroupedNav groups={groups} query={query} onNavigate={close} />
         </div>
       </div>
