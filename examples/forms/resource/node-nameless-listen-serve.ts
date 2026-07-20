@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/node-nameless-listen-serve
  *
- * Nameless listen — serve. No `Node.Tag`.
+ * Nameless `Node.unix([serve…])` — serve. No `Node.Tag`.
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-nameless-listen-serve.ts
@@ -21,7 +21,7 @@ class Emails extends Resource.Tag<Emails>()("forms/nameless/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-const live = Node.listen([
+const live = Node.unix([
   Resource.serve(Jobs, { jobs: Effect.succeed(7) }),
   Resource.serve(Emails, { emails: Effect.succeed("ok") }),
 ])

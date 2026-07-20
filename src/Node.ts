@@ -6,7 +6,8 @@
  * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
- * - {@link listen} / {@link listenLocal} / {@link httpServer} / {@link wsServer} / {@link ipcServer} — serve catalogs (incl. `listen(Tag, impl)` when Tag carries a sole Node; nameless `listen([serve…])`)
+ * - {@link unix} — same-machine IPC listen + Lookup (prefer over {@link listen} for Unix sockets)
+ * - {@link listen} / {@link listenLocal} / {@link httpServer} / {@link wsServer} / {@link ipcServer} — serve catalogs
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
  * - {@link clientsFor} — bundle clients for a catalog node's `ROut`
  *
@@ -21,6 +22,7 @@ export {
   AddressLessClaimLost,
   ListenNode,
   ListenTagNodeRequired,
+  UnixListenRequiresIpc,
   UnaddressedNode,
   NodeUnreachable,
   InvalidHttpTarget,
@@ -38,6 +40,7 @@ export type {
 export {
   Prototype,
   listen,
+  unix,
   httpServer,
   wsServer,
   ipcServer,
@@ -50,16 +53,16 @@ export {
 export type { HttpServerOptions, IpcServerOptions } from "./internal/node"
 
 import { Layer } from "effect"
-import * as LookupMod from "./Lookup"
-import { listen } from "./internal/node"
+import { unix } from "./internal/node"
 import {
   AddressLessClaimLost,
   AnyNode,
   catalogSym,
   ListenNode,
   UnaddressedNode,
+  UnixListenRequiresIpc,
 } from "./internal/nodeCore"
-import type { ListenOptions } from "./internal/nodeCore"
+import type { NamelessListenOptions } from "./internal/nodeCore"
 
 /** Non-empty serve list — same constraint as {@link listen}. */
 type ServeLayerList = readonly [
@@ -80,14 +83,9 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
   ? Exclude<R, undefined>
   : never
 
-type ListenLocalOptions = ListenOptions & {
-  readonly lookupPath?: string
-  readonly unlinkLookup?: boolean
-}
-
 /**
- * Sugar: {@link listen} + {@link Lookup.bootstrapDefaultLocal} for same-machine demos.
- * Same catalog proof as {@link listen} — serve list must cover the node's `ROut`.
+ * Sugar: {@link unix}`(node, serves)` — IPC listen + Lookup bootstrap.
+ * Prefer {@link unix} (also covers Tag+impl and nameless forms).
  *
  * @public
  */
@@ -97,7 +95,7 @@ export function listenLocal<
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
-  options?: ListenLocalOptions,
+  options?: NamelessListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   never,
@@ -106,23 +104,20 @@ export function listenLocal<
 export function listenLocal(
   node: AnyNode,
   serves: Layer.Layer<never, any, never> | ServeLayerList,
-  options?: ListenLocalOptions,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>
+  options?: NamelessListenOptions,
+): Layer.Layer<
+  never,
+  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc,
+  unknown
+>
 export function listenLocal(
   node: AnyNode,
   serves: Layer.Layer<never, any, never> | ServeLayerList,
-  options?: ListenLocalOptions,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
-  const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {}
-  const list = (
-    Array.isArray(serves) ? serves : [serves]
-  ) as ServeLayerList
-  return listen(node, list, listenOptions).pipe(
-    Layer.provide(
-      LookupMod.bootstrapDefaultLocal({
-        ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-        ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
-      }),
-    ),
-  )
+  options?: NamelessListenOptions,
+): Layer.Layer<
+  never,
+  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc,
+  unknown
+> {
+  return unix(node, serves as ServeLayerList, options)
 }

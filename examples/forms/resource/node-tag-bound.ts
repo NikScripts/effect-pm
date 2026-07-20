@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/node-tag-bound
  *
- * Tag carries the node — `Node.listen(Jobs, impl)` + `Resource.client(Jobs)`.
+ * Tag carries the node — `Node.unix(Jobs, impl)` + `Resource.client(Jobs)`.
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-tag-bound.ts
@@ -23,7 +23,7 @@ class Jobs extends Resource.Tag<Jobs>()("forms/bound/Jobs", {
 
 const program = Effect.gen(function* () {
   const serverCtx = yield* Layer.build(
-    Node.listen(Jobs, { jobs: Effect.succeed(7) }),
+    Node.unix(Jobs, { jobs: Effect.succeed(7) }),
   )
   const clientCtx = yield* Layer.build(Resource.client(Jobs))
   const n = yield* Effect.gen(function* () {

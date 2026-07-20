@@ -536,6 +536,26 @@ export class ListenTagNodeRequired extends Data.TaggedError(
 }
 
 /**
+ * {@link unix} only speaks Unix-domain IPC. The Node (or Tag-bound Node) was Http / WebSocket
+ * — use {@link listen} for those transports.
+ *
+ * @public
+ */
+export class UnixListenRequiresIpc extends Data.TaggedError(
+  "UnixListenRequiresIpc",
+)<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.unix requires an IpcSocket Node (Unix-domain path); ` +
+      `"${this.node}" is ${this.kind}. Use Node.listen for Http / WebSocket.`
+    );
+  }
+}
+
+/**
  * A remote {@link Node} that didn't answer at its declared address — down, wrong port/url, or (for a
  * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
  * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.
