@@ -122,19 +122,25 @@ const isAbstract = (modifiers: ts.NodeArray<ts.ModifierLike> | undefined): boole
   modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword) === true;
 
 // The recursive part emitter over one synthesized (or parsed) type node. Every helper closes over
-// `walk`, so the whole family is built per call site pair (resolve, fallbackText).
+// `walk`, so the whole family is built per call site pair (resolve, fallbackText). `onRef` is
+// called once per named reference with whether it resolved — the home-retry's signal.
 const makeWalk = (
   resolve: (node: ts.Node) => Option.Option<string>,
-  fallbackText: (node: ts.Node) => string
+  fallbackText: (node: ts.Node) => string,
+  onRef?: (linked: boolean) => void
 ): ((node: ts.TypeNode) => Parts) => {
   // Resolve the whole entity name; a qualified name (`Effect.Effect`) that doesn't resolve as a
   // unit still resolves at its rightmost identifier — the symbol the reference IS.
-  const refPart = (name: ts.EntityName): Part => ({
-    text: nameText(name),
-    url: resolve(name).pipe(
+  const refPart = (name: ts.EntityName): Part => {
+    const url = resolve(name).pipe(
       Option.orElse(() => (ts.isQualifiedName(name) ? resolve(name.right) : Option.none()))
-    ),
-  });
+    );
+    onRef?.(Option.isSome(url));
+    return {
+      text: nameText(name),
+      url,
+    };
+  };
 
   const propertyNameText = (name: ts.PropertyName): string =>
     ts.isIdentifier(name) || ts.isPrivateIdentifier(name) ? name.text : fallbackText(name);
@@ -344,18 +350,51 @@ export const layer: Layer.Layer<
           node
         )
       );
+    // One print attempt at `enclosing`, with reference-resolution stats for the home-retry.
+    interface Attempt {
+      readonly parts: ReadonlyArray<Part>;
+      readonly refs: number;
+      readonly linked: number;
+    }
+    const attemptType = (type: ts.Type, enclosing: ts.Node): Attempt | undefined => {
+      const node = program.checker.typeToTypeNode(type, enclosing, builderFlags);
+      if (node === undefined) return undefined;
+      let refs = 0;
+      let linked = 0;
+      const parts = normalize(
+        makeWalk(
+          resolver.resolve,
+          (n) => printer.printNode(ts.EmitHint.Unspecified, n, enclosing.getSourceFile()),
+          (ok) => {
+            refs += 1;
+            if (ok) linked += 1;
+          }
+        )(node)
+      );
+      return {
+        parts,
+        refs,
+        linked,
+      };
+    };
     return {
       [TypeId]: TypeId,
-      printType: (type, enclosing) =>
-        Option.match(
-          Option.fromNullishOr(program.checker.typeToTypeNode(type, enclosing, builderFlags)),
-          {
-            onNone: () => [
-              plain(strip(program.checker.typeToString(type, enclosing, formatFlags))),
-            ],
-            onSome: (node) => partsOf(node, enclosing.getSourceFile()),
-          }
-        ),
+      printType: (type, enclosing) => {
+        const first = attemptType(type, enclosing);
+        if (first === undefined) {
+          return [plain(strip(program.checker.typeToString(type, enclosing, formatFlags)))];
+        }
+        if (first.linked === first.refs) return first.parts;
+        // HOME RETRY: the node builder only attaches symbols to references whose names are in
+        // scope at `enclosing` — a use site in another file misses most library-internal names.
+        // Re-print from the type's own declaration (all its names are in scope there) and keep
+        // whichever print PROVES more references; both prints are exact, so zero-guess holds.
+        // Side effect when the retry wins: names print as the declaring module writes them.
+        const home = (type.aliasSymbol ?? type.getSymbol())?.getDeclarations()?.[0];
+        if (home === undefined || home === enclosing) return first.parts;
+        const second = attemptType(type, home);
+        return second !== undefined && second.linked > first.linked ? second.parts : first.parts;
+      },
       printNode: (node) => partsOf(node, node.getSourceFile()),
     };
   })

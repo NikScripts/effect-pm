@@ -99,7 +99,7 @@ const program = Effect.gen(function* () {
   if (failures.length > 0) {
     for (const failure of failures.slice(0, 25)) yield* Console.error(`DEAD ${failure}`);
     if (failures.length > 25) yield* Console.error(`… and ${failures.length - 25} more`);
-    return yield* Effect.fail(new DeadLinks({ count: failures.length }));
+    return yield* new DeadLinks({ count: failures.length });
   }
 });
 

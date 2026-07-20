@@ -41,6 +41,30 @@ const provided = TypePrinter.layer.pipe(
   )
 );
 
+// A two-file program for the home-retry test: `Target` is declared (and indexed) in home-lib.ts
+// and NOT in scope in home-user.ts.
+const providedHome = TypePrinter.layer.pipe(
+  Layer.provideMerge(LinkResolver.layer({ repoRoot })),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      TsProgram.layer({
+        entries: [
+          fileURLToPath(new URL("./fixtures/home-lib.ts", import.meta.url)),
+          fileURLToPath(new URL("./fixtures/home-user.ts", import.meta.url)),
+        ],
+        compilerOptions,
+      }),
+      SymbolIndex.layer([
+        {
+          file: "home-lib.ts",
+          line: 1,
+          url: "/api/test/Target",
+        },
+      ])
+    )
+  )
+);
+
 // The checker type of a fixture export at its declaration (throws if absent — a broken test).
 const exportType = (
   program: TsProgram.TsProgram,
@@ -172,6 +196,34 @@ describe("TypePrinter", () => {
       expect(textOf(parts)).toContain("K in keyof T");
       expect(linksOf(parts)).toStrictEqual([]);
     }).pipe(Effect.provide(provided))
+  );
+
+  it.effect("home-retry: links land even from an enclosing scope that lacks the names", () =>
+    Effect.gen(function* () {
+      const program = yield* TsProgram.TsProgram;
+      const printer = yield* TypePrinter.TypePrinter;
+      const lib = fileURLToPath(new URL("./fixtures/home-lib.ts", import.meta.url));
+      const user = fileURLToPath(new URL("./fixtures/home-user.ts", import.meta.url));
+      const libSf = Option.getOrThrow(program.sourceFile(lib));
+      const userSf = Option.getOrThrow(program.sourceFile(user));
+      const moduleSymbol = program.checker.getSymbolAtLocation(libSf);
+      if (moduleSymbol === undefined) throw new Error("no module symbol for home-lib");
+      const makeSymbol = program.checker
+        .getExportsOfModule(moduleSymbol)
+        .find((s) => s.getName() === "make");
+      const decl = makeSymbol?.getDeclarations()?.[0];
+      if (makeSymbol === undefined || decl === undefined) throw new Error("no make in home-lib");
+      const type = program.checker.getTypeOfSymbolAtLocation(makeSymbol, decl);
+      // Print at a node in home-user.ts, where `Target` is NOT in scope — the home retry must
+      // recover the reference from the type's own declaration scope.
+      const foreign = userSf.statements[0];
+      if (foreign === undefined) throw new Error("no statement in home-user");
+      const parts = printer.printType(type, foreign);
+
+      expect(
+        linksOf(parts).some(([text, url]) => text.includes("Target") && url === "/api/test/Target")
+      ).toBe(true);
+    }).pipe(Effect.provide(providedHome))
   );
 
   it.effect("prints a parsed source annotation node with links", () =>
