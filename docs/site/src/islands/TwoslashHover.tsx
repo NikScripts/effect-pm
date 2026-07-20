@@ -145,8 +145,8 @@ export function TwoslashHover(): null {
       section.classList.contains("twoslash-popup-expand")
         ? "expanded type"
         : section.classList.contains("twoslash-popup-docs")
-          ? "comments"
-          : "type";
+        ? "comments"
+        : "type";
     const copySection = (section: Element): void => {
       const el = section as HTMLElement;
       const text = (el.innerText || el.textContent || "").trim();
@@ -227,6 +227,20 @@ export function TwoslashHover(): null {
       else if (hover !== null) open(hover);
     };
 
+    // An open popup is `position: fixed` (see place()) — scrolling would leave it floating at its
+    // old viewport spot. Re-anchor it to the token on every scroll (capture phase, so the code
+    // block's own horizontal scroll counts too) and on resize; rAF-throttled.
+    let placeRaf = 0;
+    const reanchor = (): void => {
+      if (openEl === null || placeRaf !== 0) return;
+      placeRaf = requestAnimationFrame(() => {
+        placeRaf = 0;
+        if (openEl) place(openEl);
+      });
+    };
+    document.addEventListener("scroll", reanchor, { passive: true, capture: true });
+    window.addEventListener("resize", reanchor);
+
     // Hover devices open on hover; touch devices use tap-to-open + double-tap-to-copy above.
     const hoverCapable =
       typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
@@ -242,6 +256,9 @@ export function TwoslashHover(): null {
       document.removeEventListener("mouseout", onOut);
       document.removeEventListener("touchstart", onTouchStart);
       document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("scroll", reanchor, { capture: true });
+      window.removeEventListener("resize", reanchor);
+      if (placeRaf) cancelAnimationFrame(placeRaf);
       cancelClose();
       if (toastTimer) clearTimeout(toastTimer);
       toastEl?.remove();
