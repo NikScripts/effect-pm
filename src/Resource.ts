@@ -2246,6 +2246,23 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
   return undefined;
 };
 
+/**
+ * The declared {@link ProtocolKind} of the {@link Node} a tag is bound to (how a client reaches it —
+ * `Http`/`WebSocket`/`IpcSocket`), or `undefined` for a nodeless/bare tag or a node with no declared
+ * kind. A structural read (like {@link kindOf}) — the server uses it to reject a node-bound resource
+ * served over a mismatched transport ({@link ProtocolKindMismatch}).
+ *
+ * @public
+ */
+export const nodeKindOf = (tag: unknown): ProtocolKind | undefined => {
+  const node = nodeOf(tag);
+  if (node !== undefined && Predicate.hasProperty(node, "kind")) {
+    const k = node.kind;
+    return k === "Http" || k === "WebSocket" || k === "IpcSocket" ? k : undefined;
+  }
+  return undefined;
+};
+
 /** A structural bound matching any resource tag (bare or node-bound) by its spec brand — deliberately
  *  WITHOUT the tag's `Svc` type param. A data-last combinator (`.pipe(withReadiness(...))`,
  *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
@@ -3102,6 +3119,9 @@ export interface ServedResource {
   readonly readiness: Effect.Effect<Readiness>;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
+  /** Declared transport of the tag's {@link Node}, when node-bound — the server asserts each served
+   *  resource's `nodeKind` matches its own transport, else {@link ProtocolKindMismatch}. */
+  readonly nodeKind?: ProtocolKind;
 }
 
 /**
@@ -3253,12 +3273,14 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
           onNone: () => Effect.void,
           onSome: (registry) => {
             const bound = nodeOf(tag);
+            const boundKind = nodeKindOf(tag);
             return registry.register({
               groupId: tag.groupId,
               group,
               kind: kindOf(tag) ?? "resource",
               readiness: readinessCheckServed(tag, wireImpl),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
+              ...(boundKind !== undefined ? { nodeKind: boundKind } : {}),
             });
           },
         }),
