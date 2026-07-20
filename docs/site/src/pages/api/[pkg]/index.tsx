@@ -1,3 +1,4 @@
+import { PageMeta } from "../../../components/PageMeta.js";
 import { packageBySlug, packages } from "../../../lib/api-data.js";
 import { runServer } from "../../../lib/runtime.js";
 
@@ -7,7 +8,10 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
   if (p === undefined) return <p className="prose">Package not found: {pkg}</p>;
   return (
     <>
-      <title>{`${p.name} — API — effect-pm`}</title>
+      <PageMeta
+        title={`${p.name} — API — effect-pm`}
+        description={`API reference for ${p.name}: ${p.modules.length} documented modules.`}
+      />
       <article className="prose">
         <p className="api-back">
           <a href="/api">← API Reference</a>

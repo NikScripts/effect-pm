@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
-import * as SymbolIndex from "../../src/docgen/SymbolIndex.js";
+import * as SymbolIndex from "@nikscripts/docgen/SymbolIndex";
 
 const entries: ReadonlyArray<SymbolIndex.Entry> = [
   { file: "src/Layer.ts", line: 54, url: "/api/effect/Layer/Layer" },

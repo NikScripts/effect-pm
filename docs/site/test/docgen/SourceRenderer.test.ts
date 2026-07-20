@@ -2,10 +2,10 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import * as LinkResolver from "../../src/docgen/LinkResolver.js";
-import * as SourceRenderer from "../../src/docgen/SourceRenderer.js";
-import * as SymbolIndex from "../../src/docgen/SymbolIndex.js";
-import * as TsProgram from "../../src/docgen/TsProgram.js";
+import * as LinkResolver from "@nikscripts/docgen/LinkResolver";
+import * as SourceRenderer from "@nikscripts/docgen/SourceRenderer";
+import * as SymbolIndex from "@nikscripts/docgen/SymbolIndex";
+import * as TsProgram from "@nikscripts/docgen/TsProgram";
 
 const fixture = fileURLToPath(new URL("./fixtures/print-fixture.ts", import.meta.url));
 const repoRoot = fileURLToPath(new URL("./fixtures/", import.meta.url));

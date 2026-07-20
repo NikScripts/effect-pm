@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import * as TsProgram from "../../src/docgen/TsProgram.js";
+import * as TsProgram from "@nikscripts/docgen/TsProgram";
 
 const fixture = fileURLToPath(new URL("./fixtures/sample.ts", import.meta.url));
 

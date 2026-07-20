@@ -76,7 +76,14 @@ const visibleText = (n: Hast): string => {
   return (n.children ?? []).map(visibleText).join("");
 };
 
-const MAX_HOVER_LINES = 160; // above this a declaration's span is pathological — plain-highlight it
+// Two guards on a declaration's hover slice. Lines is only a COARSE pre-filter for spans so
+// pathological that even serializing them for the size check is silly (Effect.fn: 4,290 lines of
+// scattered overloads, ~100MB rendered); the byte cap on the serialized slice is the guard that
+// actually tracks cost — set to today's heaviest shipping sidecar (Channel.catchTag, 4.3MB) so
+// nothing that renders now regresses while popup-light long interfaces (Cause, Scope, DateTime)
+// stop being skipped for line count alone.
+const MAX_HOVER_LINES = 1100;
+const MAX_HOVER_BYTES = 4_500_000;
 
 const program = Effect.gen(function* () {
   const wanted = process.argv.slice(2);
@@ -140,7 +147,7 @@ const program = Effect.gen(function* () {
     const sources = [
       "scripts/gen-hovers.ts",
       ...(yield* dirFiles("src/lib")),
-      ...(yield* dirFiles("src/docgen")),
+      ...(yield* dirFiles("../docgen/src")),
     ].sort();
     const hasher = createHash("sha1");
     for (const rel of sources) {
@@ -217,6 +224,13 @@ const program = Effect.gen(function* () {
         .map((l, i) => hastToHtml(l) + (i < slice.length - 1 ? "\n" : ""))
         .join("");
       const html = `<pre class="${preClass.replace(/"/g, "&quot;")}"><code>${inner}</code></pre>`;
+      // The real constraint is page weight, not span length: a popup-light 200-line interface
+      // serializes small while a generic-dense combinator explodes. Budget = today's heaviest
+      // shipping sidecar, so nothing that works now regresses.
+      if (html.length > MAX_HOVER_BYTES) {
+        missed += 1;
+        continue;
+      }
       yield* writeText(
         nodePath.join(hoversDir, sym.pkg, sym.moduleSlug, `${symbolFileKey(sym.name)}.src.html`),
         html

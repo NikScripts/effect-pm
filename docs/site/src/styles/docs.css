@@ -1097,3 +1097,81 @@ a.api-src:hover { color: var(--primary); }
   .twoslash-popup-code.tw-copied::after,
   .twoslash-popup-docs.tw-copied::after { animation: none; }
 }
+
+/* --- search (typeahead panel + full results page) --- */
+.search-panel { margin: 0.4rem 0 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
+.search-section { padding: 0.3rem 0 0.4rem; }
+.search-panel .search-section + .search-section { border-top: 1px solid var(--border); }
+.search-section-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0.35rem 0.85rem 0.15rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; }
+.search-section-head a { font-size: 0.72rem; text-transform: none; letter-spacing: 0; }
+.search-hit { display: block; padding: 0.32rem 0.85rem; text-decoration: none; color: inherit; border-radius: 6px; }
+.search-hit:hover, .search-hit:focus-visible, .search-hit.is-active { background: color-mix(in oklab, var(--primary) 10%, transparent); }
+.search-hit mark { background: color-mix(in oklab, var(--primary) 24%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.search-hit-title { display: flex; align-items: center; gap: 0.45rem; font-size: 0.86rem; font-weight: 550; font-family: var(--mono, ui-monospace, monospace); }
+.search-hit-ctx { font-size: 0.7rem; opacity: 0.6; font-family: inherit; font-weight: normal; }
+.search-hit-sum { display: block; font-size: 0.76rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-all { display: block; padding: 0.5rem 0.85rem; border-top: 1px solid var(--border); font-size: 0.8rem; }
+.search-note { padding: 0.5rem 0.2rem; font-size: 0.85rem; opacity: 0.75; }
+.search-page .menu-search { width: 100%; margin: 0.6rem 0 1rem; }
+/* module-page symbol groups: jump chips under the title, section headers over the rows */
+.api-group-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.8rem 0 1.4rem;
+}
+.api-group-toc a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  font-size: 0.8rem;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.api-group-toc a:hover { border-color: var(--primary); }
+.api-group-title {
+  margin: 2.2rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.05rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* copy buttons on blocks WITHOUT a .code-block wrapper (API pages) — portaled into the pre by
+   the CodeCopy island, same .copy-btn as everywhere else; the pre anchors + reveals it */
+pre { position: relative; }
+pre:hover > .copy-btn, pre:focus-within > .copy-btn { opacity: 1; }
+/* touch devices have no hover — keep the button faintly present */
+@media (hover: none) { pre > .copy-btn { opacity: 0.55; } }
+
+/* 404 */
+.notfound { max-width: 34rem; margin: 3rem auto; padding: 0 1.25rem; }
+.notfound-search { margin: 1.2rem 0; }
+
+/* ⌘K hint chip on the sidebar input */
+.search-kbd {
+  position: absolute;
+  right: 0.6rem;
+  top: 0.55rem;
+  padding: 0.08rem 0.4rem;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--fg);
+  opacity: 0.55;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+/* desktop sidebar entry: tighter input, hits ellipsize into the narrow column */
+.sidebar-search { position: relative; margin-bottom: 0.9rem; }
+.sidebar-search .menu-search { padding: 0.45rem 0.7rem; font-size: 0.85rem; }
+.sidebar-search .search-hit { padding: 0.28rem 0.6rem; }
+.sidebar-search .search-hit-title { display: block; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-search .search-hit-title .api-kind { margin-left: 0.35rem; }
+.search-page .search-section { margin-bottom: 1.2rem; }
+.search-page .search-hit-sum { white-space: normal; }

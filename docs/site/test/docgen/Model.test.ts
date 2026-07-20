@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
-import * as Model from "../../src/docgen/Model.js";
+import * as Model from "@nikscripts/docgen/Model";
 
 const sample = {
   entry: "Layer",

@@ -6,6 +6,8 @@ import { GroupedNav } from "../components/GroupedNav.js";
 import { Footer } from "../components/Footer.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
+import { SidebarSearch } from "../islands/SidebarSearch.js";
+import { CodeCopy } from "../islands/CodeCopy.js";
 
 // Root layout — owns all chrome. Nav is generated from the content manifest,
 // so adding a `.dj` file updates the nav with no edit here.
@@ -13,7 +15,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const groups = await navGroups();
   return (
     <>
-      <meta name="description" content="Official documentation for @nikscripts/effect-pm" />
+      {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
+          duplicate them (React 19 hoists but does not dedupe meta by name) */}
       {/* Override Waku's default viewport: `viewport-fit=cover` lets the page paint under
           the notch/safe-area, so html's dark background fills it instead of white. */}
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -23,6 +26,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <NavBar groups={groups} />
       <div className="layout">
         <aside className="sidebar">
+          <SidebarSearch />
           <GroupedNav groups={groups} />
         </aside>
         <main>{children}</main>
@@ -30,6 +34,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <Footer />
       <TwoslashHover />
       <GlossaryHover data={glossaryEntries()} />
+      <CodeCopy />
     </>
   );
 }
