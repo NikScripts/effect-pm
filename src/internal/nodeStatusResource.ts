@@ -2,7 +2,7 @@
  * @module internal/nodeStatusResource
  *
  * The reserved **node status** resource — every node that serves a group over
- * {@link Resource.httpServer} automatically also serves this, so a client can ask any node
+ * {@link Node.httpServer} automatically also serves this, so a client can ask any node
  * "are you up, how long, how many resources, and what are your logs?" without the node author
  * wiring anything. It's a nodeless {@link Resource.Tag} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url (see {@link NodeStatus}).
@@ -25,6 +25,7 @@ import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
 import { queryDurableNode } from "./logs/durableRead";
+import * as Node from "../Node";
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
@@ -153,7 +154,7 @@ export const buildNodeStatusImpl = (options: {
 
 /**
  * The reserved node-status resource paired with its built impl — the `{ tag, impl }` that
- * {@link Resource.httpServer} folds onto every node's `RpcServer` automatically, so every node
+ * {@link Node.httpServer} folds onto every node's `RpcServer` automatically, so every node
  * exposes its status + logs without the author wiring it.
  *
  * @internal

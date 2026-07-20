@@ -22,6 +22,7 @@ import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
 import * as RunResource from "../../src/RunResource";
+import * as Node from "../../src/Node";
 
 const importJob = Schema.Struct({ id: Schema.String });
 const session = Schema.Struct({ id: Schema.String, user: Schema.String });
@@ -35,9 +36,9 @@ const session = Schema.Struct({ id: Schema.String, user: Schema.String });
 export const HOST_PORTS = { wnba: 7780, live: 7781, stats: 7782 } as const;
 const rpcUrl = (port: number) => `http://127.0.0.1:${port}/rpc`;
 
-export class WnbaNode extends Resource.Node<WnbaNode>("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
-export class LiveNode extends Resource.Node<LiveNode>("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
-export class StatsNode extends Resource.Node<StatsNode>("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
+export class WnbaNode extends Node.Tag<WnbaNode>("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
+export class LiveNode extends Node.Tag<LiveNode>("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
+export class StatsNode extends Node.Tag<StatsNode>("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
 
 // A **multi-node** resource: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
@@ -50,19 +51,19 @@ export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
   // a per-node view (one row per node) — needs `selfNode` to key this instance's own row
   activeByNode: Resource.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
 }).pipe(
-  Resource.distributed([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
+  Resource.nodes([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
 ) {}
 
 // A **fleet-health** mesh across the three nodes — each instance reports its own readiness; `byNode`
 // folds every peer's (Reachable / Unreachable), `status` rolls that up. Dogfoods the FleetHealth widget.
 export class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([WnbaNode, LiveNode, StatsNode]),
+  Resource.nodes([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A **telemetry** mesh — each node's Metric registry (the queues emit `queue_in_flight`). `fleetInFlight`
 // folds every node's in-flight, `inFlightByNode` breaks it down. Dogfoods the Telemetry widget.
 export class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([WnbaNode, LiveNode, StatsNode]),
+  Resource.nodes([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A **shard-map** mesh — active game sessions partitioned across the three nodes by `consistentHash`.
@@ -71,7 +72,7 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
   key: Schema.String,
   value: session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([WnbaNode, LiveNode, StatsNode])) {}
+}).pipe(Resource.nodes([WnbaNode, LiveNode, StatsNode])) {}
 
 // A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and

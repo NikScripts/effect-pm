@@ -1,12 +1,13 @@
 import { expect, it } from "vitest";
 // Import from the package BARREL — exactly what the other repo's UI agent imports.
-import { Group, Process, Resource, specOf, methodMeta } from "../src";
+import { Group, Process, specOf, methodMeta } from "../src";
+import * as Node from "../src/Node";
 
 // A dashboard/TUI needs three things from the package, all proven here:
 //  1. walk a Group.Tag tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
 //  3. drive it over the wire (Resource.client / httpClient — proven in the node/topology tests).
-class MiniNode extends Resource.Node<MiniNode>("ui/miniNode") {}
+class MiniNode extends Node.Tag<MiniNode>("ui/miniNode") {}
 class Roster extends Process.Tag<Roster>()("ui/Roster") {}
 class Poller extends Process.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
 class Nwsl extends Group.Tag<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}

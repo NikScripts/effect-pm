@@ -3,6 +3,7 @@ import { Effect, Layer, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 const DbStatus = Schema.Struct({
   connected: Schema.Boolean,
@@ -21,7 +22,7 @@ class Database extends Resource.withReadiness(
   readiness,
 ) {}
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   Resource.serve(Database, {
     status: Effect.succeed({ connected: false, latencyMs: 0 }),
     changes: Stream.empty,

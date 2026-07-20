@@ -18,6 +18,7 @@ import * as Store from "../../src/Store";
 import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";
 import { KeyRotation, MiniNode } from "./fleet";
+import * as Node from "../../src/Node";
 
 const PORT = 7778;
 
@@ -26,7 +27,7 @@ class MiniStore extends Store.Service<MiniStore>("@examples/web-dashboard/MiniSt
   Process.store(KeyRotation),
 ) {}
 
-const serveLayer = Resource.wsServer([
+const serveLayer = Node.wsServer([
   processEntry(KeyRotation, {
     effect: Effect.logInfo("wnba: key-rotation check"),
     polling: Polling.spaced(Duration.seconds(5)),

@@ -3,10 +3,10 @@
 
 Running one resource across many runtimes and having its instances coordinate.
 
-**Fleets** — declare nodes, pipe `Resource.distributed([...])` onto a tag, mark fields with
-`Resource.fleet` so peers don't recurse into them. **Peers** — inside a layer,
-`Resource.peers` / `Resource.selfNode` (discharged by `Resource.peersLayer`) let an instance
-reach siblings.
+**Fleets** — declare nodes with `Resource.nodes([...])` (or bare `Resource.distributed` for
+directory discovery), mark fields with `Resource.fleet` so peers don't recurse into them.
+**Peers** — inside a layer, `Resource.peers` / `Resource.selfNode` (discharged by
+`Resource.peersLayer`) let an instance reach siblings.
 
 Two shipped factories lean on this mesh:
 

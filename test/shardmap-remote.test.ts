@@ -5,18 +5,19 @@ import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
 import { ShardMap } from "../src";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Extends the transport conformance matrix to the last resource type — ShardMap must put/get over the
 // wire (both transports) and FAIL loudly on a protocol mismatch, same as queue/process/run. ShardMap's
 // remote path is heavier (SQL-backed shard + peers/selfNode), so it lives in its own file.
 
 const Session = Schema.Struct({ id: Schema.String, userId: Schema.String });
-class Node1 extends Resource.Node<Node1>("shardconf/n1") {}
+class Node1 extends Node.Tag<Node1>("shardconf/n1") {}
 class SM extends ShardMap.Tag<SM>()("shardconf/SM", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([Node1])) {}
+}).pipe(Resource.nodes([Node1])) {}
 
 const served = ShardMap.serve(SM).pipe(Layer.provide(Resource.peersLayer(SM, Node1)));
 
@@ -32,14 +33,19 @@ const remote = <A, E>(
   op: Effect.Effect<A, E, SM | Scope.Scope>,
 ): Promise<A> => {
   const server = (
-    serverKind === "ws" ? Resource.wsServer([served]) : Resource.httpServer([served])
+    serverKind === "ws" ? Node.wsServer([served]) : Node.httpServer([served])
   ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
   return Effect.runPromise(
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = address._tag === "TcpAddress" ? address.port : 0;
+      // C1: distributed([Node1]) is set-of-one — dial via that Node (not ambient Protocol).
       return yield* op.pipe(
-        Effect.provide(Resource.client(SM).pipe(Layer.provide(proto(clientKind, port)))),
+        Effect.provide(
+          Resource.client(SM, Node1).pipe(
+            Layer.provide(Node.connect(Node1, proto(clientKind, port))),
+          ),
+        ),
         Effect.scoped,
       );
     }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))),

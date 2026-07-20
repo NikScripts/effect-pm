@@ -3,13 +3,14 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Node-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
-// transport (EdgeNode), the server is one `Resource.httpServer([serve(...)])` call, and the client wires the
+// transport (EdgeNode), the server is one `Node.httpServer([serve(...)])` call, and the client wires the
 // node with one `Resource.httpClient`. Ship ONLY the tag — `Resource.client(tag)` resolves
 // where to connect from the node. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
-class EdgeNode extends Resource.Node<EdgeNode>("nodeHttp/edge") {}
+class EdgeNode extends Node.Tag<EdgeNode>("nodeHttp/edge") {}
 class Echo extends Resource.Tag<Echo>()("nodeHttp/Echo", 
   {
     ping: Resource.effect(Schema.String),
@@ -19,7 +20,7 @@ class Echo extends Resource.Tag<Echo>()("nodeHttp/Echo",
 ) {}
 
 // the whole server, collapsed — only the platform HttpServer is left to provide
-const ServerLive = Resource.httpServer([
+const ServerLive = Node.httpServer([
   Resource.serve(Echo, {
     ping: Effect.succeed("pong"),
     shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),

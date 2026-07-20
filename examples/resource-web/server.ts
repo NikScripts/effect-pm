@@ -31,6 +31,7 @@ import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, FetchGate, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
+import * as Node from "../../src/Node";
 
 const WNBA_PORT = HOST_PORTS.wnba;
 const LIVE_PORT = HOST_PORTS.live;
@@ -264,7 +265,7 @@ const logStorageDemo = Layer.effectDiscard(
 // Storage: each node provides its own `*Store.layerMemory` **into** `httpServer` (one AppStore per
 // Node runtime — see `docs/guides/stores.md`). `Layer.provide` (not sibling merge) so Soft unwrap
 // captures AppStore; also keeps NodeHttpServers from fighting over one HttpServer.
-const wnbaNode = Resource.wsServer([
+const wnbaNode = Node.wsServer([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
     concurrency: 3,
@@ -302,7 +303,7 @@ const wnbaNode = Resource.wsServer([
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
-const liveNode = Resource.wsServer([
+const liveNode = Node.wsServer([
   processEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
@@ -337,7 +338,7 @@ const liveNode = Resource.wsServer([
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
-const statsNode = Resource.wsServer([
+const statsNode = Node.wsServer([
   queueEntry(PlayByPlayQueue, {
     effect: importWorker,
     concurrency: 3,

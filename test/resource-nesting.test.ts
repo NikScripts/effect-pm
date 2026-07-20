@@ -5,6 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import { specOf } from "../src/Resource";
+import * as PmNode from "../src/Node";
 
 // A **nested** spec: top-level leaves alongside groups of leaves — an `effect`, a `stream`, and a
 // payload `effectFn` living under `connections` / `admin`. Proves the spec-tree flattens on the wire and
@@ -71,7 +72,7 @@ it("nested spec — LOCAL: groups resolve; nested stream + payload fn work", () 
 it("nested spec — REMOTE over http: same nested access across the wire", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const Node = Resource.httpServer([Resource.serve(Server, impl)]).pipe(
+      const Node = PmNode.httpServer([Resource.serve(Server, impl)]).pipe(
         Layer.provideMerge(NodeHttpServer.layerTest),
       );
 

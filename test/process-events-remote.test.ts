@@ -9,6 +9,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
@@ -39,7 +40,7 @@ const withProcessHttp = (
   config: Process.ProcessLayerConfig<any, any, any>,
   use: (port: number) => Effect.Effect<any, any, any>,
 ) => {
-  const server = Resource.httpServer([Process.serveMemory(tag, config)]).pipe(
+  const server = Node.httpServer([Process.serveMemory(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {

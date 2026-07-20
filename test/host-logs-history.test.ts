@@ -3,11 +3,11 @@ import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
 import { LogAnnotationKeys } from "../src/LogContext";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+import * as Node from "../src/Node";
 
-class BillingNode extends Resource.Node<BillingNode>(testBillingNodeKey) {}
+class BillingNode extends Node.Tag<BillingNode>(testBillingNodeKey) {}
 
 class SyncProc extends Process.Tag<SyncProc>()(testSyncProcessKey).pipe(
   Process.schedule([]),

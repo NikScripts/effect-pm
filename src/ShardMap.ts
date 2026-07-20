@@ -16,7 +16,7 @@
  *   key: Schema.String,
  *   value: Schema.Struct({ id: Schema.String, userId: Schema.String }),
  *   keyOf: (s) => s.id,
- * }).pipe(Resource.distributed([DropletEast, DropletWest])) {}
+ * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
  *
  * @module ShardMap
  */
@@ -29,11 +29,11 @@ import {
   Tag as resourceTag,
   type Local,
   type NodeBoundTag,
-  type NodeKey,
   type PeersId,
   type ResourceTag,
   type SelfNodeId,
 } from "./Resource";
+import type { NodeKey } from "./Node";
 import * as internal from "./internal/shardMap";
 import * as shardMapSql from "./internal/shardMapSql";
 
@@ -291,7 +291,7 @@ export interface ShardMapSchemas<
  *   key: SessionId,
  *   value: Session,
  *   keyOf: (s) => s.id,
- * }).pipe(Resource.distributed([DropletEast, DropletWest])) {}
+ * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
  *
  * @public
  */

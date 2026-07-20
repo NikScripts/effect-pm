@@ -2,17 +2,18 @@ import { Duration, Effect, Schema } from "effect";
 import { expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Regression: a `value` (stream-backed) field on a distributed resource used to DEADLOCK the serve at build —
 // `peersLayer` eagerly built each peer client, and a `value`'s client subscription blocked for the initial
 // push, so a co-booting / down peer hung the whole node. Peer clients are now fully lazy: nothing connects
 // until a fold reads a field, and `combineQuery` drops an unreachable peer.
 // See docs/handoffs/2026-07-02-peerslayer-eager-stream-connect-deadlock.md
-class SelfNode extends Resource.Node<SelfNode>("peers-lazy/Self") {}
-class PeerNode extends Resource.Node<PeerNode>("peers-lazy/Peer") {}
+class SelfNode extends Node.Tag<SelfNode>("peers-lazy/Self") {}
+class PeerNode extends Node.Tag<PeerNode>("peers-lazy/Peer") {}
 class Fleet extends Resource.Tag<Fleet>()("peers-lazy/Fleet", {
   n: Resource.ref(Schema.Number), // the trigger — a value field
-}).pipe(Resource.distributed([SelfNode, PeerNode])) {}
+}).pipe(Resource.nodes([SelfNode, PeerNode])) {}
 
 it("peersLayer with a value field boots against a DOWN peer (no build deadlock)", () =>
   Effect.runPromise(

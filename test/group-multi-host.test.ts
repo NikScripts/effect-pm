@@ -4,13 +4,14 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Group from "../src/Group";
+import * as Node from "../src/Node";
 
 // The payoff of killing ProcessManager: a `Group.Tag` is pure organization, and each member tag
 // independently resolves its OWN node. Here one group holds two members bound to two DIFFERENT
 // nodes (two real http servers); driving them through the group accessors connects each to its
 // own node — no central registry, no middleman.
-class NodeA extends Resource.Node<NodeA>("multi/nodeA") {}
-class NodeB extends Resource.Node<NodeB>("multi/nodeB") {}
+class NodeA extends Node.Tag<NodeA>("multi/nodeA") {}
+class NodeB extends Node.Tag<NodeB>("multi/nodeB") {}
 
 class Alpha extends Resource.Tag<Alpha>()("multi/Alpha", 
   { where: Resource.effect(Schema.String) },
@@ -24,12 +25,12 @@ class Beta extends Resource.Tag<Beta>()("multi/Beta",
 // one group, members on different nodes (could just as easily be same node)
 class Cluster extends Group.Tag<Cluster>("multi/Cluster")({ Alpha, Beta }) {}
 
-const AlphaServer = Resource.httpServer([
+const AlphaServer = Node.httpServer([
   Resource.serve(Alpha, {
     where: Effect.succeed("alpha@nodeA"),
   }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
-const BetaServer = Resource.httpServer([
+const BetaServer = Node.httpServer([
   Resource.serve(Beta, {
     where: Effect.succeed("beta@nodeB"),
   }),

@@ -5,6 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Telemetry from "../src/Telemetry";
+import * as PmNode from "../src/Node";
 
 // Telemetry serves the whole per-process Metric registry. Emit a labeled counter, serve Telemetry over
 // http, read `snapshot` via Resource.client — the counter round-trips with its label + count.
@@ -28,7 +29,7 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Node = Resource.httpServer([
+const Node = PmNode.httpServer([
   Telemetry.serve(FleetTelemetry, { interval: Duration.millis(50) }).pipe(
     Layer.provide(Telemetry.alone(FleetTelemetry)),
   ),

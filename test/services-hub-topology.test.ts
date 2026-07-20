@@ -4,13 +4,14 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Group from "../src/Group";
+import * as Node from "../src/Node";
 
 // The real target topology: a ServicesHub group containing league groups (nesting), where almost
 // everything runs LOCAL on one Droplet (provided by its `.layer`) and one member runs REMOTE on
 // the Mini (a different node, reached by a client). One runtime, one group tree, mixed provision —
 // reached uniformly through the group accessors. This is the ProcessManager-free deploy shape.
 
-class MiniNode extends Resource.Node<MiniNode>("hub/miniNode") {}
+class MiniNode extends Node.Tag<MiniNode>("hub/miniNode") {}
 
 // Local on the Droplet (no node) — stands in for a roster import queue.
 class RosterQueue extends Resource.Tag<RosterQueue>()("hub/RosterQueue", {
@@ -33,7 +34,7 @@ class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 }) {}
 
 // The Mini nodes the poller.
-const MiniServer = Resource.httpServer([
+const MiniServer = Node.httpServer([
   Resource.serve(LiveScorePoller, {
     where: Effect.succeed("poller@mini"),
   }),

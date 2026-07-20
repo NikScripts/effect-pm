@@ -4,13 +4,13 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Duration, Effect, FileSystem, Layer, Path } from "effect";
 import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+import * as Node from "../src/Node";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-class BillingNode extends Resource.Node<BillingNode>(testBillingNodeKey) {}
+class BillingNode extends Node.Tag<BillingNode>(testBillingNodeKey) {}
 class SyncProc extends Process.Tag<SyncProc>()(testSyncProcessKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/log-pipeline/Store")(

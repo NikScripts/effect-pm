@@ -3,9 +3,10 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Many resources, one Node, ONE server/port (the ControlService.make({group,port}) replacement).
-class LeagueNode extends Resource.Node<LeagueNode>("serveAll/node") {}
+class LeagueNode extends Node.Tag<LeagueNode>("serveAll/node") {}
 class Alpha extends Resource.Tag<Alpha>()("serveAll/Alpha", 
   { where: Resource.effect(Schema.String) },
   { node: LeagueNode },
@@ -15,7 +16,7 @@ class Beta extends Resource.Tag<Beta>()("serveAll/Beta",
   { node: LeagueNode },
 ) {}
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   // Alpha via the spec-checked record `Resource.serve`; Beta via the Effect-form `serve`
   // (impl built by an `Effect`). Both coexist in one `httpServer` and the result requirement
   // unions cleanly.

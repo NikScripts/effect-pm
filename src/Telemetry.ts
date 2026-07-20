@@ -38,11 +38,12 @@ import {
   fleet,
   stream,
   type NodeBoundTag,
-  type NodeKey,
   type PeersId,
   type ResourceTag,
   type SelfNodeId,
 } from "./Resource";
+import type { NodeKey } from "./Node";
+import * as Node from "./Node";
 
 // ============================================================================
 // Wire schema — the served contract, shared with the dashboard/TUI. Each datum is one
@@ -268,7 +269,7 @@ const liveBufferSize = 8;
  *
  * @internal
  */
-class TelemetryAloneNode extends Resource.Node<TelemetryAloneNode>(
+class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>(
   "@nikscripts/effect-pm/Telemetry/alone",
 ) {}
 

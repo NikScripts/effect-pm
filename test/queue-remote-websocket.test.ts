@@ -8,6 +8,7 @@ import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import type { QueueLayerConfig } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // The WEBSOCKET remote path — the transport a browser dashboard actually uses (`{ protocol:
 // "websocket" }`, so many live streams multiplex over one connection). The http path is covered by
@@ -37,7 +38,7 @@ const clientHttp = (port: number) =>
   );
 
 const serveWs = (config: QueueLayerConfig<Item, void, never, never>) =>
-  Resource.wsServer([QueueResource.serveMemory(WsQueue, config)]).pipe(
+  Node.wsServer([QueueResource.serveMemory(WsQueue, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
 

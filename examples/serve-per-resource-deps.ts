@@ -1,7 +1,7 @@
 /**
  * @module examples/serve-per-resource-deps
  *
- * Dogfoods `Resource.serve` / `Resource.httpServer`: two resources that need **different implementations
+ * Dogfoods `Resource.serve` / `PmNode.httpServer`: two resources that need **different implementations
  * of the same dependency tag**, served on one `/rpc`, isolated. `Matches` gets a "plain" `ImportHandlers`;
  * `Import` gets a "hooked" one — proven by each reading back its own label, plus `/health` listing both.
  *
@@ -15,6 +15,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Resource from "../src/Resource";
+import * as PmNode from "../src/Node";
 
 const PORT = 7790;
 
@@ -36,7 +37,7 @@ class Import extends Resource.Tag<Import>()("example/Import", {
 const impl = { handler: Effect.map(ImportHandlers, (handlers) => handlers.label) };
 
 // httpServer([...serve layers], options) — bundles the provideMerge + registry
-const Node = Resource.httpServer(
+const Node = PmNode.httpServer(
   [
     Resource.serveRemote(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
     Resource.serveRemote(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated

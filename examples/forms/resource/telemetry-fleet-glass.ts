@@ -13,17 +13,18 @@ import { Effect, Layer, Metric, Stream } from "effect";
 import * as Resource from "../../../src/Resource";
 import * as Telemetry from "../../../src/Telemetry";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+import * as Node from "../../../src/Node";
 
 // ── Nodes = Context service keys (machines) ───────────────────────────────────
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
-class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
+class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
+class DropletCentral extends Node.Tag<DropletCentral>("app/DropletCentral") {}
 
 const fleetNodes = [DropletEast, DropletWest, DropletCentral] as const;
 
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([...fleetNodes]),
+  Resource.nodes([...fleetNodes]),
 ) {}
 
 /** Stamp this node's registry with a demo in-flight gauge. */

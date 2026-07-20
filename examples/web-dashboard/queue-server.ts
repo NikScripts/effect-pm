@@ -31,6 +31,7 @@ import {
   Worker3,
   cfg,
 } from "./fleet";
+import * as Node from "../../src/Node";
 
 const PORT = 7777;
 
@@ -85,7 +86,7 @@ setInterval(() => {
 // node every queue as ONE group on ONE port: `httpServer` mounts a single `/rpc`
 // endpoint with group-id-prefixed procedures behind the Droplet node. (The wnba
 // key-rotation process lives on the Mini — see mini-server.ts.)
-const serveLayer = Resource.wsServer([
+const serveLayer = Node.wsServer([
   queueEntry(Mail, cfg),
   queueEntry(Jobs, cfg),
   queueEntry(Billing, cfg),
@@ -113,7 +114,7 @@ const serveLayer = Resource.wsServer([
 // against a ws server fails per-call — `q.add` → "empty HTTP response from RPC server" — and the
 // producer's `Effect.ignore` swallows it, so nothing enqueues and the dashboard shows empty queues.
 // That mismatch was this example's original "no live data" bug.)
-const loopback = Resource.connect(
+const loopback = Node.connect(
   Droplet,
   Resource.protocolWebsocket(`ws://localhost:${PORT}/rpc`),
 );

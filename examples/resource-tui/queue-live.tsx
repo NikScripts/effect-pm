@@ -34,12 +34,13 @@ import {
   type Status,
   type View,
 } from "./queue-widget";
+import * as Node from "../../src/Node";
 
 // ── a real queue ────────────────────────────────────────────────────────────
 const NAME = "@acme/queues/MailQueue";
 const Job = Schema.Struct({ id: Schema.String });
 class MailQueue extends QueueResource.Tag<MailQueue>()(NAME, { payload: Job }) {}
-class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
+class TuiNode extends Node.Tag<TuiNode>("acme/tui") {}
 class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/queue-live/Store")(
   TuiNode.logs,
   QueueResource.store(MailQueue),
@@ -63,7 +64,7 @@ const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
 // Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
-class TuiNode extends Resource.Node<TuiNode>("acme/tui") {}
+class TuiNode extends Node.Tag<TuiNode>("acme/tui") {}
 const QueueLayer = QueueResource.layerMemory(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {

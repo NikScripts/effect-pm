@@ -7,11 +7,11 @@ import { tmpdir } from "node:os";
 import * as CustomQueueResource from "../src/CustomQueueResource";
 import * as Process from "../src/Process";
 import * as QueueResource from "../src/QueueResource";
-import * as Resource from "../src/Resource";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
 import { Polling } from "../src/Polling";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
+import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
@@ -55,7 +55,7 @@ class RunStore extends Store.Service<RunStore>("@test/storage-correctness/RunSto
   gateRegistration,
 ) {}
 
-class NodeOnly extends Resource.Node<NodeOnly>("test/storage-correctness/node") {}
+class NodeOnly extends Node.Tag<NodeOnly>("test/storage-correctness/node") {}
 class NodeOnlyStore extends Store.Service<NodeOnlyStore>("@test/storage-correctness/NodeOnly")(
   NodeOnly.logs,
 ) {}

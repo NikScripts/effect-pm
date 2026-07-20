@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Stream } from "effect";
 import * as Logs from "../src/Logs";
-import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
 import { testRelayNodeKey } from "./fixtures/logKeys";
+import * as Node from "../src/Node";
 
-class RelayNode extends Resource.Node<RelayNode>(testRelayNodeKey) {}
+class RelayNode extends Node.Tag<RelayNode>(testRelayNodeKey) {}
 class RelayStore extends Store.Service<RelayStore>("@test/logs-relay/Store")(
   RelayNode.logs,
 ) {}

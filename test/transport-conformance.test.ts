@@ -5,6 +5,7 @@ import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
 import { Process, QueueResource, RunResource } from "../src";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Transport conformance matrix: each resource type × {ws, http} must stream/respond over the wire, and
 // a protocol MISMATCH (http client → ws server) must FAIL loudly rather than silently drop — the exact
@@ -26,7 +27,7 @@ const remote = <A, E, R>(
   op: Effect.Effect<A, E, R | Scope.Scope>,
 ): Promise<A> => {
   const server = (
-    serverKind === "ws" ? Resource.wsServer([served]) : Resource.httpServer([served])
+    serverKind === "ws" ? Node.wsServer([served]) : Node.httpServer([served])
   ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
   return Effect.runPromise(
     Effect.gen(function* () {

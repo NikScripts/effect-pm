@@ -3,9 +3,10 @@ import { describe, expect, it } from "@effect/vitest";
 import { combineByNode, combineByNodeExit, combineQuery } from "../src/MultiNode";
 import * as FleetHealth from "../src/FleetHealth";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
 
 describe("MultiNode.combineByNode vs combineByNodeExit", () => {
   it.effect("combineByNodeExit keeps every peer; combineByNode drops failures", () =>
@@ -47,7 +48,7 @@ describe("FleetHealth.rollup", () => {
 
 describe("FleetHealth", () => {
   class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-    Resource.distributed([DropletEast, DropletWest]),
+    Resource.nodes([DropletEast, DropletWest]),
   ) {}
 
   const peerLocal = (status: "ok" | "degraded", ready: boolean) => ({

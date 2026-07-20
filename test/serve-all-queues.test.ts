@@ -4,15 +4,16 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // Two REAL queue engines bound to ONE Node, served on ONE port via httpServer + QueueResource.serve —
 // the ControlService.make({ group, port }) replacement for wow's per-league deploy.
 const Item = Schema.Struct({ n: Schema.Number });
-class LeagueNode extends Resource.Node<LeagueNode>("serveAllQ/node") {}
+class LeagueNode extends Node.Tag<LeagueNode>("serveAllQ/node") {}
 class QA extends QueueResource.Tag<QA>()("serveAllQ/A", { payload: Item, node: LeagueNode }) {}
 class QB extends QueueResource.Tag<QB>()("serveAllQ/B", { payload: Item, node: LeagueNode }) {}
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   QueueResource.serveMemory(QA, { effect: (_i: { n: number }) => Effect.void }),
   QueueResource.serveMemory(QB, { effect: (_i: { n: number }) => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));

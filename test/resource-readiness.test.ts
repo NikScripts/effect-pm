@@ -4,6 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as NodeStatus from "../src/NodeStatus";
+import * as Node from "../src/Node";
 
 // A resource carries its own readiness derivation (here a bare Resource.Tag opts in via
 // `withReadiness`). When it reports "not ready", the node's `/health` returns 503 and `NodeStatus`
@@ -14,7 +15,7 @@ class Warming extends Resource.Tag<Warming>()("readiness/Warming", {
   Resource.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
 ) {}
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   Resource.serve(Warming, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
@@ -110,7 +111,7 @@ it("the factory/base check still applies — a stopped worker is not ready even 
 // Regression: a node-bound tag must be able to extend readiness via `.pipe`. Data-last duals
 // constrain `T` with a shallow `PipeableTag` brand (spec symbol only) so stock tsc does not expand
 // `ServiceOf<S, Self>` on the still-declaring class (TS2589). See `resource-withreadiness-pipe.test-d.ts`.
-class DepNode extends Resource.Node<DepNode>("dep/node") {}
+class DepNode extends Node.Tag<DepNode>("dep/node") {}
 class NodeWorker extends Resource.Tag<NodeWorker>()(
   "dep/NodeWorker",
   { running: Resource.effect(Schema.Boolean) },
