@@ -6,6 +6,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-16 — Impossible-states plan: assigned + area reserved (breaking OK)
+
+- **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away." (Later: unlock P4 + expand the reservation to the tag-config schema-input surface.)
+- **Progress:** **P1 DONE** (node value wrapped → node↔protocol wiring bug is a compile error, cast-free — merged). **P5 DONE** (http client transport dies in a browser, not just warns — merged). **P2 SKIPPED** (a clean version needs a documented cast — the `makeNode` logs/address-type complexity, same wall as the reverted `connectFleet` — for a narrow win the runtime `UnaddressedNode` throw already covers). **P4 ALREADY ENFORCED** (loose-fields payload shorthand is already rejected — `{ payload: Schema.Struct }` required; proposal mis-scoped it as new work). **P3 friction** (serve-time mismatch): `serverImpl` sees opaque serve layers → coupled, deferred. **Program's achievable clean items = COMPLETE (P1 + P5).**
+- **Reserved — hands off (all other agents, incl. C):** `src/Resource.ts` node/client typing — `NodeKey`/`AnyNode`/`AddressedNode`/`makeNode`/`connect*`/`clientLayer`/`socketClient`/`verifyConnection`/`protocolHttp` + `NodeStatus` wiring, until the branches are all merged (done). **Tag-config reservation RELEASED** — P4 was already enforced, so Agent D's queue/run/process payload-config is unblocked again.
+- **Rejected / deferred:** `connectFleet` (reverted — cast-free version not reachable given node-type complexity; not worth casts for sugar). P2 (cast). P3 (opaque serve layers). P4 (already done).
+- **Supervisor impact:** impossible-states clean wins (P1, P5) merged. Agent D queue payload-config UNBLOCKED (P4 was moot).
+
 ## 2026-07-16 — No Em Dash + No AI Fingerprints; lean Creating a Resource
 
 - **Owner said:** Research sounding less like AI (verbosity, em dashes); then do the small plan.

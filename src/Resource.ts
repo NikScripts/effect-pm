@@ -1730,13 +1730,20 @@ export type ReadinessOf<Service> = (
 // ── node: the transport for a resource, carried in the Tag ──
 
 /**
- * The value of a {@link Node} service: the RPC client transport `Protocol` for that node.
- * `Resource.connect(...)` produces a layer providing exactly this (re-keyed under the node),
- * and {@link Resource.client} feeds it to `RpcClient.make` as the `RpcClient.Protocol`.
+ * The value of a {@link Node} service: a **wrapper** holding the RPC client transport `Protocol` for
+ * that node — deliberately NOT the bare `RpcClient.Protocol` service. Wrapping makes a node's value
+ * type-distinct from an ambient protocol, which closes a real type hole: without it, a node's value is
+ * structurally identical to `RpcClient.Protocol`, so `client(tag).pipe(Layer.provide(node))` (a node
+ * supplied where an ambient protocol is required) collapses the requirement to `never` and type-checks
+ * as fully wired — then throws "Service not found: RpcClient/Protocol" at runtime (the dashboard's
+ * "connecting… forever" bug). With the wrapper that wiring fails to compile; the only forms that
+ * compile are the correct ones — `connect` (wraps) and `client(tag, node)` (unwraps).
  *
  * @internal
  */
-type NodeProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
+interface NodeProtocol {
+  readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>;
+}
 
 /**
  * The Context key of a {@link Node} (`HSelf` = its identity): a service whose value is the
@@ -3434,7 +3441,10 @@ const connectLayer = <Self, RIn>(
   node: NodeKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
 ): Layer.Layer<Self, never, RIn> =>
-  Layer.effect(node, RpcClient.Protocol).pipe(Layer.provide(protocol));
+  // wrap the ambient protocol into the node's value shape (`{ protocol }`) — see NodeProtocol.
+  Layer.effect(node, Effect.map(RpcClient.Protocol, (protocol) => ({ protocol }))).pipe(
+    Layer.provide(protocol),
+  );
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
  * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
@@ -3442,27 +3452,33 @@ const connectLayer = <Self, RIn>(
 const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
 
-// One-time nudge when {@link httpClient} builds in a browser — the silent footgun. `httpClient` is
-// the server/CLI/backend transport; a browser dashboard opens many concurrent streams and starves at
-// the ~6-connection HTTP/1.1 cap, with no error. Point the mistake at {@link socketClient}. Fires via
-// the runtime logger (once), so it can't be a raw-console lint smell and stays quiet on the server.
-let httpClientBrowserWarned = false;
-const warnHttpClientInBrowser = Effect.suspend(() => {
-  if (typeof window === "undefined" || httpClientBrowserWarned) return Effect.void;
-  httpClientBrowserWarned = true;
-  return Effect.logWarning(
-    "Resource.httpClient is running in a browser. A dashboard opens many concurrent streams " +
-      "(each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 connections " +
-      "per origin — the rest are starved (no graphs, no logs, frozen cards). Use Resource.socketClient " +
-      "for the browser. See docs/observe/dashboard.md.",
-  );
-});
+const httpClientInBrowserMessage =
+  "Resource.protocolHttp / httpClient cannot run in a browser: a dashboard opens many concurrent " +
+  "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
+  "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
+  "Resource.socketClient / a socket-kind node for the browser. See docs/observe/dashboard.md.";
+
+/** The http client transport was built in a browser — it starves at the ~6-connection HTTP/1.1 cap and
+ *  ships a blank dashboard. `socketClient` is the browser transport. A hard failure, not a warning: the
+ *  starving transport is never the right choice in a browser. @internal */
+class HttpClientInBrowser extends Data.TaggedError("HttpClientInBrowser")<{
+  readonly message: string;
+}> {}
+
+// Fail loudly if an http client transport is built in a browser (window defined). No-op on the server /
+// in tests (`window` undefined). A die, not a log — the mistake ships a silently-broken dashboard.
+const dieIfHttpClientInBrowser = Effect.suspend(() =>
+  typeof window === "undefined"
+    ? Effect.void
+    : Effect.die(new HttpClientInBrowser({ message: httpClientInBrowserMessage })),
+);
 
 /**
- * Wire a {@link Node}'s transport over **http**, the common case — `Resource.connect` with
- * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
- * and re-keys it under the node. Serialization defaults to {@link defaultSerialization}
- * (ndjson), matching {@link httpServer}'s default so the two sides agree by construction.
+ * Wire a {@link Node}'s transport over **http** — the server/CLI/backend case. Builds the http client
+ * `Protocol` (Fetch + serialization) from a `url` and re-keys it under the node. Serialization defaults
+ * to {@link defaultSerialization} (ndjson), matching {@link httpServer}'s default so the two sides agree
+ * by construction. **In a browser this fails hard** (`HttpClientInBrowser`) — http starves at the
+ * ~6-connection cap; use {@link socketClient} there.
  *
  * ```ts
  * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
@@ -3480,12 +3496,10 @@ const httpClient = <Self>(
   // a per-node shortcut = `connect` + {@link protocolHttp}. The url lives on the node by default
   // (decision 2 — the node carries how to reach it); `options.url` overrides; `"/rpc"` (same-origin)
   // is the final fallback, matching {@link httpServer}'s default path.
-  Layer.merge(
-    connectLayer(
-      node,
-      protocolHttp(options?.url ?? node.url ?? "/rpc", options?.serialization),
-    ),
-    Layer.effectDiscard(warnHttpClientInBrowser),
+  // the browser guard lives in `protocolHttp` (the root), so it applies here too.
+  connectLayer(
+    node,
+    protocolHttp(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
 
 // Normalize a `socketClient` url to `ws://` / `wss://`, resolved **lazily** (in the enclosing
@@ -3535,9 +3549,14 @@ export const protocolHttp = (
   url = "/rpc",
   serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
 ): Layer.Layer<RpcClient.Protocol> =>
-  RpcClient.layerProtocolHttp({ url }).pipe(
-    Layer.provide(serialization),
-    Layer.provide(FetchHttpClient.layer),
+  // guard at the root: `httpClient` / `clientHttp` / `connectHttp` all build on this, so the browser
+  // footgun is closed for every http-client path in one place.
+  Layer.merge(
+    RpcClient.layerProtocolHttp({ url }).pipe(
+      Layer.provide(serialization),
+      Layer.provide(FetchHttpClient.layer),
+    ),
+    Layer.effectDiscard(dieIfHttpClientInBrowser),
   );
 
 /**
@@ -3576,8 +3595,8 @@ const serverProtocolWebsocket = (
  * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
  * {@link httpClient}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
  * multiplexed connection**, so a dashboard never trips the browser's ~6-connection-per-origin
- * HTTP/1.1 limit that starves streams over {@link httpClient} (past ~6 live streams: no graphs, no
- * logs, some resources blank). The server must serve `protocol: "websocket"` — see {@link httpServer}.
+ * HTTP/1.1 limit that starves streams over {@link httpClient} (in a browser {@link httpClient} now
+ * fails hard — see its note). The server must be a {@link wsServer}.
  *
  * The `url` may be a same-origin **path** (`"/rpc"` — resolved against the page `location`, so the
  * browser follows its own host + scheme, `http→ws` / `https→wss`), an `http(s)://` url (scheme
@@ -4222,7 +4241,7 @@ function clientLayer<Self, S extends Spec>(
   const layer = Layer.effect(
     tag,
     Effect.flatMap(
-      Effect.flatMap(nodeKey, (protocol) =>
+      Effect.flatMap(nodeKey, ({ protocol }) =>
         Effect.provideService(
           RpcClient.make(group),
           RpcClient.Protocol,

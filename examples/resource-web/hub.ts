@@ -18,8 +18,13 @@ import * as CustomQueueResource from "../../src/CustomQueueResource";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
+import * as FleetHealth from "../../src/FleetHealth";
+import * as Telemetry from "../../src/Telemetry";
+import * as ShardMap from "../../src/ShardMap";
+import * as RunResource from "../../src/RunResource";
 
 const importJob = Schema.Struct({ id: Schema.String });
+const session = Schema.Struct({ id: Schema.String, user: Schema.String });
 
 // Three remote machines (see `server.ts`): the box-score queue on `WnbaNode`, the live-score poller
 // on `LiveNode`, the play-by-play queue on `StatsNode` — so the dashboard's node die shows three
@@ -47,6 +52,35 @@ export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
 }).pipe(
   Resource.distributed([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
 ) {}
+
+// A **fleet-health** mesh across the three nodes — each instance reports its own readiness; `byNode`
+// folds every peer's (Reachable / Unreachable), `status` rolls that up. Dogfoods the FleetHealth widget.
+export class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+  Resource.distributed([WnbaNode, LiveNode, StatsNode]),
+) {}
+
+// A **telemetry** mesh — each node's Metric registry (the queues emit `queue_in_flight`). `fleetInFlight`
+// folds every node's in-flight, `inFlightByNode` breaks it down. Dogfoods the Telemetry widget.
+export class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+  Resource.distributed([WnbaNode, LiveNode, StatsNode]),
+) {}
+
+// A **shard-map** mesh — active game sessions partitioned across the three nodes by `consistentHash`.
+// `sizeLocal` is this node's shard; `sizeByNode` / `size` are fleet folds. Dogfoods the ShardMap widget.
+export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
+  key: Schema.String,
+  value: session,
+  keyOf: (s) => s.id,
+}).pipe(Resource.distributed([WnbaNode, LiveNode, StatsNode])) {}
+
+// A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
+// queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
+// driven concurrently so the RunResourceCard shows live in-flight / waiting / done counters.
+export class FetchGate extends RunResource.Tag<FetchGate>()("wnba/FetchGate", {
+  payload: Schema.String,
+  success: Schema.Number,
+  error: Schema.String,
+}) {}
 
 // A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
@@ -112,6 +146,10 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   ImportJobs,
   ScoresApi,
   WorkerPool,
+  MeshHealth,
+  FleetMetrics,
+  Sessions,
+  FetchGate,
 }) {}
 
 /** The hub the dashboard renders. */
@@ -150,6 +188,11 @@ const appLayer = Layer.mergeAll(
   // one on WnbaNode. `client(tag, node)` resolves the transport from that node, so the requirement is
   // the node (satisfied by wnbaTransport), enforced at compile time.
   Resource.client(WorkerPool, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(FleetMetrics, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(Sessions, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  // FetchGate is a nodeless run gate served on LiveNode; name the instance to read (like WorkerPool).
+  Resource.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */

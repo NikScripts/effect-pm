@@ -24,6 +24,11 @@ import {
   type ProcessTag,
   type QueueBundle,
   type QueueTag,
+  isCustomQueueTag,
+  isFleetHealthTag,
+  isRunTag,
+  isShardMapTag,
+  isTelemetryTag,
   kindOf,
   leafByKey,
   leafTags,
@@ -38,7 +43,7 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useProcessBundle, useQueu
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, ResourceReadinessBanner, RunResourceDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
@@ -272,8 +277,28 @@ const DashboardInner = (props: {
   const { group, selected, trail, keys } = route;
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.key}`);
+  // ── degraded-first sort state (hoisted above the detail early-return so hook order is constant
+  //    whether a resource is selected or not — rules-of-hooks). Only read on the grid path below.
+  const [degradedKeysByNode, setDegradedKeysByNode] = React.useState<
+    ReadonlyMap<string, ReadonlyArray<string>>
+  >(() => new Map());
+  const reportDegradedKeys = React.useCallback((id: string, keys: ReadonlyArray<string>): void => {
+    setDegradedKeysByNode((prev) => {
+      const next = new Map(prev);
+      next.set(id, keys);
+      return next;
+    });
+  }, []);
+  const degradedKeys = React.useMemo(
+    () => new Set([...degradedKeysByNode.values()].flat()),
+    [degradedKeysByNode],
+  );
+  const [degradedFirst, setDegradedFirst] = React.useState(false);
 
   if (selected !== null) {
+    // the member key the selected leaf sits under — the display name the grid card used (mesh factory
+    // tags share a generic key like "telemetry", so title off the member name, not the tag key).
+    const selectedName = keys[trail.length - 1];
     const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
     const openLogs = (): void => transition("log-panel", () => route.open("logs"));
     const closeLogs = (): void => transition("log-panel", () => route.back());
@@ -290,6 +315,11 @@ const DashboardInner = (props: {
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
     if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
+    if (isCustomQueueTag(selected)) return <CustomQueueDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isRunTag(selected)) return <RunResourceDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     return <></>;
   }
 
@@ -300,24 +330,9 @@ const DashboardInner = (props: {
     .map((g, i) => (i === 0 ? displayName(g.key) : keys[i - 1] ?? displayName(g.key)))
     .join(" / ");
   // ── degraded-first sort ──────────────────────────────────────────────────
-  // Hidden probes report each node's not-ready resource keys (constant hook order); when the toggle is
-  // on, members that are (or contain) a degraded resource float to the top, stable otherwise.
+  // Hidden probes report each node's not-ready resource keys; when the toggle is on, members that are
+  // (or contain) a degraded resource float to the top, stable otherwise. (State hoisted above.)
   const sortNodes = nodesOf(group);
-  const [degradedKeysByNode, setDegradedKeysByNode] = React.useState<
-    ReadonlyMap<string, ReadonlyArray<string>>
-  >(() => new Map());
-  const reportDegradedKeys = React.useCallback((id: string, keys: ReadonlyArray<string>): void => {
-    setDegradedKeysByNode((prev) => {
-      const next = new Map(prev);
-      next.set(id, keys);
-      return next;
-    });
-  }, []);
-  const degradedKeys = React.useMemo(
-    () => new Set([...degradedKeysByNode.values()].flat()),
-    [degradedKeysByNode],
-  );
-  const [degradedFirst, setDegradedFirst] = React.useState(false);
   const memberDegraded = (member: unknown): boolean => {
     if (isLeafTag(member)) return degradedKeys.has(member.key);
     if (Group.isGroup(member)) {
@@ -435,6 +450,11 @@ const NodeResourceView = (props: {
   if (isQueueTag(tag)) {
     return <QueueDetail tag={tag} onBack={props.onBack} onOpenLogs={() => setView("logs")} />;
   }
+  if (isCustomQueueTag(tag)) return <CustomQueueDetail tag={tag} onBack={props.onBack} />;
+  if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
+  if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
+  if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
+  if (isRunTag(tag)) return <RunResourceDetail tag={tag} onBack={props.onBack} />;
   return <></>;
 };
 
