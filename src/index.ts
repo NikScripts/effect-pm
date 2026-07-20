@@ -193,6 +193,7 @@ export type {
   CatalogNode,
   DialableTarget,
   ListenOptions,
+  NamelessListenOptions,
   NodeKey,
   ProtocolKind,
 } from "./Node";
