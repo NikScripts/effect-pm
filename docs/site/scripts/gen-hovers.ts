@@ -142,6 +142,32 @@ const program = Effect.gen(function* () {
 
   // Content-hash cache: skip a file whose source is byte-identical to last run (its sidecars already
   // exist in hoversDir). A pinned submodule → every file skipped after the first pass.
+  // The cache SELF-INVALIDATES when the hover pipeline changes: the version is a hash of the
+  // pipeline's own sources, folded into every entry — no more "delete api-hovers/ after editing".
+  const pipelineVersion = yield* Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const siteDir = nodePath.join(repoRoot, "docs/site");
+    const sources = [
+      "scripts/gen-hovers.ts",
+      "src/lib/highlight.ts",
+      "src/lib/expandType.ts",
+      "src/lib/api-source-links.ts",
+      "src/lib/api-data.ts",
+    ];
+    const docgen = (yield* fs
+      .readDirectory(nodePath.join(siteDir, "src/docgen"))
+      .pipe(Effect.orElseSucceed(() => [])))
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => `src/docgen/${f}`)
+      .sort();
+    const hasher = createHash("sha1");
+    for (const rel of [...sources, ...docgen]) {
+      hasher.update(
+        yield* fs.readFileString(nodePath.join(siteDir, rel)).pipe(Effect.orElseSucceed(() => ""))
+      );
+    }
+    return hasher.digest("hex").slice(0, 12);
+  });
   const cache = (yield* readJson(cachePath, Schema.Record(Schema.String, Schema.String))) ?? {};
   const nextCache: Record<string, string> = {};
   let files = 0;
@@ -152,7 +178,7 @@ const program = Effect.gen(function* () {
     files += 1;
     const fileText = yield* readFile(nodePath.join(repoRoot, relFile));
     if (fileText === undefined) continue;
-    const hash = createHash("sha1").update(fileText).digest("hex");
+    const hash = `${pipelineVersion}:${createHash("sha1").update(fileText).digest("hex")}`;
     nextCache[relFile] = hash;
     if (cache[relFile] === hash) {
       skipped += syms.length;
