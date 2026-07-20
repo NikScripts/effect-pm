@@ -18,6 +18,7 @@ import { NodeServices } from "@effect/platform-node";
 // Reuse the LIVE render pipeline (dual-preview expand, markdown-rendered JSDoc, api-typelinks) so the
 // precomputed effect hovers are identical to our own package's — one renderer, no drift.
 import { highlightToHast, loadHighlighter } from "../src/lib/highlight.js";
+import { loadSourceLinks, sourceLinksFor } from "../src/lib/api-source-links.js";
 import { moduleSummary, packages, symbolDetail } from "../src/lib/api-data.js";
 import { symbolFileKey } from "../src/lib/api-slugs.js";
 
@@ -35,7 +36,7 @@ class FileError extends Data.TaggedError("FileError")<{
 // --- IO through effect/FileSystem (never node:fs) ---
 const readJson = <S extends Schema.Top>(
   path: string,
-  schema: S,
+  schema: S
 ): Effect.Effect<S["Type"] | undefined, never, FileSystem.FileSystem | S["DecodingServices"]> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -43,16 +44,19 @@ const readJson = <S extends Schema.Top>(
     return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text);
   }).pipe(Effect.orElseSucceed(() => undefined));
 
-const writeText = (path: string, text: string): Effect.Effect<void, FileError, FileSystem.FileSystem> =>
+const writeText = (
+  path: string,
+  text: string
+): Effect.Effect<void, FileError, FileSystem.FileSystem> =>
   Effect.flatMap(FileSystem.FileSystem, (fs) =>
     fs
       .makeDirectory(nodePath.dirname(path), { recursive: true })
-      .pipe(Effect.andThen(fs.writeFileString(path, text))),
+      .pipe(Effect.andThen(fs.writeFileString(path, text)))
   ).pipe(Effect.mapError((cause) => new FileError({ path, cause })));
 
 const readFile = (path: string): Effect.Effect<string | undefined, never, FileSystem.FileSystem> =>
   Effect.flatMap(FileSystem.FileSystem, (fs) => fs.readFileString(path)).pipe(
-    Effect.orElseSucceed(() => undefined),
+    Effect.orElseSucceed(() => undefined)
   );
 
 // --- HAST helpers (no hast-util-to-html dep — hand-serialize the shiki/twoslash tree) ---
@@ -61,8 +65,7 @@ type Hast = any;
 const VOID = new Set(["br", "hr", "img", "input", "col", "wbr"]);
 const escText = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const escAttr = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+const escAttr = (s: string): string => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 const toHtml = (n: Hast): string => {
   if (n.type === "text") return escText(String(n.value));
   if (n.type === "root") return (n.children ?? []).map(toHtml).join("");
@@ -103,8 +106,10 @@ const program = Effect.gen(function* () {
     return;
   }
 
-  // Ready the shared highlighter + api-link / doc-link data (the same load the live render does).
+  // Ready the shared highlighter + api-link / doc-link data (the same load the live render does),
+  // plus the compiler source-link stack (docgen SourceRenderer over the model's location index).
   yield* Effect.promise(() => loadHighlighter());
+  yield* Effect.promise(() => loadSourceLinks());
 
   // Collect every documented symbol (via the same readers the site uses), grouped by its source file
   // so each file is twoslashed once.
@@ -153,11 +158,16 @@ const program = Effect.gen(function* () {
       skipped += syms.length;
       continue;
     }
-    const input = ["// @noErrors", `// @filename: ${relFile}`, fileText].join("\n");
+    // The cut strips BOTH directive lines from the tokenized code (twoslash removes `@noErrors`
+    // but keeps `@filename` without one — token offsets would shift by that line's length), so
+    // file-relative link offsets ARE token offsets. Same mechanism as the live source panel.
+    const input = ["// @noErrors", `// @filename: ${relFile}`, "// ---cut---", fileText].join("\n");
+    // Compiler-resolved token links for the whole file; sliced per symbol below.
+    const links = sourceLinksFor(relFile, 1, fileText.split("\n").length);
     // The shared render pipeline — twoslash + dual-preview expand + markdown JSDoc + api-typelinks —
     // exactly what the live render gives our own package.
     const hast: Hast = yield* Effect.try(() =>
-      highlightToHast(input, "ts", { twoslash: true }),
+      highlightToHast(input, "ts", { twoslash: true, links })
     ).pipe(Effect.orElseSucceed(() => undefined));
     if (hast === undefined) {
       missed += syms.length;
@@ -166,7 +176,7 @@ const program = Effect.gen(function* () {
     const pre = (hast.children ?? []).find((c: Hast) => c.tagName === "pre");
     const code = (pre?.children ?? []).find((c: Hast) => c.tagName === "code");
     const lineEls: Array<Hast> = (code?.children ?? []).filter(
-      (c: Hast) => c.type === "element" && String(c.properties?.class ?? "").includes("line"),
+      (c: Hast) => c.type === "element" && String(c.properties?.class ?? "").includes("line")
     );
     for (const sym of syms) {
       const first = sym.sourceText.split("\n")[0]?.trimEnd() ?? "";
@@ -199,20 +209,20 @@ const program = Effect.gen(function* () {
       const html = `<pre class="${escAttr(preClass)}"><code>${inner}</code></pre>`;
       yield* writeText(
         nodePath.join(hoversDir, sym.pkg, sym.moduleSlug, `${symbolFileKey(sym.name)}.src.html`),
-        html,
+        html
       );
       written += 1;
     }
   }
   yield* writeText(cachePath, `${JSON.stringify(nextCache)}\n`);
   yield* Console.log(
-    `hovers: ${pkgs.length} pkgs, ${files} files, ${written} written, ${skipped} cached, ${missed} unmatched`,
+    `hovers: ${pkgs.length} pkgs, ${files} files, ${written} written, ${skipped} cached, ${missed} unmatched`
   );
 });
 
 const main = program.pipe(
   Effect.tapCause((cause) => Console.error(String(cause))),
-  Effect.provide(NodeServices.layer),
+  Effect.provide(NodeServices.layer)
 );
 const exit = await Effect.runPromiseExit(main);
 process.exit(Exit.isSuccess(exit) ? 0 : 1);

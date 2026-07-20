@@ -148,6 +148,72 @@ describe("Annotate", () => {
     })
   );
 
+  it.effect("transformer keeps an injected hover popup OUTSIDE the anchor", () =>
+    Effect.gen(function* () {
+      const code = "declare const a: Holder<Target>";
+      const links: ReadonlyArray<Annotate.Link> = [
+        {
+          start: code.indexOf("Holder"),
+          end: code.indexOf("Holder") + 6,
+          url: holderUrl,
+        },
+      ];
+      // Simulates twoslash: restructures the linked token's children into a hover wrapper whose
+      // FIRST child is the popup — the anchor must wrap only the visible text.
+      const fakeTwoslash = {
+        name: "test:fake-twoslash",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only)
+        span: (hast: any, _line: number, _col: number, _lineEl: any, token: any) => {
+          if (String(token.content).trim() !== "Holder") return;
+          hast.children = [
+            {
+              type: "element",
+              tagName: "span",
+              properties: { class: "twoslash-hover" },
+              children: [
+                {
+                  type: "element",
+                  tagName: "span",
+                  properties: { class: "twoslash-popup-container" },
+                  children: [
+                    {
+                      type: "text",
+                      value: "POPUP CONTENT",
+                    },
+                  ],
+                },
+                ...hast.children,
+              ],
+            },
+          ];
+        },
+      };
+      const hl = yield* Effect.promise(() =>
+        createHighlighter({
+          themes: ["github-light"],
+          langs: ["typescript"],
+        })
+      );
+      const hast = hl.codeToHast(code, {
+        lang: "typescript",
+        theme: "github-light",
+        transformers: [fakeTwoslash, Annotate.transformer({ links })],
+      });
+      expect(anchorsOf(hast)).toStrictEqual([[" Holder", holderUrl]]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only)
+      const deepText = (n: any): string =>
+        n?.type === "text" ? String(n.value) : (n?.children ?? []).map(deepText).join("");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing (test-only)
+      const anchorHoldsPopup = (n: any): boolean =>
+        n?.type === "element" && n.tagName === "a"
+          ? deepText(n).includes("POPUP CONTENT")
+          : (n?.children ?? []).some(anchorHoldsPopup);
+      expect(anchorHoldsPopup(hast)).toBe(false);
+      expect(deepText(hast)).toContain("POPUP CONTENT"); // the popup itself survives, outside
+      hl.dispose();
+    })
+  );
+
   it.effect("transformer subtracts the preamble shift", () =>
     Effect.gen(function* () {
       const preamble = "// preamble\n";

@@ -258,14 +258,38 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
 - Phase 5 REMINDER (P4): the production `TsProgram` needs `paths` mapping `effect`/`@effect/*` →
   `repos/effect/…/src`, else cross-package refs hit node_modules and link nowhere.
 
-### Then Phase 5 (integrate) — replace, don't rebuild
-`gen-api-next.ts` already IS the integrated generator; Phase 5 = rename it over `gen-api.ts`, wire
-`gen-hovers.ts` + the render (`highlight.ts`) to the services, delete the prototype extractor.
-Wire the services into `scripts/gen-api.ts` + `scripts/gen-hovers.ts` + the render (`highlight.ts`); delete
-the name-heuristic (`api-links.ts` + `api-linkify.ts`) LAST. Gate: byte-identical model + the site build
-still green. NOTE the deploy constraints: data paths resolve from `process.cwd()` (docs/site), NOT
-`import.meta.url`; symbol pages are SSR (static-all overflows Waku's ~512 MB serializer); effect-pm is
-static via the literal `/api/effect-pm/…` route. See `[[api-reference-docs]]`.
+### Phase 5 (integrate) — IN PROGRESS
+- ~~Step 1 — gen-api cutover~~ ✅ (2026-07-19): `gen-api-next.ts` renamed over `gen-api.ts` (output →
+  `api-data/`), prototype extractor deleted (−741 lines). Gate: full-corpus regen byte-identical.
+- ~~Step 2 — compiler source links in BOTH render paths~~ ✅ (2026-07-19):
+  - `gen-api.ts` now also writes `api-data/locations.json` (declaration location → url, deduped per
+    line, last-wins = extraction order) — the render-time SymbolIndex feed. Model files unchanged.
+  - NEW `src/lib/api-source-links.ts` — the docgen stack in the site: `loadSourceLinks()` (async
+    preload, like loadHighlighter) reads locations.json + enumerates repos/effect packages into the
+    P4 `paths` map; `sourceLinksFor(relFile, startLine, endLine)` = sync span links; per-package
+    programs built lazily (rooted at the package barrel, `Effect.runSync` over the sync layers),
+    rebuilt with accumulated roots when a file outside the barrel graph shows up.
+  - `highlight.ts`: `highlightToHast`/`highlightToReact` accept `links` (Annotate ranges relative
+    to the VISIBLE code); `highlightSourceWithHovers` passes the span's links (cut leaves exactly
+    the span visible → span-relative offsets need NO shift, verified empirically).
+  - `gen-hovers.ts`: whole-file links + a `// ---cut---` after the directives — twoslash strips
+    `@noErrors` but KEEPS a bare `@filename` line in the tokenized code (tokens shift by its
+    length; measured); the cut strips both, so file offsets ARE token offsets. Verified: 373/373
+    anchors aligned on sql-sqlite-node; cross-package anchors (sqlite→effect/Layer,Effect,Config)
+    live. DELETE `api-hovers/` before regenerating whenever the hover pipeline changes (the
+    content-hash cache only tracks SOURCE changes).
+  - `Annotate.transformer` is now TWO-PHASE: `span` hook only stamps a data-attr; a late `pre`
+    pass wraps the token's visible children in the anchor and DESCENDS past twoslash's hover
+    wrapper so popups stay OUTSIDE the link (found live: the popup was landing inside the anchor).
+- Step 3 (REMAINING) — replace the popup type-text linking (`linkApiTypes` name heuristic) with
+  compiler resolution, then delete `api-links.ts` + `api-linkify.ts` LAST. ⚠ CONSTRAINT to surface
+  before deleting: JSDoc inline-code PROSE linking (`linkifyCode`/`resolveDocRef` in highlight.ts)
+  has no compiler node to resolve — prose linking stays name-based (built from the model's
+  links.json) unless the owner accepts dropping it.
+Gate: byte-identical model + the site build still green. NOTE the deploy constraints: data paths
+resolve from `process.cwd()` (docs/site), NOT `import.meta.url`; symbol pages are SSR (static-all
+overflows Waku's ~512 MB serializer); effect-pm is static via the literal `/api/effect-pm/…` route.
+See `[[api-reference-docs]]`.
 
 ## Decisions log
 

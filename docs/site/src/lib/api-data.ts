@@ -74,6 +74,12 @@ const PathsS = Schema.Struct({
 });
 const DocLinksS = Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.String));
 const MetaS = Schema.Struct({ repoBaseUrl: Schema.optional(Schema.String) });
+const SymbolLocationS = Schema.Struct({
+  file: Schema.String,
+  line: Schema.Number,
+  url: Schema.String,
+});
+const LocationsS = Schema.Struct({ locations: Schema.Array(SymbolLocationS) });
 
 export interface ApiTag extends Schema.Schema.Type<typeof ApiTagS> {}
 export interface ApiSource extends Schema.Schema.Type<typeof ApiSourceS> {}
@@ -83,11 +89,12 @@ export interface ModuleInfo extends Schema.Schema.Type<typeof ModuleInfoS> {}
 export interface PackageInfo extends Schema.Schema.Type<typeof PackageInfoS> {}
 export interface ModuleSummary extends Schema.Schema.Type<typeof ModuleSummaryS> {}
 export interface LinkSymbol extends Schema.Schema.Type<typeof LinkSymbolS> {}
+export interface SymbolLocation extends Schema.Schema.Type<typeof SymbolLocationS> {}
 
 // Read + JSON-decode a data file through effect/FileSystem; undefined when it's missing/malformed.
 const readJson = <S extends Schema.Top>(
   rel: string,
-  schema: S,
+  schema: S
 ): Effect.Effect<S["Type"] | undefined, never, FileSystem.FileSystem | S["DecodingServices"]> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -105,20 +112,20 @@ export const packages = (): Effect.Effect<
 > => readJson("index.json", IndexS).pipe(Effect.map((i) => i?.packages ?? []));
 
 export const packageBySlug = (
-  slug: string,
+  slug: string
 ): Effect.Effect<PackageInfo | undefined, never, FileSystem.FileSystem> =>
   packages().pipe(Effect.map((ps) => ps.find((p) => p.slug === slug)));
 
 export const moduleSummary = (
   pkg: string,
-  moduleSlug: string,
+  moduleSlug: string
 ): Effect.Effect<ModuleSummary | undefined, never, FileSystem.FileSystem> =>
   readJson(nodePath.join(pkg, `${moduleSlug}.json`), ModuleSummaryS);
 
 export const symbolDetail = (
   pkg: string,
   moduleSlug: string,
-  name: string,
+  name: string
 ): Effect.Effect<ApiSymbol | undefined, never, FileSystem.FileSystem> =>
   readJson(nodePath.join(pkg, moduleSlug, `${symbolFileKey(name)}.json`), ApiSymbolS);
 
@@ -136,6 +143,14 @@ export const linkSymbols = (): Effect.Effect<
   FileSystem.FileSystem
 > => readJson("links.json", LinksS).pipe(Effect.map((l) => l?.symbols ?? []));
 
+// Every documented declaration's location → its doc URL (deduped per line by the writer) — the
+// render-time SymbolIndex for compiler source links (src/lib/api-source-links.ts).
+export const symbolLocations = (): Effect.Effect<
+  ReadonlyArray<SymbolLocation>,
+  never,
+  FileSystem.FileSystem
+> => readJson("locations.json", LocationsS).pipe(Effect.map((l) => l?.locations ?? []));
+
 // Resolved {@link} maps keyed by a symbol's declaration `file:line` — for hover link resolution.
 export const docLinksByLocation = (): Effect.Effect<
   Readonly<Record<string, Record<string, string>>>,
@@ -149,7 +164,7 @@ export const repoBaseUrl = (): Effect.Effect<string, never, FileSystem.FileSyste
 // The full text of a symbol's source file (repo-relative), for the twoslash source panel. Read
 // through effect/FileSystem so the sync render pipeline never touches node:fs; undefined if missing.
 export const readSourceFile = (
-  relFile: string,
+  relFile: string
 ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -161,11 +176,11 @@ export const readSourceFile = (
 export const symbolSourceHtml = (
   pkg: string,
   moduleSlug: string,
-  name: string,
+  name: string
 ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     return yield* fs.readFileString(
-      nodePath.join(hoversDir, pkg, moduleSlug, `${symbolFileKey(name)}.src.html`),
+      nodePath.join(hoversDir, pkg, moduleSlug, `${symbolFileKey(name)}.src.html`)
     );
   }).pipe(Effect.orElseSucceed(() => undefined));

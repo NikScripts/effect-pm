@@ -308,6 +308,10 @@ const program = Effect.gen(function* () {
   const paths: Array<readonly [string, string, string]> = [];
   const links: Array<{ name: string; qualifiedName: string; url: string }> = [];
   const doclinks: Record<string, Record<string, string>> = {};
+  // location → url, for the render-time SymbolIndex (compiler source links). Keyed by file#line
+  // with the LAST write winning — the writer sees symbols in extraction order, so this reproduces
+  // the Extractor's per-resolved-symbol dedup (multi-namespace re-exports keep one page per line).
+  const locations = new Map<string, { file: string; line: number; url: string }>();
 
   for (const spec of specs) {
     const model = yield* extractPackage(spec);
@@ -338,6 +342,11 @@ const program = Effect.gen(function* () {
           if (Object.keys(s.docLinks).length > 0) {
             doclinks[`${s.source.file}:${s.source.line}`] = s.docLinks;
           }
+          locations.set(`${s.source.file}#${s.source.line}`, {
+            file: s.source.file,
+            line: s.source.line,
+            url: s.url,
+          });
         }
       })
     );
@@ -351,6 +360,9 @@ const program = Effect.gen(function* () {
   yield* writeJson(nodePath.join(dataDir, "links.json"), { symbols: links });
   yield* writeJson(nodePath.join(dataDir, "meta.json"), { repoBaseUrl });
   yield* writeJson(nodePath.join(dataDir, "doclinks.json"), doclinks);
+  yield* writeJson(nodePath.join(dataDir, "locations.json"), {
+    locations: [...locations.values()],
+  });
   yield* Console.log(`wrote ${dataDir} — ${pkgInfos.length} package(s)`);
 });
 

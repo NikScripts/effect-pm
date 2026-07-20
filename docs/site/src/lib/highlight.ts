@@ -19,6 +19,8 @@ import { makeTypeExpander } from "./expandType";
 import { loadApiLinks, resolveApiLink } from "./api-links";
 import { classListOf, linkApiTypes } from "./api-linkify";
 import { docLinksByLocation } from "./api-data";
+import { loadSourceLinks, sourceLinksFor } from "./api-source-links";
+import * as Annotate from "../docgen/Annotate.js";
 import { runServer } from "./runtime";
 
 // Compiler-resolved {@link} maps, keyed by a symbol's declaration `file:line` (see gen-api). Hovers
@@ -73,7 +75,7 @@ const compilerOptions: ts.CompilerOptions = {
 // node. `removals` are ranges removed from the full code to produce the visible output.
 const toFullOffset = (
   visible: number,
-  removals: ReadonlyArray<readonly [number, number]>,
+  removals: ReadonlyArray<readonly [number, number]>
 ): number => {
   let full = visible;
   for (const [s, e] of [...removals].sort((a, b) => a[0] - b[0])) {
@@ -118,16 +120,27 @@ const formatHoverType = (text: string): string => {
   const decl = /^([\w$]+\??:\s*)([\s\S]+)$/.exec(body);
   if (decl !== null) {
     const t = tryFormat(`type _t = ${decl[2]}`, (s) =>
-      s.replace(/^type _t =\s*/, "").replace(/;$/, "").trim(),
+      s
+        .replace(/^type _t =\s*/, "")
+        .replace(/;$/, "")
+        .trim()
     );
     if (t !== undefined) return `${prefix}${decl[1]}${t}`;
   }
   // a full declaration (const / function / class / type …)
-  const full = tryFormat(`declare ${body}`, (s) => s.replace(/^declare\s+/, "").replace(/;$/, "").trim());
+  const full = tryFormat(`declare ${body}`, (s) =>
+    s
+      .replace(/^declare\s+/, "")
+      .replace(/;$/, "")
+      .trim()
+  );
   if (full !== undefined) return prefix + full;
   // a bare type
   const bare = tryFormat(`type _t = ${body}`, (s) =>
-    s.replace(/^type _t =\s*/, "").replace(/;$/, "").trim(),
+    s
+      .replace(/^type _t =\s*/, "")
+      .replace(/;$/, "")
+      .trim()
   );
   if (bare !== undefined) return prefix + bare;
   return text;
@@ -140,13 +153,13 @@ const twoslasher = Object.assign(
   (
     code: string,
     extension: Parameters<typeof baseTwoslasher>[1],
-    options: Parameters<typeof baseTwoslasher>[2],
+    options: Parameters<typeof baseTwoslasher>[2]
   ): ReturnType<typeof baseTwoslasher> => {
     const result = baseTwoslasher(code, extension, options);
     try {
       const hovers = result.nodes.filter(
         (n): n is typeof n & { text: string; start: number; docs?: string } =>
-          n.type === "hover" || n.type === "query",
+          n.type === "hover" || n.type === "query"
       );
       if (hovers.length === 0) return result;
       const removals = result.meta.removals as ReadonlyArray<readonly [number, number]>;
@@ -188,7 +201,7 @@ const twoslasher = Object.assign(
     return result;
   },
   // A `TwoslashInstance` is callable + carries a `getCacheMap`; reuse the base instance's.
-  { getCacheMap: baseTwoslasher.getCacheMap },
+  { getCacheMap: baseTwoslasher.getCacheMap }
 );
 
 // HAST helpers to splice the expanded box into the popup, and a renderer that inserts it BETWEEN the
@@ -249,9 +262,8 @@ function preprocessJsdoc(md: string): string {
   // One tolerant matcher for {@link Target}, {@link Target text}, {@link Target|text}, and any of
   // those with stray inner whitespace (e.g. `{@link httpServer }`) — the separator and trailing
   // space are optional, so a bare target with a trailing space no longer leaks raw.
-  return md.replace(
-    /\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)?([^}]*?)\s*\}/g,
-    (_m, target, text) => label(String(target), String(text ?? "")),
+  return md.replace(/\{@link\s+([^}|\s]+)(?:\s*\|\s*|\s+)?([^}]*?)\s*\}/g, (_m, target, text) =>
+    label(String(target), String(text ?? ""))
   );
 }
 
@@ -265,8 +277,8 @@ const resolveDocRef = (ref: string): string | undefined =>
   ref.startsWith("/")
     ? ref // already a resolved url (embedded into hover docs by embedDocLinks)
     : ref.includes(".")
-      ? resolveApiLink(ref, "", false)
-      : resolveApiLink(undefined, ref, true);
+    ? resolveApiLink(ref, "", false)
+    : resolveApiLink(undefined, ref, true);
 // Split inline-code text into HAST, wrapping any API-export name in a dotted-underline link.
 const linkifyCode = (text: string): any[] => {
   const out: any[] = [];
@@ -310,9 +322,21 @@ function jsdocToHast(docs: string, resolveLink?: (target: string) => string | un
             structure: "classic",
           }).children;
         } catch {
-          children = [{ type: "element", tagName: "pre", properties: {}, children: [{ type: "text", value: String(node.value) }] }];
+          children = [
+            {
+              type: "element",
+              tagName: "pre",
+              properties: {},
+              children: [{ type: "text", value: String(node.value) }],
+            },
+          ];
         }
-        return { type: "element", tagName: "div", properties: { className: ["twoslash-popup-docs-code"] }, children };
+        return {
+          type: "element",
+          tagName: "div",
+          properties: { className: ["twoslash-popup-docs-code"] },
+          children,
+        };
       },
       // inline `code` -> a <code>, with any API-export name inside it turned into a doc link. Only
       // the monospaced content is scanned; plain prose is never touched.
@@ -334,10 +358,25 @@ function jsdocToHast(docs: string, resolveLink?: (target: string) => string | un
           const target = url.slice("@link:".length).trim();
           const resolved = resolveLink?.(target) ?? resolveDocRef(target);
           return resolved !== undefined
-            ? { type: "element", tagName: "a", properties: { className: ["twoslash-jsdoc-link"], href: resolved }, children }
-            : { type: "element", tagName: "span", properties: { className: ["twoslash-jsdoc-link"] }, children };
+            ? {
+                type: "element",
+                tagName: "a",
+                properties: { className: ["twoslash-jsdoc-link"], href: resolved },
+                children,
+              }
+            : {
+                type: "element",
+                tagName: "span",
+                properties: { className: ["twoslash-jsdoc-link"] },
+                children,
+              };
         }
-        return { type: "element", tagName: "a", properties: { href: url, target: "_blank", rel: ["noreferrer"] }, children };
+        return {
+          type: "element",
+          tagName: "a",
+          properties: { href: url, target: "_blank", rel: ["noreferrer"] },
+          children,
+        };
       },
     },
   });
@@ -363,15 +402,33 @@ const renderer = {
   nodeStaticInfo(this: any, info: any, node: any) {
     const code = splitExpand(info);
     const el = baseRenderer.nodeStaticInfo.call(this, info, node);
-    if (code) try { insertExpand.call(this, el, code); } catch { /* keep plain popup */ }
-    try { linkApiTypes(el, resolveApiLink); } catch { /* links are best-effort */ }
+    if (code)
+      try {
+        insertExpand.call(this, el, code);
+      } catch {
+        /* keep plain popup */
+      }
+    try {
+      linkApiTypes(el, resolveApiLink);
+    } catch {
+      /* links are best-effort */
+    }
     return el;
   },
   nodeQuery(this: any, info: any, node: any) {
     const code = splitExpand(info);
     const el = baseRenderer.nodeQuery.call(this, info, node);
-    if (code) try { insertExpand.call(this, el, code); } catch { /* keep plain popup */ }
-    try { linkApiTypes(el, resolveApiLink); } catch { /* links are best-effort */ }
+    if (code)
+      try {
+        insertExpand.call(this, el, code);
+      } catch {
+        /* keep plain popup */
+      }
+    try {
+      linkApiTypes(el, resolveApiLink);
+    } catch {
+      /* links are best-effort */
+    }
     return el;
   },
 };
@@ -389,10 +446,16 @@ export const loadHighlighter = async (): Promise<void> => {
   }
   hoverDocLinks = await runServer(docLinksByLocation());
   await loadApiLinks();
+  await loadSourceLinks();
 };
 
 // HTML attribute → React prop name for the few twoslash emits that React is strict about.
-const ATTR_RENAME: Record<string, string> = { tabindex: "tabIndex", for: "htmlFor", colspan: "colSpan", rowspan: "rowSpan" };
+const ATTR_RENAME: Record<string, string> = {
+  tabindex: "tabIndex",
+  for: "htmlFor",
+  colspan: "colSpan",
+  rowspan: "rowSpan",
+};
 
 let keySeq = 0;
 
@@ -406,7 +469,8 @@ const toStyle = (raw?: string): React.CSSProperties | undefined => {
     const value = decl.slice(i + 1).trim();
     if (!prop) continue;
     // keep CSS custom props (--shiki-dark) verbatim; camelCase the rest for React
-    style[prop.startsWith("--") ? prop : prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = value;
+    style[prop.startsWith("--") ? prop : prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] =
+      value;
   }
   return style as React.CSSProperties;
 };
@@ -436,7 +500,11 @@ const hastToReact = (node: any): React.ReactNode => {
 export const highlightToHast = (
   code: string,
   lang?: string,
-  opts?: { readonly twoslash?: boolean },
+  opts?: {
+    readonly twoslash?: boolean;
+    /** Compiler-resolved source links (docgen Annotate ranges, relative to the VISIBLE code). */
+    readonly links?: ReadonlyArray<Annotate.Link>;
+  }
 ): any | undefined => {
   const text = code.replace(/\n$/, "");
   const resolved = lang ? ALIAS[lang.toLowerCase()] : undefined;
@@ -444,7 +512,12 @@ export const highlightToHast = (
   return hl.codeToHast(text, {
     lang: resolved,
     themes: THEMES,
-    transformers: opts?.twoslash ? [twoslash] : [],
+    transformers: [
+      ...(opts?.twoslash ? [twoslash] : []),
+      ...(opts?.links !== undefined && opts.links.length > 0
+        ? [Annotate.transformer({ links: opts.links })]
+        : []),
+    ],
   });
 };
 
@@ -452,7 +525,7 @@ export const highlightToHast = (
 export const highlightToReact = (
   code: string,
   lang?: string,
-  opts?: { readonly twoslash?: boolean },
+  opts?: { readonly twoslash?: boolean; readonly links?: ReadonlyArray<Annotate.Link> }
 ): React.ReactNode => {
   const hast = highlightToHast(code, lang, opts);
   if (hast === undefined) {
@@ -466,7 +539,7 @@ export const highlightToReact = (
  *  API-reference pages. `loadHighlighter()` must have run first so fenced code can be highlighted. */
 export const renderJsdocToReact = (
   docs: string,
-  resolveLink?: (target: string) => string | undefined,
+  resolveLink?: (target: string) => string | undefined
 ): React.ReactNode => hastToReact({ type: "root", children: jsdocToHast(docs, resolveLink) });
 
 /**
@@ -480,7 +553,7 @@ export const highlightSourceWithHovers = (
   relFile: string, // repo-relative, e.g. "src/QueueResource.ts" — for the @filename directive
   startLine: number, // 1-based first line of the declaration
   endLine: number, // 1-based last line (inclusive)
-  ownerDocLinks?: Record<string, string>, // the page symbol's resolved {@link} map (for its hovers)
+  ownerDocLinks?: Record<string, string> // the page symbol's resolved {@link} map (for its hovers)
 ): React.ReactNode | undefined => {
   try {
     const lines = fileText.split("\n");
@@ -497,7 +570,10 @@ export const highlightSourceWithHovers = (
     ].join("\n");
     currentOwnerDocLinks = ownerDocLinks;
     try {
-      return highlightToReact(input, "ts", { twoslash: true });
+      // Compiler-resolved token links for the shown span. The twoslash cut leaves EXACTLY lines
+      // startLine..endLine visible, so span-relative offsets are visible-code offsets (no shift).
+      const links = sourceLinksFor(relFile, startLine, endLine);
+      return highlightToReact(input, "ts", { twoslash: true, links });
     } finally {
       currentOwnerDocLinks = undefined;
     }

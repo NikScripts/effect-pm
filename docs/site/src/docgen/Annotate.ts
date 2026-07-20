@@ -1,7 +1,7 @@
 /**
  * Applies resolved doc links onto rendered code — the render-application half of the docgen (P3).
  * A {@link Link} is an offset range into a piece of display text (a source span, a printed type);
- * {@link transformer} turns every shiki token that overlaps a range into an anchor, so the EXISTING
+ * {@link transformer} wraps every shiki token that overlaps a range in an anchor, so the EXISTING
  * shiki/twoslash pipeline carries compiler-accurate links without a custom renderer (D1).
  *
  * Pure functions over data — no compiler, no services; the ranges come from the
@@ -130,17 +130,30 @@ export interface TransformerOptions {
   readonly className?: string;
 }
 
-const appendClass = (existing: unknown, added: string): string =>
-  typeof existing === "string" && existing !== ""
-    ? `${existing} ${added}`
-    : Array.isArray(existing)
-    ? [...existing, added].join(" ")
-    : added;
+type HastElement = Parameters<NonNullable<ShikiTransformer["pre"]>>[0];
+type HastChild = HastElement["children"][number];
+
+// Temporary marker set at token time, resolved to an anchor in the late pass — never emitted.
+const marker = "data-apilink";
+
+const classTextOf = (node: HastElement): string => {
+  const value = node.properties.class;
+  return typeof value === "string" ? value : Array.isArray(value) ? value.join(" ") : "";
+};
+
+// Other transformers (twoslash) inject hover popups INSIDE the token element; those must stay
+// outside the anchor or the whole popup becomes a click target.
+const isPopup = (child: HastChild): boolean =>
+  child.type === "element" && classTextOf(child).includes("twoslash-popup");
 
 /**
  * A shiki transformer linking the annotated text's tokens: a token whose offset RANGE overlaps a
- * {@link Link} becomes an `<a>` (kept as the token element — style and children intact). A link
- * spanning several tokens (`Effect.Effect`) yields adjacent anchors to the same page.
+ * {@link Link} gets its visible content wrapped in an `<a>` inside the token span. A link spanning
+ * several tokens (`Effect.Effect`) yields adjacent anchors to the same page.
+ *
+ * Two-phase on purpose: the `span` hook (token time) only STAMPS the element, and a late `pre`
+ * pass wraps — after other transformers' surgery, so a twoslash hover popup injected inside the
+ * token element stays OUTSIDE the anchor. List this transformer after twoslash.
  *
  * @category constructors
  * @since 1.0.0
@@ -148,6 +161,44 @@ const appendClass = (existing: unknown, added: string): string =>
 export const transformer = (options: TransformerOptions): ShikiTransformer => {
   const shift = options.shift ?? 0;
   const className = options.className ?? "api-typelink";
+  const containsPopup = (node: HastElement): boolean =>
+    node.children.some(
+      (child) => isPopup(child) || (child.type === "element" && containsPopup(child))
+    );
+  const anchorInto = (node: HastElement, url: string): void => {
+    const popups: Array<HastChild> = [];
+    const linked: Array<HastChild> = [];
+    for (const child of node.children) (isPopup(child) ? popups : linked).push(child);
+    if (linked.length === 0) return;
+    // A lone element child still holding a popup deeper down (twoslash's hover wrapper) — descend,
+    // so the anchor ends up around the visible text only.
+    const lone = linked.length === 1 && linked[0].type === "element" ? linked[0] : undefined;
+    if (lone !== undefined && containsPopup(lone)) {
+      anchorInto(lone, url);
+      return;
+    }
+    node.children = [
+      ...popups,
+      {
+        type: "element",
+        tagName: "a",
+        properties: {
+          class: className,
+          href: url,
+        },
+        children: linked,
+      },
+    ];
+  };
+  const wrap = (node: HastElement): void => {
+    for (const child of node.children) {
+      if (child.type === "element") wrap(child);
+    }
+    const url = node.properties[marker];
+    if (typeof url !== "string") return;
+    delete node.properties[marker];
+    anchorInto(node, url);
+  };
   return {
     name: "docgen:links",
     span: (hast, _line, _col, _lineElement, token) => {
@@ -155,12 +206,13 @@ export const transformer = (options: TransformerOptions): ShikiTransformer => {
       const end = start + token.content.length;
       const hit = options.links.find((link) => link.start < end && start < link.end);
       if (hit === undefined) return;
-      hast.tagName = "a";
       hast.properties = {
         ...hast.properties,
-        class: appendClass(hast.properties.class, className),
-        href: hit.url,
+        [marker]: hit.url,
       };
+    },
+    pre: (hast) => {
+      wrap(hast);
     },
   };
 };
