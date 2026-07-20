@@ -10,7 +10,7 @@
 
 import * as nodePath from "node:path";
 import * as ts from "typescript";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import * as Annotate from "../docgen/Annotate.js";
 import * as LinkResolver from "../docgen/LinkResolver.js";
 import * as SymbolIndex from "../docgen/SymbolIndex.js";
@@ -26,6 +26,13 @@ export interface ExpanderOptions {
    * compiler-printed type parts (`typeText` + `links`) for zero-guess popup linking.
    */
   readonly getLocations?: () => ReadonlyArray<SymbolIndex.Entry>;
+  /**
+   * Extra `paths` merged into the compiler options (read lazily, same loading story) — maps
+   * package imports to the DOCUMENTED source so guide-example hovers resolve to declarations the
+   * location index knows. Only this expander program uses it; twoslash (display text, diagnostics)
+   * keeps resolving the real runtime dependencies.
+   */
+  readonly getPaths?: () => Readonly<Record<string, Array<string>>>;
 }
 
 const FILE = "__docs_expand__.ts";
@@ -47,6 +54,8 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
   let current = "";
   let currentFile = nodePath.join(opts.vfsRoot, FILE);
   let version = 0;
+  let cachedPaths: Readonly<Record<string, Array<string>>> | undefined;
+  let cachedSettings: ts.CompilerOptions = opts.compilerOptions;
 
   const prepare = (fullCode: string): Prepared => {
     const named = /^\/\/ @filename: (.+)$/m.exec(fullCode);
@@ -92,7 +101,25 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         ? ts.ScriptSnapshot.fromString(ts.sys.readFile(f)!)
         : undefined,
     getCurrentDirectory: () => opts.vfsRoot,
-    getCompilationSettings: () => opts.compilerOptions,
+    getCompilationSettings: (): ts.CompilerOptions => {
+      // Merge the (lazily-loaded) documented-source paths ONCE per change — the language service
+      // compares settings by identity, so a fresh object per call would re-parse the world.
+      const paths = opts.getPaths?.();
+      if (paths !== cachedPaths) {
+        cachedPaths = paths;
+        cachedSettings =
+          paths === undefined || Object.keys(paths).length === 0
+            ? opts.compilerOptions
+            : {
+                ...opts.compilerOptions,
+                paths: {
+                  ...opts.compilerOptions.paths,
+                  ...paths,
+                },
+              };
+      }
+      return cachedSettings;
+    },
     getDefaultLibFileName: (o) => ts.getDefaultLibFilePath(o),
     fileExists: (f) => f === currentFile || ts.sys.fileExists(f),
     readFile: (f) => (f === currentFile ? current : ts.sys.readFile(f)),
@@ -147,6 +174,7 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
   // link ranges — for zero-guess popup linking (realigned onto the displayed text downstream).
   interface HoverInfo {
     readonly expanded?: string;
+    readonly expandedLinks?: ReadonlyArray<Annotate.Link>; // offsets into `expanded`
     readonly ownerLoc?: string;
     readonly typeText?: string;
     readonly typeLinks?: ReadonlyArray<Annotate.Link>;
@@ -206,7 +234,8 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         ownerLoc = `${nodePath.relative(opts.vfsRoot, f.fileName)}:${line}`;
       }
 
-      // the hover type as OUR compiler prints it, with exact link ranges
+      // the hover type as OUR compiler prints it, with exact link ranges (use-site enclosing:
+      // qualified names, matching the displayed text)
       const type = checker.getTypeAtLocation(node);
       if (printer !== undefined) {
         const parts = printer.printType(type, node);
@@ -217,24 +246,60 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         }
       }
 
-      // expanded member block (existing dual-preview)
+      // expanded member block (dual-preview), each member type printed with compiler links when
+      // the printer is available (falls back to the plain checker string otherwise)
+      let expandedLinks: ReadonlyArray<Annotate.Link> | undefined;
       if (isExpandable(type)) {
         const lines: string[] = [];
+        const links: Array<Annotate.Link> = [];
+        let cursor = 2; // past the leading "{\n"
         for (const member of type.getProperties()) {
           const mt = checker.getTypeOfSymbolAtLocation(member, node);
-          let rendered = checker
-            .typeToString(mt, node, FLAGS)
-            .replace(/import\("[^"]*"\)\./g, "")
-            .replace(/\s*\n\s*/g, " ");
-          if (rendered.length > MAX_MEMBER_LEN)
+          const head = `  ${member.getName()}: `;
+          let rendered: string;
+          let memberLinks: ReadonlyArray<Annotate.Link> = [];
+          if (printer !== undefined) {
+            // NOTE (capture-rate follow-up): the node builder only attaches symbols to references
+            // whose names are in scope at `node` — library-internal member types often print
+            // unresolvable here. Printing from `member.valueDeclaration` attached 154 members'
+            // symbols on one hover in an experiment, but regressed block-authored shapes; the real
+            // fix is a per-reference fallback inside the TypePrinter, with docgen-level tests.
+            const parts = printer.printType(mt, node);
+            const raw = parts.map((part) => part.text).join("");
+            const collapsed = raw.replace(/\s*\n\s*/g, " ");
+            const rawLinks = Annotate.fromParts(parts);
+            memberLinks =
+              collapsed === raw
+                ? rawLinks
+                : Option.getOrElse(Annotate.realign(rawLinks, raw, collapsed), () => []);
+            rendered = collapsed;
+          } else {
+            rendered = checker
+              .typeToString(mt, node, FLAGS)
+              .replace(/import\("[^"]*"\)\./g, "")
+              .replace(/\s*\n\s*/g, " ");
+          }
+          if (rendered.length > MAX_MEMBER_LEN) {
             rendered = `${rendered.slice(0, MAX_MEMBER_LEN - 1)}…`;
-          lines.push(`  ${member.getName()}: ${rendered};`);
+            memberLinks = memberLinks.filter((link) => link.end <= MAX_MEMBER_LEN - 1);
+          }
+          for (const link of memberLinks) {
+            links.push({
+              start: cursor + head.length + link.start,
+              end: cursor + head.length + link.end,
+              url: link.url,
+            });
+          }
+          const line = `${head}${rendered};`;
+          lines.push(line);
+          cursor += line.length + 1;
         }
         expanded = `{\n${lines.join("\n")}\n}`;
+        if (links.length > 0) expandedLinks = links;
       }
 
       if (expanded !== undefined || ownerLoc !== undefined || typeText !== undefined) {
-        out.set(offset, { expanded, ownerLoc, typeText, typeLinks });
+        out.set(offset, { expanded, expandedLinks, ownerLoc, typeText, typeLinks });
       }
     }
     return out;

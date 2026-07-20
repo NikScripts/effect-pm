@@ -18,7 +18,12 @@ import prettier from "prettier";
 import * as Option from "effect/Option";
 import { makeTypeExpander } from "./expandType";
 import { docLinksByLocation } from "./api-data";
-import { loadSourceLinks, sourceLinksFor, symbolIndexEntries } from "./api-source-links";
+import {
+  loadSourceLinks,
+  packageSourcePaths,
+  sourceLinksFor,
+  symbolIndexEntries,
+} from "./api-source-links";
 import * as Annotate from "../docgen/Annotate.js";
 import { runServer } from "./runtime";
 
@@ -93,12 +98,22 @@ const expandTypes = makeTypeExpander({
   vfsRoot: repoRoot,
   // The docgen location index — loaded by loadHighlighter (via loadSourceLinks), read lazily here.
   getLocations: symbolIndexEntries,
+  // Resolve `effect`/`@effect/*` to the DOCUMENTED source inside the expander only, so guide
+  // example hovers land on declarations the index knows (twoslash keeps the runtime deps).
+  getPaths: packageSourcePaths,
 });
 
 // Zero-guess popup links: per hover node, OUR compiler-printed type links REALIGNED onto the
-// displayed (formatted) hover text — in whole-text coordinates, applied to the popup's compact
-// code box by the renderer below. Absent when the texts genuinely differ (no link beats a guess).
+// displayed (formatted) hover text — in box coordinates, applied to the popup's compact code box
+// (and the expand box) by the renderer below. Absent when the texts genuinely differ.
 const hoverPopupLinks = new WeakMap<object, ReadonlyArray<Annotate.Link>>();
+const hoverExpandLinks = new WeakMap<object, ReadonlyArray<Annotate.Link>>();
+// Substituting the displayed body with our print only makes sense for plain declaration heads
+// (`const emails: `, `SqliteClient.backup: `) — a method-call head (`take(self: …): `) trips the
+// lazy head regex, and a pathological type would blow up the popup.
+const simpleHead =
+  /^(?:(?:const|let|var|function|type|interface|class|namespace|enum)\s+)?[\w$.]+\??:\s$/;
+const maxSubstituteLength = 2000;
 
 // Sentinel wrapping our expansion inside `node.docs` (a field that survives to the renderer, unlike
 // arbitrary props). The renderer splits it off and wedges it as its own box between the type and the
@@ -189,7 +204,7 @@ const twoslasher = Object.assign(
             (info?.ownerLoc !== undefined ? hoverDocLinks[info.ownerLoc] : undefined);
           if (links !== undefined) h.docs = embedDocLinks(h.docs, links);
         }
-        // Dual-preview expand box (existing).
+        // Dual-preview expand box (existing), now with compiler links on the member types.
         const expanded = info?.expanded;
         if (expanded === undefined) return;
         const head = declHead(h.text);
@@ -200,12 +215,35 @@ const twoslasher = Object.assign(
         if (h.text.slice(head.length).trimStart().startsWith("{")) return;
         const prior = h.docs;
         h.docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
+        const expandedLinks = info?.expandedLinks;
+        if (expandedLinks !== undefined && expandedLinks.length > 0) {
+          // The expand box displays `head + expanded` verbatim — displace into box coordinates.
+          hoverExpandLinks.set(
+            h,
+            expandedLinks.map((link) => ({
+              start: link.start + head.length,
+              end: link.end + head.length,
+              url: link.url,
+            }))
+          );
+        }
       });
       // Format each hover's compact type AFTER expansion (which reads the raw text) so long types
       // break across lines in the popup — then realign OUR link ranges onto the formatted text.
       hovers.forEach((h, i) => {
-        h.text = formatHoverType(h.text);
         const info = expansions!.get(offsets[i]);
+        // FULL CAPTURE: when the hover has a simple declaration head and we printed its type, the
+        // displayed body BECOMES our compiler print — realign over our own formatting then always
+        // lands, so every reference in the compact box links. Headless hovers (imports, bare type
+        // names) and method-call heads keep twoslash's text with best-effort realign.
+        if (info?.typeText !== undefined && info.typeText.length <= maxSubstituteLength) {
+          const m0 = /^(\([a-z ]+\)\s+)?([\s\S]+)$/.exec(h.text);
+          const prefix0 = m0?.[1] ?? "";
+          const rest0 = m0?.[2] ?? h.text;
+          const head0 = declHead(rest0);
+          if (simpleHead.test(head0)) h.text = `${prefix0}${head0}${info.typeText}`;
+        }
+        h.text = formatHoverType(h.text);
         if (info?.typeText === undefined || info.typeLinks === undefined) return;
         // h.text = [(prefix) ][head: ][body]; our parts print the TYPE (the body). Realign onto
         // the body, then displace into BOX coordinates: rendererRich strips the "(property) "
@@ -435,10 +473,15 @@ const baseRenderer: any = rendererRich({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
 const applyPopupLinks = (info: any, el: any): void => {
   const links = hoverPopupLinks.get(info);
-  if (links === undefined) return;
-  const box = findByClass(el, "twoslash-popup-code");
-  if (box === undefined) return;
-  Annotate.applyToHast(box, { links });
+  if (links !== undefined) {
+    const box = findByClass(el, "twoslash-popup-code");
+    if (box !== undefined) Annotate.applyToHast(box, { links });
+  }
+  const expandLinks = hoverExpandLinks.get(info);
+  if (expandLinks !== undefined) {
+    const box = findByClass(el, "twoslash-popup-expand");
+    if (box !== undefined) Annotate.applyToHast(box, { links: expandLinks });
+  }
 };
 const renderer = {
   ...baseRenderer,

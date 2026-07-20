@@ -1,8 +1,9 @@
 # Docgen system — design doc (LIVING; we work from this)
 
-Status: **Phases 1–4 ✅ · Phase 5 (integrate) ✅ — generator cut over, compiler links live in every
-render path, name-heuristic DELETED (zero-guess ruling). Remaining: Phase 6 (optional extraction) +
-follow-ups (expand-box links, popup realign hit-rate). See HANDOFF below.**
+Status: **Phases 1–5 ✅ + capture pass ✅ — generator cut over, compiler links live in EVERY surface
+(source panels, popups incl. full-capture substitution + expand box, guide hovers, signature blocks,
+{@link} chips), name-heuristic DELETED (zero-guess ruling). Remaining: Phase 6 (optional extraction)
++ ONE capture-rate follow-up (enclosing-scope symbol attachment — see step 4 notes). See HANDOFF.**
 Owner: Nik. Author: pairing session. Branch: **`docs/standards-corpus`** — the docgen replaces the
 linking internals of the API reference, which is unmerged on this branch, so it CANNOT branch from
 `integration` (would lack the prerequisite gen-api/api-data). Related work stays on one branch.
@@ -302,6 +303,30 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
   - PROSE: JSDoc `{@link}` + inline-code resolve ONLY through the owner symbol's compiler-resolved
     `docLinks` map (checker-resolved in the declaration's scope). Popup docs' inline-code is
     unlinked (no owner map at render time) — acceptable under the ruling.
+- ~~Step 4 — CAPTURE PASS (owner: "capture everything")~~ ✅ (2026-07-19):
+  - GUIDE example hovers RESTORED (deleting the heuristic had regressed them): the expander merges
+    the P4 `paths` (`getPaths` → api-source-links `packageSourcePaths`) so guide blocks resolve to
+    the DOCUMENTED source; twoslash keeps runtime deps for display/diagnostics; realign guards any
+    version skew. 42 links on /docs/type-previews.
+  - POPUP FULL-CAPTURE: for hovers with a simple declaration head (`const x: `, `Ns.member: ` —
+    `simpleHead` regex; method-call heads excluded, the lazy declHead regex trips on them), the
+    displayed body IS our compiler print, so realign always lands. Headless hovers keep twoslash
+    text + best-effort realign.
+  - EXPAND BOX linked: expandType emits `expandedLinks` (member-type parts, offsets into the
+    expanded string, truncation-aware); renderer applies via `Annotate.applyToHast` on the
+    `twoslash-popup-expand` box.
+  - SIGNATURE BLOCKS linked: `declarationTypeLinks(relFile, line, displayed)` in api-source-links —
+    call signatures realign each declaration's SOURCE slice (start → body/`=>`) onto the model's
+    formatted string; other symbols realign HoverRenderer parts onto typeText. Stack now exposes
+    hover/resolver/program (HoverRenderer + TypePrinter layers added).
+  - {@link} CHIPS on symbol cards navigate via s.docLinks.
+  - ⚠ OPEN capture-rate lead (the one real limiter): the node builder attaches symbols ONLY to
+    references whose names are in scope at the `enclosing` node — a use site in another file
+    misses most library-internal names, so popup/expand links for library shapes are partial.
+    Experiment: printing members from `member.valueDeclaration` attached 154 symbols on one hover
+    but regressed block-authored shapes and bares the names. Proper fix: per-REFERENCE enclosing
+    fallback inside TypePrinter, with docgen tests. (Also: waku dev HMR does not reliably reload
+    these server libs — RESTART the dev server after editing them; cost a debugging hour.)
 Gate: model files unchanged (links.json sidecar removed) + the site build still green. NOTE the
 deploy constraints: data paths
 resolve from `process.cwd()` (docs/site), NOT `import.meta.url`; symbol pages are SSR (static-all
