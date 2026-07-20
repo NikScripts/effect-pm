@@ -2,8 +2,8 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import * as Extractor from "../../src/docgen/Extractor.js";
-import * as TsProgram from "../../src/docgen/TsProgram.js";
+import * as Extractor from "@nikscripts/docgen/Extractor";
+import * as TsProgram from "@nikscripts/docgen/TsProgram";
 
 const fixture = fileURLToPath(new URL("./fixtures/extract-fixture.ts", import.meta.url));
 const fixturesDir = fileURLToPath(new URL("./fixtures/", import.meta.url));

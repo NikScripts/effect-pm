@@ -14,11 +14,11 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { NodeServices } from "@effect/platform-node";
 import ts from "typescript";
 import { Option } from "effect";
-import * as Extractor from "../src/docgen/Extractor.js";
-import * as LinkResolver from "../src/docgen/LinkResolver.js";
-import * as SourceRenderer from "../src/docgen/SourceRenderer.js";
-import * as SymbolIndex from "../src/docgen/SymbolIndex.js";
-import * as TsProgram from "../src/docgen/TsProgram.js";
+import * as Extractor from "@nikscripts/docgen/Extractor";
+import * as LinkResolver from "@nikscripts/docgen/LinkResolver";
+import * as SourceRenderer from "@nikscripts/docgen/SourceRenderer";
+import * as SymbolIndex from "@nikscripts/docgen/SymbolIndex";
+import * as TsProgram from "@nikscripts/docgen/TsProgram";
 import { slugForEntry, symbolFileKey } from "../src/lib/api-slugs.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));

@@ -140,7 +140,7 @@ const program = Effect.gen(function* () {
     const sources = [
       "scripts/gen-hovers.ts",
       ...(yield* dirFiles("src/lib")),
-      ...(yield* dirFiles("src/docgen")),
+      ...(yield* dirFiles("../docgen/src")),
     ].sort();
     const hasher = createHash("sha1");
     for (const rel of sources) {

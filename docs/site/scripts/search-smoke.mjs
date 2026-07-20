@@ -1,6 +1,7 @@
 import { chromium, devices } from "playwright";
 
-const base = "http://localhost:5190";
+// Run against a live server:  node scripts/search-smoke.mjs [baseUrl]
+const base = process.argv[2] ?? "http://localhost:5190";
 const fail = (msg) => {
   console.error("FAIL:", msg);
   process.exit(1);

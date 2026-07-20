@@ -11,11 +11,11 @@
 import * as nodePath from "node:path";
 import * as ts from "typescript";
 import { Effect, Layer, Option } from "effect";
-import * as Annotate from "../docgen/Annotate.js";
-import * as LinkResolver from "../docgen/LinkResolver.js";
-import * as SymbolIndex from "../docgen/SymbolIndex.js";
-import * as TsProgram from "../docgen/TsProgram.js";
-import * as TypePrinter from "../docgen/TypePrinter.js";
+import * as Annotate from "@nikscripts/docgen/Annotate";
+import * as LinkResolver from "@nikscripts/docgen/LinkResolver";
+import * as SymbolIndex from "@nikscripts/docgen/SymbolIndex";
+import * as TsProgram from "@nikscripts/docgen/TsProgram";
+import * as TypePrinter from "@nikscripts/docgen/TypePrinter";
 
 export interface ExpanderOptions {
   readonly compilerOptions: ts.CompilerOptions;

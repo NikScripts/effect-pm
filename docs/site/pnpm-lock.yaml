@@ -14,6 +14,9 @@ importers:
       '@effect/platform-node':
         specifier: 4.0.0-beta.98
         version: 4.0.0-beta.98(effect@4.0.0-beta.98)(ioredis@5.11.1)
+      '@nikscripts/docgen':
+        specifier: file:../docgen
+        version: file:../docgen(effect@4.0.0-beta.98)(prettier@2.8.8)(shiki@4.3.1)(typescript@5.9.3)
       '@shikijs/twoslash':
         specifier: ^4.3.1
         version: 4.3.1(typescript@5.9.3)
@@ -385,6 +388,14 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@nikscripts/docgen@file:../docgen':
+    resolution: {directory: ../docgen, type: directory}
+    peerDependencies:
+      effect: 4.0.0-beta.98
+      prettier: '>=2'
+      shiki: ^4.3.1
+      typescript: ^5.9.0
 
   '@oxc-project/types@0.139.0':
     resolution: {integrity: sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw==}
@@ -2826,6 +2837,13 @@ snapshots:
       '@emnapi/runtime': 1.11.1
       '@tybys/wasm-util': 0.10.3
     optional: true
+
+  '@nikscripts/docgen@file:../docgen(effect@4.0.0-beta.98)(prettier@2.8.8)(shiki@4.3.1)(typescript@5.9.3)':
+    dependencies:
+      effect: 4.0.0-beta.98
+      prettier: 2.8.8
+      shiki: 4.3.1
+      typescript: 5.9.3
 
   '@oxc-project/types@0.139.0': {}
 
