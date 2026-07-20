@@ -78,9 +78,12 @@ const browser = await chromium.launch();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto(`${base}/`, { waitUntil: "networkidle" });
-  await page.locator('label[aria-label="Search"]').tap();
+  await page.locator('button[aria-label="Search"]').tap();
   const input = page.locator('input[placeholder="Search docs and API…"]').first();
   await input.waitFor({ timeout: 15000 });
+  // the tap must land focus synchronously — that's what makes iOS raise the keyboard
+  const focused = await input.evaluate((el) => document.activeElement === el);
+  if (!focused) fail("search input not focused after tapping the search button");
   await input.fill("queue");
   await page.locator(".search-panel .search-hit").first().waitFor({ timeout: 15000 });
   const hit = await page.locator(".search-panel .search-hit-title").first().textContent();

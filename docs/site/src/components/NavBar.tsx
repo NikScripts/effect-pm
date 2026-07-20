@@ -115,9 +115,24 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
           effect-pm
         </a>
         <div className="topbar-actions">
-          <label htmlFor={MENU_ID} className="icon-btn" aria-label="Search">
+          {/* A button, not a checkbox label: iOS only shows the keyboard when focus() runs
+              synchronously inside the tap's call stack, so open + focus must happen inline here.
+              (The hamburger keeps its deferred focus — opening the NAV shouldn't raise a keyboard.) */}
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Search"
+            onClick={() => {
+              const cb = cbRef.current;
+              if (cb !== null && !cb.checked) {
+                cb.checked = true;
+                document.body.style.overflow = "hidden";
+              }
+              inputRef.current?.focus();
+            }}
+          >
             {Icon.search}
-          </label>
+          </button>
           <label htmlFor={MENU_ID} className="icon-btn menu-btn">
             <span className="i-menu">{Icon.menu}</span>
             <span className="i-close">{Icon.close}</span>
