@@ -130,21 +130,20 @@ const program = Effect.gen(function* () {
   const pipelineVersion = yield* Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const siteDir = nodePath.join(repoRoot, "docs/site");
+    // Directory-driven, so NEW pipeline files invalidate automatically (a hard-coded list
+    // missed hast-html.ts the day it was extracted).
+    const dirFiles = (dir: string): Effect.Effect<ReadonlyArray<string>, never, never> =>
+      fs.readDirectory(nodePath.join(siteDir, dir)).pipe(
+        Effect.map((files) => files.filter((f) => /\.(ts|tsx)$/.test(f)).map((f) => `${dir}/${f}`)),
+        Effect.orElseSucceed(() => [])
+      );
     const sources = [
       "scripts/gen-hovers.ts",
-      "src/lib/highlight.ts",
-      "src/lib/expandType.ts",
-      "src/lib/api-source-links.ts",
-      "src/lib/api-data.ts",
-    ];
-    const docgen = (yield* fs
-      .readDirectory(nodePath.join(siteDir, "src/docgen"))
-      .pipe(Effect.orElseSucceed(() => [])))
-      .filter((f) => f.endsWith(".ts"))
-      .map((f) => `src/docgen/${f}`)
-      .sort();
+      ...(yield* dirFiles("src/lib")),
+      ...(yield* dirFiles("src/docgen")),
+    ].sort();
     const hasher = createHash("sha1");
-    for (const rel of [...sources, ...docgen]) {
+    for (const rel of sources) {
       hasher.update(
         yield* fs.readFileString(nodePath.join(siteDir, rel)).pipe(Effect.orElseSucceed(() => ""))
       );
@@ -214,7 +213,9 @@ const program = Effect.gen(function* () {
       }
       const slice = lineEls.slice(start, start + n);
       const preClass = String(pre?.properties?.class ?? "shiki");
-      const inner = slice.map((l, i) => hastToHtml(l) + (i < slice.length - 1 ? "\n" : "")).join("");
+      const inner = slice
+        .map((l, i) => hastToHtml(l) + (i < slice.length - 1 ? "\n" : ""))
+        .join("");
       const html = `<pre class="${preClass.replace(/"/g, "&quot;")}"><code>${inner}</code></pre>`;
       yield* writeText(
         nodePath.join(hoversDir, sym.pkg, sym.moduleSlug, `${symbolFileKey(sym.name)}.src.html`),
