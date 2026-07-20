@@ -14,8 +14,20 @@ import * as React from "react";
 const GAP = 8; // px of external space between the token and the popup
 const CLOSE_DELAY = 180; // ms grace to travel from token to popup before it closes
 
-const popupOf = (hover: Element): HTMLElement | null =>
-  hover.querySelector<HTMLElement>(":scope > .twoslash-popup-container");
+// Popups ship INERT (inside a <template>, so their megabytes of markup carry no live-DOM cost);
+// materialize on first open. Content is already local — zero added hover latency. Handles both the
+// parsed-HTML case (content in template.content) and DOM-inserted children (client navigations).
+const popupOf = (hover: Element): HTMLElement | null => {
+  const existing = hover.querySelector<HTMLElement>(":scope > .twoslash-popup-container");
+  if (existing) return existing;
+  const tpl = hover.querySelector<HTMLTemplateElement>(":scope > template.twoslash-popups");
+  if (tpl) {
+    if (tpl.content.childNodes.length > 0) hover.appendChild(tpl.content);
+    else while (tpl.firstChild) hover.appendChild(tpl.firstChild);
+    tpl.remove();
+  }
+  return hover.querySelector<HTMLElement>(":scope > .twoslash-popup-container");
+};
 
 const place = (hover: Element): void => {
   const popup = popupOf(hover);

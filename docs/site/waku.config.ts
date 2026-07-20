@@ -1,7 +1,19 @@
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import compression from "compression";
 import { defineConfig } from "waku/config";
+
+// DEV-MODE compression: the hover-dense pages are megabytes raw but ~95% compressible (repetitive
+// shiki spans), and Vite's dev server sends identity encoding — browsing the dev box from a phone
+// (documenting while building) downloads it all uncompressed. Gzip at the dev middleware layer
+// cuts an 11 MB page to ~0.5 MB. Production hosting compresses at the edge; this is dev parity.
+const devCompression = {
+  name: "dev-compression",
+  configureServer(server: { middlewares: { use: (mw: unknown) => void } }) {
+    server.middlewares.use(compression());
+  },
+};
 
 // Content lives outside this app's root (at docs/), so Vite's watcher doesn't see
 // NEW files there — a new chapter wouldn't appear until restart. Add the content dirs
@@ -20,7 +32,7 @@ const watchDocsContent = {
 // condition wiring (500 on every route). Revisit the pin when a later beta fixes it.
 export default defineConfig({
   vite: {
-    plugins: [tailwindcss(), react(), watchDocsContent],
+    plugins: [tailwindcss(), react(), watchDocsContent, devCompression],
     // Content `.md` is Djot source, not JS. Declaring it an asset stops Vite from running
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.

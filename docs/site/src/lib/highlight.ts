@@ -504,6 +504,27 @@ const baseRenderer: any = rendererRich({
   renderMarkdown: renderJsdocMarkdown as never,
   renderMarkdownInline: renderJsdocInline as never,
 });
+// INERT the popup: wrap the popup container in a <template>, so the megabytes of hidden popup
+// markup parse into inert document fragments instead of live DOM (style/layout cost collapses on
+// hover-dense pages). The TwoslashHover island materializes a popup on first open — content is
+// already local, so hover latency stays zero.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
+const inertPopup = (el: any): void => {
+  if (!el || typeof el !== "object") return;
+  const kids: any[] = el.children ?? [];
+  const at = kids.findIndex((c: any) => classListOf(c).includes("twoslash-popup-container"));
+  if (at >= 0) {
+    kids[at] = {
+      type: "element",
+      tagName: "template",
+      properties: { class: "twoslash-popups" },
+      children: [kids[at]],
+    };
+    return;
+  }
+  for (const c of kids) inertPopup(c);
+};
+
 // Apply the hover's realigned compiler links onto the popup's compact type box (the first
 // twoslash-popup-code — the expand box comes after it and stays unlinked for now).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HAST plumbing
@@ -535,6 +556,11 @@ const renderer = {
     } catch {
       /* links are best-effort */
     }
+    try {
+      inertPopup(el);
+    } catch {
+      /* inertness is an optimization, never required */
+    }
     return el;
   },
   nodeQuery(this: any, info: any, node: any) {
@@ -550,6 +576,11 @@ const renderer = {
       applyPopupLinks(info, el);
     } catch {
       /* links are best-effort */
+    }
+    try {
+      inertPopup(el);
+    } catch {
+      /* inertness is an optimization, never required */
     }
     return el;
   },
