@@ -13,7 +13,11 @@ import * as FileSystem from "effect/FileSystem";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { NodeServices } from "@effect/platform-node";
 import ts from "typescript";
+import { Option } from "effect";
 import * as Extractor from "../src/docgen/Extractor.js";
+import * as LinkResolver from "../src/docgen/LinkResolver.js";
+import * as SourceRenderer from "../src/docgen/SourceRenderer.js";
+import * as SymbolIndex from "../src/docgen/SymbolIndex.js";
 import * as TsProgram from "../src/docgen/TsProgram.js";
 import { slugForEntry, symbolFileKey } from "../src/lib/api-slugs.js";
 
@@ -311,8 +315,13 @@ const program = Effect.gen(function* () {
   // with the LAST write winning — the writer sees symbols in extraction order, so this reproduces
   // the Extractor's per-resolved-symbol dedup (multi-namespace re-exports keep one page per line).
   const locations = new Map<string, { file: string; line: number; url: string }>();
+  // Every symbol's declaration span, per package — the cross-reference pass resolves each span's
+  // identifiers to invert "who references whom".
+  const spansBySpec: Array<
+    Array<{ url: string; file: string; startLine: number; endLine: number }>
+  > = specs.map(() => []);
 
-  for (const spec of specs) {
+  for (const [specIndex, spec] of specs.entries()) {
     const model = yield* extractPackage(spec);
     const modules: Array<{ slug: string; entry: string; count: number }> = [];
     yield* Effect.forEach(model, (e) =>
@@ -345,6 +354,12 @@ const program = Effect.gen(function* () {
             line: s.source.line,
             url: s.url,
           });
+          spansBySpec[specIndex].push({
+            url: s.url,
+            file: s.source.file,
+            startLine: s.source.line,
+            endLine: s.source.line + s.sourceText.split("\n").length - 1,
+          });
         }
       })
     );
@@ -360,6 +375,71 @@ const program = Effect.gen(function* () {
   yield* writeJson(nodePath.join(dataDir, "locations.json"), {
     locations: [...locations.values()],
   });
+
+  // --- cross-reference pass: resolve every declaration span's identifiers against the GLOBAL
+  // index and invert — each page learns which documented symbols reference it. Programs are
+  // rebuilt per package WITH the source `paths` (P4), so cross-package references count.
+  const referencePaths: Record<string, Array<string>> = {
+    "@nikscripts/effect-pm": [nodePath.join(repoRoot, "src/index.ts")],
+    "@nikscripts/effect-pm/*": [nodePath.join(repoRoot, "src/*")],
+  };
+  for (const effectSpec of effectSpecs) {
+    referencePaths[effectSpec.name] = [nodePath.join(effectSpec.srcDir, "index.ts")];
+    referencePaths[`${effectSpec.name}/*`] = [nodePath.join(effectSpec.srcDir, "*")];
+  }
+  const allLocations = [...locations.values()];
+  const referencedBy = new Map<string, Set<string>>();
+  for (const [specIndex, spec] of specs.entries()) {
+    const spans = spansBySpec[specIndex];
+    if (spans.length === 0) continue;
+    yield* Effect.gen(function* () {
+      const renderer = yield* SourceRenderer.SourceRenderer;
+      for (const span of spans) {
+        const links = renderer.links({
+          file: nodePath.join(repoRoot, span.file),
+          startLine: span.startLine,
+          endLine: span.endLine,
+        });
+        if (Option.isNone(links)) continue;
+        for (const link of links.value) {
+          if (link.url === span.url) continue;
+          const set = referencedBy.get(link.url) ?? new Set<string>();
+          set.add(span.url);
+          referencedBy.set(link.url, set);
+        }
+      }
+    }).pipe(
+      Effect.provide(
+        SourceRenderer.layer.pipe(
+          Layer.provideMerge(LinkResolver.layer({ repoRoot })),
+          Layer.provideMerge(
+            Layer.mergeAll(
+              TsProgram.layer({
+                entries: spec.entries.map((e) => e.file),
+                compilerOptions: {
+                  ...spec.options,
+                  baseUrl: repoRoot,
+                  paths: {
+                    ...spec.options.paths,
+                    ...referencePaths,
+                  },
+                },
+              }),
+              SymbolIndex.layer(allLocations)
+            )
+          )
+        )
+      )
+    );
+    yield* Console.log(`  refs ${spec.slug.padEnd(12)} ${spans.length} spans`);
+  }
+  const references: Record<string, ReadonlyArray<string>> = {};
+  for (const [target, referrers] of [...referencedBy.entries()].sort(([a], [b]) =>
+    a.localeCompare(b)
+  )) {
+    references[target] = [...referrers].sort();
+  }
+  yield* writeJson(nodePath.join(dataDir, "references.json"), { references });
   yield* Console.log(`wrote ${dataDir} — ${pkgInfos.length} package(s)`);
 });
 

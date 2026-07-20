@@ -32,6 +32,9 @@ const locationsSchema = Schema.Struct({
   ),
 });
 const doclinksSchema = Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.String));
+const referencesSchema = Schema.Struct({
+  references: Schema.Record(Schema.String, Schema.Array(Schema.String)),
+});
 
 const readJson = <S extends Schema.Top>(
   path: string,
@@ -64,6 +67,12 @@ const program = Effect.gen(function* () {
   const doclinks = yield* readJson(nodePath.join(dataDir, "doclinks.json"), doclinksSchema);
   for (const [owner, links] of Object.entries(doclinks)) {
     for (const url of Object.values(links)) check(url, `doclinks.json ${owner}`);
+  }
+
+  const references = yield* readJson(nodePath.join(dataDir, "references.json"), referencesSchema);
+  for (const [target, referrers] of Object.entries(references.references)) {
+    check(target, "references.json target");
+    for (const url of referrers) check(url, `references.json ${target}`);
   }
 
   // Every anchor baked into the precomputed hover sidecars.

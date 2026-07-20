@@ -1,7 +1,20 @@
 import { ApiSymbolCard } from "./ApiSymbol.js";
-import { readSourceFile, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
+import { readSourceFile, referencedBy, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
 import { loadHighlighter } from "../lib/highlight.js";
 import { runServer } from "../lib/runtime.js";
+
+// `/api/<pkg>/<module>/<name>` → a compact display label: `Module.name`, plus the package when it
+// differs from the page's own.
+const refLabel = (url: string, ownPkg: string): string => {
+  const parts = url.split("/");
+  const pkg = parts[2] ?? "";
+  const module = parts[3] ?? "";
+  const name = parts[4] ?? url;
+  const base = module === "top-level" ? name : `${module}.${name}`;
+  return pkg === ownPkg ? base : `${base} (${pkg})`;
+};
+
+const MAX_REFS = 40; // chips shown; the rest collapse into a count
 
 // One symbol, in full: /api/<pkg>/<module>/<symbol>. Loads only this symbol's file; the heavy
 // Shiki/twoslash markup is scoped to a single symbol. Shared by two routes: the static
@@ -29,6 +42,7 @@ export async function ApiSymbolPage({
   const isDep = s.source.file.startsWith("repos/");
   const fileText = isDep ? undefined : await runServer(readSourceFile(s.source.file));
   const sourceHtml = isDep ? await runServer(symbolSourceHtml(pkg, module, symbol)) : undefined;
+  const refs = await runServer(referencedBy(s.url));
   return (
     <>
       <title>{`${s.qualifiedName} — API — effect-pm`}</title>
@@ -37,6 +51,23 @@ export async function ApiSymbolPage({
           <a href={`/api/${pkg}/${module}`}>← {s.entry}</a>
         </p>
         <ApiSymbolCard s={s} fileText={fileText} sourceHtml={sourceHtml} />
+        {refs.length > 0 ? (
+          <section className="api-source">
+            <div className="api-source-head">
+              Referenced by <span className="api-source-lines">{refs.length} symbols</span>
+            </div>
+            <div className="api-chips">
+              {refs.slice(0, MAX_REFS).map((url) => (
+                <a className="api-chip api-chip-link" href={url} key={url}>
+                  {refLabel(url, pkg)}
+                </a>
+              ))}
+              {refs.length > MAX_REFS ? (
+                <span className="api-chip">+{refs.length - MAX_REFS} more</span>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
       </article>
     </>
   );

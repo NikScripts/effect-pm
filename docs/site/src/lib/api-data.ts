@@ -74,6 +74,9 @@ const SymbolLocationS = Schema.Struct({
   url: Schema.String,
 });
 const LocationsS = Schema.Struct({ locations: Schema.Array(SymbolLocationS) });
+const ReferencesS = Schema.Struct({
+  references: Schema.Record(Schema.String, Schema.Array(Schema.String)),
+});
 
 export interface ApiTag extends Schema.Schema.Type<typeof ApiTagS> {}
 export interface ApiSource extends Schema.Schema.Type<typeof ApiSourceS> {}
@@ -136,6 +139,13 @@ export const symbolLocations = (): Effect.Effect<
   never,
   FileSystem.FileSystem
 > => readJson("locations.json", LocationsS).pipe(Effect.map((l) => l?.locations ?? []));
+
+// The documented symbols whose declarations REFERENCE this page (compiler-resolved inversion,
+// scripts/gen-api.ts cross-reference pass) — the "Referenced by" section.
+export const referencedBy = (
+  url: string
+): Effect.Effect<ReadonlyArray<string>, never, FileSystem.FileSystem> =>
+  readJson("references.json", ReferencesS).pipe(Effect.map((r) => r?.references[url] ?? []));
 
 // Resolved {@link} maps keyed by a symbol's declaration `file:line` — for hover link resolution.
 export const docLinksByLocation = (): Effect.Effect<
