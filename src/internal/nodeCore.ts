@@ -506,6 +506,36 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
 }
 
 /**
+ * {@link listen}`(Tag, impl)` needs exactly one Node on the resource handle
+ * (`{ node }` / {@link Resource.nodes}`([X])` / {@link Resource.andNode}).
+ * `missing` = none; `ambiguous` = two or more (pick with `listen(node, [serve…])`).
+ * Anonymous transport stays `listen([serve…])` / `listen(serve)` — never this overload.
+ *
+ * @public
+ */
+export class ListenTagNodeRequired extends Data.TaggedError(
+  "ListenTagNodeRequired",
+)<{
+  readonly tag: string;
+  readonly reason: "missing" | "ambiguous";
+  readonly count: number;
+}> {
+  override get message() {
+    if (this.reason === "ambiguous") {
+      return (
+        `Node.listen(${this.tag}, impl) saw ${String(this.count)} Nodes on the Tag — ` +
+        `use Node.listen(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
+      );
+    }
+    return (
+      `Node.listen(${this.tag}, impl) needs a sole Node on the Tag ` +
+      `(Resource.andNode / nodes([X]) / { node }). ` +
+      `For anonymous transport use Node.listen(Resource.serve(${this.tag}, impl)).`
+    );
+  }
+}
+
+/**
  * A remote {@link Node} that didn't answer at its declared address — down, wrong port/url, or (for a
  * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
  * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.

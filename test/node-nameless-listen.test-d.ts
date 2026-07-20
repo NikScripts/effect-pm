@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from "effect";
+import { Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
@@ -19,12 +19,6 @@ expectTypeOf(anonList).toMatchTypeOf<
 const anonOne = Node.listen(serve);
 expectTypeOf(anonOne).toMatchTypeOf<
   Layer.Layer<Jobs | Node.ListenNode, never, never>
->();
-
-// Nameless Tag + impl (skips Resource.serve)
-const anonTag = Node.listen(Jobs, { jobs: Effect.succeed(7) });
-expectTypeOf(anonTag).toMatchTypeOf<
-  Layer.Layer<Jobs | Resource.Local<Jobs> | Node.ListenNode, never, never>
 >();
 
 // Named form still works

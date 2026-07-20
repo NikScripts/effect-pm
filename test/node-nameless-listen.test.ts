@@ -104,23 +104,4 @@ describe("Node.listen nameless", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("single resource Tag + impl (no Resource.serve)", () =>
-    Effect.gen(function* () {
-      const lookupPath = yield* tmpSock("tag");
-      const serverCtx = yield* Layer.build(
-        Node.listen(Jobs, jobsImpl, {
-          lookupPath,
-          unlinkLookup: true,
-        }),
-      );
-      const clientCtx = yield* Layer.build(
-        Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
-      );
-      const n = yield* Effect.gen(function* () {
-        const jobs = yield* Jobs;
-        return yield* jobs.jobs;
-      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
-      expect(n).toBe(11);
-    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
-  );
 });

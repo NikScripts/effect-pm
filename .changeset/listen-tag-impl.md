@@ -2,4 +2,4 @@
 "@nikscripts/effect-pm": minor
 ---
 
-**`Node.listen(Tag, impl)`** — nameless single-resource sugar: wraps `Resource.serve` under the hood. Multi-resource still uses `listen([serve…])` / `listen(serve)`.
+**`Node.listen(Tag, impl)`** — single-resource sugar when the Tag carries a sole Node: wraps `Resource.serve` and listens on that node. Anonymous transport stays `listen([serve…])` / `listen(serve)`.

@@ -31,6 +31,7 @@ import {
   InvalidHttpTarget,
   ListenNode,
   ListenOptions,
+  ListenTagNodeRequired,
   NamelessListenOptions,
   NodeKey,
   ProtocolKind,
@@ -495,10 +496,15 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  *   Resource.serve(Emails, emailsImpl),
  * ]).pipe(Layer.provide(Lookup.clientDefaultLocal()))
  *
- * // nameless — one resource (skips Resource.serve)
- * const anon = Node.listen(Jobs, { jobs: Effect.succeed(7) })
+ * // Tag carries the node (sole bind) — skips Resource.serve
+ * class Jobs extends Resource.Tag<Jobs>()("app/Jobs", {
+ *   jobs: Resource.effect(Schema.Number),
+ * }).pipe(Resource.andNode(Worker)) {}
+ * const bound = Node.listen(Jobs, { jobs: Effect.succeed(7) })
+ * // ≡ Node.listen(Worker, [Resource.serve(Jobs, …)])
  *
- * // nameless — several resources (still Resource.serve)
+ * // nameless — anonymous transport (no Node.Tag); still Resource.serve
+ * const anon = Node.listen(Resource.serve(Jobs, { jobs: Effect.succeed(7) }))
  * const pair = Node.listen([
  *   Resource.serve(Jobs, jobsImpl),
  *   Resource.serve(Emails, emailsImpl),
@@ -512,9 +518,10 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
 export function listen<
   Self,
   S extends Resource.Spec,
+  HSelf,
   R = never,
 >(
-  tag: Resource.ResourceTag<Self, S>,
+  tag: Resource.NodeBoundTag<Self, S, HSelf>,
   impl:
     | Resource.ImplOf<S>
     | Resource.BuiltResource<S, R>
@@ -523,9 +530,9 @@ export function listen<
         never,
         R
       >,
-  options?: NamelessListenOptions,
-): // Same success as `listen(Resource.serve(tag, impl))` — avoid naming
-  // `HandlerContextOf` here (TS2589 under stock tsc when stacked on listen overloads).
+  options?: ListenOptions,
+): // Same success as `listen(nodeOf(tag), [Resource.serve(tag, impl)])` — avoid
+  // naming `HandlerContextOf` here (TS2589 under stock tsc on listen overloads).
   Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
 export function listen<Serve extends Layer.Layer<never, any, never>>(
   serve: Serve,
@@ -568,17 +575,48 @@ export function listen(
     | ListenOptions
     | object,
   options?: ListenOptions | NamelessListenOptions,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
-  // Nameless: `listen(Tag, impl, options?)` — wrap with Resource.serve.
+): Layer.Layer<
+  never,
+  UnaddressedNode | AddressLessClaimLost | ListenTagNodeRequired,
+  unknown
+> {
+  // `listen(Tag, impl)` — Tag must carry a sole Node (not nameless).
   // Erase serve's ResourceTag generics here — naming them reopens TS2589.
   if (isResourceTagArg(nodeOrServesOrTag)) {
+    const tag = nodeOrServesOrTag;
+    const tagKey =
+      typeof (tag as { readonly key?: unknown }).key === "string"
+        ? (tag as { readonly key: string }).key
+        : "unknown";
+    const bound = Resource.nodeOf(tag);
+    const fleet = Resource.nodesOf(
+      tag as Resource.ResourceTag<unknown, Resource.Spec>,
+    );
+    if (bound === undefined) {
+      const error = new ListenTagNodeRequired({
+        tag: tagKey,
+        reason: fleet.length > 1 ? "ambiguous" : "missing",
+        count: fleet.length,
+      });
+      return Layer.unwrap(
+        Effect.map(
+          Effect.fail(error),
+          (impossible: never): Layer.Layer<never> => impossible,
+        ),
+      ) as Layer.Layer<
+        never,
+        UnaddressedNode | AddressLessClaimLost | ListenTagNodeRequired,
+        unknown
+      >;
+    }
     const serveErased = Resource.serve as unknown as (
       tag: Resource.PipeableTag,
       impl: unknown,
     ) => Layer.Layer<never, never, never>;
-    return namelessListen(
-      [serveErased(nodeOrServesOrTag, servesOrOptionsOrImpl)] as ServeLayerList,
-      options as NamelessListenOptions | undefined,
+    return listen(
+      bound as AnyNode,
+      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
+      options as ListenOptions | undefined,
     );
   }
   // Nameless: `listen([serve…], options?)` / `listen(serve, options?)`

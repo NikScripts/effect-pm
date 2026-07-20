@@ -34,7 +34,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
-| **Node module** | `node-tag-addressed` → addressless serve/call → `node-prototype` → `node-lookup` |
+| **Node module** | `node-tag-addressed` → `node-tag-bound` → addressless serve/call → nameless serve/call → `node-prototype` → `node-lookup` |
 | **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → [`process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) |
 
 ---
@@ -61,6 +61,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/telemetry-fleet-glass.ts`](./forms/resource/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
 | [`forms/resource/fleet-health-glass.ts`](./forms/resource/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
 | [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.listen` / `connect` |
+| [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.listen(Jobs, impl)` + `Resource.client(Jobs)` |
 | [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve (`Node.listenLocal`) — terminal A |
 | [`forms/resource/node-tag-addressless-call.ts`](./forms/resource/node-tag-addressless-call.ts) | Address-less call (`Resource.clientLocal`) — terminal B |
 | [`forms/resource/node-nameless-listen-serve.ts`](./forms/resource/node-nameless-listen-serve.ts) | Nameless `Node.listen([serve…])` — two resources, terminal A |
