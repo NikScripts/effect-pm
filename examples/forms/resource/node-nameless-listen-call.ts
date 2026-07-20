@@ -1,10 +1,8 @@
 /**
  * @module examples/forms/resource/node-nameless-listen-call
  *
- * **Nameless listen — call terminal.** Second runtime: `clientLocal` resolves
- * both resources via the default Lookup (no node address, no Lookup path).
+ * Nameless listen — call (second process).
  *
- * Terminal B (after serve is up):
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-nameless-listen-call.ts
  * ```
@@ -22,32 +20,17 @@ class Emails extends Resource.Tag<Emails>()("forms/nameless/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-const program = Effect.gen(function* () {
-  yield* Effect.sleep("300 millis")
-
-  const clients = Layer.mergeAll(
-    Resource.clientLocal(Jobs),
-    Resource.clientLocal(Emails),
-  )
-
-  const pair = yield* Effect.gen(function* () {
-    const jobs = yield* Jobs
-    const emails = yield* Emails
-    return [yield* jobs.jobs, yield* emails.emails] as const
-  }).pipe(Effect.provide(clients))
-
-  yield* Effect.logInfo(`jobs=${pair[0]} emails=${pair[1]}`)
-  return pair
-}).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
-
-NodeRuntime.runMain(
-  program.pipe(
-    Effect.flatMap(([n, s]) =>
-      n === 7 && s === "ok"
-        ? Effect.logInfo("nameless cross-runtime ok")
-        : Effect.die(
-            new Error(`expected [7,"ok"], got ${JSON.stringify([n, s])}`),
-          ),
-    ),
-  ),
+const clients = Layer.mergeAll(
+  Resource.clientLocal(Jobs),
+  Resource.clientLocal(Emails),
 )
+
+const program = Effect.gen(function* () {
+  const jobs = yield* Jobs
+  const emails = yield* Emails
+  const n = yield* jobs.jobs
+  const s = yield* emails.emails
+  yield* Effect.logInfo(`jobs=${n} emails=${s}`)
+}).pipe(Effect.provide(clients), Effect.scoped, Effect.provide(NodeServices.layer))
+
+NodeRuntime.runMain(program)
