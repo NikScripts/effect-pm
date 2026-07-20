@@ -10,6 +10,7 @@ import {
   renderJsdocToReact,
 } from "../lib/highlight.js";
 import { declarationTypeLinks } from "../lib/api-source-links.js";
+import { prerenderedHtml } from "../lib/inert-html.js";
 
 // The `file:line` location — a link to the line on GitHub when known, otherwise plain text. External
 // packages get a shortened display path (e.g. `effect/Layer.ts`).
@@ -106,19 +107,17 @@ export const ApiSymbolCard = ({
   // Source panel, in preference order: precomputed twoslash HTML (effect-smol deps), a live twoslash
   // of the file text (our own package), else plain highlight.
   const sourceView =
-    sourceHtml !== undefined ? (
-      <div className="twoslash-precomputed" dangerouslySetInnerHTML={{ __html: sourceHtml }} />
-    ) : fileText !== undefined ? (
-      highlightSourceWithHovers(
-        fileText,
-        s.source.file,
-        s.source.line,
-        s.source.line + sourceLines - 1,
-        s.docLinks
-      ) ?? highlightToReact(s.sourceText, "ts")
-    ) : (
-      highlightToReact(s.sourceText, "ts")
-    );
+    sourceHtml !== undefined
+      ? prerenderedHtml({ className: "twoslash-precomputed" }, sourceHtml, "gen-hovers sidecar")
+      : fileText !== undefined
+      ? highlightSourceWithHovers(
+          fileText,
+          s.source.file,
+          s.source.line,
+          s.source.line + sourceLines - 1,
+          s.docLinks
+        ) ?? highlightToReact(s.sourceText, "ts")
+      : highlightToReact(s.sourceText, "ts");
   // {@link} chips navigate when the compiler resolved the target (s.docLinks), else stay plain.
   const chips = [
     ...(s.category !== undefined
