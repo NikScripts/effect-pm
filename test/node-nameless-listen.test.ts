@@ -26,7 +26,7 @@ class Emails extends Resource.Tag<Emails>()("nameless/Emails", {
 const jobsImpl = { jobs: Effect.succeed(11) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-describe("Node.listen([serve…]) nameless", () => {
+describe("Node.listen nameless", () => {
   it.effect("mints address-less node + Lookup; clientLocal dials the served resource", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
@@ -89,6 +89,26 @@ describe("Node.listen([serve…]) nameless", () => {
       const lookupPath = yield* tmpSock("one");
       const serverCtx = yield* Layer.build(
         Node.listen(Resource.serve(Jobs, jobsImpl), {
+          lookupPath,
+          unlinkLookup: true,
+        }),
+      );
+      const clientCtx = yield* Layer.build(
+        Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
+      );
+      const n = yield* Effect.gen(function* () {
+        const jobs = yield* Jobs;
+        return yield* jobs.jobs;
+      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
+      expect(n).toBe(11);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("single resource Tag + impl (no Resource.serve)", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("tag");
+      const serverCtx = yield* Layer.build(
+        Node.listen(Jobs, jobsImpl, {
           lookupPath,
           unlinkLookup: true,
         }),

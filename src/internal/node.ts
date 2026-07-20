@@ -495,14 +495,43 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  *   Resource.serve(Emails, emailsImpl),
  * ]).pipe(Layer.provide(Lookup.clientDefaultLocal()))
  *
- * // nameless address-less — no Node.Tag to declare
- * const anon = Node.listen([Resource.serve(Jobs, jobsImpl)])
+ * // nameless — one resource (skips Resource.serve)
+ * const anon = Node.listen(Jobs, { jobs: Effect.succeed(7) })
+ *
+ * // nameless — several resources (still Resource.serve)
+ * const pair = Node.listen([
+ *   Resource.serve(Jobs, jobsImpl),
+ *   Resource.serve(Emails, emailsImpl),
+ * ])
  * ```
  *
  * Escape hatch without a catalog: keep calling `httpServer` / `wsServer` / `ipcServer` directly.
  *
  * @public
  */
+export function listen<
+  Self,
+  S extends Resource.Spec,
+  R = never,
+>(
+  tag: Resource.ResourceTag<Self, S>,
+  impl:
+    | Resource.ImplOf<S>
+    | Resource.BuiltResource<S, R>
+    | Effect.Effect<
+        Resource.ImplOf<S> | Resource.BuiltResource<S, R>,
+        never,
+        R
+      >,
+  options?: NamelessListenOptions,
+): Layer.Layer<
+  | Self
+  | Resource.Local<Self>
+  | Resource.HandlerContextOf<S>
+  | ListenNode,
+  never,
+  R
+>;
 export function listen<Serve extends Layer.Layer<never, any, never>>(
   serve: Serve,
   options?: NamelessListenOptions,
@@ -532,26 +561,57 @@ export function listen<
   Layer.Services<Serves[number]>
 >;
 export function listen(
-  nodeOrServes: AnyNode | Layer.Layer<never, any, never> | ServeLayerList,
-  servesOrOptions?:
+  nodeOrServesOrTag:
+    | AnyNode
+    | Layer.Layer<never, any, never>
+    | ServeLayerList
+    | Resource.ResourceTag<any, any>,
+  servesOrOptionsOrImpl?:
     | Layer.Layer<never, any, never>
     | ServeLayerList
     | NamelessListenOptions
-    | ListenOptions,
-  options?: ListenOptions,
+    | ListenOptions
+    | Resource.ImplOf<Resource.Spec>
+    | Resource.BuiltResource<Resource.Spec, any>
+    | Effect.Effect<
+        Resource.ImplOf<Resource.Spec> | Resource.BuiltResource<Resource.Spec, any>,
+        never,
+        any
+      >,
+  options?: ListenOptions | NamelessListenOptions,
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
+  // Nameless: `listen(Tag, impl, options?)` — wrap with Resource.serve
+  if (isResourceTagArg(nodeOrServesOrTag)) {
+    return namelessListen(
+      [
+        Resource.serve(
+          nodeOrServesOrTag,
+          servesOrOptionsOrImpl as
+            | Resource.ImplOf<Resource.Spec>
+            | Resource.BuiltResource<Resource.Spec, any>
+            | Effect.Effect<
+                | Resource.ImplOf<Resource.Spec>
+                | Resource.BuiltResource<Resource.Spec, any>,
+                never,
+                any
+              >,
+        ),
+      ] as ServeLayerList,
+      options as NamelessListenOptions | undefined,
+    );
+  }
   // Nameless: `listen([serve…], options?)` / `listen(serve, options?)`
-  if (isServeArg(nodeOrServes)) {
+  if (isServeArg(nodeOrServesOrTag)) {
     const list = (
-      Array.isArray(nodeOrServes) ? nodeOrServes : [nodeOrServes]
+      Array.isArray(nodeOrServesOrTag) ? nodeOrServesOrTag : [nodeOrServesOrTag]
     ) as ServeLayerList;
     return namelessListen(
       list,
-      servesOrOptions as NamelessListenOptions | undefined,
+      servesOrOptionsOrImpl as NamelessListenOptions | undefined,
     );
   }
-  const node = nodeOrServes;
-  const serves = servesOrOptions as
+  const node = nodeOrServesOrTag;
+  const serves = servesOrOptionsOrImpl as
     | Layer.Layer<never, any, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
@@ -628,6 +688,14 @@ export function listen(
   }
   return withListenNode(node, listenTransport(node, list, options));
 }
+
+/** True when the first `listen` arg is a {@link Resource.Tag} (has {@link Resource.specSym}). @internal */
+const isResourceTagArg = (
+  u: unknown,
+): u is Resource.ResourceTag<any, any> =>
+  (typeof u === "object" || typeof u === "function") &&
+  u !== null &&
+  Resource.specSym in u;
 
 /** True when the first `listen` arg is a serve layer or non-empty serve list. @internal */
 const isServeArg = (
