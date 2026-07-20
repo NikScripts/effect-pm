@@ -258,9 +258,17 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   const listed = new Set<string>();
   const groups: Array<NavGroup> = [];
   for (const g of nav) {
-    // A direct-link lone entry (e.g. API Reference → /api): one synthetic item, no slug resolution.
+    // A direct-link lone entry (e.g. Examples → /docs/examples): one synthetic item, no slug resolution.
     if (g.href !== undefined) {
       groups.push({ label: g.label, items: [{ slug: "", href: g.href, title: g.label }], lone: true });
+      continue;
+    }
+    // A group of direct route links (e.g. API Reference → per-package pages): synthetic items.
+    if (g.links !== undefined) {
+      groups.push({
+        label: g.label,
+        items: g.links.map((l) => ({ slug: "", href: l.href, title: l.label })),
+      });
       continue;
     }
     const items: Array<NavItem> = [];
