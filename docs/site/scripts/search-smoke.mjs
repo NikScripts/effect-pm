@@ -78,9 +78,14 @@ const browser = await chromium.launch();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto(`${base}/`, { waitUntil: "networkidle" });
-  await page.locator('button[aria-label="Search"]').tap();
+  // hamburger opens the nav WITHOUT touching the search field
   const input = page.locator('input[placeholder="Search docs and API…"]').first();
+  await page.locator("label.menu-btn").tap();
   await input.waitFor({ timeout: 15000 });
+  const stole = await input.evaluate((el) => document.activeElement === el);
+  if (stole) fail("hamburger tap must not focus the search input");
+  // the search button focuses it even when the overlay is already open
+  await page.locator('button[aria-label="Search"]').tap();
   // the tap must land focus synchronously — that's what makes iOS raise the keyboard
   const focused = await input.evaluate((el) => document.activeElement === el);
   if (!focused) fail("search input not focused after tapping the search button");

@@ -81,13 +81,14 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
 
   // Progressive enhancement only — the toggle itself is the native checkbox above. Here we mirror the
   // checkbox state into the things CSS can't do on its own: a body-scroll-lock fallback for browsers
-  // without :has(), focus the filter on open, and Escape-to-close.
+  // without :has(), and Escape-to-close.
   React.useEffect(() => {
     const cb = cbRef.current;
     if (cb === null) return;
     const onChange = (): void => {
+      // scroll-lock only — focusing the input is the search BUTTON's job (sync, in its tap);
+      // the hamburger opens the nav without touching the field at all.
       document.body.style.overflow = cb.checked ? "hidden" : "";
-      if (cb.checked) requestAnimationFrame(() => inputRef.current?.focus());
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === "Escape") close();
