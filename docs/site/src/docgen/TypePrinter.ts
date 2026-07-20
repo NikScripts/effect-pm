@@ -121,19 +121,69 @@ const isReadonly = (modifiers: ts.NodeArray<ts.ModifierLike> | undefined): boole
 const isAbstract = (modifiers: ts.NodeArray<ts.ModifierLike> | undefined): boolean =>
   modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword) === true;
 
+// A reference type (an instantiated generic like `Subscribable<…>`). `objectFlags` only exists on
+// object types, so read it reflectively — a runtime check feeding a type predicate, no cast.
+const isReferenceType = (type: ts.Type): type is ts.TypeReference => {
+  if ((type.flags & ts.TypeFlags.Object) === 0) return false;
+  const objectFlags: unknown = Reflect.get(type, "objectFlags");
+  return typeof objectFlags === "number" && (objectFlags & ts.ObjectFlags.Reference) !== 0;
+};
+
+/**
+ * Type-guided reference hints: the node builder sometimes synthesizes a reference WITHOUT a symbol
+ * attachment (deeply instantiated generics), but the checker TYPE knows its own symbol — walk the
+ * synthesized node and the type in parallel and record each reference's page from the type side.
+ * Exact by construction (the type itself names the symbol); recursion only descends where node and
+ * type agree on type-argument arity, so alignment can't drift.
+ */
+const hintsFor = (
+  checker: ts.TypeChecker,
+  resolveSymbol: (symbol: ts.Symbol) => Option.Option<string>,
+  root: ts.TypeNode,
+  type: ts.Type
+): ReadonlyMap<ts.Node, string> => {
+  const hints = new Map<ts.Node, string>();
+  const visit = (node: ts.TypeNode, t: ts.Type, depth: number): void => {
+    if (depth > 8 || !ts.isTypeReferenceNode(node)) return;
+    const symbol = t.aliasSymbol ?? t.getSymbol();
+    if (symbol !== undefined) {
+      Option.match(resolveSymbol(symbol), {
+        onNone: () => {},
+        onSome: (url) => hints.set(node.typeName, url),
+      });
+    }
+    const nodeArgs = node.typeArguments ?? [];
+    const typeArgs =
+      t.aliasSymbol !== undefined && t.aliasTypeArguments !== undefined
+        ? t.aliasTypeArguments
+        : isReferenceType(t)
+        ? checker.getTypeArguments(t)
+        : [];
+    if (nodeArgs.length === typeArgs.length) {
+      nodeArgs.forEach((argNode, i) => visit(argNode, typeArgs[i], depth + 1));
+    }
+  };
+  visit(root, type, 0);
+  return hints;
+};
+
 // The recursive part emitter over one synthesized (or parsed) type node. Every helper closes over
 // `walk`, so the whole family is built per call site pair (resolve, fallbackText). `onRef` is
-// called once per named reference with whether it resolved — the home-retry's signal.
+// called once per named reference with whether it resolved — the home-retry's signal. `hints`
+// carries the type-guided fallback urls for references the checker left symbol-less.
 const makeWalk = (
   resolve: (node: ts.Node) => Option.Option<string>,
   fallbackText: (node: ts.Node) => string,
-  onRef?: (linked: boolean) => void
+  onRef?: (linked: boolean) => void,
+  hints?: ReadonlyMap<ts.Node, string>
 ): ((node: ts.TypeNode) => Parts) => {
   // Resolve the whole entity name; a qualified name (`Effect.Effect`) that doesn't resolve as a
-  // unit still resolves at its rightmost identifier — the symbol the reference IS.
+  // unit still resolves at its rightmost identifier — the symbol the reference IS. The type-guided
+  // hint is the last resort.
   const refPart = (name: ts.EntityName): Part => {
     const url = resolve(name).pipe(
-      Option.orElse(() => (ts.isQualifiedName(name) ? resolve(name.right) : Option.none()))
+      Option.orElse(() => (ts.isQualifiedName(name) ? resolve(name.right) : Option.none())),
+      Option.orElse(() => Option.fromNullishOr(hints?.get(name)))
     );
     onRef?.(Option.isSome(url));
     return {
@@ -359,6 +409,7 @@ export const layer: Layer.Layer<
     const attemptType = (type: ts.Type, enclosing: ts.Node): Attempt | undefined => {
       const node = program.checker.typeToTypeNode(type, enclosing, builderFlags);
       if (node === undefined) return undefined;
+      const hints = hintsFor(program.checker, resolver.resolveSymbol, node, type);
       let refs = 0;
       let linked = 0;
       const parts = normalize(
@@ -368,7 +419,8 @@ export const layer: Layer.Layer<
           (ok) => {
             refs += 1;
             if (ok) linked += 1;
-          }
+          },
+          hints
         )(node)
       );
       return {

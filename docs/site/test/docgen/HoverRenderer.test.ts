@@ -83,16 +83,19 @@ describe("HoverRenderer", () => {
     }).pipe(Effect.provide(provided))
   );
 
-  it.effect("renders an interface's hover as its self-reference, unlinked", () =>
+  it.effect("renders an interface's hover as its self-reference, name linked to its page", () =>
     Effect.gen(function* () {
       const program = yield* TsProgram.TsProgram;
       const renderer = yield* HoverRenderer.HoverRenderer;
       const hover = Option.getOrThrow(renderer.hover(exportSymbol(program, "Holder")));
 
-      // The compiler renders a declared interface type as the bare self-name; a hover never links
-      // the symbol it describes, so no links is the CORRECT outcome here.
+      // The compiler renders a declared interface type as the bare self-name (no symbol on the
+      // synthesized reference) — the TYPE-GUIDED hint recovers it from the type's own symbol, so
+      // the name links to its page (the navigation path the previews rely on).
       expect(hover.text).toBe("Holder<A>");
-      expect(hover.links).toStrictEqual([]);
+      expect(
+        hover.links.map((link) => [hover.text.slice(link.start, link.end), link.url])
+      ).toStrictEqual([["Holder", "/api/test/Holder"]]);
     }).pipe(Effect.provide(provided))
   );
 });

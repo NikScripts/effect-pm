@@ -31,6 +31,11 @@ export interface LinkResolver {
   readonly [TypeId]: typeof TypeId;
   /** The doc URL the identifier at `node` points at, or none. */
   readonly resolve: (node: ts.Node) => Option.Option<string>;
+  /**
+   * The doc URL of a symbol already in hand (aliases resolved, same declaration-site rules) — for
+   * callers that know the symbol without a resolvable node, e.g. a checker type's own symbol.
+   */
+  readonly resolveSymbol: (symbol: ts.Symbol) => Option.Option<string>;
 }
 
 /**
@@ -67,14 +72,12 @@ const declNode = (decl: ts.Declaration): ts.Node =>
 const isDeclarationSite = (owner: ts.Node): boolean =>
   !ts.isSourceFile(owner) && (ts.isSourceFile(owner.parent) || ts.isModuleBlock(owner.parent));
 
-const resolveWith = (
+const resolveSymbolWith = (
   checker: ts.TypeChecker,
   index: SymbolIndex.SymbolIndex,
   repoRoot: string
-): ((node: ts.Node) => Option.Option<string>) => {
-  return (node) => {
-    const initial = checker.getSymbolAtLocation(node);
-    if (initial === undefined) return Option.none();
+): ((symbol: ts.Symbol) => Option.Option<string>) => {
+  return (initial) => {
     const symbol =
       (initial.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(initial) : initial;
     // Type parameters resolve to their `<A>` declaration (inside some symbol's span) but are local
@@ -93,6 +96,17 @@ const resolveWith = (
   };
 };
 
+const resolveWith = (
+  checker: ts.TypeChecker,
+  resolveSymbol: (symbol: ts.Symbol) => Option.Option<string>
+): ((node: ts.Node) => Option.Option<string>) => {
+  return (node) => {
+    const initial = checker.getSymbolAtLocation(node);
+    if (initial === undefined) return Option.none();
+    return resolveSymbol(initial);
+  };
+};
+
 /**
  * A {@link LinkResolver} over the current {@link TsProgram} and {@link SymbolIndex}.
  *
@@ -106,9 +120,11 @@ export const layer = (
     Effect.gen(function* () {
       const program = yield* TsProgram.TsProgram;
       const index = yield* SymbolIndex.SymbolIndex;
+      const resolveSymbol = resolveSymbolWith(program.checker, index, options.repoRoot);
       return {
         [TypeId]: TypeId,
-        resolve: resolveWith(program.checker, index, options.repoRoot),
+        resolve: resolveWith(program.checker, resolveSymbol),
+        resolveSymbol,
       };
     })
   );

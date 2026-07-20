@@ -3,8 +3,8 @@
  * {@link TypePrinter.Part} runs plus the same ranges as {@link Annotate.Link}s, ready to highlight
  * with shiki and link via {@link Annotate.transformer}. A TYPE ALIAS prints its declaration's
  * right-hand side (the parsed node — every reference resolves); an interface or class prints its
- * declared type, which the compiler renders as the bare self-reference (`Holder<A>`) — deliberately
- * unlinked, a hover never links the symbol it describes (the builder attaches no symbol to that
+ * declared type, which the compiler renders as the bare self-reference (`Holder<A>`), its name
+ * linked to its own page via the printer's type-guided hint (the builder attaches no symbol to the
  * synthesized self-name). A value export prints its type at the declaration.
  *
  * When the display text is reformatted before rendering (prettier line-breaking a long type), remap
