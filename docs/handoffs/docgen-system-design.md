@@ -335,13 +335,21 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
     spelled out one member per line, key first:
     `class Random { key: 'app/Random'; Service: { next: Effect.Effect<number> } }` — nested
     member links included. Other headless hovers (bare type names) stay box-less.
-  - ⚠ OPEN capture-rate lead (the one real limiter): the node builder attaches symbols ONLY to
-    references whose names are in scope at the `enclosing` node — a use site in another file
-    misses most library-internal names, so popup/expand links for library shapes are partial.
-    Experiment: printing members from `member.valueDeclaration` attached 154 symbols on one hover
-    but regressed block-authored shapes and bares the names. Proper fix: per-REFERENCE enclosing
-    fallback inside TypePrinter, with docgen tests. (Also: waku dev HMR does not reliably reload
-    these server libs — RESTART the dev server after editing them; cost a debugging hour.)
+  - ~~capture-rate lead~~ ✅ RESOLVED (2026-07-20, `51c7958e9`) — **HOME RETRY in
+    TypePrinter.printType**: per-reference resolution is tracked (`onRef`); when any reference
+    fails, the type re-prints from its OWN declaration (all names in scope there) and whichever
+    print PROVES more references wins — both exact, zero-guess holds; retry-winning prints show
+    names as the declaring module writes them. Live: core-concepts 8 → 45 links, expand boxes
+    0 → 23 library-shape anchors. Docgen test: foreign-enclosing fixture (home-lib/home-user).
+    (Still true: waku dev HMR does not reliably reload these server libs — RESTART the dev server
+    after editing them.)
+- ~~Step 5 — refinement pass~~ ✅ (2026-07-20): link-integrity gate (`scripts/check-links.ts`,
+  `docs:check-links` — every emitted href in locations/doclinks/references + ALL sidecar anchors
+  must be a page in paths.json; 128,536 links, 0 dead), SELF-INVALIDATING hover cache (cache
+  entries fold in a hash of the pipeline sources — the manual "delete api-hovers/" rule is
+  retired), and REFERENCED-BY: gen-api's cross-reference pass resolves every declaration span
+  against the global index (per-package programs + P4 paths) → `references.json` (2409 targets,
+  17k edges) → capped chip section on symbol pages.
 Gate: model files unchanged (links.json sidecar removed) + the site build still green. NOTE the
 deploy constraints: data paths
 resolve from `process.cwd()` (docs/site), NOT `import.meta.url`; symbol pages are SSR (static-all
