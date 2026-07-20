@@ -56,3 +56,27 @@ runFullyWired(hostedBareClient);
 expectTypeOf(Droplet.kind).toEqualTypeOf<"WebSocket">();
 expectTypeOf(PortNode.kind).toEqualTypeOf<"Http">();
 expectTypeOf(Bare.kind).toEqualTypeOf<undefined>();
+
+// `.pipe(nodes([Addressed]))` / `.pipe(andNode(Addressed))` ≡ `{ node }` for client(Tag)
+class PipedNodes extends Resource.Tag<PipedNodes>()(
+  "ca/PipedNodes",
+  { ping: Resource.effect(Schema.String) },
+).pipe(Resource.nodes([Droplet])) {}
+const pipedNodesClient = Resource.client(PipedNodes);
+runFullyWired(pipedNodesClient);
+
+class PipedAndNode extends Resource.Tag<PipedAndNode>()(
+  "ca/PipedAndNode",
+  { ping: Resource.effect(Schema.String) },
+).pipe(Resource.andNode(Droplet)) {}
+const pipedAndNodeClient = Resource.client(PipedAndNode);
+runFullyWired(pipedAndNodeClient);
+
+// Multi-node set (size ≠ 1): client(Tag) is not fully wired
+class MultiNodes extends Resource.Tag<MultiNodes>()(
+  "ca/MultiNodes",
+  { ping: Resource.effect(Schema.String) },
+).pipe(Resource.nodes([Droplet, PortNode])) {}
+const multiNodesClient = Resource.client(MultiNodes);
+// @ts-expect-error — multi-node: no sole AddressedNode for auto-connect
+runFullyWired(multiNodesClient);

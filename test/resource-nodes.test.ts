@@ -87,9 +87,8 @@ describe("Resource.nodes / andNode (C1)", () => {
       const serverCtx = yield* Layer.build(
         Node.ipcServer([Resource.serve(Ping, echoImpl)], { path }),
       );
-      // Pipe `nodes` does not narrow to NodeBoundTag at the type level — name the node.
-      // Addressed Worker → Resource.client auto-wires Node.connect.
-      const clientCtx = yield* Layer.build(Resource.client(Ping, Worker));
+      // Size-1 `nodes([Worker])` sole-binds — client(Tag) auto-connects.
+      const clientCtx = yield* Layer.build(Resource.client(Ping));
 
       const n = yield* Effect.gen(function* () {
         const ping = yield* Ping;
@@ -97,6 +96,28 @@ describe("Resource.nodes / andNode (C1)", () => {
       }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
 
       expect(n).toBe(41);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
+  );
+
+  it.effect("client dials the sole node after andNode(X) from empty", () =>
+    Effect.gen(function* () {
+      const path = `/tmp/effect-pm-nodes-andnode-${process.pid}.sock`;
+      class Worker extends Node.Tag<Worker>("nodes/AndWorker", { path }) {}
+      class Ping extends Resource.Tag<Ping>()("nodes/AndPing", {
+        ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+      }).pipe(Resource.andNode(Worker)) {}
+
+      const serverCtx = yield* Layer.build(
+        Node.ipcServer([Resource.serve(Ping, echoImpl)], { path }),
+      );
+      const clientCtx = yield* Layer.build(Resource.client(Ping));
+
+      const n = yield* Effect.gen(function* () {
+        const ping = yield* Ping;
+        return yield* ping.ping({ n: 7 });
+      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
+
+      expect(n).toBe(8);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 

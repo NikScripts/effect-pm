@@ -3682,28 +3682,74 @@ export const clientHttp = <Self, S extends Spec>(
 // ── multi-node: the fleet + peer clients ──
 
 /**
+ * Sole-node bind stamped by {@link nodes}`([n])` / {@link andNode}`(n)` from an empty set —
+ * enough for {@link client}`(Tag)` to see an {@link AddressedNode} and auto-connect.
+ *
+ * @internal
+ */
+type SoleNodeBind<T, N> = T & {
+  readonly [nodeSym]: N;
+  readonly [nodesSym]: readonly [N];
+};
+
+/**
+ * {@link andNode} type result: sole-bind only from an empty/unbound tag. Appending onto a
+ * non-empty set or a narrowed {@link nodeSym} keeps `T` (does **not** claim a fresh sole
+ * bind). Prefer {@link nodes}`([x])` to overwrite when you need a typed sole bind again.
+ *
+ * @internal
+ */
+type AndNodeResult<T, N> = T extends {
+  readonly [nodesSym]: readonly [AnyNode, ...ReadonlyArray<AnyNode>];
+}
+  ? T
+  : T extends { readonly [nodeSym]: NodeKey<any> }
+    ? T
+    : SoleNodeBind<T, N>;
+
+/**
  * Stamp a Tag's **Node set** (C1) — overwrites. Size **1** also syncs {@link nodeSym} so
  * {@link client}`(Tag)` works; size ≠ 1 clears `nodeSym` (use `client(Tag, node)`). Identity Tags
  * may only carry ≤ 1 Node ({@link IdentityMultiNode}). Empty `nodes([])` is discoverable
  * membership (same as bare {@link distributed}); {@link peersLayer} reads Lookup directory.
  *
+ * A **size-1 tuple** of an {@link AddressedNode} narrows like `{ node: X }` on the Tag ctor —
+ * `client(Tag)` is fully wired. {@link andNode}`(X)` from an empty set is the same bind.
+ *
  * ```ts
  * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
- *   Resource.nodes([WorkerA]),
+ *   Resource.nodes([WorkerA]), // or Resource.andNode(WorkerA)
  * ) {}
  * class Pool extends Resource.Tag<Pool>()("app/Pool", spec).pipe(
  *   Resource.nodes([A, B, C]),
  * ) {}
  * ```
  *
- * Append with {@link andNode}. `{ node: X }` on the Tag ctor is sugar for `nodes([X])`.
- *
  * @public
  */
 export const nodes: {
+  // data-last — addressed sole node (before bare NodeKey; AddressedNode ⊆ NodeKey)
+  <HSelf>(
+    nodeSet: readonly [AddressedNode<HSelf>],
+  ): <T extends PipeableTag>(tag: T) => SoleNodeBind<T, AddressedNode<HSelf>>;
+  <HSelf>(
+    nodeSet: readonly [NodeKey<HSelf>],
+  ): <T extends PipeableTag>(tag: T) => SoleNodeBind<T, NodeKey<HSelf>>;
   <T extends PipeableTag>(
     nodeSet: ReadonlyArray<AnyNode>,
   ): (tag: T) => T;
+  // data-first
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    nodeSet: readonly [AddressedNode<HSelf>],
+  ): SoleNodeBind<
+    NodeBoundTag<Self, S, HSelf>,
+    AddressedNode<HSelf>
+  >;
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    nodeSet: readonly [NodeKey<HSelf>],
+  ): SoleNodeBind<NodeBoundTag<Self, S, HSelf>, NodeKey<HSelf>>;
   <Self, S extends Spec, HSelf>(
     tag: NodeBoundTag<Self, S, HSelf>,
     nodeSet: ReadonlyArray<AnyNode>,
@@ -3732,17 +3778,49 @@ export const nodes: {
 );
 
 /**
- * Append one {@link Node} to a Tag's set (C1). Prefer this over `nodes([..., x])` when adding.
+ * Append one {@link Node} to a Tag's set (C1). From an **empty** set this is
+ * {@link nodes}`([node])` — including the size-1 type bind for {@link client}`(Tag)`.
  * Identity Tags refuse a second Node ({@link IdentityMultiNode}).
  *
  * ```ts
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
+ *   Resource.andNode(Worker), // ≡ nodes([Worker]) when starting empty
+ * ) {}
  * class PoolPlus extends PoolBase.pipe(Resource.andNode(StatsNode)) {}
  * ```
+ *
+ * Type narrowing to a sole bind is **only** claimed when the input has no non-empty
+ * Node set. After a populated set, overwrite with {@link nodes}`([x])` if you need a
+ * fresh typed sole bind for {@link client}`(Tag)`.
  *
  * @public
  */
 export const andNode: {
+  // data-last — addressed first (AddressedNode ⊆ NodeKey)
+  <HSelf>(
+    node: AddressedNode<HSelf>,
+  ): <T extends PipeableTag>(
+    tag: T,
+  ) => AndNodeResult<T, AddressedNode<HSelf>>;
+  <HSelf>(
+    node: NodeKey<HSelf>,
+  ): <T extends PipeableTag>(tag: T) => AndNodeResult<T, NodeKey<HSelf>>;
   <T extends PipeableTag>(node: AnyNode): (tag: T) => T;
+  // data-first
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    node: AddressedNode<HSelf>,
+  ): AndNodeResult<
+    ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    AddressedNode<HSelf>
+  >;
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    node: NodeKey<HSelf>,
+  ): AndNodeResult<
+    ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    NodeKey<HSelf>
+  >;
   <Self, S extends Spec, HSelf>(
     tag: NodeBoundTag<Self, S, HSelf>,
     node: AnyNode,
