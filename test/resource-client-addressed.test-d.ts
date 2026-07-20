@@ -3,6 +3,7 @@
  * bare `NodeKey` still requires the node (or an explicit protocol).
  */
 import { Layer } from "effect";
+import { expectTypeOf } from "vitest";
 import * as NodeStatus from "../src/NodeStatus";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
@@ -19,6 +20,10 @@ runFullyWired(Resource.client(NodeStatus.Tag, Droplet));
 // @ts-expect-error — bare client(tag, Bare) still requires Bare
 runFullyWired(Resource.client(NodeStatus.Tag, Bare));
 
+// Derived connect is compile-gated on AddressedNode
+// @ts-expect-error — bare Tag cannot derive connect
+Node.connect(Bare);
+
 // Explicit protocol still wires a bare node
 const proto = Resource.protocolHttp("http://x/rpc");
 runFullyWired(
@@ -27,8 +32,6 @@ runFullyWired(
   ),
 );
 
-// Proof: addressed Tag narrows `kind` to ProtocolKind (not undefined)
-const _kind: Node.ProtocolKind = Droplet.kind;
-const _bareKind: undefined = Bare.kind;
-void _kind;
-void _bareKind;
+// Proof: addressed Tag narrows kind; bare stays undefined
+expectTypeOf(Droplet.kind).toEqualTypeOf<"Http" | "WebSocket">();
+expectTypeOf(Bare.kind).toEqualTypeOf<undefined>();

@@ -1,10 +1,11 @@
 import { Duration, Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
-import { expect, it } from "vitest";
+import { describe, it } from "@effect/vitest";
 import { QueueResource } from "../src";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // `Resource.verifyConnection(node)` is the eager reachability backstop (F3): it opens one bounded
 // connection to the node's declared (or overridden) url and fails with `NodeUnreachable` if the peer
@@ -35,40 +36,40 @@ const httpSrv = Node.httpServer([
   QueueResource.serveMemory(VQueue, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
-it("verifyConnection succeeds against a reachable ws server", () =>
-  Effect.runPromise(
+describe("Resource.verifyConnection", () => {
+  it.live("verifyConnection succeeds against a reachable ws server", () =>
     onServer(wsSrv, (port) =>
       Resource.verifyConnection(VNode, { url: `ws://127.0.0.1:${port}/rpc` }),
-    ).pipe(Effect.timeout(Duration.seconds(10)), Effect.as("ok")),
-  ).then((r) => expect(r).toBe("ok")));
+    ).pipe(Effect.timeout(Duration.seconds(10))),
+  );
 
-it("verifyConnection succeeds against a reachable http server", () =>
-  Effect.runPromise(
+  it.live("verifyConnection succeeds against a reachable http server", () =>
     onServer(httpSrv, (port) =>
       Resource.verifyConnection(VNode, { url: `http://127.0.0.1:${port}/rpc` }),
-    ).pipe(Effect.timeout(Duration.seconds(10)), Effect.as("ok")),
-  ).then((r) => expect(r).toBe("ok")));
+    ).pipe(Effect.timeout(Duration.seconds(10))),
+  );
 
-it("verifyConnection fails with NodeUnreachable against a dead socket port", () =>
-  Effect.runPromise(
-    Effect.exit(
-      Resource.verifyConnection(VNode, { url: "ws://127.0.0.1:1/rpc", timeout: "2 seconds" }).pipe(
-        Effect.timeout(Duration.seconds(10)),
-      ),
-    ),
-  ).then((exit) => {
-    expect(exit._tag).toBe("Failure");
-    expect(JSON.stringify(exit)).toContain("NodeUnreachable");
-  }));
+  it.live("verifyConnection fails with NodeUnreachable against a dead socket port", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        Resource.verifyConnection(VNode, {
+          url: "ws://127.0.0.1:1/rpc",
+          timeout: "2 seconds",
+        }).pipe(Effect.timeout(Duration.seconds(10))),
+      );
+      expectTaggedFailure(exit, "NodeUnreachable");
+    }),
+  );
 
-it("verifyConnection fails with NodeUnreachable against a dead http port", () =>
-  Effect.runPromise(
-    Effect.exit(
-      Resource.verifyConnection(VNode, { url: "http://127.0.0.1:1/rpc", timeout: "2 seconds" }).pipe(
-        Effect.timeout(Duration.seconds(10)),
-      ),
-    ),
-  ).then((exit) => {
-    expect(exit._tag).toBe("Failure");
-    expect(JSON.stringify(exit)).toContain("NodeUnreachable");
-  }));
+  it.live("verifyConnection fails with NodeUnreachable against a dead http port", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        Resource.verifyConnection(VNode, {
+          url: "http://127.0.0.1:1/rpc",
+          timeout: "2 seconds",
+        }).pipe(Effect.timeout(Duration.seconds(10))),
+      );
+      expectTaggedFailure(exit, "NodeUnreachable");
+    }),
+  );
+});

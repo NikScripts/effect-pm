@@ -1,7 +1,9 @@
-import { Effect, Exit, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { Effect, Layer } from "effect";
+import { describe, it } from "@effect/vitest";
+import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // Compile-time proof that `Node.connect` and its `connectHttp` / `connectSocket` shortcuts dispatch
 // correctly across every call style: data-first derived, data-first explicit, data-last (pipeable), and
@@ -37,18 +39,14 @@ describe("connect dual dispatch", () => {
     expect(built.every((e) => Effect.isEffect(e))).toBe(true);
   });
 
-  it("deriving from a bare (unaddressed) node fails the Layer with UnaddressedNode", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        // Public `connect` is gated on AddressedNode; assert the runtime path via cast.
-        const layer = Node.connect(
-          BareNode as unknown as Node.AddressedNode<BareNode>,
-        );
-        const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          expect(String(exit.cause)).toMatch(/UnaddressedNode|url|kind/i);
-        }
-      }),
-    ));
+  it.effect("deriving from a bare (unaddressed) node fails the Layer with UnaddressedNode", () =>
+    Effect.gen(function* () {
+      // Public `connect` is gated on AddressedNode; exercise the runtime path via cast.
+      const layer = Node.connect(
+        BareNode as unknown as Node.AddressedNode<BareNode>,
+      );
+      const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
+      expectTaggedFailure(exit, "UnaddressedNode");
+    }),
+  );
 });

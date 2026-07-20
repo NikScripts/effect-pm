@@ -3,6 +3,7 @@
  * a port, a `":port"`, a full url, an explicit `{ url }`, or nothing.
  * Dialable targets narrow to {@link Node.AddressedNode}; bare stays unaddressed.
  */
+import { expectTypeOf } from "vitest";
 import * as Node from "../src/Node";
 
 // no address
@@ -18,19 +19,20 @@ class E extends Node.Tag<E>("app/E", { url: "http://10.0.0.1:3003/rpc" }) {}
 // ipc path
 class F extends Node.Tag<F>("app/F", { path: "/tmp/f.sock" }) {}
 
-// the resolved address is carried on the node as `url` / `path`
-const _urls: ReadonlyArray<string | undefined> = [A.url, B.url, C.url, D.url, E.url];
-void _urls;
+expectTypeOf(A.url).toEqualTypeOf<undefined>();
+expectTypeOf(B.url).toEqualTypeOf<string>();
+expectTypeOf(F.path).toEqualTypeOf<string>();
 
-const _bare: undefined = A.kind;
-const _http: Node.ProtocolKind = B.kind;
-const _ipc: Node.ProtocolKind = F.kind;
-const _addressed: Node.AddressedNode<B> = B;
-void _bare;
-void _http;
-void _ipc;
-void _addressed;
+expectTypeOf(A.kind).toEqualTypeOf<undefined>();
+expectTypeOf(B.kind).toEqualTypeOf<"Http" | "WebSocket">();
+expectTypeOf(F.kind).toEqualTypeOf<"IpcSocket">();
+
+expectTypeOf(B).toMatchTypeOf<Node.AddressedNode<B>>();
+expectTypeOf(F).toMatchTypeOf<Node.AddressedNode<F>>();
 
 // @ts-expect-error — bare Tag is not AddressedNode
 const _notAddressed: Node.AddressedNode<A> = A;
 void _notAddressed;
+void C;
+void D;
+void E;

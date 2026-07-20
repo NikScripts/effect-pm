@@ -1,7 +1,8 @@
 import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
-import { expect, it } from "vitest";
+import { describe, it } from "@effect/vitest";
+import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
@@ -23,8 +24,8 @@ const Server = Node.httpServer([
 // httpClient) — the requirement is enforced at compile time, so it can't fail at runtime with a
 // "Service not found: RpcClient/Protocol" the way `client(tag)` (ambient Protocol) did when wired to a
 // node service instead.
-it("a nodeless distributed tag is client-readable by naming the node: client(tag, node)", () =>
-  Effect.runPromise(
+describe("hostless client(tag, node)", () => {
+  it.effect("a nodeless distributed tag is client-readable by naming the node: client(tag, node)", () =>
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((server) => server.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
@@ -39,4 +40,5 @@ it("a nodeless distributed tag is client-readable by naming the node: client(tag
         Effect.scoped,
       );
     }).pipe(Effect.provide(Server), Effect.scoped),
-  ));
+  );
+});

@@ -1,5 +1,6 @@
 import { Clock, Context, Duration, Effect, Exit, Layer } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, it } from "@effect/vitest";
+import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
 
@@ -39,102 +40,99 @@ describe("LookupNode", () => {
 });
 
 describe("Lookup identity claim", () => {
-  it("first claim wins; second gets DuplicateIdentity with original", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const path = yield* tmpSock("claim");
-        const node = Node.Lookup("lookup/claim", { path });
+  it.effect("first claim wins; second gets DuplicateIdentity with original", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("claim");
+      const node = Node.Lookup("lookup/claim", { path });
 
-        yield* withLookup(
-          Lookup.layer(node),
-          Lookup.client(node),
-          Effect.gen(function* () {
-            const id = yield* Lookup.Identity;
-            const won = yield* id.claim(
+      yield* withLookup(
+        Lookup.layer(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const id = yield* Lookup.Identity;
+          const won = yield* id.claim(
+            new Lookup.ClaimRequest({
+              key: "app/Mail",
+              nodeKey: "worker-a",
+              kind: "IpcSocket",
+              path: "/tmp/worker-a.sock",
+            }),
+          );
+          expect(won.nodeKey).toBe("worker-a");
+          expect(won.path).toBe("/tmp/worker-a.sock");
+
+          const outcome = yield* id
+            .claim(
               new Lookup.ClaimRequest({
                 key: "app/Mail",
-                nodeKey: "worker-a",
+                nodeKey: "worker-b",
                 kind: "IpcSocket",
-                path: "/tmp/worker-a.sock",
+                path: "/tmp/worker-b.sock",
               }),
+            )
+            .pipe(
+              Effect.map((endpoint) => ({ _tag: "won" as const, endpoint })),
+              Effect.catchTag("DuplicateIdentity", (duplicate) =>
+                Effect.succeed({ _tag: "dup" as const, duplicate }),
+              ),
             );
-            expect(won.nodeKey).toBe("worker-a");
-            expect(won.path).toBe("/tmp/worker-a.sock");
 
-            const outcome = yield* id
-              .claim(
-                new Lookup.ClaimRequest({
-                  key: "app/Mail",
-                  nodeKey: "worker-b",
-                  kind: "IpcSocket",
-                  path: "/tmp/worker-b.sock",
-                }),
-              )
-              .pipe(
-                Effect.map((endpoint) => ({ _tag: "won" as const, endpoint })),
-                Effect.catchTag("DuplicateIdentity", (duplicate) =>
-                  Effect.succeed({ _tag: "dup" as const, duplicate }),
-                ),
-              );
-
-            expect(outcome._tag).toBe("dup");
-            if (outcome._tag === "dup") {
-              expect(outcome.duplicate.key).toBe("app/Mail");
-              expect(outcome.duplicate.original.nodeKey).toBe("worker-a");
-              expect(outcome.duplicate.original.path).toBe("/tmp/worker-a.sock");
-            }
-          }),
-        );
-      }).pipe(Effect.timeout(Duration.seconds(15))),
-    ));
+          expect(outcome._tag).toBe("dup");
+          if (outcome._tag === "dup") {
+            expect(outcome.duplicate.key).toBe("app/Mail");
+            expect(outcome.duplicate.original.nodeKey).toBe("worker-a");
+            expect(outcome.duplicate.original.path).toBe("/tmp/worker-a.sock");
+          }
+        }),
+      );
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
 });
 
 describe("Lookup L1 bind exclusivity", () => {
-  it("second listen on the same path with unlink:false fails", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const path = yield* tmpSock("exclusive");
+  it.effect("second listen on the same path with unlink:false fails", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("exclusive");
 
-        yield* Effect.gen(function* () {
-          const firstCtx = yield* Layer.build(
-            Lookup.layerIpc(path, { unlink: false }),
-          );
+      yield* Effect.gen(function* () {
+        const firstCtx = yield* Layer.build(
+          Lookup.layerIpc(path, { unlink: false }),
+        );
 
-          const secondExit = yield* Effect.exit(
-            Layer.build(Lookup.layerIpc(path, { unlink: false })).pipe(
-              Effect.scoped,
-            ),
-          );
+        const secondExit = yield* Effect.exit(
+          Layer.build(Lookup.layerIpc(path, { unlink: false })).pipe(
+            Effect.scoped,
+          ),
+        );
 
-          expect(Exit.isFailure(secondExit)).toBe(true);
-          // keep first listener alive until assertions finish
-          yield* Effect.sync(() => firstCtx);
-        }).pipe(Effect.scoped);
-      }).pipe(Effect.timeout(Duration.seconds(15))),
-    ));
+        expect(Exit.isFailure(secondExit)).toBe(true);
+        // keep first listener alive until assertions finish
+        yield* Effect.sync(() => firstCtx);
+      }).pipe(Effect.scoped);
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
 });
 
 describe("Lookup.layerDefaultLocal", () => {
-  it("serves Identity on a chosen path (override default to avoid collisions)", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const path = yield* tmpSock("default-local");
-        yield* withLookup(
-          Lookup.layerDefaultLocal({ path }),
-          Lookup.clientDefaultLocal({ path }),
-          Effect.gen(function* () {
-            const id = yield* Lookup.Identity;
-            const won = yield* id.claim(
-              new Lookup.ClaimRequest({
-                key: "k",
-                nodeKey: "n",
-                kind: "IpcSocket",
-                path: "/tmp/n.sock",
-              }),
-            );
-            expect(won.nodeKey).toBe("n");
-          }),
-        );
-      }).pipe(Effect.timeout(Duration.seconds(15))),
-    ));
+  it.effect("serves Identity on a chosen path (override default to avoid collisions)", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("default-local");
+      yield* withLookup(
+        Lookup.layerDefaultLocal({ path }),
+        Lookup.clientDefaultLocal({ path }),
+        Effect.gen(function* () {
+          const id = yield* Lookup.Identity;
+          const won = yield* id.claim(
+            new Lookup.ClaimRequest({
+              key: "k",
+              nodeKey: "n",
+              kind: "IpcSocket",
+              path: "/tmp/n.sock",
+            }),
+          );
+          expect(won.nodeKey).toBe("n");
+        }),
+      );
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
 });

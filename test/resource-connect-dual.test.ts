@@ -1,7 +1,8 @@
 import { Duration, Effect, Layer, Schema, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
-import { describe, expect, it } from "vitest";
+import { describe, it } from "@effect/vitest";
+import { expect } from "vitest";
 import * as QueueResource from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
@@ -79,8 +80,8 @@ const withPortClient = (connectAt: (port: number) => Layer.Layer<HubNode>) =>
     );
   });
 
-it("a node-derived socket client streams status live over ws", () =>
-  Effect.runPromise(
+describe("node-derived clients stream live", () => {
+  it.live("a node-derived socket client streams status live over ws", () =>
     withPortClient((port) =>
       HubNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`)),
     ).pipe(
@@ -92,10 +93,9 @@ it("a node-derived socket client streams status live over ws", () =>
       Effect.scoped,
       Effect.timeout(Duration.seconds(10)),
     ),
-  ));
+  );
 
-it("a node-derived http client streams status live over http", () =>
-  Effect.runPromise(
+  it.live("a node-derived http client streams status live over http", () =>
     withPortClient((port) =>
       HubNode.pipe(Node.connectHttp(`http://127.0.0.1:${port}/rpc`)),
     ).pipe(
@@ -107,4 +107,5 @@ it("a node-derived http client streams status live over http", () =>
       Effect.scoped,
       Effect.timeout(Duration.seconds(10)),
     ),
-  ));
+  );
+});

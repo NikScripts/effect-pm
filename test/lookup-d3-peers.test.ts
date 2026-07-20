@@ -1,5 +1,6 @@
 import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, it } from "@effect/vitest";
+import { expect } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
 import * as Resource from "../src/Resource";
@@ -57,96 +58,87 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
     ]);
   });
 
-  it("peersLayer discovers peer via Directory.nodesServing and folds over ipc", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const lookupPath = yield* tmpSock("lookup");
-        const eastPath = yield* tmpSock("east");
-        const westPath = yield* tmpSock("west");
-        const lookupNode = Node.Lookup("d3/lookup", { path: lookupPath });
-        class East extends Node.Tag<East, Pool>("d3/East", {
-          path: eastPath,
-        }) {}
-        class West extends Node.Tag<West, Pool>("d3/West", {
-          path: westPath,
-        }) {}
+  it.effect("peersLayer discovers peer via Directory.nodesServing and folds over ipc", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("lookup");
+      const eastPath = yield* tmpSock("east");
+      const westPath = yield* tmpSock("west");
+      const lookupNode = Node.Lookup("d3/lookup", { path: lookupPath });
+      class East extends Node.Tag<East, Pool>("d3/East", {
+        path: eastPath,
+      }) {}
+      class West extends Node.Tag<West, Pool>("d3/West", {
+        path: westPath,
+      }) {}
 
-        const lookupClient = Lookup.client(lookupNode);
-        const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
-        const lookupCtx = yield* Layer.build(lookupClient);
-        const lookup = Context.merge(lookupServer, lookupCtx);
+      const lookupClient = Lookup.client(lookupNode);
+      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupCtx = yield* Layer.build(lookupClient);
+      const lookup = Context.merge(lookupServer, lookupCtx);
 
-        // Leaf first so directory has West before East's peersLayer builds.
-        const westCtx = yield* Layer.build(
-          Node.listen(West, [
-            Resource.serve(Pool, impl(5)).pipe(
-              Layer.provide(Resource.peersFrom(Pool, {})),
-            ),
-          ]).pipe(Layer.provide(lookupClient)),
-        );
-
-        const dir = Context.get(lookup, Lookup.Directory);
-        const rows = yield* dir
-          .nodesServing(
-            new Lookup.NodesServingRequest({ resourceKey: "d3/Pool" }),
-          )
-          .pipe(Effect.provide(lookup));
-        expect(rows.some((r) => r.nodeKey === West.key)).toBe(true);
-
-        // Membership snapshot: empty stamp + Directory → West (not East/self).
-        const peersCtx = yield* Layer.build(
-          Resource.peersLayer(Pool, East).pipe(Layer.provide(lookupClient)),
-        );
-        const peerKeys = Object.keys(
-          yield* Resource.peers(Pool).pipe(Effect.provide(peersCtx)),
-        );
-        expect(peerKeys).toContain(West.key);
-        expect(peerKeys).not.toContain(East.key);
-
-        const eastCtx = yield* Layer.build(
-          Node.listen(East, [
-            Resource.serve(Pool, impl(2)).pipe(
-              Layer.provide(Resource.peersLayer(Pool, East)),
-            ),
-          ]).pipe(Layer.provide(lookupClient)),
-        );
-
-        const total = yield* Effect.gen(function* () {
-          const pool = yield* Pool;
-          expect(yield* pool.active).toBe(2);
-          return yield* pool.fleetActive;
-        }).pipe(
-          Effect.provide(
-            Resource.client(Pool, East).pipe(
-              Layer.provide(Node.connect(East)),
-            ),
+      // Leaf first so directory has West before East's peersLayer builds.
+      const westCtx = yield* Layer.build(
+        Node.listen(West, [
+          Resource.serve(Pool, impl(5)).pipe(
+            Layer.provide(Resource.peersFrom(Pool, {})),
           ),
-          Effect.scoped,
-        );
-        expect(total).toBe(7); // east 2 + west 5 (directory-discovered peer)
+        ]).pipe(Layer.provide(lookupClient)),
+      );
 
-        yield* Effect.sync(() => {
-          void westCtx;
-          void eastCtx;
-          void peersCtx;
-        });
-      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(25))),
-    ));
+      const dir = Context.get(lookup, Lookup.Directory);
+      const rows = yield* dir
+        .nodesServing(
+          new Lookup.NodesServingRequest({ resourceKey: "d3/Pool" }),
+        )
+        .pipe(Effect.provide(lookup));
+      expect(rows.some((r) => r.nodeKey === West.key)).toBe(true);
 
-  it("undeclared tag peersLayer stays empty without Directory (not discoverable)", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        class Lonely extends Node.Tag<Lonely>("d3/Lonely", {
-          path: "/tmp/d3-lonely.sock",
-        }) {}
-        class Undeclared extends Resource.Tag<Undeclared>()("d3/Undeclared", {
-          n: Resource.effect(Schema.Number),
-        }) {}
+      // Membership snapshot: empty stamp + Directory → West (not East/self).
+      const peersCtx = yield* Layer.build(
+        Resource.peersLayer(Pool, East).pipe(Layer.provide(lookupClient)),
+      );
+      const peerKeys = Object.keys(
+        yield* Resource.peers(Pool).pipe(Effect.provide(peersCtx)),
+      );
+      expect(peerKeys).toContain(West.key);
+      expect(peerKeys).not.toContain(East.key);
 
-        const peers = yield* Resource.peers(Undeclared).pipe(
-          Effect.provide(Resource.peersLayer(Undeclared, Lonely)),
-        );
-        expect(peers).toEqual({});
-      }),
-    ));
+      const eastCtx = yield* Layer.build(
+        Node.listen(East, [
+          Resource.serve(Pool, impl(2)).pipe(
+            Layer.provide(Resource.peersLayer(Pool, East)),
+          ),
+        ]).pipe(Layer.provide(lookupClient)),
+      );
+
+      const total = yield* Effect.gen(function* () {
+        const pool = yield* Pool;
+        expect(yield* pool.active).toBe(2);
+        return yield* pool.fleetActive;
+      }).pipe(Effect.provide(Resource.client(Pool, East)), Effect.scoped);
+      expect(total).toBe(7); // east 2 + west 5 (directory-discovered peer)
+
+      yield* Effect.sync(() => {
+        void westCtx;
+        void eastCtx;
+        void peersCtx;
+      });
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(25))),
+  );
+
+  it.effect("undeclared tag peersLayer stays empty without Directory (not discoverable)", () =>
+    Effect.gen(function* () {
+      class Lonely extends Node.Tag<Lonely>("d3/Lonely", {
+        path: "/tmp/d3-lonely.sock",
+      }) {}
+      class Undeclared extends Resource.Tag<Undeclared>()("d3/Undeclared", {
+        n: Resource.effect(Schema.Number),
+      }) {}
+
+      const peers = yield* Resource.peers(Undeclared).pipe(
+        Effect.provide(Resource.peersLayer(Undeclared, Lonely)),
+      );
+      expect(peers).toEqual({});
+    }),
+  );
 });

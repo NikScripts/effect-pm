@@ -1,5 +1,6 @@
 import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, it } from "@effect/vitest";
+import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
@@ -21,9 +22,10 @@ const echoImpl = {
 };
 
 /** Server listens before the ipc client dials. */
-const withIpc = <A, E, R>(
+const withIpc = <A, E, R, LE = never>(
   server: Layer.Layer<never, never, R>,
-  client: Layer.Layer<Echo, Node.UnaddressedNode, never>,
+  // Auto-connect clients are `Layer.Layer<Echo>`; connectIpc may still surface `UnaddressedNode`.
+  client: Layer.Layer<Echo, LE>,
   use: Effect.Effect<A, E, Echo>,
 ) =>
   Effect.gen(function* () {
@@ -54,71 +56,67 @@ describe("Node ProtocolKind — ipc", () => {
 });
 
 describe("Node.ipcServer + connectIpc", () => {
-  it("round-trips an RPC call over a Unix-domain socket", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const path = yield* tmpSock("roundtrip");
-        class Worker extends Node.Tag<Worker>("ipc/worker", { path }) {}
+  it.effect("round-trips an RPC call over a Unix-domain socket", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("roundtrip");
+      class Worker extends Node.Tag<Worker>("ipc/worker", { path }) {}
 
-        const n = yield* withIpc(
-          Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
-          Resource.client(Echo, Worker).pipe(
-            Layer.provide(Worker.pipe(Node.connectIpc)),
-          ),
-          Effect.gen(function* () {
-            const echo = yield* Echo;
-            return yield* echo.ping({ n: 41 });
-          }),
-        );
+      const n = yield* withIpc(
+        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
+        Resource.client(Echo, Worker).pipe(
+          Layer.provide(Worker.pipe(Node.connectIpc)),
+        ),
+        Effect.gen(function* () {
+          const echo = yield* Echo;
+          return yield* echo.ping({ n: 41 });
+        }),
+      );
 
-        expect(n).toBe(42);
-      }).pipe(Effect.timeout(Duration.seconds(15))),
-    ));
+      expect(n).toBe(42);
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
 
-  it("Node.connect derives ipc from the node's kind + path", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const path = yield* tmpSock("derive");
-        class Worker extends Node.Tag<Worker>("ipc/derive", { path }) {}
+  it.effect("Node.connect derives ipc from the node's kind + path", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("derive");
+      class Worker extends Node.Tag<Worker>("ipc/derive", { path }) {}
 
-        const n = yield* withIpc(
-          Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
-          Resource.client(Echo, Worker).pipe(
-            Layer.provide(Node.connect(Worker)),
-          ),
-          Effect.gen(function* () {
-            const echo = yield* Echo;
-            return yield* echo.ping({ n: 1 });
-          }),
-        );
+      const n = yield* withIpc(
+        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
+        // Addressed Worker — auto-connect; no Layer.provide(Node.connect(Worker)).
+        Resource.client(Echo, Worker),
+        Effect.gen(function* () {
+          const echo = yield* Echo;
+          return yield* echo.ping({ n: 1 });
+        }),
+      );
 
-        expect(n).toBe(2);
-      }).pipe(Effect.timeout(Duration.seconds(15))),
-    ));
+      expect(n).toBe(2);
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
 
-  it("unlinks so a second listen can bind the same path", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const path = yield* tmpSock("stale");
-        class Worker extends Node.Tag<Worker>("ipc/stale", { path }) {}
+  it.effect("unlinks so a second listen can bind the same path", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("stale");
+      class Worker extends Node.Tag<Worker>("ipc/stale", { path }) {}
 
-        const serve = () =>
-          Node.ipcServer([Resource.serve(Echo, echoImpl)], { path });
+      const serve = () =>
+        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path });
 
-        yield* Effect.void.pipe(Effect.provide(serve()), Effect.scoped);
+      yield* Effect.void.pipe(Effect.provide(serve()), Effect.scoped);
 
-        const n = yield* withIpc(
-          serve(),
-          Resource.client(Echo, Worker).pipe(
-            Layer.provide(Node.connectIpc(Worker)),
-          ),
-          Effect.gen(function* () {
-            const echo = yield* Echo;
-            return yield* echo.ping({ n: 6 });
-          }),
-        );
+      const n = yield* withIpc(
+        serve(),
+        Resource.client(Echo, Worker).pipe(
+          Layer.provide(Node.connectIpc(Worker)),
+        ),
+        Effect.gen(function* () {
+          const echo = yield* Echo;
+          return yield* echo.ping({ n: 6 });
+        }),
+      );
 
-        expect(n).toBe(7);
-      }).pipe(Effect.timeout(Duration.seconds(15))),
-    ));
+      expect(n).toBe(7);
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
 });
