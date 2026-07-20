@@ -34,6 +34,7 @@ import {
   NamelessListenOptions,
   NodeKey,
   ProtocolKind,
+  ProtocolKindMismatch,
   Tag,
   UnaddressedNode,
 } from "./nodeCore"
@@ -76,8 +77,32 @@ type ServerProtocol = (
 ) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
 
 
+/** Refuse to boot if any node-bound served resource declares a transport (`nodeKind`) other than the
+ *  transport this server actually speaks. A client derives its transport from the node's `kind`, so a
+ *  mismatch means every client dials a protocol the server never answers — the silent "blank
+ *  dashboard" failure, made loud at boot. Nodeless resources (no `nodeKind`) are unconstrained. */
+const assertProtocolKinds = (
+  entries: ReadonlyArray<Resource.ServedResource>,
+  serverKind: ProtocolKind,
+): Effect.Effect<void> =>
+  Effect.forEach(
+    entries,
+    (entry) =>
+      entry.nodeKind !== undefined && entry.nodeKind !== serverKind
+        ? Effect.die(
+            new ProtocolKindMismatch({
+              resource: entry.groupId,
+              declared: entry.nodeKind,
+              servedOver: serverKind,
+            }),
+          )
+        : Effect.void,
+    { discard: true },
+  )
+
 const httpServerBase = (
   serverProtocol: ServerProtocol,
+  serverKind: ProtocolKind,
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer> =>
   Layer.unwrap(
@@ -91,6 +116,7 @@ const httpServerBase = (
           ),
         );
       }
+      yield* assertProtocolKinds(entries, serverKind);
       const startedAt = yield* Clock.currentTimeMillis;
       const readiness = Effect.forEach(entries, (entry) =>
         Effect.map(entry.readiness, (result) => ({
@@ -286,7 +312,7 @@ export function httpServer(
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, any, unknown> {
-  return serverImpl(Resource.serverProtocolHttp, servesOrOptions, maybeOptions);
+  return serverImpl(Resource.serverProtocolHttp, "Http", servesOrOptions, maybeOptions);
 }
 
 // Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
@@ -295,6 +321,7 @@ export function httpServer(
 // any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
 function serverImpl(
   serverProtocol: ServerProtocol,
+  serverKind: ProtocolKind,
   servesOrOptions?:
     | Layer.Layer<never, any, any>
     | ServerServeList
@@ -308,12 +335,16 @@ function serverImpl(
       ? ([servesOrOptions] as unknown as ServerServeList)
       : undefined;
   if (serves !== undefined) {
-    return httpServerBase(serverProtocol, maybeOptions).pipe(
+    return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
       Layer.provideMerge(mergeServeList(serves)),
       Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
     );
   }
-  return httpServerBase(serverProtocol, servesOrOptions as HttpServerOptions | undefined);
+  return httpServerBase(
+    serverProtocol,
+    serverKind,
+    servesOrOptions as HttpServerOptions | undefined,
+  );
 }
 
 /**
@@ -360,7 +391,12 @@ export function wsServer(
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, any, unknown> {
-  return serverImpl(Resource.serverProtocolWebsocket, servesOrOptions, maybeOptions);
+  return serverImpl(
+    Resource.serverProtocolWebsocket,
+    "WebSocket",
+    servesOrOptions,
+    maybeOptions,
+  );
 }
 
 /** Options for {@link ipcServer} — Unix-domain RPC (same-machine). @public */
@@ -871,6 +907,7 @@ const ipcServerBase = (
           ),
         );
       }
+      yield* assertProtocolKinds(entries, "IpcSocket");
       const startedAt = yield* Clock.currentTimeMillis;
       const readiness = Effect.forEach(entries, (entry) =>
         Effect.map(entry.readiness, (result) => ({

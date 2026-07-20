@@ -522,6 +522,25 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
   }
 }
 
+/**
+ * A node-bound resource is being served over a transport that doesn't match its node's declared
+ * {@link ProtocolKind}. Because a client derives its transport *from* the node's `kind`, serving it
+ * over a different transport (e.g. a `WebSocket` node served on an `httpServer`) means every client
+ * dials the wrong protocol — the silent "blank dashboard / no live data" failure. The server refuses
+ * to boot with this instead, so the mismatch is loud and immediate rather than a runtime dead end.
+ *
+ * @public
+ */
+export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch")<{
+  readonly resource: string;
+  readonly declared: ProtocolKind;
+  readonly servedOver: ProtocolKind;
+}> {
+  override get message() {
+    return `Resource "${this.resource}" declares its node as ${this.declared}, but is being served over ${this.servedOver} — a client would dial ${this.declared} and never reach it. Serve it over ${this.declared} (Node.${this.declared === "Http" ? "httpServer" : this.declared === "WebSocket" ? "wsServer" : "ipcServer"}), or change the node's kind.`;
+  }
+}
+
 
 /**
  * A {@link Tag} marked as the identity/lookup server.

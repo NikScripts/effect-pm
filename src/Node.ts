@@ -22,6 +22,7 @@ export {
   ListenNode,
   UnaddressedNode,
   NodeUnreachable,
+  ProtocolKindMismatch,
   InvalidHttpTarget,
 } from "./internal/nodeCore"
 export type {
