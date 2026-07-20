@@ -28,6 +28,7 @@ import {
   AddressLessClaimLost,
   AnyNode,
   catalogSym,
+  InvalidHttpTarget,
   ListenNode,
   ListenOptions,
   NodeKey,
@@ -200,12 +201,26 @@ const directoryAdvertiseMerge = (
   );
 };
 
-// Array form of `Layer.mergeAll` (which needs a non-empty *tuple*): fold the list into one layer. The
-// `httpServer` overload guarantees a non-empty list; untyped plumbing behind that typed overload.
-const mergeLayers = (
-  layers: ReadonlyArray<Layer.Layer<any, any, any>>,
-): Layer.Layer<any, any, any> =>
-  layers.reduce((acc, layer) => Layer.merge(acc, layer));
+/**
+ * Non-empty serve list for {@link httpServer} / {@link wsServer} / {@link ipcServer}.
+ * Bounds match Effect's {@link Layer.mergeAll}: `ROut` is contravariant so `Layer<never, …>`
+ * accepts any success; `R` stays open so callers can still provide deps outside the server.
+ *
+ * @internal
+ */
+type ServerServeList = readonly [
+  Layer.Layer<never, any, any>,
+  ...ReadonlyArray<Layer.Layer<never, any, any>>,
+]
+
+/** Merge a non-empty serve list — Effect's {@link Layer.mergeAll}, not a hand-rolled `any` fold. */
+const mergeServeList = (
+  layers: ServerServeList,
+): Layer.Layer<
+  Layer.Success<ServerServeList[number]>,
+  Layer.Error<ServerServeList[number]>,
+  Layer.Services<ServerServeList[number]>
+> => Layer.mergeAll(...layers)
 
 /**
  * The shared http server for resources composed with {@link serve} — the multi-resource,
@@ -243,37 +258,33 @@ const mergeLayers = (
  *
  * @public
  */
-export function httpServer<Serve extends Layer.Layer<any, any, any>>(
+export function httpServer<Serve extends Layer.Layer<never, any, any>>(
   serve: Serve,
   options?: HttpServerOptions,
 ): Layer.Layer<
   Layer.Success<Serve>,
-  never,
+  Layer.Error<Serve>,
   Layer.Services<Serve> | HttpServer.HttpServer
 >;
 export function httpServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
-export function httpServer<
-  Serves extends readonly [
-    Layer.Layer<any, any, any>,
-    ...ReadonlyArray<Layer.Layer<any, any, any>>,
-  ],
->(
+export function httpServer<Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]>,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]> | HttpServer.HttpServer
 >;
 export function httpServer(
   servesOrOptions?:
-    | Layer.Layer<any, any, any>
-    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | Layer.Layer<never, any, any>
+    | ServerServeList
+    | ReadonlyArray<Layer.Layer<never, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, never, unknown> {
+): Layer.Layer<never, any, unknown> {
   return serverImpl(Resource.serverProtocolHttp, servesOrOptions, maybeOptions);
 }
 
@@ -284,21 +295,22 @@ export function httpServer(
 function serverImpl(
   serverProtocol: ServerProtocol,
   servesOrOptions?:
-    | Layer.Layer<any, any, any>
-    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | Layer.Layer<never, any, any>
+    | ServerServeList
+    | ReadonlyArray<Layer.Layer<never, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, never, unknown> {
+): Layer.Layer<never, any, unknown> {
   const serves = Array.isArray(servesOrOptions)
-    ? servesOrOptions
+    ? (servesOrOptions as unknown as ServerServeList)
     : Layer.isLayer(servesOrOptions)
-      ? [servesOrOptions]
+      ? ([servesOrOptions] as unknown as ServerServeList)
       : undefined;
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, maybeOptions).pipe(
-      Layer.provideMerge(mergeLayers(serves)),
+      Layer.provideMerge(mergeServeList(serves)),
       Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
-    ) as unknown as Layer.Layer<never, never, unknown>;
+    );
   }
   return httpServerBase(serverProtocol, servesOrOptions as HttpServerOptions | undefined);
 }
@@ -320,37 +332,33 @@ function serverImpl(
  *
  * @public
  */
-export function wsServer<Serve extends Layer.Layer<any, any, any>>(
+export function wsServer<Serve extends Layer.Layer<never, any, any>>(
   serve: Serve,
   options?: HttpServerOptions,
 ): Layer.Layer<
   Layer.Success<Serve>,
-  never,
+  Layer.Error<Serve>,
   Layer.Services<Serve> | HttpServer.HttpServer
 >;
 export function wsServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
-export function wsServer<
-  Serves extends readonly [
-    Layer.Layer<any, any, any>,
-    ...ReadonlyArray<Layer.Layer<any, any, any>>,
-  ],
->(
+export function wsServer<Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]>,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]> | HttpServer.HttpServer
 >;
 export function wsServer(
   servesOrOptions?:
-    | Layer.Layer<any, any, any>
-    | ReadonlyArray<Layer.Layer<any, any, any>>
+    | Layer.Layer<never, any, any>
+    | ServerServeList
+    | ReadonlyArray<Layer.Layer<never, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, never, unknown> {
+): Layer.Layer<never, any, unknown> {
   return serverImpl(Resource.serverProtocolWebsocket, servesOrOptions, maybeOptions);
 }
 
@@ -398,45 +406,47 @@ export interface IpcServerOptions {
  *
  * @public
  */
-export function ipcServer<Serve extends Layer.Layer<any, any, any>>(
+export function ipcServer<Serve extends Layer.Layer<never, any, any>>(
   serve: Serve,
   options: IpcServerOptions,
-): Layer.Layer<Layer.Success<Serve>, never, Layer.Services<Serve>>;
-export function ipcServer<
-  Serves extends readonly [
-    Layer.Layer<any, any, any>,
-    ...ReadonlyArray<Layer.Layer<any, any, any>>,
-  ],
->(
+): Layer.Layer<
+  Layer.Success<Serve>,
+  Layer.Error<Serve>,
+  Layer.Services<Serve>
+>;
+export function ipcServer<Serves extends ServerServeList>(
   serves: Serves,
   options: IpcServerOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]>,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
 export function ipcServer(
-  serves: Layer.Layer<any, any, any> | ReadonlyArray<Layer.Layer<any, any, any>>,
+  serves: Layer.Layer<never, any, any> | ServerServeList | ReadonlyArray<Layer.Layer<never, any, any>>,
   options: IpcServerOptions,
-): Layer.Layer<never, never, unknown> {
-  const list = Array.isArray(serves) ? serves : [serves];
+): Layer.Layer<never, any, unknown> {
+  const list = (
+    Array.isArray(serves) ? serves : [serves]
+  ) as unknown as ServerServeList;
   return ipcServerBase(options).pipe(
-    Layer.provideMerge(mergeLayers(list)),
+    Layer.provideMerge(mergeServeList(list)),
     // Fresh registry per server — Lookup + Worker in one process must not share.
     Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
-  ) as unknown as Layer.Layer<never, never, unknown>;
+  );
 }
 
 /**
- * Non-empty serve-layer list for {@link listen} / `*Server`.
- * R is `never` (not `any`) so an array literal is not contextually typed into
- * `Layer.Services = any` (which breaks `Layer.build` / Effect context checks).
+ * Non-empty serve-layer list for {@link listen} (deps already discharged).
+ * `ROut` bound matches Effect {@link Layer.mergeAll} (`never` = any success via
+ * contravariance); `R` is `never` so an array literal is not contextually typed
+ * into `Layer.Services = any` (which breaks `Layer.build` / Effect context checks).
  *
  * @internal
  */
 type ServeLayerList = readonly [
-  Layer.Layer<any, any, never>,
-  ...ReadonlyArray<Layer.Layer<any, any, never>>,
+  Layer.Layer<never, any, never>,
+  ...ReadonlyArray<Layer.Layer<never, any, never>>,
 ];
 
 /**
@@ -499,7 +509,7 @@ export function listen<
 >;
 export function listen(
   node: AnyNode,
-  serves: Layer.Layer<any, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, any, never> | ServeLayerList,
   options?: ListenOptions,
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
@@ -710,8 +720,8 @@ export const clientsFor = <
   );
   return Layer.mergeAll(
     ...(clients as unknown as [
-      Layer.Layer<any, never, any>,
-      ...Array<Layer.Layer<any, never, any>>,
+      Layer.Layer<never, never, never>,
+      ...Array<Layer.Layer<never, never, never>>,
     ]),
   ) as Layer.Layer<ServicesOfTags<Tags>>;
 };
@@ -869,7 +879,7 @@ export const connect: {
   (
     node: AnyNode,
     protocol?: Layer.Layer<RpcClient.Protocol, never, unknown>,
-  ): Layer.Layer<unknown, UnaddressedNode, unknown> => {
+  ): Layer.Layer<unknown, UnaddressedNode | InvalidHttpTarget, unknown> => {
     if (protocol !== undefined) {
       return connectLayer(node, protocol);
     }

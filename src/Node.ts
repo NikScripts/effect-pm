@@ -61,8 +61,8 @@ import type { ListenOptions } from "./internal/nodeCore"
 
 /** Non-empty serve list — same constraint as {@link listen}. */
 type ServeLayerList = readonly [
-  Layer.Layer<any, any, never>,
-  ...ReadonlyArray<Layer.Layer<any, any, never>>,
+  Layer.Layer<never, any, never>,
+  ...ReadonlyArray<Layer.Layer<never, any, never>>,
 ]
 
 /** C3 catalog proof — every `ROut` member appears in merged serve success. */
@@ -103,12 +103,12 @@ export function listenLocal<
 >
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<any, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, any, never> | ServeLayerList,
   options?: ListenLocalOptions,
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<any, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, any, never> | ServeLayerList,
   options?: ListenLocalOptions,
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
   const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {}
