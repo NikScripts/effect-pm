@@ -94,8 +94,10 @@ import type {
   Identity as LookupIdentity,
 } from "./Lookup";
 import {
+  AddressedNode,
   AnyNode,
   bindNodeStore,
+  isAddressedNode,
   ListenNode,
   NodeKey,
   NodeUnreachable,
@@ -105,7 +107,7 @@ import {
   UnaddressedNode,
 } from "./internal/nodeCore";
 // Node listen/connect used only inside functions via dynamic import where needed;
-// clientLayerForEndpoint uses local connectLayer + protocolForNode.
+// clientLayerForEndpoint uses local clientLayer auto-connect for dialable endpoints.
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -2668,9 +2670,8 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
       ? { path: endpoint.path as string, kind: "IpcSocket" as const }
       : { url: endpoint.url as string, kind: endpoint.kind };
   const node = makeNode(endpoint.nodeKey, target);
-  return clientLayer(tag, node).pipe(
-    Layer.provide(connectLayer(node, protocolForNode(node))),
-  ) as Layer.Layer<Self>;
+  // Dialable makeNode → AddressedNode; clientLayer auto-wires connect.
+  return clientLayer(tag, node) as Layer.Layer<Self>;
 };
 
 /**
@@ -3527,22 +3528,12 @@ export const protocolIpc = (
     ),
   );
 
-/** Build the client `Protocol` a node declares — keyed off its {@link ProtocolKind}.
- *  Unaddressed nodes fail the Layer error channel ({@link UnaddressedNode}). */
-const protocolForNode = (
-  node: AnyNode,
-): Layer.Layer<RpcClient.Protocol, UnaddressedNode> => {
-  if (node.kind === undefined) {
-    return unaddressedLayer(node.key);
-  }
+/** Protocol for an {@link AddressedNode} — address fields are type-narrowed. */
+const protocolForDialable = (
+  node: AddressedNode<unknown>,
+): Layer.Layer<RpcClient.Protocol> => {
   if (node.kind === "IpcSocket") {
-    if (node.path === undefined) {
-      return unaddressedLayer(node.key);
-    }
     return protocolIpc(node.path);
-  }
-  if (node.url === undefined) {
-    return unaddressedLayer(node.key);
   }
   return node.kind === "WebSocket"
     ? protocolWebsocket(node.url)
@@ -3870,8 +3861,8 @@ export const isIdentity = (tag: unknown): boolean =>
  * // N>1 replicas — opt-in pick (still fail on 0):
  * Resource.lookupClient(Mail, { pick: "first" })
  *
- * // You already know the Node — prefer explicit dial:
- * Resource.client(Mail, East).pipe(Layer.provide(Resource.connect(East)))
+ * // You already know an addressed Node — client auto-connects:
+ * Resource.client(Mail, East)
  * ```
  *
  * @public
@@ -4363,22 +4354,26 @@ const buildClientService = <Self, S extends Spec>(
  * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
  * matter where the resource actually runs.
  *
- * Three paths, by whether — and where — the tag names a {@link Node}:
+ * Paths, by whether — and where — the tag names a {@link Node}:
  * - **node-bearing tag** — the transport is resolved from the tag's node; the layer's only
- *   requirement is that node (satisfied by {@link Resource.connect}). Ship just the tag.
- * - **nodeless tag, node at the client** — a multi-node resource is N instances (one per node), so
- *   the client names *which* instance: `client(tag, node)`. The transport is resolved from that node
- *   (like a node-bearing tag), so the layer requires the node — satisfied by {@link Resource.connect}.
- *   The requirement is enforced at compile time, so there's no way to wire it wrong at runtime.
- * - **nodeless tag, ambient transport** — the transport is taken from the ambient `RpcClient.Protocol`,
- *   supplied at wire-up. (Remote use stays optional: a nodeless resource can also just run locally via
- *   {@link Resource.layer}, or be served as its own process.)
+ *   requirement is that node (satisfied by {@link Node.connect}). Ship just the tag.
+ * - **nodeless tag + {@link AddressedNode}** — `client(tag, Worker)` when `Worker` was built
+ *   with a dialable address: auto-wires {@link Node.connect}`(Worker)` so the layer is fully
+ *   provided (`R = never`). Type-gated — bare nodes don't get this path.
+ * - **nodeless tag + bare node** — `client(tag, Bare)` still requires the node service;
+ *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / clientLocal) yourself.
+ * - **nodeless tag, ambient transport** — the transport is taken from the ambient
+ *   `RpcClient.Protocol`, supplied at wire-up.
  *
  * @public
  */
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
+function clientLayer<Self, S extends Spec, HSelf>(
+  tag: ResourceTag<Self, S>,
+  node: AddressedNode<HSelf>,
+): Layer.Layer<Self>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
   node: NodeKey<HSelf>,
@@ -4421,6 +4416,14 @@ function clientLayer<Self, S extends Spec>(
       (client) => buildClientService(tag, client),
     ),
   );
+  // Explicit 2nd-arg {@link AddressedNode}: bake connect so callers don't repeat
+  // `.pipe(Layer.provide(Node.connect(node)))`. Bare / tag-bound nodes stay fail-closed.
+  if (node !== undefined && isAddressedNode(node as AnyNode)) {
+    const addressed = node as AddressedNode<unknown>;
+    return layer.pipe(
+      Layer.provide(connectLayer(addressed, protocolForDialable(addressed))),
+    ) as Layer.Layer<Self, never, RpcClient.Protocol>;
+  }
   return layer as Layer.Layer<Self, never, RpcClient.Protocol>;
 }
 

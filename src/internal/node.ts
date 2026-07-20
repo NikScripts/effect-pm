@@ -35,7 +35,11 @@ import {
   Tag,
   UnaddressedNode,
 } from "./nodeCore"
-import type { AddressedNode } from "./nodeCore"
+import type {
+  AddressedNode,
+  IpcNodeTagClass,
+  UrlNodeTagClass,
+} from "./nodeCore"
 
 /** Options for {@link httpServer}. @public */
 export interface HttpServerOptions {
@@ -678,8 +682,8 @@ type ServicesOfTags<Tags extends ReadonlyArray<Resource.PipeableTag>> =
  */
 
 export const clientsFor = <
-  // Same as {@link listen}: Node classes keep `kind?: ProtocolKind`; dialability is runtime.
-  Node extends AnyNode & {
+  // Dialable catalog node — each `client(tag, node)` auto-wires {@link connect}.
+  Node extends AddressedNode<unknown> & {
     readonly [catalogSym]?: unknown;
   },
   const Tags extends readonly [Resource.PipeableTag, ...ReadonlyArray<Resource.PipeableTag>],
@@ -697,9 +701,8 @@ export const clientsFor = <
     Layer.Layer<any, never, any>,
     ...Array<Layer.Layer<any, never, any>>,
   ];
-  return Layer.mergeAll(...clients).pipe(
-    Layer.provide(connect(node as AnyNode)),
-  ) as Layer.Layer<ServicesOfTags<Tags>>;
+  // Addressed `client(tag, node)` already provides connect; merge is fully wired.
+  return Layer.mergeAll(...clients) as Layer.Layer<ServicesOfTags<Tags>>;
 };
 
 /** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
@@ -886,13 +889,8 @@ export const connect: {
   <RIn>(
     protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
   ): <Self>(node: NodeKey<Self>) => Layer.Layer<Self, never, RIn>;
-  <Self>(
-    node: NodeKey<Self> & {
-      readonly url?: string;
-      readonly path?: string;
-      readonly kind?: ProtocolKind;
-    },
-  ): Layer.Layer<Self, UnaddressedNode>;
+  /** Derived transport — only {@link AddressedNode} (bare nodes are a compile error). */
+  <Self>(node: AddressedNode<Self>): Layer.Layer<Self, UnaddressedNode>;
 } = Fn.dual(
   // data-first when there are two args, or when the single arg is a node (not a protocol layer).
   (args: IArguments) => args.length >= 2 || !Layer.isLayer(args[0]),
@@ -999,16 +997,39 @@ export const Prototype = <Self, ROut = never>(
         : {}),
     });
   };
+  function make(
+    cloneName: string,
+    target: { readonly path: string; readonly kind?: ProtocolKind },
+  ): IpcNodeTagClass<Self, ROut>;
+  function make(
+    cloneName: string,
+    target: { readonly url: string; readonly kind?: ProtocolKind },
+  ): UrlNodeTagClass<Self, ROut>;
+  function make(
+    cloneName: string,
+    target:
+      | { readonly path: string; readonly kind?: ProtocolKind }
+      | { readonly url: string; readonly kind?: ProtocolKind },
+  ): IpcNodeTagClass<Self, ROut> | UrlNodeTagClass<Self, ROut> {
+    // Branch so each Tag call hits a dialable overload (not the loose union catch-all).
+    if ("path" in target) {
+      return Tag<Self, ROut>(`${name}#${cloneName}`, {
+        path: target.path,
+        ...(target.kind !== undefined ? { kind: target.kind } : {}),
+      });
+    }
+    return Tag<Self, ROut>(`${name}#${cloneName}`, {
+      url: target.url,
+      ...(target.kind !== undefined ? { kind: target.kind } : {}),
+    });
+  }
   return Object.assign(Context.Service<Self, Record<string, never>>()(name), {
     isPrototype: true as const,
     kind: options?.kind,
     url: undefined as undefined,
     path: undefined as undefined,
     [catalogSym]: undefined as ROut | undefined,
-    make: (
-      cloneName: string,
-      target: { readonly path: string } | { readonly url: string },
-    ) => Tag(`${name}#${cloneName}`, target),
+    make,
     /**
      * Dynamic instance Node — wire key `prototypeKey#suffix`, for {@link listen} /
      * {@link peersLayer} `self`. Prefer {@link makePrototype}'s `.listen(serves)` to spawn.

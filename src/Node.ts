@@ -16,6 +16,7 @@ export {
   Tag,
   Lookup,
   isLookupNode,
+  isAddressedNode,
   catalogSym,
   AddressLessClaimLost,
   ListenNode,
@@ -28,6 +29,7 @@ export type {
   AnyNode,
   AddressedNode,
   CatalogNode,
+  DialableTarget,
   ListenOptions,
 } from "./internal/nodeCore"
 export {

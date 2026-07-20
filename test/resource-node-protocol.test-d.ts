@@ -14,7 +14,10 @@ const transport = Resource.socketClient(Droplet, { url: "ws://x/rpc" });
 // A sink that only accepts a FULLY-WIRED layer (requires `never`).
 declare const runFullyWired: <A>(layer: Layer.Layer<A, never, never>) => void;
 
-// CORRECT: `client(tag, node)` reads + unwraps the node; providing the node's transport fully wires it.
+// CORRECT: addressed `client(tag, node)` auto-wires connect — fully provided.
+runFullyWired(Resource.client(NodeStatus.Tag, Droplet));
+
+// Explicit transport on an addressed node still type-checks (redundant but legal).
 runFullyWired(Resource.client(NodeStatus.Tag, Droplet).pipe(Layer.provide(transport)));
 
 // THE HOLE, now closed: a nodeless `client(tag)` given the node *transport* still needs an ambient

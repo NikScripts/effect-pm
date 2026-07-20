@@ -40,12 +40,9 @@ describe("connect dual dispatch", () => {
   it("deriving from a bare (unaddressed) node fails the Layer with UnaddressedNode", () =>
     Effect.runPromise(
       Effect.gen(function* () {
+        // Public `connect` is gated on AddressedNode; assert the runtime path via cast.
         const layer = Node.connect(
-          BareNode as Node.AnyNode & {
-            readonly url?: string;
-            readonly path?: string;
-            readonly kind?: Node.ProtocolKind;
-          },
+          BareNode as unknown as Node.AddressedNode<BareNode>,
         );
         const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
         expect(Exit.isFailure(exit)).toBe(true);

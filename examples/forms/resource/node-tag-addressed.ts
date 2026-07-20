@@ -27,9 +27,8 @@ const program = Effect.gen(function* () {
   ])
   const serverCtx = yield* Layer.build(server)
   void serverCtx
-  const client = Resource.client(Jobs, Worker).pipe(
-    Layer.provide(Node.connect(Worker)),
-  )
+  // AddressedNode → client auto-wires Node.connect(Worker)
+  const client = Resource.client(Jobs, Worker)
   const n = yield* Jobs.pipe(
     Effect.flatMap((jobs) => jobs.jobs),
     Effect.provide(client),

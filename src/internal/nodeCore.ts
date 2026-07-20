@@ -69,11 +69,19 @@ export type AnyNode = NodeKey<unknown> & {
 
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
  *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public */
-export type AddressedNode<HSelf> = NodeKey<HSelf> & {
-  readonly kind: ProtocolKind;
-  readonly url: string | undefined;
-  readonly path: string | undefined;
-};
+export type AddressedNode<HSelf> = NodeKey<HSelf> &
+  (
+    | {
+        readonly kind: "IpcSocket";
+        readonly path: string;
+        readonly url: string | undefined;
+      }
+    | {
+        readonly kind: "Http" | "WebSocket";
+        readonly url: string;
+        readonly path: string | undefined;
+      }
+  );
 
 /**
  * Type-only catalog brand on a {@link Node} — `ROut` is erased at runtime (C2 / C4).
@@ -152,6 +160,91 @@ export const resolveHttpTarget = (target: number | string): string => {
 };
 
 /**
+ * Dialable {@link Tag} targets — enough address for {@link connect} / auto-wired
+ * {@link Resource.client} with no extra protocol argument.
+ *
+ * @public
+ */
+export type DialableTarget =
+  | number
+  | string
+  | { readonly path: string; readonly kind?: ProtocolKind }
+  | { readonly url: string; readonly kind?: ProtocolKind };
+
+/** Loose target bag (may omit address — not an {@link AddressedNode}). @internal */
+type LooseNodeTarget =
+  | number
+  | string
+  | {
+      readonly url?: string;
+      readonly path?: string;
+      readonly kind?: ProtocolKind;
+    };
+
+/**
+ * Constructable {@link Tag} result — `Context.ServiceClass` plus address fields.
+ *
+ * @internal
+ */
+type NodeTagClass<Self, ROut, Address> =
+  Context.ServiceClass<Self, string, NodeProtocol> &
+    Address & {
+      readonly [catalogSym]?: ROut;
+      readonly logs: unknown;
+    };
+
+/** Bare (address-less) node fields. @internal */
+type BareAddress = {
+  readonly url: undefined;
+  readonly path: undefined;
+  readonly kind: undefined;
+};
+
+/** Dialable ipc node fields. @internal */
+type IpcAddress = {
+  readonly url: undefined;
+  readonly path: string;
+  readonly kind: "IpcSocket";
+};
+
+/** Dialable http/ws node fields (`url` always set after resolve). @internal */
+type UrlAddress = {
+  readonly url: string;
+  readonly path: undefined;
+  readonly kind: "Http" | "WebSocket";
+};
+
+/** Constructable ipc {@link Tag} (for {@link Prototype}.make). @internal */
+export type IpcNodeTagClass<Self, ROut = never> = NodeTagClass<
+  Self,
+  ROut,
+  IpcAddress
+>;
+
+/** Constructable url {@link Tag} (for {@link Prototype}.make). @internal */
+export type UrlNodeTagClass<Self, ROut = never> = NodeTagClass<
+  Self,
+  ROut,
+  UrlAddress
+>;
+
+/**
+ * Runtime predicate: node declares a {@link ProtocolKind} and the matching address
+ * (`path` for IpcSocket, `url` otherwise) so {@link connect} can derive a transport.
+ *
+ * @public
+ */
+export const isAddressedNode = (
+  node: AnyNode,
+): node is AddressedNode<unknown> => {
+  if (node.kind === "IpcSocket") return typeof node.path === "string";
+  if (node.kind === "Http" || node.kind === "WebSocket") {
+    return typeof node.url === "string";
+  }
+  return false;
+};
+
+/**
  * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
  * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service.
  * Optional catalog type param `ROut` (C2) — prefer `import type` for those handles (C4).
@@ -175,19 +268,31 @@ export const resolveHttpTarget = (target: number | string): string => {
  * {@link ProtocolKind} so the topology is self-describing about *where* AND *how*:
  * {@link connect}`(node)` derives the transport with no protocol argument.
  *
+ * Dialable targets return an {@link AddressedNode} (`kind: ProtocolKind`) so
+ * `Resource.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag("x")`
+ * stays address-less (`kind: undefined`) — still needs explicit connect / lookup.
+ *
  * @public
  */
-export const Tag = <Self, ROut = never>(
+export function Tag<Self, ROut = never>(
   name: string,
-  target?:
-    | number
-    | string
-    | {
-        readonly url?: string;
-        readonly path?: string;
-        readonly kind?: ProtocolKind;
-      },
-) => {
+): NodeTagClass<Self, ROut, BareAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: { readonly path: string; readonly kind?: ProtocolKind },
+): NodeTagClass<Self, ROut, IpcAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: number | string | { readonly url: string; readonly kind?: ProtocolKind },
+): NodeTagClass<Self, ROut, UrlAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target?: LooseNodeTarget,
+): NodeTagClass<Self, ROut, BareAddress | IpcAddress | UrlAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target?: LooseNodeTarget,
+): NodeTagClass<Self, ROut, BareAddress | IpcAddress | UrlAddress> {
   const path =
     typeof target === "object" && target !== null ? target.path : undefined;
   // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
@@ -216,8 +321,9 @@ export const Tag = <Self, ROut = never>(
     path,
     kind,
   });
-  // Stamp catalog brand without a cast — preserves Context.Service constructability
+  // Stamp catalog brand — preserves Context.Service constructability
   // (`class X extends Node.Tag()`); `ROut` stays type-only at the value (C2 / C4).
+  // Overload impl return: runtime fields are narrower than the union of address shapes.
   return Object.assign(node, {
     /**
      * Node-wide durable log registration — same as {@link store}`(this node)`.
@@ -227,8 +333,8 @@ export const Tag = <Self, ROut = never>(
       return storeOrThrow(node);
     },
     [catalogSym]: undefined as ROut | undefined,
-  });
-};
+  }) as NodeTagClass<Self, ROut, BareAddress | IpcAddress | UrlAddress>;
+}
 
 /**
  * Deriving a transport from a node that never declared one — a bare `Node.Tag("x")` has no
@@ -271,23 +377,39 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
  * A {@link Tag} marked as the identity/lookup server.
  *
  * Same-machine: `{ path }` (ipc). Cross-network: pass a full address — required; no elect (L1).
+ * Dialable targets return an {@link AddressedNode} (same overloads as {@link Tag}).
  *
  * @public
  */
-export const Lookup = <Self>(
+export function Lookup<Self>(
   name: string,
-  target?:
-    | number
-    | string
-    | {
-        readonly url?: string
-        readonly path?: string
-        readonly kind?: ProtocolKind
-      },
-): AnyNode & {
+): NodeTagClass<Self, never, BareAddress> & {
   readonly isLookupNode: true
-  readonly key: string
-} => {
+};
+export function Lookup<Self>(
+  name: string,
+  target: { readonly path: string; readonly kind?: ProtocolKind },
+): NodeTagClass<Self, never, IpcAddress> & {
+  readonly isLookupNode: true
+};
+export function Lookup<Self>(
+  name: string,
+  target: number | string | { readonly url: string; readonly kind?: ProtocolKind },
+): NodeTagClass<Self, never, UrlAddress> & {
+  readonly isLookupNode: true
+};
+export function Lookup<Self>(
+  name: string,
+  target?: LooseNodeTarget,
+): NodeTagClass<Self, never, BareAddress | IpcAddress | UrlAddress> & {
+  readonly isLookupNode: true
+};
+export function Lookup<Self>(
+  name: string,
+  target?: LooseNodeTarget,
+): NodeTagClass<Self, never, BareAddress | IpcAddress | UrlAddress> & {
+  readonly isLookupNode: true
+} {
   const node = Tag<Self>(name, target)
   return Object.assign(node, { isLookupNode: true as const })
 }

@@ -191,6 +191,7 @@ export type {
   AnyNode,
   AddressedNode,
   CatalogNode,
+  DialableTarget,
   ListenOptions,
   NodeKey,
   ProtocolKind,
