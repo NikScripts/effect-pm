@@ -8,6 +8,30 @@ import { defineConfig } from "waku/config";
 // shiki spans), and Vite's dev server sends identity encoding — browsing the dev box from a phone
 // (documenting while building) downloads it all uncompressed. Gzip at the dev middleware layer
 // cuts an 11 MB page to ~0.5 MB. Production hosting compresses at the edge; this is dev parity.
+// CLIENT-only stub for @effect/platform-node: Resource.ts / internal/node.ts reach it through
+// DYNAMIC import() on node-transport paths a browser can never take, but the bundler chases
+// dynamic imports into node:fs/http/worker_threads. A resolveId hook scoped to the client
+// environment is deterministic where environment-level alias merging proved not to be; the server
+// environments keep the real package.
+const platformNodeStubPath = fileURLToPath(new URL("./shims/platform-node-stub.js", import.meta.url));
+const clientPlatformNodeStub = {
+  name: "client-platform-node-stub",
+  enforce: "pre" as const,
+  applyToEnvironment: (env: { name: string }) => env.name === "client",
+  resolveId(id: string, importer?: string) {
+    // the package by any specifier…
+    if (id === "@effect/platform-node" || id.startsWith("@effect/platform-node/")) {
+      return platformNodeStubPath;
+    }
+    // …and anything resolved FROM INSIDE it (its internal relative imports), so the subtree can
+    // never expand into node builtins no matter which entry reached it.
+    if (importer !== undefined && importer.includes("/@effect/platform-node/")) {
+      return platformNodeStubPath;
+    }
+    return undefined;
+  },
+};
+
 const devCompression = {
   name: "dev-compression",
   configureServer(server: { middlewares: { use: (mw: unknown) => void } }) {
@@ -32,7 +56,7 @@ const watchDocsContent = {
 // condition wiring (500 on every route). Revisit the pin when a later beta fixes it.
 export default defineConfig({
   vite: {
-    plugins: [tailwindcss(), react(), watchDocsContent, devCompression],
+    plugins: [tailwindcss(), react(), watchDocsContent, devCompression, clientPlatformNodeStub],
     // Content `.md` is Djot source, not JS. Declaring it an asset stops Vite from running
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.

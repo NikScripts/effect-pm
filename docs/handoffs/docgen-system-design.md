@@ -350,6 +350,29 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
   retired), and REFERENCED-BY: gen-api's cross-reference pass resolves every declaration span
   against the global index (per-package programs + P4 paths) → `references.json` (2409 targets,
   17k edges) → capped chip section on symbol pages.
+- ~~Step 6 — UX + performance round~~ ✅ (2026-07-20): sidebar API group (nav.ts link-children);
+  MODE-AWARE PERF: dev-server gzip (vite middleware; 11 MB page → ~0.5 MB wire), predev fast-start
+  (skips regen when api-data exists; DOCS_REGEN=1 forces), INERT POPUP TEMPLATES (popups ship in
+  <template> — ~85-90% of page nodes stay out of the live DOM; the island materializes on first
+  open). GOTCHA that cost mobile taps: React-rendered template CHILDREN hydrate as a guaranteed
+  mismatch (parser moves them to .content) → React regenerated whole pages client-side → phones
+  died. Fix: template content delivered via the ONE sanctioned inner-HTML boundary
+  (`src/lib/inert-html.tsx` — hast-only input, escaping serializer `src/lib/hast-html.ts`,
+  forbidden-markup checks that THROW, and a test that counts the literal across src/ and fails on
+  a second occurrence). `pnpm docs:smoke` (Playwright): desktop hover + iPhone tap on a guide and
+  an API page, failing on any page error — hover regressions are machine-checkable now. Hover
+  cache hash is DIRECTORY-driven (src/lib + src/docgen + the script), so new pipeline files
+  invalidate automatically. OPEN (designed, deliberately deferred): the batched popup payload
+  split — popups leave the page entirely as content-addressed per-block bundles, island
+  background-fetches viewport-first; prod-mode purity + parse win; dev keeps inline templates.
+- ⚠ FOR THE PACKAGE AGENTS (found by the docs-site client build, 2026-07-20 sync): the Node
+  auto-connect work added DYNAMIC `import("@effect/platform-node")` in `src/Resource.ts` (×2) and
+  `src/internal/node.ts` — bundlers chase dynamic imports, so any browser bundle of the package
+  now tries to pull node:fs/http/worker_threads (61 rolldown errors). The docs site contains it
+  with a client-environment subtree stub (waku.config.ts `clientPlatformNodeStub` +
+  `shims/platform-node-stub.js`), but the package-level browser-safety rule ("the barrel is
+  node-safe") deserves a real fix (e.g. vite-ignore'd/indirected dynamic specifiers or a
+  node-only entry). Docs side is green either way.
 Gate: model files unchanged (links.json sidecar removed) + the site build still green. NOTE the
 deploy constraints: data paths
 resolve from `process.cwd()` (docs/site), NOT `import.meta.url`; symbol pages are SSR (static-all
