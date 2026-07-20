@@ -10,7 +10,7 @@
 import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner"
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
-import { Effect, FileSystem } from "effect"
+import { Effect, FileSystem, Layer } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { defaultIpcPath } from "../../../src/Lookup"
 
@@ -43,8 +43,9 @@ const program = Effect.gen(function* () {
   }
 }).pipe(
   Effect.scoped,
-  Effect.provide(NodeChildProcessSpawner.layer),
-  Effect.provide(NodeServices.layer),
+  Effect.provide(
+    Layer.provideMerge(NodeChildProcessSpawner.layer, NodeServices.layer),
+  ),
 )
 
 NodeRuntime.runMain(program)

@@ -524,14 +524,9 @@ export function listen<
         R
       >,
   options?: NamelessListenOptions,
-): Layer.Layer<
-  | Self
-  | Resource.Local<Self>
-  | Resource.HandlerContextOf<S>
-  | ListenNode,
-  never,
-  R
->;
+): // Same success as `listen(Resource.serve(tag, impl))` — avoid naming
+  // `HandlerContextOf` here (TS2589 under stock tsc when stacked on listen overloads).
+  Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
 export function listen<Serve extends Layer.Layer<never, any, never>>(
   serve: Serve,
   options?: NamelessListenOptions,
@@ -565,38 +560,24 @@ export function listen(
     | AnyNode
     | Layer.Layer<never, any, never>
     | ServeLayerList
-    | Resource.ResourceTag<any, any>,
+    | Resource.PipeableTag,
   servesOrOptionsOrImpl?:
     | Layer.Layer<never, any, never>
     | ServeLayerList
     | NamelessListenOptions
     | ListenOptions
-    | Resource.ImplOf<Resource.Spec>
-    | Resource.BuiltResource<Resource.Spec, any>
-    | Effect.Effect<
-        Resource.ImplOf<Resource.Spec> | Resource.BuiltResource<Resource.Spec, any>,
-        never,
-        any
-      >,
+    | object,
   options?: ListenOptions | NamelessListenOptions,
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
-  // Nameless: `listen(Tag, impl, options?)` — wrap with Resource.serve
+  // Nameless: `listen(Tag, impl, options?)` — wrap with Resource.serve.
+  // Erase serve's ResourceTag generics here — naming them reopens TS2589.
   if (isResourceTagArg(nodeOrServesOrTag)) {
+    const serveErased = Resource.serve as unknown as (
+      tag: Resource.PipeableTag,
+      impl: unknown,
+    ) => Layer.Layer<never, never, never>;
     return namelessListen(
-      [
-        Resource.serve(
-          nodeOrServesOrTag,
-          servesOrOptionsOrImpl as
-            | Resource.ImplOf<Resource.Spec>
-            | Resource.BuiltResource<Resource.Spec, any>
-            | Effect.Effect<
-                | Resource.ImplOf<Resource.Spec>
-                | Resource.BuiltResource<Resource.Spec, any>,
-                never,
-                any
-              >,
-        ),
-      ] as ServeLayerList,
+      [serveErased(nodeOrServesOrTag, servesOrOptionsOrImpl)] as ServeLayerList,
       options as NamelessListenOptions | undefined,
     );
   }
@@ -690,9 +671,7 @@ export function listen(
 }
 
 /** True when the first `listen` arg is a {@link Resource.Tag} (has {@link Resource.specSym}). @internal */
-const isResourceTagArg = (
-  u: unknown,
-): u is Resource.ResourceTag<any, any> =>
+const isResourceTagArg = (u: unknown): u is Resource.PipeableTag =>
   (typeof u === "object" || typeof u === "function") &&
   u !== null &&
   Resource.specSym in u;
