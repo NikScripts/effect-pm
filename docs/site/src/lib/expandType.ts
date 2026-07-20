@@ -193,6 +193,19 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
     return ownerIndex.get(loc);
   };
 
+  // The parsed type annotation on a symbol's declaration, when it has one — property signatures,
+  // variables, parameters, class fields. Real nodes resolve exactly; synthesized prints may not.
+  const annotationOf = (symbol: ts.Symbol | undefined): ts.TypeNode | undefined => {
+    const declaration = symbol?.valueDeclaration;
+    if (declaration === undefined) return undefined;
+    return ts.isPropertySignature(declaration) ||
+      ts.isVariableDeclaration(declaration) ||
+      ts.isParameter(declaration) ||
+      ts.isPropertyDeclaration(declaration)
+      ? declaration.type
+      : undefined;
+  };
+
   // Only a module-scope declaration site owns a page — a parameter/local/member shares its
   // statement's LINE and must not claim the enclosing export's page (the LinkResolver's rule).
   const pageOwner = (decl: ts.Declaration): ts.Node | undefined => {
@@ -268,11 +281,16 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         }
       }
 
-      // the hover type as OUR compiler prints it, with exact link ranges (use-site enclosing:
-      // qualified names, matching the displayed text)
+      // the hover type with exact link ranges. PREFER the parsed type ANNOTATION when the hovered
+      // symbol's declaration has one: parsed nodes ALWAYS resolve (the builder sometimes
+      // synthesizes references without symbols — `Resource.Subscribable<QueueStatus>` came out
+      // link-less), and the text is exactly what the author wrote. Inferred types fall back to
+      // the checker print (with the TypePrinter's home retry).
       const type = checker.getTypeAtLocation(node);
       if (printer !== undefined) {
-        const parts = printer.printType(type, node);
+        const annotation = annotationOf(sym);
+        const parts =
+          annotation !== undefined ? printer.printNode(annotation) : printer.printType(type, node);
         const links = Annotate.fromParts(parts);
         if (links.length > 0) {
           typeText = parts.map((part) => part.text).join("");
@@ -294,10 +312,14 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         // symbols on one hover in an experiment, but regressed block-authored shapes; the real
         // fix is a per-reference fallback inside the TypePrinter, with docgen-level tests.
         const renderType = (
-          mt: ts.Type
+          mt: ts.Type,
+          annotation?: ts.TypeNode
         ): { readonly text: string; readonly links: ReadonlyArray<Annotate.Link> } => {
           if (printer !== undefined) {
-            const parts = printer.printType(mt, node);
+            const parts =
+              annotation !== undefined
+                ? printer.printNode(annotation)
+                : printer.printType(mt, node);
             const raw = parts.map((part) => part.text).join("");
             const collapsed = raw.replace(/\s*\n\s*/g, " ");
             const rawLinks = Annotate.fromParts(parts);
@@ -317,9 +339,14 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
             links: [],
           };
         };
-        const pushMember = (name: string, mt: ts.Type, indent: string): void => {
+        const pushMember = (
+          name: string,
+          mt: ts.Type,
+          indent: string,
+          annotation?: ts.TypeNode
+        ): void => {
           const head = `${indent}${name}: `;
-          const r = renderType(mt);
+          const r = renderType(mt, annotation);
           let rendered = r.text;
           let memberLinks = r.links;
           if (rendered.length > MAX_MEMBER_LEN) {
@@ -363,15 +390,30 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
               ? serviceType.getProperties().filter(isVisible)
               : [];
           if (shape.length > 0 && shape.length <= MAX_PROPS) {
-            pushMember("key", checker.getTypeOfSymbolAtLocation(keyMember, node), "  ");
+            pushMember(
+              "key",
+              checker.getTypeOfSymbolAtLocation(keyMember, node),
+              "  ",
+              annotationOf(keyMember)
+            );
             pushRaw("  Service: {");
             for (const sub of shape) {
-              pushMember(sub.getName(), checker.getTypeOfSymbolAtLocation(sub, node), "    ");
+              pushMember(
+                sub.getName(),
+                checker.getTypeOfSymbolAtLocation(sub, node),
+                "    ",
+                annotationOf(sub)
+              );
             }
             pushRaw("  };");
             for (const member of visible) {
               if (member !== serviceMember && member !== keyMember) {
-                pushMember(member.getName(), checker.getTypeOfSymbolAtLocation(member, node), "  ");
+                pushMember(
+                  member.getName(),
+                  checker.getTypeOfSymbolAtLocation(member, node),
+                  "  ",
+                  annotationOf(member)
+                );
               }
             }
             serviceRendered = true;
@@ -379,7 +421,12 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         }
         if (!serviceRendered) {
           for (const member of visible) {
-            pushMember(member.getName(), checker.getTypeOfSymbolAtLocation(member, node), "  ");
+            pushMember(
+              member.getName(),
+              checker.getTypeOfSymbolAtLocation(member, node),
+              "  ",
+              annotationOf(member)
+            );
           }
         }
         // Every member can be phantom machinery (filtered above) — no box beats an empty one.
