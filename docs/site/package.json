@@ -14,7 +14,8 @@
     "docs:api": "tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "docs:check-links": "tsx scripts/check-links.ts"
+    "docs:check-links": "tsx scripts/check-links.ts",
+    "docs:smoke": "node scripts/browser-smoke.mjs"
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",
@@ -45,6 +46,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
     "compression": "^1.8.1",
+    "playwright": "^1.61.1",
     "prettier": "2.8.8",
     "tailwindcss": "^4.3.2",
     "tsx": "^4.19.2",
