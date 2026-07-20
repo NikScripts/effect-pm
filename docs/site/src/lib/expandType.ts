@@ -287,35 +287,41 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         const lines: string[] = [];
         const links: Array<Annotate.Link> = [];
         let cursor = 2; // past the leading "{\n"
-        for (const member of type.getProperties()) {
-          // Phantom brands (`~effect/...`) and symbol-keyed members (`__@iterator@...`) are
-          // machinery, not API — hide them so class/handle previews read as their real surface.
-          if (member.getName().startsWith("~") || member.getName().startsWith("__@")) continue;
-          const mt = checker.getTypeOfSymbolAtLocation(member, node);
-          const head = `  ${member.getName()}: `;
-          let rendered: string;
-          let memberLinks: ReadonlyArray<Annotate.Link> = [];
+        // One member type → display text + text-relative links.
+        // NOTE (capture-rate follow-up): the node builder only attaches symbols to references
+        // whose names are in scope at `node` — library-internal member types often print
+        // unresolvable here. Printing from `member.valueDeclaration` attached 154 members'
+        // symbols on one hover in an experiment, but regressed block-authored shapes; the real
+        // fix is a per-reference fallback inside the TypePrinter, with docgen-level tests.
+        const renderType = (
+          mt: ts.Type
+        ): { readonly text: string; readonly links: ReadonlyArray<Annotate.Link> } => {
           if (printer !== undefined) {
-            // NOTE (capture-rate follow-up): the node builder only attaches symbols to references
-            // whose names are in scope at `node` — library-internal member types often print
-            // unresolvable here. Printing from `member.valueDeclaration` attached 154 members'
-            // symbols on one hover in an experiment, but regressed block-authored shapes; the real
-            // fix is a per-reference fallback inside the TypePrinter, with docgen-level tests.
             const parts = printer.printType(mt, node);
             const raw = parts.map((part) => part.text).join("");
             const collapsed = raw.replace(/\s*\n\s*/g, " ");
             const rawLinks = Annotate.fromParts(parts);
-            memberLinks =
-              collapsed === raw
-                ? rawLinks
-                : Option.getOrElse(Annotate.realign(rawLinks, raw, collapsed), () => []);
-            rendered = collapsed;
-          } else {
-            rendered = checker
+            return {
+              text: collapsed,
+              links:
+                collapsed === raw
+                  ? rawLinks
+                  : Option.getOrElse(Annotate.realign(rawLinks, raw, collapsed), () => []),
+            };
+          }
+          return {
+            text: checker
               .typeToString(mt, node, FLAGS)
               .replace(/import\("[^"]*"\)\./g, "")
-              .replace(/\s*\n\s*/g, " ");
-          }
+              .replace(/\s*\n\s*/g, " "),
+            links: [],
+          };
+        };
+        const pushMember = (name: string, mt: ts.Type, indent: string): void => {
+          const head = `${indent}${name}: `;
+          const r = renderType(mt);
+          let rendered = r.text;
+          let memberLinks = r.links;
           if (rendered.length > MAX_MEMBER_LEN) {
             rendered = `${rendered.slice(0, MAX_MEMBER_LEN - 1)}…`;
             memberLinks = memberLinks.filter((link) => link.end <= MAX_MEMBER_LEN - 1);
@@ -330,6 +336,51 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
           const line = `${head}${rendered};`;
           lines.push(line);
           cursor += line.length + 1;
+        };
+        const pushRaw = (line: string): void => {
+          lines.push(line);
+          cursor += line.length + 1;
+        };
+        // Phantom brands (`~effect/...`), symbol-keyed members (`__@iterator@...`) and
+        // `prototype` are machinery, not API — hide them so previews read as the real surface.
+        const isVisible = (member: ts.Symbol): boolean =>
+          !member.getName().startsWith("~") &&
+          !member.getName().startsWith("__@") &&
+          member.getName() !== "prototype";
+        const visible = type.getProperties().filter(isVisible);
+
+        // A SERVICE (Context.Service / Resource.Tag convention): the type carries `key` +
+        // `Service`. Identify it and spell the service SHAPE out one member per line — the key
+        // first, so the preview reads `class Random { key: 'app/Random'; Service: { … } }`.
+        const serviceMember = visible.find((member) => member.getName() === "Service");
+        const keyMember = visible.find((member) => member.getName() === "key");
+        let serviceRendered = false;
+        if (serviceMember !== undefined && keyMember !== undefined) {
+          const serviceType = checker.getTypeOfSymbolAtLocation(serviceMember, node);
+          const shape =
+            (serviceType.flags & ts.TypeFlags.Object) !== 0 &&
+            serviceType.getCallSignatures().length === 0
+              ? serviceType.getProperties().filter(isVisible)
+              : [];
+          if (shape.length > 0 && shape.length <= MAX_PROPS) {
+            pushMember("key", checker.getTypeOfSymbolAtLocation(keyMember, node), "  ");
+            pushRaw("  Service: {");
+            for (const sub of shape) {
+              pushMember(sub.getName(), checker.getTypeOfSymbolAtLocation(sub, node), "    ");
+            }
+            pushRaw("  };");
+            for (const member of visible) {
+              if (member !== serviceMember && member !== keyMember) {
+                pushMember(member.getName(), checker.getTypeOfSymbolAtLocation(member, node), "  ");
+              }
+            }
+            serviceRendered = true;
+          }
+        }
+        if (!serviceRendered) {
+          for (const member of visible) {
+            pushMember(member.getName(), checker.getTypeOfSymbolAtLocation(member, node), "  ");
+          }
         }
         // Every member can be phantom machinery (filtered above) — no box beats an empty one.
         if (lines.length > 0) {
