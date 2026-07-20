@@ -2944,8 +2944,10 @@ export class ServedResources extends Context.Service<
 >()("@nikscripts/effect-pm/Resource/ServedResources") {}
 
 /**
- * A fresh {@link ServedResources} registry. {@link httpServer} bundles one; provide this standalone only
- * to collect `serve` registrations without the http server.
+ * A fresh {@link ServedResources} registry. {@link httpServer} / {@link ipcServer} /
+ * {@link wsServer} each provide {@link Layer.fresh} of this so two servers in one
+ * process (e.g. Lookup + a Worker) do not share registrations via Layer memoization.
+ * Provide this standalone only to collect `serve` registrations without a server.
  *
  * @public
  */
@@ -3413,7 +3415,7 @@ function serverImpl(
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, maybeOptions).pipe(
       Layer.provideMerge(mergeLayers(serves)),
-      Layer.provide(servedResourcesLayer),
+      Layer.provide(Layer.fresh(servedResourcesLayer)),
     ) as unknown as Layer.Layer<never, never, unknown>;
   }
   return httpServerBase(serverProtocol, servesOrOptions as HttpServerOptions | undefined);
@@ -3538,7 +3540,8 @@ export function ipcServer(
   const list = Array.isArray(serves) ? serves : [serves];
   return ipcServerBase(options).pipe(
     Layer.provideMerge(mergeLayers(list)),
-    Layer.provide(servedResourcesLayer),
+    // Fresh registry per server — Lookup + Worker in one process must not share.
+    Layer.provide(Layer.fresh(servedResourcesLayer)),
   ) as unknown as Layer.Layer<never, never, unknown>;
 }
 
@@ -3918,10 +3921,16 @@ const ipcServerBase = (
             >[0],
           ),
         ),
-        Layer.provide(RpcServer.layerProtocolSocketServer),
-        Layer.provide(options.serialization ?? defaultSerialization),
+        // Fresh per ipcServer — two Unix servers in one process (Lookup + Worker)
+        // must not share SocketServer / protocol layers via MemoMap.
+        Layer.provide(Layer.fresh(RpcServer.layerProtocolSocketServer)),
         Layer.provide(
-          NodeSocketServer.layer({ path: options.path }).pipe(Layer.orDie),
+          Layer.fresh(options.serialization ?? defaultSerialization),
+        ),
+        Layer.provide(
+          Layer.fresh(
+            NodeSocketServer.layer({ path: options.path }).pipe(Layer.orDie),
+          ),
         ),
       );
       const withUnlink =

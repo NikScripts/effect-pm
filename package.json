@@ -192,6 +192,7 @@
     "example:run-resource": "tsx examples/forms/resource/run-resource-unit-and-input.ts",
     "example:telemetry-fleet-glass": "tsx examples/forms/resource/telemetry-fleet-glass.ts",
     "example:fleet-health-glass": "tsx examples/forms/resource/fleet-health-glass.ts",
+    "example:addressless-ipc-lookup": "tsx examples/forms/resource/addressless-ipc-lookup.ts",
     "example:shardmap-sessions": "tsx examples/forms/resource/shardmap-sessions.ts",
     "example:run-resource-store-readback": "tsx examples/forms/resource/run-resource-store-readback.ts",
     "example:http-client-run-gate": "tsx examples/forms/resource/http-client-run-gate.ts",
