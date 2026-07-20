@@ -211,12 +211,18 @@ const twoslasher = Object.assign(
         // Dual-preview expand box (existing), now with compiler links on the member types.
         const expanded = info?.expanded;
         if (expanded === undefined) return;
-        const head = declHead(h.text);
-        // Need a real declaration head (`const emails: `) so the box reads as a declaration, not a
-        // bare `{ … }`. Skip type-name / class / alias hovers that have none.
-        if (!head) return;
-        // Skip when the hover already shows the shape inline (its type is already an object literal).
-        if (h.text.slice(head.length).trimStart().startsWith("{")) return;
+        let head = declHead(h.text);
+        if (head) {
+          // Skip when the hover already shows the shape inline (its type is an object literal).
+          if (h.text.slice(head.length).trimStart().startsWith("{")) return;
+        } else {
+          // Class hovers are headless (`class Random`) — synthesize the head so SERVICE CLASSES
+          // get a pretty preview too: `class Random { Service: …; key: … }` (phantom members are
+          // filtered by the expander). Other headless hovers (bare type names) stay box-less.
+          const cls = /^(?:\([a-z ]+\)\s+)?(class\s+[\w$.]+)/.exec(h.text);
+          if (cls === null || cls[1] === undefined) return;
+          head = `${cls[1]} `;
+        }
         const prior = h.docs;
         h.docs = `${prior ? `${prior}\n` : ""}${EXPAND_OPEN}${head}${expanded}`;
         // The expand box displays `head + expanded` verbatim: the declaration name in the head

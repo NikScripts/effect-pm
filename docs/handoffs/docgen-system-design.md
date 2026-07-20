@@ -328,6 +328,11 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
     rule so a parameter/local never claims the enclosing export's page — caught live on `byNode`).
     The EXPAND box head gets the same owner-name link (dual-preview parity). Desktop keeps both:
     hover previews + direct token links.
+  - CLASS previews (service classes): class hovers are headless (`class Random`) so the expand
+    embed used to skip them — the head is now SYNTHESIZED (`class Random `) and phantom members
+    (`~effect/...` brands, `__@symbol@...` keys) are filtered in the expander, so a service class
+    previews as `class Random { Service: { readonly next: Effect.Effect<number> }; key: '…' }`
+    with member links. Other headless hovers (bare type names) stay box-less.
   - ⚠ OPEN capture-rate lead (the one real limiter): the node builder attaches symbols ONLY to
     references whose names are in scope at the `enclosing` node — a use site in another file
     misses most library-internal names, so popup/expand links for library shapes are partial.

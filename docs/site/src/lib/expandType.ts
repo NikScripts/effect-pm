@@ -288,6 +288,9 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
         const links: Array<Annotate.Link> = [];
         let cursor = 2; // past the leading "{\n"
         for (const member of type.getProperties()) {
+          // Phantom brands (`~effect/...`) and symbol-keyed members (`__@iterator@...`) are
+          // machinery, not API — hide them so class/handle previews read as their real surface.
+          if (member.getName().startsWith("~") || member.getName().startsWith("__@")) continue;
           const mt = checker.getTypeOfSymbolAtLocation(member, node);
           const head = `  ${member.getName()}: `;
           let rendered: string;
@@ -328,8 +331,11 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
           lines.push(line);
           cursor += line.length + 1;
         }
-        expanded = `{\n${lines.join("\n")}\n}`;
-        if (links.length > 0) expandedLinks = links;
+        // Every member can be phantom machinery (filtered above) — no box beats an empty one.
+        if (lines.length > 0) {
+          expanded = `{\n${lines.join("\n")}\n}`;
+          if (links.length > 0) expandedLinks = links;
+        }
       }
 
       if (expanded !== undefined || ownerLoc !== undefined || typeText !== undefined) {
