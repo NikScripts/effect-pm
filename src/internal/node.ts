@@ -37,8 +37,10 @@ import {
 } from "./nodeCore"
 import type {
   AddressedNode,
+  HttpNodeTagClass,
   IpcNodeTagClass,
   UrlNodeTagClass,
+  WsNodeTagClass,
 } from "./nodeCore"
 import {
   connectAddressed,
@@ -983,6 +985,21 @@ export const Prototype = <Self, ROut = never>(
     cloneName: string,
     target: { readonly path: string; readonly kind?: "IpcSocket" },
   ): IpcNodeTagClass<Self, ROut>;
+  function make(
+    cloneName: string,
+    target: {
+      readonly url: `ws://${string}` | `wss://${string}`;
+      readonly kind?: "WebSocket";
+    },
+  ): WsNodeTagClass<Self, ROut>;
+  function make(
+    cloneName: string,
+    target: { readonly url: string; readonly kind: "WebSocket" },
+  ): WsNodeTagClass<Self, ROut>;
+  function make(
+    cloneName: string,
+    target: { readonly url: string; readonly kind: "Http" },
+  ): HttpNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
     target: { readonly url: string; readonly kind?: ProtocolKind },

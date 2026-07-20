@@ -77,6 +77,17 @@ export type AddressedNode<HSelf> = NodeKey<HSelf> &
         readonly url: string | undefined;
       }
     | {
+        readonly kind: "Http";
+        readonly url: string;
+        readonly path: string | undefined;
+      }
+    | {
+        readonly kind: "WebSocket";
+        readonly url: string;
+        readonly path: string | undefined;
+      }
+    // Loose url Tag (`kind: "Http" | "WebSocket"`) — still dialable at runtime.
+    | {
         readonly kind: "Http" | "WebSocket";
         readonly url: string;
         readonly path: string | undefined;
@@ -143,7 +154,14 @@ export type ListenOptions = {
   readonly unlink?: boolean;
 };
 
-class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
+/**
+ * {@link resolveHttpTarget} / `Node.Tag(name, badString)` got a string that is neither a
+ * port (`":3009"`), a port number, nor an `http(s)://` url. Thrown at Tag construction
+ * (sync) — fix the target literal.
+ *
+ * @public
+ */
+export class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
   readonly target: string;
 }> {}
 
@@ -207,8 +225,27 @@ type IpcAddress = {
   readonly kind: "IpcSocket";
 };
 
-/** Dialable http/ws node fields (`url` always set after resolve). @internal */
-type UrlAddress = {
+/** Dialable http node fields. @internal */
+type HttpAddress = {
+  readonly url: string;
+  readonly path: undefined;
+  readonly kind: "Http";
+};
+
+/** Dialable WebSocket node fields. @internal */
+type WsAddress = {
+  readonly url: string;
+  readonly path: undefined;
+  readonly kind: "WebSocket";
+};
+
+/**
+ * Loose dialable url node — single object type (not a union) so `class extends Tag(…)`
+ * stays constructable. Precise overloads return {@link HttpAddress} / {@link WsAddress}.
+ *
+ * @internal
+ */
+type UrlAddressLoose = {
   readonly url: string;
   readonly path: undefined;
   readonly kind: "Http" | "WebSocket";
@@ -221,11 +258,25 @@ export type IpcNodeTagClass<Self, ROut = never> = NodeTagClass<
   IpcAddress
 >;
 
-/** Constructable url {@link Tag} (for {@link Prototype}.make). @internal */
+/** Constructable loose-url {@link Tag} (for {@link Prototype}.make). @internal */
 export type UrlNodeTagClass<Self, ROut = never> = NodeTagClass<
   Self,
   ROut,
-  UrlAddress
+  UrlAddressLoose
+>;
+
+/** Constructable http {@link Tag}. @internal */
+export type HttpNodeTagClass<Self, ROut = never> = NodeTagClass<
+  Self,
+  ROut,
+  HttpAddress
+>;
+
+/** Constructable WebSocket {@link Tag}. @internal */
+export type WsNodeTagClass<Self, ROut = never> = NodeTagClass<
+  Self,
+  ROut,
+  WsAddress
 >;
 
 /**
@@ -283,16 +334,51 @@ export function Tag<Self, ROut = never>(
 ): NodeTagClass<Self, ROut, IpcAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
-  target: number | string | { readonly url: string; readonly kind?: ProtocolKind },
-): NodeTagClass<Self, ROut, UrlAddress>;
+  target: number | `:${number}`,
+): NodeTagClass<Self, ROut, HttpAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: `ws://${string}` | `wss://${string}`,
+): NodeTagClass<Self, ROut, WsAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: `http://${string}` | `https://${string}`,
+): NodeTagClass<Self, ROut, HttpAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: {
+    readonly url: `ws://${string}` | `wss://${string}`;
+    readonly kind?: "WebSocket";
+  },
+): NodeTagClass<Self, ROut, WsAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: { readonly url: string; readonly kind: "WebSocket" },
+): NodeTagClass<Self, ROut, WsAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: { readonly url: string; readonly kind: "Http" },
+): NodeTagClass<Self, ROut, HttpAddress>;
+export function Tag<Self, ROut = never>(
+  name: string,
+  target: string | { readonly url: string; readonly kind?: ProtocolKind },
+): NodeTagClass<Self, ROut, UrlAddressLoose>;
 export function Tag<Self, ROut = never>(
   name: string,
   target?: LooseNodeTarget,
-): NodeTagClass<Self, ROut, BareAddress | IpcAddress | UrlAddress>;
+): NodeTagClass<
+  Self,
+  ROut,
+  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+>;
 export function Tag<Self, ROut = never>(
   name: string,
   target?: LooseNodeTarget,
-): NodeTagClass<Self, ROut, BareAddress | IpcAddress | UrlAddress> {
+): NodeTagClass<
+  Self,
+  ROut,
+  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+> {
   const path =
     typeof target === "object" && target !== null ? target.path : undefined;
   // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
@@ -333,7 +419,11 @@ export function Tag<Self, ROut = never>(
       return storeOrThrow(node);
     },
     [catalogSym]: undefined as ROut | undefined,
-  }) as NodeTagClass<Self, ROut, BareAddress | IpcAddress | UrlAddress>;
+  }) as NodeTagClass<
+    Self,
+    ROut,
+    BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+  >;
 }
 
 /**
@@ -394,20 +484,46 @@ export function Lookup<Self>(
 };
 export function Lookup<Self>(
   name: string,
-  target: number | string | { readonly url: string; readonly kind?: ProtocolKind },
-): NodeTagClass<Self, never, UrlAddress> & {
+  target: number | `:${number}`,
+): NodeTagClass<Self, never, HttpAddress> & {
+  readonly isLookupNode: true
+};
+export function Lookup<Self>(
+  name: string,
+  target: `ws://${string}` | `wss://${string}`,
+): NodeTagClass<Self, never, WsAddress> & {
+  readonly isLookupNode: true
+};
+export function Lookup<Self>(
+  name: string,
+  target: `http://${string}` | `https://${string}`,
+): NodeTagClass<Self, never, HttpAddress> & {
+  readonly isLookupNode: true
+};
+export function Lookup<Self>(
+  name: string,
+  target: string | { readonly url: string; readonly kind?: ProtocolKind },
+): NodeTagClass<Self, never, UrlAddressLoose> & {
   readonly isLookupNode: true
 };
 export function Lookup<Self>(
   name: string,
   target?: LooseNodeTarget,
-): NodeTagClass<Self, never, BareAddress | IpcAddress | UrlAddress> & {
+): NodeTagClass<
+  Self,
+  never,
+  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+> & {
   readonly isLookupNode: true
 };
 export function Lookup<Self>(
   name: string,
   target?: LooseNodeTarget,
-): NodeTagClass<Self, never, BareAddress | IpcAddress | UrlAddress> & {
+): NodeTagClass<
+  Self,
+  never,
+  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+> & {
   readonly isLookupNode: true
 } {
   const node = Tag<Self>(name, target)

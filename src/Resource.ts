@@ -2432,12 +2432,24 @@ const makeTag = <Self>() => {
   // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
   // inferring call; `options.node` rides the inferring call so its identity `HSelf` infers from the
   // argument, and the node-bearing overload narrows `[nodeSym]` to a concrete `NodeKey` — which is
-  // how `Resource.client` discriminates the node-aware path.
+  // how `Resource.client` discriminates the node-aware path. An {@link AddressedNode} narrows
+  // further so `client(Tag)` can auto-wire connect.
   function build<const S extends Spec>(
     key: string,
     spec: S,
     options?: { readonly description?: string; readonly kind?: string },
   ): ResourceTag<Self, S>;
+  function build<const S extends Spec, HSelf>(
+    key: string,
+    spec: S,
+    options: {
+      readonly description?: string;
+      readonly kind?: string;
+      readonly node: AddressedNode<HSelf>;
+    },
+  ): NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  };
   function build<const S extends Spec, HSelf>(
     key: string,
     spec: S,
@@ -2522,6 +2534,24 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  *
  * @public
  */
+function tagFor<const S extends Spec, HSelf>(
+  groupId: string,
+  spec: S,
+  options: {
+    readonly description?: string;
+    readonly kind?: string;
+    readonly node: AddressedNode<HSelf>;
+  },
+): {
+  <Self>(key: string): NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  };
+  readonly groupId: string;
+  readonly description: string | undefined;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+};
 function tagFor<const S extends Spec, HSelf>(
   groupId: string,
   spec: S,
@@ -4319,18 +4349,20 @@ const buildClientService = <Self, S extends Spec>(
  * matter where the resource actually runs.
  *
  * Paths, by whether — and where — the tag names a {@link Node}:
- * - **node-bearing tag** — the transport is resolved from the tag's node; the layer's only
- *   requirement is that node (satisfied by {@link Node.connect}). Ship just the tag.
- * - **nodeless tag + {@link AddressedNode}** — `client(tag, Worker)` when `Worker` was built
- *   with a dialable address: auto-wires {@link Node.connect}`(Worker)` so the layer is fully
- *   provided (`R = never`). Type-gated — bare nodes don't get this path.
- * - **nodeless tag + bare node** — `client(tag, Bare)` still requires the node service;
+ * - **node-bearing + {@link AddressedNode}** — `client(Hosted)` when the tag's `{ node }` is
+ *   dialable: auto-wires connect (`R = never`). Bare bound nodes still require the node service.
+ * - **nodeless tag + {@link AddressedNode}** — `client(tag, Worker)` same auto-connect gate.
+ * - **bare node** — `client(tag, Bare)` / bare-bound `client(Hosted)` still require the node;
  *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / clientLocal) yourself.
- * - **nodeless tag, ambient transport** — the transport is taken from the ambient
- *   `RpcClient.Protocol`, supplied at wire-up.
+ * - **nodeless tag, ambient transport** — ambient `RpcClient.Protocol`.
  *
  * @public
  */
+function clientLayer<Self, S extends Spec, HSelf>(
+  tag: NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  },
+): Layer.Layer<Self>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
@@ -4380,11 +4412,11 @@ function clientLayer<Self, S extends Spec>(
       (client) => buildClientService(tag, client),
     ),
   );
-  // Explicit 2nd-arg {@link AddressedNode}: bake the canonical connect Layer (WeakMap-memoized
-  // per Node class) so `client(A, W)` + `client(B, W)` share one MemoMap transport.
-  if (node !== undefined && isAddressedNode(node as AnyNode)) {
+  // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
+  // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
+  if (isAddressedNode(nodeKey as AnyNode)) {
     return layer.pipe(
-      Layer.provide(connectAddressed(node as AddressedNode<unknown>)),
+      Layer.provide(connectAddressed(nodeKey as AddressedNode<unknown>)),
     ) as Layer.Layer<Self, never, RpcClient.Protocol>;
   }
   return layer as Layer.Layer<Self, never, RpcClient.Protocol>;

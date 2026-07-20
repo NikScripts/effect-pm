@@ -16,7 +16,7 @@ import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
 import type { AnyNode } from "./internal/nodeCore";
 import { Lookup as LookupNodeTag, Tag as NodeTag } from "./internal/nodeCore";
-import { connect, connectIpc, ipcServer } from "./internal/node";
+import { connectIpc, ipcServer } from "./internal/node";
 import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
 
@@ -290,12 +290,9 @@ const incumbentAlive = (
     return Effect.succeed(false);
   }
   // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
+  // Addressed target → Resource.client auto-wires connect (shared MemoMap Layer).
   const probe = Effect.gen(function* () {
-    const ctx = yield* Layer.build(
-      Resource.client(NodeStatus.Tag, target).pipe(
-        Layer.provide(connect(target)),
-      ),
-    );
+    const ctx = yield* Layer.build(Resource.client(NodeStatus.Tag, target));
     yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;
       yield* status.ping;

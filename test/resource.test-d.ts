@@ -206,24 +206,20 @@ const _procClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
 void _procClients;
 
 // ── node in the tag: ship only the tag; the client resolves where to connect ──
-// A node-bearing tag carries its own transport. `Resource.client(tag)` then requires the
-// HOST (not the ambient Protocol), and `Node.connect(Node, transport)` wires it once.
+// Bare bound node → client still requires the node (+ explicit protocol via connect).
 class EdgeNode extends Node.Tag<EdgeNode>("test/edge") {}
-class Hosted extends Resource.Tag<Hosted>()("test/Hosted", 
+class Hosted extends Resource.Tag<Hosted>()("test/Hosted",
   { ping: Resource.effect(Schema.String) },
   { node: EdgeNode },
 ) {}
 
-// the node-bearing client's only requirement is the node itself.
 const _nodeedClient: Layer.Layer<Hosted, never, EdgeNode> =
   Resource.client(Hosted);
 void _nodeedClient;
 
-// Node.connect re-keys an RPC `Protocol` layer under the node.
 const _nodeLive: Layer.Layer<EdgeNode> = Node.connect(EdgeNode, protocolLayer);
 void _nodeLive;
 
-// full wiring: client(Hosted) needs EdgeNode; node(EdgeNode, …) supplies it → R = never.
 const _nodeedRun: Promise<string> = Effect.runPromise(
   Effect.flatMap(Hosted, (h) => h.ping).pipe(
     Effect.provide(
@@ -234,6 +230,18 @@ const _nodeedRun: Promise<string> = Effect.runPromise(
   ),
 );
 void _nodeedRun;
+
+// Addressed bound node → client(Tag) auto-connects (fully wired).
+class WireNode extends Node.Tag<WireNode>("test/wire", {
+  path: "/tmp/test-wire.sock",
+}) {}
+class HostedWire extends Resource.Tag<HostedWire>()(
+  "test/HostedWire",
+  { ping: Resource.effect(Schema.String) },
+  { node: WireNode },
+) {}
+const _hostedWire: Layer.Layer<HostedWire> = Resource.client(HostedWire);
+void _hostedWire;
 
 // nodeless tag: client still takes the ambient Protocol (additive, non-breaking).
 const _nodelessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =

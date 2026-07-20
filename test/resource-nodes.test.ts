@@ -122,4 +122,29 @@ describe("Resource.nodes / andNode (C1)", () => {
       expect(n).toBe(11);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
+
+  it.effect("node-bearing client(Tag) auto-connects when { node } is addressed", () =>
+    Effect.gen(function* () {
+      const path = `/tmp/effect-pm-nodes-hosted-${process.pid}.sock`;
+      class Worker extends Node.Tag<Worker>("nodes/HostedWorker", { path }) {}
+      class Ping extends Resource.Tag<Ping>()(
+        "nodes/HostedPing",
+        { ping: Resource.effectFn({ n: Schema.Number }, Schema.Number) },
+        { node: Worker },
+      ) {}
+
+      const serverCtx = yield* Layer.build(
+        Node.ipcServer([Resource.serve(Ping, echoImpl)], { path }),
+      );
+      // Ship only the tag — no connect, no 2nd-arg node.
+      const clientCtx = yield* Layer.build(Resource.client(Ping));
+
+      const n = yield* Effect.gen(function* () {
+        const ping = yield* Ping;
+        return yield* ping.ping({ n: 2 });
+      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
+
+      expect(n).toBe(3);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
+  );
 });
