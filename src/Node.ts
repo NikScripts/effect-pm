@@ -50,30 +50,77 @@ export type { HttpServerOptions, IpcServerOptions } from "./internal/node"
 import { Layer } from "effect"
 import * as LookupMod from "./Lookup"
 import { listen } from "./internal/node"
-import type { AnyNode, ListenOptions } from "./internal/nodeCore"
+import {
+  AddressLessClaimLost,
+  AnyNode,
+  catalogSym,
+  ListenNode,
+  UnaddressedNode,
+} from "./internal/nodeCore"
+import type { ListenOptions } from "./internal/nodeCore"
+
+/** Non-empty serve list — same constraint as {@link listen}. */
+type ServeLayerList = readonly [
+  Layer.Layer<any, any, never>,
+  ...ReadonlyArray<Layer.Layer<any, any, never>>,
+]
+
+/** C3 catalog proof — every `ROut` member appears in merged serve success. */
+type ServesForCatalog<ROut, Serves extends ServeLayerList> = [ROut] extends [
+  never,
+]
+  ? Serves
+  : [ROut] extends [Layer.Success<Serves[number]>]
+    ? Serves
+    : never
+
+type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
+  ? Exclude<R, undefined>
+  : never
+
+type ListenLocalOptions = ListenOptions & {
+  readonly lookupPath?: string
+  readonly unlinkLookup?: boolean
+}
 
 /**
  * Sugar: {@link listen} + {@link Lookup.bootstrapDefaultLocal} for same-machine demos.
- *
- * Demo-only typing — catalog proof stays on {@link listen} / {@link clientsFor}.
+ * Same catalog proof as {@link listen} — serve list must cover the node's `ROut`.
  *
  * @public
  */
-export const listenLocal = (
+export function listenLocal<
+  Node extends AnyNode & { readonly [catalogSym]?: unknown },
+  Serves extends ServeLayerList,
+>(
+  node: Node,
+  serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
+  options?: ListenLocalOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]> | ListenNode,
+  never,
+  Layer.Services<Serves[number]>
+>
+export function listenLocal(
   node: AnyNode,
-  serves: Parameters<typeof listen>[1],
-  options?: ListenOptions & {
-    readonly lookupPath?: string
-    readonly unlinkLookup?: boolean
-  },
-): Layer.Layer<never, unknown, unknown> => {
+  serves: Layer.Layer<any, any, never> | ServeLayerList,
+  options?: ListenLocalOptions,
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>
+export function listenLocal(
+  node: AnyNode,
+  serves: Layer.Layer<any, any, never> | ServeLayerList,
+  options?: ListenLocalOptions,
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> {
   const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {}
-  return listen(node, serves, listenOptions).pipe(
+  const list = (
+    Array.isArray(serves) ? serves : [serves]
+  ) as ServeLayerList
+  return listen(node, list, listenOptions).pipe(
     Layer.provide(
       LookupMod.bootstrapDefaultLocal({
         ...(lookupPath !== undefined ? { path: lookupPath } : {}),
         ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
       }),
     ),
-  ) as Layer.Layer<never, unknown, unknown>
+  )
 }

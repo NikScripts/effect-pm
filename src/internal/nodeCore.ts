@@ -5,7 +5,7 @@
  *
  * @internal
  */
-import { Context, Data } from "effect"
+import { Context, Data, Result } from "effect"
 import type { Layer } from "effect"
 import type { HttpRouter } from "effect/unstable/http"
 import type { RpcClient } from "effect/unstable/rpc"
@@ -155,9 +155,10 @@ export type ListenOptions = {
 };
 
 /**
- * {@link resolveHttpTarget} / `Node.Tag(name, badString)` got a string that is neither a
- * port (`":3009"`), a port number, nor an `http(s)://` url. Thrown at Tag construction
- * (sync) — fix the target literal.
+ * {@link resolveHttpTarget} / a positional `Node.Tag(name, badString)` got a string that is
+ * neither a port (`":3009"`), a port number, nor an `http(s)://` url. Surfaces on the
+ * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
+ * sync throw. Catch via `Exit` / `CatchTag` when building `clientHttp` or derived `connect`.
  *
  * @public
  */
@@ -166,15 +167,52 @@ export class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
 }> {}
 
 /**
- * Resolve a {@link clientHttp} target to an RPC url. A port (`3009` or `":3009"`) points at
- * `http://localhost:3009/rpc`; a full `http(s)://…` url is used as-is; anything else fails loudly.
+ * Stamped on a {@link Tag} built from a positional target that failed
+ * {@link resolveHttpTarget} — {@link connect} / protocol derivation fail with that error.
+ *
  * @internal
  */
-export const resolveHttpTarget = (target: number | string): string => {
-  if (typeof target === "number") return `http://localhost:${target}/rpc`;
-  if (/^:\d+$/.test(target)) return `http://localhost${target}/rpc`;
-  if (/^https?:\/\//.test(target)) return target;
-  throw new InvalidHttpTarget({ target });
+export const invalidHttpTargetSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Node/invalidHttpTarget",
+);
+
+/** Read a stamped {@link InvalidHttpTarget}, if any. @internal */
+export const invalidHttpTargetOf = (
+  node: unknown,
+): InvalidHttpTarget | undefined => {
+  if (
+    (typeof node === "object" || typeof node === "function") &&
+    node !== null &&
+    invalidHttpTargetSym in node
+  ) {
+    const value = (node as { readonly [invalidHttpTargetSym]?: unknown })[
+      invalidHttpTargetSym
+    ];
+    return value instanceof InvalidHttpTarget ? value : undefined;
+  }
+  return undefined;
+};
+
+/**
+ * Resolve a {@link clientHttp} / positional Tag target to an RPC url.
+ * Port (`3009` / `":3009"`) → `http://localhost:3009/rpc`; `http(s)://…` as-is;
+ * anything else → {@link InvalidHttpTarget} (Failure). Pure — no throw.
+ *
+ * @internal
+ */
+export const resolveHttpTarget = (
+  target: number | string,
+): Result.Result<string, InvalidHttpTarget> => {
+  if (typeof target === "number") {
+    return Result.succeed(`http://localhost:${target}/rpc`);
+  }
+  if (/^:\d+$/.test(target)) {
+    return Result.succeed(`http://localhost${target}/rpc`);
+  }
+  if (/^https?:\/\//.test(target)) {
+    return Result.succeed(target);
+  }
+  return Result.fail(new InvalidHttpTarget({ target }));
 };
 
 /**
@@ -381,18 +419,26 @@ export function Tag<Self, ROut = never>(
 > {
   const path =
     typeof target === "object" && target !== null ? target.path : undefined;
-  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
-  // bad string); an explicit `{ url }` is used verbatim. IPC nodes omit `url`.
-  const url =
-    path !== undefined
-      ? undefined
-      : target === undefined
-        ? undefined
-        : typeof target === "object"
-          ? target.url
-          : resolveHttpTarget(target);
+  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
+  // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
+  // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
+  let url: string | undefined;
+  let invalidTarget: InvalidHttpTarget | undefined;
+  if (path !== undefined || target === undefined) {
+    url = undefined;
+  } else if (typeof target === "object") {
+    url = target.url;
+  } else {
+    const resolved = resolveHttpTarget(target);
+    if (Result.isSuccess(resolved)) {
+      url = resolved.success;
+    } else {
+      invalidTarget = resolved.failure;
+      url = undefined;
+    }
+  }
   // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` →
-  // IpcSocket, `ws(s)://` → WebSocket, any other url → Http. Bare `Node("x")` leaves kind undefined.
+  // IpcSocket, `ws(s)://` → WebSocket, any other url → Http. Bare / invalid leave kind undefined.
   const kind: ProtocolKind | undefined =
     (typeof target === "object" && target !== null ? target.kind : undefined) ??
     (path !== undefined
@@ -406,6 +452,9 @@ export function Tag<Self, ROut = never>(
     url,
     path,
     kind,
+    ...(invalidTarget !== undefined
+      ? { [invalidHttpTargetSym]: invalidTarget }
+      : {}),
   });
   // Stamp catalog brand — preserves Context.Service constructability
   // (`class X extends Node.Tag()`); `ROut` stays type-only at the value (C2 / C4).

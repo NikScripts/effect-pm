@@ -8,7 +8,11 @@
 import { Effect, Layer } from "effect"
 import { RpcClient } from "effect/unstable/rpc"
 import type { AddressedNode, AnyNode, NodeKey, ProtocolKind } from "./nodeCore"
-import { UnaddressedNode } from "./nodeCore"
+import {
+  InvalidHttpTarget,
+  invalidHttpTargetOf,
+  UnaddressedNode,
+} from "./nodeCore"
 
 /** Protocol builders injected from Resource (avoids Resource↔Node import cycles). */
 export type NodeProtocolBuilders = {
@@ -59,10 +63,25 @@ export const unaddressedLayer = <A = never>(
     ),
   )
 
-/** Protocol for any node — unaddressed → {@link UnaddressedNode}. @internal */
+/** Fail a Layer build with {@link InvalidHttpTarget}. @internal */
+export const invalidHttpTargetLayer = <A = never>(
+  error: InvalidHttpTarget,
+): Layer.Layer<A, InvalidHttpTarget> =>
+  Layer.unwrap(
+    Effect.map(
+      Effect.fail(error),
+      (impossible: never): Layer.Layer<A> => impossible,
+    ),
+  )
+
+/** Protocol for any node — invalid target / unaddressed → typed Layer fail. @internal */
 export const protocolForNode = (
   node: AnyNode,
-): Layer.Layer<RpcClient.Protocol, UnaddressedNode> => {
+): Layer.Layer<RpcClient.Protocol, UnaddressedNode | InvalidHttpTarget> => {
+  const invalid = invalidHttpTargetOf(node)
+  if (invalid !== undefined) {
+    return invalidHttpTargetLayer(invalid)
+  }
   const { protocolHttp, protocolWebsocket, protocolIpc } = protocols()
   if (node.kind === undefined) {
     return unaddressedLayer(node.key)
