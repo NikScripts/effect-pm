@@ -1558,8 +1558,44 @@ export type Validate<C, I> = {
       ? K extends keyof I
         ? Validate<C[K], I[K]>
         : LocalNeedsType<K>
-      : C[K];
+      : C[K] extends { readonly kind: MethodKind } // a wired method
+        ? K extends keyof I
+          ? WireHonors<SuccessOf<AsMethod<C[K]>>, IfaceSuccess<I[K]>> extends true
+            ? C[K]
+            : WireMismatch<K>
+          : C[K] // wired member absent from the interface — allowed (interface may be a subset view)
+        : C[K];
 };
+
+/** The success (element) type of a service interface member — the `A` of its returned `Effect`/`Stream`
+ *  (through a function), else the member itself. Used to check a wired contract member's schema against
+ *  the interface. @internal */
+type IfaceSuccess<T> = T extends (...args: any) => infer R
+  ? R extends Effect.Effect<infer A, any, any>
+    ? A
+    : R extends Stream.Stream<infer A, any, any>
+      ? A
+      : R
+  : T extends Effect.Effect<infer A, any, any>
+    ? A
+    : T extends Stream.Stream<infer A, any, any>
+      ? A
+      : T;
+
+/** Does a wired member's success `W` honor the interface's success promise `I` (is it assignable to
+ *  it)? Tuple-wrapped so neither side distributes. A schema subtype (e.g. `Array` for a `ReadonlyArray`
+ *  interface member) still honors it; a genuine mismatch (`string` for `number`) does not. @internal */
+type WireHonors<W, I> = [W] extends [I] ? true : false;
+
+/** @internal */
+declare const wireMismatchSym: unique symbol;
+
+/** The error surface a wired {@link fromService} member resolves to when its success schema disagrees
+ *  with the service interface at that key — rejected at the call, naming the key. @public */
+export interface WireMismatch<K extends PropertyKey> {
+  readonly [wireMismatchSym]: `Resource.fromService: wired member '${K &
+    string}' — its success type disagrees with the service interface`;
+}
 
 /** @internal */
 declare const fromLocalSym: unique symbol;

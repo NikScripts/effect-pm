@@ -30,6 +30,11 @@ expectTypeOf<Svc["label"]>().toEqualTypeOf<
 // A wired member is a normal client method — no `Local` requirement.
 expectTypeOf<Svc["add"]>().parameter(0).toEqualTypeOf<number>();
 
+// Locals stay OFF the wire — the serve/client surface (`Wire`) has the wired member only.
+expectTypeOf<
+  keyof Resource.Wire<Resource.SpecOf<typeof Counter>>
+>().toEqualTypeOf<"add">();
+
 // ── reject: a bare local with no matching interface member is a compile error at the call ──
 export class _Bad extends Resource.fromService<_Bad, CounterShape>()("from-svc-d/Bad", {
   current: Resource.local,
@@ -37,3 +42,14 @@ export class _Bad extends Resource.fromService<_Bad, CounterShape>()("from-svc-d
   // @ts-expect-error `bogus` is not a member of CounterShape — bare local has no type to resolve.
   bogus: Resource.local,
 }) {}
+
+// ── reject: a wired member whose success schema disagrees with the interface ──
+export class _BadWire extends Resource.fromService<_BadWire, CounterShape>()(
+  "from-svc-d/BadWire",
+  {
+    current: Resource.local,
+    // @ts-expect-error CounterShape.add returns Effect<number>, but the success schema is String.
+    add: Resource.effectFn(Schema.Number, Schema.String),
+    label: Resource.local,
+  },
+) {}
