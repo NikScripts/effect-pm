@@ -482,34 +482,22 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  * Http / WebSocket still need the caller to `Layer.provide(NodeHttpServer.layer(...))` — bind port
  * is not `node.url` (dial address). Ipc uses `node.path` for bind and dial.
  *
- * **Nameless** — pass only the serve list: mints an address-less node, claims at Lookup
- * (D7), binds ipc, and bootstraps default Lookup (same machine). Callers dial with
- * {@link Resource.clientLocal} (or directory/`lookupClient`).
+ * **No protocol / Lookup baked in** — transport comes from `node.kind` (or an address-less
+ * mint that still needs Lookup in `R` for D7 claim). Same-machine IPC + Lookup batteries
+ * are {@link unix}, not this entry.
+ *
+ * **Nameless** — `listen([serve…])` mints an address-less node and binds ipc; provide Lookup
+ * yourself (or use {@link unix}).
  *
  * ```ts
- * import type { Jobs, Emails } from "@app/contracts"
- * class Worker extends Tag<Worker, Jobs | Emails>("app/Worker", {
- *   path: "/tmp/worker.sock",
- * }) {}
- *
  * const live = Node.listen(Worker, [
  *   Resource.serve(Jobs, jobsImpl),
- *   Resource.serve(Emails, emailsImpl),
  * ]).pipe(Layer.provide(Lookup.clientDefaultLocal()))
  *
- * // Tag carries the node (sole bind) — skips Resource.serve
- * class Jobs extends Resource.Tag<Jobs>()("app/Jobs", {
- *   jobs: Resource.effect(Schema.Number),
- * }).pipe(Resource.andNode(Worker)) {}
- * const bound = Node.listen(Jobs, { jobs: Effect.succeed(7) })
- * // ≡ Node.listen(Worker, [Resource.serve(Jobs, …)])
+ * // Tag carries the node — skips Resource.serve
+ * Node.listen(Jobs.pipe(Resource.andNode(Worker)), jobsImpl)
  *
- * // nameless — anonymous transport (no Node.Tag); still Resource.serve
- * const anon = Node.listen(Resource.serve(Jobs, { jobs: Effect.succeed(7) }))
- * const pair = Node.listen([
- *   Resource.serve(Jobs, jobsImpl),
- *   Resource.serve(Emails, emailsImpl),
- * ])
+ * // batteries (ipc + Lookup): Node.unix(…)
  * ```
  *
  * Escape hatch without a catalog: keep calling `httpServer` / `wsServer` / `ipcServer` directly.
@@ -537,7 +525,7 @@ export function listen<
   Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
 export function listen<Serve extends Layer.Layer<never, any, never>>(
   serve: Serve,
-  options?: NamelessListenOptions,
+  options?: ListenOptions,
 ): Layer.Layer<
   Layer.Success<Serve> | ListenNode,
   never,
@@ -545,7 +533,7 @@ export function listen<Serve extends Layer.Layer<never, any, never>>(
 >;
 export function listen<Serves extends ServeLayerList>(
   serves: Serves,
-  options?: NamelessListenOptions,
+  options?: ListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   never,
@@ -572,10 +560,9 @@ export function listen(
   servesOrOptionsOrImpl?:
     | Layer.Layer<never, any, never>
     | ServeLayerList
-    | NamelessListenOptions
     | ListenOptions
     | object,
-  options?: ListenOptions | NamelessListenOptions,
+  options?: ListenOptions,
 ): Layer.Layer<
   never,
   UnaddressedNode | AddressLessClaimLost | ListenTagNodeRequired,
@@ -627,7 +614,7 @@ export function listen(
     ) as ServeLayerList;
     return namelessListen(
       list,
-      servesOrOptionsOrImpl as NamelessListenOptions | undefined,
+      servesOrOptionsOrImpl as ListenOptions | undefined,
     );
   }
   const node = nodeOrServesOrTag;
@@ -752,10 +739,10 @@ const unixRequiresIpcLayer = (
  *
  * - `unix(Tag, impl)` — Tag must carry a sole IpcSocket Node
  * - `unix(node, [serve…])` — node must be IpcSocket (or address-less → minted ipc)
- * - `unix(serve)` / `unix([serve…])` — nameless anonymous ipc + Lookup (same as nameless listen)
+ * - `unix(serve)` / `unix([serve…])` — nameless anonymous ipc + Lookup
  *
- * Non-IPC Nodes fail with {@link UnixListenRequiresIpc}. Dial with {@link Resource.client}
- * / {@link Resource.clientLocal}.
+ * This is the batteries entry: IPC sockets + default Lookup. {@link listen} does not bake
+ * those in. Non-IPC Nodes fail with {@link UnixListenRequiresIpc}.
  *
  * @public
  */
@@ -824,15 +811,38 @@ export function unix(
   | UnixListenRequiresIpc,
   unknown
 > {
-  // Nameless serve list — listen already binds ipc + bootstraps Lookup.
+  // Options: nameless uses 2nd arg; Tag/node forms use 3rd.
+  const rawOpts = (
+    isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
+  ) as NamelessListenOptions | undefined;
+  const { lookupPath, unlinkLookup, ...listenOptions } = rawOpts ?? {};
+  // Provide Lookup *inside* unwrap (same shape as the old nameless bake) so
+  // address-less D7 claim + directory advertise see Identity/Directory.
+  const withLookup = <A, E, R>(
+    layer: Layer.Layer<A, E, R>,
+  ): Layer.Layer<A, E, R> =>
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const Lookup = yield* Effect.promise(() => import("../Lookup"));
+        return layer.pipe(
+          Layer.provide(
+            Lookup.bootstrapDefaultLocal({
+              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+              ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
+            }),
+          ),
+        );
+      }),
+    ) as Layer.Layer<A, E, R>;
+
+  // Nameless — listen mints ipc; unix adds Lookup.
   if (isServeArg(nodeOrServesOrTag)) {
     const listenNameless = listen as unknown as (
       serves: Layer.Layer<never, any, never> | ServeLayerList,
-      options?: NamelessListenOptions,
+      options?: ListenOptions,
     ) => Layer.Layer<never, never, never>;
-    return listenNameless(
-      nodeOrServesOrTag,
-      servesOrOptionsOrImpl as NamelessListenOptions | undefined,
+    return withLookup(
+      listenNameless(nodeOrServesOrTag, listenOptions),
     ) as Layer.Layer<
       never,
       | UnaddressedNode
@@ -842,25 +852,6 @@ export function unix(
       unknown
     >;
   }
-
-  // Tag+impl / node+serves — 3rd arg is options (Lookup knobs + listen knobs).
-  const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {};
-  const withLookup = <A, E, R>(
-    layer: Layer.Layer<A, E, R>,
-  ): Layer.Layer<A, E, R> =>
-    layer.pipe(
-      Layer.provide(
-        Layer.unwrap(
-          Effect.gen(function* () {
-            const Lookup = yield* Effect.promise(() => import("../Lookup"));
-            return Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
-            });
-          }),
-        ),
-      ),
-    ) as Layer.Layer<A, E, R>;
 
   if (isResourceTagArg(nodeOrServesOrTag)) {
     const bound = Resource.nodeOf(nodeOrServesOrTag);
@@ -935,28 +926,24 @@ export function unix(
  *
  * @internal
  */
+/**
+ * Mint an address-less anonymous Node and run D7 listen (claim + ipc bind).
+ * Does **not** bootstrap Lookup — caller provides it (or use {@link unix}).
+ *
+ * @internal
+ */
 const namelessListen = (
   list: ServeLayerList,
-  options: NamelessListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> => {
-  const { lookupPath, unlinkLookup, ...listenOptions } = options ?? {};
-  return Layer.unwrap(
+  options: ListenOptions | undefined,
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
+  Layer.unwrap(
     Effect.gen(function* () {
       const suffix = yield* uniqueInstanceSuffix();
       const key = `effect-pm/anonymous#${suffix}`;
       const node = Tag(key);
-      const Lookup = yield* Effect.promise(() => import("../Lookup"));
-      return listen(node, list, listenOptions).pipe(
-        Layer.provide(
-          Lookup.bootstrapDefaultLocal({
-            ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-            ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
-          }),
-        ),
-      );
+      return listen(node, list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
-};
 
 /** True when `node` was built with {@link Node}.Prototype. @internal */
 const isPrototypeNode = (node: unknown): boolean =>

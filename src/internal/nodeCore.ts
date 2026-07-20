@@ -155,8 +155,8 @@ export type ListenOptions = {
 };
 
 /**
- * Options for nameless {@link listen}`([serve…])` — {@link ListenOptions} plus Lookup
- * bootstrap knobs (same as {@link Node.listenLocal}).
+ * Options for {@link unix} / {@link Node.listenLocal} — {@link ListenOptions} plus Lookup
+ * bootstrap knobs. {@link listen} itself does not take these (no Lookup bake-in).
  *
  * @public
  */

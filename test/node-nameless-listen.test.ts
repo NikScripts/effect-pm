@@ -3,10 +3,10 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import * as Lookup from "../src/Lookup";
 
 /**
- * Nameless `Node.listen([serve…])` — mint address-less node, D7 claim, Lookup bootstrap.
- * Dial with {@link Resource.clientLocal} on the same lookup path.
+ * Nameless serve list — `listen` leaves Lookup in `R`; `unix` bakes it in.
  */
 
 const tmpSock = (label: string) =>
@@ -26,17 +26,28 @@ class Emails extends Resource.Tag<Emails>()("nameless/Emails", {
 const jobsImpl = { jobs: Effect.succeed(11) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-describe("Node.listen nameless", () => {
-  it.effect("mints address-less node + Lookup; clientLocal dials the served resource", () =>
+/** Provide Lookup inside unwrap — same nesting address-less listen expects. */
+const withLookup = <A, E, R>(
+  layer: Layer.Layer<A, E, R>,
+  path: string,
+): Layer.Layer<A, E, R> =>
+  Layer.unwrap(
+    Effect.sync(() =>
+      layer.pipe(
+        Layer.provide(
+          Lookup.bootstrapDefaultLocal({ path, unlink: true }),
+        ),
+      ),
+    ),
+  );
+
+describe("Node.listen nameless (Lookup in R)", () => {
+  it.effect("mints address-less node; caller provides Lookup", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
-        Node.listen([Resource.serve(Jobs, jobsImpl)], {
-          lookupPath,
-          unlinkLookup: true,
-        }),
+        withLookup(Node.listen([Resource.serve(Jobs, jobsImpl)]), lookupPath),
       );
-      // Same Lookup sock — directory advertise + resolve.
       const clientCtx = yield* Layer.build(
         Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
       );
@@ -47,19 +58,36 @@ describe("Node.listen nameless", () => {
       }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
 
       expect(n).toBe(11);
-
-      // ListenNode is stamped with a minted anonymous key.
       const listenNode = Context.get(serverCtx, Node.ListenNode);
       expect(listenNode.key.startsWith("effect-pm/anonymous#")).toBe(true);
       expect(typeof listenNode.path).toBe("string");
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("two resources on one nameless listen; both dial via clientLocal", () =>
+  it.effect("single serve layer (not array) is accepted", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("one");
+      const serverCtx = yield* Layer.build(
+        withLookup(Node.listen(Resource.serve(Jobs, jobsImpl)), lookupPath),
+      );
+      const clientCtx = yield* Layer.build(
+        Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
+      );
+      const n = yield* Effect.gen(function* () {
+        const jobs = yield* Jobs;
+        return yield* jobs.jobs;
+      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
+      expect(n).toBe(11);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+});
+
+describe("Node.unix nameless (Lookup baked in)", () => {
+  it.effect("two resources; clientLocal dials both", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("pair");
       const serverCtx = yield* Layer.build(
-        Node.listen(
+        Node.unix(
           [
             Resource.serve(Jobs, jobsImpl),
             Resource.serve(Emails, emailsImpl),
@@ -83,25 +111,4 @@ describe("Node.listen nameless", () => {
       expect(pair).toEqual([11, "ok"]);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
-
-  it.effect("single serve layer (not array) is accepted", () =>
-    Effect.gen(function* () {
-      const lookupPath = yield* tmpSock("one");
-      const serverCtx = yield* Layer.build(
-        Node.listen(Resource.serve(Jobs, jobsImpl), {
-          lookupPath,
-          unlinkLookup: true,
-        }),
-      );
-      const clientCtx = yield* Layer.build(
-        Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
-      );
-      const n = yield* Effect.gen(function* () {
-        const jobs = yield* Jobs;
-        return yield* jobs.jobs;
-      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
-      expect(n).toBe(11);
-    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
-  );
-
 });
