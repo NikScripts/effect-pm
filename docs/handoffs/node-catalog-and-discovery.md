@@ -797,3 +797,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — Owner “Good” → **D4 LOCKED:** `lookupClient(Tag, { pick: "first" \| fn })`; bare fail-closed; identity ignores pick; `client(Tag)` set-of-one unchanged.
 - **2026-07-19** — Owner “Okay next” → **`askIncumbent` bake opened.** Lean **A:** `onConflict` on listen/advertise; Lookup asks `NodeStatus.yield`; timeout → `IncumbentAlive`. Awaiting owner lock.
 - **2026-07-20** — Bake tip for merge into `integration`: AddressedNode auto-connect + MemoMap-shared connect; kind-precise Tags; `nodes([X])` / `andNode(X)` sole-bind; `InvalidHttpTarget` Layer/Effect (not throw); `listenLocal` catalog proof; `*Server`/`listen` serve-list bounds match Effect `Layer.mergeAll`. `askIncumbent` still OPEN.
+- **2026-07-20** — **Nameless `Node.listen([serve…])` Eng:** mint address-less anonymous Node + D7 claim + Lookup bootstrap; dial via `clientLocal`.
