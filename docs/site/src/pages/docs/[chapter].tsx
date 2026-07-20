@@ -2,6 +2,8 @@ import { chapters, chapterBySlug } from "../../lib/content.js";
 import { renderChapter } from "../../lib/docs-content.js";
 import { PrevNext } from "../../components/PrevNext.js";
 import { DraftBanner, PageAside } from "../../components/PageAside.js";
+import { PageMeta } from "../../components/PageMeta.js";
+import { firstParagraphs } from "../../components/page-desc.js";
 
 // One route for every standards chapter. Server component: parse + render through
 // the Effect pipeline, SSG'd at build.
@@ -11,7 +13,7 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
   const { element, meta, toc } = await renderChapter(c.raw);
   return (
     <>
-      <title>{`${meta.title} — effect-pm`}</title>
+      <PageMeta title={`${meta.title} — effect-pm`} description={firstParagraphs(c.raw)} />
       <DraftBanner meta={meta} />
       <article className="prose">
         {element}

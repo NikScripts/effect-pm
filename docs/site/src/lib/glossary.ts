@@ -3,9 +3,9 @@
 // renderer (docs-content) and the hover renderer (highlight) import this without a cycle.
 
 import { chapterBySlug } from "./content.js";
+import { slugify } from "./slug-text.js";
 
-export const slugify = (s: string): string =>
-  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+export { slugify };
 
 export interface GlossaryEntry {
   readonly term: string;

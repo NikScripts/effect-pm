@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import prettier from "prettier";
 import { createHighlighter } from "shiki";
-import * as Annotate from "../../src/docgen/Annotate.js";
+import * as Annotate from "@nikscripts/docgen/Annotate";
 
 const holderUrl = "/api/test/Holder";
 const targetUrl = "/api/test/Target";

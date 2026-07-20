@@ -25,7 +25,7 @@ import {
   sourceLinksFor,
   symbolIndexEntries,
 } from "./api-source-links";
-import * as Annotate from "../docgen/Annotate.js";
+import * as Annotate from "@nikscripts/docgen/Annotate";
 import { inertTemplate } from "./inert-html.js";
 import { runServer } from "./runtime";
 

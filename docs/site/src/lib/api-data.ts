@@ -46,6 +46,7 @@ const ApiSymbolRowS = Schema.Struct({
   kind: Schema.String,
   summary: Schema.String,
   url: Schema.String,
+  category: Schema.optional(Schema.String),
 });
 const ModuleInfoS = Schema.Struct({
   slug: Schema.String,

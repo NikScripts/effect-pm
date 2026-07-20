@@ -1,4 +1,5 @@
 import { ApiSymbolCard } from "./ApiSymbol.js";
+import { PageMeta } from "./PageMeta.js";
 import { readSourceFile, referencedBy, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
 import { loadHighlighter } from "../lib/highlight.js";
 import { runServer } from "../lib/runtime.js";
@@ -45,7 +46,12 @@ export async function ApiSymbolPage({
   const refs = await runServer(referencedBy(s.url));
   return (
     <>
-      <title>{`${s.qualifiedName} — API — effect-pm`}</title>
+      <PageMeta
+        title={`${s.qualifiedName} — API — effect-pm`}
+        description={
+          s.summary !== "" ? s.summary : `API reference for ${s.qualifiedName} (${s.kind}).`
+        }
+      />
       <article className="prose">
         <p className="api-back">
           <a href={`/api/${pkg}/${module}`}>← {s.entry}</a>
