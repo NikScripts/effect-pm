@@ -5,12 +5,13 @@ import { Effect, Exit, Layer } from "effect";
 import * as FleetHealth from "../src/FleetHealth";
 import * as MultiNode from "../src/MultiNode";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([DropletEast, DropletWest]),
+  Resource.nodes([DropletEast, DropletWest]),
 ) {}
 
 type Spec = Resource.SpecOf<typeof MeshHealth>;
@@ -115,9 +116,9 @@ type BoundSpecKeys = keyof BoundSpec extends "local" | "byNode" | "status"
 true satisfies BoundSpecKeys;
 
 // `{ node }` overload stamps the droplet (unbound tags stay unbound).
-const _boundNode: Resource.NodeKey<unknown> = Resource.nodeOf(BoundGlass)!;
+const _boundNode: Node.NodeKey<unknown> = Resource.nodeOf(BoundGlass)!;
 void _boundNode;
-type BoundHasNode = NonNullable<ReturnType<typeof Resource.nodeOf>> extends Resource.NodeKey<unknown>
+type BoundHasNode = NonNullable<ReturnType<typeof Resource.nodeOf>> extends Node.NodeKey<unknown>
   ? true
   : false;
 true satisfies BoundHasNode;

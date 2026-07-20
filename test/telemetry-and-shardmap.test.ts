@@ -4,13 +4,14 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Resource from "../src/Resource";
 import * as ShardMap from "../src/ShardMap";
 import * as Telemetry from "../src/Telemetry";
+import * as Node from "../src/Node";
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
 
 describe("Telemetry fleet elevation", () => {
   class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-    Resource.distributed([DropletEast, DropletWest]),
+    Resource.nodes([DropletEast, DropletWest]),
   ) {}
 
   const stamp = (value: number) =>
@@ -83,7 +84,7 @@ describe("ShardMap", () => {
     key: SessionId,
     value: Session,
     keyOf: (s) => s.id,
-  }).pipe(Resource.distributed([DropletEast, DropletWest])) {}
+  }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
 
   const sticky: ShardMap.PartitionFn = (key) =>
     key.startsWith("w-") ? DropletWest.key : DropletEast.key;
@@ -144,7 +145,7 @@ describe("ShardMap", () => {
         value: Session,
         keyOf: (s) => s.id,
       },
-    ).pipe(Resource.distributed([DropletEast])) {}
+    ).pipe(Resource.nodes([DropletEast])) {}
 
     const live = ShardMap.layer(MemorySessions).pipe(
       Layer.provide(Resource.peersLayer(MemorySessions, DropletEast)),
@@ -167,7 +168,7 @@ describe("ShardMap", () => {
       key: SessionId,
       value: Session,
       keyOf: (s) => s.id,
-    }).pipe(Resource.distributed([DropletEast])) {}
+    }).pipe(Resource.nodes([DropletEast])) {}
 
     return Effect.gen(function* () {
       const path = yield* Path.Path;

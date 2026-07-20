@@ -5,6 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as RunResource from "../src/RunResource";
+import * as Node from "../src/Node";
 
 class RemoteGate extends RunResource.Tag<RemoteGate>()("run-remote/G", {
   payload: Schema.Number,
@@ -21,7 +22,7 @@ const clientHttp = (port: number) =>
 const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
 ): Effect.Effect<A, E, never> => {
-  const server = Resource.httpServer([
+  const server = Node.httpServer([
     RunResource.serveMemory(RemoteGate, {
       effect: (n: number) =>
         n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),

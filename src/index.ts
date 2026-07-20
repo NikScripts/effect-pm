@@ -156,9 +156,11 @@ export {
   isEffect,
   specOf,
 } from "./Resource";
-// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Node`
-// pull only what's used. Import `* as Resource` from the subpath, or `{ Resource }` from here.
+// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` /
+// `Node.Tag` pull only what's used. Import `* as Resource` / `* as Node` from the subpath.
 export * as Resource from "./Resource";
+export * as Node from "./Node";
+export * as Lookup from "./Lookup";
 export type {
   AnyLocalMethod,
   AnyMethod,
@@ -167,7 +169,6 @@ export type {
   LocalMethod,
   LocalShape,
   LocalShapeOf,
-  NodeKey,
   NodeTagFactory,
   Of,
   Method,
@@ -186,6 +187,15 @@ export type {
   WireOf,
   WireShape,
 } from "./Resource";
+export type {
+  AnyNode,
+  AddressedNode,
+  CatalogNode,
+  DialableTarget,
+  ListenOptions,
+  NodeKey,
+  ProtocolKind,
+} from "./Node";
 
 /**
  * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},

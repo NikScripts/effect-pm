@@ -14,6 +14,7 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import { groupOf } from "../src/Resource";
 import { queueStatus } from "../src/QueueResource";
+import * as Node from "../src/Node";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a
@@ -104,7 +105,7 @@ const snapB = {
   phase: "running" as const,
 };
 
-const QueueWatchServer = Resource.httpServer([
+const QueueWatchServer = Node.httpServer([
   Resource.serve(QueueWatch, {
     status: Stream.fromIterable([snapA, snapB]),
   }),

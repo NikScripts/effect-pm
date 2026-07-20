@@ -21,6 +21,7 @@ import type { QueueEntry } from "../src/QueueResource";
 import * as Logs from "../src/Logs";
 import * as Resource from "../src/Resource";
 import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Resource";
+import * as Node from "../src/Node";
 
 // A queue family built from the control contract: many instances share the "queue" group.
 const Queue = Resource.tagFor("queue", queueControlSpec);
@@ -424,7 +425,7 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
 // ── node in the queue tag (type-level): ship only the tag ──
 // A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
-class QueueNode extends Resource.Node<QueueNode>("queue/node") {}
+class QueueNode extends Node.Tag<QueueNode>("queue/node") {}
 class NodeNumbers extends QueueResource.Tag<NodeNumbers>()("test/NodeNumbers", {
   payload: NumberItem,
   node: QueueNode,

@@ -6,8 +6,9 @@ import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
 import * as Store from "../src/Store";
+import * as Node from "../src/Node";
 
-class BillingNode extends Resource.Node<BillingNode>("test/two-copies/node") {}
+class BillingNode extends Node.Tag<BillingNode>("test/two-copies/node") {}
 class SyncProc extends Process.Tag<SyncProc>()("test/two-copies/proc") {}
 
 class QuietProc extends Process.Tag<QuietProc>()("test/stream-level/quiet") {}

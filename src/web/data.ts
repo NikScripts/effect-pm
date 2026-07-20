@@ -11,7 +11,8 @@
 import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as resourceKindOf, type NodeKey, type Subscribable } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, type Subscribable } from "../Resource";
+import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
@@ -281,7 +282,7 @@ export interface ApiBundle {
   readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
 }
 
-/** A node that backs one or more of a group's resources — its id (the `Resource.Node` key) plus the
+/** A node that backs one or more of a group's resources — its id (the `Node.Tag` key) plus the
  *  transport key itself. Read straight off the tags (`nodeOf`), so the dashboard's node list is the
  *  distinct nodes its resources are bound to — no separate registry. */
 export interface NodeRef {
@@ -318,7 +319,7 @@ export const tagWireKey = (member: unknown): string | undefined => {
   return undefined;
 };
 
-/** The {@link NodeRef} a resource tag is bound to (its `Resource.Node`), or `undefined` for a nodeless
+/** The {@link NodeRef} a resource tag is bound to (its `Node.Tag`), or `undefined` for a nodeless
  *  tag — lets a resource page read its own readiness from its node's `NodeStatus`. */
 export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);

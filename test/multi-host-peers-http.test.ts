@@ -4,8 +4,9 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
-class DbNode extends Resource.Node<DbNode>("peers-http/node") {}
+class DbNode extends Node.Tag<DbNode>("peers-http/node") {}
 class Database extends Resource.Tag<Database>()(
   "peers-http/Database",
   {
@@ -22,7 +23,7 @@ const fakePeers = {
   wnba: { connections: Effect.succeed(3) },
 };
 
-const Server = Resource.httpServer([
+const Server = Node.httpServer([
   Resource.serve(
     Database,
     Effect.gen(function* () {

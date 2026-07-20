@@ -2,7 +2,7 @@
  * @module NodeStatus
  *
  * **Node status** — the reserved resource every node serves automatically (via
- * {@link Resource.httpServer}): is it up, when did it start, how long has it been up, how many
+ * {@link Node.httpServer}): is it up, when did it start, how long has it been up, how many
  * resources does it serve, plus its runtime-wide **Logs** relay (`logs.stream` stream +
  * `logs.query` query — empty unless `Logs.layer` is provided) and a `ping`. The node author wires nothing; clients just point a transport
  * at the node. — query a specific node by pointing the ambient `RpcClient.Protocol` at
@@ -28,6 +28,7 @@ import {
   type NodeStatus as NodeStatusType,
   type NodeResourceReadiness as NodeResourceReadinessType,
 } from "./internal/nodeStatusResource";
+import * as Node from "./Node";
 
 /** Live node status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
  *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.
@@ -54,7 +55,7 @@ export const Tag = NodeStatusResource;
 
 /**
  * A client layer for the node status resource pointed at a node's `/rpc` `url` (ndjson over http,
- * matching `Resource.httpServer`'s default). Provide it to a program that reads
+ * matching `Node.httpServer`'s default). Provide it to a program that reads
  * {@link NodeStatus.Tag}.
  *
  * @public

@@ -4,6 +4,7 @@ import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Resource from "../src/Resource";
+import * as PmNode from "../src/Node";
 
 /**
  * Escape hatch for "one outlier with a private dep on an otherwise shared host":
@@ -32,7 +33,7 @@ class Outlier extends Resource.Tag<Outlier>()("sharedIso/Outlier", {
 const sharedImpl = { read: Effect.map(SharedDep, (n) => n) };
 const outlierImpl = { read: Effect.map(PrivateDep, (n) => n) };
 
-const Node = Resource.httpServer(
+const Node = PmNode.httpServer(
   [
     Resource.provide(Layer.succeed(SharedDep, 10), [
       Resource.serveRemote(MajorityA, sharedImpl),

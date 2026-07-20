@@ -42,10 +42,11 @@ import {
   ref,
   stream,
   type NodeBoundTag,
-  type NodeKey,
   type ResourceTag,
   type Subscribable,
 } from "./Resource";
+import type { NodeKey } from "./Node";
+import * as Node from "./Node";
 
 // ============================================================================
 // Metadata
@@ -194,7 +195,7 @@ export const layerFor = <
 ): Layer.Layer<Self, never, Scope.Scope> => layer(tag, options);
 
 /** Tag-construction options for {@link ApiMetrics.Tag}: bind the metrics resource to a {@link
- *  Resource.Node} (so it's served + reached on that node) and/or set its dashboard panel title.
+ *  Node.Tag} (so it's served + reached on that node) and/or set its dashboard panel title.
  *  @public */
 export interface ApiMetricsConstructOptions<HSelf = never> {
   readonly node?: NodeKey<HSelf>;
@@ -223,7 +224,7 @@ export const serveRemote = <Self>(
  * Serve this metrics resource **and** grant its local instance from **one** materialization — the
  * counterpart to {@link Resource.serve}, fed from the in-process usage registry
  * ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add the tag to the served node's
- * `Group` and drop this into {@link Resource.httpServer}; a served-**only** edge uses {@link serveRemote}.
+ * `Group` and drop this into {@link Node.httpServer}; a served-**only** edge uses {@link serveRemote}.
  *
  * @public
  */

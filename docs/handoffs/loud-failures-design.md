@@ -48,7 +48,7 @@ Both share three properties that make them expensive:
 2. **Quiet** — it surfaces as an opaque *defect* or a *hang*, not a named failure that points at the fix.
 3. **Swallowable** — an opaque defect is easy to `Effect.ignore` (or never observe), so it can live indefinitely.
 
-The fix is not "write more careful examples." It's to make these misconfigurations **fail loudly and early**, the way `resolveHttpTarget` already throws `InvalidHttpTarget` for a malformed target (`src/Resource.ts:3561`). That precedent is the whole philosophy — this doc extends it from *config strings* to the *transport handshake*.
+The fix is not "write more careful examples." It's to make these misconfigurations **fail loudly and early**, the way a bad `resolveHttpTarget` / `clientHttp` target already fails the **Layer** with `InvalidHttpTarget` (Effect/Layer error channel — same shape as `UnaddressedNode`; catch via `Exit` / `CatchTag`). That precedent is the whole philosophy — this doc extends it from *config strings* to the *transport handshake*.
 
 ## 2. Current state (grounded in `src/Resource.ts`)
 
@@ -57,7 +57,7 @@ Building blocks that already exist:
 - Client protocols: `protocolHttp(url)` (Fetch + ndjson), `protocolWebsocket(url)` (one multiplexed ws + ndjson) — each returns `Layer<RpcClient.Protocol>`.
 - Wiring: `connect(node, protocol)`, `client(tag)` (nodeless → requires ambient `RpcClient.Protocol`), `client(tag, node)`, `socketClient(node, {url})`, `clientHttp(tag, target)`.
 - Servers: `httpServer([...])`, `wsServer([...])` → `serverProtocolHttp`/`serverProtocolWebsocket` internally.
-- Eager-loud precedent: `resolveHttpTarget` **throws** `InvalidHttpTarget` on a bad target.
+- Eager-loud precedent: bad http target → `InvalidHttpTarget` on the Layer/Effect error channel (`clientHttp` / stamped positional `Node.Tag` → derived `connect`).
 
 The gaps:
 

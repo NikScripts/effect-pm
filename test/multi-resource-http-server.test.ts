@@ -4,8 +4,9 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as PmNode from "../src/Node";
 
-// End-to-end: Resource.serve + Resource.httpServer + the served-resources registry. Two resources need
+// End-to-end: Resource.serve + PmNode.httpServer + the served-resources registry. Two resources need
 // the SAME Dep tag with DIFFERENT values (isolated per resource), served on one /rpc, with /health
 // listing both (which only works if the registry was populated before httpServer read it).
 
@@ -22,7 +23,7 @@ const layerA = Resource.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(De
 const layerB = Resource.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
 // the serves form — httpServer([...]) bundles the provideMerge + registry
-const Node = Resource.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(
+const Node = PmNode.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 

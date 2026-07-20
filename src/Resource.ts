@@ -46,12 +46,12 @@
  * @module Resource
  */
 import {
-  Clock,
   Context,
   Data,
   Duration,
   Effect,
   Fiber,
+  Result,
   Function as Fn,
   Layer,
   Match,
@@ -69,8 +69,6 @@ import {
   Headers,
   HttpClient,
   HttpRouter,
-  HttpServer,
-  HttpServerResponse,
 } from "effect/unstable/http";
 import * as Socket from "effect/unstable/socket/Socket";
 import type { Simplify } from "effect/Types";
@@ -90,6 +88,35 @@ import {
   withRegistrationJournal,
   type StoreScopeTag,
 } from "./internal/store/registration";
+// Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
+import type {
+  Directory as LookupDirectory,
+  DirectoryEntry as LookupDirectoryEntry,
+  Identity as LookupIdentity,
+} from "./Lookup";
+import {
+  AddressedNode,
+  AnyNode,
+  bindNodeStore,
+  InvalidHttpTarget,
+  isAddressedNode,
+  ListenNode,
+  NodeKey,
+  NodeUnreachable,
+  ProtocolKind,
+  resolveHttpTarget,
+  Tag as makeNode,
+  UnaddressedNode,
+} from "./internal/nodeCore";
+import {
+  bindNodeProtocolBuilders,
+  connectAddressed,
+  connectLayer,
+  invalidHttpTargetLayer,
+  unaddressedLayer,
+} from "./internal/nodeConnect";
+// Node listen/connect used only inside functions via dynamic import where needed;
+// clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -409,7 +436,8 @@ export const flattenResourceSpec = flattenSpec;
 
 /** Flatten a nested impl to a flat path-keyed record, walking each path from the (flat) spec's keys —
  *  identity for a flat spec. @internal */
-const flattenImpl = (
+/** @internal */
+export const flattenImpl = (
   impl: Record<string, unknown>,
   flatSpec: FlatSpec,
 ): Record<string, unknown> => {
@@ -850,6 +878,8 @@ export function store(tag: StoreScopeTag, extended?: StoreShapes) {
       : facetStoreRegistration(tag, builtIn, extended);
   return withRegistrationJournal(registered, "node");
 }
+
+bindNodeStore(store);
 
 /**
  * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream
@@ -1617,7 +1647,8 @@ export type HandlerContextOf<S extends Spec> = Rpc.ToHandler<RpcUnionOf<S>>;
  * method name — it's a transport detail, never part of the logical contract (the type-level
  * tag and the `yield* Tag` service surface stay the bare method name).
  */
-const wireTag = (groupId: string, method: string): string => `${groupId}/${method}`;
+/** @internal */
+export const wireTag = (groupId: string, method: string): string => `${groupId}/${method}`;
 
 /**
  * Build the shared RPC contract group from a {@link Spec}, namespaced by `groupId`. A bare
@@ -1697,6 +1728,11 @@ export const nodeSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/node",
 );
 
+/** Marks a Tag as identity-claiming ({@link identity} pipe) — layer/serve claim at Lookup first. @internal */
+export const identitySym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/identity",
+);
+
 // ── readiness: a derived view of a resource's status, aggregated into node /health + NodeStatus ──
 
 /**
@@ -1729,57 +1765,7 @@ export type ReadinessOf<Service> = (
 
 // ── node: the transport for a resource, carried in the Tag ──
 
-/**
- * The value of a {@link Node} service: a **wrapper** holding the RPC client transport `Protocol` for
- * that node — deliberately NOT the bare `RpcClient.Protocol` service. Wrapping makes a node's value
- * type-distinct from an ambient protocol, which closes a real type hole: without it, a node's value is
- * structurally identical to `RpcClient.Protocol`, so `client(tag).pipe(Layer.provide(node))` (a node
- * supplied where an ambient protocol is required) collapses the requirement to `never` and type-checks
- * as fully wired — then throws "Service not found: RpcClient/Protocol" at runtime (the dashboard's
- * "connecting… forever" bug). With the wrapper that wiring fails to compile; the only forms that
- * compile are the correct ones — `connect` (wraps) and `client(tag, node)` (unwraps).
- *
- * @internal
- */
-interface NodeProtocol {
-  readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>;
-}
-
-/**
- * The Context key of a {@link Node} (`HSelf` = its identity): a service whose value is the
- * transport {@link NodeProtocol}. Stored on a node-bearing tag under {@link nodeSym}; read by
- * {@link Resource.client} to resolve *where* to connect (its requirement channel).
- *
- * @public
- */
-export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
-
-/**
- * The transport a {@link Node} speaks, in Effect's client vocabulary: `"http"` (`RpcClient.
- * layerProtocolHttp`) or `"socket"` (`RpcClient.layerProtocolSocket`, over a WebSocket in the browser).
- * Stamped on the node so the topology is self-describing about *how* to reach it — `connect`/`client`
- * derive the transport from it, and a server asserts it at serve time. Inferred from a `ws(s)://` url;
- * otherwise declare it explicitly.
- *
- * @public
- */
-export type ProtocolKind = "http" | "socket";
-
-/** A {@link Resource.Node} erased — a {@link NodeKey} that also carries its own transport `url`
- *  (decision 2) and {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
- *  *where* AND *how* to reach each one, and {@link peersLayer} can reach it. An element of a tag's
- *  fleet. @public */
-export type AnyNode = NodeKey<unknown> & {
-  readonly url: string | undefined;
-  readonly kind: ProtocolKind | undefined;
-};
-
-/** An {@link AnyNode} that has fully declared its transport — both `url` and `kind` are present, so
- *  {@link Resource.connect} can derive the client from it with no protocol argument. @public */
-export type AddressedNode<HSelf> = NodeKey<HSelf> & {
-  readonly url: string;
-  readonly kind: ProtocolKind;
-};
+// [extracted to Node module — was Resource.ts:1764-1845]
 
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
  *  don't collide in one context. @internal */
@@ -1844,9 +1830,79 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
    *  as (the same key its peers are keyed by). Provided by {@link peersLayer} / {@link selfNodeLayer},
    *  read via {@link selfNode}. */
   readonly [selfNodeSym]: Context.Key<SelfNodeId<Self>, string>;
-  /** The fleet — the tag's `distributed` set, if declared (via {@link distributed}); else `undefined`. */
+  /** The Node set (C1), if declared via {@link nodes} / `{ node }` / {@link distributed}; else `undefined`. */
   readonly [nodesSym]?: ReadonlyArray<AnyNode>;
+  /** Set when the tag was piped through {@link identity} — layer/serve claim at Lookup first. */
+  readonly [identitySym]?: true;
 }
+
+/**
+ * Identity-claiming resources need a dialable Node — Tag-bound (`nodes` / `{ node }`) and/or
+ * the {@link ListenNode} from {@link listen} (including minted address-less Nodes).
+ *
+ * @public
+ */
+export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired")<{
+  readonly tag: string;
+}> {}
+
+/**
+ * Identity-stamped Tags may carry at most one Node (S1). Multi-node fleets use ordinary Tags +
+ * {@link distributed} / peers — not identity.
+ *
+ * @public
+ */
+export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
+  readonly tag: string;
+  readonly nodeCount: number;
+}> {}
+
+// [extracted to Node module — was Resource.ts:1936-1951]
+
+/**
+ * {@link lookupClient} could not resolve **exactly one** dial target for the Tag
+ * (`missing` = none; `ambiguous` = more than one directory row and no {@link LookupClientOptions.pick}).
+ *
+ * @public
+ */
+export class LookupClientError extends Data.TaggedError("LookupClientError")<{
+  readonly tag: string;
+  readonly reason: "missing" | "ambiguous";
+  readonly count: number;
+}> {}
+
+/**
+ * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4).
+ * `"first"` = `rows[0]`; custom sync fn returns the dial target.
+ *
+ * @public
+ */
+export type LookupClientPick =
+  | "first"
+  | ((
+      rows: ReadonlyArray<LookupDirectoryEntry>,
+    ) => LookupDirectoryEntry);
+
+/**
+ * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous.
+ *
+ * @public
+ */
+export type LookupClientOptions = {
+  readonly pick?: LookupClientPick;
+};
+
+// [extracted to Node module — was Resource.ts:1985-1994]
+
+/** Throw when an identity Tag would carry more than one fleet Node. @internal */
+const assertIdentityNodeCount = (
+  tag: { readonly key: string },
+  nodes: ReadonlyArray<AnyNode>,
+): void => {
+  if (nodes.length > 1) {
+    throw new IdentityMultiNode({ tag: tag.key, nodeCount: nodes.length });
+  }
+};
 
 /** A resource tag identifier — {@link Context.Service} tags carry `Service` and `Spec`. @internal */
 type TagIdentifier = { readonly Service: unknown };
@@ -2053,7 +2109,8 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
  *  shape) — never `ResourceTag | NodeBoundTag`, which reopens TS2589 under stock tsc.
  *
  *  @internal */
-type PipeableTag = { readonly [specSym]: FlatSpec };
+/** @internal */
+export type PipeableTag = { readonly [specSym]: FlatSpec };
 
 /**
  * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and `NodeStatus`
@@ -2342,6 +2399,10 @@ const buildInstanceTag = <Self, S extends Spec>(
     [groupSym]: group,
     [localCapSym]: localCap,
     [nodeSym]: node,
+    // C1: `{ node: X }` ≡ set-of-one — keep nodeSym + nodesSym in sync at construction.
+    ...(node !== undefined
+      ? { [nodesSym]: [node as AnyNode] as ReadonlyArray<AnyNode> }
+      : {}),
     // Every tag carries a kind: the typed factories pass their own; a bare tag defaults to `kind`.
     [kindSym]: kindOverride ?? kind,
     [readinessSym]: undefined,
@@ -2374,12 +2435,24 @@ const makeTag = <Self>() => {
   // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
   // inferring call; `options.node` rides the inferring call so its identity `HSelf` infers from the
   // argument, and the node-bearing overload narrows `[nodeSym]` to a concrete `NodeKey` — which is
-  // how `Resource.client` discriminates the node-aware path.
+  // how `Resource.client` discriminates the node-aware path. An {@link AddressedNode} narrows
+  // further so `client(Tag)` can auto-wire connect.
   function build<const S extends Spec>(
     key: string,
     spec: S,
     options?: { readonly description?: string; readonly kind?: string },
   ): ResourceTag<Self, S>;
+  function build<const S extends Spec, HSelf>(
+    key: string,
+    spec: S,
+    options: {
+      readonly description?: string;
+      readonly kind?: string;
+      readonly node: AddressedNode<HSelf>;
+    },
+  ): NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  };
   function build<const S extends Spec, HSelf>(
     key: string,
     spec: S,
@@ -2464,6 +2537,24 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  *
  * @public
  */
+function tagFor<const S extends Spec, HSelf>(
+  groupId: string,
+  spec: S,
+  options: {
+    readonly description?: string;
+    readonly kind?: string;
+    readonly node: AddressedNode<HSelf>;
+  },
+): {
+  <Self>(key: string): NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  };
+  readonly groupId: string;
+  readonly description: string | undefined;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+};
 function tagFor<const S extends Spec, HSelf>(
   groupId: string,
   spec: S,
@@ -2587,6 +2678,121 @@ const buildLocalContext = <Self>(
     ).pipe(Context.add(cap, { granted: true }));
   });
 
+/** Dialable self for an identity claim — kind + url or path. @internal */
+const isDialableSelf = (
+  self: AnyNode,
+): self is AnyNode & { readonly kind: ProtocolKind; readonly key: string } => {
+  if (self.kind === undefined || typeof self.key !== "string") {
+    return false;
+  }
+  if (self.kind === "IpcSocket") {
+    return self.path !== undefined;
+  }
+  return self.url !== undefined;
+};
+
+/**
+ * Client layer dialing a Lookup winner's {@link Endpoint} — used when identity claim loses.
+ * @internal
+ */
+const clientLayerForEndpoint = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  endpoint: {
+    readonly nodeKey: string;
+    readonly kind: ProtocolKind;
+    readonly url?: string;
+    readonly path?: string;
+  },
+): Layer.Layer<Self> => {
+  const target =
+    endpoint.kind === "IpcSocket"
+      ? { path: endpoint.path as string, kind: "IpcSocket" as const }
+      : { url: endpoint.url as string, kind: endpoint.kind };
+  const node = makeNode(endpoint.nodeKey, target);
+  // Dialable makeNode → AddressedNode; clientLayer auto-wires connect.
+  return clientLayer(tag, node) as Layer.Layer<Self>;
+};
+
+/**
+ * Claim `tag.key` at Lookup — won → `onWon` layer; lost → client of `original`.
+ * Endpoint from {@link ListenNode} (listen) or the Tag's bound Node — no `{ self }` bag.
+ * Fail-closed: requires {@link LookupIdentity}; missing/unaddressed → {@link IdentitySelfRequired}.
+ * @internal
+ */
+const identityClaimLayer = <Self, S extends Spec, A, E, R>(
+  tag: ResourceTag<Self, S>,
+  onWon: Layer.Layer<A, E, R>,
+): Layer.Layer<A | Self, E | IdentitySelfRequired, R | LookupIdentity> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const listenOpt = yield* Effect.serviceOption(ListenNode);
+      const self = Option.isSome(listenOpt)
+        ? listenOpt.value
+        : (nodeOf(tag) as AnyNode | undefined);
+      if (self === undefined || !isDialableSelf(self)) {
+        return yield* new IdentitySelfRequired({ tag: tag.key });
+      }
+      const Lookup = yield* Effect.promise(() => import("./Lookup"));
+      const identity = yield* Lookup.Identity;
+      const outcome = yield* identity
+        .claim(
+          new Lookup.ClaimRequest({
+            key: tag.key,
+            nodeKey: self.key,
+            kind: self.kind,
+            ...(self.url !== undefined ? { url: self.url } : {}),
+            ...(self.path !== undefined ? { path: self.path } : {}),
+          }),
+        )
+        .pipe(
+          Effect.map((endpoint) => ({ _tag: "Won" as const, endpoint })),
+          Effect.catchTag("DuplicateIdentity", (duplicate) =>
+            Effect.succeed({
+              _tag: "Lost" as const,
+              original: duplicate.original,
+            }),
+          ),
+        );
+      if (outcome._tag === "Won") {
+        return onWon;
+      }
+      return clientLayerForEndpoint(tag, outcome.original) as Layer.Layer<
+        A | Self,
+        E,
+        R
+      >;
+    }),
+  ) as Layer.Layer<A | Self, E | IdentitySelfRequired, R | LookupIdentity>;
+
+/** Plain local layer — no identity claim. @internal */
+const localLayerPlain = <Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> => {
+  // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
+  const build = Effect.flatMap(
+    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
+    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
+  );
+  return Layer.effectContext(build) as Layer.Layer<
+    Self | Local<Self>,
+    never,
+    Exclude<R, Scope.Scope>
+  >;
+};
+
+function localLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
+  impl: ImplOf<S>,
+): Layer.Layer<Self | Local<Self>, IdentitySelfRequired, LookupIdentity>;
+function localLayer<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
+  impl: Effect.Effect<ImplOf<S>, never, R>,
+): Layer.Layer<
+  Self | Local<Self>,
+  IdentitySelfRequired,
+  Exclude<R, Scope.Scope> | LookupIdentity
+>;
 function localLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S>,
@@ -2598,17 +2804,20 @@ function localLayer<Self, S extends Spec, R>(
 function localLayer<Self, S extends Spec, R>(
   tag: ResourceTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> {
-  // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
-  const build = Effect.flatMap(
-    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
-    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
-  );
-  return Layer.effectContext(build) as Layer.Layer<
-    Self | Local<Self>,
-    never,
-    Exclude<R, Scope.Scope>
-  >;
+): Layer.Layer<
+  Self | Local<Self>,
+  IdentitySelfRequired,
+  Exclude<R, Scope.Scope> | LookupIdentity
+> {
+  const plain = localLayerPlain(tag, impl);
+  if (!isIdentity(tag)) {
+    return plain as Layer.Layer<
+      Self | Local<Self>,
+      IdentitySelfRequired,
+      Exclude<R, Scope.Scope> | LookupIdentity
+    >;
+  }
+  return identityClaimLayer(tag, plain);
 }
 
 /**
@@ -2619,7 +2828,8 @@ function localLayer<Self, S extends Spec, R>(
  * @public
  */
 /** Invoke a wire impl member — spreads 2-tuple payloads when `callStyle` is `"pair"`. @internal */
-const invokeWireMethod = (
+/** @internal */
+export const invokeWireMethod = (
   member: unknown,
   method: AnyMethod,
   payload: unknown,
@@ -2687,8 +2897,10 @@ export class ServedResources extends Context.Service<
 >()("@nikscripts/effect-pm/Resource/ServedResources") {}
 
 /**
- * A fresh {@link ServedResources} registry. {@link httpServer} bundles one; provide this standalone only
- * to collect `serve` registrations without the http server.
+ * A fresh {@link ServedResources} registry. {@link httpServer} / {@link ipcServer} /
+ * {@link wsServer} each provide {@link Layer.fresh} of this so two servers in one
+ * process (e.g. Lookup + a Worker) do not share registrations via Layer memoization.
+ * Provide this standalone only to collect `serve` registrations without a server.
  *
  * @public
  */
@@ -2847,9 +3059,13 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  * Use the **`Effect` form** when the impl needs a capability to build (resolve `peers` / a pool once; the
  * members close over it) — `R` is discharged here, shared by both the grant and the handlers.
  *
+ * When `tag` is {@link identity}-stamped, claims at Lookup first (see {@link layer}): winner serves
+ * locally; loser becomes a client of the winner (no handlers). Pass dialable `options.self` when the
+ * tag has no bound {@link Node}.
+ *
  * @public
  */
-export const serve = <Self, S extends Spec, R = never>(
+const servePlain = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
   impl:
     | ImplOf<S>
@@ -2860,8 +3076,9 @@ export const serve = <Self, S extends Spec, R = never>(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
       if (isBuiltResource(built)) {
         const bundle = built as BuiltResource<S, R>;
+        // Plain local — identity claim (if any) already happened in {@link serve}.
         return Layer.merge(
-          localLayer(tag, grantLocal(tag, bundle)),
+          localLayerPlain(tag, grantLocal(tag, bundle)),
           serveRemote(tag, bundle as any) as unknown as Layer.Layer<
             HandlerContextOf<S>,
             never,
@@ -2871,7 +3088,7 @@ export const serve = <Self, S extends Spec, R = never>(
       }
       const granted = built as ImplOf<S>;
       return Layer.merge(
-        localLayer(tag, granted),
+        localLayerPlain(tag, granted),
         // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
         // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
         // `R` was discharged by the Effect form above, so the handlers are requirement-free.
@@ -2884,279 +3101,27 @@ export const serve = <Self, S extends Spec, R = never>(
     }),
   );
 
-/** Options for {@link httpServer}. @public */
-export interface HttpServerOptions {
-  readonly path?: HttpRouter.PathInput;
-  readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  readonly health?: { readonly path?: HttpRouter.PathInput };
-  /**
-   * Node log key for auto-mounted {@link NodeStatus} durable `logs.query`
-   * (`Resource.store(Node)` / `Node.logs`). When omitted, inferred from served tags'
-   * bound {@link Node} when all share one key.
-   */
-  readonly node?: string | { readonly key: string };
-}
-
-/** A server RPC-protocol builder — {@link serverProtocolHttp} or {@link serverProtocolWebsocket}. */
-type ServerProtocol = (
-  path: HttpRouter.PathInput,
-) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>;
-
-const httpServerBase = (
-  serverProtocol: ServerProtocol,
-  options?: HttpServerOptions,
-): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer> =>
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const registry = yield* ServedResources;
-      const entries = yield* registry.all;
-      if (entries.length === 0) {
-        return yield* Effect.die(
-          new Error(
-            "Resource.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
-          ),
-        );
-      }
-      const startedAt = yield* Clock.currentTimeMillis;
-      const readiness = Effect.forEach(entries, (entry) =>
-        Effect.map(entry.readiness, (result) => ({
-          key: entry.groupId,
-          kind: entry.kind,
-          ready: result.ready,
-          ...(result.detail !== undefined ? { detail: result.detail } : {}),
-        })),
-      );
-      const optionNodeKey =
-        options?.node === undefined
-          ? undefined
-          : typeof options.node === "string"
-            ? options.node
-            : options.node.key;
-      const boundKeys = [
-        ...new Set(
-          entries.flatMap((entry) =>
-            entry.nodeLogKey === undefined ? [] : [entry.nodeLogKey],
-          ),
-        ),
-      ];
-      const inferredNodeKey =
-        optionNodeKey ?? (boundKeys.length === 1 ? boundKeys[0] : undefined);
-      // Every node auto-serves the reserved node-status resource (status / logs / ping) alongside the
-      // registered resources, so a client can inspect any node without the author wiring it. Built here
-      // (not a registered `serve` layer) so it reports the user resources without counting itself.
-      const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./internal/nodeStatusResource"),
-      );
-      const nodeEntry = nodeStatusServeEntry({
-        startedAt,
-        resourceCount: entries.length,
-        readiness,
-        ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
-      });
-      const nodeTag = nodeEntry.tag;
-      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
-        ? nodeEntry.impl
-        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
-      const nodeFlat = flattenImpl(nodeImpl, nodeTag[specSym]);
-      const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
-      for (const [key, member] of Object.entries(nodeFlat)) {
-        nodeHandlers[wireTag(nodeTag.groupId, key)] = (payload) =>
-          invokeWireMethod(member, nodeTag[specSym][key] as AnyMethod, payload);
-      }
-      const merged = [...entries.map((entry) => entry.group), nodeTag[groupSym]].reduce(
-        (acc, group) => acc.merge(group),
-      );
-      // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
-      // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it — an
-      // http POST handler or a ws upgrade — on the same router (`HttpRouter.serve` below).
-      const rpcAppLayer = RpcServer.layer(merged).pipe(
-        Layer.provide(
-          nodeTag[groupSym].toLayer(
-            nodeHandlers as unknown as Parameters<
-              (typeof nodeTag)[typeof groupSym]["toLayer"]
-            >[0],
-          ),
-        ),
-        Layer.provide(serverProtocol(options?.path ?? "/rpc")),
-      );
-      const healthRoute = HttpRouter.add(
-        "GET",
-        options?.health?.path ?? "/health",
-        Effect.gen(function* () {
-          const ts = yield* Clock.currentTimeMillis;
-          const resources = yield* readiness;
-          const ok = resources.every((resource) => resource.ready);
-          return yield* HttpServerResponse.json({
-            status: ok ? "ok" : "degraded",
-            listening: true,
-            resources,
-            uptimeMillis: ts - startedAt,
-            ts,
-          }).pipe(
-            Effect.map((response) => HttpServerResponse.setStatus(response, ok ? 200 : 503)),
-            Effect.orDie,
-          );
-        }),
-      );
-      return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
-        Layer.provideMerge(options?.serialization ?? defaultSerialization),
-      );
-    }),
-  ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
-
-// Array form of `Layer.mergeAll` (which needs a non-empty *tuple*): fold the list into one layer. The
-// `httpServer` overload guarantees a non-empty list; untyped plumbing behind that typed overload.
-const mergeLayers = (
-  layers: ReadonlyArray<Layer.Layer<any, any, any>>,
-): Layer.Layer<any, any, any> =>
-  layers.reduce((acc, layer) => Layer.merge(acc, layer));
-
-/**
- * The shared http server for resources composed with {@link serve} — the multi-resource,
- * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
- * {@link ServedResources} registry, merges every registered group onto **one** `RpcServer` at `path`
- * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each
- * `serve` layer carries **its own** `Layer.provide`d dependency, resources needing different
- * implementations of the same tag stay isolated — no shared union-provide.
- *
- * Pass the `serve` layers as the first argument (recommended) — it bundles the `provideMerge` +
- * {@link servedResourcesLayer}, so you list resources and provide only the platform (and any shared
- * dependency):
- *
- * ```ts
- * const Node = Resource.httpServer([
- *   // homogeneous majority — one shared dependency, stated once
- *   Resource.provide(ImportHandlers.plain, [
- *     Resource.serve(SeasonMatches, seasonMatchesImpl),
- *     Resource.serve(LiveScorePoller, pollerImpl),
- *   ]),
- *   // outlier — private dependency, isolated on its own serve layer
- *   Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(ImportHandlers.hooked)),
- * ], { health: { path: "/health" } }).pipe(
- *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
- * );
- * ```
- *
- * Prefer this shape over rewriting around a retired bag API: one {@link httpServer}, mixed
- * shared + isolated deps, no second port.
- *
- * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
- * not pruned) + {@link servedResourcesLayer} yourself. Either way the handlers ride the context the
- * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
- * a silent runtime gap.
- *
- * @public
- */
-export function httpServer<Serve extends Layer.Layer<any, any, any>>(
-  serve: Serve,
-  options?: HttpServerOptions,
-): Layer.Layer<
-  Layer.Success<Serve>,
-  never,
-  Layer.Services<Serve> | HttpServer.HttpServer
->;
-export function httpServer(
-  options?: HttpServerOptions,
-): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
-export function httpServer<
-  Serves extends readonly [
-    Layer.Layer<any, any, any>,
-    ...ReadonlyArray<Layer.Layer<any, any, any>>,
-  ],
->(
-  serves: Serves,
-  options?: HttpServerOptions,
-): Layer.Layer<
-  Layer.Success<Serves[number]>,
-  never,
-  Layer.Services<Serves[number]> | HttpServer.HttpServer
->;
-export function httpServer(
-  servesOrOptions?:
-    | Layer.Layer<any, any, any>
-    | ReadonlyArray<Layer.Layer<any, any, any>>
-    | HttpServerOptions,
-  maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, never, unknown> {
-  return serverImpl(serverProtocolHttp, servesOrOptions, maybeOptions);
-}
-
-// Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
-// server RPC protocol. The serves form bundles the boilerplate: provideMerge the serve layers (kept,
-// not pruned) + the shared registry, so the caller lists resources and provides only the platform (+
-// any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
-function serverImpl(
-  serverProtocol: ServerProtocol,
-  servesOrOptions?:
-    | Layer.Layer<any, any, any>
-    | ReadonlyArray<Layer.Layer<any, any, any>>
-    | HttpServerOptions,
-  maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, never, unknown> {
-  const serves = Array.isArray(servesOrOptions)
-    ? servesOrOptions
-    : Layer.isLayer(servesOrOptions)
-      ? [servesOrOptions]
-      : undefined;
-  if (serves !== undefined) {
-    return httpServerBase(serverProtocol, maybeOptions).pipe(
-      Layer.provideMerge(mergeLayers(serves)),
-      Layer.provide(servedResourcesLayer),
-    ) as unknown as Layer.Layer<never, never, unknown>;
+export const serve = <Self, S extends Spec, R = never>(
+  tag: ResourceTag<Self, S>,
+  impl:
+    | ImplOf<S>
+    | BuiltResource<S, R>
+    | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
+  const plain = servePlain(tag, impl);
+  if (!isIdentity(tag)) {
+    return plain;
   }
-  return httpServerBase(serverProtocol, servesOrOptions as HttpServerOptions | undefined);
-}
+  // Identity path requires Lookup.Identity at runtime (fail-closed). Kept off the public
+  // `R` channel so plain `serve` stays TS2589-free (ResourceTag & identity brand blows up).
+  return identityClaimLayer(tag, plain) as Layer.Layer<
+    Self | Local<Self> | HandlerContextOf<S>,
+    never,
+    R
+  >;
+};
 
-/**
- * A **WebSocket** RPC server — the {@link httpServer} sibling for the browser. Everything a client
- * subscribes to (each resource's `status` + `metrics` + `logs`) rides **one multiplexed WebSocket per
- * client**, so a dashboard never trips the browser's ~6-connection-per-origin HTTP/1.1 cap that
- * starves streams over plain HTTP. Identical to {@link httpServer} in every other way — same serve
- * list, same options, same `/health` — it just speaks WebSocket instead of HTTP POST. Clients connect
- * with {@link socketClient} (or `Resource.layerProtocol(Resource.protocolWebsocket())`); a fleet whose
- * peers also serve over this should add `Resource.layerPeerProtocol(Resource.protocolWebsocket)`.
- *
- * ```ts
- * const Node = Resource.wsServer([Resource.serve(Jobs, jobsImpl)]).pipe(
- *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
- * );
- * ```
- *
- * @public
- */
-export function wsServer<Serve extends Layer.Layer<any, any, any>>(
-  serve: Serve,
-  options?: HttpServerOptions,
-): Layer.Layer<
-  Layer.Success<Serve>,
-  never,
-  Layer.Services<Serve> | HttpServer.HttpServer
->;
-export function wsServer(
-  options?: HttpServerOptions,
-): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
-export function wsServer<
-  Serves extends readonly [
-    Layer.Layer<any, any, any>,
-    ...ReadonlyArray<Layer.Layer<any, any, any>>,
-  ],
->(
-  serves: Serves,
-  options?: HttpServerOptions,
-): Layer.Layer<
-  Layer.Success<Serves[number]>,
-  never,
-  Layer.Services<Serves[number]> | HttpServer.HttpServer
->;
-export function wsServer(
-  servesOrOptions?:
-    | Layer.Layer<any, any, any>
-    | ReadonlyArray<Layer.Layer<any, any, any>>
-    | HttpServerOptions,
-  maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, never, unknown> {
-  return serverImpl(serverProtocolWebsocket, servesOrOptions, maybeOptions);
-}
+// [extracted to Node module — was Resource.ts:3193-3978]
 
 /**
  * Provide one dependency `Layer` to several {@link serve} layers at once — sugar for
@@ -3362,94 +3327,13 @@ export const forwardClient = <S extends Spec>(
   return service as unknown as WireServiceOf<S>;
 };
 
-/**
- * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
- * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service:
- *
- * ```ts
- * class EdgeNode extends Resource.Node<EdgeNode>("edge") {}                       // no address yet
- * class Worker extends Resource.Node<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "http"
- * class Mail extends Resource.Node<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "http"
- * class Live extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}    // kind "socket" (inferred from ws url)
- * class Push extends Resource.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // same-origin path, explicit kind
- * ```
- *
- * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
- * → `http://localhost:3001/rpc`), a full **url** (used as-is), or `{ url, kind }` for an explicit
- * endpoint. The node also carries its {@link ProtocolKind} `kind` — inferred `"socket"` from a
- * `ws(s)://` url, `"http"` from an http target, or set explicitly (needed for a same-origin `"/rpc"`
- * path that a browser resolves to ws). The node carries both so the topology is self-describing about
- * *where* AND *how*: ship only the tag and {@link Resource.connect}`(node)` derives the transport with
- * no protocol argument, {@link Resource.client} reads the node to resolve where to connect, and
- * {@link peersLayer} reaches the fleet.
- *
- * @public
- */
-const makeNode = <Self>(
-  name: string,
-  target?: number | string | { readonly url?: string; readonly kind?: ProtocolKind },
-) => {
-  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url (fails loudly on a
-  // bad string); an explicit `{ url }` is used verbatim.
-  const url =
-    target === undefined
-      ? undefined
-      : typeof target === "object"
-        ? target.url
-        : resolveHttpTarget(target);
-  // `kind` is the SSOT for *how* to reach the node: an explicit `{ kind }` wins; otherwise a `ws(s)://`
-  // url is a socket and any other resolved url is http. Left `undefined` only when the url is (a bare
-  // `Node("x")` with no address) — then a caller must supply the transport at `connect` explicitly.
-  const kind: ProtocolKind | undefined =
-    (typeof target === "object" ? target.kind : undefined) ??
-    (url === undefined
-      ? undefined
-      : url.startsWith("ws://") || url.startsWith("wss://")
-        ? "socket"
-        : "http");
-  const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
-    url,
-    kind,
-  });
-  return Object.assign(node, {
-    /**
-     * Node-wide durable log registration — same as {@link store}`(this node)`.
-     * Use on an app `Store.Service`: `Store.Service(...)(WnbaNode.logs, Process.store(Daily))`.
-     */
-    get logs() {
-      return store(node);
-    },
-  });
-};
-
-/**
- * Wire a {@link Node}'s transport, **once**, from any RPC client `Protocol` layer — the
- * transport-agnostic primitive (use {@link httpClient} for the batteries-included http case).
- * Re-keys that `Protocol` under the node, so {@link Resource.client} resolves it for every tag
- * bound to this node; provide one `Resource.connect(...)` per node an app talks to.
- *
- * ```ts
- * const EdgeLive = Resource.connect(EdgeNode, RpcClient.layerProtocolWebsocket({ url }).pipe(
- *   Layer.provide(RpcSerialization.layerNdjson),
- *   Layer.provide(socketLayer),
- * ));
- * ```
- *
- * @public
- */
-const connectLayer = <Self, RIn>(
-  node: NodeKey<Self>,
-  protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
-): Layer.Layer<Self, never, RIn> =>
-  // wrap the ambient protocol into the node's value shape (`{ protocol }`) — see NodeProtocol.
-  Layer.effect(node, Effect.map(RpcClient.Protocol, (protocol) => ({ protocol }))).pipe(
-    Layer.provide(protocol),
-  );
+// [extracted to Node module — was Resource.ts:4183-4261]
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
  * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
  * client and server can't silently disagree on the codec. */
-const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
+/** @internal */
+export const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
 
 const httpClientInBrowserMessage =
@@ -3579,14 +3463,16 @@ export const protocolWebsocket = (
 
 /** The **http** server `Protocol` (RPC over HTTP POST) mounted on the server router at `path` — what
  *  {@link httpServer} provides internally. `RpcSerialization` is supplied by the server. */
-const serverProtocolHttp = (
+/** @internal */
+export const serverProtocolHttp = (
   path: HttpRouter.PathInput = "/rpc",
 ): Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter> =>
   RpcServer.layerProtocolHttp({ path });
 
 /** The **WebSocket** server `Protocol` (RPC over a ws upgrade at `path`) — what {@link wsServer}
  *  provides internally so a browser rides one multiplexed connection per client. */
-const serverProtocolWebsocket = (
+/** @internal */
+export const serverProtocolWebsocket = (
   path: HttpRouter.PathInput = "/rpc",
 ): Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter> =>
   RpcServer.layerProtocolWebsocket({ path });
@@ -3623,127 +3509,56 @@ const socketClient = <Self>(
     protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
   );
 
-/** Deriving a transport from a node that never declared one — a bare `Resource.Node("x")` has no
- *  `url`/`kind`, so `connect(node)` can't know how to reach it. Fails loudly instead of guessing. @internal */
-class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
-  readonly node: string;
-}> {
-  override get message() {
-    return (
-      `Node "${this.node}" declares no url/kind, so a transport can't be derived from it. ` +
-      `Give the node an address (e.g. Resource.Node("${this.node}", 3001) or { url, kind }), ` +
-      `or pass a protocol explicitly: Resource.connect(node, protocol).`
-    );
-  }
-}
+/**
+ * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
+ * (`NodeSocket.layerNet({ path })`). Same-machine counterpart to {@link protocolHttp} /
+ * {@link protocolWebsocket}. @public
+ */
+export const protocolIpc = (
+  path: string,
+  serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
+): Layer.Layer<RpcClient.Protocol> =>
+  Layer.unwrap(
+    Effect.promise(() => import("@effect/platform-node")).pipe(
+      Effect.map(({ NodeSocket }) =>
+        RpcClient.layerProtocolSocket().pipe(
+          Layer.provide(serialization),
+          Layer.provide(NodeSocket.layerNet({ path })),
+          Layer.orDie,
+        ),
+      ),
+    ),
+  );
 
-/** Build the client `Protocol` a node declares — {@link protocolHttp} or {@link protocolWebsocket},
- *  keyed off its {@link ProtocolKind}. The topology (not the caller) decides the transport, so the
- *  http↔socket mismatch can't be introduced here. Fails loudly on an unaddressed node. */
-const protocolForNode = (node: AnyNode): Layer.Layer<RpcClient.Protocol> => {
-  if (node.url === undefined || node.kind === undefined) {
-    throw new UnaddressedNode({ node: node.key });
+// Shared dial helpers (Node.connect + client auto-connect) use these builders.
+bindNodeProtocolBuilders({
+  protocolHttp,
+  protocolWebsocket,
+  protocolIpc,
+});
+
+// [extracted to Node module — was Resource.ts:4539-4649]
+
+/**
+ * Per-node ipc shortcut — {@link connect} + {@link protocolIpc} (same-machine Unix socket).
+ *
+ * @public
+ */
+const ipcClient = <Self>(
+  node: NodeKey<Self> & { readonly path?: string },
+  options?: {
+    readonly path?: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self, UnaddressedNode> => {
+  const sock = options?.path ?? node.path;
+  if (sock === undefined) {
+    return unaddressedLayer(node.key);
   }
-  return node.kind === "socket" ? protocolWebsocket(node.url) : protocolHttp(node.url);
+  return connectLayer(node, protocolIpc(sock, options?.serialization));
 };
 
-/**
- * Wire a {@link Node}'s transport — the transport-agnostic primitive, **dual**:
- *
- * ```ts
- * MyNode.pipe(Resource.connect)              // derive the transport from the node's declared kind + url
- * MyNode.pipe(Resource.connect(protocol))    // data-last: an explicit RpcClient.Protocol
- * Resource.connect(MyNode)                    // data-first, derived (needs an AddressedNode)
- * Resource.connect(MyNode, protocol)          // data-first, explicit
- * ```
- *
- * The derived forms read the node's {@link ProtocolKind} — so a node that declares `kind: "socket"`
- * dials a socket and one that declares `"http"` dials http; picking the wrong transport isn't
- * expressible. `MyNode.pipe(Resource.connect)` only type-checks for an {@link AddressedNode} (a node
- * with both `url` and `kind`); a bare node is a compile error pointing you to declare its address or
- * pass a protocol.
- *
- * @public
- */
-export const connect: {
-  // Order matters: TS selects the LAST matching overload when the function is used as a bare value
-  // (`node.pipe(connect)`), so the node→Layer form is last to make the pipe form resolve to it; direct
-  // calls still match top-down by arg count / shape.
-  <Self, RIn>(
-    node: NodeKey<Self>,
-    protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
-  ): Layer.Layer<Self, never, RIn>;
-  <RIn>(
-    protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
-  ): <Self>(node: NodeKey<Self>) => Layer.Layer<Self, never, RIn>;
-  <Self>(
-    node: NodeKey<Self> & { readonly url?: string; readonly kind?: ProtocolKind },
-  ): Layer.Layer<Self>;
-} = Fn.dual(
-  // data-first when there are two args, or when the single arg is a node (not a protocol layer).
-  (args: IArguments) => args.length >= 2 || !Layer.isLayer(args[0]),
-  (
-    node: AnyNode,
-    protocol?: Layer.Layer<RpcClient.Protocol, never, unknown>,
-  ): Layer.Layer<unknown, never, unknown> =>
-    connectLayer(node, protocol ?? protocolForNode(node)),
-);
-
-/**
- * Wire a node over **http** — Effect's `layerProtocolHttp` transport, {@link connect} pinned to
- * `kind: "http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
- * `MyNode.pipe(Resource.connectHttp(url))` overrides it.
- *
- * @public
- */
-export const connectHttp: {
-  // data-last first, node form last — so the bare pipe (`node.pipe(connectHttp)`) resolves to the node
-  // overload (TS picks the last for a bare value); `connectHttp(url)` still matches the string overload.
-  (url: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
-  <Self>(node: NodeKey<Self> & { readonly url?: string }): Layer.Layer<Self>;
-} = Fn.dual(
-  (args: IArguments) => typeof args[0] !== "string",
-  (
-    node: NodeKey<unknown> & { readonly url?: string },
-    url?: string,
-  ): Layer.Layer<unknown> => connectLayer(node, protocolHttp(url ?? node.url ?? "/rpc")),
-);
-
-/**
- * Wire a node over a **socket** — Effect's `layerProtocolSocket` transport (a WebSocket in the
- * browser), {@link connect} pinned to `kind: "socket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
- * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Resource.connectSocket(url))` overrides it.
- *
- * @public
- */
-export const connectSocket: {
-  // data-last first, node form last — see connectHttp.
-  (url: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
-  <Self>(node: NodeKey<Self> & { readonly url?: string }): Layer.Layer<Self>;
-} = Fn.dual(
-  (args: IArguments) => typeof args[0] !== "string",
-  (
-    node: NodeKey<unknown> & { readonly url?: string },
-    url?: string,
-  ): Layer.Layer<unknown> => connectLayer(node, protocolWebsocket(url ?? node.url ?? "/rpc")),
-);
-
-/**
- * A remote {@link Node} that didn't answer at its declared address — down, wrong port/url, or (for a
- * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
- * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.
- *
- * @public
- */
-export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
-  readonly node: string;
-  readonly url: string;
-  readonly cause: unknown;
-}> {
-  override get message() {
-    return `Node "${this.node}" did not respond at ${this.url} — is it running, and are the url and kind right?`;
-  }
-}
+// [extracted to Node module — was Resource.ts:4669-4685]
 
 // Reachability probes (transport-native, one bounded connection). Socket: reachable if the ws stays
 // open past a short window (`run` errors fast if it can't connect). Http: reachable if the url answers
@@ -3788,39 +3603,58 @@ const probeHttpReachable = (url: string, timeout: Duration.Input) =>
  * @public
  */
 export const verifyConnection = (
-  node: NodeKey<unknown> & { readonly url?: string; readonly kind?: ProtocolKind },
-  options?: { readonly timeout?: Duration.Input; readonly url?: string },
-): Effect.Effect<void, NodeUnreachable> => {
+  node: NodeKey<unknown> & {
+    readonly url?: string;
+    readonly path?: string;
+    readonly kind?: ProtocolKind;
+  },
+  options?: { readonly timeout?: Duration.Input; readonly url?: string; readonly path?: string },
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
+  const effectiveUrl = options?.url ?? node.url;
+  const kind: ProtocolKind | undefined =
+    node.kind ??
+    (options?.path !== undefined || node.path !== undefined
+      ? "IpcSocket"
+      : effectiveUrl !== undefined
+        ? effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
+          ? "WebSocket"
+          : "Http"
+        : undefined);
+  if (kind === undefined) {
+    return Effect.fail(new UnaddressedNode({ node: node.key }));
+  }
+  if (kind === "IpcSocket") {
+    const path = options?.path ?? node.path;
+    if (path === undefined) {
+      return Effect.fail(new UnaddressedNode({ node: node.key }));
+    }
+    const timeout = options?.timeout ?? "3 seconds";
+    const window = Duration.millis(Math.min(Duration.toMillis(timeout), 500));
+    return Effect.gen(function* () {
+      const { NodeSocket } = yield* Effect.promise(() => import("@effect/platform-node"));
+      const socket = yield* NodeSocket.makeNet({ path });
+      yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
+    }).pipe(
+      Effect.scoped,
+      Effect.mapError(
+        (cause: unknown) =>
+          new NodeUnreachable({ node: node.key, url: path, cause }),
+      ),
+    );
+  }
   const url = options?.url ?? node.url;
   if (url === undefined) {
-    return Effect.die(new UnaddressedNode({ node: node.key }));
+    return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
-  const kind: ProtocolKind =
-    node.kind ?? (url.startsWith("ws://") || url.startsWith("wss://") ? "socket" : "http");
   const timeout = options?.timeout ?? "3 seconds";
   const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
-  // map per-branch (not on the ternary union) so both branches unify to `Effect<void, NodeUnreachable>`.
-  return kind === "socket"
+  return kind === "WebSocket"
     ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
     : probeHttpReachable(url, timeout).pipe(fail);
 };
 
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
-class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
-  readonly target: string;
-}> {}
-
-/**
- * Resolve a {@link clientHttp} target to an RPC url. A port (`3009` or `":3009"`) points at
- * `http://localhost:3009/rpc`; a full `http(s)://…` url is used as-is; anything else fails loudly.
- * @internal
- */
-const resolveHttpTarget = (target: number | string): string => {
-  if (typeof target === "number") return `http://localhost:${target}/rpc`;
-  if (/^:\d+$/.test(target)) return `http://localhost${target}/rpc`;
-  if (/^https?:\/\//.test(target)) return target;
-  throw new InvalidHttpTarget({ target });
-};
+// [extracted to Node module — was Resource.ts:4780-4795]
 
 /**
  * The single-resource client mirror of {@link httpServer}. Wire a served resource `tag` to a remote
@@ -3828,7 +3662,8 @@ const resolveHttpTarget = (target: number | string): string => {
  * batteries-included transport (Fetch + ndjson serialization), bundled.
  *
  * The `target` is a **port** (`3009` or `":3009"` → `http://localhost:3009/rpc`) for a runtime on the
- * same machine, or a full **url** for one across the network:
+ * same machine, or a full **url** for one across the network. A bad target fails the Layer with
+ * {@link InvalidHttpTarget} (not a sync throw):
  *
  * ```ts
  * Effect.provide(program, Resource.clientHttp(Emails, 3001));                       // same machine
@@ -3837,63 +3672,375 @@ const resolveHttpTarget = (target: number | string): string => {
  *
  * @public
  */
-export const clientHttp = <Self, S extends Spec>(
+export function clientHttp<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  target: number | `:${number}` | `http://${string}` | `https://${string}`,
+  options?: {
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self>;
+export function clientHttp<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   target: number | string,
   options?: {
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self> =>
-  clientLayer(tag).pipe(
-    Layer.provide(protocolHttp(resolveHttpTarget(target), options?.serialization)),
+): Layer.Layer<Self, InvalidHttpTarget>;
+export function clientHttp<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  target: number | string,
+  options?: {
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self, InvalidHttpTarget> {
+  const resolved = resolveHttpTarget(target);
+  if (Result.isFailure(resolved)) {
+    return invalidHttpTargetLayer(resolved.failure);
+  }
+  return clientLayer(tag).pipe(
+    Layer.provide(protocolHttp(resolved.success, options?.serialization)),
   );
+}
 
 // ── multi-node: the fleet + peer clients ──
 
 /**
- * Declare a resource's **fleet** — the nodes it's served on — piped onto the tag (like
- * {@link withReadiness}). Variadic; each {@link Node} carries its own url (decision 2), so the tag is
- * self-describing. Read by {@link peersLayer} to reach the other nodes.
+ * Sole-node bind stamped by {@link nodes}`([n])` / {@link andNode}`(n)` from an empty set —
+ * enough for {@link client}`(Tag)` to see an {@link AddressedNode} and auto-connect.
+ *
+ * @internal
+ */
+type SoleNodeBind<T, N> = T & {
+  readonly [nodeSym]: N;
+  readonly [nodesSym]: readonly [N];
+};
+
+/**
+ * {@link andNode} type result: sole-bind only from an empty/unbound tag. Appending onto a
+ * non-empty set or a narrowed {@link nodeSym} keeps `T` (does **not** claim a fresh sole
+ * bind). Prefer {@link nodes}`([x])` to overwrite when you need a typed sole bind again.
+ *
+ * @internal
+ */
+type AndNodeResult<T, N> = T extends {
+  readonly [nodesSym]: readonly [AnyNode, ...ReadonlyArray<AnyNode>];
+}
+  ? T
+  : T extends { readonly [nodeSym]: NodeKey<any> }
+    ? T
+    : SoleNodeBind<T, N>;
+
+/**
+ * Stamp a Tag's **Node set** (C1) — overwrites. Size **1** also syncs {@link nodeSym} so
+ * {@link client}`(Tag)` works; size ≠ 1 clears `nodeSym` (use `client(Tag, node)`). Identity Tags
+ * may only carry ≤ 1 Node ({@link IdentityMultiNode}). Empty `nodes([])` is discoverable
+ * membership (same as bare {@link distributed}); {@link peersLayer} reads Lookup directory.
+ *
+ * A **size-1 tuple** of an {@link AddressedNode} narrows like `{ node: X }` on the Tag ctor —
+ * `client(Tag)` is fully wired. {@link andNode}`(X)` from an empty set is the same bind.
  *
  * ```ts
- * class Database extends Resource.Tag<Database>()("app/Database", spec).pipe(
- *   Resource.distributed(NwslNode, EbwslNode, WnbaNode),
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
+ *   Resource.nodes([WorkerA]), // or Resource.andNode(WorkerA)
+ * ) {}
+ * class Pool extends Resource.Tag<Pool>()("app/Pool", spec).pipe(
+ *   Resource.nodes([A, B, C]),
  * ) {}
  * ```
  *
  * @public
  */
-export const distributed: {
-  // data-last (pipe): mirrors `withReadiness` — the data-first overloads (which infer `Self`/`S` and
-  // return the *specific* tag) are what let a class `extends … .pipe(distributed(...))` resolve without
-  // recursing on its own type, so `distributed` is `Fn.dual` too (not a bare curry).
+export const nodes: {
+  // data-last — addressed sole node (before bare NodeKey; AddressedNode ⊆ NodeKey)
+  <HSelf>(
+    nodeSet: readonly [AddressedNode<HSelf>],
+  ): <T extends PipeableTag>(tag: T) => SoleNodeBind<T, AddressedNode<HSelf>>;
+  <HSelf>(
+    nodeSet: readonly [NodeKey<HSelf>],
+  ): <T extends PipeableTag>(tag: T) => SoleNodeBind<T, NodeKey<HSelf>>;
   <T extends PipeableTag>(
-    nodes: ReadonlyArray<AnyNode>,
+    nodeSet: ReadonlyArray<AnyNode>,
   ): (tag: T) => T;
+  // data-first
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    nodeSet: readonly [AddressedNode<HSelf>],
+  ): SoleNodeBind<
+    NodeBoundTag<Self, S, HSelf>,
+    AddressedNode<HSelf>
+  >;
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    nodeSet: readonly [NodeKey<HSelf>],
+  ): SoleNodeBind<NodeBoundTag<Self, S, HSelf>, NodeKey<HSelf>>;
   <Self, S extends Spec, HSelf>(
     tag: NodeBoundTag<Self, S, HSelf>,
-    nodes: ReadonlyArray<AnyNode>,
+    nodeSet: ReadonlyArray<AnyNode>,
   ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
     tag: ResourceTag<Self, S>,
-    nodes: ReadonlyArray<AnyNode>,
+    nodeSet: ReadonlyArray<AnyNode>,
   ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any, any>>(tag: T, nodes: ReadonlyArray<AnyNode>): T =>
-    Object.assign(tag, { [nodesSym]: nodes }),
+  <T extends ResourceTag<any, any, any>>(
+    tag: T,
+    nodeSet: ReadonlyArray<AnyNode>,
+  ): T => {
+    if (isIdentity(tag)) {
+      assertIdentityNodeCount(tag, nodeSet);
+    }
+    // Size 1 → client(Tag); otherwise nodeless for client (explicit node / ambient Protocol).
+    const node =
+      nodeSet.length === 1 ? (nodeSet[0] as NodeKey<unknown>) : undefined;
+    return Object.assign(tag, {
+      [nodesSym]: nodeSet,
+      [nodeSym]: node,
+    });
+  },
 );
 
 /**
- * Read a tag's {@link distributed} fleet — the nodes it was declared on, or `[]` when undeclared.
- * Factories that hash-partition across the pack use this instead of reaching through private symbols.
+ * Append one {@link Node} to a Tag's set (C1). From an **empty** set this is
+ * {@link nodes}`([node])` — including the size-1 type bind for {@link client}`(Tag)`.
+ * Identity Tags refuse a second Node ({@link IdentityMultiNode}).
+ *
+ * ```ts
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
+ *   Resource.andNode(Worker), // ≡ nodes([Worker]) when starting empty
+ * ) {}
+ * class PoolPlus extends PoolBase.pipe(Resource.andNode(StatsNode)) {}
+ * ```
+ *
+ * Type narrowing to a sole bind is **only** claimed when the input has no non-empty
+ * Node set. After a populated set, overwrite with {@link nodes}`([x])` if you need a
+ * fresh typed sole bind for {@link client}`(Tag)`.
+ *
+ * @public
+ */
+export const andNode: {
+  // data-last — addressed first (AddressedNode ⊆ NodeKey)
+  <HSelf>(
+    node: AddressedNode<HSelf>,
+  ): <T extends PipeableTag>(
+    tag: T,
+  ) => AndNodeResult<T, AddressedNode<HSelf>>;
+  <HSelf>(
+    node: NodeKey<HSelf>,
+  ): <T extends PipeableTag>(tag: T) => AndNodeResult<T, NodeKey<HSelf>>;
+  <T extends PipeableTag>(node: AnyNode): (tag: T) => T;
+  // data-first
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    node: AddressedNode<HSelf>,
+  ): AndNodeResult<
+    ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    AddressedNode<HSelf>
+  >;
+  <Self, S extends Spec, HSelf>(
+    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    node: NodeKey<HSelf>,
+  ): AndNodeResult<
+    ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    NodeKey<HSelf>
+  >;
+  <Self, S extends Spec, HSelf>(
+    tag: NodeBoundTag<Self, S, HSelf>,
+    node: AnyNode,
+  ): NodeBoundTag<Self, S, HSelf>;
+  <Self, S extends Spec>(
+    tag: ResourceTag<Self, S>,
+    node: AnyNode,
+  ): ResourceTag<Self, S>;
+} = Fn.dual(
+  2,
+  <T extends ResourceTag<any, any, any>>(tag: T, node: AnyNode): T => {
+    const current = tag[nodesSym] ?? [];
+    return nodes(tag, [...current, node]) as T;
+  },
+);
+
+/**
+ * Read a Tag's Node set (C1), or `[]` when undeclared.
+ *
+ * @public
+ */
+export const nodesOf = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
+
+/**
+ * Stamp a **discoverable** empty Node set (D3) — `.pipe(Resource.distributed)` ≡
+ * {@link nodes}`([])`. {@link peersLayer} then reads Lookup `Directory.nodesServing`.
+ *
+ * For a **fixed** fleet list, use {@link nodes}`([A, B])` (not this pipe). Identity-shaped
+ * like {@link identity} so `class extends Tag(…).pipe(Resource.distributed)` type-checks.
+ *
+ * @public
+ */
+export const distributed = <T extends PipeableTag>(tag: T): T =>
+  nodes(tag as unknown as ResourceTag<any, any, any>, []) as unknown as T;
+
+/**
+ * Alias of {@link nodesOf}.
  *
  * @public
  * @since 1.0.0
  */
-export const distributedOf = <Self, S extends Spec>(
+export const distributedOf = nodesOf;
+
+/**
+ * Mark a Tag as **identity-claiming** (S1): {@link layer} / {@link serve} claim the resource key at
+ * Lookup first — winner runs the local impl; loser becomes a client of the winner's endpoint.
+ * Requires {@link LookupIdentity} in the layer graph (fail-closed if Lookup is down).
+ *
+ * Pipe onto any Resource / Process / Queue tag (same shape as {@link withReadiness}):
+ *
+ * ```ts
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(Resource.identity) {}
+ *
+ * // bind a Node on the Tag (or listen with ListenNode) — Lookup decides winner/loser:
+ * class Mail extends Resource.Tag<Mail>()("app/Mail", spec, { node: ThisNode }).pipe(
+ *   Resource.identity,
+ * ) {}
+ * Resource.serve(Mail, impl).pipe(Layer.provide(Lookup.client(lookupNode)))
+ * ```
+ *
+ * @public
+ */
+export const identity = <T extends PipeableTag>(
+  tag: T,
+): T & { readonly [identitySym]: true } => {
+  // S1: refuse identity on a Tag that already carries a multi-node fleet.
+  if (
+    (typeof tag === "object" || typeof tag === "function") &&
+    tag !== null &&
+    "key" in tag
+  ) {
+    const fleet =
+      (tag as { readonly [nodesSym]?: ReadonlyArray<AnyNode> })[nodesSym] ?? [];
+    assertIdentityNodeCount(tag as { readonly key: string }, fleet);
+  }
+  return Object.assign(tag, { [identitySym]: true as const });
+};
+
+/**
+ * True when `tag` was piped through {@link identity}.
+ *
+ * @public
+ */
+export const isIdentity = (tag: unknown): boolean =>
+  (typeof tag === "object" || typeof tag === "function") &&
+  tag !== null &&
+  identitySym in (tag as object) &&
+  (tag as { readonly [identitySym]?: true })[identitySym] === true;
+
+/**
+ * **Lookup-resolved nodeless client** (D7/D4) — you do **not** pass a {@link Node}; Lookup
+ * chooses the dial target. Contrast {@link client}`(Tag, node)`, where **you** name the Node.
+ *
+ * Resolution order: {@link Lookup.Identity}`resolve(tag.key)`, else
+ * {@link Lookup.Directory}`nodesServing(tag.key)`.
+ *
+ * **Fail-closed by default:** missing or more than one directory row →
+ * {@link LookupClientError}. Opt into soft pick with `{ pick: "first" }` or a sync
+ * `(rows) => DirectoryEntry` (D4). Identity resolve ignores `pick` (unique by key).
+ *
+ * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
+ * `lookupClient(Tag)` keeps that fail-closed contract.
+ *
+ * ```ts
+ * // Sole endpoint (identity winner or one directory row):
+ * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+ *
+ * // N>1 replicas — opt-in pick (still fail on 0):
+ * Resource.lookupClient(Mail, { pick: "first" })
+ *
+ * // You already know an addressed Node — client auto-connects:
+ * Resource.client(Mail, East)
+ * ```
+ *
+ * @public
+ */
+export const lookupClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
+  options?: LookupClientOptions,
+): Layer.Layer<
+  Self,
+  LookupClientError,
+  LookupIdentity | LookupDirectory
+> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const Lookup = yield* Effect.promise(() => import("./Lookup"));
+      const identity = yield* Lookup.Identity;
+      const resolved = yield* identity.resolve(
+        new Lookup.ResolveRequest({ key: tag.key }),
+      );
+      if (Option.isSome(resolved)) {
+        return clientLayerForEndpoint(tag, resolved.value);
+      }
+      const directory = yield* Lookup.Directory;
+      const entries = yield* directory.nodesServing(
+        new Lookup.NodesServingRequest({ resourceKey: tag.key }),
+      );
+      if (entries.length === 0) {
+        return yield* new LookupClientError({
+          tag: tag.key,
+          reason: "missing",
+          count: 0,
+        });
+      }
+      if (entries.length === 1) {
+        return clientLayerForEndpoint(tag, entries[0]!);
+      }
+      const pick = options?.pick;
+      if (pick === undefined) {
+        return yield* new LookupClientError({
+          tag: tag.key,
+          reason: "ambiguous",
+          count: entries.length,
+        });
+      }
+      const chosen = pick === "first" ? entries[0]! : pick(entries);
+      return clientLayerForEndpoint(tag, chosen);
+    }),
+  ) as Layer.Layer<
+    Self,
+    LookupClientError,
+    LookupIdentity | LookupDirectory
+  >;
+
+/**
+ * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} for same-machine demos.
+ *
+ * @public
+ */
+export const clientLocal = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  options?: LookupClientOptions & {
+    readonly lookupPath?: string;
+    readonly unlink?: boolean;
+  },
+): Layer.Layer<Self, LookupClientError> => {
+  const { lookupPath, unlink, ...clientOptions } = options ?? {};
+  return Layer.unwrap(
+    Effect.promise(() => import("./Lookup")).pipe(
+      Effect.map((Lookup) =>
+        lookupClient(tag, clientOptions).pipe(
+          Layer.provide(
+            Lookup.bootstrapDefaultLocal({
+              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+              ...(unlink !== undefined ? { unlink } : {}),
+            }),
+          ),
+        ),
+      ),
+    ),
+  ) as Layer.Layer<Self, LookupClientError>;
+};
+
+// [extracted to Node module — was Resource.ts:5053-5132]
 
 /**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
@@ -3968,6 +4115,23 @@ export const layerPeerProtocol = (
   builder: PeerProtocolBuilder,
 ): Layer.Layer<never> => Layer.succeedContext(Context.make(peerProtocolRef, builder));
 
+/** Build a lazy peer client from an already-chosen protocol layer. @internal */
+const buildPeerClientWithProtocol = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  protocol: Layer.Layer<RpcClient.Protocol>,
+): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    // build the chosen protocol into the enclosing scope, then feed its value to the client (a value
+    // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
+    const context = yield* Layer.build(protocol);
+    const client: unknown = yield* Effect.provideService(
+      RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
+      RpcClient.Protocol,
+      Context.get(context, RpcClient.Protocol),
+    );
+    return buildPeerService(tag, client);
+  });
+
 /** Build a lazy client to one peer node, dialing its `url` with the injected {@link peerProtocolRef}
  *  builder (http by default). Fully lazy — see {@link buildPeerService} (nothing connects until a fold
  *  reads a field). */
@@ -3976,17 +4140,38 @@ const buildPeerClient = <Self, S extends Spec>(
   url: string,
 ): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    // build the chosen protocol into the enclosing scope, then feed its value to the client (a value
-    // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
     const buildProtocol = yield* peerProtocolRef;
-    const context = yield* Layer.build(buildProtocol(url));
-    const client: unknown = yield* Effect.provideService(
-      RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
-      RpcClient.Protocol,
-      Context.get(context, RpcClient.Protocol),
-    );
-    return buildPeerService(tag, client);
+    return yield* buildPeerClientWithProtocol(tag, buildProtocol(url));
   });
+
+/**
+ * Dial a peer from a directory row or static Node address — kind-aware (D3).
+ * Prefer `url` when set (honors `options.url` overrides + {@link peerProtocolRef});
+ * WebSocket kind uses {@link protocolWebsocket}. Else IpcSocket/`path` → {@link protocolIpc}.
+ * @internal
+ */
+const buildPeerClientAt = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  target: {
+    readonly key: string;
+    readonly kind?: ProtocolKind;
+    readonly url?: string;
+    readonly path?: string;
+  },
+): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> => {
+  if (target.url !== undefined) {
+    if (target.kind === "WebSocket") {
+      return buildPeerClientWithProtocol(tag, protocolWebsocket(target.url));
+    }
+    return buildPeerClient(tag, target.url);
+  }
+  if (target.path !== undefined) {
+    return buildPeerClientWithProtocol(tag, protocolIpc(target.path));
+  }
+  return Effect.die(
+    new Error(`Resource.peersLayer: peer "${target.key}" has no dial target`),
+  );
+};
 
 /**
  * The resource's **peer clients** — the OTHER nodes' full services, keyed by node — for a resource's
@@ -4045,18 +4230,23 @@ export const selfNodeLayer = <Self, S extends Spec>(
 
 /**
  * Provide the {@link peers} capability on **this** node: connect every OTHER node in the tag's
- * {@link distributed} set and expose them as the peer clients. Also provides the {@link selfNode}
- * capability (this node's key) for `byNode`-style folds. The **opt-in mesh** — add it to a node's serve
- * only where the resource's own logic reaches across nodes. `self` is the node you are, so you're
- * excluded from your own peer set.
+ * {@link distributed} / {@link nodes} set and expose them as the peer clients. Also provides the
+ * {@link selfNode} capability (this node's key) for `byNode`-style folds. The **opt-in mesh** — add
+ * it to a node's serve only where the resource's own logic reaches across nodes. `self` is the node
+ * you are, so you're excluded from your own peer set.
  *
- * **Peer urls:** each {@link Node}'s own `url` is the default (the standard practice — the node carries
- * how to reach it). Pass `options.url` to **override** per node — an env-specific port, a tunnel, or a
- * value from Effect `Config` — falling back to `Node.url` when the resolver returns `undefined`. A node
- * with no url from either source is **skipped** (never a throw), so a partial mesh degrades cleanly. The
- * resolver's error and requirements flow to the layer (typed): a `Config`-backed resolver surfaces a
- * `ConfigError` as a typed layer-build failure — fail-fast on a misconfigured url — or return `undefined`
- * (e.g. via `Config.option`) to skip that peer instead.
+ * **Membership (D3):**
+ * - **Fixed** — non-empty `options.nodes` or stamped `nodes([…])` / `distributed([…])`.
+ * - **Directory** — stamped **empty** set (bare `.pipe(Resource.distributed)` / `nodes([])`): read
+ *   Lookup `Directory.nodesServing(tag.key)` at layer build. Soft empty map when Directory is absent.
+ * - **Undeclared** — no `nodesSym` and no `options.nodes` → empty static peers (not directory).
+ *
+ * **Peer addresses:** each {@link Node}'s own `url` / `path` is the default. Pass `options.url` to
+ * **override** the url per node — an env-specific port, a tunnel, or a value from Effect `Config` —
+ * falling back to `Node.url` when the resolver returns `undefined`. A node with no dialable address
+ * is **skipped** (never a throw), so a partial mesh degrades cleanly. IpcSocket peers dial via
+ * {@link protocolIpc} when only `path` is set. The resolver's error and requirements flow to the
+ * layer (typed).
  *
  * @public
  */
@@ -4065,7 +4255,8 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
   self: AnyNode,
   options?: {
     /** The fleet (including `self`) — supply it **at the use site** so a shared resource can be defined
-     *  node-free and exported; falls back to the tag's baked-in {@link distributed} set when omitted. */
+     *  node-free and exported; falls back to the tag's baked-in {@link distributed} set when omitted.
+     *  An explicit empty array is directory-backed (same as bare {@link distributed}). */
     readonly nodes?: ReadonlyArray<AnyNode>;
     readonly url?: (node: AnyNode) => Effect.Effect<string | undefined, EIn, RIn>;
   },
@@ -4074,25 +4265,90 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
     Layer.effect(
       tag[peersSym],
       Effect.gen(function* () {
-        // fleet from the use site (`options.nodes`) or the tag's baked set; drop self to get the peers.
-        const fleet = options?.nodes ?? tag[nodesSym] ?? [];
+        const stamped =
+          options?.nodes !== undefined ? options.nodes : tag[nodesSym];
+
+        // D3: stamped empty set → Lookup directory membership (soft if Directory absent).
+        if (stamped !== undefined && stamped.length === 0) {
+          const Lookup = yield* Effect.promise(() => import("./Lookup"));
+          const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+          if (Option.isNone(dirOpt)) {
+            return {} as Record<string, PeerServiceOf<S>>;
+          }
+          const rows = yield* dirOpt.value.nodesServing(
+            new Lookup.NodesServingRequest({ resourceKey: tag.key }),
+          );
+          type DialTarget = {
+            readonly key: string;
+            readonly kind: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+          };
+          const dialable: Array<DialTarget> = [];
+          for (const row of rows) {
+            if (row.nodeKey === self.key) continue;
+            if (row.kind === "IpcSocket" && row.path !== undefined) {
+              dialable.push({
+                key: row.nodeKey,
+                kind: row.kind,
+                path: row.path,
+              });
+              continue;
+            }
+            if (row.url !== undefined) {
+              dialable.push({
+                key: row.nodeKey,
+                kind: row.kind,
+                url: row.url,
+              });
+            }
+          }
+          const discovered = yield* Effect.forEach(dialable, (target) =>
+            Effect.map(
+              buildPeerClientAt(tag, target),
+              (client) => [target.key, client] as const,
+            ),
+          );
+          return Object.fromEntries(discovered) as unknown as Record<
+            string,
+            PeerServiceOf<S>
+          >;
+        }
+
+        // Fixed fleet (or undeclared → []); drop self to get the peers.
+        const fleet = stamped ?? [];
         const others = fleet.filter((node) => node.key !== self.key);
-        // the node's own url is the default; an optional resolver overrides it, falling back to the url.
-        const resolveUrl = (node: AnyNode): Effect.Effect<string | undefined, EIn, RIn> =>
+        const resolveUrl = (
+          node: AnyNode,
+        ): Effect.Effect<string | undefined, EIn, RIn> =>
           options?.url === undefined
             ? Effect.succeed(node.url)
             : Effect.map(options.url(node), (override) => override ?? node.url);
         const resolved = yield* Effect.forEach(others, (node) =>
-          Effect.map(resolveUrl(node), (url) => ({ key: node.key, url })),
+          Effect.map(resolveUrl(node), (url) => ({
+            key: node.key,
+            kind: node.kind,
+            url,
+            path: node.path,
+          })),
         );
         const entries = yield* Effect.forEach(
-          // a node with no url anywhere is skipped — a partial mesh, not a failure
+          // no dialable address → skip (partial mesh); ipc path counts when url absent
           resolved.filter(
-            (entry): entry is { readonly key: string; readonly url: string } =>
-              entry.url !== undefined,
+            (entry) =>
+              entry.url !== undefined ||
+              (entry.kind === "IpcSocket" && entry.path !== undefined),
           ),
-          ({ key, url }) =>
-            Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
+          (target) =>
+            Effect.map(
+              buildPeerClientAt(tag, {
+                key: target.key,
+                kind: target.kind,
+                ...(target.url !== undefined ? { url: target.url } : {}),
+                ...(target.path !== undefined ? { path: target.path } : {}),
+              }),
+              (client) => [target.key, client] as const,
+            ),
         );
         // Boundary: each peer client is a full `ServiceOf<S>` — a width-supertype of the leaf
         // `PeerServiceOf<S>` the capability exposes — but the mapped types don't reduce under a generic
@@ -4193,22 +4449,28 @@ const buildClientService = <Self, S extends Spec>(
  * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
  * matter where the resource actually runs.
  *
- * Three paths, by whether — and where — the tag names a {@link Node}:
- * - **node-bearing tag** — the transport is resolved from the tag's node; the layer's only
- *   requirement is that node (satisfied by {@link Resource.connect}). Ship just the tag.
- * - **nodeless tag, node at the client** — a multi-node resource is N instances (one per node), so
- *   the client names *which* instance: `client(tag, node)`. The transport is resolved from that node
- *   (like a node-bearing tag), so the layer requires the node — satisfied by {@link Resource.connect}.
- *   The requirement is enforced at compile time, so there's no way to wire it wrong at runtime.
- * - **nodeless tag, ambient transport** — the transport is taken from the ambient `RpcClient.Protocol`,
- *   supplied at wire-up. (Remote use stays optional: a nodeless resource can also just run locally via
- *   {@link Resource.layer}, or be served as its own process.)
+ * Paths, by whether — and where — the tag names a {@link Node}:
+ * - **node-bearing + {@link AddressedNode}** — `client(Hosted)` when the tag's `{ node }` is
+ *   dialable: auto-wires connect (`R = never`). Bare bound nodes still require the node service.
+ * - **nodeless tag + {@link AddressedNode}** — `client(tag, Worker)` same auto-connect gate.
+ * - **bare node** — `client(tag, Bare)` / bare-bound `client(Hosted)` still require the node;
+ *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / clientLocal) yourself.
+ * - **nodeless tag, ambient transport** — ambient `RpcClient.Protocol`.
  *
  * @public
  */
 function clientLayer<Self, S extends Spec, HSelf>(
+  tag: NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  },
+): Layer.Layer<Self>;
+function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
+function clientLayer<Self, S extends Spec, HSelf>(
+  tag: ResourceTag<Self, S>,
+  node: AddressedNode<HSelf>,
+): Layer.Layer<Self>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
   node: NodeKey<HSelf>,
@@ -4251,6 +4513,13 @@ function clientLayer<Self, S extends Spec>(
       (client) => buildClientService(tag, client),
     ),
   );
+  // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
+  // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
+  if (isAddressedNode(nodeKey as AnyNode)) {
+    return layer.pipe(
+      Layer.provide(connectAddressed(nodeKey as AddressedNode<unknown>)),
+    ) as Layer.Layer<Self, never, RpcClient.Protocol>;
+  }
   return layer as Layer.Layer<Self, never, RpcClient.Protocol>;
 }
 
@@ -4487,9 +4756,10 @@ export const runForEachTagScoped: {
 export {
   makeTag as Tag,
   tagFor,
-  makeNode as Node,
+  // Node module: import * as Node from "@nikscripts/effect-pm/Node"
   httpClient,
   socketClient,
+  ipcClient,
   instance,
   localLayer as layer,
   serveInstances,

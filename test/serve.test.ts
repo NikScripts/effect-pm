@@ -2,6 +2,7 @@ import { Effect, Layer, Ref, Schema } from "effect";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 
 // `serve` grants Self + Local AND mounts the wire handlers from ONE materialization — the
 // co-located "serve it AND consume it here" case. The impl generator runs exactly ONCE (the wow report's
@@ -46,7 +47,7 @@ it("httpServer grants each serve layer's local instance from one build", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const builds = yield* Ref.make(0);
-      const node = Resource.httpServer([
+      const node = Node.httpServer([
         Resource.serve(
           Db,
           Effect.gen(function* () {

@@ -5,6 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Process from "../src/Process";
 import * as Resource from "../src/Resource";
+import * as Node from "../src/Node";
 // The full remote path: a REAL toolkit Process driver served over http via
 // `httpServer([Process.serveMemory(...)])`, driven by `Resource.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
@@ -26,7 +27,7 @@ const withServer = <A, E>(
   config: Process.ProcessLayerConfig<void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteProc>,
 ) => {
-  const server = Resource.httpServer([
+  const server = Node.httpServer([
     Process.serveMemory(RemoteProc, config),
   ]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),

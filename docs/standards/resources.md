@@ -166,10 +166,13 @@ because `httpServer`'s own type doesn't demand them.
 
 ``` ts
 // ✅ good — serve layers preserved
-const Node = Resource.httpServer([Counter.serve, Mail.serve])
+const live = Resource.httpServer([
+  Resource.serve(Counter, counterImpl),
+  Resource.serve(Mail, mailImpl),
+])
 
 // ❌ bad — provide prunes the serve layers off the server
-program.pipe(Layer.provide(Counter.serve))
+program.pipe(Layer.provide(Resource.serve(Counter, counterImpl)))
 ```
 
 {#declare-dont-provide-in-workers .must appliesTo="src examples"}

@@ -11,6 +11,7 @@ import {
   assertQueueInstanceSpec,
   QueueSpecShapeError,
 } from "../src/internal/queueSpecAssert";
+import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
@@ -65,7 +66,7 @@ describe("queueSpec wire — structural validation", () => {
 });
 
 describe("queueSpec wire — RPC round-trip", () => {
-  const numberQueueServer = Resource.httpServer([
+  const numberQueueServer = Node.httpServer([
     QueueResource.serveMemory(NumberQueue, {
       effect: (job) => Effect.succeed(job.id.length),
       concurrency: 1,

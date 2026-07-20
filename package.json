@@ -48,6 +48,10 @@
       "types": "./dist/Resource.d.ts",
       "default": "./dist/Resource.js"
     },
+    "./Node": {
+      "types": "./dist/Node.d.ts",
+      "default": "./dist/Node.js"
+    },
     "./MultiNode": {
       "types": "./dist/MultiNode.d.ts",
       "default": "./dist/MultiNode.js"
@@ -95,6 +99,10 @@
     "./ShardMap": {
       "types": "./dist/ShardMap.d.ts",
       "default": "./dist/ShardMap.js"
+    },
+    "./Lookup": {
+      "types": "./dist/Lookup.d.ts",
+      "default": "./dist/Lookup.js"
     },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",

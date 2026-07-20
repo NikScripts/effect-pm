@@ -6,8 +6,9 @@ import { Schema } from "effect";
 import type * as Layer from "effect/Layer";
 import * as Resource from "../src/Resource";
 import * as ShardMap from "../src/ShardMap";
+import * as Node from "../src/Node";
 
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
+class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
 
 const Session = Schema.Struct({
   id: Schema.String,
@@ -18,7 +19,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([DropletEast])) {}
+}).pipe(Resource.nodes([DropletEast])) {}
 
 type Mesh = Resource.PeersId<Sessions> | Resource.SelfNodeId<Sessions>;
 

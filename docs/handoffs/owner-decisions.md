@@ -6,6 +6,163 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-20 — Node module extract LOCKED + Eng
+
+- **Owner said:** Extract Node from Resource/Lookup on tip (`cursor/bake-catalog-thoughts-906e`); Effect-true `import * as Node`; no shims; forms replace spawn demo.
+- **Chose (LOCKED):**
+  - Public module **`@nikscripts/effect-pm/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clientsFor` + catalog types.
+  - **Removed:** `Resource.Node`, `Lookup.LookupNode`, `Resource.listen` / `connect*` / `httpServer` / `wsServer` / `ipcServer` / `clientsFor` (no shims).
+  - **Stays Resource:** Tag/serve/layer/client, `lookupClient`, identity, nodes/andNode/distributed, peers, Spec builders; sugar `clientLocal`.
+  - **Stays Lookup:** Identity, Directory, layer, client, `bootstrapDefaultLocal`; sugar `Node.listenLocal`.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — D4 soft pick LOCKED (`lookupClient` `{ pick }`)
+
+- **Owner said:** “Good” (to lean A after D4 bake).
+- **Chose (LOCKED):**
+  - Opt-in **`Resource.lookupClient(Tag, { pick })`** — `"first"` or sync `(rows) => DirectoryEntry`.
+  - Bare `lookupClient(Tag)` stays **fail-closed** on 0 / >1.
+  - Identity resolve hit ignores `pick`; `client(Tag)` stays set-of-one.
+  - Out of v1: `"random"`, Effect picker, sticky affinity, manager LB.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — `Prototype.listen(serves)` factory LOCKED
+
+- **Owner said:** Rewrite `Resource.listen(Proto.instance(…), serves)` into curried `Proto.listen(serves)` → `(suffix?) => Layer`; agreed lean (Layer-only, keep `instance()`, no named-clone `.listen`) — “Good.”
+- **Chose (LOCKED):**
+  - `Node.Prototype.listen(serves[, options])` → `(suffix?: string) => Layer` — sugar over `Resource.listen(instance(suffix), serves)`.
+  - Return **Layer only**; minted Node available as `ListenNode` after `Layer.build`.
+  - **`instance()` stays public**; named clones keep `Resource.listen(East, serves)`.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — `lookupClient` name (= bake `unsafeLookupClient`)
+
+- **Owner said:** The Lookup-or-die nodeless client was sketched as `unsafeLookupClient`; keep without `unsafe` if docs are clear — agent’s call.
+- **Chose (LOCKED):** Keep **`Resource.lookupClient`**. Same contract as the sketch: Lookup resolves the dial target; missing/ambiguous → fail (`LookupClientError`); not a silent N&gt;1 pick. TSDoc + handoff state the rename from `unsafeLookupClient`. Soft multi-replica pick remains **D4 OPEN**.
+- **Supervisor impact:** Docs/TSDoc clarify on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — `Resource.Node.Prototype` (nest under Node)
+
+- **Owner said:** Top-level `Resource.Prototype` is wrong if it’s a Node — expected `Resource.Node.Prototype`.
+- **Chose:** Prototype is a **Node kind** — `Resource.Node.Prototype` (+ `.make` / `.instance`). Top-level `Resource.Prototype` removed (no shim).
+- **Supervisor impact:** Rename on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — Dynamic `Node.Prototype.instance` LOCKED
+
+- **Owner said:** “Continue” (after D3).
+- **Chose (LOCKED):**
+  - `Node.Prototype.instance()` / `instance(suffix)` → Node for `listen` (value, not class ctor).
+  - Wire key `prototypeKey#suffix`; omitted suffix minted at listen; always ephemeral ipc path.
+  - **No** `Identity.claim` (many winners); directory advertise + `livenessReplace` on dupe `nodeKey`.
+  - Multi-instance client picker stays **D4 OPEN** (`lookupClient` fail-closed on ambiguous).
+- **Still LEAN / later:** `askIncumbent`; D4 picker/LB; X1 multi-protocol.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — D3 LOCKED (bare `distributed` / directory-backed peers)
+
+- **Owner said:** “Okay” (proceed with recommended next slice after D7).
+- **Chose (LOCKED — D3):**
+  - Bare `.pipe(Resource.distributed)` ≡ `nodes([])` (discoverable empty membership); identity-shaped pipe (not a list dual).
+  - Fixed fleets stay on `Resource.nodes([…])` (former `distributed([…])` call sites migrated).
+  - `peersLayer` with a **stamped empty** Node set reads Lookup `Directory.nodesServing(tag.key)` at build; exclude self; dial by directory entry kind (ipc path / url).
+  - Undeclared tags (no `nodesSym`) stay empty static peers — not directory.
+  - Directory absent → soft empty peer map (provide Lookup client for a real mesh).
+- **Still LEAN / later:** `askIncumbent`; ~~dynamic `instance`~~ → **LOCKED**; D4 picker/LB.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — D7 vertical LOCKED (address-less / bootstrap / lookupClient)
+
+- **Owner said:** Nail goal APIs; drop `{ self }` (treat like any Node); `Prototype.make` → **class**; “if questions need context/code, else build.”
+- **Chose (LOCKED — D7 vertical):**
+  - Address-less `Node(key)` at `listen` → mint ephemeral **ipc** path; **claim `node.key`**; win → bind+advertise; lose → fail Layer (winner endpoint in error); no silent double-serve.
+  - Identity claim endpoint = **Tag’s bound Node** (`nodes` / `{ node }`) or **listen’s Node** (minted) — **remove `{ self }` bag**.
+  - `Lookup.bootstrapDefaultLocal` — bind-or-dial default ipc (OS exclusivity).
+  - `Resource.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
+  - `Node.Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
+- **Still LEAN / later:** ~~bare `distributed` / D3~~ → **LOCKED** (see D3 entry); `askIncumbent`; ~~dynamic `instance`~~ → **LOCKED**; D4 picker/LB.
+- **Supervisor impact:** Eng unlocked on tip for this vertical. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — Phase-3 directory slice LOCKED + Eng unlocked
+
+- **Owner said:** “lol yes” to write leans then lock subset + unlock smallest Eng (advertise/list, unregister, `livenessReplace`).
+- **Chose (LOCKED — directory slice):**
+  - **D5:** Node directory on the **same Lookup server** as `Identity.claim`, **separate RPCs**.
+  - **D6:** Duplicate `nodeKey` → default **`livenessReplace`**; **unregister** on clean listen close; **`serves[]` from listen** serve list.
+  - **D2:** Conflict probe = existing **NodeStatus `ping`** (timeout ⇒ dead); no v1 heartbeats.
+- **Still LEAN:** `askIncumbent` handoff preset; dynamic `instance` / `NodeServer` name sugar. (D3/D7 Eng’d — see later entries.)
+- **Rejected / deferred:** Separate discovery process; default `lastWins` orphan; http default Lookup v1.
+- **Supervisor impact:** Eng unlocked on tip for Lookup directory + listen advertise/unregister wiring. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
+## 2026-07-19 — Phase-3 discovery / prototype bake (LEAN — owner agreed)
+
+- **Owner said:** Bake Phase 3 with details/code; clarify claim vs directory; first-wins already shipped for identity; duplicate advertise / handoff presets; agree leans; write to handoff as LEAN.
+- **Chose (LEAN):** Prototype / `make(name, addr)` / `NodeServer<N>`; bare `distributed` ≡ `nodes([])`; address-less non-proto via claim; ipc default only; etc. (see catalog handoff Phase-3 bake).
+- **Supervisor impact:** Superseded in part by directory LOCKED entry above; prototype Eng still gated on LEAN.
+
+## 2026-07-19 — Catalog C2 / C3 / C4 locked (continue bake)
+
+- **Owner said:** Continue (after C5); prior steers — full `ROut`; `import type` to avoid Tag↔Node cycles; C2 lean keep `*Server` + `listen`.
+- **Chose:** **C2** = `listen` proves catalog then dispatches to kept `httpServer`/`wsServer`/`ipcServer`; http/ws bind still caller-provided. **C3** = full `ROut` required. **C4** = `import type` for `ROut`.
+- **Rejected / deferred:** Replacing `*Server`; partial catalogs; cross-package Tag value→Node for `ROut`.
+- **Supervisor impact:** Eng shipped on tip — `Node<Self, ROut>`, `listen`, `clientsFor`.
+
+## 2026-07-19 — Serve-list naming C5 (one name: `serve`)
+
+- **Owner said:** Want one name — `server`, `expose`, or something else; choose well; follow v4 and standards.
+- **Chose (C5 LOCKED):** **`serve`** only (`Resource.serve` / engine `*.serve`). Reject `expose` (alias or rename). Reject using `server` as the verb (collides with `httpServer` / `wsServer` / `ipcServer` / Effect `RpcServer`). `serveRemote` remains the served-only sibling on the four-verb axis.
+- **Rejected / deferred:** `expose`; dual spellings; renaming transport `*Server` helpers.
+- **Supervisor impact:** Catalog/`listen` sketches use `serve` layers only; no rename Eng.
+
+## 2026-07-19 — Tag Node sets C1 (Option B)
+
+- **Owner said:** Lean B; identity/distributed multi disabled; asked what distributed buys; failover if identity unreachable; `andNode(Node)` vs `nodes([Node])`; then “Locked.”
+- **Chose (C1 LOCKED):** One Node set on the handle; `nodes([...])` overwrite + `andNode(node)` append; `{ node }` ≡ set-of-one; `client(Tag)` when size === 1; `distributed` alias; identity multi-set forbidden; identity dial-fail does **not** try other nodes; pipe mutates (copy-on-pipe deferred). See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) C1.
+- **Rejected / deferred:** Privileged home Node; identity→fleet failover; multi-node client try-next / LB (later); copy-on-pipe (later).
+- **Supervisor impact:** C1 Eng unlocked on tip; C2–C5 still OPEN.
+
+## 2026-07-18 — Identity pipe S1 (“good enough for now”)
+
+- **Owner said:** Pipe on any resource/process constructor (don’t need Singleton ctor); maybe better name; layer vs handle footgun; agent recs; “Good enough for now.”
+- **Chose (S1 LOCKED):** `Resource.identity` pipe on toolkit Tags; stamp on handle; `layer`/`serve` honor claim→serve-or-client; no layer-only primary; fail-closed if Lookup down; self endpoint at layer v1; optional Singleton sugar only. See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) S1.
+- **Rejected / deferred:** Layer-only identity flag as main API; always-lookup on every non-identity serve; Manager Eng before identity pipe; orphan-serve default.
+- **Supervisor impact:** Identity Eng shipped on tip (`Resource.identity` + layer/serve claim-or-client + `IdentityMultiNode` one-Node rule). Next bake: **C1**.
+
+## 2026-07-18 — ProtocolKind tag rename (X5)
+
+- **Owner said:** Fix the kind strings; multi-protocol Nodes whenever it best fits later.
+- **Chose (X5 LOCKED):** `ProtocolKind = "Http" | "WebSocket" | "IpcSocket"`. Eng rename on tip. Multi-protocol (X1) deferred.
+- **Rejected / deferred:** Keeping lowercase `"http"|"socket"|"ipc"`; Effect’s `Websocket` spelling (owner: `WebSocket`); multi-protocol in this change.
+- **Supervisor impact:** Breaking kind-string rename; apps that wrote explicit `kind: "socket"` etc. must update.
+
+## 2026-07-18 — Lookup bootstrap L1 locked; identity Eng unlocked
+
+- **Owner said:** Tiered lookup — safest split-brain = OS bind on-box; explicit where defaults impossible; “Let’s go.”
+- **Chose (L1 LOCKED):** Same-machine default via well-known local bind (OS exclusivity); cross-network **no** self-elect — explicit `LookupNode`. Failover re-elect out of v1. Dial-fail serve policy still open. See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) L1.
+- **Eng unlocked:** First slice — `Lookup` module (LookupNode, default-local ipc, identity claim first-wins / Duplicate + original). Singleton layer-swap / nodeless client / manager streams still bake or follow-on Eng.
+- **Rejected / deferred:** Cross-network elect; seamless lookup failover in v1.
+- **Supervisor impact:** Identity lookup Eng on tip; C* still OPEN.
+
+## 2026-07-18 — Catalog bake in progress (thoughts, not locks)
+
+- **Owner said:** One idea at a time; note discussions as thoughts; be careful what is actually locked. C1 chat: Tags can carry node sets; class-extends-pipe; overwrite/add helpers; no “home”; managers-as-Resources under rethink vs DNS/lookup self-election; `serve`→`expose` asked; no Protocol type param on Node (value is SSOT).
+- **Chose:** At time of entry, nothing beyond I1–I5 locked. **Superseded same day by L1 lock** (above). C1 and most bake thoughts remain unlocked.
+- **Rejected / deferred:** Treating manager / `nodes` API sketches as Eng-ready; Protocol as Node type param (do not re-propose).
+- **Supervisor impact:** Was continue bake; now L1 Eng unlocked.
+
+## 2026-07-18 — IPC Unix socket Phase 1 + bake sessions
+
+- **Owner said:** Build IPC first; then lock plan/API details; bring back bake sessions.
+- **Chose:** Ship `"ipc"` ProtocolKind + `{ path }` Node address + `ipcServer` / `connectIpc` / `protocolIpc` / `ipcClient` (Unix-only v1; unlink before bind + on close). Phase 1 decisions I1–I5 locked in [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md). Remaining catalog/discovery locks (C*/D*) via **bake sessions**.
+- **Rejected / deferred:** Overloading `"socket"` for UDS; Windows named pipes in v1; catalog/`ROut`/discovery in this slice.
+- **Supervisor impact:** IPC Eng on tip; next = bake C1–C5 before catalog Eng.
+
+## 2026-07-18 — Node catalog (`ROut`) + discovery (design direction)
+
+- **Owner said:** Node should take optional `ROut` (union of resource handles); serve/listen validates catalog at compile time; type-only imports avoid bundling contracts; same-machine discovery (esp. Unix sockets) so peers share catalogs without stamping Node on every Tag; document it; this is the next library step for seamless cross-runtime. Product rename away from “Resource” parked.
+- **Chose (design only):** Living design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) — `Node<Self, ROut = never>`, nodeless Tags by default, `listen` / `clientsFor` / local discovery; peers = topology (static `distributed` **or** discovery) + per-Node catalog. Clarified: shipped Node never had definition-time resource list — catalog is new, not a restore. **Update:** Phase 1 IPC Eng unlocked/shipped same day.
+- **Rejected / deferred:** multi-protocol Node endpoints; becoming Cluster membership/rebalance.
+- **Supervisor impact:** Design handoff on bus; IPC first; catalog Eng after bake locks.
+
 ## 2026-07-16 — Impossible-states plan: assigned + area reserved (breaking OK)
 
 - **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away." (Later: unlock P4 + expand the reservation to the tag-config schema-input surface.)
