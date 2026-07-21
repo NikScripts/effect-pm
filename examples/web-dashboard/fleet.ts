@@ -8,7 +8,6 @@
 import { Duration, Effect, Schema } from "effect";
 import * as QueueResource from "../../src/QueueResource";
 import * as Process from "../../src/Process";
-import * as Resource from "../../src/Resource";
 import * as Group from "../../src/Group";
 import * as Node from "../../src/Node";
 

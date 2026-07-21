@@ -25,7 +25,6 @@ import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
 import { queryDurableNode } from "./logs/durableRead";
-import * as Node from "../Node";
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";

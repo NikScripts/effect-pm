@@ -114,7 +114,6 @@ import type {
   Subscribable,
 } from "./Resource";
 import type { NodeKey } from "./Node";
-import * as Node from "./Node";
 import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";

@@ -46,7 +46,6 @@ import {
   type Subscribable,
 } from "./Resource";
 import type { NodeKey } from "./Node";
-import * as Node from "./Node";
 
 // ============================================================================
 // Metadata

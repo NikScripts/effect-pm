@@ -52,7 +52,6 @@ import type { LogSort } from "./internal/manager/logQuery";
 import { queryDurableNode, queryDurableScope } from "./internal/logs/durableRead";
 import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
-import * as Node from "./Node";
 
 /**
  * **Node log key** — durable bucket id for one runtime host. Must equal {@link Node.Tag} `.key`
