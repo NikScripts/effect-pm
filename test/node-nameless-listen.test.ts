@@ -46,7 +46,7 @@ describe("Node.unix nameless", () => {
 
       expect(n).toBe(11);
       const listenNode = Context.get(serverCtx, Node.ListenNode);
-      expect(listenNode.key.startsWith("effect-pm/anonymous#")).toBe(true);
+      expect(listenNode.key.startsWith("@nikscripts/effect-pm/anonymous-node/")).toBe(true);
       expect(typeof listenNode.path).toBe("string");
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );

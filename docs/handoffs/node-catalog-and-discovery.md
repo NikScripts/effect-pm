@@ -9,7 +9,7 @@
 
 | Export | Role |
 |--------|------|
-| `Node.Tag` / `Node.Prototype` / `Node.Lookup` | Node constructors (was `Resource.Node` / `.Prototype` / `Lookup.LookupNode`) |
+| `Node.Tag` / `Node.Prototype` / `Node.asLookup` | Node constructors (was `Resource.Node` / `.Prototype` / `Lookup.LookupNode`) |
 | `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen + local batteries (Lookup bootstrap) |
 | `Node.listen` | Neutral spine — **no transport bind** (`ListenUseProtocol` → use protocol entry) |
 | `httpServer` / `wsServer` / `ipcServer` | Low-level escape hatches (caller provides platform) |
@@ -429,15 +429,15 @@ type OnConflict =
   | "reject"          // alive → IncumbentAlive; dead → still replace (AI.6)
   | "inherit"         // take Lookup node’s concrete policy at advertise time
 
-// 1) Stamp fleet default on the Lookup node constructor
-class AppLookup extends Node.Lookup("app/Lookup", {
+// 1) Brand a Tag node as the Lookup server; stamp the fleet default
+class AppLookup extends Node.Tag<AppLookup>()("app/Lookup", {
   path: "/tmp/app-lookup.sock",
   onConflict: "askIncumbent", // concrete — Lookup should not use "inherit"
-}) {}
+}).pipe(Node.asLookup) {}
 
 // 2) Ordinary nodes default to inherit (unless stamped)
-class Worker extends Node.Tag("app/Worker") {} // onConflict: "inherit"
-class Sticky extends Node.Tag("app/Sticky", {
+class Worker extends Node.Tag<Worker>()("app/Worker") {} // onConflict: "inherit"
+class Sticky extends Node.Tag<Sticky>()("app/Sticky", {
   path: "/tmp/sticky.sock",
   onConflict: "reject", // node-definition override
 }) {}
@@ -459,7 +459,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 
 | Surface | Default | Notes |
 |---------|---------|--------|
-| `Node.Lookup(...)` | `livenessReplace` (concrete) | Fleet parent; `"inherit"` on Lookup is meaningless / rejected |
+| `Node.asLookup` | `livenessReplace` (concrete) | Fleet parent; `"inherit"` on Lookup is meaningless / rejected |
 | `Node.Tag` / Prototype / clones / instances | `"inherit"` | Pulls from Lookup at advertise |
 | listen / advertise options | omit = inherit chain | Explicit tag short-circuits |
 
@@ -476,7 +476,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 | AI.5 | Refuse / timeout | **LOCKED** — `IncumbentAlive` (fail-closed) |
 | AI.6 | `reject` preset | **LOCKED** — alive → `IncumbentAlive`; dead → still replace |
 | AI.7 | Prototype cascade | **LOCKED** — `make` / `instance` default `"inherit"`; stamp on Prototype or `make` overrides that clone only |
-| AI.8 | Wire field | **LOCKED** — advertise carries advertiser preference (`callSite`∋`nodeStamp`, may still be `"inherit"` / omit); **Lookup server** finishes resolve with its node stamp (so `bootstrapDefaultLocal` stays `livenessReplace` unless a stamped `Node.Lookup` is served) |
+| AI.8 | Wire field | **LOCKED** — advertise carries advertiser preference (`callSite`∋`nodeStamp`, may still be `"inherit"` / omit); **Lookup server** finishes resolve with its node stamp (so `bootstrapDefaultLocal` stays `livenessReplace` unless an asLookup-branded node is served) |
 
 ```ts
 // Goal sketch after lock:

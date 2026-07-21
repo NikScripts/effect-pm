@@ -32,7 +32,7 @@ const withLookup = <A, E>(
 describe("LookupNode", () => {
   it("is a Node.Tag with ipc from { path }", () => {
     const path = "/tmp/lookup-example.sock";
-    const node = Node.Lookup()("lookup/example", { path });
+    const node = Node.Tag()("lookup/example", { path }).pipe(Node.asLookup);
     expect(Node.isLookupNode(node)).toBe(true);
     expect(node.kind).toBe("IpcSocket");
     expect(node.path).toBe(path);
@@ -43,7 +43,7 @@ describe("Lookup identity claim", () => {
   it.effect("first claim wins; second gets DuplicateIdentity with original", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("claim");
-      const node = Node.Lookup()("lookup/claim", { path });
+      const node = Node.Tag()("lookup/claim", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
         Lookup.layer(node),

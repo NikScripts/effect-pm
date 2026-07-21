@@ -7,7 +7,13 @@
  */
 import { Effect, Layer } from "effect"
 import { RpcClient } from "effect/unstable/rpc"
-import type { AddressedNode, AnyNode, NodeKey, ProtocolKind } from "./nodeCore"
+import type {
+  AddressedNode,
+  AnyNode,
+  Endpoints,
+  NodeKey,
+  ProtocolKind,
+} from "./nodeCore"
 import {
   InvalidHttpTarget,
   invalidHttpTargetOf,
@@ -74,6 +80,39 @@ export const invalidHttpTargetLayer = <A = never>(
     ),
   )
 
+/**
+ * Which endpoint {@link connect} dials from a node's transport `endpoints` set. A **multi-protocol**
+ * node prefers WebSocket in a browser (past HTTP/1.1's ~6-conn cap, and dodging the http-in-browser
+ * death) and Http elsewhere; a single-endpoint node uses its one. Falls back to the node's primary
+ * `kind`/`url`/`path` (single-protocol nodes and any not carrying an `endpoints` set). @internal
+ */
+export const selectEndpoint = (
+  node: AnyNode,
+): { readonly kind: ProtocolKind; readonly url?: string; readonly path?: string } | undefined => {
+  const ep: Endpoints | undefined = node.endpoints
+  if (ep !== undefined) {
+    const order: ReadonlyArray<ProtocolKind> =
+      typeof window !== "undefined"
+        ? ["WebSocket", "Http", "IpcSocket"]
+        : ["Http", "WebSocket", "IpcSocket"]
+    for (const k of order) {
+      if (k === "Http" && ep.Http !== undefined) {
+        return { kind: "Http", url: ep.Http.url }
+      }
+      if (k === "WebSocket" && ep.WebSocket !== undefined) {
+        return { kind: "WebSocket", url: ep.WebSocket.url }
+      }
+      if (k === "IpcSocket" && ep.IpcSocket !== undefined) {
+        return { kind: "IpcSocket", path: ep.IpcSocket.path }
+      }
+    }
+  }
+  if (node.kind === undefined) {
+    return undefined
+  }
+  return { kind: node.kind, url: node.url, path: node.path }
+}
+
 /** Protocol for any node — invalid target / unaddressed → typed Layer fail. @internal */
 export const protocolForNode = (
   node: AnyNode,
@@ -83,21 +122,22 @@ export const protocolForNode = (
     return invalidHttpTargetLayer(invalid)
   }
   const { protocolHttp, protocolWebsocket, protocolIpc } = protocols()
-  if (node.kind === undefined) {
+  const sel = selectEndpoint(node)
+  if (sel === undefined) {
     return unaddressedLayer(node.key)
   }
-  if (node.kind === "IpcSocket") {
-    if (node.path === undefined) {
+  if (sel.kind === "IpcSocket") {
+    if (sel.path === undefined) {
       return unaddressedLayer(node.key)
     }
-    return protocolIpc(node.path)
+    return protocolIpc(sel.path)
   }
-  if (node.url === undefined) {
+  if (sel.url === undefined) {
     return unaddressedLayer(node.key)
   }
-  return node.kind === "WebSocket"
-    ? protocolWebsocket(node.url)
-    : protocolHttp(node.url)
+  return sel.kind === "WebSocket"
+    ? protocolWebsocket(sel.url)
+    : protocolHttp(sel.url)
 }
 
 /** Protocol for a type-narrowed {@link AddressedNode} — no error channel. @internal */
@@ -105,6 +145,18 @@ export const protocolForDialable = (
   node: AddressedNode<unknown>,
 ): Layer.Layer<RpcClient.Protocol> => {
   const { protocolHttp, protocolWebsocket, protocolIpc } = protocols()
+  const sel = selectEndpoint(node)
+  if (sel !== undefined) {
+    if (sel.kind === "IpcSocket" && sel.path !== undefined) {
+      return protocolIpc(sel.path)
+    }
+    if (sel.kind !== "IpcSocket" && sel.url !== undefined) {
+      return sel.kind === "WebSocket"
+        ? protocolWebsocket(sel.url)
+        : protocolHttp(sel.url)
+    }
+  }
+  // primary fallback — an AddressedNode always carries a dialable primary.
   if (node.kind === "IpcSocket") {
     return protocolIpc(node.path)
   }

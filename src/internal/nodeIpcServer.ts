@@ -66,7 +66,7 @@ export interface IpcServerOptions {
  * or a node whose {@link ProtocolKind} is `"IpcSocket"` (`Tag()("x", { path })`).
  *
  * ```ts
- * class Worker extends Tag<Worker>("worker", { path: "/tmp/worker.sock" }) {}
+ * class Worker extends Tag<Worker>()("worker", { path: "/tmp/worker.sock" }) {}
  *
  * const live = Resource.ipcServer(
  *   [Resource.serve(Jobs, jobsImpl)],

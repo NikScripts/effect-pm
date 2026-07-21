@@ -5,7 +5,7 @@
  *
  * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
- * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
+ * - {@link asLookup} — brand a Tag node as the Lookup-server (`isLookupNode: true`)
  * - {@link listen} — neutral spine (**no transport bind** — use {@link unix} / {@link http} / {@link ws})
  * - {@link unix} — IpcSocket listen + Lookup batteries (nameless / Tag+impl / node+serves)
  * - {@link http} — local Http listen + Lookup batteries (localhost bind / nameless / Tag+impl)
@@ -20,7 +20,8 @@
  */
 export {
   Tag,
-  Lookup,
+  withProtocol,
+  asLookup,
   isLookupNode,
   isAddressedNode,
   catalogSym,
@@ -37,6 +38,7 @@ export {
   UnaddressedNode,
   NodeUnreachable,
   ProtocolKindMismatch,
+  MalformedNode,
   InvalidHttpTarget,
 } from "./internal/nodeCore"
 export type {

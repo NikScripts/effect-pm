@@ -28,6 +28,7 @@ import {
   isPrototypeNode,
   isResourceTagArg,
   isServeArg,
+  anonymousNodeKey,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -256,8 +257,7 @@ const httpNameless = (
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const suffix = yield* uniqueInstanceSuffix();
-      const key = `effect-pm/anonymous#${suffix}`;
+      const key = yield* anonymousNodeKey(list);
       return httpListenOn(Tag()(key, { kind: "Http" }), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;

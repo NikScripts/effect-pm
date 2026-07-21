@@ -27,6 +27,7 @@ import {
   isResourceTagArg,
   isServeArg,
   unixRequiresIpcLayer,
+  anonymousNodeKey,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -245,8 +246,7 @@ const ipcNameless = (
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const suffix = yield* uniqueInstanceSuffix();
-      const key = `effect-pm/anonymous#${suffix}`;
+      const key = yield* anonymousNodeKey(list);
       return ipcListenOn(Tag()(key), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;

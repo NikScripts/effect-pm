@@ -2,7 +2,7 @@
  * Lookup — identity claims (first wins) + node directory (advertise / list).
  *
  * Same-machine default: bind a well-known {@link Resource} `ipc` path (OS exclusivity).
- * Cross-network: pass an explicit {@link Node.Lookup} with an address — no self-elect (L1).
+ * Cross-network: pass an explicit {@link Node.asLookup}-branded node with an address — no self-elect (L1).
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
@@ -17,7 +17,7 @@ import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
 import type { AnyNode, OnConflict, OnConflictResolved } from "./internal/nodeCore";
 import {
-  Lookup as LookupNodeTag,
+  asLookup,
   Tag as NodeTag,
   onConflictOf,
   resolveOnConflict,
@@ -268,7 +268,7 @@ export class Directory extends Resource.Tag<Directory>()(
 ) {}
 
 // ============================================================================
-// Defaults (L1) — Lookup Node ctor is {@link Node.Lookup}
+// Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
 // ============================================================================
 
 /**
@@ -632,7 +632,7 @@ export const clientDefaultLocal = (options?: {
   readonly path?: string;
 }): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
-  const node = LookupNodeTag()("effect-pm/Lookup/default", { path });
+  const node = NodeTag()("effect-pm/Lookup/default", { path }).pipe(asLookup);
   return client(node);
 };
 

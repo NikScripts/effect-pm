@@ -41,11 +41,11 @@ export const assertProtocolKinds = (
   Effect.forEach(
     entries,
     (entry) =>
-      entry.nodeKind !== undefined && entry.nodeKind !== serverKind
+      entry.nodeKinds !== undefined && !entry.nodeKinds.includes(serverKind)
         ? Effect.die(
             new ProtocolKindMismatch({
               resource: entry.groupId,
-              declared: entry.nodeKind,
+              declared: entry.nodeKinds,
               servedOver: serverKind,
             }),
           )

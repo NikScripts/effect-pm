@@ -1,5 +1,5 @@
 /**
- * Node core — Tag / Prototype / Lookup constructors + catalog types.
+ * Node core — Tag / Prototype constructors, withProtocol / asLookup combinators + catalog types.
  * No Resource runtime imports (avoids circular init). Store binding is late via
  * {@link bindNodeStore}.
  *
@@ -59,6 +59,16 @@ export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
  * @public
  */
 export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
+
+/** The set of transports one {@link Tag} node speaks — a record keyed by {@link ProtocolKind}. A
+ *  single-protocol node has one entry; a multi-protocol node (the `{ http, ws }` shorthand or piped
+ *  {@link overHttp}/{@link overSocket}/{@link overIpc}) has several. `connect` selects one; the server
+ *  ({@link ProtocolKindMismatch}) asserts its transport is a member. @public */
+export interface Endpoints {
+  readonly Http?: { readonly url: string };
+  readonly WebSocket?: { readonly url: string };
+  readonly IpcSocket?: { readonly path: string };
+}
 
 /**
  * Directory advertise conflict policy when the same `nodeKey` already has a row.
@@ -122,9 +132,10 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
   return undefined;
 };
 
-/** A {@link Tag} erased — transport address (`url` and/or Unix `path`) plus
- *  {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
- *  *where* AND *how* to reach each one. @public
+/** A {@link Tag} erased — its transport `endpoints` set, plus the **primary** address
+ *  (`url` and/or Unix `path`) and {@link ProtocolKind} `kind` (the first-declared endpoint, kept for
+ *  single-protocol readers), so a tag's `distributed` set is self-describing about *where* AND *how* to
+ *  reach each one. @public
  *
  * @category models
  */
@@ -132,6 +143,7 @@ export type AnyNode = NodeKey<unknown> & {
   readonly url: string | undefined;
   readonly path: string | undefined;
   readonly kind: ProtocolKind | undefined;
+  readonly endpoints?: Endpoints;
   /** Stamped advertise conflict policy (default `"inherit"` on ordinary nodes). */
   readonly onConflict?: OnConflict;
 };
@@ -341,7 +353,8 @@ type LooseNodeTarget =
       readonly path?: string;
       readonly kind?: ProtocolKind;
       readonly onConflict?: OnConflict;
-    };
+    }
+  | ShorthandTarget;
 
 /**
  * Constructable {@link Tag} result — `Context.ServiceClass` plus address fields.
@@ -396,6 +409,34 @@ type UrlAddressLoose = {
   readonly kind: "Http" | "WebSocket";
 };
 
+/** A **multi-protocol** node's fields — its transport `endpoints` set, `kind` the union of the set
+ *  (the primary at runtime), plus the primary `url`/`path`. Single object type (not a union) so
+ *  `class extends Tag()(…)` stays constructable. @internal */
+type MultiAddress<Kinds extends ProtocolKind> = {
+  readonly url: string | undefined;
+  readonly path: string | undefined;
+  readonly kind: Kinds;
+  readonly endpoints: Endpoints;
+};
+
+/** The {@link ProtocolKind}s present in a `{ http, ws, ipc }` shorthand target. @internal */
+type KindsOf<T> =
+  | (T extends { readonly http: string } ? "Http" : never)
+  | (T extends { readonly ws: string } ? "WebSocket" : never)
+  | (T extends { readonly ipc: string } ? "IpcSocket" : never);
+
+/** The `{ http, ws, ipc }` multi-protocol shorthand target. `url`/`path`/`kind` are pinned to `never`
+ *  so it stays disjoint from the single-address `{ url, kind }` / `{ path }` forms. @internal */
+type ShorthandTarget = {
+  readonly http?: string;
+  readonly ws?: string;
+  readonly ipc?: string;
+  readonly onConflict?: OnConflict;
+  readonly url?: never;
+  readonly path?: never;
+  readonly kind?: never;
+};
+
 /** Constructable ipc {@link Tag} (for {@link Prototype}.make). @internal */
 export type IpcNodeTagClass<Self, ROut = never> = NodeTagClass<
   Self,
@@ -441,11 +482,128 @@ export const isAddressedNode = (
   return false;
 };
 
+/** Is a target the `{ http, ws, ipc }` multi-protocol shorthand? @internal */
+const isShorthandTarget = (
+  t: LooseNodeTarget | undefined,
+): t is ShorthandTarget =>
+  typeof t === "object" &&
+  t !== null &&
+  ("http" in t || "ws" in t || "ipc" in t);
+
+/** The advertise policy a construction target carries, if any — the single reader of `target.onConflict`
+ *  for both {@link Tag} (default `"inherit"`) and {@link asLookup} (folds via {@link resolveOnConflict}).
+ *  @internal */
+const onConflictFromTarget = (
+  target: LooseNodeTarget | undefined,
+): OnConflict | undefined =>
+  typeof target === "object" && target !== null ? target.onConflict : undefined;
+
 /**
- * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
- * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service.
- * Optional catalog type param `ROut` (C2) — prefer `import type` for those handles (C4).
- * Templates (no address until cloned) live on {@link Node}.Prototype:
+ * A node was built with inconsistent transport fields — a programming invariant, thrown at
+ * declaration (like {@link DuplicateResourceKey}) so a malformed node fails loudly *there* instead of
+ * as a confusing dial/serve failure later. @public
+ */
+export class MalformedNode extends Data.TaggedError("MalformedNode")<{
+  readonly key: string;
+  readonly reason: string;
+}> {
+  override get message() {
+    return `Node "${this.key}" is malformed: ${this.reason}.`;
+  }
+}
+
+/**
+ * Assemble a node tag value from resolved address fields — a `Context.Service` class stamped with the
+ * transport fields, the `logs` accessor, and the catalog brand. **The single place** the runtime →
+ * `NodeTagClass` impedance is bridged: a node's runtime `kind` is always looser (`ProtocolKind |
+ * undefined`) than any precise address form `Addr`, so exactly one construction cast lives here and
+ * every caller ({@link Tag}, {@link withProtocol}) stays cast-free. @internal
+ */
+
+const assembleNode = <Self, ROut, Addr>(
+  key: string,
+  fields: {
+    readonly url: string | undefined;
+    readonly path: string | undefined;
+    readonly kind: ProtocolKind | undefined;
+    readonly endpoints: Endpoints;
+    readonly onConflict: OnConflict;
+    readonly invalidTarget?: InvalidHttpTarget;
+  },
+): NodeTagClass<Self, ROut, Addr> => {
+  // Validate the fields are well-formed BEFORE the (generic-`Addr`) construction cast — the cast can't
+  // be type-checked, so a runtime check is what makes it safe. NOTE: a node may declare a `kind`
+  // WITHOUT a `url`/`path` — an address-less listen node (e.g. the anonymous http/ws mint) knows *how*
+  // it'll be reached but binds *where* only at listen. So we validate the invariants that always hold:
+  // a non-empty key, and that any endpoint actually present in the set carries a non-empty address.
+  const { endpoints } = fields;
+  if (typeof key !== "string" || key.length === 0) {
+    throw new MalformedNode({
+      key,
+      reason: "empty key (a node needs a Context service key)",
+    });
+  }
+  for (const [transport, endpoint] of Object.entries(endpoints)) {
+    const address =
+      "url" in endpoint
+        ? endpoint.url
+        : "path" in endpoint
+          ? endpoint.path
+          : undefined;
+    if (typeof address !== "string" || address.length === 0) {
+      throw new MalformedNode({
+        key,
+        reason: `${transport} endpoint has an empty ${"url" in endpoint ? "url" : "path"}`,
+      });
+    }
+  }
+  const node = Object.assign(Context.Service<Self, NodeProtocol>()(key), {
+    url: fields.url,
+    path: fields.path,
+    kind: fields.kind,
+    endpoints: fields.endpoints,
+    onConflict: fields.onConflict,
+    ...(fields.invalidTarget !== undefined
+      ? { [invalidHttpTargetSym]: fields.invalidTarget }
+      : {}),
+  });
+  const built = Object.assign(node, {
+    /** Node-wide durable log registration — same as {@link store}`(this node)`. */
+    get logs() {
+      return storeOrThrow(node);
+    },
+    [catalogSym]: undefined,
+  });
+  // Narrow to the node-tag type with a guard instead of a blind `as unknown` — the guard verifies the
+  // built value carries the node-tag shape (the checkable part) and catches a broken build. `Addr` is
+  // an erased type parameter, so its precision is asserted by the predicate rather than checked.
+  if (!isNodeTagValue<Self, ROut, Addr>(built)) {
+    throw new MalformedNode({
+      key,
+      reason: "assembled value is not a well-formed node tag",
+    });
+  }
+  return built;
+};
+
+/** Does a freshly-assembled value carry the node-tag shape? The type-guard form of the construction
+ *  assertion — verifies the checkable structure; `Addr`'s precision is trusted (erased). @internal */
+const isNodeTagValue = <Self, ROut, Addr>(
+  x: unknown,
+): x is NodeTagClass<Self, ROut, Addr> =>
+  (typeof x === "object" || typeof x === "function") &&
+  x !== null &&
+  "endpoints" in x &&
+  "logs" in x &&
+  catalogSym in x;
+
+/**
+ * Declare a **node** — a named transport endpoint a resource connects to. **Two-stage** and keyed by
+ * a string, mirroring Effect's `Context.Service<Self, Shape>()(key)` (a node *is* a `Context.Key`,
+ * resolved by its `key` in the Context map) and every sibling factory (`Resource.Tag<Self>()`, …).
+ * The second call infers the target shape, so the `{ http, ws }` shorthand types its
+ * {@link ProtocolKind} set precisely. Optional catalog type param `ROut` (C2) — prefer `import type`
+ * for those handles (C4). Templates (no address until cloned) live on {@link Node}.Prototype:
  *
  * ```ts
  * class EdgeNode extends Node.Tag<EdgeNode>()("edge") {}                       // no address yet
@@ -454,16 +612,18 @@ export const isAddressedNode = (
  * class Live extends Node.Tag<Live>()("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
  * class Push extends Node.Tag<Push>()("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
  * class Local extends Node.Tag<Local>()("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
+ * class Droplet extends Node.Tag<Droplet>()("droplet", { http: "http://d/rpc", ws: "ws://d/rpc" }) {} // multi-protocol
  * import type { Jobs, Emails } from "@app/contracts"
  * class AppWorker extends Node.Tag<AppWorker, Jobs | Emails>()("app/Worker", { path: "/tmp/w.sock" }) {}
  * class MailWorker extends Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * ```
  *
- * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
- * → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for an explicit
- * endpoint, or `{ path }` for a **Unix-domain** socket (`kind: "IpcSocket"`). The node carries
- * {@link ProtocolKind} so the topology is self-describing about *where* AND *how*:
- * {@link connect}`(node)` derives the transport with no protocol argument.
+ * The `key` is the service key. The optional address matches {@link clientHttp}'s `target`: a **port**
+ * (`3001` or `":3001"` → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for
+ * an explicit endpoint, `{ path }` for a **Unix-domain** socket (`kind: "IpcSocket"`), or the
+ * `{ http, ws, ipc }` multi-protocol shorthand. The node carries {@link ProtocolKind} so the topology
+ * is self-describing about *where* AND *how*: {@link connect}`(node)` derives the transport with no
+ * protocol argument.
  *
  * Dialable targets return an {@link AddressedNode} (`kind: ProtocolKind`) so
  * `Resource.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag()("x")`
@@ -473,11 +633,9 @@ export const isAddressedNode = (
  * @public
  */
 export const Tag = <Self, ROut = never>() => {
+  function build(key: string): NodeTagClass<Self, ROut, BareAddress>;
   function build(
-    name: string,
-  ): NodeTagClass<Self, ROut, BareAddress>;
-  function build(
-    name: string,
+    key: string,
     target: {
       readonly path: string;
       readonly kind?: "IpcSocket";
@@ -485,19 +643,19 @@ export const Tag = <Self, ROut = never>() => {
     },
   ): NodeTagClass<Self, ROut, IpcAddress>;
   function build(
-    name: string,
+    key: string,
     target: number | `:${number}`,
   ): NodeTagClass<Self, ROut, HttpAddress>;
   function build(
-    name: string,
+    key: string,
     target: `ws://${string}` | `wss://${string}`,
   ): NodeTagClass<Self, ROut, WsAddress>;
   function build(
-    name: string,
+    key: string,
     target: `http://${string}` | `https://${string}`,
   ): NodeTagClass<Self, ROut, HttpAddress>;
   function build(
-    name: string,
+    key: string,
     target: {
       readonly url: `ws://${string}` | `wss://${string}`;
       readonly kind?: "WebSocket";
@@ -505,7 +663,7 @@ export const Tag = <Self, ROut = never>() => {
     },
   ): NodeTagClass<Self, ROut, WsAddress>;
   function build(
-    name: string,
+    key: string,
     target: {
       readonly url: string;
       readonly kind: "WebSocket";
@@ -513,15 +671,19 @@ export const Tag = <Self, ROut = never>() => {
     },
   ): NodeTagClass<Self, ROut, WsAddress>;
   function build(
-    name: string,
+    key: string,
     target: {
       readonly url: string;
       readonly kind: "Http";
       readonly onConflict?: OnConflict;
     },
   ): NodeTagClass<Self, ROut, HttpAddress>;
+  function build<const T extends ShorthandTarget>(
+    key: string,
+    target: T,
+  ): NodeTagClass<Self, ROut, MultiAddress<KindsOf<T>>>;
   function build(
-    name: string,
+    key: string,
     target:
       | string
       | {
@@ -531,28 +693,62 @@ export const Tag = <Self, ROut = never>() => {
         },
   ): NodeTagClass<Self, ROut, UrlAddressLoose>;
   function build(
-    name: string,
+    key: string,
     target?: LooseNodeTarget,
   ): NodeTagClass<
     Self,
     ROut,
-    BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+    | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
   >;
   function build(
-    name: string,
+    key: string,
     target?: LooseNodeTarget,
   ): NodeTagClass<
     Self,
     ROut,
-    BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+    | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
   > {
-    const path =
-      typeof target === "object" && target !== null ? target.path : undefined;
-    // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
-    // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
-    // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
-    let url: string | undefined;
-    let invalidTarget: InvalidHttpTarget | undefined;
+  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
+  // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
+  // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
+  let url: string | undefined;
+  let path: string | undefined;
+  let kind: ProtocolKind | undefined;
+  let endpoints: Endpoints;
+  let invalidTarget: InvalidHttpTarget | undefined;
+  if (isShorthandTarget(target)) {
+    // Multi-protocol shorthand `{ http?, ws?, ipc? }` — build the transport set; the primary
+    // (for single-protocol readers) is http > ws > ipc. `connect` selects from the full set.
+    const httpUrl = target.http;
+    const wsUrl = target.ws;
+    const ipcPath = target.ipc;
+    endpoints = {
+      ...(httpUrl !== undefined ? { Http: { url: httpUrl } } : {}),
+      ...(wsUrl !== undefined ? { WebSocket: { url: wsUrl } } : {}),
+      ...(ipcPath !== undefined ? { IpcSocket: { path: ipcPath } } : {}),
+    };
+    url = httpUrl ?? wsUrl;
+    path = ipcPath;
+    kind =
+      httpUrl !== undefined
+        ? "Http"
+        : wsUrl !== undefined
+          ? "WebSocket"
+          : ipcPath !== undefined
+            ? "IpcSocket"
+            : undefined;
+  } else {
+    path = typeof target === "object" && target !== null ? target.path : undefined;
     if (path !== undefined || target === undefined) {
       url = undefined;
     } else if (typeof target === "object") {
@@ -568,7 +764,7 @@ export const Tag = <Self, ROut = never>() => {
     }
     // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` →
     // IpcSocket, `ws(s)://` → WebSocket, any other url → Http. Bare / invalid leave kind undefined.
-    const kind: ProtocolKind | undefined =
+    kind =
       (typeof target === "object" && target !== null ? target.kind : undefined) ??
       (path !== undefined
         ? "IpcSocket"
@@ -577,41 +773,107 @@ export const Tag = <Self, ROut = never>() => {
           : url.startsWith("ws://") || url.startsWith("wss://")
             ? "WebSocket"
             : "Http");
-    const onConflict: OnConflict =
-      typeof target === "object" &&
-      target !== null &&
-      target.onConflict !== undefined
-        ? target.onConflict
-        : "inherit";
-    const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
-      url,
-      path,
-      kind,
-      onConflict,
-      ...(invalidTarget !== undefined
-        ? { [invalidHttpTargetSym]: invalidTarget }
-        : {}),
-    });
-    // Stamp catalog brand — preserves Context.Service constructability
-    // (`class X extends Node.Tag()`); `ROut` stays type-only at the value (C2 / C4).
-    // Overload impl return: runtime fields are narrower than the union of address shapes.
-    return Object.assign(node, {
-      /**
-       * Node-wide durable log registration — same as {@link store}`(this node)`.
-       * Use on an app `Store.Service`: `Store.Service(...)(WnbaNode.logs, Process.store(Daily))`.
-       */
-      get logs() {
-        return storeOrThrow(node);
-      },
-      [catalogSym]: undefined as ROut | undefined,
-    }) as NodeTagClass<
-      Self,
-      ROut,
-      BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
-    >;
+    // The transport set — one entry from the resolved primary (multi-protocol shorthand / `over*`
+    // add more). `connect` selects from it; the server asserts its transport is a member.
+    endpoints =
+      kind === "IpcSocket" && path !== undefined
+        ? { IpcSocket: { path } }
+        : kind === "WebSocket" && url !== undefined
+          ? { WebSocket: { url } }
+          : kind === "Http" && url !== undefined
+            ? { Http: { url } }
+            : {};
   }
+  // Advertise conflict policy — an explicit `{ onConflict }` on the target wins (shorthand included);
+  // an ordinary node defaults to `"inherit"` (resolved up the chain at advertise time).
+  const onConflict: OnConflict = onConflictFromTarget(target) ?? "inherit";
+  return assembleNode<
+    Self,
+    ROut,
+    | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
+  >(key, { url, path, kind, endpoints, onConflict, invalidTarget });
+  }
+
   return build;
 };
+
+/**
+ * Add transports to a node — piped on to derive a **same-identity** handle that speaks more
+ * protocols: `class DropletWs extends Droplet.pipe(Node.withProtocol({ ws: "/rpc" })) {}`. Takes the
+ * same `{ http, ws, ipc }` record as the declaration; keeps the node's **key** and served resources,
+ * merges the transports into its `endpoints`, and **widens** its {@link ProtocolKind} set in the type.
+ * Accepts single- or multi-protocol nodes alike.
+ *
+ * @public
+ */
+export const withProtocol =
+  <const T extends ShorthandTarget>(transports: T) =>
+  <Self, ROut, K extends ProtocolKind>(
+    node: NodeTagClass<
+      Self,
+      ROut,
+      {
+        readonly kind: K;
+        readonly url?: string;
+        readonly path?: string;
+        readonly endpoints?: Endpoints;
+      }
+    >,
+  ): NodeTagClass<Self, ROut, MultiAddress<K | KindsOf<T>>> => {
+    const add: Endpoints = {
+      ...(transports.http !== undefined ? { Http: { url: transports.http } } : {}),
+      ...(transports.ws !== undefined ? { WebSocket: { url: transports.ws } } : {}),
+      ...(transports.ipc !== undefined
+        ? { IpcSocket: { path: transports.ipc } }
+        : {}),
+    };
+    const endpoints: Endpoints = { ...node.endpoints, ...add };
+    // Keep the base node's primary if it had one, else the first of the merged set (http > ws > ipc).
+    const kind: ProtocolKind | undefined =
+      node.kind ??
+      (endpoints.Http !== undefined
+        ? "Http"
+        : endpoints.WebSocket !== undefined
+          ? "WebSocket"
+          : endpoints.IpcSocket !== undefined
+            ? "IpcSocket"
+            : undefined);
+    return assembleNode<Self, ROut, MultiAddress<K | KindsOf<T>>>(node.key, {
+      url: node.url ?? endpoints.Http?.url ?? endpoints.WebSocket?.url,
+      path: node.path ?? endpoints.IpcSocket?.path,
+      kind,
+      endpoints,
+      // Same-identity derived handle keeps the base node's advertise policy.
+      onConflict: node.onConflict,
+    });
+  };
+
+/**
+ * Brand a node as the fleet **lookup / identity server** — piped onto a {@link Tag} node (sibling to
+ * {@link withProtocol}). Reuses the node verbatim (address, transports, key, served resources) and
+ * folds its advertise policy to a **concrete** default: an explicit `{ onConflict }` survives, while an
+ * ordinary node's `"inherit"` (or none) becomes `"livenessReplace"` — a lookup root never inherits.
+ *
+ * ```ts
+ * class Directory extends Node.Tag<Directory>()("app/Lookup", { path: "/tmp/lookup.sock" }).pipe(Node.asLookup) {}
+ * class Dual extends Node.Tag<Dual>()("app/Lookup", { http: "http://l/rpc", ws: "ws://l/rpc" }).pipe(Node.asLookup) {}
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const asLookup = <N extends AnyNode>(
+  node: N,
+): N & { readonly isLookupNode: true } =>
+  Object.assign(node, {
+    isLookupNode: true as const,
+    onConflict: resolveOnConflict(node.onConflict),
+  });
 
 /**
  * Deriving a transport from a node that never declared one — a bare `Node.Tag()("x")` has no
@@ -802,115 +1064,32 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
 }
 
 /**
- * A node-bound resource is being served over a transport that doesn't match its node's declared
- * {@link ProtocolKind}. Because a client derives its transport *from* the node's `kind`, serving it
- * over a different transport (e.g. a `WebSocket` node served on an `httpServer`) means every client
- * dials the wrong protocol — the silent "blank dashboard / no live data" failure. The server refuses
- * to boot with this instead, so the mismatch is loud and immediate rather than a runtime dead end.
+ * A node-bound resource is being served over a transport that isn't in its node's declared
+ * {@link ProtocolKind} set. Because a client derives its transport *from* the node's declared
+ * transports, serving it over one the node doesn't advertise (e.g. a `WebSocket`-only node served on
+ * an `httpServer`) means every client dials a protocol the server never answers — the silent "blank
+ * dashboard / no live data" failure. The server refuses to boot with this instead, so the mismatch is
+ * loud and immediate. A multi-protocol node served over any of its declared transports passes.
  *
  * @category errors
  * @public
  */
 export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch")<{
   readonly resource: string;
-  readonly declared: ProtocolKind;
+  readonly declared: ReadonlyArray<ProtocolKind>;
   readonly servedOver: ProtocolKind;
 }> {
   override get message() {
-    return `Resource "${this.resource}" declares its node as ${this.declared}, but is being served over ${this.servedOver} — a client would dial ${this.declared} and never reach it. Serve it over ${this.declared} (Node.${this.declared === "Http" ? "httpServer" : this.declared === "WebSocket" ? "wsServer" : "ipcServer"}), or change the node's kind.`;
+    const serverFor = (k: ProtocolKind): string =>
+      k === "Http" ? "httpServer" : k === "WebSocket" ? "wsServer" : "ipcServer";
+    const kinds = this.declared.join(" / ");
+    const servers = this.declared.map((k) => `Node.${serverFor(k)}`).join(" / ");
+    return `Resource "${this.resource}" declares its node over ${kinds}, but is being served over ${this.servedOver} — a client dials one of [${kinds}] and would never reach it. Serve it over a declared transport (${servers}), or add ${this.servedOver} to the node.`;
   }
 }
 
-
 /**
- * A {@link Tag} marked as the identity/lookup server.
- *
- * Same-machine: `{ path }` (ipc). Cross-network: pass a full address — required; no elect (L1).
- * Dialable targets return an {@link AddressedNode} (same overloads as {@link Tag}).
- *
- * @category constructors
- * @public
- */
-export const Lookup = <Self>() => {
-  function build(
-    name: string,
-  ): NodeTagClass<Self, never, BareAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target: {
-      readonly path: string;
-      readonly kind?: "IpcSocket";
-      readonly onConflict?: OnConflictResolved;
-    },
-  ): NodeTagClass<Self, never, IpcAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target: number | `:${number}`,
-  ): NodeTagClass<Self, never, HttpAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target: `ws://${string}` | `wss://${string}`,
-  ): NodeTagClass<Self, never, WsAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target: `http://${string}` | `https://${string}`,
-  ): NodeTagClass<Self, never, HttpAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target: string | { readonly url: string; readonly kind?: ProtocolKind },
-  ): NodeTagClass<Self, never, UrlAddressLoose> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target?: LooseNodeTarget,
-  ): NodeTagClass<
-    Self,
-    never,
-    BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
-  > & {
-    readonly isLookupNode: true
-  };
-  function build(
-    name: string,
-    target?: LooseNodeTarget,
-  ): NodeTagClass<
-    Self,
-    never,
-    BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
-  > & {
-    readonly isLookupNode: true
-  } {
-    const node = Tag<Self>()(name, target)
-    // Lookup is the fleet parent — concrete default (never leave as ordinary-node "inherit").
-    const onConflict: OnConflict =
-      typeof target === "object" &&
-      target !== null &&
-      target.onConflict !== undefined
-        ? target.onConflict === "inherit"
-          ? "livenessReplace"
-          : target.onConflict
-        : "livenessReplace";
-    return Object.assign(node, {
-      isLookupNode: true as const,
-      onConflict,
-    })
-  }
-  return build;
-};
-
-/**
- * True when `node` was built with {@link Lookup}.
+ * True when `node` was branded by {@link asLookup} (the fleet lookup/identity server).
  *
  * @category guards
  * @public

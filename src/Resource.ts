@@ -2368,6 +2368,33 @@ export const nodeKindOf = (tag: unknown): ProtocolKind | undefined => {
   return undefined;
 };
 
+/**
+ * The full set of {@link ProtocolKind}s a tag's {@link Node} speaks — every transport in its
+ * `endpoints` set (a multi-protocol node has several), or its single primary `kind`, or `[]` for a
+ * nodeless/bare tag. A structural read; the server asserts its own transport is a **member** of this
+ * set ({@link ProtocolKindMismatch}) so a node served over any of its declared transports passes.
+ *
+ * @public
+ */
+export const nodeKindsOf = (tag: unknown): ReadonlyArray<ProtocolKind> => {
+  const node = nodeOf(tag);
+  if (node === undefined) {
+    return [];
+  }
+  const kinds: Array<ProtocolKind> = [];
+  if (Predicate.hasProperty(node, "endpoints")) {
+    const ep = node.endpoints;
+    if (Predicate.hasProperty(ep, "Http")) kinds.push("Http");
+    if (Predicate.hasProperty(ep, "WebSocket")) kinds.push("WebSocket");
+    if (Predicate.hasProperty(ep, "IpcSocket")) kinds.push("IpcSocket");
+  }
+  if (kinds.length > 0) {
+    return kinds;
+  }
+  const single = nodeKindOf(tag);
+  return single !== undefined ? [single] : [];
+};
+
 /** A structural bound matching any resource tag (bare or node-bound) by its spec brand — deliberately
  *  WITHOUT the tag's `Svc` type param. A data-last combinator (`.pipe(withReadiness(...))`,
  *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
@@ -2403,7 +2430,7 @@ export type PipeableTag = { readonly [specSym]: FlatSpec };
  */
 export const withReadiness: {
   // Data-last: `T extends PipeableTag` (shallow) — do not constrain against ResourceTag|NodeBoundTag
-  // or stock tsc TS2589s on node-bound `class extends Tag(…).pipe(withReadiness(…))` (expands Svc).
+  // or stock tsc TS2589s on node-bound `class extends Tag()(…).pipe(withReadiness(…))` (expands Svc).
   // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
   // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
   //
@@ -3236,9 +3263,10 @@ export interface ServedResource {
   readonly readiness: Effect.Effect<Readiness>;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
-  /** Declared transport of the tag's {@link Node}, when node-bound — the server asserts each served
-   *  resource's `nodeKind` matches its own transport, else {@link ProtocolKindMismatch}. */
-  readonly nodeKind?: ProtocolKind;
+  /** Declared transport set of the tag's {@link Node}, when node-bound — the server asserts its own
+   *  transport is a **member**, else {@link ProtocolKindMismatch}. A multi-protocol node lists all its
+   *  transports, so serving it over any one passes. */
+  readonly nodeKinds?: ReadonlyArray<ProtocolKind>;
 }
 
 /**
@@ -3396,14 +3424,14 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
           onNone: () => Effect.void,
           onSome: (registry) => {
             const bound = nodeOf(tag);
-            const boundKind = nodeKindOf(tag);
+            const boundKinds = nodeKindsOf(tag);
             return registry.register({
               groupId: tag.groupId,
               group,
               kind: kindOf(tag) ?? "resource",
               readiness: readinessCheckServed(tag, wireImpl),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
-              ...(boundKind !== undefined ? { nodeKind: boundKind } : {}),
+              ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
           },
         }),
@@ -3470,6 +3498,21 @@ const servePlain = <Self, S extends Spec, R = never>(
     }),
   );
 
+/** Stamped on a {@link serve} layer with the served tag's key — lets an anonymous `listen` derive a
+ *  legible node name from the first resource it serves without building the layer. @public */
+export const servedKeySym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/servedKey",
+);
+
+/** The served tag's key stamped on a {@link serve} layer, or `undefined`. @public */
+export const servedKeyOf = (layer: unknown): string | undefined => {
+  if (Predicate.hasProperty(layer, servedKeySym)) {
+    const k = layer[servedKeySym];
+    return typeof k === "string" ? k : undefined;
+  }
+  return undefined;
+};
+
 export const serve = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
   impl:
@@ -3477,17 +3520,23 @@ export const serve = <Self, S extends Spec, R = never>(
     | BuiltResource<S, R>
     | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
-  const plain = servePlain(tag, impl);
+  // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
+  // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
+  // paths return (servePlain re-merges, which would drop an earlier stamp).
+  const plain = Object.assign(servePlain(tag, impl), {
+    [servedKeySym]: tag.groupId,
+  });
   if (!isIdentity(tag)) {
     return plain;
   }
   // Identity path requires Lookup.Identity at runtime (fail-closed). Kept off the public
   // `R` channel so plain `serve` stays TS2589-free (ResourceTag & identity brand blows up).
-  return identityClaimLayer(tag, plain) as Layer.Layer<
+  const claimed = identityClaimLayer(tag, plain) as Layer.Layer<
     Self | Local<Self> | HandlerContextOf<S>,
     never,
     R
   >;
+  return Object.assign(claimed, { [servedKeySym]: tag.groupId });
 };
 
 // [extracted to Node module — was Resource.ts:3193-3978]
@@ -4259,7 +4308,7 @@ export const nodesOf = <Self, S extends Spec>(
  * {@link nodes}`([])`. {@link peersLayer} then reads Lookup `Directory.nodesServing`.
  *
  * For a **fixed** fleet list, use {@link nodes}`([A, B])` (not this pipe). Identity-shaped
- * like {@link identity} so `class extends Tag(…).pipe(Resource.distributed)` type-checks.
+ * like {@link identity} so `class extends Tag()(…).pipe(Resource.distributed)` type-checks.
  *
  * @category nodes & fleet
  * @public

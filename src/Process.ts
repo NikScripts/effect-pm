@@ -2090,7 +2090,7 @@ const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
 /**
  * Graft path-keyed leaves onto a tag's flat spec and rebuild its RPC group in place, optionally
  * stamping combinator metadata. Reuses the tag's already-claimed `groupId` (no re-claim). Returns
- * the same (mutated) tag — so `class X extends Tag(...).pipe(combinator) {}` extends it. @internal
+ * the same (mutated) tag — so `class X extends Tag()(...).pipe(combinator) {}` extends it. @internal
  */
 const augmentTag = (
   tag: ResourceTag<any, any, any>,

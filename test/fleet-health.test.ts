@@ -168,7 +168,7 @@ describe("FleetHealth", () => {
     }),
   );
 
-  it("Tag() is unbound; Tag({ node }) stamps the droplet", () => {
+  it("Tag()() is unbound; Tag()({ node }) stamps the droplet", () => {
     // MeshHealth is `Tag()()` (default key already claimed) — still unbound after distributed.
     expect(Resource.nodeOf(MeshHealth)).toBeUndefined();
     class BoundGlass extends FleetHealth.Tag<BoundGlass>()({ node: DropletEast }) {}
