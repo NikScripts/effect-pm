@@ -1,4 +1,4 @@
-import { Duration, Effect, Layer, Schema, Scope, Stream } from "effect";
+import { Duration, Effect, Exit, Layer, Schema, Scope, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { Process, QueueResource, RunResource } from "../src";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // Transport conformance matrix: each resource type × {ws, http} must stream/respond over the wire, and
 // a protocol MISMATCH (http client → ws server) must FAIL loudly rather than silently drop — the exact
@@ -108,20 +109,38 @@ describe("transport conformance: streams/responds over BOTH transports", () => {
   );
 });
 
-describe("transport conformance: an http client against a ws server FAILS loudly", () => {
-  // `remote` rejects when the wire op fails; a mismatch must reject (not resolve = silently drop).
-  const rejects = <A, E, R>(
+describe("transport conformance: an http client against a ws server FAILS as ProtocolMismatch", () => {
+  // Loud-failures §5 / 4.2a — mismatch must fail with the tagged ProtocolMismatch, not silently drop.
+  const mismatchExit = <A, E, R>(
     served: Layer.Layer<R, unknown, HttpServer.HttpServer>,
     clientTag: Layer.Layer<R, never, RpcClient.Protocol>,
     op: Effect.Effect<A, E, R | Scope.Scope>,
-  ): Promise<boolean> =>
-    remote("ws", "http", served, clientTag, op).then(
-      () => false,
-      () => true,
+  ): Promise<Exit.Exit<A, unknown>> => {
+    const server = Node.wsServer([served]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
+        const port = address._tag === "TcpAddress" ? address.port : 0;
+        return yield* Effect.exit(
+          op.pipe(
+            Effect.provide(clientTag.pipe(Layer.provide(proto("http", port)))),
+            Effect.scoped,
+          ),
+        );
+      }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))),
     );
+  };
 
-  it("queue mismatch fails", () =>
-    rejects(queueServe, Resource.client(ConfQueue), queueOp).then((r) => expect(r).toBe(true)));
-  it("run mismatch fails", () =>
-    rejects(gateServe, Resource.client(ConfGate), gateOp).then((r) => expect(r).toBe(true)));
+  // Single RPC call — avoid stream subscribe races so the tagged remap is what we assert.
+  const queueAdd = Effect.flatMap(ConfQueue, (q) => q.add({ n: 1 }));
+  const gateRun = Effect.flatMap(ConfGate, (g) => g.run(1));
+
+  it("queue mismatch → ProtocolMismatch", () =>
+    mismatchExit(queueServe, Resource.client(ConfQueue), queueAdd).then((exit) =>
+      expectTaggedFailure(exit, "ProtocolMismatch"),
+    ));
+  it("run mismatch → ProtocolMismatch", () =>
+    mismatchExit(gateServe, Resource.client(ConfGate), gateRun).then((exit) =>
+      expectTaggedFailure(exit, "ProtocolMismatch"),
+    ));
 });

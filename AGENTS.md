@@ -8,7 +8,7 @@ Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) fo
 
 **Roadmap (future only):** [`docs/plans/README.md`](./docs/plans/README.md).
 
-**Branches:** `<type>/<description>` (e.g. `feature/store-release-hygiene`, `cursor/…`). Agent work branches may commit and push freely; merge into **`integration`** when green and directed. Do not commit or push on `main` / `develop` / release / user-owned branches without approval. **`integration`** pushes require owner direction (or explicit handoff/supervisor OK).
+**Branches:** one **work branch per agent** + one **`integration`** tip. Sync so work branch and `integration` are merged and share the same tip. Do **not** open PRs unless the owner asks. Do not commit or push on `main` / `develop` / release / user-owned branches without approval. Detail: [`docs/legacy/AGENTS.md`](./docs/legacy/AGENTS.md#branch-policy).
 
 **Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat.
 

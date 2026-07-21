@@ -101,13 +101,11 @@ A one-shot handshake at `connect` that pings the server and returns eagerly with
 
 **Sequencing:** 4.1 → 4.2(a) → (4.2(b) + 4.3 together, since both need the kind marker / host-health verb). 4.1 and 4.2(a) deliver most of the value and need no new server surface.
 
-## 5. Verification harness (independently ownable, land first)
+## 5. Verification harness
 
-This is the part that isn't in `Resource.ts` and doesn't collide with any active worktree. It also *reproduces* both motivating bugs, so it's worth building even before §4:
-
-1. **A per-failure-mode test matrix** (`test/`): for each of F1–F4, assert the misconfiguration produces the **named** typed error **eagerly** (or, pre-fix, assert the current bad behavior so the fix is a visible diff). F1 already has partial coverage in `test/queue-remote-websocket.test.ts` (the mismatch test asserts a failure — extend it to assert the *tagged* error once F1 lands).
-2. **A headless fleet smoke test** (example CI): boot Droplet + Mini, run one producer, assert (a) queues fill, (b) NodeStatus reaches ready, (c) a stream delivers frames — from node probes, no browser. Turns the manual "three servers + Playwright + eyeballs" ritual into a CI gate. This alone would have caught both bugs.
-3. **A transport conformance matrix:** every resource type {queue, process, run, shardmap, httpapi} × {http, ws, mismatch}, generated once, so "streams over the wire, fails loudly on mismatch" becomes a proven invariant per type instead of a per-type surprise.
+1. **Per-failure-mode matrix** — **SHIPPED for F1/F2/F3:** `ProtocolMismatch` (`queue-remote-websocket`, `transport-conformance`), `MissingClientProtocol`, `verifyConnection` deep classification. F4 `contractHash` still deferred.
+2. **Headless fleet smoke** — **SHIPPED:** `test/fleet-smoke.test.ts` (ws producer + NodeStatus).
+3. **Transport conformance matrix** — **SHIPPED** for queue/process/run/shardmap × {http, ws} + http→ws mismatch → `ProtocolMismatch` (`test/transport-conformance.test.ts`, `test/shardmap-remote.test.ts`). httpapi row still open if needed.
 
 ## 6. Success criteria
 

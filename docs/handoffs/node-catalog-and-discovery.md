@@ -528,7 +528,7 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
 | Address | Always ephemeral ipc path at `listen` (no address arg — fixed addresses stay on `make`). |
 | Claim | **None** — many instances may run; directory `livenessReplace` still applies on duplicate `nodeKey`. |
 | Catalog | Same `ROut` brand as the Prototype. |
-| Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node (D4 OPEN). |
+| Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node; soft pick via D4 `{ pick }` (**LOCKED**). |
 | Spawn ergonomics | **`Proto.listen(serves) → (suffix?) => Layer`** — curry serve list; sugar over `Resource.listen(instance(suffix), serves)`. Returns **Layer only** (`ListenNode` in built context). Keep **`instance()`** public. Named clones stay `Resource.listen(East, serves)` — no `East.listen`. |
 
 #### `Prototype.listen` factory (**LOCKED** 2026-07-19)

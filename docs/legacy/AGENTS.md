@@ -139,11 +139,12 @@ breaking notes into one coherent changeset when possible (see
 
 **Rules:**
 
+- **One work branch per agent** (e.g. `cursor/<desc>-….` / `feature/<desc>`). Do not scatter work across many agent branches.
+- **One integration branch:** `integration`. Agents **sync** with it: after a sync, the work branch and `integration` are **merged and share the same tip**.
 - Branch agent work from **`integration`**, not `main`, for platform work.
-- Open PRs → **`integration`** unless the handoff says otherwise.
-- **Push to `integration`** only when the owner directs — do not block on unrelated agents.
+- **Do not open PRs** unless the owner asks.
+- **Push to `integration`** when syncing (or when the owner directs) so the shared tip is published.
 - Do **not** push to `main`, `develop`, release branches, or owner-owned branches without explicit approval.
-- Cloud agent feature branches use `cursor/<desc>-a3ad`.
 
 ---
 
