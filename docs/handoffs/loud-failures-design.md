@@ -22,8 +22,9 @@
 
 **SHIPPED — §4.2a `ProtocolMismatch` remap** — `Resource.client` / `forwardClient` maps Effect's "empty HTTP response" `RpcClientDefect` (http client → ws server) to tagged `ProtocolMismatch`.
 
+**SHIPPED — §4.1 `MissingClientProtocol`** — nodeless `client(tag)` / `clientInstances` use `serviceOption(RpcClient.Protocol)`; absent ambient protocol → tagged `MissingClientProtocol` with remediation (Layer still requires Protocol in `R`).
+
 **REMAINING:**
-- **§4.1 `MissingClientProtocol`** — absent ambient `RpcClient.Protocol` still a generic missing-service die; P1 already makes the classic mis-provide a compile error.
 - **§4.3/§8.4 `verify` handshake (F3/F4)** — investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
   - **F1/F3 verify is free and self-contained** — await `onConnect` / send one `Ping`, bounded by a timeout → `NodeUnreachable` (no Pong) or `ProtocolMismatch` (transport opened but handshake rejected — http↔ws). **No server-side application verb, works against any Effect RPC server today.** This unblocks **default-on `verify` for remote tags** (no host-health prerequisite).
   - **Socket vs http nuance:** socket is persistent (built-in ping timeouts / `onConnect`, verify nearly passive); http is stateless, so http-verify is one explicit `Ping` round-trip at connect.

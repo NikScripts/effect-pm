@@ -34,7 +34,7 @@ yield* Resource.verifyConnection(Droplet, { deep: true })       // + NodeStatus 
 yield* Resource.verifyConnection(Droplet, { deep: true, resource: "app/Emails" })
 // → ProtocolUnanswered | ServiceNotServed | ServiceNotReady
 ```
-Tier-1 is a cheap transport probe (`selectEndpoint`, or `{ all: true }`). `{ deep: true }` dials auto-served `NodeStatus`. Escape-hatch http→ws calls also remap to tagged `ProtocolMismatch` (not an opaque `RpcClientDefect`).
+Tier-1 is a cheap transport probe (`selectEndpoint`, or `{ all: true }`). `{ deep: true }` dials auto-served `NodeStatus`. Escape-hatch http→ws calls also remap to tagged `ProtocolMismatch` (not an opaque `RpcClientDefect`). Nodeless `client(tag)` without ambient Protocol fails as tagged `MissingClientProtocol`.
 
 ## ★ A node is no longer a bare protocol — the wiring bug is now a compile error
 

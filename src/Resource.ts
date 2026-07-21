@@ -229,6 +229,28 @@ export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
 }
 
 /**
+ * A nodeless {@link Resource.client}`(tag)` was built with no ambient {@link RpcClient.Protocol}.
+ * Replaces Effect's opaque "Service not found: …/Protocol" die with a remediation message naming
+ * the three ways to connect. The Layer still *requires* `RpcClient.Protocol` in `R` (compile-time);
+ * this is the loud runtime backstop when that requirement is stripped or left unsatisfied.
+ *
+ * @category errors
+ * @public
+ */
+export class MissingClientProtocol extends Data.TaggedError("MissingClientProtocol")<{
+  readonly resource: string;
+}> {
+  override get message() {
+    return (
+      `Resource.client("${this.resource}") has no ambient RpcClient.Protocol. ` +
+      `Connect it with Node.connect(node) / Resource.client(tag, node), ` +
+      `Resource.clientHttp(tag, target), or Resource.socketClient(node) ` +
+      `(or Layer.provide a protocolHttp / protocolWebsocket / protocolIpc layer).`
+    );
+  }
+}
+
+/**
  * Effect's http RPC client surfaces a wrong-protocol peer as `RpcClientDefect` with these
  * fixed messages (see `effect/unstable/rpc/RpcClient`). Match the defect `_tag` + those
  * strings — the only discriminant the wire gives us.
@@ -5304,14 +5326,26 @@ function clientLayer<Self, S extends Spec>(
   const group = tag[groupSym];
   // an explicit `node` (for a nodeless tag) wins; otherwise the tag's own node, if any.
   const nodeKey = node ?? tag[nodeSym];
-  // no node anywhere: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
+  // no node anywhere: take the transport from the ambient `RpcClient.Protocol`.
+  // `serviceOption` so a missing protocol surfaces as {@link MissingClientProtocol} (not Effect's
+  // opaque "Service not found" die). Typed as `E = never` like before — this replaces a defect,
+  // not a channel that callers already handled; Protocol stays required in `R`.
   if (nodeKey === undefined) {
     return Layer.effect(
       tag,
-      Effect.flatMap(RpcClient.make(group), (client) =>
-        buildClientService(tag, client),
-      ),
-    );
+      Effect.gen(function* () {
+        const protocol = yield* Effect.serviceOption(RpcClient.Protocol);
+        if (Option.isNone(protocol)) {
+          return yield* new MissingClientProtocol({ resource: tag.key });
+        }
+        const client = yield* Effect.provideService(
+          RpcClient.make(group),
+          RpcClient.Protocol,
+          protocol.value,
+        );
+        return yield* buildClientService(tag, client);
+      }),
+    ) as unknown as Layer.Layer<Self, never, RpcClient.Protocol>;
   }
   // node chosen (from the tag or the argument): resolve the transport from that node service and
   // provide it locally to the client, so the layer requires the node rather than the ambient
@@ -5380,7 +5414,18 @@ const clientInstances = <
   ...tags: Tags
 ): Layer.Layer<InstanceIdentifiers<Tags, S>, never, RpcClient.Protocol> =>
   Layer.effectContext(
-    Effect.map(RpcClient.make(factory[groupSym]), (rpc) => {
+    Effect.gen(function* () {
+      const protocol = yield* Effect.serviceOption(RpcClient.Protocol);
+      if (Option.isNone(protocol)) {
+        return yield* new MissingClientProtocol({
+          resource: factory.groupId,
+        });
+      }
+      const rpc = yield* Effect.provideService(
+        RpcClient.make(factory[groupSym]),
+        RpcClient.Protocol,
+        protocol.value,
+      );
       let context = Context.empty();
       for (const tag of tags) {
         const service = nestService(
@@ -5392,7 +5437,11 @@ const clientInstances = <
       // per-instance `Context.add` loop. Runtime-safe — built key-for-key from `tags`.
       return context as Context.Context<InstanceIdentifiers<Tags, S>>;
     }),
-  );
+  ) as unknown as Layer.Layer<
+    InstanceIdentifiers<Tags, S>,
+    never,
+    RpcClient.Protocol
+  >;
 
 // ── stream helpers: tag-dispatched consumption of an event stream ──
 
