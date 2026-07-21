@@ -31,7 +31,7 @@
  * @module Polling
  */
 
-import { Duration, Effect, Layer, Option, Random, Ref, Deferred, Stream } from "effect";
+import { Duration, Effect, Layer, Option, Random, Ref, Deferred, Scope, Stream } from "effect";
 import { registerPollingLayer } from "./internal/processLayerBrand";
 import { DynamicConfigStore, type FixedField, type SwappableField } from "./DynamicConfig";
 
@@ -474,3 +474,94 @@ export const dynamic = (
     ),
   );
 };
+
+// ============================================================================
+// Preset: adaptive (fast on work, decay to idle)
+// ============================================================================
+
+/**
+ * Work-aware cadence — the complement of {@link backoff}. Ticks run at `active` after a work
+ * signal and DECAY toward `idle` (each tick multiplies the wait by `factor`, capped at `idle`)
+ * while nothing happens. Signal work by calling `resetCadence` — from inside the effect via
+ * {@link current}, from the handle via `proc.polling.resetCadence`, or wire a stream to it with
+ * {@link wakeOn}. The reset snaps the cadence back to `active` and wakes the current wait.
+ *
+ * The queue-drainer shape: drain fast while entries keep arriving, back off to a lazy idle poll
+ * when the queue runs dry.
+ *
+ * @example
+ * ```ts
+ * Polling.adaptive({ active: "250 millis", idle: "30 seconds" })
+ * // work → 250ms → 500ms → 1s → … → 30s → 30s (factor 2 default)
+ * ```
+ * @category presets
+ * @public
+ */
+export const adaptive = (options: {
+  readonly active: Duration.Input;
+  readonly idle: Duration.Input;
+  readonly factor?: number;
+}): Layer.Layer<PollingTag> => {
+  const activeMs = Duration.toMillis(Duration.fromInputUnsafe(options.active));
+  const idleMs = Duration.toMillis(Duration.fromInputUnsafe(options.idle));
+  const factor = options.factor ?? 2;
+  const delayMs = (iteration: number): number =>
+    Math.min(activeMs * Math.pow(factor, iteration), idleMs);
+
+  return registerPollingLayer(
+    Layer.effect(
+      PollingTag,
+      Effect.gen(function* () {
+        const iteration = yield* Ref.make(0);
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined),
+        ).pipe(Effect.asVoid);
+        const awaitNextTick = Effect.gen(function* () {
+          const d = Deferred.makeUnsafe<void, never>();
+          yield* Ref.set(wakeRef, d);
+          const n = yield* Ref.get(iteration);
+          yield* Effect.race(
+            Effect.sleep(Duration.millis(delayMs(n))),
+            Deferred.await(d),
+          ).pipe(Effect.asVoid);
+        });
+        return {
+          awaitNextTick,
+          requestWake,
+          // work signal: snap back to `active` and end the current wait
+          resetCadence: Ref.set(iteration, 0).pipe(Effect.andThen(requestWake)),
+          afterTick: Ref.update(iteration, (n) => n + 1),
+          peekCadence: Effect.map(Ref.get(iteration), (n) =>
+            Option.some(Duration.millis(delayMs(n))),
+          ),
+        } satisfies PollingService;
+      }),
+    ),
+  );
+};
+
+// ============================================================================
+// Event-driven wake
+// ============================================================================
+
+/**
+ * Wire a stream to a cadence control: every element runs `wake` (or any control effect), so an
+ * external fact — a queue `add` event, a store change — ends the polling wait IMMEDIATELY
+ * instead of waiting out the interval. Forked into the current scope.
+ *
+ * Pair with {@link adaptive}: point it at `proc.polling.resetCadence` and arrivals snap the
+ * drainer back to its `active` cadence.
+ *
+ * @example
+ * ```ts
+ * yield* Polling.wakeOn(queue.events, proc.polling.resetCadence)
+ * ```
+ * @category combinators
+ * @public
+ */
+export const wakeOn = <A, R>(
+  stream: Stream.Stream<A, never, R>,
+  wake: Effect.Effect<void>,
+): Effect.Effect<void, never, R | Scope.Scope> =>
+  Effect.asVoid(Effect.forkScoped(Stream.runForEach(stream, () => wake)));
