@@ -131,8 +131,8 @@ export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
 };
 
 /**
- * Address-less {@link listen} lost the `Node.key` claim — another process owns this Node.
- * Winner endpoint is in `original` (dial via {@link lookupClient} / `client`).
+ * Address-less {@link unix} / {@link http} / {@link ws} lost the `Node.key` claim — another
+ * process owns this Node. Winner endpoint is in `original` (dial via Lookup / `client`).
  *
  * @public
  */
@@ -147,8 +147,8 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
 }> {}
 
 /**
- * The Node {@link listen} is binding (concrete or minted address-less). Identity claims prefer
- * this over a Tag-bound Node when present.
+ * The Node a protocol listen (`unix` / `http` / `ws`) is binding (concrete or minted).
+ * Identity claims prefer this over a Tag-bound Node when present.
  *
  * @public
  */
@@ -156,7 +156,12 @@ export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
   "@nikscripts/effect-pm/internal/nodeCore/ListenNode",
 ) {}
 
-/** Options for {@link listen} — rpc path / health / ipc unlink; not the Http bind port (C2). @public */
+/**
+ * Shared options for {@link unix} / {@link http} / {@link ws} (and low-level `*Server`) —
+ * rpc path / health / ipc unlink. Not the TCP bind port (platform layer owns that).
+ *
+ * @public
+ */
 export type ListenOptions = {
   readonly path?: HttpRouter.PathInput;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -166,14 +171,19 @@ export type ListenOptions = {
 };
 
 /**
- * Options for nameless {@link listen}`([serve…])` — {@link ListenOptions} plus Lookup
- * bootstrap knobs (same as {@link Node.listenLocal}).
+ * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal} —
+ * {@link ListenOptions} plus Lookup bootstrap knobs.
  *
  * @public
  */
 export type NamelessListenOptions = ListenOptions & {
   readonly lookupPath?: string;
   readonly unlinkLookup?: boolean;
+  /**
+   * When `false`, skip {@link Lookup.bootstrapDefaultLocal} — caller provides
+   * Identity / Directory (e.g. a custom Lookup server). Default `true`.
+   */
+  readonly bootstrapLookup?: boolean;
 };
 
 /**
@@ -604,6 +614,149 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
       `Node "${this.node}" declares no address/kind, so a transport can't be derived from it. ` +
       `Give the node an address (e.g. Node.Tag("${this.node}", 3001), { url, kind }, or { path }), ` +
       `or pass a protocol explicitly: connect(node, protocol).`
+    );
+  }
+}
+
+/**
+ * Protocol Tag+impl (`unix` / `http` / `ws`(Tag, impl)) needs exactly one Node on the resource
+ * handle (`{ node }` / {@link Resource.nodes}`([X])` / {@link Resource.andNode}).
+ * `missing` = none; `ambiguous` = two or more (pick with `unix/http/ws(node, [serve…])`).
+ * Anonymous transport stays `unix/http/ws([serve…])` / `unix/http/ws(serve)` — never this overload.
+ *
+ * @public
+ */
+export class ListenTagNodeRequired extends Data.TaggedError(
+  "ListenTagNodeRequired",
+)<{
+  readonly tag: string;
+  readonly reason: "missing" | "ambiguous";
+  readonly count: number;
+}> {
+  override get message() {
+    if (this.reason === "ambiguous") {
+      return (
+        `Tag+impl listen for "${this.tag}" saw ${String(this.count)} Nodes — ` +
+        `use Node.unix/http/ws(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
+      );
+    }
+    return (
+      `Tag+impl listen for "${this.tag}" needs a sole Node on the Tag ` +
+      `(Resource.andNode / nodes([X]) / { node }). ` +
+      `For anonymous transport use Node.unix/http/ws(Resource.serve(${this.tag}, impl)).`
+    );
+  }
+}
+
+/**
+ * {@link unix} only speaks Unix-domain IPC. The Node (or Tag-bound Node) was Http / WebSocket
+ * — use {@link http} / {@link ws} for those transports.
+ *
+ * @public
+ */
+export class UnixListenRequiresIpc extends Data.TaggedError(
+  "UnixListenRequiresIpc",
+)<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.unix requires an IpcSocket Node (Unix-domain path); ` +
+      `"${this.node}" is ${this.kind}. Use Node.http / Node.ws (or httpServer / wsServer) for those transports.`
+    );
+  }
+}
+
+/**
+ * {@link http} only speaks local Http. The Node (or Tag-bound Node) was IpcSocket / WebSocket
+ * (or a non-loopback URL) — use {@link unix} / {@link ws}, or {@link httpServer} for custom binds.
+ *
+ * @public
+ */
+export class HttpListenRequiresHttp extends Data.TaggedError(
+  "HttpListenRequiresHttp",
+)<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.http requires a local Http Node (loopback url or address-less mint); ` +
+      `"${this.node}" is ${this.kind}. Use Node.unix / Node.ws (or httpServer / wsServer) for other transports.`
+    );
+  }
+}
+
+/**
+ * {@link ws} only speaks local WebSocket. The Node (or Tag-bound Node) was IpcSocket / Http
+ * (or a non-loopback URL) — use {@link unix} / {@link http}, or {@link wsServer} for custom binds.
+ *
+ * @public
+ */
+export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.ws requires a local WebSocket Node (loopback ws:// url or address-less mint); ` +
+      `"${this.node}" is ${this.kind}. Use Node.unix / Node.http (or ipcServer / httpServer) for other transports.`
+    );
+  }
+}
+
+/**
+ * {@link nPipe} only speaks IpcSocket (named-pipe path). The Node was Http / WebSocket —
+ * use {@link http} / {@link ws} for those transports.
+ *
+ * @public
+ */
+export class NPipeListenRequiresIpc extends Data.TaggedError(
+  "NPipeListenRequiresIpc",
+)<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.nPipe requires an IpcSocket Node (Windows named-pipe path); ` +
+      `"${this.node}" is ${this.kind}. Use Node.http / Node.ws (or httpServer / wsServer) for those transports.`
+    );
+  }
+}
+
+/**
+ * {@link nPipe} is Windows-only. On POSIX use {@link unix}.
+ *
+ * @public
+ */
+export class NPipeRequiresWindows extends Data.TaggedError(
+  "NPipeRequiresWindows",
+)<{
+  readonly platform: string;
+}> {
+  override get message() {
+    return (
+      `Node.nPipe requires win32 (got "${this.platform}"). ` +
+      `On POSIX use Node.unix for IpcSocket listen.`
+    );
+  }
+}
+
+/**
+ * {@link listen} no longer binds a transport. Use the protocol entry instead.
+ *
+ * @public
+ */
+export class ListenUseProtocol extends Data.TaggedError("ListenUseProtocol")<{
+  readonly protocol: "unix" | "http" | "ws";
+  readonly detail: string;
+}> {
+  override get message() {
+    return (
+      `Node.listen does not bind a transport (${this.detail}). ` +
+      `Use Node.${this.protocol}(…) for that protocol.`
     );
   }
 }

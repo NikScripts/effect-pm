@@ -113,9 +113,74 @@ const hoverExpandLinks = new WeakMap<object, ReadonlyArray<Annotate.Link>>();
 // Substituting the displayed body with our print only makes sense for plain declaration heads
 // (`const emails: `, `SqliteClient.backup: `) — a method-call head (`take(self: …): `) trips the
 // lazy head regex, and a pathological type would blow up the popup.
-const simpleHead =
-  /^(?:(?:const|let|var|function|type|interface|class|namespace|enum)\s+)?[\w$.]+\??:\s$/;
+// A substitutable declaration head: keyword + (possibly generic-qualified) name + `: `.
+// `QueueResource<{ to: string; }>.add: ` qualifies (brackets balance, junk only inside them);
+// `H.add(item: Email): ` does NOT — a depth-zero `(` marks a callable head, which the
+// callableForm path owns (substituting a head that already spells the params would double them).
+const isSimpleHead = (head: string): boolean => {
+  const m = /^(?:(?:const|let|var|type|interface|class|namespace|enum)\s+)?([\s\S]+?)\??:\s$/.exec(
+    head
+  );
+  if (m === null || m[1] === undefined) return false;
+  let depth = 0;
+  for (const c of m[1]) {
+    if (c === "(" && depth === 0) return false;
+    if (c === "(" || c === "[" || c === "{" || c === "<") depth += 1;
+    else if (c === ")" || c === "]" || c === "}" || c === ">") depth -= 1;
+    else if (depth === 0 && !/[\w$.]/.test(c)) return false;
+  }
+  return depth === 0;
+};
 const maxSubstituteLength = 2000;
+
+// Callable hovers (`(method) H.add(item: Email): Effect<…>`, `function retry(...): …`) have no
+// simple head — their first `:` sits inside the parameter list, so neither substitution nor
+// realign ever landed and method popups stayed link-less. But the compiler print exists at those
+// sites in ARROW form; method form is the same text with the top-level ` => ` seam replaced by
+// `: `, so links carry over by pure displacement.
+const callableHead = /^((?:function\s+)?[\w$.]+)(?=[(<])/;
+
+// Index of the top-level ` => ` in a printed type — depth-tracked so arrows nested in parameter
+// or generic positions don't match; `=>`'s own `>` must not count against depth.
+const topLevelArrow = (text: string): number => {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (depth === 0 && text.startsWith(" => ", i)) return i;
+    if (text.startsWith("=>", i)) {
+      i += 1;
+      continue;
+    }
+    const c = text[i];
+    if (c === "(" || c === "[" || c === "{" || c === "<") depth += 1;
+    else if (c === ")" || c === "]" || c === "}" || c === ">") depth -= 1;
+  }
+  return -1;
+};
+
+interface CallableForm {
+  readonly text: string;
+  readonly links: ReadonlyArray<Annotate.Link>;
+}
+
+const callableForm = (
+  name: string,
+  typeText: string,
+  typeLinks: ReadonlyArray<Annotate.Link>
+): CallableForm | undefined => {
+  const arrow = topLevelArrow(typeText);
+  if (arrow < 0) return undefined;
+  const shift = (p: number): number => (p < arrow ? p + name.length : p + name.length - 2);
+  return {
+    text: `${name}${typeText.slice(0, arrow)}: ${typeText.slice(arrow + 4)}`,
+    links: typeLinks
+      .filter((l) => l.end <= arrow || l.start >= arrow + 4)
+      .map((l) => ({
+        start: shift(l.start),
+        end: shift(l.end),
+        url: l.url,
+      })),
+  };
+};
 // The declaration NAME at the start of a (prefix-stripped) hover text — declaration keywords are
 // skipped, so `type Protocol = …` yields `Protocol`.
 const declName =
@@ -126,9 +191,24 @@ const declName =
 // real JSDoc comments.
 const EXPAND_OPEN = "@@PMEXPAND@@";
 
-// The declaration head of a hover — `const emails: QueueResource<…>` → `const emails: ` (everything up
-// to the type), so the expanded box reads as the same declaration with the body spelled out.
-const declHead = (text: string): string => text.match(/^([\s\S]*?:\s)/)?.[1] ?? "";
+// The declaration head of a hover — `const emails: QueueResource<…>` → `const emails: ` (everything
+// up to the type), so the expanded box reads as the same declaration with the body spelled out.
+// DEPTH-AWARE: a generic-qualified head (`QueueResource<{ to: string; }>.add: …`) has colons inside
+// the type arguments; the head's colon is the first one at bracket depth zero.
+const declHead = (text: string): string => {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (depth === 0 && text[i] === ":" && text[i + 1] === " ") return text.slice(0, i + 2);
+    if (text.startsWith("=>", i)) {
+      i += 1;
+      continue;
+    }
+    const c = text[i];
+    if (c === "(" || c === "[" || c === "{" || c === "<") depth += 1;
+    else if (c === ")" || c === "]" || c === "}" || c === ">") depth -= 1;
+  }
+  return "";
+};
 
 // Prettier-format a hover's compact type so long generics break across lines in the popup instead of
 // stretching off-screen. Twoslash prefixes some hovers with "(property) " / "(method) " etc. — keep
@@ -259,12 +339,30 @@ const twoslasher = Object.assign(
         // displayed body BECOMES our compiler print — realign over our own formatting then always
         // lands, so every reference in the compact box links. Headless hovers (imports, bare type
         // names) and method-call heads keep twoslash's text with best-effort realign.
+        // What realign works against below: the compiler print (source coordinates + links) and
+        // the head to skip in the displayed text. Callable substitution replaces both.
+        let subText = info?.typeText;
+        let subLinks = info?.typeLinks;
+        let subHeadless = false;
         if (info?.typeText !== undefined && info.typeText.length <= maxSubstituteLength) {
           const m0 = /^(\([a-z ]+\)\s+)?([\s\S]+)$/.exec(h.text);
           const prefix0 = m0?.[1] ?? "";
           const rest0 = m0?.[2] ?? h.text;
           const head0 = declHead(rest0);
-          if (simpleHead.test(head0)) h.text = `${prefix0}${head0}${info.typeText}`;
+          if (isSimpleHead(head0)) {
+            h.text = `${prefix0}${head0}${info.typeText}`;
+          } else {
+            const callable = callableHead.exec(rest0);
+            if (callable !== null && callable[1] !== undefined && info.typeLinks !== undefined) {
+              const form = callableForm(callable[1], info.typeText, info.typeLinks);
+              if (form !== undefined) {
+                h.text = `${prefix0}${form.text}`;
+                subText = form.text;
+                subLinks = form.links;
+                subHeadless = true;
+              }
+            }
+          }
         }
         h.text = formatHoverType(h.text);
         // Box coordinates: rendererRich strips the "(property) " prefix from the displayed box.
@@ -286,12 +384,12 @@ const twoslasher = Object.assign(
           }
         }
         // Our parts print the TYPE (the body after the declaration head) — realign onto it, then
-        // displace into box coordinates.
-        if (info?.typeText !== undefined && info.typeLinks !== undefined) {
-          const head = declHead(rest);
+        // displace into box coordinates. Callable forms have no head: the whole rest IS our print.
+        if (subText !== undefined && subLinks !== undefined) {
+          const head = subHeadless ? "" : declHead(rest);
           const body = rest.slice(head.length);
           const displace = head.length;
-          Option.match(Annotate.realign(info.typeLinks, info.typeText, body), {
+          Option.match(Annotate.realign(subLinks, subText, body), {
             onNone: () => {},
             onSome: (links) => {
               for (const link of links) {

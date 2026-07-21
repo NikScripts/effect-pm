@@ -34,7 +34,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
-| **Node module** | `node-tag-addressed` → addressless serve/call → `node-prototype` → `node-lookup` |
+| **Node module** | `node-tag-addressed` → `node-tag-bound` → addressless serve/call → nameless serve/call → `node-prototype` → `node-lookup` |
 | **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → [`process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) |
 
 ---
@@ -60,10 +60,14 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar capture |
 | [`forms/resource/telemetry-fleet-glass.ts`](./forms/resource/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
 | [`forms/resource/fleet-health-glass.ts`](./forms/resource/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
-| [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.listen` / `connect` |
-| [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve (`Node.listenLocal`) — terminal A |
+| [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
+| [`forms/resource/node-http-nameless-serve.ts`](./forms/resource/node-http-nameless-serve.ts) | Nameless `Node.http(serve)` — localhost Http + Lookup |
+| [`forms/resource/node-ws-nameless-serve.ts`](./forms/resource/node-ws-nameless-serve.ts) | Nameless `Node.ws(serve)` — localhost WebSocket + Lookup |
+| — | `Node.nPipe` — Windows named-pipe sibling of `unix` (same `IpcSocket` kind; see `test/node-npipe.test.ts`) |
+| [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Resource.client(Jobs)` |
+| [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve (`Node.unix`) — terminal A |
 | [`forms/resource/node-tag-addressless-call.ts`](./forms/resource/node-tag-addressless-call.ts) | Address-less call (`Resource.clientLocal`) — terminal B |
-| [`forms/resource/node-nameless-listen-serve.ts`](./forms/resource/node-nameless-listen-serve.ts) | Nameless `Node.listen([serve…])` — two resources, terminal A |
+| [`forms/resource/node-nameless-listen-serve.ts`](./forms/resource/node-nameless-listen-serve.ts) | Nameless `Node.unix([serve…])` — two resources, terminal A |
 | [`forms/resource/node-nameless-listen-call.ts`](./forms/resource/node-nameless-listen-call.ts) | Nameless call (`clientLocal` ×2) — terminal B |
 | [`forms/resource/node-nameless-listen-demo.ts`](./forms/resource/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
 | [`forms/resource/node-prototype.ts`](./forms/resource/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |

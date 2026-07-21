@@ -53,7 +53,7 @@ const program = Effect.gen(function* () {
       const prev = yield* Ref.get(lastScoreKey);
       const key = scoreKey(snapshot);
 
-      const polling = yield* Polling;
+      const polling = yield* Polling.current;
       // Read-only: upcoming wait duration without consuming a tick.
       const peeked = yield* polling.peekCadence;
       const gapMs = Option.match(peeked, {

@@ -4,7 +4,7 @@ import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-// C2 — listen proves ROut then dispatches to ipcServer / *Server; clientsFor bundles connect.
+// C2 — unix proves ROut then binds ipc; clientsFor bundles connect.
 
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
@@ -33,7 +33,7 @@ describe("Node.listen + clientsFor (C2)", () => {
       ) {}
 
       const serverCtx = yield* Layer.build(
-        Node.listen(Worker, [
+        Node.unix(Worker, [
           Resource.serve(Jobs, jobsImpl),
           Resource.serve(Emails, emailsImpl),
         ]),

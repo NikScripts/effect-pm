@@ -1987,7 +1987,8 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
 
 /**
  * Identity-claiming resources need a dialable Node — Tag-bound (`nodes` / `{ node }`) and/or
- * the {@link ListenNode} from {@link listen} (including minted address-less Nodes).
+ * the {@link ListenNode} from {@link Node.unix} / {@link Node.http} / {@link Node.ws}
+ * (including minted address-less Nodes).
  *
  * @public
  */
@@ -2956,7 +2957,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
 
 /**
  * Claim `tag.key` at Lookup — won → `onWon` layer; lost → client of `original`.
- * Endpoint from {@link ListenNode} (listen) or the Tag's bound Node — no `{ self }` bag.
+ * Endpoint from {@link ListenNode} (protocol listen) or the Tag's bound Node — no `{ self }` bag.
  * Fail-closed: requires {@link LookupIdentity}; missing/unaddressed → {@link IdentitySelfRequired}.
  * @internal
  */

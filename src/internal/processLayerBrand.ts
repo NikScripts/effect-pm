@@ -1,5 +1,5 @@
 import { Layer } from "effect";
-import type { PollingTag } from "../Polling";
+import type { PollingTag } from "./pollingTag";
 import type { ProcessScheduleTag } from "./processSchedule";
 
 /** @internal */

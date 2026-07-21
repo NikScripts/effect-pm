@@ -45,7 +45,7 @@ const program = Effect.gen(function* () {
       const key = scoreKey(snapshot);
 
       if (key !== prev) {
-        const polling = yield* Polling;
+        const polling = yield* Polling.current;
         yield* polling.resetCadence;
         yield* Ref.set(lastScoreKey, key);
         yield* Effect.logInfo(`  score changed → resetCadence → ${key}`);

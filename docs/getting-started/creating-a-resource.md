@@ -127,6 +127,16 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(CounterLive))
 ```
 
+## Try It Live
+
+This exact Counter — the same Tag, the same `Resource.layer` — is running in this page right now.
+The buttons call `increment` / `reset` on the Handle; the count reads straight off `value.changes`.
+There is no extra API between the UI and the resource, the Handle *is* the surface:
+
+``` resource
+docs/Counter
+```
+
 ## What Changes Next
 
 Serve or client the same Tag without rewriting the program body. Only the Layer at the edge changes.

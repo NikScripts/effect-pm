@@ -21,7 +21,7 @@ class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
   jobs: Resource.effect(Schema.Number),
 }) {}
 
-/** Address-less — listen mints path + claims this key. */
+/** Address-less — `Node.unix` mints path + claims this key. */
 class Worker extends Node.Tag<Worker, Jobs>("forms/AddresslessWorker") {}
 
 const lookupSock = Config.string("LOOKUP_SOCK").pipe(
@@ -30,7 +30,7 @@ const lookupSock = Config.string("LOOKUP_SOCK").pipe(
 
 const program = Effect.gen(function* () {
   const path = yield* lookupSock
-  const live = Node.listenLocal(
+  const live = Node.unix(
     Worker,
     [Resource.serve(Jobs, { jobs: Effect.succeed(42) })],
     { lookupPath: path, unlinkLookup: true },

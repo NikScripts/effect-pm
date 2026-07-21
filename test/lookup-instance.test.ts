@@ -50,9 +50,10 @@ describe("Node.Prototype.instance / .listen", () => {
       const lookupClient = Lookup.client(lookupNode);
       yield* Layer.build(Lookup.layer(lookupNode));
 
-      const mailWorker = MailWorker.listen([
-        Resource.serve(Jobs, jobsImpl(9)),
-      ]);
+      const mailWorker = MailWorker.listen(
+        [Resource.serve(Jobs, jobsImpl(9))],
+        { bootstrapLookup: false },
+      );
       const ctx = yield* Layer.build(
         mailWorker("w2").pipe(Layer.provide(lookupClient)),
       );
@@ -84,9 +85,15 @@ describe("Node.Prototype.instance / .listen", () => {
       const lookupCtx = yield* Layer.build(lookupClient);
       const lookup = Context.merge(lookupServer, lookupCtx);
 
-      const worker = MailWorker.listen([Resource.serve(Jobs, jobsImpl(3))])
+      const worker = MailWorker.listen(
+        [Resource.serve(Jobs, jobsImpl(3))],
+        { bootstrapLookup: false },
+      )
       // second factory with different impl — same Prototype, own curry
-      const workerB = MailWorker.listen([Resource.serve(Jobs, jobsImpl(5))])
+      const workerB = MailWorker.listen(
+        [Resource.serve(Jobs, jobsImpl(5))],
+        { bootstrapLookup: false },
+      )
       const a = yield* Layer.build(
         worker().pipe(Layer.provide(lookupClient)),
       );
@@ -184,16 +191,22 @@ describe("Node.Prototype.instance / .listen", () => {
       const lookup = Context.merge(lookupServer, lookupCtx);
 
       const east = PoolWorker.instance("east");
-      const westLive = PoolWorker.listen([
-        Resource.serve(FleetJobs, fleetImpl(5)).pipe(
-          Layer.provide(Resource.peersFrom(FleetJobs, {})),
-        ),
-      ]);
-      const eastLive = PoolWorker.listen([
-        Resource.serve(FleetJobs, fleetImpl(2)).pipe(
-          Layer.provide(Resource.peersLayer(FleetJobs, east)),
-        ),
-      ]);
+      const westLive = PoolWorker.listen(
+        [
+          Resource.serve(FleetJobs, fleetImpl(5)).pipe(
+            Layer.provide(Resource.peersFrom(FleetJobs, {})),
+          ),
+        ],
+        { bootstrapLookup: false },
+      );
+      const eastLive = PoolWorker.listen(
+        [
+          Resource.serve(FleetJobs, fleetImpl(2)).pipe(
+            Layer.provide(Resource.peersLayer(FleetJobs, east)),
+          ),
+        ],
+        { bootstrapLookup: false },
+      );
 
       const westCtx = yield* Layer.build(
         westLive("west").pipe(Layer.provide(lookupClient)),

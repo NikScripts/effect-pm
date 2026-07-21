@@ -31,41 +31,36 @@
  * @module Polling
  */
 
-import { Context, Duration, Effect, Layer, Option, Random, Ref, Deferred } from "effect";
+import { Duration, Effect, Layer, Option, Random, Ref, Deferred } from "effect";
 import { registerPollingLayer } from "./internal/processLayerBrand";
 
 // ============================================================================
 // Service interface
 // ============================================================================
 
-/**
- * Cadence policy used by the Process supervisor between ticks while armed.
- *
- * @public
- */
-export interface PollingService {
-  /** Only `serial` is used by current presets (mutex between ticks). */
-  readonly overlap: "serial" | "concurrent";
-  /** Wait until the next poll attempt (races internal wake deferred). */
-  readonly awaitNextTick: Effect.Effect<void>;
-  /** End the current wait early so cadence recomputes immediately. */
-  readonly requestWake: Effect.Effect<void>;
-  /** Preset-specific reset (iteration for accelerating, wake for spaced). */
-  readonly resetCadence: Effect.Effect<void>;
-  /** Run after each successful user effect completion (e.g., increment iteration). */
-  readonly afterTick: Effect.Effect<void>;
-  /** Best-effort cadence hint for status UIs (none if unknown). */
-  readonly peekCadence: Effect.Effect<Option.Option<Duration.Duration>>;
-}
+// The Service interface + Context tag live in internal/pollingTag — the tag is not part of
+// the public namespace (polling is not a resource; a `Tag` member would suggest the contract
+// factory it isn't). `layer` and `current` below are the public verbs over it.
+import { PollingTag, type PollingService } from "./internal/pollingTag";
+
+export type { PollingService as Service } from "./internal/pollingTag";
 
 /**
- * Context tag for the Polling service.
+ * The polling service of the CURRENT process tick context — yield inside a process
+ * effect to wake, reset, or peek the cadence. Provided by the supervisor.
  *
  * @public
  */
-export class PollingTag extends Context.Service<PollingTag, PollingService>()(
-  "@nikscripts/effect-pm/Polling/PollingTag",
-) {}
+export const current: Effect.Effect<PollingService, never, PollingTag> = PollingTag;
+
+/**
+ * A custom cadence policy as a polling layer for `Process.make({ polling })`.
+ * Replaces the old `Layer.succeed(Polling, impl)` form; the tag stays internal.
+ *
+ * @public
+ */
+export const layer = (impl: PollingService): Layer.Layer<PollingTag> =>
+  registerPollingLayer(Layer.succeed(PollingTag, impl));
 
 // ============================================================================
 // Internal: wakeable sleep (Deferred-based interruptible timer)
@@ -109,8 +104,9 @@ const makeWakeableAwait = (duration: Duration.Duration) =>
  * Polling.spaced("30 seconds")
  * Polling.spaced(Duration.minutes(1))
  * ```
+ * @public
  */
-const spacedLayer = (
+export const spaced = (
   interval: Duration.Input,
 ): Layer.Layer<PollingTag> => {
   const dur = Duration.fromInputUnsafe(interval);
@@ -118,7 +114,6 @@ const spacedLayer = (
     Layer.effect(
       PollingTag,
       Effect.map(makeWakeableAwait(dur), ({ awaitNextTick, requestWake }): PollingService => ({
-        overlap: "serial",
         awaitNextTick,
         requestWake,
         resetCadence: requestWake,
@@ -142,8 +137,9 @@ const spacedLayer = (
  * Polling.jittered("5 seconds", { jitter: 0.2 })
  * // Each tick: 5s ± 20% → between 4s and 6s
  * ```
+ * @public
  */
-const jitteredLayer = (
+export const jittered = (
   interval: Duration.Input,
   options: { readonly jitter: number } = { jitter: 0.1 },
 ): Layer.Layer<PollingTag> => {
@@ -171,7 +167,6 @@ const jitteredLayer = (
       );
 
       return {
-        overlap: "serial",
         awaitNextTick,
         requestWake,
         resetCadence: requestWake,
@@ -197,8 +192,9 @@ const jitteredLayer = (
  * // 1s → 2s → 4s → 8s → 16s → 30s → 30s → ...
  * // resetCadence → back to 1s
  * ```
+ * @public
  */
-const backoffLayer = (options: {
+export const backoff = (options: {
   readonly initial: Duration.Input;
   readonly max: Duration.Input;
   readonly factor?: number;
@@ -234,7 +230,6 @@ const backoffLayer = (options: {
       const peekCadence = Effect.map(Ref.get(currentMs), (ms) => Option.some(Duration.millis(ms)));
 
       return {
-        overlap: "serial",
         awaitNextTick,
         requestWake,
         resetCadence,
@@ -265,7 +260,7 @@ const backoffLayer = (options: {
  *
  * @public
  */
-export interface AcceleratingPollConfig {
+export interface AcceleratingConfig {
   /** Fastest possible interval (lower bound). */
   readonly fastest: Duration.Input;
   /** Slowest interval at iteration zero (upper bound). */
@@ -305,8 +300,9 @@ const delayMsForIteration = (
  *   excitement: 1,
  * })
  * ```
+ * @public
  */
-const acceleratingLayer = (config: AcceleratingPollConfig): Layer.Layer<PollingTag> => {
+export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag> => {
   const fastestMs = Duration.toMillis(Duration.fromInputUnsafe(config.fastest));
   const slowestMs = Math.max(fastestMs, Duration.toMillis(Duration.fromInputUnsafe(config.slowest)));
   const decay = config.decay ?? 0.3;
@@ -339,7 +335,6 @@ const acceleratingLayer = (config: AcceleratingPollConfig): Layer.Layer<PollingT
       );
 
       return {
-        overlap: "serial",
         awaitNextTick,
         requestWake,
         resetCadence,
@@ -357,7 +352,7 @@ const acceleratingLayer = (config: AcceleratingPollConfig): Layer.Layer<PollingT
  *
  * @public
  */
-const acceleratingWithRefs = (options: {
+export const acceleratingWithRefs = (options: {
   readonly config: Ref.Ref<{ minIntervalMs: number; maxIntervalMs: number; decayK: number }>;
   readonly iteration: Ref.Ref<number>;
   readonly excitement: Ref.Ref<number>;
@@ -393,7 +388,7 @@ const acceleratingWithRefs = (options: {
         return Option.some(Duration.millis(delayMsForIteration(cfg.minIntervalMs, cfg.maxIntervalMs, cfg.decayK, exc, n)));
       });
 
-        return { overlap: "serial", awaitNextTick, requestWake, resetCadence, afterTick, peekCadence } satisfies PollingService;
+        return { awaitNextTick, requestWake, resetCadence, afterTick, peekCadence } satisfies PollingService;
       }),
     ),
   );
@@ -401,22 +396,3 @@ const acceleratingWithRefs = (options: {
 // ============================================================================
 // Public API
 // ============================================================================
-
-/**
- * Polling — cadence presets and Context tag.
- *
- * @public
- */
-export const Polling: typeof PollingTag & {
-  readonly spaced: typeof spacedLayer;
-  readonly jittered: typeof jitteredLayer;
-  readonly backoff: typeof backoffLayer;
-  readonly accelerating: typeof acceleratingLayer;
-  readonly acceleratingWithRefs: typeof acceleratingWithRefs;
-} = Object.assign(PollingTag, {
-  spaced: spacedLayer,
-  jittered: jitteredLayer,
-  backoff: backoffLayer,
-  accelerating: acceleratingLayer,
-  acceleratingWithRefs,
-});
