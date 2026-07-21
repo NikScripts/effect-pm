@@ -104,7 +104,10 @@ import {
   NodeKey,
   NodeUnreachable,
   ProtocolKind,
+  ProtocolUnanswered,
   resolveHttpTarget,
+  ServiceNotReady,
+  ServiceNotServed,
   Tag as makeNode,
   UnaddressedNode,
 } from "./internal/nodeCore";
@@ -113,6 +116,7 @@ import {
   connectAddressed,
   connectLayer,
   invalidHttpTargetLayer,
+  selectEndpoint,
   unaddressedLayer,
 } from "./internal/nodeConnect";
 // Node listen/connect used only inside functions via dynamic import where needed;
@@ -4009,79 +4013,264 @@ const probeHttpReachable = (url: string, timeout: Duration.Input) =>
     yield* HttpClient.get(url).pipe(Effect.asVoid, Effect.timeout(timeout), Effect.provide(ctx));
   }).pipe(Effect.scoped);
 
+/** One endpoint to probe — same shape as {@link selectEndpoint}. @internal */
+type VerifyEndpoint = {
+  readonly kind: ProtocolKind;
+  readonly url?: string;
+  readonly path?: string;
+};
+
+/** Address string used in verify errors (url or ipc path). @internal */
+const verifyAddressOf = (ep: VerifyEndpoint): string | undefined =>
+  ep.kind === "IpcSocket" ? ep.path : ep.url;
+
 /**
- * **Verify a node is reachable, eagerly** — a fail-fast startup check for a remote {@link Node}. Opens
- * one bounded connection to the node's declared `url`/`kind` and fails with {@link NodeUnreachable} if
- * it doesn't answer, so a client refuses to start against a down / misaddressed backend instead of
- * hanging or failing opaquely at the first RPC. Complements {@link Resource.connect} (which derives the
- * transport from the node so the wrong protocol can't be *dialed*): `connect` prevents mis-wiring,
- * `verifyConnection` catches a peer that isn't there.
+ * Endpoints {@link verifyConnection} probes. Overrides (`url`/`path`) win as a single synthetic
+ * endpoint; `{ all: true }` walks every declared transport; otherwise the same
+ * {@link selectEndpoint} pick {@link connect} would dial.
  *
- * ```ts
- * yield* Resource.verifyConnection(Droplet);                     // NodeUnreachable if the Droplet is down
- * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
- * yield* Resource.verifyConnection(Droplet, { url: "/rpc" });    // runtime url (bare node, e.g. a browser)
- * ```
- *
- * The `url` resolves `options.url` → the node's own `url`; `kind` is the node's, else inferred from the
- * effective url's scheme (`ws(s)://` → socket, else http). Scope: a **reachability** check (F3). It does
- * not distinguish a protocol *mismatch* on the http side (a socket server answers an http probe) —
- * `connect` already makes the client dial the node's declared kind; a `socket` node pointed at a
- * non-socket server surfaces here as unreachable.
- *
- * @category serving
- * @public
+ * @internal
  */
-export const verifyConnection = (
-  node: NodeKey<unknown> & {
+const verifyEndpointsOf = (
+  node: AnyNode,
+  options?: {
     readonly url?: string;
     readonly path?: string;
-    readonly kind?: ProtocolKind;
+    readonly all?: boolean;
   },
-  options?: { readonly timeout?: Duration.Input; readonly url?: string; readonly path?: string },
-): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
-  const effectiveUrl = options?.url ?? node.url;
-  const kind: ProtocolKind | undefined =
-    node.kind ??
-    (options?.path !== undefined || node.path !== undefined
-      ? "IpcSocket"
-      : effectiveUrl !== undefined
-        ? effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
-          ? "WebSocket"
-          : "Http"
-        : undefined);
-  if (kind === undefined) {
-    return Effect.fail(new UnaddressedNode({ node: node.key }));
-  }
-  if (kind === "IpcSocket") {
-    const path = options?.path ?? node.path;
-    if (path === undefined) {
-      return Effect.fail(new UnaddressedNode({ node: node.key }));
+): ReadonlyArray<VerifyEndpoint> | UnaddressedNode => {
+  if (options?.url !== undefined || options?.path !== undefined) {
+    if (options.path !== undefined && options.url === undefined) {
+      return [{ kind: "IpcSocket", path: options.path }];
     }
-    const timeout = options?.timeout ?? "3 seconds";
+    const url = options.url;
+    if (url === undefined) {
+      return new UnaddressedNode({ node: node.key });
+    }
+    const kind: ProtocolKind =
+      url.startsWith("ws://") || url.startsWith("wss://") ? "WebSocket" : "Http";
+    return [{ kind, url, path: options.path }];
+  }
+  if (options?.all === true && node.endpoints !== undefined) {
+    const out: Array<VerifyEndpoint> = [];
+    if (node.endpoints.Http !== undefined) {
+      out.push({ kind: "Http", url: node.endpoints.Http.url });
+    }
+    if (node.endpoints.WebSocket !== undefined) {
+      out.push({ kind: "WebSocket", url: node.endpoints.WebSocket.url });
+    }
+    if (node.endpoints.IpcSocket !== undefined) {
+      out.push({ kind: "IpcSocket", path: node.endpoints.IpcSocket.path });
+    }
+    if (out.length === 0) {
+      return new UnaddressedNode({ node: node.key });
+    }
+    return out;
+  }
+  const selected = selectEndpoint(node);
+  if (selected === undefined) {
+    return new UnaddressedNode({ node: node.key });
+  }
+  return [selected];
+};
+
+/** Tier-1 transport reachability for one endpoint. @internal */
+const probeEndpointReachable = (
+  nodeKey: string,
+  ep: VerifyEndpoint,
+  timeout: Duration.Input,
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
+  const address = verifyAddressOf(ep);
+  if (address === undefined) {
+    return Effect.fail(new UnaddressedNode({ node: nodeKey }));
+  }
+  if (ep.kind === "IpcSocket") {
     const window = Duration.millis(Math.min(Duration.toMillis(timeout), 500));
     return Effect.gen(function* () {
       const { NodeSocket } = yield* Effect.promise(() => import("@effect/platform-node"));
-      const socket = yield* NodeSocket.makeNet({ path });
+      const socket = yield* NodeSocket.makeNet({ path: address });
       yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
     }).pipe(
       Effect.scoped,
       Effect.mapError(
-        (cause: unknown) =>
-          new NodeUnreachable({ node: node.key, url: path, cause }),
+        (cause: unknown) => new NodeUnreachable({ node: nodeKey, url: address, cause }),
       ),
     );
   }
-  const url = options?.url ?? node.url;
-  if (url === undefined) {
-    return Effect.fail(new UnaddressedNode({ node: node.key }));
+  const fail = Effect.mapError(
+    (cause: unknown) => new NodeUnreachable({ node: nodeKey, url: address, cause }),
+  );
+  return ep.kind === "WebSocket"
+    ? probeSocketReachable(address, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(
+        fail,
+      )
+    : probeHttpReachable(address, timeout).pipe(fail);
+};
+
+/**
+ * Tier-2/3: after transport is up, dial {@link NodeStatus} over the endpoint's protocol. Failures
+ * classify as {@link ProtocolUnanswered}; optional `resource` checks served-key / readiness.
+ *
+ * Dynamic-imports the status tag so Resource ⇄ nodeStatusResource stays acyclic.
+ *
+ * @internal
+ */
+const probeEndpointDeep = (
+  nodeKey: string,
+  ep: VerifyEndpoint,
+  timeout: Duration.Input,
+  resource: string | undefined,
+): Effect.Effect<
+  void,
+  ProtocolUnanswered | ServiceNotServed | ServiceNotReady | UnaddressedNode
+> => {
+  const address = verifyAddressOf(ep);
+  if (address === undefined) {
+    return Effect.fail(new UnaddressedNode({ node: nodeKey }));
+  }
+  const dialTarget =
+    ep.kind === "IpcSocket"
+      ? makeNode()(`@pm/verify/${nodeKey}`, { path: address })
+      : makeNode()(`@pm/verify/${nodeKey}`, { url: address, kind: ep.kind });
+  return Effect.gen(function* () {
+    const { NodeStatusResource } = yield* Effect.promise(
+      () => import("./internal/nodeStatusResource"),
+    );
+    const ctx = yield* Layer.build(clientLayer(NodeStatusResource, dialTarget));
+    const snap = yield* Effect.gen(function* () {
+      const status = yield* NodeStatusResource;
+      return yield* status.status.get;
+    }).pipe(Effect.provide(ctx));
+    if (resource === undefined) {
+      return;
+    }
+    const row = snap.resources.find((r) => r.key === resource);
+    if (row === undefined) {
+      return yield* new ServiceNotServed({
+        node: nodeKey,
+        url: address,
+        resource,
+        served: snap.resources.map((r) => r.key),
+      });
+    }
+    if (!row.ready) {
+      return yield* new ServiceNotReady({
+        node: nodeKey,
+        url: address,
+        resource,
+        ...(row.detail !== undefined ? { detail: row.detail } : {}),
+      });
+    }
+  }).pipe(
+    Effect.scoped,
+    Effect.timeout(timeout),
+    Effect.mapError((cause) => {
+      if (
+        cause instanceof ServiceNotServed ||
+        cause instanceof ServiceNotReady ||
+        cause instanceof UnaddressedNode
+      ) {
+        return cause;
+      }
+      return new ProtocolUnanswered({
+        node: nodeKey,
+        url: address,
+        kind: ep.kind,
+        cause,
+      });
+    }),
+  );
+};
+
+/** Options for the cheap (tier-1) {@link verifyConnection} probe. @public */
+export type VerifyConnectionOptions = {
+  readonly timeout?: Duration.Input;
+  readonly url?: string;
+  readonly path?: string;
+  /** Probe every declared endpoint (default: the {@link selectEndpoint} pick). */
+  readonly all?: boolean;
+};
+
+/** Options for deep (tier-2/3) {@link verifyConnection} — RPC + optional resource check. @public */
+export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
+  readonly deep: true;
+  /** When set, require this resource key in `NodeStatus.resources` and `ready: true`. */
+  readonly resource?: string;
+};
+
+/**
+ * **Verify a node is reachable, eagerly** — a fail-fast startup check for a remote {@link Node}.
+ * Default: one bounded **transport** probe (tier 1) against the endpoint {@link connect} would
+ * dial (`selectEndpoint`, or every endpoint with `{ all: true }`). Fails
+ * {@link NodeUnreachable} if nothing answers.
+ *
+ * With `{ deep: true }`, escalates after transport OK: dials the auto-served {@link NodeStatus}
+ * over that endpoint. Transport up but RPC silent → {@link ProtocolUnanswered}; optional
+ * `resource` key → {@link ServiceNotServed} / {@link ServiceNotReady}.
+ *
+ * ```ts
+ * yield* Resource.verifyConnection(Droplet);                          // tier 1
+ * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
+ * yield* Resource.verifyConnection(Droplet, { deep: true });          // + NodeStatus RPC
+ * yield* Resource.verifyConnection(Droplet, { deep: true, resource: "app/Emails" });
+ * yield* Resource.verifyConnection(Droplet, { all: true });           // every endpoint
+ * ```
+ *
+ * Complements {@link connect}: `connect` prevents mis-wiring the client transport;
+ * `verifyConnection` catches a peer that isn't there (or, with `deep`, isn't speaking RPC /
+ * isn't serving the resource you need).
+ *
+ * @category serving
+ * @public
+ */
+export function verifyConnection(
+  node: AnyNode,
+  options?: VerifyConnectionOptions,
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode>;
+export function verifyConnection(
+  node: AnyNode,
+  options: VerifyConnectionDeepOptions,
+): Effect.Effect<
+  void,
+  | NodeUnreachable
+  | UnaddressedNode
+  | ProtocolUnanswered
+  | ServiceNotServed
+  | ServiceNotReady
+>;
+export function verifyConnection(
+  node: AnyNode,
+  options?: VerifyConnectionOptions & {
+    readonly deep?: boolean;
+    readonly resource?: string;
+  },
+): Effect.Effect<
+  void,
+  | NodeUnreachable
+  | UnaddressedNode
+  | ProtocolUnanswered
+  | ServiceNotServed
+  | ServiceNotReady
+> {
+  const endpoints = verifyEndpointsOf(node, options);
+  if (endpoints instanceof UnaddressedNode) {
+    return Effect.fail(endpoints);
   }
   const timeout = options?.timeout ?? "3 seconds";
-  const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
-  return kind === "WebSocket"
-    ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
-    : probeHttpReachable(url, timeout).pipe(fail);
-};
+  const deep = options?.deep === true;
+  const resource = options?.resource;
+  return Effect.forEach(
+    endpoints,
+    (ep) =>
+      Effect.gen(function* () {
+        yield* probeEndpointReachable(node.key, ep, timeout);
+        if (deep) {
+          yield* probeEndpointDeep(node.key, ep, timeout, resource);
+        }
+      }),
+    { discard: true },
+  );
+}
 
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 // [extracted to Node module — was Resource.ts:4780-4795]

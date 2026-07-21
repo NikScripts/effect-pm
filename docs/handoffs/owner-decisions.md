@@ -73,7 +73,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - Wire key `prototypeKey#suffix`; omitted suffix minted at listen; always ephemeral ipc path.
   - **No** `Identity.claim` (many winners); directory advertise + `livenessReplace` on dupe `nodeKey`.
   - Multi-instance client picker stays **D4 OPEN** (`lookupClient` fail-closed on ambiguous).
-- **Still LEAN / later:** `askIncumbent`; D4 picker/LB; X1 multi-protocol.
+- **Still LEAN / later:** ~~`askIncumbent`~~ → Eng’d; D4 picker/LB; ~~X1 multi-protocol~~ → Eng’d.
 - **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — D3 LOCKED (bare `distributed` / directory-backed peers)
@@ -145,10 +145,17 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected / deferred:** Layer-only identity flag as main API; always-lookup on every non-identity serve; Manager Eng before identity pipe; orphan-serve default.
 - **Supervisor impact:** Identity Eng shipped on tip (`Resource.identity` + layer/serve claim-or-client + `IdentityMultiNode` one-Node rule). Next bake: **C1**.
 
+## 2026-07-21 — X1 multi-protocol Eng’d + verifyConnection deep classification
+
+- **Owner said:** “Do it” (docs truth for X1 + `verifyConnection` RPC ping over `selectEndpoint`).
+- **Chose (X1 LOCKED + Eng’d; verify D1–D5 LOCKED + Eng’d):** Multi-protocol endpoint set already on tip; catalog/handoff flipped OPEN → Eng’d. `verifyConnection({ deep: true })` dials `NodeStatus` after tier-1 reachability; errors `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`; default endpoint = `selectEndpoint`; `{ all: true }` optional; `deep` defaults off; no `contractHash`.
+- **Rejected / deferred:** Changing tier-1 default behaviour; contract-shape digest.
+- **Supervisor impact:** SSOT [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) + [`verify-connection-classification.md`](./verify-connection-classification.md).
+
 ## 2026-07-18 — ProtocolKind tag rename (X5)
 
 - **Owner said:** Fix the kind strings; multi-protocol Nodes whenever it best fits later.
-- **Chose (X5 LOCKED):** `ProtocolKind = "Http" | "WebSocket" | "IpcSocket"`. Eng rename on tip. Multi-protocol (X1) deferred.
+- **Chose (X5 LOCKED):** `ProtocolKind = "Http" | "WebSocket" | "IpcSocket"`. Eng rename on tip. Multi-protocol (X1) was deferred then — **now Eng’d** (see 2026-07-21).
 - **Rejected / deferred:** Keeping lowercase `"http"|"socket"|"ipc"`; Effect’s `Websocket` spelling (owner: `WebSocket`); multi-protocol in this change.
 - **Supervisor impact:** Breaking kind-string rename; apps that wrote explicit `kind: "socket"` etc. must update.
 

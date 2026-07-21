@@ -13,7 +13,7 @@
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
 | **D** | **merged to `integration`** | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **M3 shipped** | `d2d340b4b` | typecheck 0 (both) / lint 0 / 418 tests | **M3 done:** `yield* MyQueue` hovers as named `QueueResource<Item>` (Svc seam on ResourceTag + 1 harness-guarded cast in nameQueueService; `events` success now `void`). Follow-ups: M2 `.Service` unify, per-Tag success/error carriers, elide trailing default args. Agent 3 must not touch handles | 2026-07-14 |
-| **E** | work branch from `integration` | [impossible-states](./impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) | **P2 in flight** | on line | topology + verifyConnection merged (`d554ec212`); 515 tests green | **Owner-reserved (2026-07-16):** `src/Resource.ts` node/client typing (`NodeKey`/`AnyNode`/`AddressedNode`/`makeNode`/`connect*`/`clientLayer`/`socketClient`/`verifyConnection`) + `NodeStatus` wiring. All other agents (incl. C) route around it. `test/transport-harness` (conformance + fleet smoke) also awaiting sync | 2026-07-16 |
+| **E** | `integration` | [impossible-states](./impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) · [verify-connection](./verify-connection-classification.md) | **verify deep Eng’d** | on line | X1 multi-protocol + `verifyConnection({ deep })` classification | Reservation released. Deep path: `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady` over `selectEndpoint` | 2026-07-21 |
 
 ---
 
@@ -28,7 +28,7 @@
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` bake open**; managers / X1 still OPEN
+4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 multi-protocol Eng’d**; managers still OPEN
 5. Store-layer `(scopeKey, lineId)` memo — **deferred**
 6. Fail-loud Soft when AppStore lacks engine registration — **parked** (Agent 3 out of scope unless unlocked)
 7. `main` merge + `pnpm run version` — still deferred

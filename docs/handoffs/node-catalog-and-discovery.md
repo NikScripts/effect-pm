@@ -360,7 +360,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
 > **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`** + **`askIncumbent`**.  
-> Managers / X1 still OPEN.  
+> Managers still OPEN; **X1 multi-protocol Eng’d**.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 #### D3 — directory-backed peers (**LOCKED** 2026-07-19)
@@ -610,11 +610,11 @@ Resource.lookupClient(Mail, {
 
 | # | Decision | Status |
 |---|----------|--------|
-| **X1** | Multi-protocol Node (endpoint set) | **OPEN** — later; one kind per Node until discovery exists |
+| **X1** | Multi-protocol Node (endpoint set) | **LOCKED + Eng’d** — `{ http, ws, ipc }` shorthand, `Node.withProtocol`, `selectEndpoint` connect, P3 set-membership; see [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) |
 | **X2** | Product rename away from “Resource” | **Parked** |
 | **X3** | Docs: handoff-only vs draft guide now | Handoff SSOT now |
 | **X4** | `Protocol` as Node **type param** | **Rejected as idea** (owner): value-level `kind` + address is SSOT — typing protocol twice drifts. Not a formal bake-row lock; do not re-propose. |
-| **X5** | Protocol kind strings → `_tag`-style names | **LOCKED** — `"Http" \| "WebSocket" \| "IpcSocket"` (multi-protocol Node still later / X1) |
+| **X5** | Protocol kind strings → `_tag`-style names | **LOCKED** — `"Http" \| "WebSocket" \| "IpcSocket"` (X1 multi-protocol Eng’d) |
 | **S1** | Identity-claiming Resources (was “Singleton”) | **LOCKED** (owner: “good enough for now”) — see below |
 
 #### S1 — Identity pipe (**LOCKED** 2026-07-18)
@@ -640,7 +640,7 @@ export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
 ```
 
 Inference unchanged: `{ path }` → `IpcSocket`, `ws(s)://` → `WebSocket`, other url/port → `Http`.  
-Multi-protocol Node (endpoint set / `_tag` ADT) remains **X1 later** — not this rename.
+Multi-protocol Node (endpoint set) is **X1 LOCKED + Eng’d** — see [`multi-protocol-nodes.md`](./multi-protocol-nodes.md).
 
 ---
 
@@ -851,3 +851,5 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — Owner: rename **`clientsFor` → `Node.clients`**; array + rest; bound-tag overloads (`clients([Jobs, Emails])` / `clients(Jobs, Emails)`). No shim.
 - **2026-07-21** — Owner: rename **`clientLocal` → `Resource.discoverClient`** (avoid Effect “local”); no shim.
 - **2026-07-21** — Owner: **`Resource.discoverClients`** (array/rest) — mergeAll of discover clients, one Lookup bootstrap.
+- **2026-07-21** — **X1 multi-protocol Eng’d** on `integration`: `{ http, ws, ipc }` Tag shorthand, `Node.withProtocol`, `connect`/`selectEndpoint`, P3 set-membership, dual-serve proof. Catalog row flipped OPEN → LOCKED + Eng’d.
+- **2026-07-21** — Owner “Do it” → **`verifyConnection` deep classification Eng’d:** `{ deep: true }` dials `NodeStatus` over `selectEndpoint` (or `{ all: true }`); `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged.
