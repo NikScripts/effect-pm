@@ -72,7 +72,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-nameless-listen-call.ts`](./forms/resource/node-nameless-listen-call.ts) | Nameless call (`discoverClients(Jobs, Emails)`) — terminal B |
 | [`forms/resource/node-nameless-listen-demo.ts`](./forms/resource/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
 | [`forms/resource/node-prototype.ts`](./forms/resource/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
-| [`forms/resource/node-lookup.ts`](./forms/resource/node-lookup.ts) | `Node.asLookup` + `Lookup.layerOptions` / `client` |
+| [`forms/resource/node-lookup.ts`](./forms/resource/node-lookup.ts) | `Node.asLookup` + `Lookup.layerNode` / `client` |
 | [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
 ### Process store (EventJournal)
