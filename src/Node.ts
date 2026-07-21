@@ -14,7 +14,7 @@
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
- * - {@link clientsFor} — bundle clients for a catalog node's `ROut`
+ * - {@link clients} — bundle clients for a catalog node's `ROut`
  *
  * @module Node
  */
@@ -62,7 +62,8 @@ export { ipcServer } from "./internal/nodeIpcServer"
 export type { IpcServerOptions } from "./internal/nodeIpcServer"
 export { Prototype } from "./internal/nodePrototype"
 export {
-  clientsFor,
+  clients,
+  ClientsNodeMismatch,
   connect,
   connectHttp,
   connectSocket,

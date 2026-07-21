@@ -13,10 +13,10 @@
 | `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen + local batteries (Lookup bootstrap) |
 | `Node.listen` | Neutral spine — **no transport bind** (`ListenUseProtocol` → use protocol entry) |
 | `httpServer` / `wsServer` / `ipcServer` | Low-level escape hatches (caller provides platform) |
-| `Node.connect*` / `clientsFor` | Dial helpers |
+| `Node.connect*` / `clients` | Dial helpers |
 | Types | `AnyNode`, `ProtocolKind`, `ListenNode`, `UnaddressedNode`, … |
 
-No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts` (path includes `node-clients-for`).
+No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts` (path includes `node-clients`).
 
 ### How to read locks in this file
 
@@ -107,11 +107,14 @@ const WorkerLive = Resource.listen(Worker, [
 
 Runtime `serves: ["app/Jobs", "app/Emails"]` should be **derived from the same serve list** so discovery can’t drift from `ROut`.
 
-### 4. `clientsFor(Node)`
+### 4. `Node.clients`
 
 ```ts
-Resource.clientsFor(Worker)
-// Layer<Jobs | Emails, …, Worker> — needs Worker connected
+Node.clients(Worker, [Jobs, Emails])
+Node.clients(Worker, Jobs, Emails)
+Node.clients([Jobs, Emails]) // tags carry Worker via andNode / { node }
+Node.clients(Jobs, Emails)
+// Layer<Jobs | Emails> — one shared connect
 ```
 
 Dynamic provide: given runtime `serves` keys, install matching client layers (owner verified this is feasible). Static `ROut` types the happy path; discovery fills peers you didn’t hardcode.
@@ -122,7 +125,7 @@ Dynamic provide: given runtime `serves` keys, install matching client layers (ow
 Worker binds ephemeral path (or port 0)
 publishes { nodeKey, address, kind, serves[] } to a local registry
 
-Peer discovers → connect(address) → clientsFor / dynamic clients from serves[]
+Peer discovers → connect(address) → `Node.clients` / dynamic clients from serves[]
 → yield* Jobs   // no Jobs.pipe(onNode(Worker))
 ```
 
@@ -175,7 +178,7 @@ If a Node advertises multiple endpoints (`http` / `socket` / `ipc`), peers need 
 | `Node<Self, ROut = never>(key, address?)` | Address + optional catalog type param |
 | `listen(node, serveLayers[])` | Catalog mount; proves `ROut` (uses `serve` layers — C5) |
 | `serve` / `serveRemote` | Core verbs (C5 LOCKED — no `expose`) |
-| `clientsFor(node)` | Layer providing clients for `ROut` |
+| `Node.clients(node, tags)` | Layer providing clients for `ROut` (array or rest; bound-tag overloads) |
 | `discover` / `Discovery` layer | Local registry → peer Nodes + `serves[]` |
 | `peersLayer` evolution | Static distributed **or** discovery-backed topology |
 | `onNode(node)` pipe | Optional Tag→Node stamp (escape hatch) |
@@ -195,7 +198,7 @@ Phase 1  IPC / Unix domain socket  ← first Eng
     │    ProtocolKind + address path + ipcServer/connectIpc + tests
     │
 Phase 2  Node catalog types        ← after Phase-2 locks
-    │    Node<Self, ROut>, listen proves ROut, clientsFor
+    │    Node<Self, ROut>, listen proves ROut, Node.clients
     │
 Phase 3  Local discovery           ← after Phase-3 locks
     │    registry + peersLayer discovery mode + same-machine example
@@ -233,7 +236,7 @@ Resource.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
 
 ### Phase 2 — Node catalog (`ROut`)
 
-`Node<Self, ROut = never>` (names provisional), `listen` proves catalog, `clientsFor`, runtime `serves[]` from the serve list (C5: verb is `serve`). Tag↔Node is **C1 LOCKED**.
+`Node<Self, ROut = never>` (names provisional), `listen` proves catalog, `Node.clients`, runtime `serves[]` from the serve list (C5: verb is `serve`). Tag↔Node is **C1 LOCKED**.
 
 ### Phase 3 — Discovery + peers
 
@@ -288,9 +291,9 @@ Tests: `test/resource-ipc.test.ts`.
 | Transport servers | **Keep** `httpServer` / `wsServer` / `ipcServer` public (escape hatch; what `listen` calls) |
 | Http / WebSocket bind | **Not** inferred from `node.url` alone — caller still provides `NodeHttpServer.layer` (bind ≠ dial). Ipc: `node.path` is bind+dial |
 | Serve list | `Resource.serve` / engine `*.serve` layers only (C5) |
-| Clients | **`Resource.clientsFor(node, …tags)`** — one bundled `connect`; tags must cover `ROut` |
+| Clients | **`Node.clients(node, tags)`** — one bundled `connect`; tags must cover `ROut` (array or rest; bound-tag overloads) |
 
-**Eng (2026-07-19):** shipped — `Node<Self, ROut>`, `listen`, `clientsFor`; tests `resource-listen.test.ts` / `.test-d.ts`.
+**Eng (2026-07-19):** shipped — `Node<Self, ROut>`, `listen`, `clients` (was `clientsFor`); tests `resource-listen.test.ts` / `.test-d.ts`.
 
 #### C3 — Full catalog (**LOCKED** 2026-07-19)
 
@@ -823,3 +826,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — Owner: RPC name **`NodeStatus.yield` LOCKED** (best word; acknowledge possible confusion with Effect `yield*`). Inheritance/`onConflict` surface still baking.
 - **2026-07-21** — Owner “Continue” → **`askIncumbent` LOCKED** (inheritance chain + `NodeStatus.yield` + AI.1–8). Eng next.
 - **2026-07-21** — **`askIncumbent` Eng’d:** `OnConflict` stamps + listen opts; Lookup resolves + `NodeStatus.yield`; dial-matched unregister; tests + changeset.
+- **2026-07-21** — Owner: rename **`clientsFor` → `Node.clients`**; array + rest; bound-tag overloads (`clients([Jobs, Emails])` / `clients(Jobs, Emails)`). No shim.

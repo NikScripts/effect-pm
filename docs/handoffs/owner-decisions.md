@@ -10,7 +10,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** Extract Node from Resource/Lookup on tip (`cursor/bake-catalog-thoughts-906e`); Effect-true `import * as Node`; no shims; forms replace spawn demo.
 - **Chose (LOCKED):**
-  - Public module **`@nikscripts/effect-pm/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clientsFor` + catalog types.
+  - Public module **`@nikscripts/effect-pm/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clients` + catalog types.
   - **Removed:** `Resource.Node`, `Lookup.LookupNode`, `Resource.listen` / `connect*` / `httpServer` / `wsServer` / `ipcServer` / `clientsFor` (no shims).
   - **Stays Resource:** Tag/serve/layer/client, `lookupClient`, identity, nodes/andNode/distributed, peers, Spec builders; sugar `clientLocal`.
   - **Stays Lookup:** Identity, Directory, layer, client, `bootstrapDefaultLocal`; sugar `Node.listenLocal`.
@@ -104,7 +104,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** Continue (after C5); prior steers — full `ROut`; `import type` to avoid Tag↔Node cycles; C2 lean keep `*Server` + `listen`.
 - **Chose:** **C2** = `listen` proves catalog then dispatches to kept `httpServer`/`wsServer`/`ipcServer`; http/ws bind still caller-provided. **C3** = full `ROut` required. **C4** = `import type` for `ROut`.
 - **Rejected / deferred:** Replacing `*Server`; partial catalogs; cross-package Tag value→Node for `ROut`.
-- **Supervisor impact:** Eng shipped on tip — `Node<Self, ROut>`, `listen`, `clientsFor`.
+- **Supervisor impact:** Eng shipped on tip — `Node<Self, ROut>`, `listen`, `clients` (was `clientsFor`).
 
 ## 2026-07-19 — Serve-list naming C5 (one name: `serve`)
 
