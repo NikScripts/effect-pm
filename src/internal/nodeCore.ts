@@ -58,6 +58,65 @@ export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
  */
 export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
 
+/**
+ * Directory advertise conflict policy when the same `nodeKey` already has a row.
+ *
+ * - `livenessReplace` — ping incumbent; alive → reject; dead → replace
+ * - `askIncumbent` — if alive, Lookup asks `NodeStatus.yield`; refuse/timeout → reject
+ * - `reject` — alive → reject; dead → still replace
+ * - `inherit` — continue up the resolve chain (call-site → node → Lookup → hard fallback)
+ *
+ * @public
+ */
+export type OnConflict =
+  | "livenessReplace"
+  | "askIncumbent"
+  | "reject"
+  | "inherit";
+
+/**
+ * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
+ *
+ * @public
+ */
+export type OnConflictResolved = Exclude<OnConflict, "inherit">;
+
+/**
+ * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
+ *
+ * @public
+ */
+export const resolveOnConflict = (
+  ...prefs: ReadonlyArray<OnConflict | undefined>
+): OnConflictResolved => {
+  for (const pref of prefs) {
+    if (pref !== undefined && pref !== "inherit") {
+      return pref;
+    }
+  }
+  return "livenessReplace";
+};
+
+/** Read a node's stamped {@link OnConflict}, if any. @internal */
+export const onConflictOf = (node: unknown): OnConflict | undefined => {
+  if (
+    (typeof node === "object" || typeof node === "function") &&
+    node !== null &&
+    "onConflict" in node
+  ) {
+    const value = (node as { readonly onConflict?: unknown }).onConflict;
+    if (
+      value === "livenessReplace" ||
+      value === "askIncumbent" ||
+      value === "reject" ||
+      value === "inherit"
+    ) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
 /** A {@link Tag} erased — transport address (`url` and/or Unix `path`) plus
  *  {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
  *  *where* AND *how* to reach each one. @public */
@@ -65,6 +124,8 @@ export type AnyNode = NodeKey<unknown> & {
   readonly url: string | undefined;
   readonly path: string | undefined;
   readonly kind: ProtocolKind | undefined;
+  /** Stamped advertise conflict policy (default `"inherit"` on ordinary nodes). */
+  readonly onConflict?: OnConflict;
 };
 
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
@@ -157,6 +218,11 @@ export type ListenOptions = {
   readonly health?: { readonly path?: HttpRouter.PathInput };
   readonly node?: string | { readonly key: string };
   readonly unlink?: boolean;
+  /**
+   * Directory advertise conflict policy for this listen (call-site; wins over node stamp).
+   * Omit / `"inherit"` → continue resolve chain.
+   */
+  readonly onConflict?: OnConflict;
 };
 
 /**
@@ -256,6 +322,7 @@ type LooseNodeTarget =
       readonly url?: string;
       readonly path?: string;
       readonly kind?: ProtocolKind;
+      readonly onConflict?: OnConflict;
     };
 
 /**
@@ -268,6 +335,7 @@ type NodeTagClass<Self, ROut, Address> =
     Address & {
       readonly [catalogSym]?: ROut;
       readonly logs: unknown;
+      readonly onConflict: OnConflict;
     };
 
 /** Bare (address-less) node fields. @internal */
@@ -389,7 +457,11 @@ export function Tag<Self, ROut = never>(
 ): NodeTagClass<Self, ROut, BareAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
-  target: { readonly path: string; readonly kind?: "IpcSocket" },
+  target: {
+    readonly path: string;
+    readonly kind?: "IpcSocket";
+    readonly onConflict?: OnConflict;
+  },
 ): NodeTagClass<Self, ROut, IpcAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
@@ -408,19 +480,34 @@ export function Tag<Self, ROut = never>(
   target: {
     readonly url: `ws://${string}` | `wss://${string}`;
     readonly kind?: "WebSocket";
+    readonly onConflict?: OnConflict;
   },
 ): NodeTagClass<Self, ROut, WsAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
-  target: { readonly url: string; readonly kind: "WebSocket" },
+  target: {
+    readonly url: string;
+    readonly kind: "WebSocket";
+    readonly onConflict?: OnConflict;
+  },
 ): NodeTagClass<Self, ROut, WsAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
-  target: { readonly url: string; readonly kind: "Http" },
+  target: {
+    readonly url: string;
+    readonly kind: "Http";
+    readonly onConflict?: OnConflict;
+  },
 ): NodeTagClass<Self, ROut, HttpAddress>;
 export function Tag<Self, ROut = never>(
   name: string,
-  target: string | { readonly url: string; readonly kind?: ProtocolKind },
+  target:
+    | string
+    | {
+        readonly url: string;
+        readonly kind?: ProtocolKind;
+        readonly onConflict?: OnConflict;
+      },
 ): NodeTagClass<Self, ROut, UrlAddressLoose>;
 export function Tag<Self, ROut = never>(
   name: string,
@@ -469,10 +556,17 @@ export function Tag<Self, ROut = never>(
         : url.startsWith("ws://") || url.startsWith("wss://")
           ? "WebSocket"
           : "Http");
+  const onConflict: OnConflict =
+    typeof target === "object" &&
+    target !== null &&
+    target.onConflict !== undefined
+      ? target.onConflict
+      : "inherit";
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     url,
     path,
     kind,
+    onConflict,
     ...(invalidTarget !== undefined
       ? { [invalidHttpTargetSym]: invalidTarget }
       : {}),
@@ -710,7 +804,11 @@ export function Lookup<Self>(
 };
 export function Lookup<Self>(
   name: string,
-  target: { readonly path: string; readonly kind?: "IpcSocket" },
+  target: {
+    readonly path: string;
+    readonly kind?: "IpcSocket";
+    readonly onConflict?: OnConflictResolved;
+  },
 ): NodeTagClass<Self, never, IpcAddress> & {
   readonly isLookupNode: true
 };
@@ -759,7 +857,19 @@ export function Lookup<Self>(
   readonly isLookupNode: true
 } {
   const node = Tag<Self>(name, target)
-  return Object.assign(node, { isLookupNode: true as const })
+  // Lookup is the fleet parent — concrete default (never leave as ordinary-node "inherit").
+  const onConflict: OnConflict =
+    typeof target === "object" &&
+    target !== null &&
+    target.onConflict !== undefined
+      ? target.onConflict === "inherit"
+        ? "livenessReplace"
+        : target.onConflict
+      : "livenessReplace";
+  return Object.assign(node, {
+    isLookupNode: true as const,
+    onConflict,
+  })
 }
 
 /** True when `node` was built with {@link Lookup}. @public */

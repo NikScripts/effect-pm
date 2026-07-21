@@ -400,7 +400,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **`reject`** | Strict never-steal (dead still replaceable? OPEN) |
 | **`lastWins`** (orphan first) | **Not** the default |
 
-#### `askIncumbent` advertise policy (**LOCKED** 2026-07-21 — Eng next)
+#### `askIncumbent` advertise policy (**LOCKED + ENG’D** 2026-07-21)
 
 **Shipped today (fact):**
 
@@ -824,3 +824,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — **Protocol listen Phases A–E Eng + on `integration`:** `Node.unix` / `http` / `ws` / `nPipe`; neutral `listen` binds nothing; module split for tree-shake; forms teach protocol entries + `clientsFor`. `askIncumbent` still OPEN.
 - **2026-07-21** — Owner: RPC name **`NodeStatus.yield` LOCKED** (best word; acknowledge possible confusion with Effect `yield*`). Inheritance/`onConflict` surface still baking.
 - **2026-07-21** — Owner “Continue” → **`askIncumbent` LOCKED** (inheritance chain + `NodeStatus.yield` + AI.1–8). Eng next.
+- **2026-07-21** — **`askIncumbent` Eng’d:** `OnConflict` stamps + listen opts; Lookup resolves + `NodeStatus.yield`; dial-matched unregister; tests + changeset.

@@ -6,20 +6,30 @@
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
- *   `nodeKey` uses **livenessReplace**: ping incumbent {@link NodeStatus} `ping`; alive →
- *   {@link IncumbentAlive}; dead/unreachable → replace row.
+ *   `nodeKey` conflict policy via {@link OnConflict} (default **livenessReplace**): ping
+ *   incumbent {@link NodeStatus} `ping`; alive → {@link IncumbentAlive} (or ask
+ *   {@link NodeStatus}.`yield` when `askIncumbent`); dead/unreachable → replace row.
  *
  * @module Lookup
  * @since 0.8.0
  */
 import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
-import type { AnyNode } from "./internal/nodeCore";
-import { Lookup as LookupNodeTag, Tag as NodeTag } from "./internal/nodeCore";
+import type { AnyNode, OnConflict, OnConflictResolved } from "./internal/nodeCore";
+import {
+  Lookup as LookupNodeTag,
+  Tag as NodeTag,
+  onConflictOf,
+  resolveOnConflict,
+} from "./internal/nodeCore";
 import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
 import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
+
+/** Wire + resolve helpers re-exported for apps that stamp policies on nodes. @public */
+export type { OnConflict, OnConflictResolved };
+export { resolveOnConflict };
 
 // ============================================================================
 // Wire schemas
@@ -98,10 +108,24 @@ export class AdvertiseRequest extends Schema.Class<AdvertiseRequest>(
   url: Schema.optionalKey(Schema.String),
   path: Schema.optionalKey(Schema.String),
   serves: Schema.Array(Schema.String),
+  /**
+   * Advertiser preference after call-site∋node resolve — may still be `"inherit"`.
+   * Lookup finishes resolve with its node stamp. Omit → inherit.
+   */
+  onConflict: Schema.optionalKey(
+    Schema.Literals([
+      "livenessReplace",
+      "askIncumbent",
+      "reject",
+      "inherit",
+    ]),
+  ),
 }) {}
 
 /**
  * Unregister payload — remove a directory row by `nodeKey`.
+ * When dial fields are present, remove only if the stored dial still matches
+ * (askIncumbent-safe finalizers).
  *
  * @public
  */
@@ -109,6 +133,9 @@ export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
   "LookupUnregisterRequest",
 )({
   nodeKey: Schema.String,
+  kind: Schema.optionalKey(Schema.Literals(["Http", "WebSocket", "IpcSocket"])),
+  url: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
 }) {}
 
 /**
@@ -193,13 +220,16 @@ const directorySpec = {
   }).annotate({
     description:
       "Register or refresh a node directory row. Same dial target refreshes serves; " +
-      "a different dial target runs livenessReplace (NodeStatus.ping on the incumbent).",
+      "a different dial target runs onConflict (default livenessReplace via NodeStatus.ping; " +
+      "askIncumbent asks NodeStatus.yield on a live incumbent).",
   }),
   unregister: Resource.effectFn({
     payload: UnregisterRequest,
     success: Schema.Boolean,
   }).annotate({
-    description: "Remove a directory row by nodeKey (clean listen scope close).",
+    description:
+      "Remove a directory row by nodeKey (clean listen scope close). " +
+      "With dial fields, removes only if the stored dial still matches.",
   }),
   nodesServing: Resource.effectFn({
     payload: NodesServingRequest,
@@ -302,8 +332,43 @@ const incumbentAlive = (
   return Effect.map(Effect.exit(probe), Exit.isSuccess);
 };
 
+/**
+ * Ask incumbent {@link NodeStatus}.`yield` — true only on explicit accept within timeout.
+ * Refuse / timeout / dial error → false (fail-closed).
+ *
+ * Note: wire RPC `status.yield` is unrelated to Effect generator `yield*`.
+ */
+const incumbentYield = (
+  entry: internal.StoredDirectoryEntry,
+): Effect.Effect<boolean> => {
+  const target =
+    entry.kind === "IpcSocket" && entry.path !== undefined
+      ? NodeTag(`@pm/lookup-yield/${entry.nodeKey}`, {
+          path: entry.path,
+        })
+      : entry.url !== undefined
+        ? NodeTag(`@pm/lookup-yield/${entry.nodeKey}`, {
+            url: entry.url,
+            kind: entry.kind,
+          })
+        : undefined;
+  if (target === undefined) {
+    return Effect.succeed(false);
+  }
+  const ask = Effect.gen(function* () {
+    const ctx = yield* Layer.build(Resource.client(NodeStatus.Tag, target));
+    return yield* Effect.gen(function* () {
+      const status = yield* NodeStatus.Tag;
+      return yield* status.yield;
+    }).pipe(Effect.provide(ctx));
+  }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(2)));
+  return Effect.map(Effect.exit(ask), (exit) =>
+    Exit.isSuccess(exit) ? exit.value === true : false,
+  );
+};
+
 /** Identity + Directory impl over one shared in-memory registry pair. */
-const lookupServeLayers = () =>
+const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const registries = yield* internal.makeRegistries();
@@ -333,20 +398,45 @@ const lookupServeLayers = () =>
             const prior = yield* registries.directory.get(req.nodeKey);
             if (Option.isSome(prior)) {
               if (!internal.sameDialTarget(prior.value, next)) {
+                const policy = resolveOnConflict(
+                  req.onConflict,
+                  serverOnConflict,
+                );
                 const alive = yield* incumbentAlive(prior.value);
                 if (alive) {
-                  return yield* new IncumbentAlive({
-                    nodeKey: req.nodeKey,
-                    incumbent: toDirectoryEntry(prior.value),
-                  });
+                  if (policy === "askIncumbent") {
+                    const yielded = yield* incumbentYield(prior.value);
+                    if (!yielded) {
+                      return yield* new IncumbentAlive({
+                        nodeKey: req.nodeKey,
+                        incumbent: toDirectoryEntry(prior.value),
+                      });
+                    }
+                    // accepted yield → fall through and replace
+                  } else {
+                    // livenessReplace | reject — alive means refuse
+                    return yield* new IncumbentAlive({
+                      nodeKey: req.nodeKey,
+                      incumbent: toDirectoryEntry(prior.value),
+                    });
+                  }
                 }
               }
             }
             const stored = yield* registries.directory.set(next);
             return toDirectoryEntry(stored);
           }),
-        unregister: (req: UnregisterRequest) =>
-          registries.directory.remove(req.nodeKey),
+        unregister: (req: UnregisterRequest) => {
+          if (req.kind !== undefined) {
+            return registries.directory.removeIfSameDial({
+              nodeKey: req.nodeKey,
+              kind: req.kind,
+              ...(req.url !== undefined ? { url: req.url } : {}),
+              ...(req.path !== undefined ? { path: req.path } : {}),
+            });
+          }
+          return registries.directory.remove(req.nodeKey);
+        },
         nodesServing: (req: NodesServingRequest) =>
           registries.directory.nodesServing(req.resourceKey).pipe(
             Effect.map((entries) => entries.map(toDirectoryEntry)),
@@ -363,12 +453,25 @@ const lookupServeLayers = () =>
  */
 export const layerIpc = (
   path: string,
-  options?: { readonly unlink?: boolean },
+  options?: {
+    readonly unlink?: boolean;
+    /** Fleet-parent conflict policy (concrete). Default `livenessReplace`. */
+    readonly onConflict?: OnConflictResolved;
+  },
 ) =>
-  ipcServer([lookupServeLayers()], {
-    path,
-    ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
-  });
+  ipcServer(
+    [
+      lookupServeLayers(
+        options?.onConflict !== undefined
+          ? options.onConflict
+          : "livenessReplace",
+      ),
+    ],
+    {
+      path,
+      ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
+    },
+  );
 
 /**
  * L1 same-machine default — bind {@link defaultIpcPath} (or `options.path`).
@@ -379,10 +482,12 @@ export const layerIpc = (
 export const layerDefaultLocal = (options?: {
   readonly path?: string;
   readonly unlink?: boolean;
+  readonly onConflict?: OnConflictResolved;
 }) => layerIpc(options?.path ?? defaultIpcPath, options);
 
 /**
  * Serve Lookup on an addressed {@link LookupNode} (ipc `{ path }` in v1).
+ * Reads concrete {@link OnConflict} from the Lookup node stamp.
  *
  * @public
  */
@@ -402,7 +507,12 @@ export const layer = (
   options?: { readonly unlink?: boolean },
 ): Layer.Layer<never, LookupUnaddressed> => {
   if (node.kind === "IpcSocket" && node.path !== undefined) {
-    return layerIpc(node.path, options);
+    const stamped = onConflictOf(node);
+    const onConflict = resolveOnConflict(stamped);
+    return layerIpc(node.path, {
+      ...options,
+      onConflict,
+    });
   }
   return lookupUnaddressedLayer(node.key);
 };
@@ -415,11 +525,15 @@ export const layer = (
  * `serves` is derived from the protocol-listen serve list (group ids) after registration.
  * Duplicate `nodeKey` with a live incumbent fails the layer with {@link IncumbentAlive}.
  *
+ * `options.onConflict` is the call-site preference; combined with the node's stamp before
+ * the wire request (may still be `"inherit"` for the Lookup server to finish).
+ *
  * @public
  */
 export const directoryAdvertiseLayer = (
   node: AnyNode & { readonly key: string },
   serves: ReadonlyArray<string>,
+  options?: { readonly onConflict?: OnConflict },
 ): Layer.Layer<never, IncumbentAlive> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
@@ -431,18 +545,35 @@ export const directoryAdvertiseLayer = (
       if (kind === undefined) {
         return;
       }
+      // Advertiser side: call-site → node stamp; leave `"inherit"` so Lookup finishes.
+      const callSite = options?.onConflict;
+      const nodeStamp = onConflictOf(node);
+      const wireOnConflict: OnConflict =
+        callSite !== undefined && callSite !== "inherit"
+          ? callSite
+          : nodeStamp !== undefined && nodeStamp !== "inherit"
+            ? nodeStamp
+            : "inherit";
       yield* dirOpt.value.advertise(
         new AdvertiseRequest({
           nodeKey: node.key,
           kind,
           serves: [...serves],
+          onConflict: wireOnConflict,
           ...(typeof node.path === "string" ? { path: node.path } : {}),
           ...(typeof node.url === "string" ? { url: node.url } : {}),
         }),
       );
       yield* Effect.addFinalizer(() =>
         dirOpt.value
-          .unregister(new UnregisterRequest({ nodeKey: node.key }))
+          .unregister(
+            new UnregisterRequest({
+              nodeKey: node.key,
+              kind,
+              ...(typeof node.path === "string" ? { path: node.path } : {}),
+              ...(typeof node.url === "string" ? { url: node.url } : {}),
+            }),
+          )
           .pipe(Effect.ignore),
       );
     }),

@@ -7,6 +7,7 @@ import { Effect, Layer } from "effect"
 import * as Resource from "../Resource"
 import {
   AnyNode,
+  OnConflict,
   ProtocolKind,
   ProtocolKindMismatch,
 } from "./nodeCore"
@@ -59,6 +60,7 @@ export const assertProtocolKinds = (
 export const directoryAdvertiseMerge = (
   advertiseNode: (AnyNode & { readonly key: string }) | undefined,
   entries: ReadonlyArray<Resource.ServedResource>,
+  options?: { readonly onConflict?: OnConflict },
 ): Effect.Effect<Layer.Layer<never>> => {
   if (advertiseNode === undefined) {
     return Effect.succeed(Layer.empty);
@@ -67,6 +69,6 @@ export const directoryAdvertiseMerge = (
   return Effect.map(
     Effect.promise(() => import("../Lookup")),
     (Lookup) =>
-      Lookup.directoryAdvertiseLayer(advertiseNode, serves) as Layer.Layer<never>,
+      Lookup.directoryAdvertiseLayer(advertiseNode, serves, options) as Layer.Layer<never>,
   );
 };
