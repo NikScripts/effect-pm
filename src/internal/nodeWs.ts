@@ -1,5 +1,5 @@
 /**
- * {@link ws} — local WebSocket listen + Lookup batteries (mint/claim/bind).
+ * {@link ws} — local WebSocket listen (mint/claim/bind). Lookup via pipe, not options.
  *
  * @internal
  */
@@ -36,7 +36,8 @@ import {
 } from "./nodeListenCommon"
 
 /**
- * Local WebSocket listen — localhost bind + default Lookup bootstrap.
+ * Local WebSocket listen — localhost bind. Compose Lookup via
+ * `Layer.provide(Lookup.bootstrapDefaultLocal(...))` when claim / advertise needs it.
  * Same overload shapes as {@link unix}. Prefer this for same-machine WebSocket.
  *
  * @category listen
@@ -107,35 +108,11 @@ export function ws(
   | WsListenRequiresWs,
   unknown
 > {
-  const rawOpts = (
+  const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  const {
-    lookupPath,
-    unlinkLookup,
-    bootstrapLookup = true,
-    ...listenOptions
-  } = rawOpts ?? {};
-  const withLookup = <A, E, R>(
-    layer: Layer.Layer<A, E, R>,
-  ): Layer.Layer<A, E, R> => {
-    if (bootstrapLookup === false) {
-      return layer;
-    }
-    return Layer.unwrap(
-      Effect.gen(function* () {
-        const Lookup = yield* Effect.promise(() => import("../Lookup"));
-        return layer.pipe(
-          Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
-            }),
-          ),
-        );
-      }),
-    ) as Layer.Layer<A, E, R>;
-  };
+  // Lookup is not baked in — pipe `Layer.provide(Lookup.bootstrapDefaultLocal(…))`
+  // (or `Lookup.layer` / `Lookup.client`) when claim / advertise needs it.
 
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
@@ -143,7 +120,7 @@ export function ws(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return withLookup(wsNameless(list, listenOptions)) as Layer.Layer<
+    return wsNameless(list, listenOptions) as Layer.Layer<
       never,
       | UnaddressedNode
       | AddressLessClaimLost
@@ -200,12 +177,10 @@ export function ws(
       tag: Resource.PipeableTag,
       impl: unknown,
     ) => Layer.Layer<never, never, never>;
-    return withLookup(
-      wsListenOn(
-        bound as AnyNode,
-        [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
-        listenOptions,
-      ),
+    return wsListenOn(
+      bound as AnyNode,
+      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
+      listenOptions,
     ) as Layer.Layer<
       never,
       | UnaddressedNode
@@ -240,7 +215,7 @@ export function ws(
     | Layer.Layer<never, any, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return withLookup(wsListenOn(node, list, listenOptions)) as Layer.Layer<
+  return wsListenOn(node, list, listenOptions) as Layer.Layer<
     never,
     | UnaddressedNode
     | AddressLessClaimLost
@@ -250,7 +225,7 @@ export function ws(
   >;
 }
 
-/** Nameless anonymous WebSocket Node + bind (Lookup added by {@link ws}). @internal */
+/** Nameless anonymous WebSocket Node + bind (pipe Lookup when needed). @internal */
 const wsNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,

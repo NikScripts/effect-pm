@@ -35,7 +35,6 @@ const program = Effect.gen(function* () {
   const live = Node.unix(
     Worker,
     [Resource.serve(Jobs, { jobs: Effect.succeed(42) })],
-    { bootstrapLookup: false },
   ).pipe(
     Layer.provide(
       Lookup.bootstrapDefaultLocal({ path, unlink: true }),

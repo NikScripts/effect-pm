@@ -52,7 +52,6 @@ describe("Node.Prototype.instance / .listen", () => {
 
       const mailWorker = MailWorker.listen(
         [Resource.serve(Jobs, jobsImpl(9))],
-        { bootstrapLookup: false },
       );
       const ctx = yield* Layer.build(
         mailWorker("w2").pipe(Layer.provide(lookupClient)),
@@ -87,12 +86,10 @@ describe("Node.Prototype.instance / .listen", () => {
 
       const worker = MailWorker.listen(
         [Resource.serve(Jobs, jobsImpl(3))],
-        { bootstrapLookup: false },
       )
       // second factory with different impl — same Prototype, own curry
       const workerB = MailWorker.listen(
         [Resource.serve(Jobs, jobsImpl(5))],
-        { bootstrapLookup: false },
       )
       const a = yield* Layer.build(
         worker().pipe(Layer.provide(lookupClient)),
@@ -197,7 +194,6 @@ describe("Node.Prototype.instance / .listen", () => {
             Layer.provide(Resource.peersFrom(FleetJobs, {})),
           ),
         ],
-        { bootstrapLookup: false },
       );
       const eastLive = PoolWorker.listen(
         [
@@ -205,7 +201,6 @@ describe("Node.Prototype.instance / .listen", () => {
             Layer.provide(Resource.peersLayer(FleetJobs, east)),
           ),
         ],
-        { bootstrapLookup: false },
       );
 
       const westCtx = yield* Layer.build(

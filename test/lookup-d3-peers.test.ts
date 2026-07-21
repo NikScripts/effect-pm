@@ -85,7 +85,6 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
               Layer.provide(Resource.peersFrom(Pool, {})),
             ),
           ],
-          { bootstrapLookup: false },
         ).pipe(Layer.provide(lookupClient)),
       );
 
@@ -115,7 +114,6 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
               Layer.provide(Resource.peersLayer(Pool, East)),
             ),
           ],
-          { bootstrapLookup: false },
         ).pipe(Layer.provide(lookupClient)),
       );
 

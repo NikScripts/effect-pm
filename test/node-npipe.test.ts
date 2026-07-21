@@ -3,6 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import * as Lookup from "../src/Lookup";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 class JobsAnon extends Resource.Tag<JobsAnon>()("npipe/JobsAnon", {
@@ -14,9 +15,7 @@ describe("Node.nPipe", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         Layer.build(
-          Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(1) }), {
-            bootstrapLookup: false,
-          }),
+          Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(1) })),
         ).pipe(Effect.scoped),
       );
       if (process.platform === "win32") {
@@ -55,10 +54,11 @@ describe.skipIf(process.platform !== "win32")("Node.nPipe (win32)", () => {
     Effect.gen(function* () {
       const lookupPath = `\\\\.\\pipe\\effect-pm-npipe-lookup-${process.pid}`;
       const serverCtx = yield* Layer.build(
-        Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) }), {
-          lookupPath,
-          unlinkLookup: false,
-        }),
+        Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
+          Layer.provide(
+            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: false }),
+          ),
+        ),
       );
       const clientCtx = yield* Layer.build(
         Resource.discoverClient(JobsAnon, { lookupPath, unlink: false }),

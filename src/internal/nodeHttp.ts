@@ -1,5 +1,5 @@
 /**
- * {@link http} — local Http listen + Lookup batteries (mint/claim/bind).
+ * {@link http} — local Http listen (mint/claim/bind). Lookup via pipe, not options.
  *
  * @internal
  */
@@ -36,7 +36,8 @@ import {
 } from "./nodeListenCommon"
 
 /**
- * Local Http listen — localhost bind + default Lookup bootstrap.
+ * Local Http listen — localhost bind. Compose Lookup via
+ * `Layer.provide(Lookup.bootstrapDefaultLocal(...))` when claim / advertise needs it.
  * Same overload shapes as {@link unix}. Prefer this for same-machine HTTP.
  *
  * @category listen
@@ -107,35 +108,11 @@ export function http(
   | HttpListenRequiresHttp,
   unknown
 > {
-  const rawOpts = (
+  const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  const {
-    lookupPath,
-    unlinkLookup,
-    bootstrapLookup = true,
-    ...listenOptions
-  } = rawOpts ?? {};
-  const withLookup = <A, E, R>(
-    layer: Layer.Layer<A, E, R>,
-  ): Layer.Layer<A, E, R> => {
-    if (bootstrapLookup === false) {
-      return layer;
-    }
-    return Layer.unwrap(
-      Effect.gen(function* () {
-        const Lookup = yield* Effect.promise(() => import("../Lookup"));
-        return layer.pipe(
-          Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
-            }),
-          ),
-        );
-      }),
-    ) as Layer.Layer<A, E, R>;
-  };
+  // Lookup is not baked in — pipe `Layer.provide(Lookup.bootstrapDefaultLocal(…))`
+  // (or `Lookup.layer` / `Lookup.client`) when claim / advertise needs it.
 
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
@@ -143,7 +120,7 @@ export function http(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return withLookup(httpNameless(list, listenOptions)) as Layer.Layer<
+    return httpNameless(list, listenOptions) as Layer.Layer<
       never,
       | UnaddressedNode
       | AddressLessClaimLost
@@ -200,12 +177,10 @@ export function http(
       tag: Resource.PipeableTag,
       impl: unknown,
     ) => Layer.Layer<never, never, never>;
-    return withLookup(
-      httpListenOn(
-        bound as AnyNode,
-        [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
-        listenOptions,
-      ),
+    return httpListenOn(
+      bound as AnyNode,
+      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
+      listenOptions,
     ) as Layer.Layer<
       never,
       | UnaddressedNode
@@ -240,7 +215,7 @@ export function http(
     | Layer.Layer<never, any, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return withLookup(httpListenOn(node, list, listenOptions)) as Layer.Layer<
+  return httpListenOn(node, list, listenOptions) as Layer.Layer<
     never,
     | UnaddressedNode
     | AddressLessClaimLost
@@ -250,7 +225,7 @@ export function http(
   >;
 }
 
-/** Nameless anonymous Http Node + bind (Lookup added by {@link http}). @internal */
+/** Nameless anonymous Http Node + bind (pipe Lookup when needed). @internal */
 const httpNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
