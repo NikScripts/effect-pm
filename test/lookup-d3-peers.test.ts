@@ -63,7 +63,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
       const lookupPath = yield* tmpSock("lookup");
       const eastPath = yield* tmpSock("east");
       const westPath = yield* tmpSock("west");
-      const lookupNode = Node.Lookup("d3/lookup", { path: lookupPath });
+      const lookupNode = Node.Lookup()("d3/lookup", { path: lookupPath });
       class East extends Node.Tag<East, Pool>()("d3/East", {
         path: eastPath,
       }) {}

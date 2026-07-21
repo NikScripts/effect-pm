@@ -602,17 +602,24 @@ const isNodeTagValue = <Self, ROut, Addr>(
  * class Worker extends Node.Tag<Worker>()("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "Http"
  * class Mail extends Node.Tag<Mail>()("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "Http"
  * class Live extends Node.Tag<Live>()("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
+ * class Push extends Node.Tag<Push>()("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
  * class Local extends Node.Tag<Local>()("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
  * class Droplet extends Node.Tag<Droplet>()("droplet", { http: "http://d/rpc", ws: "ws://d/rpc" }) {} // multi-protocol
  * import type { Jobs, Emails } from "@app/contracts"
  * class AppWorker extends Node.Tag<AppWorker, Jobs | Emails>()("app/Worker", { path: "/tmp/w.sock" }) {}
+ * class MailWorker extends Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * ```
  *
  * The `key` is the service key. The optional address matches {@link clientHttp}'s `target`: a **port**
- * (`3001` / `":3001"`), a full **url**, `{ url, kind }`, `{ path }` for a **Unix** socket, or the
- * `{ http, ws, ipc }` multi-protocol shorthand. Dialable targets return an {@link AddressedNode} so
- * `Resource.client(Tag, Worker)` can auto-wire {@link connect}; bare `Node.Tag<X>()("x")` stays
- * address-less.
+ * (`3001` or `":3001"` → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for
+ * an explicit endpoint, `{ path }` for a **Unix-domain** socket (`kind: "IpcSocket"`), or the
+ * `{ http, ws, ipc }` multi-protocol shorthand. The node carries {@link ProtocolKind} so the topology
+ * is self-describing about *where* AND *how*: {@link connect}`(node)` derives the transport with no
+ * protocol argument.
+ *
+ * Dialable targets return an {@link AddressedNode} (`kind: ProtocolKind`) so
+ * `Resource.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag()("x")`
+ * stays address-less (`kind: undefined`) — still needs explicit connect / lookup.
  *
  * @category constructors
  * @public
@@ -1066,90 +1073,93 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
  * @category constructors
  * @public
  */
-export function Lookup<Self>(
-  name: string,
-): NodeTagClass<Self, never, BareAddress> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target: {
-    readonly path: string;
-    readonly kind?: "IpcSocket";
-    readonly onConflict?: OnConflictResolved;
-  },
-): NodeTagClass<Self, never, IpcAddress> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target: number | `:${number}`,
-): NodeTagClass<Self, never, HttpAddress> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target: `ws://${string}` | `wss://${string}`,
-): NodeTagClass<Self, never, WsAddress> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target: `http://${string}` | `https://${string}`,
-): NodeTagClass<Self, never, HttpAddress> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target: string | { readonly url: string; readonly kind?: ProtocolKind },
-): NodeTagClass<Self, never, UrlAddressLoose> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target?: LooseNodeTarget,
-): NodeTagClass<
-  Self,
-  never,
-  | BareAddress
+export const Lookup = <Self>() => {
+  function build(
+    name: string,
+  ): NodeTagClass<Self, never, BareAddress> & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target: {
+      readonly path: string;
+      readonly kind?: "IpcSocket";
+      readonly onConflict?: OnConflictResolved;
+    },
+  ): NodeTagClass<Self, never, IpcAddress> & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target: number | `:${number}`,
+  ): NodeTagClass<Self, never, HttpAddress> & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target: `ws://${string}` | `wss://${string}`,
+  ): NodeTagClass<Self, never, WsAddress> & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target: `http://${string}` | `https://${string}`,
+  ): NodeTagClass<Self, never, HttpAddress> & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target: string | { readonly url: string; readonly kind?: ProtocolKind },
+  ): NodeTagClass<Self, never, UrlAddressLoose> & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target?: LooseNodeTarget,
+  ): NodeTagClass<
+    Self,
+    never,
+    | BareAddress
     | IpcAddress
     | HttpAddress
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
-> & {
-  readonly isLookupNode: true
-};
-export function Lookup<Self>(
-  name: string,
-  target?: LooseNodeTarget,
-): NodeTagClass<
-  Self,
-  never,
-  | BareAddress
+  > & {
+    readonly isLookupNode: true
+  };
+  function build(
+    name: string,
+    target?: LooseNodeTarget,
+  ): NodeTagClass<
+    Self,
+    never,
+    | BareAddress
     | IpcAddress
     | HttpAddress
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
-> & {
-  readonly isLookupNode: true
-} {
-  const node = Tag<Self>()(name, target)
-  // Lookup is the fleet parent — concrete default (never leave as ordinary-node "inherit").
-  const onConflict: OnConflict =
-    typeof target === "object" &&
-    target !== null &&
-    target.onConflict !== undefined
-      ? target.onConflict === "inherit"
-        ? "livenessReplace"
-        : target.onConflict
-      : "livenessReplace";
-  return Object.assign(node, {
-    isLookupNode: true as const,
-    onConflict,
-  })
-}
+  > & {
+    readonly isLookupNode: true
+  } {
+    const node = Tag<Self>()(name, target)
+    // Lookup is the fleet parent — concrete default (never leave as ordinary-node "inherit").
+    const onConflict: OnConflict =
+      typeof target === "object" &&
+      target !== null &&
+      target.onConflict !== undefined
+        ? target.onConflict === "inherit"
+          ? "livenessReplace"
+          : target.onConflict
+        : "livenessReplace";
+    return Object.assign(node, {
+      isLookupNode: true as const,
+      onConflict,
+    })
+  }
+  return build;
+};
 
 /**
  * True when `node` was built with {@link Lookup}.

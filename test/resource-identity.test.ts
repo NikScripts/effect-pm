@@ -68,7 +68,7 @@ describe("Resource.identity", () => {
   it.effect("fails closed without a dialable bound Node or ListenNode", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("noself-lookup");
-      const lookupNode = Node.Lookup("identity/noself-lookup", { path });
+      const lookupNode = Node.Lookup()("identity/noself-lookup", { path });
 
       const exit = yield* Effect.exit(
         Layer.build(
@@ -87,7 +87,7 @@ describe("Resource.identity", () => {
       const lookupPath = yield* tmpSock("claim-lookup");
       const winnerPath = yield* tmpSock("claim-winner");
 
-      const lookupNode = Node.Lookup("identity/claim-lookup", {
+      const lookupNode = Node.Lookup()("identity/claim-lookup", {
         path: lookupPath,
       });
       class WinnerNode extends Node.Tag<WinnerNode>()("identity/winner", {

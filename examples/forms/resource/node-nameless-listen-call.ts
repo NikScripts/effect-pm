@@ -21,8 +21,8 @@ class Emails extends Resource.Tag<Emails>()("forms/nameless/Emails", {
 }) {}
 
 const clients = Layer.mergeAll(
-  Resource.clientLocal(Jobs),
-  Resource.clientLocal(Emails),
+  Resource.discoverClient(Jobs),
+  Resource.discoverClient(Emails),
 )
 
 const program = Effect.gen(function* () {

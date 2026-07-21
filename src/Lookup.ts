@@ -632,7 +632,7 @@ export const clientDefaultLocal = (options?: {
   readonly path?: string;
 }): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
-  const node = LookupNodeTag("effect-pm/Lookup/default", { path });
+  const node = LookupNodeTag()("effect-pm/Lookup/default", { path });
   return client(node);
 };
 

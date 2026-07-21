@@ -15,7 +15,7 @@ import * as Node from "../../../src/Node"
 
 const program = Effect.gen(function* () {
   const path = `/tmp/effect-pm-forms-lookup-${process.pid}.sock`
-  const lookupNode = Node.Lookup("forms/Lookup", { path })
+  const lookupNode = Node.Lookup()("forms/Lookup", { path })
 
   // bootstrap = bind-or-dial default-local style on an explicit path
   const boot = Lookup.bootstrapDefaultLocal({ path, unlink: true })

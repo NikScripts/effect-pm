@@ -41,7 +41,7 @@ describe("Node.Prototype.instance / .listen", () => {
   it.effect("Prototype.listen curries serves; ListenNode is in built context", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("proto-listen");
-      const lookupNode = Node.Lookup("inst/proto-listen", {
+      const lookupNode = Node.Lookup()("inst/proto-listen", {
         path: lookupPath,
       });
       class MailWorker extends Node.Prototype<MailWorker, Jobs>(
@@ -73,7 +73,7 @@ describe("Node.Prototype.instance / .listen", () => {
   it.effect("listen mints path + suffix, advertises, and serves without claim", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
-      const lookupNode = Node.Lookup("inst/lookup", {
+      const lookupNode = Node.Lookup()("inst/lookup", {
         path: lookupPath,
       });
       class MailWorker extends Node.Prototype<MailWorker, Jobs>(
@@ -162,7 +162,7 @@ describe("Node.Prototype.instance / .listen", () => {
   it.effect("named instance suffix is stable; peersLayer folds both via directory", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("peers-lookup");
-      const lookupNode = Node.Lookup("inst/peers-lookup", {
+      const lookupNode = Node.Lookup()("inst/peers-lookup", {
         path: lookupPath,
       });
       class FleetJobs extends Resource.Tag<FleetJobs>()("inst/FleetJobs", {

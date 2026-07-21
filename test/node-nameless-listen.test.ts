@@ -26,7 +26,7 @@ const jobsImpl = { jobs: Effect.succeed(11) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
 describe("Node.unix nameless", () => {
-  it.effect("mints address-less node + Lookup; clientLocal dials", () =>
+  it.effect("mints address-less node + Lookup; discoverClient dials", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
@@ -36,7 +36,7 @@ describe("Node.unix nameless", () => {
         }),
       );
       const clientCtx = yield* Layer.build(
-        Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
+        Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
       );
 
       const n = yield* Effect.gen(function* () {
@@ -61,7 +61,7 @@ describe("Node.unix nameless", () => {
         }),
       );
       const clientCtx = yield* Layer.build(
-        Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
+        Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
@@ -71,7 +71,7 @@ describe("Node.unix nameless", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("two resources; clientLocal dials both", () =>
+  it.effect("two resources; discoverClient dials both", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("pair");
       const serverCtx = yield* Layer.build(
@@ -85,8 +85,8 @@ describe("Node.unix nameless", () => {
       );
       const clientCtx = yield* Layer.build(
         Layer.mergeAll(
-          Resource.clientLocal(Jobs, { lookupPath, unlink: false }),
-          Resource.clientLocal(Emails, { lookupPath, unlink: false }),
+          Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
+          Resource.discoverClient(Emails, { lookupPath, unlink: false }),
         ),
       );
 

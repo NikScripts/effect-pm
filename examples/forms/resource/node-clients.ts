@@ -22,12 +22,9 @@ class Emails extends Resource.Tag<Emails>()("forms/clients/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs | Emails>()(
-  "forms/clients/Worker",
-  {
-    path: `/tmp/effect-pm-forms-clients-${process.pid}.sock`,
-  },
-) {}
+class Worker extends Node.Tag<Worker, Jobs | Emails>()("forms/clients/Worker", {
+  path: `/tmp/effect-pm-forms-clients-${process.pid}.sock`,
+}) {}
 
 const program = Effect.gen(function* () {
   const serverCtx = yield* Layer.build(
