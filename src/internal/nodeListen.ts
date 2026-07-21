@@ -1,5 +1,5 @@
 /**
- * Neutral {@link listen} spine — Http/WS interim only; ipc → {@link unix}.
+ * Neutral {@link listen} spine — no transport bind; use {@link unix} / {@link http} / {@link ws}.
  *
  * @internal
  */
@@ -24,22 +24,17 @@ import {
   isIpcListenNode,
   isPrototypeNode,
   isResourceTagArg,
-  withListenNode,
+  isWsListenNode,
   type CatalogROut,
   type ServeLayerList,
   type ServesForCatalog,
 } from "./nodeListenCommon"
-import {
-  wsServer,
-  type HttpServerOptions,
-} from "./nodeHttpServer"
 
 /**
- * Neutral catalog spine (C2) — **no transport bind**. Prefer {@link unix} / `http` / `ws`.
+ * Neutral catalog spine (C2) — **no transport bind**. Prefer {@link unix} / {@link http} / {@link ws}.
  *
- * Temporary: Http / WebSocket `listen(node, serves)` still dispatches to {@link httpServer} /
- * {@link wsServer} until `Node.http` / `Node.ws` land. **IpcSocket, address-less ipc, nameless,
- * and Tag+impl on an ipc Node fail with {@link ListenUseProtocol}** → use {@link unix}.
+ * **IpcSocket, Http, WebSocket, address-less, nameless, and Tag+impl fail with
+ * {@link ListenUseProtocol}** → use the matching protocol entry.
  *
  * @public
  */
@@ -74,11 +69,11 @@ export function listen<
 >;
 export function listen(
   nodeOrTag: AnyNode | Resource.PipeableTag,
-  servesOrImpl?:
+  _servesOrImpl?:
     | Layer.Layer<never, any, never>
     | ServeLayerList
     | object,
-  options?: ListenOptions,
+  _options?: ListenOptions,
 ): Layer.Layer<
   never,
   | UnaddressedNode
@@ -116,22 +111,19 @@ export function listen(
         `Tag "${tagKey}" is bound to an Http Node`,
       );
     }
-    const serveErased = Resource.serve as unknown as (
-      tag: Resource.PipeableTag,
-      impl: unknown,
-    ) => Layer.Layer<never, never, never>;
-    return listen(
-      bound as AnyNode,
-      [serveErased(tag, servesOrImpl)] as ServeLayerList,
-      options,
+    if (isWsListenNode(bound as AnyNode)) {
+      return failUseProtocol(
+        "ws",
+        `Tag "${tagKey}" is bound to a WebSocket Node`,
+      );
+    }
+    return failUseProtocol(
+      "unix",
+      `Tag "${tagKey}" has no protocol-bound Node — use Node.unix / Node.http / Node.ws`,
     );
   }
 
   const node = nodeOrTag as AnyNode;
-  const serves = servesOrImpl as
-    | Layer.Layer<never, any, never>
-    | ServeLayerList;
-  const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
 
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
@@ -145,35 +137,11 @@ export function listen(
   if (isHttpListenNode(node)) {
     return failUseProtocol("http", `node "${node.key}" needs Http bind`);
   }
-  // WebSocket only until Node.ws (Phase C).
-  return withListenNode(node, wsTransport(node, list, options));
-}
-
-
-/**
- * WebSocket bind for neutral {@link listen} only (Phase B interim).
- * Http is {@link http}; ipc is {@link unix}. @internal
- */
-const wsTransport = (
-  node: AnyNode,
-  list: ServeLayerList,
-  options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode, unknown> => {
-  const advertiseNode = node as AnyNode & { readonly key: string };
-  const httpOpts: HttpServerOptions | undefined =
-    options === undefined
-      ? { advertiseNode }
-      : {
-          ...(options.path !== undefined ? { path: options.path } : {}),
-          ...(options.serialization !== undefined
-            ? { serialization: options.serialization }
-            : {}),
-          ...(options.health !== undefined ? { health: options.health } : {}),
-          ...(options.node !== undefined ? { node: options.node } : {}),
-          advertiseNode,
-        };
-  if (node.kind === "WebSocket") {
-    return wsServer(list, httpOpts);
+  if (isWsListenNode(node)) {
+    return failUseProtocol("ws", `node "${node.key}" needs WebSocket bind`);
   }
-  return unaddressedLayer(node.key);
-};
+  return failUseProtocol(
+    "unix",
+    `node "${node.key}" — use Node.unix / Node.http / Node.ws`,
+  );
+}

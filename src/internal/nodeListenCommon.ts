@@ -13,6 +13,7 @@ import {
   ListenTagNodeRequired,
   ListenUseProtocol,
   UnixListenRequiresIpc,
+  WsListenRequiresWs,
 } from "./nodeCore"
 
 /**
@@ -130,6 +131,34 @@ export const isHttpListenNode = (node: AnyNode): boolean => {
     return (
       node.url.startsWith("http://") || node.url.startsWith("https://")
     );
+  }
+  return false;
+};
+
+/** Fail a Layer build with {@link WsListenRequiresWs}. @internal */
+export const wsRequiresWsLayer = (
+  node: string,
+  kind: string,
+): Layer.Layer<never, WsListenRequiresWs> =>
+  failLayer(new WsListenRequiresWs({ node, kind }));
+
+/**
+ * Nodes that are not WebSocket for {@link ws} (IpcSocket / Http / http(s) urls / unix paths).
+ * @internal
+ */
+export const isNonWsNode = (node: AnyNode): boolean =>
+  node.kind === "IpcSocket" ||
+  node.kind === "Http" ||
+  typeof node.path === "string" ||
+  (typeof node.url === "string" &&
+    (node.url.startsWith("http://") || node.url.startsWith("https://")));
+
+/** Nodes that need {@link ws} (WebSocket kind / ws(s) url). @internal */
+export const isWsListenNode = (node: AnyNode): boolean => {
+  if (isNonWsNode(node)) return false;
+  if (node.kind === "WebSocket") return true;
+  if (typeof node.url === "string") {
+    return node.url.startsWith("ws://") || node.url.startsWith("wss://");
   }
   return false;
 };

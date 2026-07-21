@@ -26,6 +26,7 @@ import {
 } from "./nodeListenCommon"
 import { http } from "./nodeHttp"
 import { unix } from "./nodeUnix"
+import { ws } from "./nodeWs"
 
 /**
  * Prototype Node template (D7) — a Node kind, nested on {@link Node} as `Prototype`.
@@ -133,6 +134,9 @@ export const Prototype = <Self, ROut = never>(
         const node = instance(suffix);
         if (options?.kind === "Http") {
           return http<typeof node, Serves>(node, serves, listenOptions);
+        }
+        if (options?.kind === "WebSocket") {
+          return ws<typeof node, Serves>(node, serves, listenOptions);
         }
         return unix<typeof node, Serves>(node, serves, listenOptions);
       },

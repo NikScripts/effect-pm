@@ -87,7 +87,10 @@ const cases = [
     engine: [
       "src/internal/nodeUnix.ts",
       "src/internal/nodeHttp.ts",
+      "src/internal/nodeWs.ts",
       "src/internal/nodePrototype.ts",
+      "src/internal/nodeHttpServer.ts",
+      "src/internal/nodeIpcServer.ts",
     ],
     member: "listen",
   },

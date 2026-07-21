@@ -581,6 +581,24 @@ export class HttpListenRequiresHttp extends Data.TaggedError(
 }
 
 /**
+ * {@link ws} only speaks local WebSocket. The Node (or Tag-bound Node) was IpcSocket / Http
+ * (or a non-loopback URL) — use {@link unix} / {@link http}, or {@link wsServer} for custom binds.
+ *
+ * @public
+ */
+export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.ws requires a local WebSocket Node (loopback ws:// url or address-less mint); ` +
+      `"${this.node}" is ${this.kind}. Use Node.unix / Node.http (or ipcServer / httpServer) for other transports.`
+    );
+  }
+}
+
+/**
  * {@link listen} no longer binds a transport. Use the protocol entry instead.
  *
  * @public
