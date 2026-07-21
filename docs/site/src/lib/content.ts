@@ -1,3 +1,4 @@
+import { stripDocBanner } from "./doc-banner.js";
 // Content source — Vite's module graph, NOT node:fs.
 //
 // `import.meta.glob(... ?raw)` inlines every `.md` file as a raw string and, crucially,
@@ -19,7 +20,7 @@ const modules = import.meta.glob(
     "../../../observe/**/*.md",
     "../../../standards/**/*.md",
   ],
-  { query: "?raw", import: "default", eager: true },
+  { query: "?raw", import: "default", eager: true }
 ) as Record<string, string>;
 
 export interface RawChapter {
@@ -29,12 +30,15 @@ export interface RawChapter {
   readonly raw: string;
 }
 
-const toEntry = (path: string, raw: string): RawChapter => {
+const toEntry = (path: string, rawWithBanner: string): RawChapter => {
+  // the GitHub-facing banner lives only in the SOURCE — never in anything the site renders
+  const raw = stripDocBanner(rawWithBanner);
   // key is either absolute (".../docs/guides/queues.md") or relative ("../../../guides/queues.md");
   // normalize to "guides/queues" -> group "guides", slug "queues" (top-level -> group "").
-  const rel = (path.includes("/docs/")
-    ? path.slice(path.lastIndexOf("/docs/") + "/docs/".length)
-    : path.replace(/^(?:\.\.\/)+/, "")
+  const rel = (
+    path.includes("/docs/")
+      ? path.slice(path.lastIndexOf("/docs/") + "/docs/".length)
+      : path.replace(/^(?:\.\.\/)+/, "")
   ).replace(/\.md$/, "");
   const parts = rel.split("/");
   const slug = parts[parts.length - 1] ?? rel;
@@ -54,7 +58,7 @@ export const chapters: ReadonlyArray<RawChapter> = Object.entries(modules)
     const prev = seen.get(c.slug);
     if (prev !== undefined) {
       throw new Error(
-        `Duplicate docs slug "${c.slug}": ${prev} and ${c.path} both map to /docs/${c.slug}. Rename one file.`,
+        `Duplicate docs slug "${c.slug}": ${prev} and ${c.path} both map to /docs/${c.slug}. Rename one file.`
       );
     }
     seen.set(c.slug, c.path);
