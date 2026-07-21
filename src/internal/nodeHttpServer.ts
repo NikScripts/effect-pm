@@ -22,6 +22,7 @@ import * as Resource from "../Resource"
 import {
   AnyNode,
   ProtocolKind,
+  type OnConflict,
 } from "./nodeCore"
 import {
   assertProtocolKinds,
@@ -52,6 +53,12 @@ export interface HttpServerOptions {
    * @internal
    */
   readonly advertiseNode?: AnyNode & { readonly key: string };
+  /**
+   * Call-site advertise conflict policy (forwarded to {@link Lookup.directoryAdvertiseLayer}).
+   *
+   * @internal
+   */
+  readonly onConflict?: OnConflict;
 }
 
 /** A server RPC-protocol builder — {@link Resource.serverProtocolHttp} or {@link Resource.serverProtocolWebsocket}. */
@@ -163,6 +170,9 @@ const httpServerBase = (
       const advertise = yield* directoryAdvertiseMerge(
         options?.advertiseNode,
         entries,
+        options?.onConflict !== undefined
+          ? { onConflict: options.onConflict }
+          : undefined,
       );
       return served.pipe(Layer.provideMerge(advertise));
     }),

@@ -24,6 +24,7 @@ export {
   isLookupNode,
   isAddressedNode,
   catalogSym,
+  resolveOnConflict,
   AddressLessClaimLost,
   ListenNode,
   ListenTagNodeRequired,
@@ -47,6 +48,8 @@ export type {
   DialableTarget,
   ListenOptions,
   NamelessListenOptions,
+  OnConflict,
+  OnConflictResolved,
 } from "./internal/nodeCore"
 export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"

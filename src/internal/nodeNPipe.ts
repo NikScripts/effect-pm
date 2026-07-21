@@ -373,6 +373,9 @@ const nPipeBind = (
       ? { serialization: options.serialization }
       : {}),
     ...(options?.node !== undefined ? { node: options.node } : {}),
+    ...(options?.onConflict !== undefined
+      ? { onConflict: options.onConflict }
+      : {}),
     advertiseNode,
   });
 };

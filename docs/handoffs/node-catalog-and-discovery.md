@@ -356,8 +356,8 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`**.  
-> **Baking:** `askIncumbent` (see § below). Managers / X1 still OPEN.  
+> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`** + **`askIncumbent`**.  
+> Managers / X1 still OPEN.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 #### D3 — directory-backed peers (**LOCKED** 2026-07-19)
@@ -396,73 +396,92 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | Preset | v1 |
 |--------|-----|
 | **`livenessReplace`** (default) | **SHIPPED** — ping incumbent via **NodeStatus.ping**; timeout/fail ⇒ replace row; alive ⇒ `IncumbentAlive` |
-| **`askIncumbent`** | **LEAN / baking** — opt-in; ask live incumbent to yield before reject (see § askIncumbent) |
-| **`reject`** | Strict never-steal (dead still replaceable? OPEN) |
+| **`askIncumbent`** | **SHIPPED** — inherit chain + `NodeStatus.yield` (see § askIncumbent) |
+| **`reject`** | **SHIPPED** — alive → `IncumbentAlive`; dead → still replace |
+| **`inherit`** | **SHIPPED** — call-site → node stamp → Lookup stamp → `livenessReplace` |
 | **`lastWins`** (orphan first) | **Not** the default |
 
-#### `askIncumbent` advertise policy (**OPEN** — bake 2026-07-19)
+#### `askIncumbent` advertise policy (**LOCKED + ENG’D** 2026-07-21)
 
-**Shipped today (fact):**
+**Shipped (fact):**
 
 ```ts
-// Same nodeKey + different dial target:
-//   ping incumbent → alive → IncumbentAlive (layer/advertise fails)
-//                 → dead/unreachable → replace directory row
-Lookup.directoryAdvertiseLayer(node, serves) // always livenessReplace
+// Resolve: call-site → node stamp → Lookup stamp → livenessReplace
+// askIncumbent + alive → NodeStatus.yield; refuse/timeout → IncumbentAlive
+Lookup.directoryAdvertiseLayer(node, serves, { onConflict })
 ```
 
-**Gap:** rolling restart / takeover of a **named** Node (`Worker` / `Proto.make("East", …)`) while the old process is still up — today the newcomer is hard-rejected until the old process dies or unregisters.
+**Not this bake:** manager LB streams; queue/work drain across processes; changing the **hard** fallback away from `livenessReplace`.
 
-**Not this bake:** manager LB streams; queue/work drain across processes; changing default away from `livenessReplace`.
+##### Job (shipped)
 
-##### Job (lean)
+When effective policy is `askIncumbent` and the incumbent is **alive**, Lookup **asks it to yield** (cooperative). If it yields (unregisters / accepts), newcomer’s advertise succeeds. If it refuses or times out → `IncumbentAlive`. Dead incumbent still replaced (same as livenessReplace).
 
-When policy is `askIncumbent` and the incumbent is **alive**, Lookup **asks it to yield** (cooperative). If it yields (unregisters / accepts), newcomer’s advertise succeeds. If it refuses or times out → same as today: `IncumbentAlive`. Dead incumbent still replaced (same as livenessReplace).
-
-##### Surface options
-
-**A — Policy on advertise / listen (LEAN)**
+##### Surface + inheritance (LEAN — replaces A-only)
 
 ```ts
-// listen opts (or AdvertiseRequest field) — default stays livenessReplace
-Resource.listen(East, [Resource.serve(Mail, impl)], {
-  onConflict: "askIncumbent", // | "livenessReplace" | "reject"
+type OnConflict =
+  | "livenessReplace" // today’s behavior
+  | "askIncumbent"    // cooperative yield ask
+  | "reject"          // alive → IncumbentAlive; dead → still replace (AI.6)
+  | "inherit"         // take Lookup node’s concrete policy at advertise time
+
+// 1) Stamp fleet default on the Lookup node constructor
+class AppLookup extends Node.Lookup("app/Lookup", {
+  path: "/tmp/app-lookup.sock",
+  onConflict: "askIncumbent", // concrete — Lookup should not use "inherit"
+}) {}
+
+// 2) Ordinary nodes default to inherit (unless stamped)
+class Worker extends Node.Tag("app/Worker") {} // onConflict: "inherit"
+class Sticky extends Node.Tag("app/Sticky", {
+  path: "/tmp/sticky.sock",
+  onConflict: "reject", // node-definition override
+}) {}
+
+// 3) Call-site option still wins when provided
+Node.unix(Worker, [Resource.serve(Mail, impl)], {
+  onConflict: "livenessReplace",
 })
-
-// Lookup.advertise path mirrors the same tag when callers advertise by hand
 ```
 
-**B — Lookup server global default (sketch)**
+**Resolve order** (first concrete wins; `"inherit"` continues):
 
-```ts
-Lookup.layer(node, { onConflict: "askIncumbent" })
-```
+1. Call-site listen / advertise option (`unix` / `http` / `ws` / `nPipe` / `advertise`)
+2. Advertising node’s constructor stamp (`Tag` / `Prototype` / `Prototype.make` / `instance`)
+3. Lookup node’s constructor stamp (the directory being advertised into)
+4. Hard fallback: **`livenessReplace`**
 
-Forces one policy for all advertisers — less flexible for mixed fleets.
+So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the whole fleet asks — unless a node definition or call-site overrides.
 
-**C — Park (sketch)**
+| Surface | Default | Notes |
+|---------|---------|--------|
+| `Node.Lookup(...)` | `livenessReplace` (concrete) | Fleet parent; `"inherit"` on Lookup is meaningless / rejected |
+| `Node.Tag` / Prototype / clones / instances | `"inherit"` | Pulls from Lookup at advertise |
+| listen / advertise options | omit = inherit chain | Explicit tag short-circuits |
 
-Keep only `livenessReplace` until managers own handoff. Named-Node rolling restart = kill old first / wait for unregister.
+**Not lean:** `Lookup.layer(node, { onConflict })` as a second parent — constructor stamp on the Lookup node is enough; layer opts stay for other concerns unless we later need a runtime override.
 
-**Agent lean: A** — opt-in at the advertise/listen site; default unchanged.
-
-##### Yield mechanism (after A)
+##### Yield mechanism
 
 | # | Question | Lean |
 |---|----------|------|
-| AI.1 | Surface = A / B / C? | **A** |
-| AI.2 | Who dials the ask? | **Lookup server** (has incumbent endpoint; newcomer shouldn’t need to) |
-| AI.3 | RPC | Add **`NodeStatus.yield`** (or `askYield`) — reserved resource every node already serves |
-| AI.4 | Yield meaning v1 | Cooperative: incumbent **unregisters** its directory row (and may interrupt listen scope). **No** in-flight work drain |
-| AI.5 | Refuse / timeout | → **`IncumbentAlive`** (fail-closed; no steal) |
-| AI.6 | `reject` preset | Alive → always `IncumbentAlive`; dead → still replace (same liveness probe) — or strict never-replace? lean: dead still replace |
+| AI.1 | Surface | **LOCKED** — inheritance chain (call-site → node stamp → Lookup stamp → `livenessReplace`) |
+| AI.2 | Who dials the ask? | **LOCKED** — Lookup server |
+| AI.3 | RPC | **LOCKED** — `NodeStatus.yield` (best word; note Effect `yield*` confusion in docs) |
+| AI.4 | Yield meaning v1 | **LOCKED** — cooperative accept → Lookup may replace; unregister finalizer is **dial-matched** so a late unregister cannot wipe the newcomer. Interrupt listen scope optional/best-effort. **No** in-flight work drain |
+| AI.5 | Refuse / timeout | **LOCKED** — `IncumbentAlive` (fail-closed) |
+| AI.6 | `reject` preset | **LOCKED** — alive → `IncumbentAlive`; dead → still replace |
+| AI.7 | Prototype cascade | **LOCKED** — `make` / `instance` default `"inherit"`; stamp on Prototype or `make` overrides that clone only |
+| AI.8 | Wire field | **LOCKED** — advertise carries advertiser preference (`callSite`∋`nodeStamp`, may still be `"inherit"` / omit); **Lookup server** finishes resolve with its node stamp (so `bootstrapDefaultLocal` stays `livenessReplace` unless a stamped `Node.Lookup` is served) |
 
 ```ts
 // Goal sketch after lock:
-// NodeStatus gains:
+// NodeStatus gains (AI.3 LOCKED — name is `yield`, not askYield/concede):
 yield: Resource.effect(Schema.Boolean) // true = accepted yield
+// Mental note: wire/API `status.yield` ≠ Effect `yield*`; docs should call that out once.
 
-// Lookup advertise when onConflict: "askIncumbent":
+// Lookup advertise when effective onConflict: "askIncumbent":
 //   same dial → refresh serves (unchanged)
 //   different dial + dead → replace
 //   different dial + alive → client(NodeStatus).yield on incumbent
@@ -801,3 +820,6 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-20** — Bake tip for merge into `integration`: AddressedNode auto-connect + MemoMap-shared connect; kind-precise Tags; `nodes([X])` / `andNode(X)` sole-bind; `InvalidHttpTarget` Layer/Effect (not throw); `listenLocal` catalog proof; `*Server`/`listen` serve-list bounds match Effect `Layer.mergeAll`. `askIncumbent` still OPEN.
 - **2026-07-20** — **Nameless `Node.listen([serve…])` Eng:** mint address-less anonymous Node + D7 claim + Lookup bootstrap; dial via `clientLocal`.
 - **2026-07-21** — **Protocol listen Phases A–E Eng + on `integration`:** `Node.unix` / `http` / `ws` / `nPipe`; neutral `listen` binds nothing; module split for tree-shake; forms teach protocol entries + `clientsFor`. `askIncumbent` still OPEN.
+- **2026-07-21** — Owner: RPC name **`NodeStatus.yield` LOCKED** (best word; acknowledge possible confusion with Effect `yield*`). Inheritance/`onConflict` surface still baking.
+- **2026-07-21** — Owner “Continue” → **`askIncumbent` LOCKED** (inheritance chain + `NodeStatus.yield` + AI.1–8). Eng next.
+- **2026-07-21** — **`askIncumbent` Eng’d:** `OnConflict` stamps + listen opts; Lookup resolves + `NodeStatus.yield`; dial-matched unregister; tests + changeset.

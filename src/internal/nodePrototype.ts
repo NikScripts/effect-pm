@@ -11,6 +11,7 @@ import {
   catalogSym,
   ListenNode,
   NamelessListenOptions,
+  OnConflict,
   ProtocolKind,
   Tag,
 } from "./nodeCore"
@@ -47,63 +48,101 @@ import { ws } from "./nodeWs"
  */
 export const Prototype = <Self, ROut = never>(
   name: string,
-  options?: { readonly kind?: ProtocolKind },
+  options?: { readonly kind?: ProtocolKind; readonly onConflict?: OnConflict },
 ) => {
+  const protoOnConflict = options?.onConflict;
   const instance = (suffix?: string) => {
     const key =
       suffix !== undefined && suffix.length > 0 ? `${name}#${suffix}` : name;
-    return Object.assign(Tag<Self, ROut>(key), {
-      isDynamicInstance: true as const,
-      dynamicPrototypeKey: name,
-      ...(suffix !== undefined && suffix.length > 0
-        ? { instanceSuffix: suffix }
-        : {}),
-    });
+    return Object.assign(
+      Tag<Self, ROut>(
+        key,
+        protoOnConflict !== undefined
+          ? { onConflict: protoOnConflict }
+          : undefined,
+      ),
+      {
+        isDynamicInstance: true as const,
+        dynamicPrototypeKey: name,
+        ...(suffix !== undefined && suffix.length > 0
+          ? { instanceSuffix: suffix }
+          : {}),
+      },
+    );
   };
   function make(
     cloneName: string,
-    target: { readonly path: string; readonly kind?: "IpcSocket" },
+    target: {
+      readonly path: string;
+      readonly kind?: "IpcSocket";
+      readonly onConflict?: OnConflict;
+    },
   ): IpcNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
     target: {
       readonly url: `ws://${string}` | `wss://${string}`;
       readonly kind?: "WebSocket";
+      readonly onConflict?: OnConflict;
     },
   ): WsNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
-    target: { readonly url: string; readonly kind: "WebSocket" },
+    target: {
+      readonly url: string;
+      readonly kind: "WebSocket";
+      readonly onConflict?: OnConflict;
+    },
   ): WsNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
-    target: { readonly url: string; readonly kind: "Http" },
+    target: {
+      readonly url: string;
+      readonly kind: "Http";
+      readonly onConflict?: OnConflict;
+    },
   ): HttpNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
-    target: { readonly url: string; readonly kind?: ProtocolKind },
+    target: {
+      readonly url: string;
+      readonly kind?: ProtocolKind;
+      readonly onConflict?: OnConflict;
+    },
   ): UrlNodeTagClass<Self, ROut>;
   function make(
     cloneName: string,
     target:
-      | { readonly path: string; readonly kind?: "IpcSocket" }
-      | { readonly url: string; readonly kind?: ProtocolKind },
+      | {
+          readonly path: string;
+          readonly kind?: "IpcSocket";
+          readonly onConflict?: OnConflict;
+        }
+      | {
+          readonly url: string;
+          readonly kind?: ProtocolKind;
+          readonly onConflict?: OnConflict;
+        },
   ): IpcNodeTagClass<Self, ROut> | UrlNodeTagClass<Self, ROut> {
+    const onConflict = target.onConflict ?? protoOnConflict;
     // Branch so each Tag call hits a dialable overload (not the loose union catch-all).
     if ("path" in target) {
       return Tag<Self, ROut>(`${name}#${cloneName}`, {
         path: target.path,
         ...(target.kind !== undefined ? { kind: target.kind } : {}),
+        ...(onConflict !== undefined ? { onConflict } : {}),
       });
     }
     return Tag<Self, ROut>(`${name}#${cloneName}`, {
       url: target.url,
       ...(target.kind !== undefined ? { kind: target.kind } : {}),
+      ...(onConflict !== undefined ? { onConflict } : {}),
     });
   }
   return Object.assign(Context.Service<Self, Record<string, never>>()(name), {
     isPrototype: true as const,
     kind: options?.kind,
+    onConflict: protoOnConflict ?? ("inherit" as const),
     url: undefined as undefined,
     path: undefined as undefined,
     [catalogSym]: undefined as ROut | undefined,
