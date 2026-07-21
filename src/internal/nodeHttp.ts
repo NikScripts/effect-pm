@@ -38,6 +38,7 @@ import {
  * Local Http listen — localhost bind + default Lookup bootstrap.
  * Same overload shapes as {@link unix}. Prefer this for same-machine HTTP.
  *
+ * @category listen
  * @public
  */
 export function http<

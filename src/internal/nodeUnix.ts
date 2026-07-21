@@ -37,6 +37,7 @@ import {
  * Unix-domain IPC listen — all ipc mint/bind + default Lookup bootstrap.
  * Same overload shapes as the old multi-protocol `listen`. Prefer this for same-machine.
  *
+ * @category listen
  * @public
  */
 export function unix<

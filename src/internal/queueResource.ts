@@ -151,6 +151,7 @@ export {
  * - `"normal"` — default priority
  * - `"low"` — processed last (use for background/deferrable work)
  *
+ * @category models
  * @public
  */
 export type Priority = "high" | "normal" | "low";
@@ -162,6 +163,7 @@ export type Priority = "high" | "normal" | "low";
  * - `"strict-descending"` — highest level index first (can starve lower levels).
  * - `"weighted"` — virtual-time weighted fair queuing; level index is the weight (≥ 1).
  *
+ * @category models
  * @public
  */
 export type BuiltInTakeAlgorithm = BuiltInTakeAlgorithmInternal;
@@ -169,6 +171,7 @@ export type BuiltInTakeAlgorithm = BuiltInTakeAlgorithmInternal;
 /**
  * Context passed to a {@link CustomTakeAlgorithm} on each non-blocking take.
  *
+ * @category models
  * @public
  */
 export type TakeAlgorithmPickContext = TakeAlgorithmPickContextInternal;
@@ -176,6 +179,7 @@ export type TakeAlgorithmPickContext = TakeAlgorithmPickContextInternal;
 /**
  * Result of a custom take pick — which level to dequeue from and updated scheduler state.
  *
+ * @category models
  * @public
  */
 export type TakeAlgorithmPick = TakeAlgorithmPickInternal;
@@ -194,6 +198,7 @@ export type TakeAlgorithmPick = TakeAlgorithmPickInternal;
  * };
  * ```
  *
+ * @category models
  * @public
  */
 export type CustomTakeAlgorithm = CustomTakeAlgorithmInternal;
@@ -201,6 +206,7 @@ export type CustomTakeAlgorithm = CustomTakeAlgorithmInternal;
 /**
  * Lane take algorithm: a built-in name or a custom pick function.
  *
+ * @category models
  * @public
  */
 export type TakeAlgorithm = TakeAlgorithmInternal;
@@ -208,6 +214,7 @@ export type TakeAlgorithm = TakeAlgorithmInternal;
 /**
  * JSON-safe metadata for queue item wire encoding and typed group contracts.
  *
+ * @category models
  * @public
  */
 export interface QueueItemCodecDescriptor {
@@ -225,6 +232,7 @@ export interface QueueItemCodecDescriptor {
  * Annotation key carrying an item schema's **version** — the anchor for the `@vN` marker that
  * travels on released / handoff entries and the future upcast/migration history.
  *
+ * @category item codecs
  * @public
  */
 export const schemaVersionAnnotation = "schemaVersion";
@@ -235,6 +243,7 @@ export const schemaVersionAnnotation = "schemaVersion";
  * from an older sender). The version flows into {@link makeQueueItemCodecDescriptor}'s `id`
  * (`…/item@vN`) and `version`, making every released/handoff entry self-describing.
  *
+ * @category item codecs
  * @public
  */
 export const withSchemaVersion = <S extends Schema.Top>(
@@ -245,6 +254,7 @@ export const withSchemaVersion = <S extends Schema.Top>(
 /**
  * Read an item schema's {@link withSchemaVersion | version}; defaults to `1` when unannotated.
  *
+ * @category item codecs
  * @public
  */
 export const schemaVersionOf = (schema: Schema.Top): number => {
@@ -257,6 +267,7 @@ export const schemaVersionOf = (schema: Schema.Top): number => {
  * `id` (`…/item@vN`) and `version` are taken from the schema's {@link withSchemaVersion} stamp
  * (default `1`), so the descriptor self-describes the schema version for handoff / drift checks.
  *
+ * @category item codecs
  * @public
  */
 export const makeQueueItemCodecDescriptor = <T>(
@@ -278,6 +289,7 @@ export const makeQueueItemCodecDescriptor = <T>(
 /**
  * Single-item enqueue failed schema validation before the queue mutated.
  *
+ * @category errors
  * @public
  */
 export class QueueItemValidationError extends Data.TaggedError("QueueItemValidationError")<{
@@ -291,6 +303,7 @@ export class QueueItemValidationError extends Data.TaggedError("QueueItemValidat
 /**
  * Batch enqueue failed schema validation under atomic semantics (no items enqueued).
  *
+ * @category errors
  * @public
  */
 export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValidationError")<{
@@ -305,7 +318,11 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
   readonly codecId?: string;
 }> {}
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemEncodingError;
 
 /**
@@ -314,6 +331,7 @@ export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemE
  * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
  * @typeParam R - Dependencies needed to encode items (schema requirements) when called from the ambient program
  *
+ * @category models
  * @public
  */
 export interface QueueEnqueue<T, E = never, R = never> {
@@ -331,6 +349,7 @@ export interface QueueEnqueue<T, E = never, R = never> {
  * **`attempts`** count preserved (so a job mid-retry keeps its budget). For handoff / event
  * round-trips: `yield* queue.enqueue(event.entries)`.
  *
+ * @category models
  * @public
  */
 export interface QueueEnqueueEntries<T, R = never> {
@@ -540,7 +559,11 @@ export interface QueueEngineHandle<
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueEntryTimestamps {
   readonly enqueuedAt: DateTime.Utc;
   readonly startedAt?: DateTime.Utc;
@@ -548,7 +571,11 @@ export interface QueueEntryTimestamps {
   readonly interruptedAt?: DateTime.Utc;
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueEntry<T> {
   readonly item: T;
   readonly entryId: string;
@@ -564,14 +591,22 @@ export interface QueueEntry<T> {
   readonly attributes?: { readonly [key: string]: unknown };
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueBatch<T> {
   readonly entries: ReadonlyArray<QueueEntry<T>>;
   readonly priority: Priority;
   readonly batchId?: string;
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueEncodedEntry {
   readonly payload: JsonValue;
   readonly item: QueueItemCodecDescriptor;
@@ -586,21 +621,33 @@ export interface QueueEncodedEntry {
   readonly attributes?: { readonly [key: string]: unknown };
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueEntrySelector<T> {
   readonly entryId?: string;
   readonly key?: string;
   readonly item?: T;
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueReleaseOptions {
   readonly scope?: "pendingOnly";
   readonly releaseId?: string;
   readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface QueueRouteOptions {
   readonly reason: string;
   readonly attributes?: { readonly [key: string]: JsonValue };
@@ -614,6 +661,7 @@ export interface QueueRouteOptions {
  * truth (per-priority pending sizes, paused, in-flight, lifetime completed), recomputed from
  * authoritative sources. Mirrors the encodable `queueStatus` contract schema.
  *
+ * @category models
  * @public
  */
 export interface QueueStatus {
@@ -640,6 +688,7 @@ export interface QueueStatus {
  * plus the as-of-window-end `inFlight`, throughput, and average latency. Windows are dynamic
  * (variable `windowMillis`). Mirrors the encodable `queueMetrics` contract schema.
  *
+ * @category models
  * @public
  */
 export interface QueueMetrics {
@@ -683,6 +732,7 @@ export interface QueueMetrics {
  * erased / wire form. The non-streamable `retry` affordance the old callbacks received is
  * dropped — a subscriber holds the handle to drive control.
  *
+ * @category models
  * @public
  */
 export type QueueEvent<T, E = unknown, A = void> =
@@ -777,6 +827,7 @@ export type QueueStoreWriter<T, _E = unknown, _A = void> = import("./store/queue
  * Queue declaration metadata for {@link QueueResourceDefinition} and
  * {@link QueueResourceServiceDefinition}.
  *
+ * @category models
  * @public
  */
 export interface QueueResourceMetadata<
@@ -800,6 +851,7 @@ export interface QueueResourceMetadata<
 /**
  * Canonical queue declaration.
  *
+ * @category models
  * @public
  */
 export type QueueResourceDefinition<
@@ -814,6 +866,7 @@ export type QueueResourceDefinition<
 /**
  * Class-based queue service declaration from {@link QueueResource.Service}.
  *
+ * @category models
  * @public
  */
 export interface QueueResourceServiceDefinition<
@@ -857,6 +910,7 @@ export interface QueueResourceServiceDefinition<
  *
  * @typeParam T - Item type
  *
+ * @category models
  * @public
  */
 export interface EffectContext<T, EEnqueue = never, R = never> {
@@ -891,6 +945,7 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  * Field names match `effect/unstable/persistence` `RateLimiter` (`window`, not
  * `duration`). New upstream consume fields flow through when Effect adds them.
  *
+ * @category models
  * @public
  */
 export type QueueResourceRateLimitOptions = Omit<
@@ -907,6 +962,7 @@ export type { ConsumeResult } from "effect/unstable/persistence/RateLimiter";
 /**
  * Shared queue configuration fields (see {@link QueueResourceConfig}).
  *
+ * @category models
  * @public
  */
 export interface QueueResourceConfigBase<T> {
@@ -1002,6 +1058,7 @@ export interface QueueResourceConfigBase<T> {
  * - `"default"` — fall back to the queue's policy (auto re-enqueue when `attempts`/`retries` is
  *   set, otherwise log a warning).
  *
+ * @category models
  * @public
  */
 export type QueueFailureDisposition = "retry" | "deadLetter" | "drop" | "default";
@@ -1012,6 +1069,7 @@ export type QueueFailureDisposition = "retry" | "deadLetter" | "drop" | "default
  * {@link QueueFailureDisposition}. Observation still belongs on the `events` stream; this is
  * **control**.
  *
+ * @category models
  * @public
  */
 export interface QueueOnFailure<T, E, R> {
@@ -1044,6 +1102,7 @@ export interface QueueRefill<T, E, EEnqueue, R, A = void> {
  * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
  *
+ * @category models
  * @public
  */
 export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
@@ -1101,25 +1160,41 @@ export type QueueResourceConfigWithItemSchema<T, E, R, A = void> = QueueResource
  * @typeParam E - Worker `effect` failure channel
  * @typeParam R - Dependencies required while running the worker `effect`
  *
+ * @category models
  * @public
  */
 export type QueueResourceConfig<T, E, R, A = void> =
   | QueueResourceConfigWithoutItemSchema<T, E, R>
   | QueueResourceConfigWithItemSchema<T, E, R, A>;
 
-/** @public Config fields for {@link QueueResource.make} / {@link QueueResource.Service} without `effect`. */
+/**
+ * @public Config fields for {@link QueueResource.make} / {@link QueueResource.Service} without `effect`.
+ *
+ * @category models
+ * @public
+ */
 export type QueueResourceOptionsWithoutItemSchema<T, E, R> = Omit<
   QueueResourceConfigWithoutItemSchema<T, E, R>,
   "effect"
 >;
 
-/** @public Config fields when `itemSchema` is set (still omit `effect`). */
+/**
+ * @public Config fields when `itemSchema` is set (still omit `effect`).
+ *
+ * @category models
+ * @public
+ */
 export type QueueResourceOptionsWithItemSchema<T, E, R> = Omit<
   QueueResourceConfigWithItemSchema<T, E, R>,
   "effect"
 >;
 
-/** @public Worker body passed as the second argument to queue factories. */
+/**
+ * @public Worker body passed as the second argument to queue factories.
+ *
+ * @category models
+ * @public
+ */
 export type QueueWorkerEffect<T, E, EEnqueue = never, R = never> = (
   item: T,
   ctx: EffectContext<T, EEnqueue, R>,
@@ -1134,6 +1209,7 @@ export type QueueWorkerEffect<T, E, EEnqueue = never, R = never> = (
  * In practice this is logged as a warning and the items are dropped —
  * this error type exists for programmatic detection in tests/monitoring.
  *
+ * @category errors
  * @public
  */
 export class QueueShutdownError extends Data.TaggedError(
@@ -1163,6 +1239,7 @@ type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<
 /**
  * Enqueue error channel for a queue configuration (never when no `itemSchema`).
  *
+ * @category models
  * @public
  */
 export type InferQueueEnqueueError<C> = EnqueueErrOf<C>;
@@ -1174,6 +1251,7 @@ export type InferQueueEnqueueError<C> = EnqueueErrOf<C>;
  * **`effect`** parameter positions use **`any`** in the constraint so TypeScript accepts
  * the concrete **`ctx`** (`EffectContext`) without pretending it is **`unknown`**.
  *
+ * @category models
  * @public
  */
 export type InferQueueItem<
@@ -1183,6 +1261,7 @@ export type InferQueueItem<
 /**
  * Infer worker **`E`** (failure channel) from `effect`'s **`Effect`** return type.
  *
+ * @category models
  * @public
  */
 export type InferQueueWorkerError<
@@ -1217,6 +1296,7 @@ type InferQueueOnFailureRequirements<C> = C extends {
  * declared on the optional `onFailure` control hook. (Observation is via the `events` stream —
  * it contributes no requirements.)
  *
+ * @category models
  * @public
  */
 export type InferQueueWorkerRequirements<
@@ -1230,7 +1310,12 @@ const hasItemSchema = <T, E, R, A = void>(
   config: QueueResourceConfig<T, E, R, A>,
 ): config is QueueResourceConfigWithItemSchema<T, E, R, A> => config.itemSchema !== undefined;
 
-/** @public Merged config shape for positional queue factories. */
+/**
+ * @public Merged config shape for positional queue factories.
+ *
+ * @category models
+ * @public
+ */
 export type QueueConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
@@ -1337,6 +1422,7 @@ interface RateLimitExceededEmit<T> {
  * Merged automatically on {@link QueueResource.Service} `.layer` when `rateLimit` is
  * present; compose at the app root for Redis via `RateLimiter.layerStoreRedis`.
  *
+ * @category layers & serving
  * @public
  */
 export const queueRateLimiterLayer = Layer.provide(rateLimiterLayer, layerStoreMemory);

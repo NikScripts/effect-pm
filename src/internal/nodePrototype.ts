@@ -42,6 +42,7 @@ import { ws } from "./nodeWs"
  * mailWorker("w1")
  * ```
  *
+ * @category constructors
  * @public
  */
 export const Prototype = <Self, ROut = never>(

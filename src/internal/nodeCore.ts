@@ -39,6 +39,7 @@ const storeOrThrow = (tag: { readonly key: string }): unknown => {
  * transport {@link NodeProtocol}. Stored on a node-bearing tag under {@link nodeSym}; read by
  * {@link Resource.client} to resolve *where* to connect (its requirement channel).
  *
+ * @category models
  * @public
  */
 export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
@@ -54,13 +55,17 @@ export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
  * derive the transport from it. Inferred from a `ws(s)://` url, an http target, or `{ path }` →
  * IpcSocket; otherwise declare it explicitly.
  *
+ * @category models
  * @public
  */
 export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
 
 /** A {@link Tag} erased — transport address (`url` and/or Unix `path`) plus
  *  {@link ProtocolKind} `kind`, so a tag's `distributed` set is self-describing about
- *  *where* AND *how* to reach each one. @public */
+ *  *where* AND *how* to reach each one. @public
+ *
+ * @category models
+ */
 export type AnyNode = NodeKey<unknown> & {
   readonly url: string | undefined;
   readonly path: string | undefined;
@@ -68,7 +73,10 @@ export type AnyNode = NodeKey<unknown> & {
 };
 
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
- *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public */
+ *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public
+ *
+ * @category models
+ */
 export type AddressedNode<HSelf> = NodeKey<HSelf> &
   (
     | {
@@ -110,6 +118,7 @@ export const catalogSym: unique symbol = Symbol.for(
  * Catalog members must be structurally distinct types (different specs / service shapes) —
  * identical Tag shapes collapse in TypeScript, so `Jobs | Emails` cannot prove C3.
  *
+ * @category models
  * @public
  */
 export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
@@ -123,6 +132,7 @@ export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
  * Address-less {@link unix} / {@link http} / {@link ws} lost the `Node.key` claim — another
  * process owns this Node. Winner endpoint is in `original` (dial via Lookup / `client`).
  *
+ * @category errors
  * @public
  */
 export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost")<{
@@ -139,6 +149,7 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
  * The Node a protocol listen (`unix` / `http` / `ws`) is binding (concrete or minted).
  * Identity claims prefer this over a Tag-bound Node when present.
  *
+ * @category models
  * @public
  */
 export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
@@ -149,6 +160,7 @@ export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
  * Shared options for {@link unix} / {@link http} / {@link ws} (and low-level `*Server`) —
  * rpc path / health / ipc unlink. Not the TCP bind port (platform layer owns that).
  *
+ * @category models
  * @public
  */
 export type ListenOptions = {
@@ -163,6 +175,7 @@ export type ListenOptions = {
  * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal} —
  * {@link ListenOptions} plus Lookup bootstrap knobs.
  *
+ * @category models
  * @public
  */
 export type NamelessListenOptions = ListenOptions & {
@@ -181,6 +194,7 @@ export type NamelessListenOptions = ListenOptions & {
  * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
  * sync throw. Catch via `Exit` / `CatchTag` when building `clientHttp` or derived `connect`.
  *
+ * @category errors
  * @public
  */
 export class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
@@ -240,6 +254,7 @@ export const resolveHttpTarget = (
  * Dialable {@link Tag} targets — enough address for {@link connect} / auto-wired
  * {@link Resource.client} with no extra protocol argument.
  *
+ * @category models
  * @public
  */
 export type DialableTarget =
@@ -342,6 +357,7 @@ export type WsNodeTagClass<Self, ROut = never> = NodeTagClass<
  * Runtime predicate: node declares a {@link ProtocolKind} and the matching address
  * (`path` for IpcSocket, `url` otherwise) so {@link connect} can derive a transport.
  *
+ * @category guards
  * @public
  */
 export const isAddressedNode = (
@@ -382,6 +398,7 @@ export const isAddressedNode = (
  * `Resource.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag("x")`
  * stays address-less (`kind: undefined`) — still needs explicit connect / lookup.
  *
+ * @category constructors
  * @public
  */
 export function Tag<Self, ROut = never>(
@@ -501,6 +518,7 @@ export function Tag<Self, ROut = never>(
  * address/`kind`, so `connect` / `listen` can't know how to reach it. Surfaces on the Layer / Effect
  * error channel (never a sync `throw`).
  *
+ * @category errors
  * @public
  */
 export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
@@ -521,6 +539,7 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
  * `missing` = none; `ambiguous` = two or more (pick with `unix/http/ws(node, [serve…])`).
  * Anonymous transport stays `unix/http/ws([serve…])` / `unix/http/ws(serve)` — never this overload.
  *
+ * @category errors
  * @public
  */
 export class ListenTagNodeRequired extends Data.TaggedError(
@@ -549,6 +568,7 @@ export class ListenTagNodeRequired extends Data.TaggedError(
  * {@link unix} only speaks Unix-domain IPC. The Node (or Tag-bound Node) was Http / WebSocket
  * — use {@link http} / {@link ws} for those transports.
  *
+ * @category errors
  * @public
  */
 export class UnixListenRequiresIpc extends Data.TaggedError(
@@ -569,6 +589,7 @@ export class UnixListenRequiresIpc extends Data.TaggedError(
  * {@link http} only speaks local Http. The Node (or Tag-bound Node) was IpcSocket / WebSocket
  * (or a non-loopback URL) — use {@link unix} / {@link ws}, or {@link httpServer} for custom binds.
  *
+ * @category errors
  * @public
  */
 export class HttpListenRequiresHttp extends Data.TaggedError(
@@ -589,6 +610,7 @@ export class HttpListenRequiresHttp extends Data.TaggedError(
  * {@link ws} only speaks local WebSocket. The Node (or Tag-bound Node) was IpcSocket / Http
  * (or a non-loopback URL) — use {@link unix} / {@link http}, or {@link wsServer} for custom binds.
  *
+ * @category errors
  * @public
  */
 export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
@@ -607,6 +629,7 @@ export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
  * {@link nPipe} only speaks IpcSocket (named-pipe path). The Node was Http / WebSocket —
  * use {@link http} / {@link ws} for those transports.
  *
+ * @category errors
  * @public
  */
 export class NPipeListenRequiresIpc extends Data.TaggedError(
@@ -626,6 +649,7 @@ export class NPipeListenRequiresIpc extends Data.TaggedError(
 /**
  * {@link nPipe} is Windows-only. On POSIX use {@link unix}.
  *
+ * @category errors
  * @public
  */
 export class NPipeRequiresWindows extends Data.TaggedError(
@@ -644,6 +668,7 @@ export class NPipeRequiresWindows extends Data.TaggedError(
 /**
  * {@link listen} no longer binds a transport. Use the protocol entry instead.
  *
+ * @category errors
  * @public
  */
 export class ListenUseProtocol extends Data.TaggedError("ListenUseProtocol")<{
@@ -663,6 +688,7 @@ export class ListenUseProtocol extends Data.TaggedError("ListenUseProtocol")<{
  * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
  * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.
  *
+ * @category errors
  * @public
  */
 export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
@@ -682,6 +708,7 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
  * dials the wrong protocol — the silent "blank dashboard / no live data" failure. The server refuses
  * to boot with this instead, so the mismatch is loud and immediate rather than a runtime dead end.
  *
+ * @category errors
  * @public
  */
 export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch")<{
@@ -701,6 +728,7 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
  * Same-machine: `{ path }` (ipc). Cross-network: pass a full address — required; no elect (L1).
  * Dialable targets return an {@link AddressedNode} (same overloads as {@link Tag}).
  *
+ * @category constructors
  * @public
  */
 export function Lookup<Self>(
@@ -762,7 +790,12 @@ export function Lookup<Self>(
   return Object.assign(node, { isLookupNode: true as const })
 }
 
-/** True when `node` was built with {@link Lookup}. @public */
+/**
+ * True when `node` was built with {@link Lookup}.
+ *
+ * @category guards
+ * @public
+ */
 export const isLookupNode = (
   node: unknown,
 ): node is AnyNode & { readonly isLookupNode: true } =>

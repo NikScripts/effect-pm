@@ -101,6 +101,7 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  * Sugar: {@link unix}`(node, serves)` — IPC listen + Lookup bootstrap.
  * Prefer {@link unix} (also covers Tag+impl and nameless forms).
  *
+ * @category listen
  * @public
  */
 export function listenLocal<

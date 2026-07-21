@@ -38,6 +38,7 @@ import {
  * Local WebSocket listen — localhost bind + default Lookup bootstrap.
  * Same overload shapes as {@link unix}. Prefer this for same-machine WebSocket.
  *
+ * @category listen
  * @public
  */
 export function ws<

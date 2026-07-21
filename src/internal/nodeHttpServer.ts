@@ -30,7 +30,12 @@ import {
   type ServerServeList,
 } from "./nodeServerCommon"
 
-/** Options for {@link httpServer}. @public */
+/**
+ * Options for {@link httpServer}.
+ *
+ * @category models
+ * @public
+ */
 export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -198,6 +203,7 @@ const httpServerBase = (
  * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
  * a silent runtime gap.
  *
+ * @category servers
  * @public
  */
 export function httpServer<Serve extends Layer.Layer<never, any, any>>(
@@ -277,6 +283,7 @@ function serverImpl(
  * );
  * ```
  *
+ * @category servers
  * @public
  */
 export function wsServer<Serve extends Layer.Layer<never, any, any>>(

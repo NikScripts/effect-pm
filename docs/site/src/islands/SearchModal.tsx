@@ -21,7 +21,11 @@ export function SearchModal(): React.ReactElement {
     setHint(/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K");
   }, []);
 
+  // closing KEEPS the query (reopen picks up where you left off); navigating clears it
   const close = React.useCallback((): void => {
+    setOpen(false);
+  }, []);
+  const navigated = React.useCallback((): void => {
     setOpen(false);
     setQuery("");
   }, []);
@@ -53,6 +57,7 @@ export function SearchModal(): React.ReactElement {
   React.useEffect(() => {
     if (!open) return;
     inputRef.current?.focus();
+    inputRef.current?.select();
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -90,7 +95,7 @@ export function SearchModal(): React.ReactElement {
                     if (panelRef.current?.handleKey(e) === true) return;
                     // … otherwise Enter → the full results page
                     if (e.key === "Enter" && query.trim() !== "") {
-                      close();
+                      navigated();
                       window.location.assign(`/search?q=${encodeURIComponent(query.trim())}`);
                     }
                   }}
@@ -98,7 +103,7 @@ export function SearchModal(): React.ReactElement {
                   aria-label="Search docs and API"
                 />
                 <div className="search-modal-results">
-                  <SearchPanel query={query} onNavigate={close} controlRef={panelRef} />
+                  <SearchPanel query={query} onNavigate={navigated} controlRef={panelRef} />
                   {query.trim() === "" ? (
                     <p className="search-note">
                       Type to search the docs, API reference, and glossary. ↑↓ to select, ↵ to open,

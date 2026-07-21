@@ -36,6 +36,7 @@ import {
  * **IpcSocket, Http, WebSocket, address-less, nameless, and Tag+impl fail with
  * {@link ListenUseProtocol}** → use the matching protocol entry.
  *
+ * @category listen
  * @public
  */
 export function listen<

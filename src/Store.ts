@@ -1458,6 +1458,7 @@ export const scoped = <
  * ) {}
  * ```
  *
+ * @category spec fields
  * @public
  */
 export const withStore = <const C extends StoreContractValue>(

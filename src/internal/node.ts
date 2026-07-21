@@ -45,6 +45,7 @@ type ServicesOfTags<Tags extends ReadonlyArray<Resource.PipeableTag>> =
  * Client layers for a catalog node's `ROut` (C2) — one {@link connect}, no repeated node in
  * each `client` line. Pass the Tag values that make up `ROut` (they must cover it).
  *
+ * @category connect
  * @public
  */
 export const clientsFor = <
@@ -94,6 +95,7 @@ export const clientsFor = <
  * Derived connect Layers are WeakMap-memoized per Node class so multiple
  * `Resource.client(Tag, MyNode)` call sites share one MemoMap transport.
  *
+ * @category connect
  * @public
  */
 export const connect: {
@@ -136,6 +138,7 @@ export const connect: {
  * `kind: "Http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
  * `MyNode.pipe(Resource.connectHttp(url))` overrides it.
  *
+ * @category connect
  * @public
  */
 export const connectHttp: {
@@ -156,6 +159,7 @@ export const connectHttp: {
  * browser), {@link connect} pinned to `kind: "WebSocket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
  * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Resource.connectSocket(url))` overrides it.
  *
+ * @category connect
  * @public
  */
 export const connectSocket: {
@@ -175,6 +179,7 @@ export const connectSocket: {
  * pinned to `kind: "IpcSocket"`. Dual: `MyNode.pipe(Resource.connectIpc)` uses the node's own `path`;
  * `MyNode.pipe(Resource.connectIpc(path))` overrides it.
  *
+ * @category connect
  * @public
  */
 export const connectIpc: {

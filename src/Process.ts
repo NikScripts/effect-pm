@@ -138,6 +138,7 @@ import type { StoreShapes } from "./internal/store/contractDef";
  * maintains as it reconciles the schedule and spawns instances. Native (engine-side) types;
  * the toolkit contract ({@link processStatus}) maps these to its wire form.
  *
+ * @category models
  * @public
  */
 export interface ProcessSnapshot {
@@ -168,6 +169,7 @@ export interface ProcessSnapshot {
  *
  * @typeParam R — Environment required to run {@link Process.effect} (after optional inline layers).
  *
+ * @category models
  * @public
  */
 export interface Process<out R> {
@@ -220,6 +222,7 @@ export interface Process<out R> {
  * read-only JavaScript property, so storing the runtime handle separately keeps
  * the service class safe while preserving the canonical process id.
  *
+ * @category models
  * @public
  */
 export interface ProcessDefinition<out Id extends string, out R>
@@ -236,6 +239,7 @@ export interface ProcessDefinition<out Id extends string, out R>
  * This mirrors Effect's class-based `Context.Service` style while attaching the
  * metadata the process manager needs for typed registration and contract generation.
  *
+ * @category models
  * @public
  */
 export interface ProcessServiceDefinition<Self, Id extends string, E, R>
@@ -271,6 +275,7 @@ export interface ProcessServiceDefinition<Self, Id extends string, E, R>
 /**
  * Extract service requirements from a {@link Process} handle.
  *
+ * @category models
  * @public
  */
 export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : never;
@@ -278,6 +283,7 @@ export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : neve
 /**
  * Context for the currently running scheduled window.
  *
+ * @category models
  * @public
  */
 export interface ProcessScheduleContext {
@@ -301,6 +307,7 @@ class ProcessScheduleControlsTag extends Context.Service<
  * - For scheduled runs: value from `ProcessScheduleEntry.id`
  * - For manual toolkit {@link run}: `Option.none()`
  *
+ * @category schedule
  * @public
  */
 export const currentScheduleId: Effect.Effect<Option.Option<string>, never, never> =
@@ -321,6 +328,7 @@ export const currentScheduleId: Effect.Effect<Option.Option<string>, never, neve
  * - `Process.make(id, { schedule: (controls) => ... })`
  * - inside the process `effect` via this accessor.
  *
+ * @category schedule
  * @public
  */
 export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, never> =
@@ -342,20 +350,40 @@ export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, nev
 // Internal
 // ============================================================================
 
-/** @public Thrown when a positional {@link Process.make} argument is not a recognized preset layer or schedule initializer. */
+/**
+ * @public Thrown when a positional {@link Process.make} argument is not a recognized preset layer or schedule initializer.
+ *
+ * @category errors
+ * @public
+ */
 export class ProcessMakeInvalidLayerArgument extends Data.TaggedError("ProcessMakeInvalidLayerArgument")<{
   /** 1-based index of the invalid argument (`3` or `4`). */
   readonly argumentIndex: 3 | 4;
   readonly reason: string;
 }> {}
 
-/** @public Optional polling layer argument to {@link Process.make}. */
+/**
+ * @public Optional polling layer argument to {@link Process.make}.
+ *
+ * @category models
+ * @public
+ */
 export type ProcessPollingInput = Layer.Layer<PollingTag, never, never>;
 
-/** @public Optional schedule layer argument to {@link Process.make}. */
+/**
+ * @public Optional schedule layer argument to {@link Process.make}.
+ *
+ * @category models
+ * @public
+ */
 export type ProcessScheduleLayerInput = Layer.Layer<ProcessScheduleTag, never, never>;
 
-/** @public Optional schedule layer or initializer argument to {@link Process.make}. */
+/**
+ * @public Optional schedule layer or initializer argument to {@link Process.make}.
+ *
+ * @category models
+ * @public
+ */
 export type ProcessScheduleInput<R = never> =
   | ProcessScheduleLayerInput
   | ProcessScheduleInitializer<R>;
@@ -399,6 +427,7 @@ interface ProcessStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
  * rows (`Started` | `Completed` | `Failed` | `Interrupted`). Tag-stamped `success` / `error`
  * ride `Completed.success?` / `Failed.error` the same way on both surfaces.
  *
+ * @category models
  * @public
  */
 export type ProcessLiveEvent = ProcessStoreEvent;
@@ -415,7 +444,12 @@ interface ProcessBuildStateBase<E, RUser> {
   readonly resultRef?: SubscriptionRef.SubscriptionRef<Option.Option<unknown>>;
 }
 
-/** User-facing controls for a process's schedule — enumerate, set, add, and clear entries. @public */
+/**
+ * User-facing controls for a process's schedule — enumerate, set, add, and clear entries.
+ *
+ * @category models
+ * @public
+ */
 export interface ProcessScheduleControls {
   readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
   readonly set: (
@@ -427,7 +461,12 @@ export interface ProcessScheduleControls {
   readonly clear: Effect.Effect<void, never, never>;
 }
 
-/** A function that seeds a process's schedule via its {@link ProcessScheduleControls}. @public */
+/**
+ * A function that seeds a process's schedule via its {@link ProcessScheduleControls}.
+ *
+ * @category models
+ * @public
+ */
 export type ProcessScheduleInitializer<R = never> = (
   controls: ProcessScheduleControls,
 ) => Effect.Effect<void, never, R>;
@@ -1087,6 +1126,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
  * Services still required at the fork site for {@link Process.effect} for a given
  * {@link ProcessMakeConfig}.
  *
+ * @category models
  * @public
  */
 // `E` is covariant in `Effect.Effect<void, E, RUser>` (top = `unknown`),
@@ -1100,6 +1140,7 @@ export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<unknown, 
 /**
  * Configuration for {@link Process.make} when using the config-object form (id is separate).
  *
+ * @category models
  * @public
  */
 export interface ProcessMakeOptions<E, RUser> {
@@ -1256,6 +1297,7 @@ const resolveProcessMakeConfig = <E, RUser>(
 /**
  * Create a managed {@link Process}.
  *
+ * @category constructors
  * @public
  */
 function make<const Id extends string, E, RUser>(
@@ -1314,7 +1356,11 @@ function make<const Id extends string, E, RUser>(
   return buildProcess(id, resolveProcessMakeConfig(effectOrConfig, third, fourth));
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type ProcessMake = typeof make;
 
 const processDefinitionKind = "process" as const;
@@ -1409,10 +1455,18 @@ const defineProcessService = <Self>() => {
   return service;
 };
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type ProcessServiceBuilder<Self> = ReturnType<typeof defineProcessService<Self>>;
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type ProcessServiceFactory = typeof defineProcessService;
 
 // ============================================================================
@@ -1431,6 +1485,7 @@ export { defineProcessService as Service };
 /**
  * Engine errors thrown by {@link make}.
  *
+ * @category errors
  * @public
  */
 export const Errors = {
@@ -1456,6 +1511,7 @@ export const Errors = {
  * `DateTime.Utc` and `optionalKey`, so the runtime maps between them. `startAt` is when the run
  * instance triggers; `stopAt` (absent = open-ended) is when it stops.
  *
+ * @category schedule
  * @public
  */
 export const processScheduleEntry = Schema.Struct({
@@ -1469,6 +1525,7 @@ export const processScheduleEntry = Schema.Struct({
  * {@link ProcessSnapshot} (plus `supervising`). The element of the reactive `status` field:
  * `status.get` reads it once, `status.changes` streams it.
  *
+ * @category wire schemas
  * @public
  */
 export const processStatus = Schema.Struct({
@@ -1488,6 +1545,7 @@ export const processStatus = Schema.Struct({
 /**
  * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Resource.logs}.
  *
+ * @category wire schemas
  * @public
  */
 export const processLogEntry = LogEntrySchema;
@@ -1503,16 +1561,22 @@ export { processEventReadPayload };
 /**
  * Execution event union for void processes (no `success` field on `Completed`).
  *
+ * @category wire schemas
  * @public
  */
 export const processExecutionEvent = processExecutionEventVoid;
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type ProcessExecutionEvent = typeof processExecutionEventVoid.Type;
 
 /**
  * Build an execution event union when the process tag carries a {@link ProcessTagOptions.success}.
  *
+ * @category wire schemas
  * @public
  */
 export const processExecutionEventFor = makeProcessExecutionEvent;
@@ -1521,6 +1585,7 @@ export const processExecutionEventFor = makeProcessExecutionEvent;
  * This contract's canonical **kind** — stamped on every process tag so consumers (e.g. the
  * dashboard) can classify it via {@link Resource.kindOf} without sniffing the spec.
  *
+ * @category wire schemas
  * @public
  */
 export const kind = "@nikscripts/effect-pm/Process";
@@ -1528,6 +1593,7 @@ export const kind = "@nikscripts/effect-pm/Process";
 /**
  * This contract's canonical **kind** for a standalone {@link Schedule} resource.
  *
+ * @category schedule
  * @public
  */
 export const scheduleKind = "@nikscripts/effect-pm/Process/Schedule";
@@ -1542,6 +1608,7 @@ export const scheduleKind = "@nikscripts/effect-pm/Process/Schedule";
  * A base process has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
  * those verbs appear only when a process {@link schedule | owns an inline schedule}.
  *
+ * @category wire schemas
  * @public
  */
 export const processControlSpec = {
@@ -1579,6 +1646,7 @@ export const processControlSpec = {
  * manual {@link run} RPC. Event element schema matches the durable store union
  * ({@link processExecutionEventFor} with the tag's optional `success` / `error`).
  *
+ * @category wire schemas
  * @public
  */
 export const buildProcessSpec = <
@@ -1607,12 +1675,22 @@ export const buildProcessSpec = <
   };
 };
 
-/** Erased baseline process spec (`Void` success, `Never` error). @public */
+/**
+ * Erased baseline process spec (`Void` success, `Never` error).
+ *
+ * @category wire schemas
+ * @public
+ */
 export const processSpec = buildProcessSpec();
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
 // The spec is validated (without widening) at the `Resource.Tag` call site.
 
-/** The base (schedule-less, result-less) process spec. @public */
+/**
+ * The base (schedule-less, result-less) process spec.
+ *
+ * @category models
+ * @public
+ */
 export type ProcessSpec = typeof processSpec;
 
 // ============================================================================
@@ -1623,6 +1701,7 @@ export type ProcessSpec = typeof processSpec;
  * Options for {@link Tag} — use as the sole 2nd argument (config-object overload) or merge with
  * positional `success` / `error` args.
  *
+ * @category models
  * @public
  */
 export type ProcessTagOptions = {
@@ -1644,6 +1723,7 @@ export { successOf, errorOf };
  * Reading is `entries` (reactive); mutation is `set` / `add` / `clear`. This is how you arm/disarm:
  * `armed` is derived from the entries, so arming is done by mutating them.
  *
+ * @category schedule
  * @public
  */
 export const scheduleGroupSpec = {
@@ -1675,6 +1755,7 @@ type ScheduleGroupSpec = { readonly schedule: typeof scheduleGroupSpec };
  * The full CRUD contract of a standalone {@link Schedule} resource — the reusable window manager
  * one or more processes can be gated by. Mirrors the engine's {@link ProcessScheduleService}.
  *
+ * @category schedule
  * @public
  */
 export const scheduleResourceSpec = {
@@ -1712,7 +1793,12 @@ export const scheduleResourceSpec = {
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
 // The spec is validated (without widening) at the `Resource.Tag` call site.
 
-/** The standalone {@link Schedule} resource's spec. @public */
+/**
+ * The standalone {@link Schedule} resource's spec.
+ *
+ * @category models
+ * @public
+ */
 export type ScheduleResourceSpec = typeof scheduleResourceSpec;
 
 // ============================================================================
@@ -1730,6 +1816,7 @@ type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> }
 /**
  * Per-tag process spec — control surface, live `events`, plus stamped `run` success/error on the wire.
  *
+ * @category models
  * @public
  */
 export type ProcessInstanceSpec<
@@ -1750,6 +1837,7 @@ export type ProcessInstanceSpec<
  * reference, but is invisible to id-keyed ops). The runtime maps these to the engine's native
  * {@link ProcessScheduleEntry}.
  *
+ * @category models
  * @public
  */
 export interface ScheduleWindow {
@@ -1769,6 +1857,7 @@ const toWindowId = (id: string | undefined): Option.Option<string> =>
  * Process.at("daily-2am", startDate)
  * ```
  *
+ * @category schedule
  * @public
  */
 export function at(startAt: Date): ScheduleWindow;
@@ -1791,6 +1880,7 @@ export function at(idOrStartAt: string | Date, maybeStartAt?: Date): ScheduleWin
  * Process.window("game-123", gameStart, gameEnd)
  * ```
  *
+ * @category schedule
  * @public
  */
 export function window(startAt: Date, stopAt: Date): ScheduleWindow;
@@ -1826,6 +1916,7 @@ export function window(
  * {@link ScheduleWindow} ({@link at} / {@link window} build these). Element of a
  * {@link ScheduleService}'s entries.
  *
+ * @category models
  * @public
  */
 export type ScheduleEntry = ProcessScheduleEntry;
@@ -1835,6 +1926,7 @@ export type ScheduleEntry = ProcessScheduleEntry;
  * `reconcile`) that a {@link make} supervisor watches for arming decisions. Materialized by the
  * schedule-layer constructors below and injected via {@link ProcessMakeOptions.scheduleLayer}.
  *
+ * @category models
  * @public
  */
 export type ScheduleService = ProcessScheduleService;
@@ -1844,6 +1936,7 @@ export type ScheduleService = ProcessScheduleService;
  * (`entries` / `set` / `add` / `clear`) and available inside the process effect via
  * {@link scheduleControls}.
  *
+ * @category models
  * @public
  */
 export type ScheduleControls = ProcessScheduleControls;
@@ -1852,6 +1945,7 @@ export type ScheduleControls = ProcessScheduleControls;
  * The diff produced by {@link ScheduleService.reconcile} — the entry ids that were
  * added / updated / removed / left unchanged.
  *
+ * @category models
  * @public
  */
 export type ScheduleReconcileResult = ReconcileResult;
@@ -1867,6 +1961,7 @@ export type ScheduleReconcileResult = ReconcileResult;
  * via `set` / `add` / `reconcile` or a schedule initializer). Mutable at runtime through the schedule
  * controls (`Process.scheduleControls`, the inline `schedule` verbs, or a {@link Schedule} resource).
  *
+ * @category schedule
  * @public
  */
 export const scheduleInMemory = (
@@ -1877,6 +1972,7 @@ export const scheduleInMemory = (
  * A **declarative** schedule layer from a builder DSL:
  * `Process.scheduleDefine(({ at, window }) => [at("daily", d), window("game", start, end)])`.
  *
+ * @category schedule
  * @public
  */
 export const scheduleDefine = (
@@ -2039,6 +2135,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  * ) {}
  * ```
  *
+ * @category schedule
  * @public
  */
 export function schedule(
@@ -2068,7 +2165,12 @@ export function schedule(
 // Tag factories
 // ============================================================================
 
-/** Callable shape for {@link Tag} — overloads for positional schemas + config object. @public */
+/**
+ * Callable shape for {@link Tag} — overloads for positional schemas + config object.
+ *
+ * @category models
+ * @public
+ */
 export type ProcessTagBuild<Self> = {
   (key: string): ResourceTag<Self, ProcessInstanceSpec>;
   <A extends Schema.Top>(
@@ -2123,6 +2225,7 @@ export type ProcessTagBuild<Self> = {
  *
  * Pass `options.node` to bind the process to a {@link Node.Tag}.
  *
+ * @category constructors
  * @public
  */
 export const Tag = <Self>() => {
@@ -2164,6 +2267,7 @@ export const Tag = <Self>() => {
  * yield* s.add({ id: "wk2", startAt: wk2Start, stopAt: wk2End }); // arms every gated process
  * ```
  *
+ * @category schedule
  * @public
  */
 export const Schedule = <Self>() => {
@@ -2197,6 +2301,7 @@ export const Schedule = <Self>() => {
  * performs; its success is captured into `result` when the tag is value-returning. Scheduling comes
  * from the **tag** now (`Process.schedule(...)`), not the config.
  *
+ * @category models
  * @public
  */
 export interface ProcessLayerConfig<A, E, R> {
@@ -2444,6 +2549,7 @@ const withDefaultMemory = <A, E, R>(
  *
  * {@link layerMemory} is an alias for the same soft-default.
  *
+ * @category layers & serving
  * @public
  */
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
@@ -2467,6 +2573,7 @@ export function layer(
 /**
  * Alias of {@link layer} — soft-default in-memory Storage (override the same way).
  *
+ * @category layers & serving
  * @public
  */
 export function layerMemory<Self, S extends Spec, A = void, E = never, R = never>(
@@ -2485,6 +2592,7 @@ export function layerMemory(
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
+ * @category layers & serving
  * @public
  */
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
@@ -2513,6 +2621,7 @@ export function serve(
 /**
  * Alias of {@link serve}.
  *
+ * @category layers & serving
  * @public
  */
 export function serveMemory<Self, S extends Spec, A = void, E = never, R = never>(
@@ -2536,6 +2645,7 @@ export function serveMemory(
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
+ * @category layers & serving
  * @public
  */
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
@@ -2560,6 +2670,7 @@ export function serveRemote(
 /**
  * Alias of {@link serveRemote}.
  *
+ * @category layers & serving
  * @public
  */
 export function serveRemoteMemory<Self, S extends Spec, A = void, E = never, R = never>(
@@ -2577,6 +2688,7 @@ export function serveRemoteMemory(
  * A **config-patch layer** for the process `tag` — merge it with the process's {@link layer} and its
  * patch (polling / a `(previous) => next` wrap of `effect`) folds onto the base config at build.
  *
+ * @category layers & serving
  * @public
  */
 export const configure = <A = void, E = never, R = never>(
@@ -2597,6 +2709,7 @@ export const configure = <A = void, E = never, R = never>(
  * }))
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
@@ -2650,6 +2763,7 @@ const buildScheduleImpl = (
  * The **local** layer for a standalone {@link Schedule} resource — an in-memory window manager
  * (optionally seeded with `initial` windows) that any number of processes can be gated by.
  *
+ * @category schedule
  * @public
  */
 export const scheduleLayer = <Self>(
@@ -2663,6 +2777,7 @@ export const scheduleLayer = <Self>(
 /**
  * Serve a standalone {@link Schedule} resource **and** grant its local instance.
  *
+ * @category schedule
  * @public
  */
 export const scheduleServe = <Self>(

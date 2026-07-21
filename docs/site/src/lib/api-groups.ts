@@ -17,8 +17,22 @@ export interface SymbolGroup {
 const categoryOrder = [
   "constructors",
   "presets",
+  "spec fields",
+  "layers & serving",
+  "serving",
+  "clients",
+  "transports",
+  "connect",
+  "listen",
+  "servers",
+  "nodes & fleet",
+  "schedule",
   "models",
   "type ids",
+  "wire schemas",
+  "item codecs",
+  "reactivity",
+  "introspection",
   "guards",
   "refinements",
   "getters",
@@ -31,7 +45,9 @@ const categoryOrder = [
   "destructors",
   "conversions",
   "interop",
+  "context",
   "utils",
+  "errors",
 ];
 
 const kindBuckets: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [

@@ -24,7 +24,12 @@ import {
   type ServerServeList,
 } from "./nodeServerCommon"
 
-/** Options for {@link ipcServer} — Unix-domain RPC (same-machine). @public */
+/**
+ * Options for {@link ipcServer} — Unix-domain RPC (same-machine).
+ *
+ * @category models
+ * @public
+ */
 export interface IpcServerOptions {
   /** Filesystem path for the Unix-domain listen socket (required). */
   readonly path: string;
@@ -66,6 +71,7 @@ export interface IpcServerOptions {
  * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route
  * (no HTTP listener) — probe readiness via NodeStatus over RPC.
  *
+ * @category servers
  * @public
  */
 export function ipcServer<Serve extends Layer.Layer<never, any, any>>(

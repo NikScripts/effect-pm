@@ -94,6 +94,7 @@ import type { ConfigPatch } from "./ResourceConfigure";
 /**
  * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Resource.logs}.
  *
+ * @category wire schemas
  * @public
  */
 export const queueLogEntry = LogEntrySchema;
@@ -101,6 +102,7 @@ export const queueLogEntry = LogEntrySchema;
 /**
  * The per-priority pending counts returned by `sizes`.
  *
+ * @category wire schemas
  * @public
  */
 export const queueSizes = Schema.Struct({
@@ -115,6 +117,7 @@ export const queueSizes = Schema.Struct({
  * atom / CLI `--watch` / TUI renders. Distinct from `events` (discrete facts) and `metrics`
  * (windowed aggregates).
  *
+ * @category wire schemas
  * @public
  */
 export const queueStatus = Schema.Struct({
@@ -132,6 +135,7 @@ export const queueStatus = Schema.Struct({
  * `status` (instantaneous) and `events` (discrete) because aggregates are inherently
  * time-bucketed.
  *
+ * @category wire schemas
  * @public
  */
 export const queueMetrics = Schema.Struct({
@@ -163,10 +167,20 @@ export const queueMetrics = Schema.Struct({
   avgTotalMillis: Schema.optionalKey(Schema.Number),
 });
 
-/** A queue entry's priority level. @public */
+/**
+ * A queue entry's priority level.
+ *
+ * @category wire schemas
+ * @public
+ */
 export const queuePriority = Schema.Literals(["high", "normal", "low"]);
 
-/** Timestamps carried by a wire {@link queueEntry}. @public */
+/**
+ * Timestamps carried by a wire {@link queueEntry}.
+ *
+ * @category wire schemas
+ * @public
+ */
 export const queueEntryTimestamps = Schema.Struct({
   enqueuedAt: Schema.DateTimeUtc,
   startedAt: Schema.optionalKey(Schema.DateTimeUtc),
@@ -178,6 +192,7 @@ export const queueEntryTimestamps = Schema.Struct({
  * Recursive structural JSON value schema — decodes to {@link JsonValue}. Used for the option
  * `attributes`, which the engine persists as JSON. `Schema.suspend` breaks the self-reference.
  *
+ * @category wire schemas
  * @public
  */
 export const jsonValue: Schema.Codec<JsonValue> = Schema.Union([
@@ -196,6 +211,7 @@ export const jsonValue: Schema.Codec<JsonValue> = Schema.Union([
  * Entry/encoded `attributes` — a readonly record of arbitrary values, matching the engine's
  * `{ readonly [key: string]: unknown }` on `QueueEntry` / `QueueEncodedEntry`.
  *
+ * @category wire schemas
  * @public
  */
 export const queueEntryAttributes = Schema.Record(Schema.String, Schema.Unknown);
@@ -204,6 +220,7 @@ export const queueEntryAttributes = Schema.Record(Schema.String, Schema.Unknown)
  * Option `attributes` — a readonly record of {@link JsonValue}, matching the engine's
  * `{ readonly [key: string]: JsonValue }` on `QueueReleaseOptions` / `QueueRouteOptions`.
  *
+ * @category wire schemas
  * @public
  */
 export const queueJsonAttributes = Schema.Record(Schema.String, jsonValue);
@@ -212,6 +229,7 @@ export const queueJsonAttributes = Schema.Record(Schema.String, jsonValue);
  * A queue entry on the wire, parameterized by the per-instance `itemSchema`. Mirrors the
  * engine's `QueueEntry<T>`; used inside {@link queueEvent}.
  *
+ * @category wire schemas
  * @public
  */
 export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
@@ -365,6 +383,7 @@ export const buildQueueEvent = <
  * (on `Completed`) and `error` failure (the `Cause`) wire slots. `Success` decodes exactly (no
  * `| void` widening) — the source of the typed `Completed.success` (`A`) that flows to the worker
  * `effect` return type, `store.completed`, and the analytics reads. @public
+ * @category models
  */
 export type QueueEventSchema<
   Sch extends Schema.Top,
@@ -376,6 +395,7 @@ export type QueueEventSchema<
  * Build the `events` union **schema** for a queue item schema `Sch` with optional `success`/`error`
  * wire slots (default {@link Schema.Void} / {@link Schema.Never}) — the runtime schema behind
  * {@link QueueResource.events}, whose decoded type is {@link QueueEventSchema}. @public
+ * @category wire schemas
  */
 export const queueEvent = <
   Sch extends Schema.Top,
@@ -400,6 +420,7 @@ export const queueEvent = <
  * selector (typically `entryId`) identifies the target — routing a full `QueueEntry` is a local
  * convenience that reduces to its `entryId`.
  *
+ * @category wire schemas
  * @public
  */
 export const queueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
@@ -411,14 +432,24 @@ export const queueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
     item: Schema.optionalKey(itemSchema),
   });
 
-/** Options for `release` / `releaseEncoded` (wire form of `QueueReleaseOptions`). @public */
+/**
+ * Options for `release` / `releaseEncoded` (wire form of `QueueReleaseOptions`).
+ *
+ * @category wire schemas
+ * @public
+ */
 export const queueReleaseOptions = Schema.Struct({
   scope: Schema.optionalKey(Schema.Literal("pendingOnly")),
   releaseId: Schema.optionalKey(Schema.String),
   attributes: Schema.optionalKey(queueJsonAttributes),
 });
 
-/** Options for `deadLetter` / `drop` (wire form of `QueueRouteOptions`). @public */
+/**
+ * Options for `deadLetter` / `drop` (wire form of `QueueRouteOptions`).
+ *
+ * @category wire schemas
+ * @public
+ */
 export const queueRouteOptions = Schema.Struct({
   reason: Schema.String,
   attributes: Schema.optionalKey(queueJsonAttributes),
@@ -430,6 +461,7 @@ export const queueRouteOptions = Schema.Struct({
  * JSON-encoded), so an encoded entry crosses RPC without the receiver knowing the item schema.
  * Mirrors the engine's `QueueEncodedEntry`.
  *
+ * @category wire schemas
  * @public
  */
 export const queueEncodedEntry = Schema.Struct({
@@ -454,6 +486,7 @@ export const queueEncodedEntry = Schema.Struct({
  * The `releaseEncoded` failure channel — the wire-encodable union of the engine's encode
  * errors (now `Schema.TaggedErrorClass`, so they are both yieldable and RPC-encodable).
  *
+ * @category wire schemas
  * @public
  */
 export const queueReleaseEncodingError = Schema.Union([
@@ -465,6 +498,7 @@ export const queueReleaseEncodingError = Schema.Union([
  * Payload fields for the `metrics.query` history read — newest `limit` entries within an optional
  * `[since, until]` window.
  *
+ * @category wire schemas
  * @public
  */
 export const historyQuery = {
@@ -478,6 +512,7 @@ export const historyQuery = {
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
  * slice. Mirrors the matching members of `QueueResource`'s `QueueHandleApi`.
  *
+ * @category wire schemas
  * @public
  */
 export const queueControlSpec = {
@@ -549,6 +584,7 @@ export const queueControlSpec = {
  * `itemSchema` becomes the rpc payload schema, so RPC validates items on the wire — the
  * client rejects bad items before the round trip and the server re-validates on decode.
  *
+ * @category wire schemas
  * @public
  */
 export const queueSpec = <
@@ -647,6 +683,7 @@ export const queueSpec = <
  * schema) at the type level, without touching the (invariant, RPC-facing) spec. The `layer` / `serve`
  * config and the store analytics recover `A` from here (default {@link Schema.Void}). Type-only — no
  * runtime field; the runtime `success` schema still rides the `successSym` stamp. @public
+ * @category models
  */
 export interface QueueSuccessCarrier<Success extends Schema.Top = typeof Schema.Void> {
   readonly [queueSuccessCarrierSym]?: Success;
@@ -665,6 +702,7 @@ export type QueueSuccessSchemaOf<Tag> = Tag extends QueueSuccessCarrier<infer Su
  * constrains the worker's failure channel to this (default {@link Schema.Never}: no declared error →
  * the worker must be infallible, or defect). Type-only — no runtime field; the runtime `error` schema
  * rides the wire stamp. @public
+ * @category models
  */
 export interface QueueErrorCarrier<Error extends Schema.Top = typeof Schema.Never> {
   readonly [queueErrorCarrierSym]?: Error;
@@ -706,7 +744,10 @@ type QueueInstanceSpec<
  * @public
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. @public */
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @public
+ *
+ * @category utils
+ */
 export const kind = "@nikscripts/effect-pm/QueueResource";
 
 /**
@@ -714,6 +755,7 @@ export const kind = "@nikscripts/effect-pm/QueueResource";
  * return) and `error` (worker failure channel) are the optional wire slots, stamped for the engine
  * + store to read as the tag SSOT. Positional `Tag()(key, payload, success?, error?)` is also valid.
  *
+ * @category models
  * @public
  */
 export interface QueueTagConfig<
@@ -797,6 +839,7 @@ const materializeQueueTag = <
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol`
  *   for a remote {@link Resource.client})
  *
+ * @category models
  * @public
  */
 export interface QueueResource<
@@ -873,6 +916,7 @@ type QueueItemOf<F extends Schema.Struct.Fields> = Resource.Decoded<Schema.Struc
  * The queue's {@link Resource.Tag} whose service value is the **named** {@link QueueResource} handle
  * (via the `Svc` seam on {@link ResourceTag}), so `yield* MyQueue` hovers as
  * `QueueResource<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
+ * @category models
  */
 export type QueueTag<
   Self,
@@ -885,7 +929,12 @@ export type QueueTag<
   QueueResource<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
-/** {@link QueueTag} for a node-bound queue (its own transport). @public */
+/**
+ * {@link QueueTag} for a node-bound queue (its own transport).
+ *
+ * @category models
+ * @public
+ */
 export type QueueNodeBoundTag<
   Self,
   F extends Schema.Struct.Fields,
@@ -1023,6 +1072,7 @@ const queueTag = <Self>() => {
  * `itemSchema` (the tag already carries it). The item type is the tag's `itemSchema` decoded
  * type, so `effect: (item, ctx) => …` is typed against it.
  *
+ * @category models
  * @public
  */
 export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
@@ -1303,6 +1353,7 @@ const withDefaultMemory = <A, E, R>(
  * Local queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
  * `QueueResource.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <
@@ -1327,6 +1378,7 @@ export const layer = <
 /**
  * Alias of {@link layer}.
  *
+ * @category layers & serving
  * @public
  */
 export const layerMemory = <
@@ -1359,6 +1411,7 @@ export const layerMemory = <
  * ]).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port })));
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <
@@ -1383,6 +1436,7 @@ export const serveRemote = <
 /**
  * Alias of {@link serveRemote}.
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemoteMemory = <
@@ -1412,6 +1466,7 @@ export const serveRemoteMemory = <
  * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export const serve = <
@@ -1438,6 +1493,7 @@ export const serve = <
 /**
  * Alias of {@link serve}.
  *
+ * @category layers & serving
  * @public
  */
 export const serveMemory = <
@@ -1478,6 +1534,7 @@ export const serveMemory = <
  * );
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export const configure = <
@@ -1505,6 +1562,7 @@ export const configure = <
  * }))
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export function store<const Tag extends QueueStoreTag>(tag: Tag): ReturnType<
