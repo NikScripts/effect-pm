@@ -51,31 +51,56 @@ import * as Node from "./Node";
 // schema pair to keep in sync (Types & Naming → *Prefer a class schema*).
 // ============================================================================
 
-/** A metric's label set (from Effect `Metric` attributes). @public */
+/**
+ * A metric's label set (from Effect `Metric` attributes).
+ *
+ * @category models
+ * @public
+ */
 export type MetricLabels = Readonly<Record<string, string>>;
 const metricLabels = Schema.Record(Schema.String, Schema.String);
 
-/** A counter reading. @public */
+/**
+ * A counter reading.
+ *
+ * @category models
+ * @public
+ */
 export class CounterDatum extends Schema.TaggedClass<CounterDatum>()("Counter", {
   id: Schema.String,
   labels: metricLabels,
   count: Schema.Number,
 }) {}
 
-/** A gauge reading. @public */
+/**
+ * A gauge reading.
+ *
+ * @category models
+ * @public
+ */
 export class GaugeDatum extends Schema.TaggedClass<GaugeDatum>()("Gauge", {
   id: Schema.String,
   labels: metricLabels,
   value: Schema.Number,
 }) {}
 
-/** One cumulative histogram bucket: observations `<= le`. @public */
+/**
+ * One cumulative histogram bucket: observations `<= le`.
+ *
+ * @category models
+ * @public
+ */
 export class HistogramBucket extends Schema.Class<HistogramBucket>("HistogramBucket")({
   le: Schema.Number,
   count: Schema.Number,
 }) {}
 
-/** A histogram reading (cumulative buckets). @public */
+/**
+ * A histogram reading (cumulative buckets).
+ *
+ * @category models
+ * @public
+ */
 export class HistogramDatum extends Schema.TaggedClass<HistogramDatum>()("Histogram", {
   id: Schema.String,
   labels: metricLabels,
@@ -84,12 +109,27 @@ export class HistogramDatum extends Schema.TaggedClass<HistogramDatum>()("Histog
   sum: Schema.Number,
 }) {}
 
-/** One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred. @public */
+/**
+ * One metric from a node's registry, tagged by kind. `Frequency`/`Summary` are deferred.
+ *
+ * @category wire schemas
+ * @public
+ */
 export const metricDatum = Schema.Union([CounterDatum, GaugeDatum, HistogramDatum]);
-/** The type of a single {@link metricDatum}. @public */
+/**
+ * The type of a single {@link metricDatum}.
+ *
+ * @category models
+ * @public
+ */
 export type MetricDatum = typeof metricDatum.Type;
 
-/** A node's whole `Metric` registry, point-in-time — the served wire envelope. @public */
+/**
+ * A node's whole `Metric` registry, point-in-time — the served wire envelope.
+ *
+ * @category models
+ * @public
+ */
 export class MetricsSnapshot extends Schema.Class<MetricsSnapshot>("MetricsSnapshot")({
   ts: Schema.Number,
   metrics: Schema.Array(metricDatum),
@@ -151,6 +191,7 @@ const encodeSnapshot = (
  * The current registry snapshot, encoded — the **single source** of "take a snapshot" (the served
  * `snapshot` query and the `live` sampler both use it). Usable locally, without the resource.
  *
+ * @category getters
  * @public
  */
 export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.all([
@@ -162,12 +203,18 @@ export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.all([
 // Contract (Tag)
 // ============================================================================
 
-/** Gauge id folded by {@link inFlightOf} / fleet fields — queue engines emit this. @public */
+/**
+ * Gauge id folded by {@link inFlightOf} / fleet fields — queue engines emit this.
+ *
+ * @category utils
+ * @public
+ */
 export const inFlightMetricId = "queue_in_flight";
 
 /**
  * Read {@link inFlightMetricId} from a snapshot (missing ⇒ `0`). Used by fleet folds and demos.
  *
+ * @category getters
  * @public
  */
 export const inFlightOf = (snap: MetricsSnapshot): number => {
@@ -198,16 +245,36 @@ const telemetrySpec = {
 /** @internal */
 export type TelemetrySpec = typeof telemetrySpec;
 
-/** This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`). @public */
+/**
+ * This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`).
+ *
+ * @category utils
+ * @public
+ */
 export const kind = "@nikscripts/effect-pm/Telemetry";
 
-/** A Telemetry instance tag. @public */
+/**
+ * A Telemetry instance tag.
+ *
+ * @category models
+ * @public
+ */
 export type TelemetryTag<Self> = ResourceTag<Self, TelemetrySpec>;
 
-/** A node-bound {@link TelemetryTag} — served + reached on that node. @public */
+/**
+ * A node-bound {@link TelemetryTag} — served + reached on that node.
+ *
+ * @category models
+ * @public
+ */
 export type TelemetryNodeTag<Self, HSelf> = NodeBoundTag<Self, TelemetrySpec, HSelf>;
 
-/** Tag-construction options for {@link Tag}. @public */
+/**
+ * Tag-construction options for {@link Tag}.
+ *
+ * @category models
+ * @public
+ */
 export interface TelemetryConstructOptions<HSelf = never> {
   readonly node?: NodeKey<HSelf>;
   readonly description?: string;
@@ -222,6 +289,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  * — the dashboard reaches each node via `Resource.client(FleetTelemetry, node)`), or
  * `…Tag<FleetTelemetry>()({ node: MiniNode })` to bind + serve it on a specific node.
  *
+ * @category constructors
  * @public
  */
 export const Tag = <Self>() => {
@@ -253,7 +321,12 @@ export const Tag = <Self>() => {
 // Engine (sampler + layer + serve/serveRemote)
 // ============================================================================
 
-/** Options for {@link layer} / {@link serve} / {@link serveRemote}. @public */
+/**
+ * Options for {@link layer} / {@link serve} / {@link serveRemote}.
+ *
+ * @category models
+ * @public
+ */
 export interface TelemetryOptions {
   /** Live-stream sampling cadence. @default 1 second */
   readonly interval?: Duration.Duration;
@@ -283,6 +356,7 @@ class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>(
  *
  * For a fleet, provide {@link Resource.peersLayer} instead (bundled selfNode + peers).
  *
+ * @category layers & serving
  * @public
  */
 export const alone = <Self>(
@@ -357,6 +431,7 @@ const buildImpl = <Self>(
  * Local layer for a Telemetry tag — forks one sampling fiber and wires leaf + fleet fields.
  * Requires the mesh capability ({@link alone} or {@link Resource.peersLayer}).
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <Self>(
@@ -377,6 +452,7 @@ export const layer = <Self>(
  * {@link Resource.serveRemote}. Mounts leaf + fleet RPC handlers **without** granting the local
  * instance. Requires the mesh capability ({@link alone} or {@link Resource.peersLayer}).
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <Self>(
@@ -400,6 +476,7 @@ export const serveRemote = <Self>(
  * )
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export const serve = <Self>(

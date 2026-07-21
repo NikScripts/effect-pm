@@ -38,6 +38,7 @@ export { resolveOnConflict };
 /**
  * Where a winning claimant / advertised node lives — node key + transport address.
  *
+ * @category wire schemas
  * @public
  */
 export class Endpoint extends Schema.Class<Endpoint>("LookupEndpoint")({
@@ -50,6 +51,7 @@ export class Endpoint extends Schema.Class<Endpoint>("LookupEndpoint")({
 /**
  * Claim payload — resource identity key plus the claimant's endpoint.
  *
+ * @category wire schemas
  * @public
  */
 export class ClaimRequest extends Schema.Class<ClaimRequest>("LookupClaimRequest")({
@@ -63,6 +65,7 @@ export class ClaimRequest extends Schema.Class<ClaimRequest>("LookupClaimRequest
 /**
  * Resolve payload — look up a winning claim by resource key (nodeless clients).
  *
+ * @category wire schemas
  * @public
  */
 export class ResolveRequest extends Schema.Class<ResolveRequest>("LookupResolveRequest")({
@@ -72,6 +75,7 @@ export class ResolveRequest extends Schema.Class<ResolveRequest>("LookupResolveR
 /**
  * Another process already owns this resource key — `original` is where to dial.
  *
+ * @category errors
  * @public
  */
 export class DuplicateIdentity extends Schema.TaggedErrorClass<DuplicateIdentity>()(
@@ -85,6 +89,7 @@ export class DuplicateIdentity extends Schema.TaggedErrorClass<DuplicateIdentity
 /**
  * Directory row — dial target plus resource keys this node serves (`listen` catalog).
  *
+ * @category wire schemas
  * @public
  */
 export class DirectoryEntry extends Schema.Class<DirectoryEntry>("LookupDirectoryEntry")({
@@ -98,6 +103,7 @@ export class DirectoryEntry extends Schema.Class<DirectoryEntry>("LookupDirector
 /**
  * Advertise / refresh a directory row.
  *
+ * @category wire schemas
  * @public
  */
 export class AdvertiseRequest extends Schema.Class<AdvertiseRequest>(
@@ -127,6 +133,7 @@ export class AdvertiseRequest extends Schema.Class<AdvertiseRequest>(
  * When dial fields are present, remove only if the stored dial still matches
  * (askIncumbent-safe finalizers).
  *
+ * @category wire schemas
  * @public
  */
 export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
@@ -141,6 +148,7 @@ export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
 /**
  * List nodes that advertised a given resource key in `serves`.
  *
+ * @category wire schemas
  * @public
  */
 export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
@@ -152,6 +160,7 @@ export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
 /**
  * Advertise rejected — an incumbent with the same `nodeKey` still answers NodeStatus ping.
  *
+ * @category errors
  * @public
  */
 export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
@@ -170,6 +179,7 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
 /**
  * Lookup node has no dialable address — Layer error channel (not a sync throw).
  *
+ * @category errors
  * @public
  */
 export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
@@ -180,7 +190,12 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
 // Contracts
 // ============================================================================
 
-/** Canonical kind stamped on Lookup resources. @public */
+/**
+ * Canonical kind stamped on Lookup resources.
+ *
+ * @category utils
+ * @public
+ */
 export const kind = "@nikscripts/effect-pm/Lookup";
 
 const identitySpec = {
@@ -204,6 +219,7 @@ const identitySpec = {
 /**
  * Lookup identity service — claim resource keys (first wins).
  *
+ * @category services
  * @public
  */
 export class Identity extends Resource.Tag<Identity>()(
@@ -242,6 +258,7 @@ const directorySpec = {
 /**
  * Lookup node directory — advertise / unregister / list by served resource key.
  *
+ * @category services
  * @public
  */
 export class Directory extends Resource.Tag<Directory>()(
@@ -258,6 +275,7 @@ export class Directory extends Resource.Tag<Directory>()(
  * Well-known Unix socket path for same-machine default lookup (L1).
  * Prefer overriding in tests so suites don't collide on one machine.
  *
+ * @category utils
  * @public
  */
 export const defaultIpcPath = "/tmp/effect-pm-lookup.sock";
@@ -449,6 +467,7 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
 /**
  * Serve {@link Identity} + {@link Directory} on a Unix-domain path (same-machine lookup).
  *
+ * @category layers & serving
  * @public
  */
 export const layerIpc = (
@@ -477,6 +496,7 @@ export const layerIpc = (
  * L1 same-machine default — bind {@link defaultIpcPath} (or `options.path`).
  * Second binder loses with `EADDRINUSE` (OS exclusivity).
  *
+ * @category layers & serving
  * @public
  */
 export const layerDefaultLocal = (options?: {
@@ -528,6 +548,7 @@ export const layer = (
  * `options.onConflict` is the call-site preference; combined with the node's stamp before
  * the wire request (may still be `"inherit"` for the Lookup server to finish).
  *
+ * @category layers & serving
  * @public
  */
 export const directoryAdvertiseLayer = (
@@ -582,6 +603,7 @@ export const directoryAdvertiseLayer = (
 /**
  * Client for {@link Identity} + {@link Directory} via an ipc {@link LookupNode}.
  *
+ * @category clients
  * @public
  */
 export const client = (
@@ -603,6 +625,7 @@ export const client = (
 /**
  * Client for the same-machine default lookup path.
  *
+ * @category clients
  * @public
  */
 export const clientDefaultLocal = (options?: {
@@ -617,6 +640,7 @@ export const clientDefaultLocal = (options?: {
  * Bind-or-dial the same-machine default Lookup path (D7).
  * First process serves Identity+Directory; later processes dial it (`Layer.catchCause`).
  *
+ * @category layers & serving
  * @public
  */
 export const bootstrapDefaultLocal = (options?: {

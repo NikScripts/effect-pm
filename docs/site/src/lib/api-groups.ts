@@ -20,6 +20,7 @@ const categoryOrder = [
   "spec fields",
   "layers & serving",
   "serving",
+  "services",
   "clients",
   "transports",
   "connect",
@@ -36,6 +37,7 @@ const categoryOrder = [
   "guards",
   "refinements",
   "getters",
+  "reads",
   "elements",
   "combinators",
   "mapping",
@@ -46,6 +48,7 @@ const categoryOrder = [
   "conversions",
   "interop",
   "context",
+  "logging",
   "utils",
   "errors",
 ];

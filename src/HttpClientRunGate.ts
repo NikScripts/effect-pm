@@ -17,6 +17,7 @@ import type { RunResourceRunner } from "./RunResource";
 /**
  * Pipe-friendly: `client.pipe(HttpClientRunGate.withRunner(runner))`.
  *
+ * @category combinators
  * @public
  */
 export const withRunner =
@@ -27,6 +28,7 @@ export const withRunner =
 /**
  * Same as {@link withRunner}, argument order for explicit calls.
  *
+ * @category combinators
  * @public
  */
 export const transformClient = <E, R>(

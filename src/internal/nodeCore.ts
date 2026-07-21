@@ -68,6 +68,7 @@ export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
  * - `reject` — alive → reject; dead → still replace
  * - `inherit` — continue up the resolve chain (call-site → node → Lookup → hard fallback)
  *
+ * @category models
  * @public
  */
 export type OnConflict =
@@ -79,6 +80,7 @@ export type OnConflict =
 /**
  * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
  *
+ * @category models
  * @public
  */
 export type OnConflictResolved = Exclude<OnConflict, "inherit">;
@@ -86,6 +88,7 @@ export type OnConflictResolved = Exclude<OnConflict, "inherit">;
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
  *
+ * @category utils
  * @public
  */
 export const resolveOnConflict = (

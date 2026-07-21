@@ -64,7 +64,12 @@ export const buildLevelIndexLabels = (
   return labels;
 };
 
-/** Custom-queue status snapshot (Record sizes). @public */
+/**
+ * Custom-queue status snapshot (Record sizes).
+ *
+ * @category models
+ * @public
+ */
 export interface CustomQueueStatus {
   readonly sizes: Record<string, number>;
   readonly paused: boolean;

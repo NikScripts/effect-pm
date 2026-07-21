@@ -105,6 +105,7 @@ export { runGateStatus };
 /**
  * This contract's canonical **kind** — stamped on every run-gate tag.
  *
+ * @category utils
  * @public
  */
 export const kind = "@nikscripts/effect-pm/RunResource";
@@ -127,6 +128,7 @@ export type { RunInstanceSpec };
 /**
  * Live counters for an observable run gate.
  *
+ * @category models
  * @public
  */
 export type RunGateStatus = internal.RunGateStatus;
@@ -134,6 +136,7 @@ export type RunGateStatus = internal.RunGateStatus;
 /**
  * Minimal handle from {@link RunResource.make} — `.run` only.
  *
+ * @category models
  * @public
  */
 export type RunGateHandle<T, A, E> = internal.RunGateHandle<T, A, E>;
@@ -142,6 +145,7 @@ export type RunGateHandle<T, A, E> = internal.RunGateHandle<T, A, E>;
  * Observable handle from {@link RunResource.make} with observation disabled, or the local-only
  * engine handle. Prefer the toolkit service from {@link Tag} / {@link Service} for RPC.
  *
+ * @category models
  * @public
  */
 export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
@@ -158,6 +162,7 @@ export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
  *   a remote {@link Resource.client})
  *
+ * @category models
  * @public
  */
 export interface RunResource<
@@ -190,6 +195,7 @@ export interface RunResource<
 /**
  * Static `.run` shortcut on {@link Tag} / {@link Service} — adds the tag to `R`.
  *
+ * @category models
  * @public
  */
 export type RunResourceStaticRun<I, A, E, Self> = [Schema.Schema.Type<I>] extends [void]
@@ -199,6 +205,7 @@ export type RunResourceStaticRun<I, A, E, Self> = [Schema.Schema.Type<I>] extend
 /**
  * Service factory result — tag surface plus baked-in layer and configure helpers.
  *
+ * @category models
  * @public
  */
 export interface RunResourceServiceDefinition<
@@ -259,6 +266,7 @@ type RunTagWithStaticRun<
 /**
  * Tag factory result — Resource tag + wire schemas + static {@link RunResourceStaticRun}.
  *
+ * @category models
  * @public
  */
 export type RunResourceTagDefinition<
@@ -271,6 +279,7 @@ export type RunResourceTagDefinition<
 /**
  * Wire schemas shared by {@link Tag} and {@link Service}.
  *
+ * @category models
  * @public
  */
 export interface RunResourceWireSchemas<
@@ -289,6 +298,7 @@ export interface RunResourceWireSchemas<
 /**
  * Schema-only options for {@link Tag} — pair with {@link layer} for the gated effect.
  *
+ * @category models
  * @public
  */
 export interface RunResourceTagSchemas<
@@ -303,6 +313,7 @@ export interface RunResourceTagSchemas<
  * Gated effect for {@link layer} / {@link serve} — unit gates (`void` input) accept a bare
  * {@link Effect.Effect} or `() => Effect`; parameterized gates use `(input) => Effect`.
  *
+ * @category models
  * @public
  */
 export type RunResourceLayerEffect<I, A, E, R> = [I] extends [void]
@@ -312,6 +323,7 @@ export type RunResourceLayerEffect<I, A, E, R> = [I] extends [void]
 /**
  * Gated effect for {@link Service} — same rules as {@link RunResourceLayerEffect} at the decoded type.
  *
+ * @category models
  * @public
  */
 export type RunResourceServiceEffect<
@@ -331,6 +343,7 @@ export type RunResourceServiceEffect<
 /**
  * Full {@link Service} config — wire schemas and the gated effect in one object.
  *
+ * @category models
  * @public
  */
 export interface RunResourceServiceConfig<
@@ -351,6 +364,7 @@ export interface RunResourceServiceConfig<
 /**
  * Layer / serve config — the tag carries wire schemas; this supplies the gated effect.
  *
+ * @category models
  * @public
  */
 export interface RunResourceLayerConfig<I, A, E, R> {
@@ -368,6 +382,7 @@ export interface RunResourceLayerConfig<I, A, E, R> {
 /**
  * Configuration for {@link RunResource.make} — local scoped handle, no RPC.
  *
+ * @category models
  * @public
  */
 export interface RunResourceConfig<T, A, E> {
@@ -379,6 +394,7 @@ export interface RunResourceConfig<T, A, E> {
 /**
  * Configuration for {@link RunResource.makeRunner}.
  *
+ * @category models
  * @public
  */
 export interface RunResourceRunnerConfig {
@@ -389,6 +405,7 @@ export interface RunResourceRunnerConfig {
 /**
  * A generic runner that wraps any effect with concurrency gating.
  *
+ * @category models
  * @public
  */
 export type RunResourceRunner = internal.RunResourceRunner;
@@ -711,6 +728,7 @@ const buildRunImpl = <
 /**
  * Create a scoped handle with `.run` only — no live observation, no RPC.
  *
+ * @category constructors
  * @public
  */
 export const make = internal.makeRunGateHandleEffect;
@@ -718,6 +736,7 @@ export const make = internal.makeRunGateHandleEffect;
 /**
  * Config-patch layer for a tag — merge with {@link layer} (Tag path).
  *
+ * @category layers & serving
  * @public
  */
 export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
@@ -738,6 +757,7 @@ export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E ex
  *
  * {@link layerMemory} is an alias for the same soft-default.
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <
@@ -761,6 +781,7 @@ export const layer = <
 /**
  * Alias of {@link layer}.
  *
+ * @category layers & serving
  * @public
  */
 export const layerMemory = <
@@ -780,6 +801,7 @@ export const layerMemory = <
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
+ * @category layers & serving
  * @public
  */
 export function serveRemote<
@@ -813,6 +835,7 @@ export function serveRemote(
 /**
  * Alias of {@link serveRemote}.
  *
+ * @category layers & serving
  * @public
  */
 export function serveRemoteMemory<
@@ -837,6 +860,7 @@ export function serveRemoteMemory(
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
+ * @category layers & serving
  * @public
  */
 export function serve<
@@ -871,6 +895,7 @@ export function serve(
 /**
  * Alias of {@link serve}.
  *
+ * @category layers & serving
  * @public
  */
 export function serveMemory<
@@ -897,6 +922,7 @@ export function serveMemory(
 /**
  * Class factory: tag + wire schemas + baked-in `.layer` + `.configure`.
  *
+ * @category constructors
  * @public
  */
 export const Service = <Self>() => {
@@ -970,6 +996,7 @@ export { runTag as Tag };
  * Register this run gate on an app {@link Store.Service} — built-in analytics reads over run facts
  * and state history (tier 3), with the tag's `success` / `error` wire slots.
  *
+ * @category layers & serving
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
@@ -995,6 +1022,7 @@ export function store(tag: StoreScopeTag, extended?: StoreShapes) {
 /**
  * Generic runner tag + layer — no observation, no handle shape, no RPC.
  *
+ * @category constructors
  * @public
  */
 export const makeRunner = <const Name extends string>(

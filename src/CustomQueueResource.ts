@@ -64,6 +64,7 @@ export { queueLogEntry as customQueueLogEntry } from "./QueueResource";
 /**
  * Per-lane pending counts keyed by configured name (or `"0"`, `"1"`, …).
  *
+ * @category wire schemas
  * @public
  */
 export const customQueueSizes = Schema.Record(Schema.String, Schema.Number);
@@ -71,6 +72,7 @@ export const customQueueSizes = Schema.Record(Schema.String, Schema.Number);
 /**
  * Custom-queue current-state snapshot — element of the `status` stream.
  *
+ * @category wire schemas
  * @public
  */
 export const customQueueStatus = Schema.Struct({
@@ -85,6 +87,7 @@ export const customQueueStatus = Schema.Struct({
  * Level argument on the wire — numeric lane index or a name from the tag's
  * `namedLevels` registry (when declared at tag construction).
  *
+ * @category wire schemas
  * @public
  */
 export const customQueueLevel = (
@@ -103,6 +106,7 @@ export const customQueueLevel = (
 /**
  * Custom queue entry on the wire — like {@link queueEntry} plus optional numeric `level`.
  *
+ * @category wire schemas
  * @public
  */
 export const customQueueEntry = <Sch extends Schema.Top>(
@@ -122,7 +126,12 @@ export const customQueueEntry = <Sch extends Schema.Top>(
     attributes: Schema.optional(queueEntryAttributes),
   });
 
-/** Selector for custom-queue routing verbs. @public */
+/**
+ * Selector for custom-queue routing verbs.
+ *
+ * @category wire schemas
+ * @public
+ */
 export const customQueueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
   Schema.Struct({
     entryId: Schema.optionalKey(Schema.String),
@@ -137,6 +146,7 @@ const sumLaneSizes = (sizes: Record<string, number>): number =>
 /**
  * Shared control + observation contract for every custom-queue instance.
  *
+ * @category wire schemas
  * @public
  */
 export const customQueueControlSpec = {
@@ -202,6 +212,7 @@ type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
  * Build a custom-queue **instance** spec: shared {@link customQueueControlSpec} plus
  * per-instance data-plane procedures typed by `itemSchema`.
  *
+ * @category wire schemas
  * @public
  */
 export const customQueueSpec = <F extends Schema.Struct.Fields>(
@@ -271,7 +282,12 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
 
 type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
-/** Wire `add` member — tuple payload surfaced as `add(item, level?)`. @public */
+/**
+ * Wire `add` member — tuple payload surfaced as `add(item, level?)`.
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueAddMethod = Method<
   Schema.Tuple<readonly [Schema.Top, Schema.Top]>,
   Schema.Void,
@@ -280,7 +296,12 @@ export type CustomQueueAddMethod = Method<
   CustomQueuePairAnnotations
 >;
 
-/** Full custom-queue instance contract for `itemSchema` `F`. @public */
+/**
+ * Full custom-queue instance contract for `itemSchema` `F`.
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
   ReturnType<typeof customQueueSpec<F>>,
   "add"
@@ -315,6 +336,7 @@ export const kind = "@nikscripts/effect-pm/CustomQueueResource";
  * schema; `levelCount` is the number of priority lanes; `namedLevels` maps names → lane indices.
  * Optional `success` / `error` wire slots match {@link QueueResource.Tag} (stamped for engine + store).
  *
+ * @category models
  * @public
  */
 export interface CustomQueueTagConfig<
@@ -394,7 +416,12 @@ export const customQueueTag = <Self>() => {
   return build;
 };
 
-/** Worker/layer config for a toolkit custom queue (tag carries `itemSchema`). @public */
+/**
+ * Worker/layer config for a toolkit custom queue (tag carries `itemSchema`).
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
   CustomQueueResourceConfigWithItemSchema<A, E, R>,
   "itemSchema" | "refill" | "name"
@@ -532,6 +559,7 @@ const withDefaultMemory = <A, E, R>(
  *
  * {@link layerMemory} is an alias for the same soft-default.
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <
@@ -555,6 +583,7 @@ export const layer = <
 /**
  * Alias of {@link layer}.
  *
+ * @category layers & serving
  * @public
  */
 export const layerMemory = <
@@ -578,6 +607,7 @@ export const layerMemory = <
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <
@@ -601,6 +631,7 @@ export const serveRemote = <
 /**
  * Alias of {@link serveRemote}.
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemoteMemory = <
@@ -623,6 +654,7 @@ export const serveRemoteMemory = <
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
+ * @category layers & serving
  * @public
  */
 export const serve = <
@@ -650,6 +682,7 @@ export const serve = <
 /**
  * Alias of {@link serve}.
  *
+ * @category layers & serving
  * @public
  */
 export const serveMemory = <
@@ -666,7 +699,11 @@ export const serveMemory = <
   never,
   R | RR
 > => serve(tag, config);
-/** @public */
+/**
+ *
+ * @category layers & serving
+ * @public
+ */
 export const configure = <
   Self,
   F extends CustomQueueItemFields = CustomQueueItemFields,
@@ -691,6 +728,7 @@ export const configure = <
  * }))
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export function store<const Tag extends QueueStoreTag>(tag: Tag): ReturnType<

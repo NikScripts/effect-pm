@@ -14,13 +14,23 @@
  */
 import { Cause, Effect, Exit, Stream } from "effect";
 
-/** One node's outcome for a gathered query field — node-attributed success/failure. @public */
+/**
+ * One node's outcome for a gathered query field — node-attributed success/failure.
+ *
+ * @category models
+ * @public
+ */
 export interface NodeResult<A, E = never> {
   readonly node: string;
   readonly exit: Exit.Exit<A, E>;
 }
 
-/** One node's stream for a gathered stream field. @public */
+/**
+ * One node's stream for a gathered stream field.
+ *
+ * @category models
+ * @public
+ */
 export interface NodeStream<A, E = never> {
   readonly node: string;
   readonly stream: Stream.Stream<A, E>;
@@ -31,6 +41,7 @@ export interface NodeStream<A, E = never> {
  * {@link NodeResult} — a down node becomes a failed `exit`, never a thrown gather — then `combine`.
  * The combine sees **every** node's outcome, so it owns the down-node policy.
  *
+ * @category combinators
  * @public
  */
 export const combineQuery = <Svc, A, E, B>(
@@ -50,6 +61,7 @@ export const combineQuery = <Svc, A, E, B>(
  * (node-attributed) and produces the combined stream — e.g. {@link mergeNodeStreams} to interleave
  * them all, or a latest-per-node fold. Pure; the live subscription lifecycle is the caller's.
  *
+ * @category combinators
  * @public
  */
 export const combineStream = <Svc, A, E, B, EE>(
@@ -68,29 +80,54 @@ export const combineStream = <Svc, A, E, B, EE>(
 // bundle pulls only the combines it uses.
 // ============================================================================
 
-/** Successful per-node values, dropping the nodes that failed. @public */
+/**
+ * Successful per-node values, dropping the nodes that failed.
+ *
+ * @category combinators
+ * @public
+ */
 export const combineSuccesses = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): ReadonlyArray<{ readonly node: string; readonly value: A }> =>
   results.flatMap((r) => (Exit.isSuccess(r.exit) ? [{ node: r.node, value: r.exit.value }] : []));
 
-/** The nodes whose gather failed, with their cause. @public */
+/**
+ * The nodes whose gather failed, with their cause.
+ *
+ * @category combinators
+ * @public
+ */
 export const combineFailures = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): ReadonlyArray<{ readonly node: string; readonly cause: Cause.Cause<E> }> =>
   results.flatMap((r) => (Exit.isFailure(r.exit) ? [{ node: r.node, cause: r.exit.cause }] : []));
 
-/** Sum of the successful numeric values. @public */
+/**
+ * Sum of the successful numeric values.
+ *
+ * @category combinators
+ * @public
+ */
 export const combineSum = (
   results: ReadonlyArray<NodeResult<number, unknown>>,
 ): number => combineSuccesses(results).reduce((n, { value }) => n + value, 0);
 
-/** Successful values as an array (node order). @public */
+/**
+ * Successful values as an array (node order).
+ *
+ * @category combinators
+ * @public
+ */
 export const combineCollect = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): ReadonlyArray<A> => combineSuccesses(results).map((s) => s.value);
 
-/** Successful values keyed by node. @public */
+/**
+ * Successful values keyed by node.
+ *
+ * @category combinators
+ * @public
+ */
 export const combineByNode = <A, E>(
   results: ReadonlyArray<NodeResult<A, E>>,
 ): Record<string, A> =>
@@ -101,6 +138,7 @@ export const combineByNode = <A, E>(
  * health): map `Exit` → wire (`Reachable` / `Unreachable`) yourself. Contrast
  * {@link combineByNode}, which drops failed peers (fine for optional metric folds).
  *
+ * @category combinators
  * @public
  */
 export const combineByNodeExit = <A, E>(
@@ -108,14 +146,22 @@ export const combineByNodeExit = <A, E>(
 ): Record<string, Exit.Exit<A, E>> =>
   Object.fromEntries(results.map((r) => [r.node, r.exit]));
 
-/** Interleave every node's stream into one (a `transform` for {@link combineStream}). @public */
+/**
+ * Interleave every node's stream into one (a `transform` for {@link combineStream}).
+ *
+ * @category combinators
+ * @public
+ */
 export const mergeNodeStreams = <A, E>(
   streams: ReadonlyArray<NodeStream<A, E>>,
 ): Stream.Stream<A, E> =>
   streams.reduce<Stream.Stream<A, E>>((acc, s) => Stream.merge(acc, s.stream), Stream.empty);
 
 /** Interleave every node's stream into one, **tagging** each element with its node — attribution
- *  when following peers (a `transform` for {@link combineStream}). @public */
+ *  when following peers (a `transform` for {@link combineStream}). @public
+ *
+ * @category combinators
+ */
 export const mergeNodeStreamsByNode = <A, E>(
   streams: ReadonlyArray<NodeStream<A, E>>,
 ): Stream.Stream<{ readonly node: string; readonly value: A }, E> =>

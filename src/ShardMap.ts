@@ -44,6 +44,7 @@ import * as shardMapSql from "./internal/shardMapSql";
 /**
  * This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`).
  *
+ * @category utils
  * @public
  */
 export const kind = "@nikscripts/effect-pm/ShardMap";
@@ -52,6 +53,7 @@ export const kind = "@nikscripts/effect-pm/ShardMap";
  * Stable owner pick for a **fixed** node set — sort keys, then `Hash.string` modulo.
  * Remapping when membership changes is intentional / explicit (v1 = fixed fleet).
  *
+ * @category utils
  * @public
  */
 export const consistentHash = internal.consistentHash;
@@ -59,6 +61,7 @@ export const consistentHash = internal.consistentHash;
 /**
  * Partition function — maps a wire key string onto a node key.
  *
+ * @category models
  * @public
  */
 export type PartitionFn = internal.PartitionFn;
@@ -66,6 +69,7 @@ export type PartitionFn = internal.PartitionFn;
 /**
  * Options for {@link layer} / {@link serve} / {@link serveRemote}.
  *
+ * @category models
  * @public
  */
 export type ShardMapOptions = internal.ShardMapOptions;
@@ -168,6 +172,7 @@ const buildShardMapSpec = <
 /**
  * Build a ShardMap instance spec from key/value schemas (failure channel = Never).
  *
+ * @category constructors
  * @public
  */
 export function shardMapSpec<Key extends Schema.Top, Value extends Schema.Top>(
@@ -211,6 +216,7 @@ export function shardMapSpec<
 /**
  * Spec produced by {@link shardMapSpec}.
  *
+ * @category models
  * @public
  */
 export type ShardMapSpecOf<
@@ -226,6 +232,7 @@ export type ShardMapSpecOf<
 /**
  * A ShardMap instance tag — wire contract plus stamped `key` / `value` / `keyOf` carriers.
  *
+ * @category models
  * @public
  */
 export type ShardMapTag<
@@ -244,6 +251,7 @@ export type ShardMapTag<
 /**
  * A node-bound {@link ShardMapTag} (served + reached on a specific {@link NodeKey}).
  *
+ * @category models
  * @public
  */
 export type ShardMapNodeTag<
@@ -264,6 +272,7 @@ export type ShardMapNodeTag<
  * Tag-construction schemas + `keyOf` for routed `put` (partition strategy stays on
  * {@link layer} / {@link serve} options — tag is the wire contract only).
  *
+ * @category models
  * @public
  */
 export interface ShardMapSchemas<
@@ -293,6 +302,7 @@ export interface ShardMapSchemas<
  *   keyOf: (s) => s.id,
  * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
  *
+ * @category constructors
  * @public
  */
 export const Tag =
@@ -572,6 +582,7 @@ const asServeImpl = <
  * override with `{ filename }`). Requires the mesh capability
  * ({@link Resource.peersLayer}, or {@link Resource.peersFrom} + {@link Resource.selfNodeLayer}).
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <
@@ -597,6 +608,7 @@ export const layer = <
  * (`:memory:` by default). Requires the mesh capability ({@link Resource.peersLayer} or
  * peersFrom + selfNodeLayer).
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <
@@ -629,6 +641,7 @@ export const serveRemote = <
  * // Durable file:
  * ShardMap.serve(Sessions, { filename: ".effect-pm/sessions.sqlite" })
  *
+ * @category layers & serving
  * @public
  */
 export const serve = <

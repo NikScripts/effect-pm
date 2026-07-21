@@ -24,6 +24,7 @@ import { Effect } from "effect";
  *
  * Package: `@nikscripts/effect-pm/LogContext` · Source: `src/LogContext.ts` · See `docs/LOGS.md`.
  *
+ * @category utils
  * @public
  */
 export const LogAnnotationKeys = {
@@ -41,6 +42,7 @@ export const LogAnnotationKeys = {
  *
  * @param node - **Node log key** value (`Node.Tag.key`).
  *
+ * @category utils
  * @public
  */
 export const withNodeLogAnnotations = <A, E, R>(

@@ -8,6 +8,7 @@ import { Schema } from "effect";
 /**
  * Per-endpoint counts within one metrics window.
  *
+ * @category wire schemas
  * @public
  */
 export const apiUsageEndpointMetrics = Schema.Struct({
@@ -21,6 +22,7 @@ export const apiUsageEndpointMetrics = Schema.Struct({
 /**
  * Windowed API usage metrics — element of the {@link ApiMetrics} `metrics` stream.
  *
+ * @category wire schemas
  * @public
  */
 export const apiUsageMetrics = Schema.Struct({
@@ -37,6 +39,7 @@ export const apiUsageMetrics = Schema.Struct({
 /**
  * Point-in-time API usage snapshot — element of the {@link ApiMetrics} `usage` ref (`usage.get`).
  *
+ * @category wire schemas
  * @public
  */
 export const apiUsageSnapshot = Schema.Struct({
@@ -55,11 +58,13 @@ export const apiUsageSnapshot = Schema.Struct({
 });
 
 /**
+ * @category models
  * @public
  */
 export type ApiUsageMetrics = typeof apiUsageMetrics.Type;
 
 /**
+ * @category models
  * @public
  */
 export type ApiUsageSnapshot = typeof apiUsageSnapshot.Type;
