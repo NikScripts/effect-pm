@@ -2264,6 +2264,33 @@ export const nodeKindOf = (tag: unknown): ProtocolKind | undefined => {
   return undefined;
 };
 
+/**
+ * The full set of {@link ProtocolKind}s a tag's {@link Node} speaks — every transport in its
+ * `endpoints` set (a multi-protocol node has several), or its single primary `kind`, or `[]` for a
+ * nodeless/bare tag. A structural read; the server asserts its own transport is a **member** of this
+ * set ({@link ProtocolKindMismatch}) so a node served over any of its declared transports passes.
+ *
+ * @public
+ */
+export const nodeKindsOf = (tag: unknown): ReadonlyArray<ProtocolKind> => {
+  const node = nodeOf(tag);
+  if (node === undefined) {
+    return [];
+  }
+  const kinds: Array<ProtocolKind> = [];
+  if (Predicate.hasProperty(node, "endpoints")) {
+    const ep = node.endpoints;
+    if (Predicate.hasProperty(ep, "Http")) kinds.push("Http");
+    if (Predicate.hasProperty(ep, "WebSocket")) kinds.push("WebSocket");
+    if (Predicate.hasProperty(ep, "IpcSocket")) kinds.push("IpcSocket");
+  }
+  if (kinds.length > 0) {
+    return kinds;
+  }
+  const single = nodeKindOf(tag);
+  return single !== undefined ? [single] : [];
+};
+
 /** A structural bound matching any resource tag (bare or node-bound) by its spec brand — deliberately
  *  WITHOUT the tag's `Svc` type param. A data-last combinator (`.pipe(withReadiness(...))`,
  *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
@@ -3120,9 +3147,10 @@ export interface ServedResource {
   readonly readiness: Effect.Effect<Readiness>;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
-  /** Declared transport of the tag's {@link Node}, when node-bound — the server asserts each served
-   *  resource's `nodeKind` matches its own transport, else {@link ProtocolKindMismatch}. */
-  readonly nodeKind?: ProtocolKind;
+  /** Declared transport set of the tag's {@link Node}, when node-bound — the server asserts its own
+   *  transport is a **member**, else {@link ProtocolKindMismatch}. A multi-protocol node lists all its
+   *  transports, so serving it over any one passes. */
+  readonly nodeKinds?: ReadonlyArray<ProtocolKind>;
 }
 
 /**
@@ -3274,14 +3302,14 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
           onNone: () => Effect.void,
           onSome: (registry) => {
             const bound = nodeOf(tag);
-            const boundKind = nodeKindOf(tag);
+            const boundKinds = nodeKindsOf(tag);
             return registry.register({
               groupId: tag.groupId,
               group,
               kind: kindOf(tag) ?? "resource",
               readiness: readinessCheckServed(tag, wireImpl),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
-              ...(boundKind !== undefined ? { nodeKind: boundKind } : {}),
+              ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
           },
         }),

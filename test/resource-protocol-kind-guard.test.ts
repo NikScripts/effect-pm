@@ -31,7 +31,9 @@ it("a WebSocket-declared resource served on httpServer refuses to boot (Protocol
         Effect.catchDefect((d: unknown) => Effect.succeed(d)),
       );
       expect(outcome).toBeInstanceOf(Node.ProtocolKindMismatch);
-      expect((outcome as Node.ProtocolKindMismatch).declared).toBe("WebSocket");
+      expect((outcome as Node.ProtocolKindMismatch).declared).toEqual([
+        "WebSocket",
+      ]);
       expect((outcome as Node.ProtocolKindMismatch).servedOver).toBe("Http");
     }),
   ));
@@ -45,6 +47,32 @@ it("the same resource served on wsServer boots fine — the kind matches", () =>
 
       // no die → the boot assertion passed (a mismatch would have died before completing).
       yield* Effect.void.pipe(Effect.provide(server), Effect.scoped);
+      expect(true).toBe(true);
+    }),
+  ));
+
+// `DualNode` declares BOTH http and ws (multi-protocol) — set membership means serving it over
+// EITHER transport is fine; only a transport it doesn't declare trips the guard.
+class DualNode extends Node.Tag<DualNode>()("p3/dual", {
+  http: "http://d/rpc",
+  ws: "ws://d/rpc",
+}) {}
+class DualRes extends Resource.Tag<DualRes>()(
+  "p3/DualRes",
+  { ping: Resource.effect(Schema.String) },
+  { node: DualNode },
+) {}
+
+it("a multi-protocol (http+ws) node boots on httpServer AND wsServer — server ∈ its set", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const make of [Node.httpServer, Node.wsServer]) {
+        const server = make([
+          Resource.serve(DualRes, { ping: Effect.succeed("pong") }),
+        ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+        // neither dies — Http and WebSocket are both members of DualNode's declared set.
+        yield* Effect.void.pipe(Effect.provide(server), Effect.scoped);
+      }
       expect(true).toBe(true);
     }),
   ));
