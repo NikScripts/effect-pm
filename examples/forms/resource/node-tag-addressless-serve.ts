@@ -2,6 +2,7 @@
  * @module examples/forms/resource/node-tag-addressless-serve
  *
  * **Address-less Node.Tag — serve terminal.** Mints ipc + claims at Lookup.
+ * Lookup is **piped** on (not `lookupPath` listen opts).
  *
  * Terminal A:
  * ```bash
@@ -14,6 +15,7 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Config, Effect, Layer, Schema } from "effect"
+import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
 import * as Resource from "../../../src/Resource"
 
@@ -33,7 +35,11 @@ const program = Effect.gen(function* () {
   const live = Node.unix(
     Worker,
     [Resource.serve(Jobs, { jobs: Effect.succeed(42) })],
-    { lookupPath: path, unlinkLookup: true },
+    { bootstrapLookup: false },
+  ).pipe(
+    Layer.provide(
+      Lookup.bootstrapDefaultLocal({ path, unlink: true }),
+    ),
   )
 
   yield* Layer.build(live)
