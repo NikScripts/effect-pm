@@ -257,7 +257,7 @@ Managing Layers + Fleets & Peers; optional serve-family neutral names if locked.
 | **I1** | Kind name | **`"ipc"`** — `"socket"` stays WebSocket only |
 | **I2** | Address shape on Node | **`{ path }`** → infers `kind: "ipc"`; `url` left undefined |
 | **I3** | Server helper | **`Resource.ipcServer(serves, { path })`** |
-| **I4** | Path lifecycle | **unlink before bind + on scope close** (`unlink: false` to opt out) |
+| **I4** | Path lifecycle | **no unlink by default** (anti unlink-steal; matches Lookup / nPipe). Opt in with `unlink: true` for stale-sock recovery before bind + on scope close |
 | **I5** | Windows named pipes | **Unix-only v1**; same `ipc` kind later |
 
 Shipped API:

@@ -41,8 +41,10 @@ export interface IpcServerOptions {
    */
   readonly node?: string | { readonly key: string };
   /**
-   * Best-effort `unlink` of `path` before bind and when the server scope closes (default `true`).
-   * Clears stale `.sock` files from a previous crash so listen does not fail with EADDRINUSE.
+   * Best-effort `unlink` of `path` before bind and when the server scope closes
+   * (default `false` — same as {@link Lookup.layerOptions} / named-pipe listen).
+   * Opt in with `unlink: true` to clear a stale `.sock` from a previous crash; leaving the
+   * default avoids unlink-steal of a live peer's socket.
    */
   readonly unlink?: boolean;
   /**
@@ -178,7 +180,7 @@ const ipcServerBase = (
       const { NodeFileSystem, NodeSocketServer } = yield* Effect.promise(
         () => import("@effect/platform-node"),
       );
-      const doUnlink = options.unlink !== false;
+      const doUnlink = options.unlink === true;
       // Build FileSystem once for path hygiene (Context provide — not Layer provide mid-graph).
       const fsCtx = doUnlink
         ? yield* Layer.build(NodeFileSystem.layer)

@@ -95,13 +95,16 @@ describe("Node.ipcServer + connectIpc", () => {
     }).pipe(Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("unlinks so a second listen can bind the same path", () =>
+  it.effect("with unlink:true, a second listen can bind the same path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("stale");
       class Worker extends Node.Tag<Worker>()("ipc/stale", { path }) {}
 
       const serve = () =>
-        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path });
+        Node.ipcServer([Resource.serve(Echo, echoImpl)], {
+          path,
+          unlink: true,
+        });
 
       yield* Effect.void.pipe(Effect.provide(serve()), Effect.scoped);
 
