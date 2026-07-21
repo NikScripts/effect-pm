@@ -10,6 +10,7 @@
  * - {@link unix} — IpcSocket listen + Lookup batteries (nameless / Tag+impl / node+serves)
  * - {@link http} — local Http listen + Lookup batteries (localhost bind / nameless / Tag+impl)
  * - {@link ws} — local WebSocket listen + Lookup batteries (localhost bind / nameless / Tag+impl)
+ * - {@link nPipe} — Windows named-pipe IpcSocket listen + Lookup (sibling of {@link unix})
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
@@ -30,6 +31,8 @@ export {
   UnixListenRequiresIpc,
   HttpListenRequiresHttp,
   WsListenRequiresWs,
+  NPipeListenRequiresIpc,
+  NPipeRequiresWindows,
   UnaddressedNode,
   NodeUnreachable,
   ProtocolKindMismatch,
@@ -49,6 +52,7 @@ export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"
 export { http } from "./internal/nodeHttp"
 export { ws } from "./internal/nodeWs"
+export { nPipe } from "./internal/nodeNPipe"
 export { httpServer, wsServer } from "./internal/nodeHttpServer"
 export type { HttpServerOptions } from "./internal/nodeHttpServer"
 export { ipcServer } from "./internal/nodeIpcServer"

@@ -604,6 +604,44 @@ export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
 }
 
 /**
+ * {@link nPipe} only speaks IpcSocket (named-pipe path). The Node was Http / WebSocket —
+ * use {@link http} / {@link ws} for those transports.
+ *
+ * @public
+ */
+export class NPipeListenRequiresIpc extends Data.TaggedError(
+  "NPipeListenRequiresIpc",
+)<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.nPipe requires an IpcSocket Node (Windows named-pipe path); ` +
+      `"${this.node}" is ${this.kind}. Use Node.http / Node.ws (or httpServer / wsServer) for those transports.`
+    );
+  }
+}
+
+/**
+ * {@link nPipe} is Windows-only. On POSIX use {@link unix}.
+ *
+ * @public
+ */
+export class NPipeRequiresWindows extends Data.TaggedError(
+  "NPipeRequiresWindows",
+)<{
+  readonly platform: string;
+}> {
+  override get message() {
+    return (
+      `Node.nPipe requires win32 (got "${this.platform}"). ` +
+      `On POSIX use Node.unix for IpcSocket listen.`
+    );
+  }
+}
+
+/**
  * {@link listen} no longer binds a transport. Use the protocol entry instead.
  *
  * @public

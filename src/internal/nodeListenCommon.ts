@@ -12,6 +12,7 @@ import {
   ListenNode,
   ListenTagNodeRequired,
   ListenUseProtocol,
+  NPipeListenRequiresIpc,
   UnixListenRequiresIpc,
   WsListenRequiresWs,
 } from "./nodeCore"
@@ -104,6 +105,13 @@ export const unixRequiresIpcLayer = (
   kind: string,
 ): Layer.Layer<never, UnixListenRequiresIpc> =>
   failLayer(new UnixListenRequiresIpc({ node, kind }));
+
+/** Fail a Layer build with {@link NPipeListenRequiresIpc}. @internal */
+export const nPipeRequiresIpcLayer = (
+  node: string,
+  kind: string,
+): Layer.Layer<never, NPipeListenRequiresIpc> =>
+  failLayer(new NPipeListenRequiresIpc({ node, kind }));
 
 /** Fail a Layer build with {@link HttpListenRequiresHttp}. @internal */
 export const httpRequiresHttpLayer = (

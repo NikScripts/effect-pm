@@ -88,6 +88,7 @@ const cases = [
       "src/internal/nodeUnix.ts",
       "src/internal/nodeHttp.ts",
       "src/internal/nodeWs.ts",
+      "src/internal/nodeNPipe.ts",
       "src/internal/nodePrototype.ts",
       "src/internal/nodeHttpServer.ts",
       "src/internal/nodeIpcServer.ts",
