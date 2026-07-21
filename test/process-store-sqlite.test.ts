@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
-import { Polling } from "../src/Polling";
+import * as Polling from "../src/Polling";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });

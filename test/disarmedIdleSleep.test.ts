@@ -7,7 +7,7 @@ import {
   DISARMED_HINT_SLEEP_MIN,
   MIN_SCHEDULE_POLL_WHILE_DISARMED,
   resolveDisarmedFallbackPoll,
-} from "../src/disarmedIdleSleep";
+} from "../src/internal/disarmedIdleSleep";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const expectDuration = (actual: Duration.Duration, expected: Duration.Duration) => {

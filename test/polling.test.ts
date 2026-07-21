@@ -8,7 +8,7 @@ describe("Polling.spaced", () => {
     Effect.gen(function* () {
       const fiber = yield* Effect.forkChild(
         Effect.gen(function* () {
-          const polling = yield* Polling;
+          const polling = yield* Polling.current;
           yield* polling.awaitNextTick;
         }),
       );
@@ -22,7 +22,7 @@ describe("Polling.spaced", () => {
 
   it.effect("requestWake ends the current await before the full duration elapses", () =>
     Effect.gen(function* () {
-      const polling = yield* Polling;
+      const polling = yield* Polling.current;
       const waitFiber = yield* Effect.forkChild(polling.awaitNextTick);
       yield* TestClock.adjust(Duration.seconds(1));
       yield* polling.requestWake;
@@ -38,7 +38,7 @@ describe("Polling.spaced", () => {
 describe("Polling.accelerating", () => {
   it.effect("afterTick decreases cadence and resetCadence restores it", () =>
     Effect.gen(function* () {
-      const polling = yield* Polling;
+      const polling = yield* Polling.current;
 
       const first = yield* polling.peekCadence;
       yield* polling.afterTick;
@@ -75,7 +75,7 @@ describe("Polling.accelerating", () => {
 
   it.effect("resetCadence wakes a pending wait", () =>
     Effect.gen(function* () {
-      const polling = yield* Polling;
+      const polling = yield* Polling.current;
 
       const waitFiber = yield* Effect.forkChild(polling.awaitNextTick);
       yield* TestClock.adjust(Duration.seconds(1));

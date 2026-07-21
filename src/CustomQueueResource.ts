@@ -723,3 +723,16 @@ export {
   makeCustomQueueEffect as make,
   queueRateLimiterLayer as rateLimiterLayer,
 } from "./internal/customQueueResource";
+
+// The custom-queue type surface lives HERE, namespace-style (`CustomQueueResource.CustomQueueStatus`)
+// — the barrel no longer re-exports these bare (effect has no top-level; neither do we).
+export type {
+  CustomQueueEnqueue,
+  CustomQueueHandle,
+  CustomQueueLevelConfig,
+  CustomQueueRefill,
+  CustomQueueResourceConfig,
+  CustomQueueResourceConfigWithItemSchema,
+  CustomQueueResourceConfigWithoutItemSchema,
+  CustomQueueStatus,
+} from "./internal/customQueueResource";

@@ -8,8 +8,8 @@
  * we repeatedly:
  * 1. check the active entry `stopAt`
  * 2. if closed: exit the instance naturally
- * 3. otherwise await {@link Polling.awaitNextTick}, run the tracked user effect,
- *    then {@link Polling.afterTick}.
+ * 3. otherwise await {@link Polling.Service.awaitNextTick | Polling awaitNextTick}, run the tracked user effect,
+ *    then {@link Polling.Service.afterTick | Polling afterTick}.
  *
  * Default overlap policy is **parallel** because the driver forks each instance.
  *
@@ -90,7 +90,7 @@ import {
   successSym,
 } from "./internal/processTagSchemas";
 import { withLogScope } from "./internal/logs/scope";
-import { Polling, PollingTag } from "./Polling";
+import { PollingTag } from "./internal/pollingTag";
 import { ProcessSchedule, ProcessScheduleTag } from "./internal/processSchedule";
 import type {
   ProcessScheduleEntry,
@@ -798,7 +798,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       }
 
       const runEntryInstance = Effect.gen(function* () {
-        const pollingOption = yield* Effect.serviceOption(Polling);
+        const pollingOption = yield* Effect.serviceOption(PollingTag);
 
         const canContinue = Effect.gen(function* () {
           const nowMillis = yield* Clock.currentTimeMillis;
