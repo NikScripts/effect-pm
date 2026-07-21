@@ -828,3 +828,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — **`askIncumbent` Eng’d:** `OnConflict` stamps + listen opts; Lookup resolves + `NodeStatus.yield`; dial-matched unregister; tests + changeset.
 - **2026-07-21** — Owner: rename **`clientsFor` → `Node.clients`**; array + rest; bound-tag overloads (`clients([Jobs, Emails])` / `clients(Jobs, Emails)`). No shim.
 - **2026-07-21** — Owner: rename **`clientLocal` → `Resource.discoverClient`** (avoid Effect “local”); no shim.
+- **2026-07-21** — Owner: **`Resource.discoverClients`** (array/rest) — mergeAll of discover clients, one Lookup bootstrap.

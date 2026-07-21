@@ -71,7 +71,7 @@ describe("Node.unix nameless", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("two resources; discoverClient dials both", () =>
+  it.effect("two resources; discoverClients dials both", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("pair");
       const serverCtx = yield* Layer.build(
@@ -84,10 +84,10 @@ describe("Node.unix nameless", () => {
         ),
       );
       const clientCtx = yield* Layer.build(
-        Layer.mergeAll(
-          Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
-          Resource.discoverClient(Emails, { lookupPath, unlink: false }),
-        ),
+        Resource.discoverClients([Jobs, Emails], {
+          lookupPath,
+          unlink: false,
+        }),
       );
 
       const pair = yield* Effect.gen(function* () {
@@ -98,5 +98,14 @@ describe("Node.unix nameless", () => {
 
       expect(pair).toEqual([11, "ok"]);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("discoverClients rest form (default Lookup path)", () =>
+    Effect.gen(function* () {
+      // Unique default path via env would collide suites — pin via array form above.
+      // Rest shape is type-checked here against the same tags.
+      const layer = Resource.discoverClients(Jobs, Emails);
+      expect(Layer.isLayer(layer)).toBe(true);
+    }),
   );
 });

@@ -1,7 +1,8 @@
 /**
  * @module examples/forms/resource/node-tag-addressless-call
  *
- * **Address-less Node.Tag — call terminal.** Resolves via Lookup + `discoverClient`.
+ * **Address-less Node.Tag — call terminal.** Lookup is **piped** onto
+ * {@link Resource.lookupClient} (same shape as the serve side).
  *
  * Terminal B (after serve is up):
  * ```bash
@@ -11,7 +12,8 @@
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
-import { Config, Effect, Schema } from "effect"
+import { Config, Effect, Layer, Schema } from "effect"
+import * as Lookup from "../../../src/Lookup"
 import * as Resource from "../../../src/Resource"
 
 class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
@@ -26,9 +28,12 @@ const program = Effect.gen(function* () {
   const path = yield* lookupSock
   // Give the serve process a moment if started in parallel.
   yield* Effect.sleep("200 millis")
-  const jobs = yield* Jobs.pipe(
-    Effect.provide(Resource.discoverClient(Jobs, { lookupPath: path })),
+  const client = Resource.lookupClient(Jobs).pipe(
+    Layer.provide(
+      Lookup.bootstrapDefaultLocal({ path, unlink: false }),
+    ),
   )
+  const jobs = yield* Jobs.pipe(Effect.provide(client))
   const n = yield* jobs.jobs
   yield* Effect.logInfo(`jobs=${n}`)
   return n
