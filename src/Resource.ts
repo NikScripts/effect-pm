@@ -47,6 +47,7 @@
  */
 import {
   Context,
+  Config,
   Data,
   Duration,
   Effect,
@@ -3851,25 +3852,63 @@ export const layerProtocol = (
 ): Layer.Layer<RpcClient.Protocol> => protocol;
 
 /**
- * Build an **http** client `Protocol` (Fetch + ndjson serialization) for one endpoint `url` (default
- * `"/rpc"`, resolved same-origin in a browser) — the value you hand {@link layerProtocol} or
- * {@link Resource.connect}. The server/CLI/backend transport; a browser dashboard should prefer
- * {@link protocolWebsocket} (HTTP/1.1's ~6-connection cap starves many concurrent streams). @public
+ * The default **host** a bare-**port** client shorthand resolves against — an Effect {@link Config}
+ * (`EFFECT_PM_CLIENT_HOST`) defaulting to `"localhost"`. In dev nothing is set → `localhost`; in
+ * production set it (`EFFECT_PM_CLIENT_HOST=api.myapp.com`) and every `protocolHttp(3009)` /
+ * `protocolWebsocket(3009)` / `connect(tag, …(port))` becomes `…://api.myapp.com:3009/rpc` — no
+ * `NODE_ENV` branching, just "did they configure a host". @category transports @public
+ */
+export const clientHost: Config.Config<string> = Config.string(
+  "EFFECT_PM_CLIENT_HOST",
+).pipe(Config.withDefault("localhost"));
+
+/** A bare **port** (`3009`) / `":3009"` resolves to `${scheme}://${clientHost}:port/rpc` (Config host,
+ *  read at layer build); a path / full url passes through unchanged. @internal */
+const clientTargetUrl = (
+  scheme: "http" | "ws",
+  target: number | string,
+): Effect.Effect<string> => {
+  // `clientHost` has a default, so a residual ConfigError means a malformed config source — a boot
+  // misconfiguration, not a per-call failure; die rather than thread it onto every client's channel.
+  const host = Effect.orDie(clientHost);
+  if (typeof target === "number") {
+    return Effect.map(host, (h) => `${scheme}://${h}:${target}/rpc`);
+  }
+  if (/^:\d+$/.test(target)) {
+    return Effect.map(host, (h) => `${scheme}://${h}${target}/rpc`);
+  }
+  return Effect.succeed(target);
+};
+
+/**
+ * Build an **http** client `Protocol` (Fetch + ndjson serialization) for an endpoint — the value you
+ * hand {@link layerProtocol} or {@link connect}. `target` is a **port** (`3009` → `http://${clientHost}:3009/rpc`,
+ * Config host default `"localhost"`), a full url, or a same-origin path (default `"/rpc"`). The
+ * server/CLI transport; a browser should prefer {@link protocolWebsocket} (HTTP/1.1's ~6-connection cap
+ * starves streams — `protocolHttp` dies loudly in a browser).
+ *
  * @category transports
+ * @public
  */
 export const protocolHttp = (
-  url = "/rpc",
+  target: number | string = "/rpc",
   serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
-): Layer.Layer<RpcClient.Protocol> =>
-  // guard at the root: `http` / `clientHttp` / `connectHttp` all build on this, so the browser
-  // footgun is closed for every http-client path in one place.
-  Layer.merge(
-    RpcClient.layerProtocolHttp({ url }).pipe(
-      Layer.provide(serialization),
-      Layer.provide(FetchHttpClient.layer),
-    ),
-    Layer.effectDiscard(dieIfHttpClientInBrowser),
-  );
+): Layer.Layer<RpcClient.Protocol> => {
+  // guard at the root: `http` / `connect` all build on this, so the browser footgun is closed for
+  // every http-client path in one place.
+  const build = (url: string): Layer.Layer<RpcClient.Protocol> =>
+    Layer.merge(
+      RpcClient.layerProtocolHttp({ url }).pipe(
+        Layer.provide(serialization),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+      Layer.effectDiscard(dieIfHttpClientInBrowser),
+    );
+  // A bare port defers to the `clientHost` Config (layer build); a path / url stays sync.
+  return typeof target === "number" || /^:\d+$/.test(target)
+    ? Layer.unwrap(Effect.map(clientTargetUrl("http", target), build))
+    : build(target);
+};
 
 /**
  * Build a **WebSocket** client `Protocol` (one multiplexed connection + ndjson) for one endpoint
@@ -3881,14 +3920,42 @@ export const protocolHttp = (
  * @category transports
  */
 export const protocolWebsocket = (
-  url = "/rpc",
+  target: number | string = "/rpc",
   serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
-): Layer.Layer<RpcClient.Protocol> =>
-  RpcClient.layerProtocolSocket().pipe(
-    Layer.provide(serialization),
-    Layer.provide(Socket.layerWebSocket(Effect.sync(() => toWebSocketUrl(url)))),
-    Layer.provide(Socket.layerWebSocketConstructorGlobal),
-  );
+): Layer.Layer<RpcClient.Protocol> => {
+  const build = (url: string): Layer.Layer<RpcClient.Protocol> =>
+    RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(serialization),
+      Layer.provide(Socket.layerWebSocket(Effect.sync(() => toWebSocketUrl(url)))),
+      Layer.provide(Socket.layerWebSocketConstructorGlobal),
+    );
+  // A bare port defers to the `clientHost` Config (→ `ws://${host}:port/rpc`); a path / url stays sync.
+  return typeof target === "number" || /^:\d+$/.test(target)
+    ? Layer.unwrap(Effect.map(clientTargetUrl("ws", target), build))
+    : build(target);
+};
+
+/**
+ * Dial a resource `tag` over a transport **you provide** — the no-batteries client. `connect` bakes in
+ * **no** transport of its own (unlike {@link http} / {@link ws} / {@link unix} / {@link nPipe}, whose
+ * wire is in the name and bundled): you hand it a {@link protocolHttp} / {@link protocolWebsocket} /
+ * {@link protocolIpc} layer, so a browser build pulls in only the one wire it passes.
+ *
+ * ```ts
+ * program.pipe(Effect.provide(Resource.connect(Emails, Resource.protocolHttp(3009))));       // server
+ * program.pipe(Effect.provide(Resource.connect(Emails, Resource.protocolWebsocket("/rpc")))); // browser (ws only)
+ * ```
+ *
+ * The port shorthand (`3009`) resolves against {@link clientHost} (default `"localhost"`), so the same
+ * `3009` points at your production host once `EFFECT_PM_CLIENT_HOST` is set.
+ *
+ * @category clients
+ * @public
+ */
+export const connect = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  protocol: Layer.Layer<RpcClient.Protocol>,
+): Layer.Layer<Self> => clientLayer(tag).pipe(Layer.provide(protocol));
 
 /** The **http** server `Protocol` (RPC over HTTP POST) mounted on the server router at `path` — what
  *  {@link httpServer} provides internally. `RpcSerialization` is supplied by the server. */
