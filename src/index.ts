@@ -88,16 +88,6 @@
 // effect-pm - Main exports (see @packageDocumentation above)
 // ============================================================================
 
-export {
-  computeDisarmedIdleSleep,
-  resolveDisarmedFallbackPoll,
-  DEFAULT_SCHEDULE_POLL_WHILE_DISARMED,
-  MIN_SCHEDULE_POLL_WHILE_DISARMED,
-  DISARMED_HINT_SLEEP_MIN,
-  DISARMED_HINT_SLEEP_MAX,
-  DisarmedIdleSleep,
-} from "./disarmedIdleSleep";
-
 // The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
 // access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
 // engine only when used. Engine + Resource toolkit are both members (`Process.make`, `Process.Tag`, …).
@@ -277,63 +267,7 @@ export type {
 export type { PollingService, AcceleratingPollConfig } from "./Polling";
 
 // Types - QueueResource
-export type {
-  QueueHandle,
-  QueueEnqueue,
-  QueueResourceDefinition,
-  QueueResourceMetadata,
-  QueueResourceServiceDefinition,
-  QueueResourceConfig,
-  QueueResourceConfigBase,
-  QueueResourceRateLimitOptions,
-  QueueResourceConfigWithoutItemSchema,
-  QueueResourceConfigWithItemSchema,
-  QueueResourceOptionsWithoutItemSchema,
-  QueueResourceOptionsWithItemSchema,
-  QueueConfigFromEffect,
-  QueueWorkerEffect,
-  QueueShutdownError,
-  EffectContext,
-  QueueBatch,
-  QueueEncodedEntry,
-  QueueEntry,
-  QueueEntrySelector,
-  QueueEntryTimestamps,
-  QueueEnqueueEntries,
-  QueueEvent,
-  QueueStatus,
-  QueueMetrics,
-  QueueFailureDisposition,
-  QueueOnFailure,
-  QueueReleaseOptions,
-  QueueRouteOptions,
-  QueueReleaseEncodingError,
-  Priority,
-  BuiltInTakeAlgorithm,
-  TakeAlgorithm,
-  TakeAlgorithmPick,
-  TakeAlgorithmPickContext,
-  CustomTakeAlgorithm,
-  QueueItemCodecDescriptor,
-  InferQueueEnqueueError,
-  InferQueueItem,
-  InferQueueWorkerError,
-  InferQueueWorkerRequirements,
-  ConsumeResult,
-} from "./internal/queueResource";
-
 export * as CustomQueueResource from "./CustomQueueResource";
-
-export type {
-  CustomQueueHandle,
-  CustomQueueEnqueue,
-  CustomQueueLevelConfig,
-  CustomQueueRefill,
-  CustomQueueResourceConfig,
-  CustomQueueResourceConfigWithoutItemSchema,
-  CustomQueueResourceConfigWithItemSchema,
-  CustomQueueStatus,
-} from "./internal/customQueueResource";
 
 export type {
   CustomQueueTagConfig,
