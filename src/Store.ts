@@ -1140,9 +1140,10 @@ export const resolveOrDie = <const C extends StoreContractValue>(
   resolve(scope, contract).pipe(
     Effect.catchTag("StoreScopeNotRegistered", (e) =>
       Effect.die(
-        `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store, and no default ` +
-          `store is in context to materialize it. Provide the in-memory default (Service.layerMemory / ` +
-          `the resource layer's baked default) so the scope resolves.`,
+        `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store. ` +
+          `If Soft override captured an AppStore, register this engine on that Store.Service ` +
+          `(Process.store / QueueResource.store / CustomQueueResource.store / RunResource.store) ` +
+          `alongside Node.logs — or omit Soft override so Memory soft-default materializes the scope.`,
       ),
     ),
   );

@@ -2,7 +2,7 @@
 
 **Status:** **Soft stack SHIPPED** on `integration` — bake+override [#62](https://github.com/NikScripts/effect-pm/pull/62) + follow-through S1–S3 [#65](https://github.com/NikScripts/effect-pm/pull/65) (living prose + CustomQueue Soft SQLite / sibling-merge parity). Agent 3 Soft **idle**.  
 **SSOT (wiring):** [`docs/guides/stores.md`](../guides/stores.md) — toolkit soft-default Memory (R fulfilled); override by providing AppStore **into** the toolkit layer (`Layer.provide` / `provideMerge`). `*Memory` = aliases.  
-**Not this plan:** store-layer `(scopeKey, lineId)` memo (deferred); Agent D handles; docs-site chrome; Postgres; fail-loud Soft die when AppStore lacks engine registration (parked unless owner unlocks).
+**Not this plan:** Agent D handles; docs-site chrome; Postgres. Soft fail-loud (missing engine registration) **unlocked + Eng’d** 2026-07-21. Store-layer `(scopeKey, lineId)` memo unlocked same wave.
 
 ---
 
@@ -20,7 +20,7 @@ Goal: happy path is **one recipe** (`stores.md`); intentional multi-node / two-c
 |---------|--------|
 | Soft-default Memory via `Store.withDefaultStorage` — R fulfilled; `*Memory` aliases | Process / Queue / CustomQueue / RunResource toolkit layers |
 | Soft SQLite capture + sibling-merge empty-file guards | `test/storage-correctness-guards.test.ts` (Process, Queue, RunResource, CustomQueue) |
-| Node-logs-only Soft → engine scope unreadable (fail-soft) | same guards + stores guide note |
+| Node-logs-only Soft → layer build dies (`resolveOrDie`) | same guards + stores guide note |
 | Dual-`DemoStore` process-store forms fixed | `examples/forms/process-store/*` |
 | Living Soft teachability (examples + TSDoc ripple) | #65 S1–S2 |
 | AGENTS persistence → stores guide; cutover-00 §2 refreshed | repo tip |
@@ -66,7 +66,7 @@ There is no “later-wins Soft override.” Soft peeks ambient `Storage` **at to
 |---|---------|-------|---------|
 | **P0** | Sibling `Layer.merge(engine, AppStore)` expecting Soft override | Silent empty SQLite | stores guide + Soft guards (Process/Queue/Run/CustomQueue) |
 | **P1** | Expect logs from `layerDefaultMemory` alone | Empty `by*` / `Resource.logs` | stores guide + TSDoc |
-| **P1** | Soft-override with store that omits engine registration | Fail-soft empty engine journal | guide note + Node-only guard; fail-loud **parked** |
+| **P1** | Soft-override with store that omits engine registration | Layer build dies (`resolveOrDie`) | **Eng’d** — Process/Queue/CustomQueue/Run probe at build |
 | **P1** | Missing `Node.logs` / toolkit `.store(tag)` | Empty durable queries | docs / empty-query honesty |
 | **P2** | Nested / second `Logs.layer` or second `Store.Service` in one Node | Two buses/journals | Document-only (Phase C) |
 | **P3** | Legacy bag / `processId` identity docs | Confusion | mostly fixed (#59); Agent 1 archive if leftovers |
@@ -80,13 +80,13 @@ There is no “later-wins Soft override.” Soft peeks ambient `Storage` **at to
 
 `docs/guides/stores.md` filled; README/examples aligned for Soft; AGENTS → stores guide.
 
-### Phase B — Hard guards · **DONE Soft surface (#62 + #65)**; fail-loud still parked
+### Phase B — Hard guards · **DONE Soft surface (#62 + #65)**; fail-loud **Eng’d**
 
 | Guard | Status |
 |-------|--------|
 | Soft unwrap + Memory soft-default | **Shipped** (#62) |
 | Soft SQLite + sibling-merge tests (Process/Queue/Run/CustomQueue) | **Shipped** (#62 + #65) |
-| Fail-loud when Soft captures store lacking engine registration | **Parked** |
+| Fail-loud when Soft captures store lacking engine registration | **Eng’d** (2026-07-21) — `resolveOrDie` at toolkit layer build |
 | Outer `Effect.provide(Layer.mergeAll(engine, AppStore))` guard | Guide-only unless unlocked |
 | B2 LogRelay presence / B3 filename honesty / B4 registration completeness | Owner unlock later |
 

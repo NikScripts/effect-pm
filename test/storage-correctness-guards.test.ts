@@ -160,23 +160,26 @@ describe("storage correctness — Process soft-default + AppStore override", () 
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, clock)), Effect.scoped),
   );
 
-  it.effect("Node-logs-only Soft override — engine scope unreadable on that AppStore", () =>
+  it.effect("Node-logs-only Soft override — layer build dies (fail-loud)", () =>
     Effect.gen(function* () {
-      // Soft captures NodeOnly Storage. Exec is not registered → resolve fails (writes are
-      // fail-soft on the engine fiber; the compose mistake is silent empty journals).
+      // Soft captures NodeOnly Storage. Exec is not registered → die at Process.layer build.
       const live = Process.layer(Exec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       }).pipe(Layer.provideMerge(NodeOnlyStore.layerMemory));
-      yield* Effect.gen(function* () {
-        yield* Exec;
-        yield* TestClock.adjust(Duration.millis(200));
-        const resolved = yield* Effect.exit(
-          Store.resolve(Exec.key, builtInProcessStoreContract(Exec)),
-        );
-        expect(Exit.isFailure(resolved)).toBe(true);
-      }).pipe(Effect.provide(live), Effect.scoped);
+      const exit = yield* Effect.exit(Layer.build(live).pipe(Effect.scoped));
+      expect(Exit.isFailure(exit)).toBe(true);
     }).pipe(Effect.provide(clock), Effect.scoped),
+  );
+
+  it.effect("Queue Soft with Node-logs-only AppStore dies at layer build", () =>
+    Effect.gen(function* () {
+      const live = QueueResource.layer(Jobs, {
+        effect: () => Effect.void,
+      }).pipe(Layer.provideMerge(NodeOnlyStore.layerMemory));
+      const exit = yield* Effect.exit(Layer.build(live).pipe(Effect.scoped));
+      expect(Exit.isFailure(exit)).toBe(true);
+    }).pipe(Effect.scoped),
   );
 });
 

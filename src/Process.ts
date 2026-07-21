@@ -2437,6 +2437,9 @@ const buildProcessImpl = <A, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
+    // Fail-loud Soft: AppStore missing this engine registration dies at layer build
+    // (not silent empty journals on first write). Soft-default Memory always materializes.
+    yield* Store.resolveOrDie(tag.key, builtInProcessStoreContract(tag));
     const storeEffects = pipe(
       Store.effects(tag.key, builtInProcessStoreContract(tag)),
       Store.catchWriteErrors,
