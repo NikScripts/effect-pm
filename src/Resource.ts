@@ -4402,12 +4402,18 @@ export const lookupClient = <Self, S extends Spec>(
   >;
 
 /**
- * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} for same-machine demos.
+ * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} — discover an
+ * endpoint for `tag` via Lookup (identity, then directory) and dial it. Not Effect
+ * “local” vs remote; name is **discover**.
+ *
+ * ```ts
+ * Resource.discoverClient(Jobs, { lookupPath })
+ * ```
  *
  * @category clients
  * @public
  */
-export const clientLocal = <Self, S extends Spec>(
+export const discoverClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   options?: LookupClientOptions & {
     readonly lookupPath?: string;
@@ -4852,7 +4858,7 @@ const buildClientService = <Self, S extends Spec>(
  *   dialable: auto-wires connect (`R = never`). Bare bound nodes still require the node service.
  * - **nodeless tag + {@link AddressedNode}** — `client(tag, Worker)` same auto-connect gate.
  * - **bare node** — `client(tag, Bare)` / bare-bound `client(Hosted)` still require the node;
- *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / clientLocal) yourself.
+ *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / discoverClient) yourself.
  * - **nodeless tag, ambient transport** — ambient `RpcClient.Protocol`.
  *
  * @category clients

@@ -821,9 +821,10 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — Owner “Good” → **D4 LOCKED:** `lookupClient(Tag, { pick: "first" \| fn })`; bare fail-closed; identity ignores pick; `client(Tag)` set-of-one unchanged.
 - **2026-07-19** — Owner “Okay next” → **`askIncumbent` bake opened.** Lean **A:** `onConflict` on listen/advertise; Lookup asks `NodeStatus.yield`; timeout → `IncumbentAlive`. Awaiting owner lock.
 - **2026-07-20** — Bake tip for merge into `integration`: AddressedNode auto-connect + MemoMap-shared connect; kind-precise Tags; `nodes([X])` / `andNode(X)` sole-bind; `InvalidHttpTarget` Layer/Effect (not throw); `listenLocal` catalog proof; `*Server`/`listen` serve-list bounds match Effect `Layer.mergeAll`. `askIncumbent` still OPEN.
-- **2026-07-20** — **Nameless `Node.listen([serve…])` Eng:** mint address-less anonymous Node + D7 claim + Lookup bootstrap; dial via `clientLocal`.
+- **2026-07-20** — **Nameless `Node.listen([serve…])` Eng:** mint address-less anonymous Node + D7 claim + Lookup bootstrap; dial via `discoverClient`.
 - **2026-07-21** — **Protocol listen Phases A–E Eng + on `integration`:** `Node.unix` / `http` / `ws` / `nPipe`; neutral `listen` binds nothing; module split for tree-shake; forms teach protocol entries + `clientsFor`. `askIncumbent` still OPEN.
 - **2026-07-21** — Owner: RPC name **`NodeStatus.yield` LOCKED** (best word; acknowledge possible confusion with Effect `yield*`). Inheritance/`onConflict` surface still baking.
 - **2026-07-21** — Owner “Continue” → **`askIncumbent` LOCKED** (inheritance chain + `NodeStatus.yield` + AI.1–8). Eng next.
 - **2026-07-21** — **`askIncumbent` Eng’d:** `OnConflict` stamps + listen opts; Lookup resolves + `NodeStatus.yield`; dial-matched unregister; tests + changeset.
 - **2026-07-21** — Owner: rename **`clientsFor` → `Node.clients`**; array + rest; bound-tag overloads (`clients([Jobs, Emails])` / `clients(Jobs, Emails)`). No shim.
+- **2026-07-21** — Owner: rename **`clientLocal` → `Resource.discoverClient`** (avoid Effect “local”); no shim.

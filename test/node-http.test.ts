@@ -46,7 +46,7 @@ describe("Node.http", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("nameless serve — Http + Lookup; clientLocal dials", () =>
+  it.effect("nameless serve — Http + Lookup; discoverClient dials", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
@@ -56,7 +56,7 @@ describe("Node.http", () => {
         }),
       );
       const clientCtx = yield* Layer.build(
-        Resource.clientLocal(JobsAnon, { lookupPath, unlink: false }),
+        Resource.discoverClient(JobsAnon, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* JobsAnon;
