@@ -400,7 +400,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **`reject`** | Strict never-steal (dead still replaceable? OPEN) |
 | **`lastWins`** (orphan first) | **Not** the default |
 
-#### `askIncumbent` advertise policy (**OPEN** — bake 2026-07-21; inheritance lean)
+#### `askIncumbent` advertise policy (**LOCKED** 2026-07-21 — Eng next)
 
 **Shipped today (fact):**
 
@@ -468,14 +468,14 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 
 | # | Question | Lean |
 |---|----------|------|
-| AI.1 | Surface | **Inheritance chain** (call-site → node stamp → Lookup stamp → `livenessReplace`) |
-| AI.2 | Who dials the ask? | **Lookup server** (has incumbent endpoint; newcomer shouldn’t need to) |
-| AI.3 | RPC | **`NodeStatus.yield`** — LOCKED (best word for “step aside”; note: may confuse with Effect `yield*`, but keep) |
-| AI.4 | Yield meaning v1 | Cooperative: incumbent **unregisters** its directory row (and may interrupt listen scope). **No** in-flight work drain |
-| AI.5 | Refuse / timeout | → **`IncumbentAlive`** (fail-closed; no steal) |
-| AI.6 | `reject` preset | Alive → always `IncumbentAlive`; dead → still replace (same liveness probe) |
-| AI.7 | Prototype cascade | Named `make` / `instance` default `"inherit"` (→ Lookup). Optional stamp on Prototype or `make(...)` overrides for that clone only |
-| AI.8 | Wire field | Advertise request carries **resolved** concrete policy (Lookup never sees `"inherit"`) |
+| AI.1 | Surface | **LOCKED** — inheritance chain (call-site → node stamp → Lookup stamp → `livenessReplace`) |
+| AI.2 | Who dials the ask? | **LOCKED** — Lookup server |
+| AI.3 | RPC | **LOCKED** — `NodeStatus.yield` (best word; note Effect `yield*` confusion in docs) |
+| AI.4 | Yield meaning v1 | **LOCKED** — cooperative accept → Lookup may replace; unregister finalizer is **dial-matched** so a late unregister cannot wipe the newcomer. Interrupt listen scope optional/best-effort. **No** in-flight work drain |
+| AI.5 | Refuse / timeout | **LOCKED** — `IncumbentAlive` (fail-closed) |
+| AI.6 | `reject` preset | **LOCKED** — alive → `IncumbentAlive`; dead → still replace |
+| AI.7 | Prototype cascade | **LOCKED** — `make` / `instance` default `"inherit"`; stamp on Prototype or `make` overrides that clone only |
+| AI.8 | Wire field | **LOCKED** — advertise carries advertiser preference (`callSite`∋`nodeStamp`, may still be `"inherit"` / omit); **Lookup server** finishes resolve with its node stamp (so `bootstrapDefaultLocal` stays `livenessReplace` unless a stamped `Node.Lookup` is served) |
 
 ```ts
 // Goal sketch after lock:
@@ -823,3 +823,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-20** — **Nameless `Node.listen([serve…])` Eng:** mint address-less anonymous Node + D7 claim + Lookup bootstrap; dial via `clientLocal`.
 - **2026-07-21** — **Protocol listen Phases A–E Eng + on `integration`:** `Node.unix` / `http` / `ws` / `nPipe`; neutral `listen` binds nothing; module split for tree-shake; forms teach protocol entries + `clientsFor`. `askIncumbent` still OPEN.
 - **2026-07-21** — Owner: RPC name **`NodeStatus.yield` LOCKED** (best word; acknowledge possible confusion with Effect `yield*`). Inheritance/`onConflict` surface still baking.
+- **2026-07-21** — Owner “Continue” → **`askIncumbent` LOCKED** (inheritance chain + `NodeStatus.yield` + AI.1–8). Eng next.
