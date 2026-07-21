@@ -3777,6 +3777,25 @@ const dieIfHttpClientInBrowser = Effect.suspend(() =>
     : Effect.die(new HttpClientInBrowser({ message: httpClientInBrowserMessage })),
 );
 
+/** A Unix-domain / named-pipe ipc transport was built in a browser — IpcSocket is Node-only. Die loud
+ *  with a clear "use ws" pointer instead of a cryptic `@effect/platform-node` dynamic-import failure,
+ *  mirroring {@link dieIfHttpClientInBrowser}. @internal */
+class IpcInBrowser extends Data.TaggedError("IpcInBrowser")<{
+  readonly message: string;
+}> {}
+
+const dieIfIpcInBrowser = Effect.suspend(() =>
+  typeof window === "undefined"
+    ? Effect.void
+    : Effect.die(
+        new IpcInBrowser({
+          message:
+            "Resource.protocolIpc / unix / nPipe cannot run in a browser: IpcSocket is a Node-only " +
+            "Unix-domain / named-pipe transport. Use Resource.ws (WebSocket) for the browser.",
+        }),
+      ),
+);
+
 /**
  * Wire a {@link Node}'s transport over **http** — the server/CLI/backend case. Builds the http client
  * `Protocol` (Fetch + serialization) from a `url` and re-keys it under the node. Serialization defaults
@@ -3948,10 +3967,10 @@ export const protocolWebsocket = (
  * @category clients
  * @public
  */
-export const connect = <Self, S extends Spec>(
+export const connect = <Self, S extends Spec, E = never>(
   tag: ResourceTag<Self, S>,
-  protocol: Layer.Layer<RpcClient.Protocol>,
-): Layer.Layer<Self> => clientLayer(tag).pipe(Layer.provide(protocol));
+  protocol: Layer.Layer<RpcClient.Protocol, E>,
+): Layer.Layer<Self, E> => clientLayer(tag).pipe(Layer.provide(protocol));
 
 /** The **http** server `Protocol` (RPC over HTTP POST) mounted on the server router at `path` — what
  *  {@link httpServer} provides internally. `RpcSerialization` is supplied by the server. */
@@ -4017,7 +4036,9 @@ export const protocolIpc = (
   serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
 ): Layer.Layer<RpcClient.Protocol> =>
   Layer.unwrap(
-    Effect.promise(() => import("@effect/platform-node")).pipe(
+    // guard BEFORE the node-only dynamic import, so a browser gets the clear die (not the import error).
+    dieIfIpcInBrowser.pipe(
+      Effect.andThen(Effect.promise(() => import("@effect/platform-node"))),
       Effect.map(({ NodeSocket }) =>
         RpcClient.layerProtocolSocket().pipe(
           Layer.provide(serialization),
