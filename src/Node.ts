@@ -20,6 +20,7 @@
  */
 export {
   Tag,
+  withProtocol,
   Lookup,
   isLookupNode,
   isAddressedNode,

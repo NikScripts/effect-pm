@@ -402,6 +402,43 @@ const isShorthandTarget = (
   ("http" in t || "ws" in t || "ipc" in t);
 
 /**
+ * Assemble a node tag value from resolved address fields — a `Context.Service` class stamped with the
+ * transport fields, the `logs` accessor, and the catalog brand. **The single place** the runtime →
+ * `NodeTagClass` impedance is bridged: a node's runtime `kind` is always looser (`ProtocolKind |
+ * undefined`) than any precise address form `Addr`, so exactly one construction cast lives here and
+ * every caller ({@link Tag}, {@link withProtocol}) stays cast-free. @internal
+ */
+const assembleNode = <Self, ROut, Addr>(
+  key: string,
+  fields: {
+    readonly url: string | undefined;
+    readonly path: string | undefined;
+    readonly kind: ProtocolKind | undefined;
+    readonly endpoints: Endpoints;
+    readonly invalidTarget?: InvalidHttpTarget;
+  },
+): NodeTagClass<Self, ROut, Addr> => {
+  const node = Object.assign(Context.Service<Self, NodeProtocol>()(key), {
+    url: fields.url,
+    path: fields.path,
+    kind: fields.kind,
+    endpoints: fields.endpoints,
+    ...(fields.invalidTarget !== undefined
+      ? { [invalidHttpTargetSym]: fields.invalidTarget }
+      : {}),
+  });
+  return Object.assign(node, {
+    /** Node-wide durable log registration — same as {@link store}`(this node)`. */
+    get logs() {
+      return storeOrThrow(node);
+    },
+    [catalogSym]: undefined,
+    // Through `unknown`: `Addr` is generic, so TS can't see the (real) overlap between the loose
+    // runtime `kind` and the precise address form — the single, contained construction assertion.
+  }) as unknown as NodeTagClass<Self, ROut, Addr>;
+};
+
+/**
  * Declare a **node** — a named transport endpoint a resource connects to. **Two-stage** and keyed by
  * a string, mirroring Effect's `Context.Service<Self, Shape>()(key)` (a node *is* a `Context.Key`,
  * resolved by its `key` in the Context map) and every sibling factory (`Resource.Tag<Self>()`, …).
@@ -561,28 +598,7 @@ export const Tag = <Self, ROut = never>() => {
             ? { Http: { url } }
             : {};
   }
-  const node = Object.assign(Context.Service<Self, NodeProtocol>()(key), {
-    url,
-    path,
-    kind,
-    endpoints,
-    ...(invalidTarget !== undefined
-      ? { [invalidHttpTargetSym]: invalidTarget }
-      : {}),
-  });
-  // Stamp catalog brand — preserves Context.Service constructability
-  // (`class X extends Node.Tag()`); `ROut` stays type-only at the value (C2 / C4).
-  // Overload impl return: runtime fields are narrower than the union of address shapes.
-  return Object.assign(node, {
-    /**
-     * Node-wide durable log registration — same as {@link store}`(this node)`.
-     * Use on an app `Store.Service`: `Store.Service(...)(WnbaNode.logs, Process.store(Daily))`.
-     */
-    get logs() {
-      return storeOrThrow(node);
-    },
-    [catalogSym]: undefined as ROut | undefined,
-  }) as NodeTagClass<
+  return assembleNode<
     Self,
     ROut,
     | BareAddress
@@ -591,11 +607,60 @@ export const Tag = <Self, ROut = never>() => {
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
-  >;
+  >(key, { url, path, kind, endpoints, invalidTarget });
   }
 
   return build;
 };
+
+/**
+ * Add transports to a node — piped on to derive a **same-identity** handle that speaks more
+ * protocols: `class DropletWs extends Droplet.pipe(Node.withProtocol({ ws: "/rpc" })) {}`. Takes the
+ * same `{ http, ws, ipc }` record as the declaration; keeps the node's **key** and served resources,
+ * merges the transports into its `endpoints`, and **widens** its {@link ProtocolKind} set in the type.
+ * Accepts single- or multi-protocol nodes alike.
+ *
+ * @public
+ */
+export const withProtocol =
+  <const T extends ShorthandTarget>(transports: T) =>
+  <Self, ROut, K extends ProtocolKind>(
+    node: NodeTagClass<
+      Self,
+      ROut,
+      {
+        readonly kind: K;
+        readonly url?: string;
+        readonly path?: string;
+        readonly endpoints?: Endpoints;
+      }
+    >,
+  ): NodeTagClass<Self, ROut, MultiAddress<K | KindsOf<T>>> => {
+    const add: Endpoints = {
+      ...(transports.http !== undefined ? { Http: { url: transports.http } } : {}),
+      ...(transports.ws !== undefined ? { WebSocket: { url: transports.ws } } : {}),
+      ...(transports.ipc !== undefined
+        ? { IpcSocket: { path: transports.ipc } }
+        : {}),
+    };
+    const endpoints: Endpoints = { ...node.endpoints, ...add };
+    // Keep the base node's primary if it had one, else the first of the merged set (http > ws > ipc).
+    const kind: ProtocolKind | undefined =
+      node.kind ??
+      (endpoints.Http !== undefined
+        ? "Http"
+        : endpoints.WebSocket !== undefined
+          ? "WebSocket"
+          : endpoints.IpcSocket !== undefined
+            ? "IpcSocket"
+            : undefined);
+    return assembleNode<Self, ROut, MultiAddress<K | KindsOf<T>>>(node.key, {
+      url: node.url ?? endpoints.Http?.url ?? endpoints.WebSocket?.url,
+      path: node.path ?? endpoints.IpcSocket?.path,
+      kind,
+      endpoints,
+    });
+  };
 
 /**
  * Deriving a transport from a node that never declared one — a bare `Node.Tag()("x")` has no
