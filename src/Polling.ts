@@ -50,6 +50,7 @@ export type { PollingService as Service } from "./internal/pollingTag";
  * The polling service of the CURRENT process tick context — yield inside a process
  * effect to wake, reset, or peek the cadence. Provided by the supervisor.
  *
+ * @category context
  * @public
  */
 export const current: Effect.Effect<PollingService, never, PollingTag> = PollingTag;
@@ -58,6 +59,7 @@ export const current: Effect.Effect<PollingService, never, PollingTag> = Polling
  * A custom cadence policy as a polling layer for `Process.make({ polling })`.
  * Replaces the old `Layer.succeed(Polling, impl)` form; the tag stays internal.
  *
+ * @category constructors
  * @public
  */
 export const layer = (impl: PollingService): Layer.Layer<PollingTag> =>
@@ -105,6 +107,7 @@ const makeWakeableAwait = (duration: Duration.Duration) =>
  * Polling.spaced("30 seconds")
  * Polling.spaced(Duration.minutes(1))
  * ```
+ * @category presets
  * @public
  */
 export const spaced = (
@@ -138,6 +141,7 @@ export const spaced = (
  * Polling.jittered("5 seconds", { jitter: 0.2 })
  * // Each tick: 5s ± 20% → between 4s and 6s
  * ```
+ * @category presets
  * @public
  */
 export const jittered = (
@@ -193,6 +197,7 @@ export const jittered = (
  * // 1s → 2s → 4s → 8s → 16s → 30s → 30s → ...
  * // resetCadence → back to 1s
  * ```
+ * @category presets
  * @public
  */
 export const backoff = (options: {
@@ -259,6 +264,7 @@ export const backoff = (options: {
  * })
  * ```
  *
+ * @category models
  * @public
  */
 export interface AcceleratingConfig {
@@ -301,6 +307,7 @@ const delayMsForIteration = (
  *   excitement: 1,
  * })
  * ```
+ * @category presets
  * @public
  */
 export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag> => {
@@ -351,6 +358,7 @@ export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag
  * Accelerating cadence with externally-managed refs for live tuning.
  * Prefer {@link accelerating} unless you need runtime parameter changes via refs.
  *
+ * @category presets
  * @public
  */
 export const acceleratingWithRefs = (options: {
@@ -417,6 +425,7 @@ export const acceleratingWithRefs = (options: {
  * const pollInterval = DynamicConfig.swappable(Config.duration("POLL_INTERVAL"))
  * Process.make("sync", { polling: Polling.dynamic(pollInterval), effect })
  * ```
+ * @category presets
  * @public
  */
 export const dynamic = (
