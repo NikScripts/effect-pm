@@ -252,8 +252,8 @@ describe("Lookup directory livenessReplace", () => {
   );
 });
 
-describe("Node.listen directory wire", () => {
-  it.effect("unregisters the directory row when the listen scope closes", () =>
+describe("Node.unix directory wire", () => {
+  it.effect("unregisters the directory row when the unix scope closes", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("close-lookup");
       const workerPath = yield* tmpSock("close-worker");

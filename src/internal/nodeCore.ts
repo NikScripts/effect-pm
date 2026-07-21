@@ -120,8 +120,8 @@ export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
 };
 
 /**
- * Address-less {@link listen} lost the `Node.key` claim — another process owns this Node.
- * Winner endpoint is in `original` (dial via {@link lookupClient} / `client`).
+ * Address-less {@link unix} / {@link http} / {@link ws} lost the `Node.key` claim — another
+ * process owns this Node. Winner endpoint is in `original` (dial via Lookup / `client`).
  *
  * @public
  */
@@ -136,8 +136,8 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
 }> {}
 
 /**
- * The Node {@link listen} is binding (concrete or minted address-less). Identity claims prefer
- * this over a Tag-bound Node when present.
+ * The Node a protocol listen (`unix` / `http` / `ws`) is binding (concrete or minted).
+ * Identity claims prefer this over a Tag-bound Node when present.
  *
  * @public
  */
@@ -145,7 +145,12 @@ export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
   "@nikscripts/effect-pm/internal/nodeCore/ListenNode",
 ) {}
 
-/** Options for {@link listen} — rpc path / health / ipc unlink; not the Http bind port (C2). @public */
+/**
+ * Shared options for {@link unix} / {@link http} / {@link ws} (and low-level `*Server`) —
+ * rpc path / health / ipc unlink. Not the TCP bind port (platform layer owns that).
+ *
+ * @public
+ */
 export type ListenOptions = {
   readonly path?: HttpRouter.PathInput;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -155,8 +160,8 @@ export type ListenOptions = {
 };
 
 /**
- * Options for {@link unix} / {@link Node.listenLocal} — {@link ListenOptions} plus Lookup
- * bootstrap knobs. {@link listen} itself does not take these (no Lookup bake-in).
+ * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal} —
+ * {@link ListenOptions} plus Lookup bootstrap knobs.
  *
  * @public
  */
@@ -511,10 +516,10 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
 }
 
 /**
- * {@link listen}`(Tag, impl)` needs exactly one Node on the resource handle
- * (`{ node }` / {@link Resource.nodes}`([X])` / {@link Resource.andNode}).
- * `missing` = none; `ambiguous` = two or more (pick with `listen(node, [serve…])`).
- * Anonymous transport stays `listen([serve…])` / `listen(serve)` — never this overload.
+ * Protocol Tag+impl (`unix` / `http` / `ws`(Tag, impl)) needs exactly one Node on the resource
+ * handle (`{ node }` / {@link Resource.nodes}`([X])` / {@link Resource.andNode}).
+ * `missing` = none; `ambiguous` = two or more (pick with `unix/http/ws(node, [serve…])`).
+ * Anonymous transport stays `unix/http/ws([serve…])` / `unix/http/ws(serve)` — never this overload.
  *
  * @public
  */
@@ -528,14 +533,14 @@ export class ListenTagNodeRequired extends Data.TaggedError(
   override get message() {
     if (this.reason === "ambiguous") {
       return (
-        `Node.unix(${this.tag}, impl) saw ${String(this.count)} Nodes on the Tag — ` +
-        `use Node.unix(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
+        `Tag+impl listen for "${this.tag}" saw ${String(this.count)} Nodes — ` +
+        `use Node.unix/http/ws(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
       );
     }
     return (
-      `Node.unix(${this.tag}, impl) needs a sole Node on the Tag ` +
+      `Tag+impl listen for "${this.tag}" needs a sole Node on the Tag ` +
       `(Resource.andNode / nodes([X]) / { node }). ` +
-      `For anonymous ipc use Node.unix(Resource.serve(${this.tag}, impl)).`
+      `For anonymous transport use Node.unix/http/ws(Resource.serve(${this.tag}, impl)).`
     );
   }
 }

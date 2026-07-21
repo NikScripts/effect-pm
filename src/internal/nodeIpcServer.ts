@@ -40,7 +40,7 @@ export interface IpcServerOptions {
    */
   readonly unlink?: boolean;
   /**
-   * Soft Lookup directory advertise after serve registration (`Resource.listen` only).
+   * Soft Lookup directory advertise after serve registration (`Node.unix` / protocol listen).
    *
    * @internal
    */
@@ -60,7 +60,7 @@ export interface IpcServerOptions {
  *   [Resource.serve(Jobs, jobsImpl)],
  *   { path: "/tmp/worker.sock" },
  * )
- * // or Resource.listen(Worker, [Resource.serve(Jobs, jobsImpl)])
+ * // or Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)])
  * ```
  *
  * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route

@@ -115,8 +115,9 @@ export const Prototype = <Self, ROut = never>(
     instance,
     /**
      * Curry a serve list into a dynamic-instance factory (sugar over
-     * `listen(proto.instance(suffix), serves)`). Returns a **Layer** only —
-     * after `Layer.build`, the minted Node is {@link ListenNode} in context.
+     * `unix` / `http` / `ws`(proto.instance(suffix), serves) by `kind`).
+     * Returns a **Layer** only — after `Layer.build`, the minted Node is
+     * {@link ListenNode} in context.
      */
     listen: <Serves extends ServeLayerList>(
       serves: Serves & ServesForCatalog<Exclude<ROut, undefined>, Serves>,

@@ -1,5 +1,6 @@
 /**
- * Http / WebSocket RPC servers — low-level escape hatches for {@link listen} (interim) and apps.
+ * Http / WebSocket RPC servers — low-level escape hatches for {@link http} / {@link ws} and apps
+ * that bind their own platform (`NodeHttpServer.layer`).
  *
  * @internal
  */
@@ -41,7 +42,7 @@ export interface HttpServerOptions {
    */
   readonly node?: string | { readonly key: string };
   /**
-   * Soft Lookup directory advertise after serve registration (`Resource.listen` only).
+   * Soft Lookup directory advertise after serve registration (`Node.http` / `Node.ws` / protocol listen).
    *
    * @internal
    */
