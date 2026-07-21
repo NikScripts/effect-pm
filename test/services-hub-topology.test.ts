@@ -11,7 +11,7 @@ import * as Node from "../src/Node";
 // the Mini (a different node, reached by a client). One runtime, one group tree, mixed provision —
 // reached uniformly through the group accessors. This is the ProcessManager-free deploy shape.
 
-class MiniNode extends Node.Tag<MiniNode>("hub/miniNode") {}
+class MiniNode extends Node.Tag<MiniNode>()("hub/miniNode") {}
 
 // Local on the Droplet (no node) — stands in for a roster import queue.
 class RosterQueue extends Resource.Tag<RosterQueue>()("hub/RosterQueue", {

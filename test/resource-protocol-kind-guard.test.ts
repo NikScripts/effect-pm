@@ -10,7 +10,7 @@ import * as Node from "../src/Node";
 // refuses to boot loudly instead.
 
 // `WsNode` declares WebSocket; `WsRes` is bound to it.
-class WsNode extends Node.Tag<WsNode>("p3/ws", { url: "/rpc", kind: "WebSocket" }) {}
+class WsNode extends Node.Tag<WsNode>()("p3/ws", { url: "/rpc", kind: "WebSocket" }) {}
 class WsRes extends Resource.Tag<WsRes>()(
   "p3/WsRes",
   { ping: Resource.effect(Schema.String) },

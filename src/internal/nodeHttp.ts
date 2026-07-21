@@ -258,7 +258,7 @@ const httpNameless = (
     Effect.gen(function* () {
       const suffix = yield* uniqueInstanceSuffix();
       const key = `effect-pm/anonymous#${suffix}`;
-      return httpListenOn(Tag(key, { kind: "Http" }), list, options);
+      return httpListenOn(Tag()(key, { kind: "Http" }), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
 
@@ -337,7 +337,7 @@ const ephemeralHttpListen = (
             server.address._tag === "TcpAddress" ? server.address.port : 0;
           const url = `http://127.0.0.1:${String(port)}/rpc`;
           const addressed = Object.assign(
-            Tag(wireKey, { url, kind: "Http" as const }),
+            Tag()(wireKey, { url, kind: "Http" as const }),
             {
               [catalogSym]: (
                 catalogSource as { readonly [catalogSym]?: unknown }

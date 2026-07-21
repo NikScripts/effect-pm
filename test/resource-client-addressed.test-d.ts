@@ -10,9 +10,9 @@ import * as Node from "../src/Node";
 
 declare const runFullyWired: <A>(layer: Layer.Layer<A, never, never>) => void;
 
-class Droplet extends Node.Tag<Droplet>("ca/Droplet", { url: "wss://x/rpc" }) {}
-class PortNode extends Node.Tag<PortNode>("ca/Port", 3001) {}
-class Bare extends Node.Tag<Bare>("ca/Bare") {}
+class Droplet extends Node.Tag<Droplet>()("ca/Droplet", { url: "wss://x/rpc" }) {}
+class PortNode extends Node.Tag<PortNode>()("ca/Port", 3001) {}
+class Bare extends Node.Tag<Bare>()("ca/Bare") {}
 
 // Dialable Tag → AddressedNode → auto-connect, R = never
 runFullyWired(Resource.client(NodeStatus.Tag, Droplet));

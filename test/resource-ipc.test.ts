@@ -39,14 +39,14 @@ const withIpc = <A, E, R, LE = never>(
 describe("Node ProtocolKind — ipc", () => {
   it("infers ipc from { path }, leaves url undefined", () => {
     const path = "/tmp/example.sock";
-    class Local extends Node.Tag<Local>("ipc/local", { path }) {}
+    class Local extends Node.Tag<Local>()("ipc/local", { path }) {}
     expect(Local.kind).toBe("IpcSocket");
     expect(Local.path).toBe(path);
     expect(Local.url).toBeUndefined();
   });
 
   it("honors explicit kind with path", () => {
-    class Explicit extends Node.Tag<Explicit>("ipc/explicit", {
+    class Explicit extends Node.Tag<Explicit>()("ipc/explicit", {
       path: "/tmp/x.sock",
       kind: "IpcSocket",
     }) {}
@@ -59,7 +59,7 @@ describe("Node.ipcServer + connectIpc", () => {
   it.effect("round-trips an RPC call over a Unix-domain socket", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("roundtrip");
-      class Worker extends Node.Tag<Worker>("ipc/worker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("ipc/worker", { path }) {}
 
       const n = yield* withIpc(
         Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
@@ -79,7 +79,7 @@ describe("Node.ipcServer + connectIpc", () => {
   it.effect("Node.connect derives ipc from the node's kind + path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("derive");
-      class Worker extends Node.Tag<Worker>("ipc/derive", { path }) {}
+      class Worker extends Node.Tag<Worker>()("ipc/derive", { path }) {}
 
       const n = yield* withIpc(
         Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
@@ -98,7 +98,7 @@ describe("Node.ipcServer + connectIpc", () => {
   it.effect("unlinks so a second listen can bind the same path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("stale");
-      class Worker extends Node.Tag<Worker>("ipc/stale", { path }) {}
+      class Worker extends Node.Tag<Worker>()("ipc/stale", { path }) {}
 
       const serve = () =>
         Node.ipcServer([Resource.serve(Echo, echoImpl)], { path });

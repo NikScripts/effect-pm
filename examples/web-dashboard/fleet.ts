@@ -14,11 +14,11 @@ import * as Node from "../../src/Node";
 
 /** The Mini — a second machine (your home server). Resources bound to it run + are
  *  reached there; everything else is on the Droplet. */
-export class MiniNode extends Node.Tag<MiniNode>("hub/miniNode") {}
+export class MiniNode extends Node.Tag<MiniNode>()("hub/miniNode") {}
 
 /** The Droplet — the main node. Every queue is bound to it, so they're served as one
  *  group on one port (`Node.httpServer`) and reached over one client transport. */
-export class Droplet extends Node.Tag<Droplet>("hub/droplet") {}
+export class Droplet extends Node.Tag<Droplet>()("hub/droplet") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 

@@ -33,7 +33,7 @@ describe("Node.nPipe", () => {
 
   it.effect("rejects Http Node with NPipeListenRequiresIpc", () =>
     Effect.gen(function* () {
-      class HttpWorker extends Node.Tag<HttpWorker>("npipe/HttpWorker", {
+      class HttpWorker extends Node.Tag<HttpWorker>()("npipe/HttpWorker", {
         url: "http://127.0.0.1:9",
         kind: "Http",
       }) {}

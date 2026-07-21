@@ -51,7 +51,7 @@ describe("Lookup.Identity.resolve", () => {
   it.effect("returns Some after claim and None when missing", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("resolve");
-      const node = Node.Lookup("d7/resolve", { path });
+      const node = Node.Lookup()("d7/resolve", { path });
       const serverCtx = yield* Layer.build(Lookup.layer(node));
       const clientCtx = yield* Layer.build(Lookup.client(node));
       const ctx = Context.merge(serverCtx, clientCtx);
@@ -89,10 +89,10 @@ describe("Resource.lookupClient", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lc-lookup");
       const workerPath = yield* tmpSock("lc-worker");
-      const lookupNode = Node.Lookup("d7/lc-lookup", {
+      const lookupNode = Node.Lookup()("d7/lc-lookup", {
         path: lookupPath,
       });
-      class Worker extends Node.Tag<Worker, Jobs>("d7/lc-worker", {
+      class Worker extends Node.Tag<Worker, Jobs>()("d7/lc-worker", {
         path: workerPath,
       }) {}
 
@@ -134,10 +134,10 @@ describe("address-less listen", () => {
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("al-lookup");
-        const lookupNode = Node.Lookup("d7/al-lookup", {
+        const lookupNode = Node.Lookup()("d7/al-lookup", {
           path: lookupPath,
         });
-        class Worker extends Node.Tag<Worker, Jobs>("d7/al-worker") {}
+        class Worker extends Node.Tag<Worker, Jobs>()("d7/al-worker") {}
 
         const lookupClient = Lookup.client(lookupNode);
         const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
@@ -168,7 +168,7 @@ describe("address-less listen", () => {
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("al2-lookup");
-        class Worker extends Node.Tag<Worker, Jobs>("d7/al2-worker") {}
+        class Worker extends Node.Tag<Worker, Jobs>()("d7/al2-worker") {}
 
         const lookup = Lookup.bootstrapDefaultLocal({ path: lookupPath });
         const first = yield* Layer.build(

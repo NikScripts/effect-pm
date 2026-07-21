@@ -55,7 +55,7 @@ export const Prototype = <Self, ROut = never>(
     const key =
       suffix !== undefined && suffix.length > 0 ? `${name}#${suffix}` : name;
     return Object.assign(
-      Tag<Self, ROut>(
+      Tag<Self, ROut>()(
         key,
         protoOnConflict !== undefined
           ? { onConflict: protoOnConflict }
@@ -127,13 +127,13 @@ export const Prototype = <Self, ROut = never>(
     const onConflict = target.onConflict ?? protoOnConflict;
     // Branch so each Tag call hits a dialable overload (not the loose union catch-all).
     if ("path" in target) {
-      return Tag<Self, ROut>(`${name}#${cloneName}`, {
+      return Tag<Self, ROut>()(`${name}#${cloneName}`, {
         path: target.path,
         ...(target.kind !== undefined ? { kind: target.kind } : {}),
         ...(onConflict !== undefined ? { onConflict } : {}),
       });
     }
-    return Tag<Self, ROut>(`${name}#${cloneName}`, {
+    return Tag<Self, ROut>()(`${name}#${cloneName}`, {
       url: target.url,
       ...(target.kind !== undefined ? { kind: target.kind } : {}),
       ...(onConflict !== undefined ? { onConflict } : {}),

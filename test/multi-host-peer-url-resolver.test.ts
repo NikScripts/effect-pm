@@ -5,9 +5,9 @@ import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-class SelfNode extends Node.Tag<SelfNode>("resolver/SelfNode") {}
+class SelfNode extends Node.Tag<SelfNode>()("resolver/SelfNode") {}
 // PeerNode carries NO baked url — its url is a deploy concern the resolver supplies
-class PeerNode extends Node.Tag<PeerNode>("resolver/PeerNode") {}
+class PeerNode extends Node.Tag<PeerNode>()("resolver/PeerNode") {}
 class Fleet extends Resource.Tag<Fleet>()("resolver/Fleet", {
   count: Resource.effect(Schema.Number),
 }).pipe(

@@ -342,7 +342,7 @@ const liveBufferSize = 8;
  *
  * @internal
  */
-class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>(
+class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>()(
   "@nikscripts/effect-pm/Telemetry/alone",
 ) {}
 

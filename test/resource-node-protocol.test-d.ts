@@ -8,7 +8,7 @@ import * as Node from "../src/Node";
 // dashboard's "connecting… forever" bug is now a compile error. This file is the proof: it only
 // type-checks if the hole is closed (the `@ts-expect-error` fires).
 
-class Droplet extends Node.Tag<Droplet>("np/Droplet", { url: "wss://x/rpc" }) {}
+class Droplet extends Node.Tag<Droplet>()("np/Droplet", { url: "wss://x/rpc" }) {}
 const transport = Resource.socketClient(Droplet, { url: "ws://x/rpc" });
 
 // A sink that only accepts a FULLY-WIRED layer (requires `never`).

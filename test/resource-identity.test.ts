@@ -29,10 +29,10 @@ describe("Resource.identity", () => {
   });
 
   it("rejects multi-node distributed on an identity Tag (S1)", () => {
-    class A extends Node.Tag<A>("identity/multi-a", {
+    class A extends Node.Tag<A>()("identity/multi-a", {
       path: "/tmp/identity-multi-a.sock",
     }) {}
-    class B extends Node.Tag<B>("identity/multi-b", {
+    class B extends Node.Tag<B>()("identity/multi-b", {
       path: "/tmp/identity-multi-b.sock",
     }) {}
     class Solo extends Resource.Tag<Solo>()("identity/Solo", {
@@ -53,7 +53,7 @@ describe("Resource.identity", () => {
   });
 
   it("allows a single-node fleet overwrite on identity", () => {
-    class One extends Node.Tag<One>("identity/one", {
+    class One extends Node.Tag<One>()("identity/one", {
       path: "/tmp/identity-one.sock",
     }) {}
     class Solo extends Resource.Tag<Solo>()("identity/SoloOne", {
@@ -68,7 +68,7 @@ describe("Resource.identity", () => {
   it.effect("fails closed without a dialable bound Node or ListenNode", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("noself-lookup");
-      const lookupNode = Node.Lookup("identity/noself-lookup", { path });
+      const lookupNode = Node.Lookup()("identity/noself-lookup", { path });
 
       const exit = yield* Effect.exit(
         Layer.build(
@@ -87,13 +87,13 @@ describe("Resource.identity", () => {
       const lookupPath = yield* tmpSock("claim-lookup");
       const winnerPath = yield* tmpSock("claim-winner");
 
-      const lookupNode = Node.Lookup("identity/claim-lookup", {
+      const lookupNode = Node.Lookup()("identity/claim-lookup", {
         path: lookupPath,
       });
-      class WinnerNode extends Node.Tag<WinnerNode>("identity/winner", {
+      class WinnerNode extends Node.Tag<WinnerNode>()("identity/winner", {
         path: winnerPath,
       }) {}
-      class LoserNode extends Node.Tag<LoserNode>("identity/loser", {
+      class LoserNode extends Node.Tag<LoserNode>()("identity/loser", {
         path: "/tmp/identity-loser-unused.sock",
       }) {}
 

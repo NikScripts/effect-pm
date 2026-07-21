@@ -21,7 +21,7 @@ describe("Node.unix(Tag, impl) sole-bound node", () => {
   it.effect("listens on the Tag's node; client(Tag) dials", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
-      class Worker extends Node.Tag<Worker>("listen-tag/Worker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("listen-tag/Worker", { path }) {}
       class Jobs extends Resource.Tag<Jobs>()("listen-tag/Jobs", {
         jobs: Resource.effect(Schema.Number),
       }).pipe(Resource.andNode(Worker)) {}
@@ -58,7 +58,7 @@ describe("Node.unix(Tag, impl) sole-bound node", () => {
   it.effect("Node.listen on ipc Node fails ListenUseProtocol", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("use-unix");
-      class Worker extends Node.Tag<Worker>("listen-tag/UseUnix", { path }) {}
+      class Worker extends Node.Tag<Worker>()("listen-tag/UseUnix", { path }) {}
       class Jobs extends Resource.Tag<Jobs>()("listen-tag/UseUnixJobs", {
         jobs: Resource.effect(Schema.Number),
       }) {}

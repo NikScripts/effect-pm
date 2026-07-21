@@ -19,7 +19,7 @@ expectTypeOf(anonOne).toMatchTypeOf<
   Layer.Layer<Jobs | Node.ListenNode, never, never>
 >();
 
-class Worker extends Node.Tag<Worker, Jobs>("nameless-d/Worker", {
+class Worker extends Node.Tag<Worker, Jobs>()("nameless-d/Worker", {
   path: "/tmp/x.sock",
 }) {}
 const named = Node.unix(Worker, [serve]);

@@ -3065,7 +3065,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
     endpoint.kind === "IpcSocket"
       ? { path: endpoint.path as string, kind: "IpcSocket" as const }
       : { url: endpoint.url as string, kind: endpoint.kind };
-  const node = makeNode(endpoint.nodeKey, target);
+  const node = makeNode()(endpoint.nodeKey, target);
   // Dialable makeNode → AddressedNode; clientLayer auto-wires connect.
   return clientLayer(tag, node) as Layer.Layer<Self>;
 };

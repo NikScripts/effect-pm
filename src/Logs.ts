@@ -31,7 +31,7 @@
  * import * as Process from "@nikscripts/effect-pm/Process";
  * import * as Store from "@nikscripts/effect-pm/Store";
  *
- * class BillingNode extends Node.Tag<BillingNode>("billing/scores") {}
+ * class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
  * class Daily extends Process.Tag<Daily>()("app/Daily") {}
  *
  * class AppStore extends Store.Service<AppStore>("@app/Store")(

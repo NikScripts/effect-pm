@@ -425,7 +425,7 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
 // ── node in the queue tag (type-level): ship only the tag ──
 // A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
-class QueueNode extends Node.Tag<QueueNode>("queue/node") {}
+class QueueNode extends Node.Tag<QueueNode>()("queue/node") {}
 class NodeNumbers extends QueueResource.Tag<NodeNumbers>()("test/NodeNumbers", {
   payload: NumberItem,
   node: QueueNode,

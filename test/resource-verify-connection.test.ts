@@ -15,7 +15,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class VNode extends Node.Tag<VNode>("verify/node") {} // bare — url supplied per-check at runtime
+class VNode extends Node.Tag<VNode>()("verify/node") {} // bare — url supplied per-check at runtime
 class VQueue extends QueueResource.Tag<VQueue>()("verify/Q", { payload: Item, node: VNode }) {}
 
 // Run `check(port)` against a live test server (its layer is inlined per-`it` so its type infers).

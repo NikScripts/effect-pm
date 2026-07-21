@@ -7,21 +7,21 @@ import { expectTypeOf } from "vitest";
 import * as Node from "../src/Node";
 
 // no address
-class A extends Node.Tag<A>("app/A") {}
+class A extends Node.Tag<A>()("app/A") {}
 // port number → http://localhost:3001/rpc
-class B extends Node.Tag<B>("app/B", 3001) {}
+class B extends Node.Tag<B>()("app/B", 3001) {}
 // ":port" string
-class C extends Node.Tag<C>("app/C", ":3002") {}
+class C extends Node.Tag<C>()("app/C", ":3002") {}
 // full http url
-class D extends Node.Tag<D>("app/D", "https://mail.internal/rpc") {}
+class D extends Node.Tag<D>()("app/D", "https://mail.internal/rpc") {}
 // explicit { url } http
-class E extends Node.Tag<E>("app/E", { url: "http://10.0.0.1:3003/rpc" }) {}
+class E extends Node.Tag<E>()("app/E", { url: "http://10.0.0.1:3003/rpc" }) {}
 // ipc path
-class F extends Node.Tag<F>("app/F", { path: "/tmp/f.sock" }) {}
+class F extends Node.Tag<F>()("app/F", { path: "/tmp/f.sock" }) {}
 // ws url string
-class G extends Node.Tag<G>("app/G", "wss://live.example/rpc") {}
+class G extends Node.Tag<G>()("app/G", "wss://live.example/rpc") {}
 // explicit ws kind
-class H extends Node.Tag<H>("app/H", { url: "/rpc", kind: "WebSocket" }) {}
+class H extends Node.Tag<H>()("app/H", { url: "/rpc", kind: "WebSocket" }) {}
 
 expectTypeOf(A.url).toEqualTypeOf<undefined>();
 expectTypeOf(B.url).toEqualTypeOf<string>();

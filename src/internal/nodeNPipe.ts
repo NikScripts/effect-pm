@@ -272,7 +272,7 @@ const nPipeNameless = (
     Effect.gen(function* () {
       const suffix = yield* uniqueInstanceSuffix();
       const key = `effect-pm/anonymous#${suffix}`;
-      return nPipeListenOn(Tag(key), list, options);
+      return nPipeListenOn(Tag()(key), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
 
@@ -297,7 +297,7 @@ const nPipeListenOn = (
           dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
         const wireKey = `${protoKey}#${suffix}`;
         const path = yield* ephemeralNPipePath(wireKey);
-        const addressed = Object.assign(Tag(wireKey, { path }), {
+        const addressed = Object.assign(Tag()(wireKey, { path }), {
           [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
             catalogSym
           ],
@@ -314,7 +314,7 @@ const nPipeListenOn = (
     return Layer.unwrap(
       Effect.gen(function* () {
         const path = yield* ephemeralNPipePath(node.key);
-        const addressed = Object.assign(Tag(node.key, { path }), {
+        const addressed = Object.assign(Tag()(node.key, { path }), {
           [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
             catalogSym
           ],

@@ -3,7 +3,7 @@ import { expectTypeOf } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-class Worker extends Node.Tag<Worker>("listen-tag-d/Worker", {
+class Worker extends Node.Tag<Worker>()("listen-tag-d/Worker", {
   path: "/tmp/x.sock",
 }) {}
 

@@ -14,14 +14,14 @@ import * as Node from "../src/Node";
 
 describe("Node ProtocolKind inference", () => {
   it("infers WebSocket from a ws url, Http from a port, IpcSocket from path, honors explicit kind, leaves a bare node blank", () => {
-    class WsUrl extends Node.Tag<WsUrl>("cd/ws", { url: "wss://x/rpc" }) {}
-    class Port extends Node.Tag<Port>("cd/port", 3001) {}
-    class Explicit extends Node.Tag<Explicit>("cd/explicit", {
+    class WsUrl extends Node.Tag<WsUrl>()("cd/ws", { url: "wss://x/rpc" }) {}
+    class Port extends Node.Tag<Port>()("cd/port", 3001) {}
+    class Explicit extends Node.Tag<Explicit>()("cd/explicit", {
       url: "/rpc",
       kind: "WebSocket",
     }) {}
-    class Ipc extends Node.Tag<Ipc>("cd/ipc", { path: "/tmp/cd.sock" }) {}
-    class Bare extends Node.Tag<Bare>("cd/bare") {}
+    class Ipc extends Node.Tag<Ipc>()("cd/ipc", { path: "/tmp/cd.sock" }) {}
+    class Bare extends Node.Tag<Bare>()("cd/bare") {}
     expect(WsUrl.kind).toBe("WebSocket");
     expect(Port.kind).toBe("Http");
     expect(Port.url).toBe("http://localhost:3001/rpc");
@@ -47,7 +47,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class HubNode extends Node.Tag<HubNode>("cd/hub") {}
+class HubNode extends Node.Tag<HubNode>()("cd/hub") {}
 class HubQueue extends QueueResource.Tag<HubQueue>()("cd/HubQueue", {
   payload: Item,
   node: HubNode,

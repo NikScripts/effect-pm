@@ -7,7 +7,7 @@ import * as Store from "../src/Store";
 import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
 import * as Node from "../src/Node";
 
-class BillingNode extends Node.Tag<BillingNode>(testBillingNodeKey) {}
+class BillingNode extends Node.Tag<BillingNode>()(testBillingNodeKey) {}
 
 class SyncProc extends Process.Tag<SyncProc>()(testSyncProcessKey).pipe(
   Process.schedule([]),

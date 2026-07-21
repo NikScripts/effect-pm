@@ -63,7 +63,7 @@ export interface IpcServerOptions {
  * A **Unix-domain** RPC server — same-machine sibling of {@link httpServer} / {@link wsServer}.
  * Speaks Effect's raw socket RPC protocol (`RpcServer.layerProtocolSocketServer`) over a
  * filesystem path — no HTTP, no WebSocket upgrade. Clients connect with {@link connectIpc}
- * or a node whose {@link ProtocolKind} is `"IpcSocket"` (`Tag("x", { path })`).
+ * or a node whose {@link ProtocolKind} is `"IpcSocket"` (`Tag()("x", { path })`).
  *
  * ```ts
  * class Worker extends Tag<Worker>("worker", { path: "/tmp/worker.sock" }) {}

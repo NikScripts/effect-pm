@@ -9,8 +9,8 @@ import * as Node from "../src/Node";
 // push, so a co-booting / down peer hung the whole node. Peer clients are now fully lazy: nothing connects
 // until a fold reads a field, and `combineQuery` drops an unreachable peer.
 // See docs/handoffs/2026-07-02-peerslayer-eager-stream-connect-deadlock.md
-class SelfNode extends Node.Tag<SelfNode>("peers-lazy/Self") {}
-class PeerNode extends Node.Tag<PeerNode>("peers-lazy/Peer") {}
+class SelfNode extends Node.Tag<SelfNode>()("peers-lazy/Self") {}
+class PeerNode extends Node.Tag<PeerNode>()("peers-lazy/Peer") {}
 class Fleet extends Resource.Tag<Fleet>()("peers-lazy/Fleet", {
   n: Resource.ref(Schema.Number), // the trigger — a value field
 }).pipe(Resource.nodes([SelfNode, PeerNode])) {}

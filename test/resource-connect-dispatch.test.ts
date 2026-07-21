@@ -11,8 +11,8 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 // declared LAST (TS selects the last overload for a function used as a bare value); direct calls still
 // resolve top-down. Each line below is a real `Effect.provide(program, <connect layer>)` — that they
 // type-check IS the assertion; the runtime `it` just confirms they built.
-class AddrNode extends Node.Tag<AddrNode>("cd/addr", { url: "wss://x/rpc" }) {}
-class BareNode extends Node.Tag<BareNode>("cd/bare") {}
+class AddrNode extends Node.Tag<AddrNode>()("cd/addr", { url: "wss://x/rpc" }) {}
+class BareNode extends Node.Tag<BareNode>()("cd/bare") {}
 const prog = Effect.void as Effect.Effect<void, never, AddrNode>;
 const proto = Resource.protocolHttp("http://x/rpc");
 

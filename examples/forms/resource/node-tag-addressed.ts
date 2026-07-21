@@ -17,7 +17,7 @@ class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
   jobs: Resource.effect(Schema.Number),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs>("forms/Worker", {
+class Worker extends Node.Tag<Worker, Jobs>()("forms/Worker", {
   path: `/tmp/effect-pm-forms-node-tag-addressed-${process.pid}.sock`,
 }) {}
 

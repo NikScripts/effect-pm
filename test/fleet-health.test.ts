@@ -5,8 +5,8 @@ import * as FleetHealth from "../src/FleetHealth";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 describe("MultiNode.combineByNode vs combineByNodeExit", () => {
   it.effect("combineByNodeExit keeps every peer; combineByNode drops failures", () =>

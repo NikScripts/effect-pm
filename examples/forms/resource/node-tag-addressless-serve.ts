@@ -22,7 +22,7 @@ class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
 }) {}
 
 /** Address-less — `Node.unix` mints path + claims this key. */
-class Worker extends Node.Tag<Worker, Jobs>("forms/AddresslessWorker") {}
+class Worker extends Node.Tag<Worker, Jobs>()("forms/AddresslessWorker") {}
 
 const lookupSock = Config.string("LOOKUP_SOCK").pipe(
   Config.withDefault("/tmp/effect-pm-forms-addressless.sock"),

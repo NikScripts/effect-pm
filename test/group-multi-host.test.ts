@@ -10,8 +10,8 @@ import * as Node from "../src/Node";
 // independently resolves its OWN node. Here one group holds two members bound to two DIFFERENT
 // nodes (two real http servers); driving them through the group accessors connects each to its
 // own node — no central registry, no middleman.
-class NodeA extends Node.Tag<NodeA>("multi/nodeA") {}
-class NodeB extends Node.Tag<NodeB>("multi/nodeB") {}
+class NodeA extends Node.Tag<NodeA>()("multi/nodeA") {}
+class NodeB extends Node.Tag<NodeB>()("multi/nodeB") {}
 
 class Alpha extends Resource.Tag<Alpha>()("multi/Alpha", 
   { where: Resource.effect(Schema.String) },

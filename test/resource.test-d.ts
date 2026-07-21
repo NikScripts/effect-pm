@@ -207,7 +207,7 @@ void _procClients;
 
 // ── node in the tag: ship only the tag; the client resolves where to connect ──
 // Bare bound node → client still requires the node (+ explicit protocol via connect).
-class EdgeNode extends Node.Tag<EdgeNode>("test/edge") {}
+class EdgeNode extends Node.Tag<EdgeNode>()("test/edge") {}
 class Hosted extends Resource.Tag<Hosted>()("test/Hosted",
   { ping: Resource.effect(Schema.String) },
   { node: EdgeNode },
@@ -232,7 +232,7 @@ const _nodeedRun: Promise<string> = Effect.runPromise(
 void _nodeedRun;
 
 // Addressed bound node → client(Tag) auto-connects (fully wired).
-class WireNode extends Node.Tag<WireNode>("test/wire", {
+class WireNode extends Node.Tag<WireNode>()("test/wire", {
   path: "/tmp/test-wire.sock",
 }) {}
 class HostedWire extends Resource.Tag<HostedWire>()(

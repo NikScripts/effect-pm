@@ -21,7 +21,7 @@ describe("Node.http", () => {
       // Pid-scoped port avoids parallel-worker collisions without a reserve dance.
       const port = 19000 + (process.pid % 1000);
       const lookupPath = yield* tmpSock("bound-lookup");
-      class Worker extends Node.Tag<Worker>("http/Worker", {
+      class Worker extends Node.Tag<Worker>()("http/Worker", {
         url: `http://127.0.0.1:${String(port)}/rpc`,
         kind: "Http",
       }) {}
@@ -71,7 +71,7 @@ describe("Node.http", () => {
 
   it.effect("rejects Ipc Node with HttpListenRequiresHttp", () =>
     Effect.gen(function* () {
-      class IpcWorker extends Node.Tag<IpcWorker>("http/IpcWorker", {
+      class IpcWorker extends Node.Tag<IpcWorker>()("http/IpcWorker", {
         path: "/tmp/effect-pm-http-reject.sock",
       }) {}
       const exit = yield* Effect.exit(
@@ -88,7 +88,7 @@ describe("Node.http", () => {
 
   it.effect("listen on Http Node fails with ListenUseProtocol", () =>
     Effect.gen(function* () {
-      class Worker extends Node.Tag<Worker>("http/ListenReject", {
+      class Worker extends Node.Tag<Worker>()("http/ListenReject", {
         url: "http://127.0.0.1:9/rpc",
         kind: "Http",
       }) {}

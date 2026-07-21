@@ -18,8 +18,8 @@ import * as Node from "../src/Node";
 const PORT_A = 7913;
 const PORT_B = 7914;
 
-class NodeA extends Node.Tag<NodeA>("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
-class NodeB extends Node.Tag<NodeB>("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
+class NodeA extends Node.Tag<NodeA>()("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
+class NodeB extends Node.Tag<NodeB>()("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
 
 class Pool extends Resource.Tag<Pool>()("ws-peers/Pool", {
   active: Resource.effect(Schema.Number),

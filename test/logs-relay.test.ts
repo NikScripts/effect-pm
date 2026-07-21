@@ -5,7 +5,7 @@ import * as Store from "../src/Store";
 import { testRelayNodeKey } from "./fixtures/logKeys";
 import * as Node from "../src/Node";
 
-class RelayNode extends Node.Tag<RelayNode>(testRelayNodeKey) {}
+class RelayNode extends Node.Tag<RelayNode>()(testRelayNodeKey) {}
 class RelayStore extends Store.Service<RelayStore>("@test/logs-relay/Store")(
   RelayNode.logs,
 ) {}

@@ -6,7 +6,7 @@ import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
 // Many resources, one Node, ONE server/port (the ControlService.make({group,port}) replacement).
-class LeagueNode extends Node.Tag<LeagueNode>("serveAll/node") {}
+class LeagueNode extends Node.Tag<LeagueNode>()("serveAll/node") {}
 class Alpha extends Resource.Tag<Alpha>()("serveAll/Alpha", 
   { where: Resource.effect(Schema.String) },
   { node: LeagueNode },

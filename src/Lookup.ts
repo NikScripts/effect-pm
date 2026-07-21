@@ -326,11 +326,11 @@ const incumbentAlive = (
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
-      ? NodeTag(`@pm/lookup-ping/${entry.nodeKey}`, {
+      ? NodeTag()(`@pm/lookup-ping/${entry.nodeKey}`, {
           path: entry.path,
         })
       : entry.url !== undefined
-        ? NodeTag(`@pm/lookup-ping/${entry.nodeKey}`, {
+        ? NodeTag()(`@pm/lookup-ping/${entry.nodeKey}`, {
             url: entry.url,
             kind: entry.kind,
           })
@@ -361,11 +361,11 @@ const incumbentYield = (
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
-      ? NodeTag(`@pm/lookup-yield/${entry.nodeKey}`, {
+      ? NodeTag()(`@pm/lookup-yield/${entry.nodeKey}`, {
           path: entry.path,
         })
       : entry.url !== undefined
-        ? NodeTag(`@pm/lookup-yield/${entry.nodeKey}`, {
+        ? NodeTag()(`@pm/lookup-yield/${entry.nodeKey}`, {
             url: entry.url,
             kind: entry.kind,
           })
@@ -632,7 +632,7 @@ export const clientDefaultLocal = (options?: {
   readonly path?: string;
 }): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
-  const node = LookupNodeTag("effect-pm/Lookup/default", { path });
+  const node = LookupNodeTag()("effect-pm/Lookup/default", { path });
   return client(node);
 };
 
