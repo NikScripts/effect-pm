@@ -1,8 +1,7 @@
 # Design: loud, eager transport failures
 
-**Status:** IN PROGRESS on `feat/loud-failures`. Topology core (§8.1–8.2) SHIPPED + tested; error-surfacing (§4 remap, §8.3 serve assertion) and verify (§4.3/§8.4) remain — see §9.
+**Status (2026-07-21):** Core loud-failure track **Eng’d** on `integration` / Agent 3 tip — topology (§8.1–8.2), serve assert (§8.3), `ProtocolMismatch` / `MissingClientProtocol` (§4.1–4.2a), tier-1 + deep `verifyConnection` (§4.3/§8.4 F3). **Still owner-gated:** default-on verify (§8.6), F4 `contractHash`.
 **Author intent:** kill the recurring "silent wiring failure" bug class at the library level.
-**Ownership note:** the runtime changes live in `src/Resource.ts` (the protocol/connect API — Agent C's zone), so §4.1–4.3 are a **spec to co-own with C**. The verification harness (§5) touches only `test/` + example smoke scripts and is **independently ownable** — it can land first and would have caught both motivating bugs on its own.
 
 ---
 
@@ -24,8 +23,9 @@
 
 **SHIPPED — §4.1 `MissingClientProtocol`** — nodeless `client(tag)` / `clientInstances` use `serviceOption(RpcClient.Protocol)`; absent ambient protocol → tagged `MissingClientProtocol` with remediation (Layer still requires Protocol in `R`).
 
-**REMAINING:**
-- **§4.3/§8.4 `verify` handshake (F3/F4)** — investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
+**REMAINING (owner-gated):**
+- **F4 `contractHash` / default-on verify (§8.6)** — see §7 open questions.
+- **§4.3/§8.4 historical note (F3 path Eng’d via transport probe + deep NodeStatus):** investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
   - **F1/F3 verify is free and self-contained** — await `onConnect` / send one `Ping`, bounded by a timeout → `NodeUnreachable` (no Pong) or `ProtocolMismatch` (transport opened but handshake rejected — http↔ws). **No server-side application verb, works against any Effect RPC server today.** This unblocks **default-on `verify` for remote tags** (no host-health prerequisite).
   - **Socket vs http nuance:** socket is persistent (built-in ping timeouts / `onConnect`, verify nearly passive); http is stateless, so http-verify is one explicit `Ping` round-trip at connect.
   - **F4 (`contractHash`)** rides the `initialMessage` channel (`RpcServer` exposes `initialMessage: Effect<Option<unknown>>` to read a client's connect payload). Server-read exists; client-send needs a bit more — **still deferred** to land with host-health, but the mechanism is confirmed real.

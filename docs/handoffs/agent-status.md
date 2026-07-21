@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **M4–M6 Eng’d** — identity coordinator v1 complete | same tip as `integration` | guide + prefer helpers | Soft/memo parked; loud-failures later track | 2026-07-21 |
+| **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle / needs unlock** — identity v1 + loud core Eng’d; lint green | same tip as `integration` | 634 tests / lint 0 | Unlock: default-on verify · contractHash · Soft fail-loud/memo · or new major | 2026-07-21 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -24,7 +24,7 @@
 
 ### Active (owner approval required)
 1. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
-2. **Agent 3:** Soft stack **idle** — [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) on `integration`. Next only if owner unlocks fail-loud Soft / memo (not handles/site).
+2. **Agent 3:** **needs unlock** — identity coordinator M1–M6 Eng’d; loud-failures core Eng’d. Parked unless unlocked: Soft fail-loud / memo; default-on verify; F4 `contractHash`. Not handles/site.
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
