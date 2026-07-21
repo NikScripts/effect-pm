@@ -174,7 +174,7 @@ export const catalogSym: unique symbol = Symbol.for(
 
 /**
  * A {@link Node} with typed catalog `ROut` (union of resource handles). Prefer
- * `import type` for those handles (C4). Use with {@link listen} / {@link clientsFor}.
+ * `import type` for those handles (C4). Use with {@link listen} / {@link clients}.
  *
  * Catalog members must be structurally distinct types (different specs / service shapes) —
  * identical Tag shapes collapse in TypeScript, so `Jobs | Emails` cannot prove C3.
