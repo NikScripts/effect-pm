@@ -116,6 +116,7 @@ Storage:
 | File | Teaches |
 |------|---------|
 | [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
+| [`scenarios/multi-protocol-dual-serve.ts`](./scenarios/multi-protocol-dual-serve.ts) | One `{ http, ws }` node served over both transports (P3 boot guard) + a live round-trip over each |
 | [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
 
 ---
