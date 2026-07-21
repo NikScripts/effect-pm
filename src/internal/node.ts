@@ -24,6 +24,7 @@ import {
 } from "./nodeCore"
 import type {
   AddressedNode,
+  Endpoints,
 } from "./nodeCore"
 import {
   connectAddressed,
@@ -259,13 +260,18 @@ export const connectHttp: {
   // data-last first, node form last — so the bare pipe (`node.pipe(connectHttp)`) resolves to the node
   // overload (TS picks the last for a bare value); `connectHttp(url)` still matches the string overload.
   (url: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
-  <Self>(node: NodeKey<Self> & { readonly url?: string }): Layer.Layer<Self>;
+  <Self>(
+    node: NodeKey<Self> & { readonly url?: string; readonly endpoints?: Endpoints },
+  ): Layer.Layer<Self>;
 } = Fn.dual(
   (args: IArguments) => typeof args[0] !== "string",
   (
-    node: NodeKey<unknown> & { readonly url?: string },
+    node: NodeKey<unknown> & { readonly url?: string; readonly endpoints?: Endpoints },
     url?: string,
-  ): Layer.Layer<unknown> => connectLayer(node, Resource.protocolHttp(url ?? node.url ?? "/rpc")),
+    // Prefer the node's OWN Http endpoint over the primary `url` — a multi-protocol `{ http, ws }` node
+    // has a WebSocket primary-or-http primary but its Http endpoint is the right target for `connectHttp`.
+  ): Layer.Layer<unknown> =>
+    connectLayer(node, Resource.protocolHttp(url ?? node.endpoints?.Http?.url ?? node.url ?? "/rpc")),
 );
 
 /**
@@ -279,13 +285,22 @@ export const connectHttp: {
 export const connectSocket: {
   // data-last first, node form last — see connectHttp.
   (url: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
-  <Self>(node: NodeKey<Self> & { readonly url?: string }): Layer.Layer<Self>;
+  <Self>(
+    node: NodeKey<Self> & { readonly url?: string; readonly endpoints?: Endpoints },
+  ): Layer.Layer<Self>;
 } = Fn.dual(
   (args: IArguments) => typeof args[0] !== "string",
   (
-    node: NodeKey<unknown> & { readonly url?: string },
+    node: NodeKey<unknown> & { readonly url?: string; readonly endpoints?: Endpoints },
     url?: string,
-  ): Layer.Layer<unknown> => connectLayer(node, Resource.protocolWebsocket(url ?? node.url ?? "/rpc")),
+    // Prefer the node's OWN WebSocket endpoint over the primary `url`: on a multi-protocol `{ http, ws }`
+    // node the primary is the Http url, so `node.url` would dial ws against the http endpoint (footgun).
+    // Fall back to `node.url` (scheme-swapped) for a single-transport / co-mounted node.
+  ): Layer.Layer<unknown> =>
+    connectLayer(
+      node,
+      Resource.protocolWebsocket(url ?? node.endpoints?.WebSocket?.url ?? node.url ?? "/rpc"),
+    ),
 );
 
 /**
@@ -299,15 +314,16 @@ export const connectSocket: {
 export const connectIpc: {
   (path: string): <Self>(node: NodeKey<Self>) => Layer.Layer<Self>;
   <Self>(
-    node: NodeKey<Self> & { readonly path?: string },
+    node: NodeKey<Self> & { readonly path?: string; readonly endpoints?: Endpoints },
   ): Layer.Layer<Self, UnaddressedNode>;
 } = Fn.dual(
   (args: IArguments) => typeof args[0] !== "string",
   (
-    node: NodeKey<unknown> & { readonly path?: string },
+    node: NodeKey<unknown> & { readonly path?: string; readonly endpoints?: Endpoints },
     path?: string,
+    // Prefer the node's OWN IpcSocket endpoint over the primary `path` (multi-protocol parity).
   ): Layer.Layer<unknown, UnaddressedNode> => {
-    const sock = path ?? node.path;
+    const sock = path ?? node.endpoints?.IpcSocket?.path ?? node.path;
     if (sock === undefined) {
       return unaddressedLayer(node.key);
     }
