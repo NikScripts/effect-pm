@@ -9,19 +9,19 @@ class Jobs extends Resource.Tag<Jobs>()("lookup-pick-d/Jobs", {}) {}
 const bare: Layer.Layer<
   Jobs,
   Resource.LookupClientError,
-  Lookup.Identity | Lookup.Directory
+  Lookup.Services
 > = Resource.lookupClient(Jobs);
 
 const first: Layer.Layer<
   Jobs,
   Resource.LookupClientError,
-  Lookup.Identity | Lookup.Directory
+  Lookup.Services
 > = Resource.lookupClient(Jobs, { pick: "first" });
 
 const custom: Layer.Layer<
   Jobs,
   Resource.LookupClientError,
-  Lookup.Identity | Lookup.Directory
+  Lookup.Services
 > = Resource.lookupClient(Jobs, {
   pick: (rows) => rows[0]!,
 });

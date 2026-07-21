@@ -73,7 +73,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-nameless-listen-demo.ts`](./forms/resource/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
 | [`forms/resource/node-prototype.ts`](./forms/resource/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
 | [`forms/resource/node-lookup.ts`](./forms/resource/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
-| [`forms/resource/node-identity-coordinator.ts`](./forms/resource/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + N Workers + Lookup |
+| [`forms/resource/node-identity-coordinator.ts`](./forms/resource/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers |
 | [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Resource.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 

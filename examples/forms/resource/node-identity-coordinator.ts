@@ -2,9 +2,10 @@
  * @module examples/forms/resource/node-identity-coordinator
  *
  * **One brain, many hands** — identity {@link Router} (exclusive) + N {@link Worker}s
- * (directory advertise) + Lookup. Router enqueues; a Worker runs the job.
+ * (directory advertise) + Lookup placement advice. Router publishes prefer, then
+ * enqueues; the advised Worker runs the job.
  *
- * Handoff: `docs/handoffs/identity-coordinator.md` (M4).
+ * Handoff: `docs/handoffs/identity-coordinator.md` (M4 + M5).
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-identity-coordinator.ts
@@ -12,7 +13,7 @@
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
-import { Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
 import * as Resource from "../../../src/Resource"
@@ -39,30 +40,41 @@ const program = Effect.gen(function* () {
   // Hold one Lookup server for the whole demo; everyone else dials.
   yield* Layer.build(Lookup.layerOptions({ path: lookupPath, unlink: true }))
   const lookup = Lookup.clientOptions({ path: lookupPath })
+  const lookupCtx = yield* Layer.build(lookup)
 
   class RouterNode extends Node.Tag<RouterNode>()("forms/RouterNode", {
     path: routerPath,
   }) {}
 
-  const workerImpl = {
-    run: ({ job }: { readonly job: Schema.Schema.Type<typeof Job> }) =>
-      Effect.succeed(`done:${job.id}:${job.payload}`),
-  }
-
-  // Hands: nameless unix listens advertise Worker under Lookup Directory.
-  yield* Layer.build(
-    Node.unix([Resource.serve(Worker, workerImpl)]).pipe(Layer.provide(lookup)),
+  // Hands: distinct impls so advice can target worker B.
+  const workerA = yield* Layer.build(
+    Node.unix([
+      Resource.serve(Worker, {
+        run: ({ job }: { readonly job: Schema.Schema.Type<typeof Job> }) =>
+          Effect.succeed(`A:${job.id}`),
+      }),
+    ]).pipe(Layer.provide(lookup)),
   )
-  yield* Layer.build(
-    Node.unix([Resource.serve(Worker, workerImpl)]).pipe(Layer.provide(lookup)),
+  const workerB = yield* Layer.build(
+    Node.unix([
+      Resource.serve(Worker, {
+        run: ({ job }: { readonly job: Schema.Schema.Type<typeof Job> }) =>
+          Effect.succeed(`B:${job.id}`),
+      }),
+    ]).pipe(Layer.provide(lookup)),
   )
 
-  // Dial any advertised Worker (D4 pick) — closed over by the Router impl.
+  const preferB = Context.get(workerB, Node.ListenNode).key
+  yield* Lookup.advise({
+    resourceKey: Worker.key,
+    prefer: preferB,
+  }).pipe(Effect.provide(lookupCtx))
+
+  // Bare lookupClient — M5 honors advice (no D4 pick needed).
   const workerCtx = yield* Layer.build(
-    Resource.lookupClient(Worker, { pick: "first" }).pipe(Layer.provide(lookup)),
+    Resource.lookupClient(Worker).pipe(Layer.provide(lookup)),
   )
 
-  // Brain: identity Router claims at Lookup; enqueue dials a Worker hand.
   const routerCtx = yield* Layer.build(
     Node.unix(RouterNode, [
       Resource.serve(Router, {
@@ -83,8 +95,11 @@ const program = Effect.gen(function* () {
     })
   }).pipe(Effect.provide(routerCtx))
 
+  // keep worker A scope alive (B is dialed via advice)
+  yield* Effect.sync(() => workerA)
+
   yield* Effect.logInfo(
-    "identity coordinator ok — Router (identity) + 2 Workers (directory)",
+    "identity coordinator ok — Router advised Worker B via Lookup.Advice",
   )
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 

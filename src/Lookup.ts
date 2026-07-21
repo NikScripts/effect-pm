@@ -1,5 +1,5 @@
 /**
- * Lookup — identity claims (first wins) + node directory (advertise / list).
+ * Lookup — identity claims + node directory + placement advice.
  *
  * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
@@ -12,6 +12,8 @@
  *   `nodeKey` conflict policy via {@link OnConflict} (default **livenessReplace**): ping
  *   incumbent {@link NodeStatus} `ping`; alive → {@link IncumbentAlive} (or ask
  *   {@link NodeStatus}.`yield` when `askIncumbent`); dead/unreachable → replace row.
+ * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
+ *   resource key). {@link Resource.lookupClient} honors a live preferred row before D4 `pick`.
  *
  * @module Lookup
  * @since 0.8.0
@@ -175,6 +177,44 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
 ) {}
 
 /**
+ * Placement advice — prefer this directory `nodeKey` when dialing `resourceKey`.
+ *
+ * @category wire schemas
+ * @public
+ */
+export class AdviseRequest extends Schema.Class<AdviseRequest>(
+  "LookupAdviseRequest",
+)({
+  resourceKey: Schema.String,
+  /** Directory row `nodeKey` to prefer (e.g. `fleet/Worker#w2`). */
+  prefer: Schema.String,
+}) {}
+
+/**
+ * Clear placement advice for a resource key.
+ *
+ * @category wire schemas
+ * @public
+ */
+export class ClearAdviceRequest extends Schema.Class<ClearAdviceRequest>(
+  "LookupClearAdviceRequest",
+)({
+  resourceKey: Schema.String,
+}) {}
+
+/**
+ * Read the preferred directory `nodeKey` for a resource (if any).
+ *
+ * @category wire schemas
+ * @public
+ */
+export class PreferredRequest extends Schema.Class<PreferredRequest>(
+  "LookupPreferredRequest",
+)({
+  resourceKey: Schema.String,
+}) {}
+
+/**
  * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
  * {@link layerOptions}. Layer error channel (not a sync throw).
  *
@@ -267,6 +307,99 @@ export class Directory extends Resource.Tag<Directory>()(
   directorySpec,
   { kind },
 ) {}
+
+const adviceSpec = {
+  advise: Resource.effectFn({
+    payload: AdviseRequest,
+    success: Schema.String,
+  }).annotate({
+    description:
+      "Last-write placement advice: prefer this directory nodeKey when dialing resourceKey. " +
+      "Stale prefer (not in nodesServing) is ignored by lookupClient.",
+  }),
+  clear: Resource.effectFn({
+    payload: ClearAdviceRequest,
+    success: Schema.Boolean,
+  }).annotate({
+    description: "Drop placement advice for resourceKey (true if a row was removed).",
+  }),
+  preferred: Resource.effectFn({
+    payload: PreferredRequest,
+    success: Schema.Option(Schema.String),
+  }).annotate({
+    description: "Read the preferred directory nodeKey for resourceKey, if any.",
+  }),
+};
+
+/**
+ * Lookup placement board — coordinator advice for nodeless / {@link Resource.lookupClient} dial.
+ *
+ * v1: last-write-wins, in-memory, no advisor ACL. Algorithms stay app-owned (who calls
+ * {@link advise}); Lookup only stores and surfaces the preference.
+ *
+ * @category services
+ * @public
+ */
+export class Advice extends Resource.Tag<Advice>()(
+  "@nikscripts/effect-pm/Lookup/Advice",
+  adviceSpec,
+  { kind },
+) {}
+
+/**
+ * Services a Lookup client layer provides — identity, directory, and placement advice.
+ *
+ * @category models
+ * @public
+ */
+export type Services = Identity | Directory | Advice;
+
+/**
+ * Publish placement advice (requires {@link Advice} in context).
+ *
+ * ```ts
+ * yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const advise = (input: {
+  readonly resourceKey: string;
+  readonly prefer: string;
+}): Effect.Effect<string, never, Advice> =>
+  Effect.flatMap(Advice, (svc) =>
+    svc.advise(
+      new AdviseRequest({
+        resourceKey: input.resourceKey,
+        prefer: input.prefer,
+      }),
+    ),
+  );
+
+/**
+ * Clear placement advice for a resource key (requires {@link Advice} in context).
+ *
+ * @category constructors
+ * @public
+ */
+export const clearAdvice = (resourceKey: string): Effect.Effect<boolean, never, Advice> =>
+  Effect.flatMap(Advice, (svc) =>
+    svc.clear(new ClearAdviceRequest({ resourceKey })),
+  );
+
+/**
+ * Read preferred directory `nodeKey` for a resource (requires {@link Advice} in context).
+ *
+ * @category constructors
+ * @public
+ */
+export const preferred = (
+  resourceKey: string,
+): Effect.Effect<Option.Option<string>, never, Advice> =>
+  Effect.flatMap(Advice, (svc) =>
+    svc.preferred(new PreferredRequest({ resourceKey })),
+  );
 
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
@@ -386,7 +519,7 @@ const incumbentYield = (
   );
 };
 
-/** Identity + Directory impl over one shared in-memory registry pair. */
+/** Identity + Directory + Advice impl over one shared in-memory registry. */
 const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -491,12 +624,20 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
             Effect.map((entries) => entries.map(toDirectoryEntry)),
           ),
       });
-      return Layer.mergeAll(identity, directory);
+      const advice = Resource.serve(Advice, {
+        advise: (req: AdviseRequest) =>
+          registries.advice.set(req.resourceKey, req.prefer),
+        clear: (req: ClearAdviceRequest) =>
+          registries.advice.clear(req.resourceKey),
+        preferred: (req: PreferredRequest) =>
+          registries.advice.get(req.resourceKey),
+      });
+      return Layer.mergeAll(identity, directory, advice);
     }),
   );
 
 /**
- * Serve {@link Identity} + {@link Directory} on a Unix-domain path (same-machine lookup).
+ * Serve {@link Identity} + {@link Directory} + {@link Advice} on a Unix-domain path.
  *
  * @category layers & serving
  * @public
@@ -628,7 +769,7 @@ export const directoryAdvertiseLayer = (
  */
 export const client = (
   node: AnyNode & { readonly path?: string },
-): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
+): Layer.Layer<Services, LookupUnaddressed> => {
   if (node.path === undefined) {
     return lookupUnaddressedLayer(
       "key" in node && typeof node.key === "string" ? node.key : "lookup",
@@ -639,6 +780,7 @@ export const client = (
   return Layer.mergeAll(
     Resource.client(Identity, node),
     Resource.client(Directory, node),
+    Resource.client(Advice, node),
   ).pipe(Layer.provide(node.pipe(connectIpc(path))));
 };
 
@@ -651,7 +793,7 @@ export const client = (
  */
 export const clientOptions = (options?: {
   readonly path?: string;
-}): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
+}): Layer.Layer<Services, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
   const node = NodeTag()("effect-pm/Lookup/default", { path }).pipe(asLookup);
   return client(node);
@@ -659,7 +801,7 @@ export const clientOptions = (options?: {
 
 /**
  * Bind-or-dial a same-machine Lookup path (L1 / D7).
- * First process serves {@link Identity}+{@link Directory}; later processes dial
+ * First process serves {@link Identity}+{@link Directory}+{@link Advice}; later processes dial
  * (`Layer.catchCause`). Default `unlink: false` so a second process cannot unlink-steal
  * a live sock (stale socks: pass `unlink: true` or a fresh `path`).
  *
@@ -671,13 +813,13 @@ export const clientOptions = (options?: {
 export const layerOptions = (options?: {
   readonly path?: string;
   readonly unlink?: boolean;
-}): Layer.Layer<Identity | Directory> => {
+}): Layer.Layer<Services> => {
   const path = options?.path ?? defaultIpcPath;
   return layerIpc(path, {
     unlink: options?.unlink ?? false,
   }).pipe(
     Layer.catchCause(() => clientOptions({ path })),
-  ) as Layer.Layer<Identity | Directory>;
+  ) as Layer.Layer<Services>;
 };
 
 /**
@@ -689,4 +831,4 @@ export const layerOptions = (options?: {
  * @category layers & serving
  * @public
  */
-export const layer: Layer.Layer<Identity | Directory> = layerOptions();
+export const layer: Layer.Layer<Services> = layerOptions();

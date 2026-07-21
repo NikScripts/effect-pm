@@ -90,6 +90,7 @@ import {
 } from "./internal/store/registration";
 // Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
 import type {
+  Advice as LookupAdvice,
   Directory as LookupDirectory,
   DirectoryEntry as LookupDirectoryEntry,
   Identity as LookupIdentity,
@@ -2230,8 +2231,9 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
 }> {}
 
 /**
- * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4).
- * `"first"` = `rows[0]`; custom sync fn returns the dial target.
+ * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4) and no live
+ * {@link Lookup.Advice} prefer matches a row. `"first"` = `rows[0]`; custom sync
+ * fn returns the dial target.
  *
  * @category models
  * @public
@@ -2243,7 +2245,8 @@ export type LookupClientPick =
     ) => LookupDirectoryEntry);
 
 /**
- * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous.
+ * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous
+ * and placement advice is absent or stale.
  *
  * @category models
  * @public
@@ -4685,17 +4688,23 @@ export const isIdentity = (tag: unknown): boolean =>
  * {@link Lookup.Directory}`nodesServing(tag.key)`.
  *
  * **Fail-closed by default:** missing or more than one directory row →
- * {@link LookupClientError}. Opt into soft pick with `{ pick: "first" }` or a sync
- * `(rows) => DirectoryEntry` (D4). Identity resolve ignores `pick` (unique by key).
+ * {@link LookupClientError}. When N&gt;1, a live {@link Lookup.Advice} prefer that
+ * matches a directory row wins before D4 `{ pick }`. Opt into soft pick with
+ * `{ pick: "first" }` or a sync `(rows) => DirectoryEntry`. Identity resolve
+ * ignores advice / `pick` (unique by key).
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
- * `lookupClient(Tag)` keeps that fail-closed contract.
+ * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
  *
  * ```ts
  * // Sole endpoint (identity winner or one directory row):
  * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
- * // N>1 replicas — opt-in pick (still fail on 0):
+ * // Coordinator published advice — bare client honors prefer:
+ * yield* Lookup.advise({ resourceKey: Mail.key, prefer: "fleet/Mail#w2" })
+ * Resource.lookupClient(Mail)
+ *
+ * // N>1 replicas — opt-in pick when no advice (still fail on 0):
  * Resource.lookupClient(Mail, { pick: "first" })
  *
  * // You already know an addressed Node — client auto-connects:
@@ -4711,7 +4720,7 @@ export const lookupClient = <Self, S extends Spec>(
 ): Layer.Layer<
   Self,
   LookupClientError,
-  LookupIdentity | LookupDirectory
+  LookupIdentity | LookupDirectory | LookupAdvice
 > =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -4737,6 +4746,14 @@ export const lookupClient = <Self, S extends Spec>(
       if (entries.length === 1) {
         return clientLayerForEndpoint(tag, entries[0]!);
       }
+      // M5 — honor placement advice when the preferred node is still advertised.
+      const prefer = yield* Lookup.preferred(tag.key);
+      if (Option.isSome(prefer)) {
+        const advised = entries.find((row) => row.nodeKey === prefer.value);
+        if (advised !== undefined) {
+          return clientLayerForEndpoint(tag, advised);
+        }
+      }
       const pick = options?.pick;
       if (pick === undefined) {
         return yield* new LookupClientError({
@@ -4751,7 +4768,7 @@ export const lookupClient = <Self, S extends Spec>(
   ) as Layer.Layer<
     Self,
     LookupClientError,
-    LookupIdentity | LookupDirectory
+    LookupIdentity | LookupDirectory | LookupAdvice
   >;
 
 /**

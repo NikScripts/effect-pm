@@ -13,6 +13,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected / deferred:** Second first-wins product surface; required `manages[]` value list; advice wire before liveness.
 - **Supervisor impact:** SSOT [`identity-coordinator.md`](./identity-coordinator.md). Work branch `cursor/logs-store-followers-plan-906e` synced with `integration`.
 
+## 2026-07-21 — Placement advice (M5) LOCKED + Eng’d
+
+- **Owner said:** “Let’s do it” (after M4 tip).
+- **Chose (LOCKED + Eng):**
+  - `Lookup.Advice` — `advise` / `clear` / `preferred`; helpers `Lookup.advise` / `clearAdvice` / `preferred`.
+  - Key = `resourceKey` → preferred directory `nodeKey`; in-memory **last-write-wins**; no advisor ACL.
+  - Stale prefer (not in `nodesServing`) ignored; `lookupClient` honors live prefer **before** D4 `{ pick }`.
+  - Algorithms stay app-owned (identity Router decides prefer).
+- **Supervisor impact:** Eng on tip. SSOT [`identity-coordinator.md`](./identity-coordinator.md).
+
 ## 2026-07-21 — Protocol listen siblings stay in sync
 
 - **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.

@@ -1,8 +1,8 @@
 # Identity coordinator — exclusive brain + many hands
 
-**Status:** **M4 Eng’d** (identity liveness + coordinator example, 2026-07-21). M5 placement advice still later.  
+**Status:** **M4 + M5 Eng’d** (2026-07-21). M6 sugar still later.  
 **Work branch:** `cursor/logs-store-followers-plan-906e` — sync tip with `integration`.  
-**Related:** [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) (S1 identity, Lookup, directory) · [`owner-decisions.md`](./owner-decisions.md) · shipped `Resource.identity` / `Lookup.Identity` / `Lookup.Directory`.
+**Related:** [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) (S1 identity, Lookup, directory) · [`owner-decisions.md`](./owner-decisions.md) · shipped `Resource.identity` / `Lookup.Identity` / `Lookup.Directory` / `Lookup.Advice`.
 
 ---
 
@@ -15,7 +15,7 @@ You never think “Manager” as a special library noun. You think **one brain, 
                    ┌────────────────────────────────────┐
                    │ Identity:  "Router" → node A       │
                    │ Directory: Worker#w1, w2, w3       │
-                   │ Advice:    "prefer w2 right now"   │  ← later Eng
+                   │ Advice:    "prefer w2 right now"   │  ← Eng’d (M5)
                    └───────────────┬────────────────────┘
                                    │
            ┌───────────────────────┼───────────────────────┐
@@ -39,7 +39,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | **M2** | **Dedupe** | Key-only (already S1). No required value-level `manages[]` Tag list. |
 | **M3** | **Pattern** | One brain (identity) + many hands (directory / nameless / `Prototype` / `distributed`). Taught as the fleet recipe. |
 | **M4** | **v1 Eng spine** | **Identity liveness** (dead winner → claim releasable / replaceable) + **coordinator+workers example**. |
-| **M5** | **Placement advice** | Later Eng — winning coordinator (or identity advisor) streams advice into Lookup; dial / `lookupClient` honor it. Not a separate Manager type. |
+| **M5** | **Placement advice** | **Eng’d** — `Lookup.Advice` last-write prefer; `lookupClient` honors live preferred `nodeKey` before D4 `pick`. Not a separate Manager type. |
 | **M6** | **Sugar** | After the pattern is proven — recipes / clearer `IdentitySelfRequired` remediation; no magic baked into every listen. |
 
 **Rejected / deferred:**
@@ -63,6 +63,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | Loud-failures: `verifyConnection({ deep })`, `ProtocolMismatch`, `MissingClientProtocol` | **Eng’d** |
 | Identity claim liveness (dead winner → replaceable) + same-dial refresh | **Eng’d** (M4 slice 1) |
 | Coordinator+workers form (`node-identity-coordinator`) | **Eng’d** (M4 slice 2) |
+| `Lookup.Advice` + `lookupClient` honors prefer | **Eng’d** (M5) |
 
 ---
 
@@ -89,25 +90,29 @@ Shipped:
 - README / catalog cross-link: “one brain, many hands.”
 - Clearer `IdentitySelfRequired` message (Lookup + dialable self).
 
-### Slice 3 — Placement advice (**M5**, later bake/Eng)
+### Slice 3 — Placement advice (**M5**) — **Eng’d**
 
 **Goal:** Smart dial without a Manager type.
 
-Sketch (not wire-final):
+**Bake locks (lean v1):**
+
+| Topic | Lock |
+|-------|------|
+| Wire | `Lookup.Advice` — `advise` / `clear` / `preferred`; helpers `Lookup.advise` / `clearAdvice` / `preferred` |
+| Key | `resourceKey` → preferred directory `nodeKey` |
+| Retention | In-memory last-write-wins; stale prefer (not in `nodesServing`) ignored |
+| Multi-advisor | Last write wins; no advisor ACL |
+| Dial | `lookupClient` N>1: live prefer → dial; else D4 `pick` / ambiguous |
+| Algorithms | App-owned (identity Router decides prefer) |
 
 ```ts
-// Winner-only (identity Router impl)
-yield* Lookup.advise({ resource: "fleet/Worker", prefer: "fleet/Worker#w2" })
-
-// Clients / router dial
-Resource.lookupClient(Worker, { pick: /* honor advice, else D4 */ })
+yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
+Resource.lookupClient(Worker) // honors advice; pick only if absent/stale
 ```
-
-Wire shape, retention, and multi-advisor conflicts = **separate bake** before Eng. Algorithms stay app-owned.
 
 ### Slice 4 — Sugar (**M6**, last)
 
-Documented recipes; optional helpers only after slices 1–2 are green. Lookup stays pipe-only on listens (existing invariant).
+Documented recipes; optional helpers after M4–M5. Lookup stays pipe-only on listens (existing invariant).
 
 ---
 
@@ -135,19 +140,20 @@ class Worker extends Resource.Tag<Worker>()("fleet/Worker", {
 |-------|-------|--------------|
 | 1 | Identity liveness | **Eng’d** |
 | 2 | Coordinator+workers example | **Eng’d** |
-| 3 | Placement advice | Needs short wire bake, then Eng |
-| 4 | Sugar | After 1–2 |
+| 3 | Placement advice | **Eng’d** |
+| 4 | Sugar | After 1–3 |
 
 **Agent:** work on `cursor/logs-store-followers-plan-906e`; sync so work branch and `integration` share the same tip. **No PRs** unless owner asks.
 
 ---
 
-## Success criteria (v1 = slices 1–2)
+## Success criteria (v1 = slices 1–3)
 
 - Kill winner process → next claimant can win the identity key without restarting Lookup by hand.
-- Example runs: one Router, two Workers, enqueue reaches a worker.
+- Example runs: one Router, two Workers, enqueue reaches the **advised** worker.
+- `Lookup.advise` + bare `lookupClient` dials prefer when live.
 - No `Resource.Manager` API; docs say collapse + this handoff.
-- Typecheck + identity / lookup tests green; changeset when public behavior ships.
+- Typecheck + identity / lookup / advice tests green; changeset when public behavior ships.
 
 ---
 

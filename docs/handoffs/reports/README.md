@@ -2,7 +2,7 @@
 
 **Live supervisor bus:** [`agent-status.md`](../agent-status.md) · [`supervisor-protocol.md`](../supervisor-protocol.md) · [`owner-decisions.md`](../owner-decisions.md).
 
-**Active major Eng (2026-07-21):** [`identity-coordinator.md`](../identity-coordinator.md) — M4 Eng’d (identity liveness + coordinator example); M5 placement advice next.
+**Active major Eng (2026-07-21):** [`identity-coordinator.md`](../identity-coordinator.md) — M4+M5 Eng’d (liveness + `Lookup.Advice` + coordinator); M6 sugar next.
 
 Historical review reports and session closeouts from the 2026-07 store cutover land under [`../archive/2026-07/`](../archive/2026-07/). This folder keeps only the **index** (so `AGENTS.md` / legacy links stay stable).
 

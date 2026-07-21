@@ -1,5 +1,5 @@
 /**
- * In-memory Lookup registries — identity claims (first wins) + node directory (advertise).
+ * In-memory Lookup registries — identity claims, node directory, placement advice.
  *
  * Structural shapes only (no import from `Lookup.ts`) so the public module can own Schema
  * classes without a cycle.
@@ -79,19 +79,33 @@ export type DirectoryRegistry = {
   ) => Effect.Effect<ReadonlyArray<StoredDirectoryEntry>>;
 };
 
+/** Placement advice — resource key → preferred directory `nodeKey`. @internal */
+export type AdviceRegistry = {
+  readonly set: (
+    resourceKey: string,
+    prefer: string,
+  ) => Effect.Effect<string>;
+  readonly clear: (resourceKey: string) => Effect.Effect<boolean>;
+  readonly get: (
+    resourceKey: string,
+  ) => Effect.Effect<Option.Option<string>>;
+};
+
 /** Combined registries for one Lookup server process. @internal */
 export type LookupRegistries = {
   readonly claims: ClaimRegistry;
   readonly directory: DirectoryRegistry;
+  readonly advice: AdviceRegistry;
 };
 
-/** Build empty claim + directory registries (one per lookup server process). @internal */
+/** Build empty claim + directory + advice registries (one per lookup server). @internal */
 export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
   Effect.all([
     Ref.make(new Map<string, StoredEndpoint>()),
     Ref.make(new Map<string, StoredDirectoryEntry>()),
+    Ref.make(new Map<string, string>()),
   ]).pipe(
-    Effect.map(([claimMap, directoryMap]) => ({
+    Effect.map(([claimMap, directoryMap, adviceMap]) => ({
       claims: {
         claim: (key, endpoint) =>
           Ref.modify(
@@ -166,6 +180,29 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
               [...current.values()].filter((entry) =>
                 entry.serves.includes(resourceKey),
               ),
+            ),
+          ),
+      },
+      advice: {
+        set: (resourceKey, prefer) =>
+          Ref.update(adviceMap, (current) => {
+            const next = new Map(current);
+            next.set(resourceKey, prefer);
+            return next;
+          }).pipe(Effect.as(prefer)),
+        clear: (resourceKey) =>
+          Ref.modify(adviceMap, (current) => {
+            if (!current.has(resourceKey)) {
+              return [false, current] as const;
+            }
+            const next = new Map(current);
+            next.delete(resourceKey);
+            return [true, next] as const;
+          }),
+        get: (resourceKey) =>
+          Ref.get(adviceMap).pipe(
+            Effect.map((current) =>
+              Option.fromNullishOr(current.get(resourceKey)),
             ),
           ),
       },
