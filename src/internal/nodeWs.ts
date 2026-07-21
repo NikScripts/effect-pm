@@ -36,7 +36,7 @@ import {
 
 /**
  * Local WebSocket listen — localhost bind. Compose Lookup via
- * `Layer.provide(Lookup.bootstrapDefaultLocal(...))` when claim / advertise needs it.
+ * `Layer.provide(Lookup.layerOptions(...))` when claim / advertise needs it.
  * Same overload shapes as {@link unix}. Prefer this for same-machine WebSocket.
  *
  * @category listen
@@ -110,8 +110,8 @@ export function ws(
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  // Lookup is not baked in — pipe `Layer.provide(Lookup.bootstrapDefaultLocal(…))`
-  // (or `Lookup.layer` / `Lookup.client`) when claim / advertise needs it.
+  // Lookup is not baked in — pipe `Layer.provide(Lookup.layer)` (default) or
+  // `Lookup.layerOptions({ path })` / `Lookup.client` when claim / advertise needs it.
 
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (

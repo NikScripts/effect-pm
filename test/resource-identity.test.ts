@@ -100,7 +100,7 @@ describe("Resource.identity", () => {
       const lookupClient = Lookup.client(lookupNode);
 
       // Winner: listen stamps ListenNode for identity claim
-      const lookupCtx = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupCtx = yield* Layer.build(Lookup.layerNode(lookupNode));
       const winnerCtx = yield* Layer.build(
         Node.unix(WinnerNode, [Resource.serve(Mail, mailImpl)]).pipe(Layer.provide(lookupClient)),
       );

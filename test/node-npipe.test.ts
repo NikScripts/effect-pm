@@ -56,7 +56,7 @@ describe.skipIf(process.platform !== "win32")("Node.nPipe (win32)", () => {
       const serverCtx = yield* Layer.build(
         Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: false }),
+            Lookup.layerOptions({ path: lookupPath, unlink: false }),
           ),
         ),
       );

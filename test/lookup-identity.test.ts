@@ -46,7 +46,7 @@ describe("Lookup identity claim", () => {
       const node = Node.Lookup()("lookup/claim", { path });
 
       yield* withLookup(
-        Lookup.layer(node),
+        Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
           const id = yield* Lookup.Identity;
@@ -113,13 +113,13 @@ describe("Lookup L1 bind exclusivity", () => {
   );
 });
 
-describe("Lookup.layerDefaultLocal", () => {
+describe("Lookup.layerIpc (path override)", () => {
   it.effect("serves Identity on a chosen path (override default to avoid collisions)", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("default-local");
       yield* withLookup(
-        Lookup.layerDefaultLocal({ path }),
-        Lookup.clientDefaultLocal({ path }),
+        Lookup.layerIpc(path),
+        Lookup.clientOptions({ path }),
         Effect.gen(function* () {
           const id = yield* Lookup.Identity;
           const won = yield* id.claim(

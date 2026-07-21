@@ -37,7 +37,7 @@ const program = Effect.gen(function* () {
     [Resource.serve(Jobs, { jobs: Effect.succeed(42) })],
   ).pipe(
     Layer.provide(
-      Lookup.bootstrapDefaultLocal({ path, unlink: true }),
+      Lookup.layerOptions({ path, unlink: true }),
     ),
   )
 

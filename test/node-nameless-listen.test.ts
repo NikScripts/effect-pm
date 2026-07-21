@@ -33,7 +33,7 @@ describe("Node.unix nameless", () => {
       const serverCtx = yield* Layer.build(
         Node.unix([Resource.serve(Jobs, jobsImpl)]).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
@@ -59,7 +59,7 @@ describe("Node.unix nameless", () => {
       const serverCtx = yield* Layer.build(
         Node.unix(Resource.serve(Jobs, jobsImpl)).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
@@ -83,7 +83,7 @@ describe("Node.unix nameless", () => {
           Resource.serve(Emails, emailsImpl),
         ]).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );

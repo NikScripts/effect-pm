@@ -72,7 +72,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
       }) {}
 
       const lookupClient = Lookup.client(lookupNode);
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupCtx = yield* Layer.build(lookupClient);
       const lookup = Context.merge(lookupServer, lookupCtx);
 

@@ -29,7 +29,7 @@ describe("Node.unix", () => {
       const serverCtx = yield* Layer.build(
         Node.unix(Jobs, { jobs: Effect.succeed(11) }).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
@@ -50,7 +50,7 @@ describe("Node.unix", () => {
       const serverCtx = yield* Layer.build(
         Node.unix(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );

@@ -4340,7 +4340,7 @@ export const isIdentity = (tag: unknown): boolean =>
  *
  * ```ts
  * // Sole endpoint (identity winner or one directory row):
- * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+ * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * // N>1 replicas — opt-in pick (still fail on 0):
  * Resource.lookupClient(Mail, { pick: "first" })
@@ -4414,9 +4414,9 @@ export type DiscoverClientOptions = LookupClientOptions & {
 };
 
 /**
- * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} — discover an
- * endpoint for `tag` via Lookup (identity, then directory) and dial it. Not Effect
- * “local” vs remote; name is **discover**.
+ * Sugar: {@link lookupClient} + {@link Lookup.layer} / {@link Lookup.layerOptions} —
+ * discover an endpoint for `tag` via Lookup (identity, then directory) and dial it.
+ * Not Effect “local” vs remote; name is **discover**.
  *
  * ```ts
  * Resource.discoverClient(Jobs, { lookupPath })
@@ -4435,10 +4435,12 @@ export const discoverClient = <Self, S extends Spec>(
       Effect.map((Lookup) =>
         lookupClient(tag, clientOptions).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlink !== undefined ? { unlink } : {}),
-            }),
+            lookupPath === undefined && unlink === undefined
+              ? Lookup.layer
+              : Lookup.layerOptions({
+                  ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+                  ...(unlink !== undefined ? { unlink } : {}),
+                }),
           ),
         ),
       ),
@@ -4513,10 +4515,12 @@ export function discoverClients(
           ]),
         ).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlink !== undefined ? { unlink } : {}),
-            }),
+            lookupPath === undefined && unlink === undefined
+              ? Lookup.layer
+              : Lookup.layerOptions({
+                  ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+                  ...(unlink !== undefined ? { unlink } : {}),
+                }),
           ),
         ),
       ),
