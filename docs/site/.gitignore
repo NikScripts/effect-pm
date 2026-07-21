@@ -8,3 +8,5 @@ api-data-next/
 api-hovers/
 public/search/
 public/sitemap.xml
+public/llms.txt
+public/llms-full.txt
