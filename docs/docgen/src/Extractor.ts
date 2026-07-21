@@ -319,6 +319,8 @@ const preferRename = (
 interface Walked {
   readonly entries: ReadonlyArray<{
     readonly entry: string;
+    /** First paragraph of the module's `@module` header ("" when absent). */
+    readonly summary: string;
     readonly symbols: ReadonlyArray<Extracted>;
   }>;
   /**
