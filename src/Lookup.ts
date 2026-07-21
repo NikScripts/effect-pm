@@ -511,8 +511,14 @@ const incumbentAlive = (
   }
   // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
   // Addressed target → Resource.client auto-wires connect (shared MemoMap Layer).
+  // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
+  // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
-    const ctx = yield* Layer.build(Resource.client(NodeStatus.Tag, target));
+    const ctx = yield* Layer.build(
+      Resource.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Resource.clientVerify(false)),
+      ),
+    );
     yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;
       yield* status.ping;
@@ -544,8 +550,13 @@ const incumbentYield = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
+  // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
-    const ctx = yield* Layer.build(Resource.client(NodeStatus.Tag, target));
+    const ctx = yield* Layer.build(
+      Resource.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Resource.clientVerify(false)),
+      ),
+    );
     return yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;
       return yield* status.yield;
@@ -814,11 +825,18 @@ export const client = (
   }
   const path = node.path;
   // Path overload of connectIpc — no UnaddressedNode on the error channel.
+  // Opt out of default-on client verify: Lookup.client is often composed before (or
+  // beside) the Lookup listen, and bind-or-dial ({@link layerOptions}) builds the
+  // dial side without a guaranteed live peer at Layer.build. Connectivity fails on
+  // the first Identity/Directory call instead.
   return Layer.mergeAll(
     Resource.client(Identity, node),
     Resource.client(Directory, node),
     Resource.client(Advice, node),
-  ).pipe(Layer.provide(node.pipe(connectIpc(path))));
+  ).pipe(
+    Layer.provide(node.pipe(connectIpc(path))),
+    Layer.provide(Resource.clientVerify(false)),
+  );
 };
 
 /**

@@ -34,7 +34,8 @@ const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
  * One served resource's readiness, as the node reports it — its wire key, {@link Resource.kindOf}
- * kind, whether it's ready, and (when not) why. The element of {@link nodeStatus}'s `resources`.
+ * kind, optional F4 {@link contractHash}, whether it's ready, and (when not) why. The element of
+ * {@link nodeStatus}'s `resources`.
  *
  * @internal
  */
@@ -43,6 +44,8 @@ export const nodeResourceReadiness = Schema.Struct({
   kind: Schema.String,
   ready: Schema.Boolean,
   detail: Schema.optionalKey(Schema.String),
+  /** Wire-contract fingerprint (F4) — stamped at serve from the tag Spec. */
+  contractHash: Schema.optionalKey(Schema.String),
 });
 
 /** A served resource's readiness as reported by its node. @internal */

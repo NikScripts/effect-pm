@@ -1121,6 +1121,30 @@ export class ServiceNotReady extends Data.TaggedError("ServiceNotReady")<{
 }
 
 /**
+ * Client and server disagree on a resource's wire contract (`contractHash` mismatch).
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource, contractHash })`
+ * and by default-on addressed {@link Resource.client} verify (F4).
+ *
+ * @category errors
+ * @public
+ */
+export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly expected: string;
+  readonly actual: string | undefined;
+}> {
+  override get message() {
+    const got = this.actual === undefined ? "(missing)" : this.actual;
+    return (
+      `Node "${this.node}" at ${this.url} serves "${this.resource}" with contract ` +
+      `${got}, but this client expects ${this.expected} — redeploy the stale side.`
+    );
+  }
+}
+
+/**
  * A node-bound resource is being served over a transport that isn't in its node's declared
  * {@link ProtocolKind} set. Because a client derives its transport *from* the node's declared
  * transports, serving it over one the node doesn't advertise (e.g. a `WebSocket`-only node served on

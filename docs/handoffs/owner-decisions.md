@@ -33,7 +33,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** “All of them in whatever order” (after unlock menu).
 - **Chose:** Eng in order Soft fail-loud → default-on verify → F4 contractHash → store-layer lineId memo.
-- **Supervisor impact:** Agent 3 Eng on tip; Soft fail-loud + default-on verify landing first.
+- **Supervisor impact:** Soft + default-on verify + F4 `contractHash` Eng’d; store-layer lineId memo next.
+
+## 2026-07-21 — F4 contractHash Eng’d
+
+- **Owner said:** “All of them” (unlock wave).
+- **Chose (LOCKED + Eng’d):** `contractHash` on `NodeStatus.resources[]`; `Resource.contractHash(tag)`; deep verify + tag-aware default-on client compare → `ContractMismatch`. Nested verify opted out for Lookup.client / identity ping / `clientLayerForEndpoint` (Layer.unwrap deadlock).
+- **Supervisor impact:** loud-failures F4 closed; memo remains.
 
 ## 2026-07-21 — Protocol listen siblings stay in sync
 

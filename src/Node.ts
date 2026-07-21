@@ -39,6 +39,7 @@ export {
   ProtocolUnanswered,
   ServiceNotServed,
   ServiceNotReady,
+  ContractMismatch,
   ProtocolKindMismatch,
   MalformedNode,
   InvalidHttpTarget,

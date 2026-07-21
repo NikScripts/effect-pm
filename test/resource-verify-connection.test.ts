@@ -183,6 +183,33 @@ describe("Resource.verifyConnection", () => {
     ).pipe(Effect.timeout(Duration.seconds(10))),
   );
 
+  it.live("deep verifyConnection succeeds when contractHash matches", () =>
+    onServer(httpSrv, (port) =>
+      Resource.verifyConnection(VNode, {
+        url: `http://127.0.0.1:${port}/rpc`,
+        deep: true,
+        resource: VQueue.groupId,
+        contractHash: Resource.contractHash(VQueue),
+      }),
+    ).pipe(Effect.timeout(Duration.seconds(10))),
+  );
+
+  it.live("deep verifyConnection fails ContractMismatch on hash drift", () =>
+    onServer(httpSrv, (port) =>
+      Effect.gen(function* () {
+        const exit = yield* Effect.exit(
+          Resource.verifyConnection(VNode, {
+            url: `http://127.0.0.1:${port}/rpc`,
+            deep: true,
+            resource: VQueue.groupId,
+            contractHash: "00000000",
+          }),
+        );
+        expectTaggedFailure(exit, "ContractMismatch");
+      }),
+    ).pipe(Effect.timeout(Duration.seconds(10))),
+  );
+
   it.live("verifyConnection uses selectEndpoint on a multi-protocol node", () =>
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));

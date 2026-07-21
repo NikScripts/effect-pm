@@ -1,6 +1,6 @@
 # Design: loud, eager transport failures
 
-**Status (2026-07-21):** Core loud-failure track **Eng’d** — topology (§8.1–8.2), serve assert (§8.3), `ProtocolMismatch` / `MissingClientProtocol` (§4.1–4.2a), tier-1 + deep `verifyConnection`, **default-on client verify (§8.6)**. **In flight / next:** F4 `contractHash`.
+**Status (2026-07-21):** Loud-failure track **Eng’d** — topology (§8.1–8.2), serve assert (§8.3), `ProtocolMismatch` / `MissingClientProtocol` (§4.1–4.2a), tier-1 + deep `verifyConnection`, **default-on client verify (§8.6)**, **F4 `contractHash`**.
 **Author intent:** kill the recurring "silent wiring failure" bug class at the library level.
 
 ---
@@ -24,7 +24,7 @@
 **SHIPPED — §4.1 `MissingClientProtocol`** — nodeless `client(tag)` / `clientInstances` use `serviceOption(RpcClient.Protocol)`; absent ambient protocol → tagged `MissingClientProtocol` with remediation (Layer still requires Protocol in `R`).
 
 **REMAINING (owner-gated):**
-- **F4 `contractHash` / default-on verify (§8.6)** — see §7 open questions.
+- **F4 `contractHash`** — **Eng’d:** stamped on `NodeStatus.resources[]` at serve; deep verify compares; tag-aware default-on client escalates to deep+hash.
 - **§4.3/§8.4 historical note (F3 path Eng’d via transport probe + deep NodeStatus):** investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
   - **F1/F3 verify is free and self-contained** — await `onConnect` / send one `Ping`, bounded by a timeout → `NodeUnreachable` (no Pong) or `ProtocolMismatch` (transport opened but handshake rejected — http↔ws). **No server-side application verb, works against any Effect RPC server today.** This unblocks **default-on `verify` for remote tags** (no host-health prerequisite).
   - **Socket vs http nuance:** socket is persistent (built-in ping timeouts / `onConnect`, verify nearly passive); http is stateless, so http-verify is one explicit `Ping` round-trip at connect.
@@ -103,7 +103,7 @@ A one-shot handshake at `connect` that pings the server and returns eagerly with
 
 ## 5. Verification harness
 
-1. **Per-failure-mode matrix** — **SHIPPED for F1/F2/F3:** `ProtocolMismatch` (`queue-remote-websocket`, `transport-conformance`), `MissingClientProtocol`, `verifyConnection` deep classification. F4 `contractHash` still deferred.
+1. **Per-failure-mode matrix** — **SHIPPED for F1/F2/F3/F4:** `ProtocolMismatch`, `MissingClientProtocol`, `verifyConnection` deep classification + `ContractMismatch` via `contractHash`.
 2. **Headless fleet smoke** — **SHIPPED:** `test/fleet-smoke.test.ts` (ws producer + NodeStatus).
 3. **Transport conformance matrix** — **SHIPPED** for queue/process/run/shardmap × {http, ws} + http→ws mismatch → `ProtocolMismatch` (`test/transport-conformance.test.ts`, `test/shardmap-remote.test.ts`). httpapi row still open if needed.
 

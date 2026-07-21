@@ -134,6 +134,7 @@ const ipcServerBase = (
           key: entry.groupId,
           kind: entry.kind,
           ready: result.ready,
+          contractHash: entry.contractHash,
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );

@@ -6,6 +6,7 @@
 import type { Effect } from "effect";
 import type {
   AnyNode,
+  ContractMismatch,
   NodeUnreachable,
   ProtocolUnanswered,
   ServiceNotReady,
@@ -19,7 +20,11 @@ type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : fa
 
 function typeLock(node: AnyNode): void {
   const tier1 = verifyConnection(node);
-  const deep = verifyConnection(node, { deep: true, resource: "app/X" });
+  const deep = verifyConnection(node, {
+    deep: true,
+    resource: "app/X",
+    contractHash: "deadbeef",
+  });
 
   type Tier1Err = ErrOf<typeof tier1>;
   type DeepErr = ErrOf<typeof deep>;
@@ -28,12 +33,14 @@ function typeLock(node: AnyNode): void {
   const _deepHasProtocol: ProtocolUnanswered extends DeepErr ? true : false = true;
   const _deepHasServed: ServiceNotServed extends DeepErr ? true : false = true;
   const _deepHasReady: ServiceNotReady extends DeepErr ? true : false = true;
+  const _deepHasHash: ContractMismatch extends DeepErr ? true : false = true;
   const _tier1LacksProtocol: ProtocolUnanswered extends Tier1Err ? false : true = true;
 
   void _tier1;
   void _deepHasProtocol;
   void _deepHasServed;
   void _deepHasReady;
+  void _deepHasHash;
   void _tier1LacksProtocol;
   void tier1;
   void deep;
