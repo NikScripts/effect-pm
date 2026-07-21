@@ -18,9 +18,12 @@
 - **Overload order:** the node→Layer form is declared **last** in each dual, because TS selects the last overload for a function used as a bare value (`node.pipe(connect)`); direct calls resolve top-down. Documented in-code.
 - **Loud fail is runtime, not compile-time.** `connect(node)` accepts any node and throws `UnaddressedNode` at call for a bare one, rather than a type-level `AddressedNode` gate. A compile-time gate would require overloading `makeNode` to return precise per-target url/kind types, which entangles the complex `store`/`logs` getter types — deferred as a possible refinement. Runtime throw is still eager + loud (at connect, not first RPC).
 
-**REMAINING (C-coupled follow-ups, well-specified now that the topology exists):**
-- **§8.3 serve-time `ProtocolKindMismatch`** — `wsServer`/`httpServer` assert each served tag's node `kind`. Coupled: `serverImpl` handles opaque `serve` layers and would need to read each served tag's bound node.
-- **§4.1/§4.2a reactive remap** — `MissingClientProtocol` (absent ambient protocol) and `ProtocolMismatch` (the "empty HTTP response" first-call defect). Coupled: the client-building / `forwardClient` path.
+**SHIPPED — §8.3 serve-time `ProtocolKindMismatch`** — `assertProtocolKinds` on `httpServer` / `wsServer` / `ipcServer` (set-membership for multi-protocol).
+
+**SHIPPED — §4.2a `ProtocolMismatch` remap** — `Resource.client` / `forwardClient` maps Effect's "empty HTTP response" `RpcClientDefect` (http client → ws server) to tagged `ProtocolMismatch`.
+
+**REMAINING:**
+- **§4.1 `MissingClientProtocol`** — absent ambient `RpcClient.Protocol` still a generic missing-service die; P1 already makes the classic mis-provide a compile error.
 - **§4.3/§8.4 `verify` handshake (F3/F4)** — investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
   - **F1/F3 verify is free and self-contained** — await `onConnect` / send one `Ping`, bounded by a timeout → `NodeUnreachable` (no Pong) or `ProtocolMismatch` (transport opened but handshake rejected — http↔ws). **No server-side application verb, works against any Effect RPC server today.** This unblocks **default-on `verify` for remote tags** (no host-health prerequisite).
   - **Socket vs http nuance:** socket is persistent (built-in ping timeouts / `onConnect`, verify nearly passive); http is stateless, so http-verify is one explicit `Ping` round-trip at connect.

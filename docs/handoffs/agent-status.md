@@ -13,7 +13,7 @@
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
 | **D** | **merged to `integration`** | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **M3 shipped** | `d2d340b4b` | typecheck 0 (both) / lint 0 / 418 tests | **M3 done:** `yield* MyQueue` hovers as named `QueueResource<Item>` (Svc seam on ResourceTag + 1 harness-guarded cast in nameQueueService; `events` success now `void`). Follow-ups: M2 `.Service` unify, per-Tag success/error carriers, elide trailing default args. Agent 3 must not touch handles | 2026-07-14 |
-| **E** | `integration` | [impossible-states](./impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) · [verify-connection](./verify-connection-classification.md) | **verify deep Eng’d** | on line | X1 multi-protocol + `verifyConnection({ deep })` classification | Reservation released. Deep path: `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady` over `selectEndpoint` | 2026-07-21 |
+| **E** | `cursor/verify-connection-deep-906e` | [impossible-states](./impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) · [verify-connection](./verify-connection-classification.md) | **verify deep + ProtocolMismatch Eng’d** | PR tip | X1 docs + deep verify + 4.2a remap | Remaining loud-failures: §4.1 `MissingClientProtocol`. [#77](https://github.com/NikScripts/effect-pm/pull/77) | 2026-07-21 |
 
 ---
 

@@ -204,6 +204,89 @@ export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPay
 }> {}
 
 /**
+ * An RPC call failed with a signature that means the client transport doesn't match the
+ * server (classic: http client → WebSocket server → Effect's "empty HTTP response" defect).
+ * Remapped at the {@link Resource.client} boundary so the failure is catchable by `_tag`
+ * instead of looking like an opaque `RpcClientDefect`. Topology already designs this out on
+ * the blessed path ({@link Node.connect} derives the transport); this is the legible backstop
+ * when an escape-hatch protocol is still wrong.
+ *
+ * @category errors
+ * @public
+ */
+export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
+  readonly resource: string;
+  readonly method: string;
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return (
+      `Resource "${this.resource}" method "${this.method}" hit a transport/protocol mismatch ` +
+      `(often an http client dialing a WebSocket server). Use Node.connect / the node's declared ` +
+      `kind (protocolWebsocket / socketClient), not a guessed transport.`
+    );
+  }
+}
+
+/**
+ * Effect's http RPC client surfaces a wrong-protocol peer as `RpcClientDefect` with these
+ * fixed messages (see `effect/unstable/rpc/RpcClient`). Match the defect `_tag` + those
+ * strings — the only discriminant the wire gives us.
+ *
+ * @internal
+ */
+const isHttpProtocolMismatchDefect = (err: unknown): boolean => {
+  if (!Predicate.hasProperty(err, "_tag") || err._tag !== "RpcClientError") {
+    return false;
+  }
+  if (!Predicate.hasProperty(err, "reason")) {
+    return false;
+  }
+  const reason = err.reason;
+  if (
+    !Predicate.hasProperty(reason, "_tag") ||
+    reason._tag !== "RpcClientDefect" ||
+    !Predicate.hasProperty(reason, "message") ||
+    typeof reason.message !== "string"
+  ) {
+    return false;
+  }
+  const msg = reason.message;
+  return (
+    msg.includes("Received empty HTTP response from RPC server") ||
+    msg.includes("HTTP response ended before RPC request completed")
+  );
+};
+
+/**
+ * Remap known http↔ws mismatch defects on a wire Effect / Stream / thunk to
+ * {@link ProtocolMismatch}. Identity for anything else.
+ *
+ * @internal
+ */
+const remapProtocolMismatch = (
+  resource: string,
+  method: string,
+  value: unknown,
+): unknown => {
+  if (Effect.isEffect(value)) {
+    return Effect.catch(value as Effect.Effect<unknown, unknown>, (err) =>
+      isHttpProtocolMismatchDefect(err)
+        ? new ProtocolMismatch({ resource, method, cause: err })
+        : Effect.fail(err),
+    );
+  }
+  if (Stream.isStream(value)) {
+    return Stream.mapError(value as Stream.Stream<unknown, unknown>, (err) =>
+      isHttpProtocolMismatchDefect(err)
+        ? new ProtocolMismatch({ resource, method, cause: err })
+        : err,
+    );
+  }
+  return value;
+};
+
+/**
  * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
  * encoded by the constructor used ({@link effect} vs {@link effectFn}):
  * - **`query`** — an idempotent read (CLI prints it, dashboard reads it as an Atom);
@@ -3743,10 +3826,12 @@ export const forwardClient = <S extends Spec>(
     }
     service[key] =
       m.payload === undefined
-        ? call(undefined, { headers })
+        ? remapProtocolMismatch(instanceKey, key, call(undefined, { headers }))
         : m.annotations.callStyle === "pair"
-          ? (arg0: unknown, arg1?: unknown) => call([arg0, arg1], { headers })
-          : (payload: unknown) => call(payload, { headers });
+          ? (arg0: unknown, arg1?: unknown) =>
+              remapProtocolMismatch(instanceKey, key, call([arg0, arg1], { headers }))
+          : (payload: unknown) =>
+              remapProtocolMismatch(instanceKey, key, call(payload, { headers }));
   }
   // Boundary assertion (runtime-safe): every method verified present above; RPC validates
   // every payload/result against the spec schemas at the wire.
