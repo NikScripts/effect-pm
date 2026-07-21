@@ -39,7 +39,7 @@ describe("Lookup directory advertise / nodesServing", () => {
   it.effect("advertise stores serves[]; nodesServing filters by resource key", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("adv");
-      const node = Node.Lookup()("lookup/dir-adv", { path });
+      const node = Node.Tag()("lookup/dir-adv", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
         Lookup.layer(node),
@@ -82,7 +82,7 @@ describe("Lookup directory advertise / nodesServing", () => {
   it.effect("unregister removes the row", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("unreg");
-      const node = Node.Lookup()("lookup/dir-unreg", { path });
+      const node = Node.Tag()("lookup/dir-unreg", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
         Lookup.layer(node),
@@ -119,7 +119,7 @@ describe("Lookup directory advertise / nodesServing", () => {
   it.effect("same dial target refreshes serves without IncumbentAlive", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("refresh");
-      const node = Node.Lookup()("lookup/dir-refresh", { path });
+      const node = Node.Tag()("lookup/dir-refresh", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
         Lookup.layer(node),
@@ -157,9 +157,9 @@ describe("Lookup directory livenessReplace", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("live-lookup");
       const workerPath = yield* tmpSock("live-worker");
-      const lookupNode = Node.Lookup()("lookup/dir-live", {
+      const lookupNode = Node.Tag()("lookup/dir-live", {
         path: lookupPath,
-      });
+      }).pipe(Node.asLookup);
 
       class Worker extends Node.Tag<Worker, Jobs>()("lookup-dir/Worker", {
         path: workerPath,
@@ -220,7 +220,7 @@ describe("Lookup directory livenessReplace", () => {
   it.live("dead / unreachable incumbent is replaced", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("dead");
-      const node = Node.Lookup()("lookup/dir-dead", { path });
+      const node = Node.Tag()("lookup/dir-dead", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
         Lookup.layer(node),
@@ -257,9 +257,9 @@ describe("Node.unix directory wire", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("close-lookup");
       const workerPath = yield* tmpSock("close-worker");
-      const lookupNode = Node.Lookup()("lookup/dir-close", {
+      const lookupNode = Node.Tag()("lookup/dir-close", {
         path: lookupPath,
-      });
+      }).pipe(Node.asLookup);
 
       class Worker extends Node.Tag<Worker, Jobs>()("lookup-dir/CloseWorker", {
         path: workerPath,
@@ -316,19 +316,19 @@ describe("resolveOnConflict", () => {
   });
 
   it("Lookup stamps concrete default; Tag defaults inherit", () => {
-    const lookup = Node.Lookup()("lookup/policy-default", {
+    const lookup = Node.Tag()("lookup/policy-default", {
       path: "/tmp/lookup-policy.sock",
-    });
+    }).pipe(Node.asLookup);
     const worker = Node.Tag()("lookup/policy-worker", {
       path: "/tmp/worker-policy.sock",
     });
     expect(lookup.onConflict).toBe("livenessReplace");
     expect(worker.onConflict).toBe("inherit");
 
-    const askLookup = Node.Lookup()("lookup/policy-ask", {
+    const askLookup = Node.Tag()("lookup/policy-ask", {
       path: "/tmp/lookup-ask.sock",
       onConflict: "askIncumbent",
-    });
+    }).pipe(Node.asLookup);
     expect(askLookup.onConflict).toBe("askIncumbent");
   });
 });
@@ -338,10 +338,10 @@ describe("Lookup directory askIncumbent", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("ask-lookup");
       const workerPath = yield* tmpSock("ask-worker");
-      const lookupNode = Node.Lookup()("lookup/dir-ask", {
+      const lookupNode = Node.Tag()("lookup/dir-ask", {
         path: lookupPath,
         onConflict: "askIncumbent",
-      });
+      }).pipe(Node.asLookup);
 
       class Worker extends Node.Tag<Worker, Jobs>()("lookup-dir/AskWorker", {
         path: workerPath,
@@ -402,10 +402,10 @@ describe("Lookup directory askIncumbent", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("ask-override-lookup");
       const workerPath = yield* tmpSock("ask-override-worker");
-      const lookupNode = Node.Lookup()("lookup/dir-ask-override", {
+      const lookupNode = Node.Tag()("lookup/dir-ask-override", {
         path: lookupPath,
         onConflict: "askIncumbent",
-      });
+      }).pipe(Node.asLookup);
 
       class Worker extends Node.Tag<Worker, Jobs>()(
         "lookup-dir/AskOverrideWorker",

@@ -41,24 +41,24 @@ it("withProtocol keeps the base node's advertise policy on the derived same-iden
 });
 
 it("Lookup defaults to the concrete livenessReplace policy, never inherit", () => {
-  class L extends Node.Lookup<L>()("policy/lookup", { path: "/tmp/l.sock" }) {}
+  class L extends Node.Tag<L>()("policy/lookup", { path: "/tmp/l.sock" }).pipe(Node.asLookup) {}
   expect(L.onConflict).toBe("livenessReplace");
   expect(Node.isLookupNode(L)).toBe(true);
 });
 
 it("Lookup honours an explicit resolved policy", () => {
-  class L extends Node.Lookup<L>()("policy/lookup-ask", {
+  class L extends Node.Tag<L>()("policy/lookup-ask", {
     path: "/tmp/l.sock",
     onConflict: "askIncumbent",
-  }) {}
+  }).pipe(Node.asLookup) {}
   expect(L.onConflict).toBe("askIncumbent");
 });
 
 it("Lookup accepts the multi-protocol shorthand (uniform with Tag) and stays livenessReplace", () => {
-  class L extends Node.Lookup<L>()("policy/lookup-dual", {
+  class L extends Node.Tag<L>()("policy/lookup-dual", {
     http: "http://l/rpc",
     ws: "ws://l/rpc",
-  }) {}
+  }).pipe(Node.asLookup) {}
   expect(L.endpoints).toEqual({
     Http: { url: "http://l/rpc" },
     WebSocket: { url: "ws://l/rpc" },

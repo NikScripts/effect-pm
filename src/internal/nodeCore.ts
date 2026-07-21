@@ -1,5 +1,5 @@
 /**
- * Node core — Tag / Prototype / Lookup constructors + catalog types.
+ * Node core — Tag / Prototype constructors, withProtocol / asLookup combinators + catalog types.
  * No Resource runtime imports (avoids circular init). Store binding is late via
  * {@link bindNodeStore}.
  *
@@ -491,7 +491,7 @@ const isShorthandTarget = (
   ("http" in t || "ws" in t || "ipc" in t);
 
 /** The advertise policy a construction target carries, if any — the single reader of `target.onConflict`
- *  for both {@link Tag} (default `"inherit"`) and {@link Lookup} (folds via {@link resolveOnConflict}).
+ *  for both {@link Tag} (default `"inherit"`) and {@link asLookup} (folds via {@link resolveOnConflict}).
  *  @internal */
 const onConflictFromTarget = (
   target: LooseNodeTarget | undefined,
@@ -854,6 +854,28 @@ export const withProtocol =
   };
 
 /**
+ * Brand a node as the fleet **lookup / identity server** — piped onto a {@link Tag} node (sibling to
+ * {@link withProtocol}). Reuses the node verbatim (address, transports, key, served resources) and
+ * folds its advertise policy to a **concrete** default: an explicit `{ onConflict }` survives, while an
+ * ordinary node's `"inherit"` (or none) becomes `"livenessReplace"` — a lookup root never inherits.
+ *
+ * ```ts
+ * class Directory extends Node.Tag<Directory>()("app/Lookup", { path: "/tmp/lookup.sock" }).pipe(Node.asLookup) {}
+ * class Dual extends Node.Tag<Dual>()("app/Lookup", { http: "http://l/rpc", ws: "ws://l/rpc" }).pipe(Node.asLookup) {}
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const asLookup = <N extends AnyNode>(
+  node: N,
+): N & { readonly isLookupNode: true } =>
+  Object.assign(node, {
+    isLookupNode: true as const,
+    onConflict: resolveOnConflict(node.onConflict),
+  });
+
+/**
  * Deriving a transport from a node that never declared one — a bare `Node.Tag()("x")` has no
  * address/`kind`, so `connect` / `listen` can't know how to reach it. Surfaces on the Layer / Effect
  * error channel (never a sync `throw`).
@@ -1066,106 +1088,8 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
   }
 }
 
-
 /**
- * A {@link Tag} marked as the identity/lookup server.
- *
- * Same-machine: `{ path }` (ipc). Cross-network: pass a full address — required; no elect (L1).
- * Dialable targets return an {@link AddressedNode} (same overloads as {@link Tag}).
- *
- * @category constructors
- * @public
- */
-export const Lookup = <Self>() => {
-  function build(
-    key: string,
-  ): NodeTagClass<Self, never, BareAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target: {
-      readonly path: string;
-      readonly kind?: "IpcSocket";
-      readonly onConflict?: OnConflictResolved;
-    },
-  ): NodeTagClass<Self, never, IpcAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target: number | `:${number}`,
-  ): NodeTagClass<Self, never, HttpAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target: `ws://${string}` | `wss://${string}`,
-  ): NodeTagClass<Self, never, WsAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target: `http://${string}` | `https://${string}`,
-  ): NodeTagClass<Self, never, HttpAddress> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target: string | { readonly url: string; readonly kind?: ProtocolKind },
-  ): NodeTagClass<Self, never, UrlAddressLoose> & {
-    readonly isLookupNode: true
-  };
-  function build<const T extends ShorthandTarget>(
-    key: string,
-    target: T,
-  ): NodeTagClass<Self, never, MultiAddress<KindsOf<T>>> & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target?: LooseNodeTarget,
-  ): NodeTagClass<
-    Self,
-    never,
-    | BareAddress
-    | IpcAddress
-    | HttpAddress
-    | WsAddress
-    | UrlAddressLoose
-    | MultiAddress<ProtocolKind>
-  > & {
-    readonly isLookupNode: true
-  };
-  function build(
-    key: string,
-    target?: LooseNodeTarget,
-  ): NodeTagClass<
-    Self,
-    never,
-    | BareAddress
-    | IpcAddress
-    | HttpAddress
-    | WsAddress
-    | UrlAddressLoose
-    | MultiAddress<ProtocolKind>
-  > & {
-    readonly isLookupNode: true
-  } {
-    const node = Tag<Self>()(key, target)
-    // Lookup is the fleet parent — its policy is always concrete (never the ordinary-node "inherit"):
-    // `resolveOnConflict` folds an explicit target policy, mapping "inherit"/absent → "livenessReplace".
-    const onConflict = resolveOnConflict(onConflictFromTarget(target))
-    return Object.assign(node, {
-      isLookupNode: true as const,
-      onConflict,
-    })
-  }
-  return build;
-};
-
-/**
- * True when `node` was built with {@link Lookup}.
+ * True when `node` was branded by {@link asLookup} (the fleet lookup/identity server).
  *
  * @category guards
  * @public
