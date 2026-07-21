@@ -1,11 +1,11 @@
 /**
- * @module examples/forms/resource/node-clients-for
+ * @module examples/forms/resource/node-clients
  *
- * **Catalog Node + `Node.clientsFor`** — one Worker advertises `Jobs | Emails`;
+ * **Catalog Node + `Node.clients`** — one Worker advertises `Jobs | Emails`;
  * the client dials both without repeating `connect`.
  *
  * ```bash
- * pnpm exec tsx examples/forms/resource/node-clients-for.ts
+ * pnpm exec tsx examples/forms/resource/node-clients.ts
  * ```
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
@@ -14,20 +14,17 @@ import { Context, Effect, Layer, Schema } from "effect"
 import * as Node from "../../../src/Node"
 import * as Resource from "../../../src/Resource"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/clientsFor/Jobs", {
+class Jobs extends Resource.Tag<Jobs>()("forms/clients/Jobs", {
   jobs: Resource.effect(Schema.Number),
 }) {}
 
-class Emails extends Resource.Tag<Emails>()("forms/clientsFor/Emails", {
+class Emails extends Resource.Tag<Emails>()("forms/clients/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs | Emails>(
-  "forms/clientsFor/Worker",
-  {
-    path: `/tmp/effect-pm-forms-clients-for-${process.pid}.sock`,
-  },
-) {}
+class Worker extends Node.Tag<Worker, Jobs | Emails>("forms/clients/Worker", {
+  path: `/tmp/effect-pm-forms-clients-${process.pid}.sock`,
+}) {}
 
 const program = Effect.gen(function* () {
   const serverCtx = yield* Layer.build(
@@ -36,8 +33,8 @@ const program = Effect.gen(function* () {
       Resource.serve(Emails, { emails: Effect.succeed("ok") }),
     ]),
   )
-  // One bundled connect — tags must cover Worker's ROut.
-  const clientCtx = yield* Layer.build(Node.clientsFor(Worker, Jobs, Emails))
+  // Array or rest — tags must cover Worker's ROut.
+  const clientCtx = yield* Layer.build(Node.clients(Worker, [Jobs, Emails]))
 
   const pair = yield* Effect.gen(function* () {
     const jobs = yield* Jobs

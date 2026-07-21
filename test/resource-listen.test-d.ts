@@ -34,9 +34,30 @@ const partial: Layer.Layer<any, any, any> = Node.unix(Worker, [
 void full;
 void partial;
 
-const clients = Node.clientsFor(Worker, Jobs, Emails);
-void clients;
+const clientsRest = Node.clients(Worker, Jobs, Emails);
+void clientsRest;
 
-// @ts-expect-error C3: clientsFor must cover Emails
-const clientsPartial = Node.clientsFor(Worker, Jobs);
+const clientsArr = Node.clients(Worker, [Jobs, Emails]);
+void clientsArr;
+
+// @ts-expect-error C3: clients must cover Emails
+const clientsPartial = Node.clients(Worker, Jobs);
 void clientsPartial;
+
+// @ts-expect-error C3: array form must cover Emails
+const clientsPartialArr = Node.clients(Worker, [Jobs]);
+void clientsPartialArr;
+
+class BoundJobs extends Resource.Tag<BoundJobs>()("listen-d/BoundJobs", {
+  jobs: Resource.effect(Schema.Number),
+}).pipe(Resource.andNode(Worker)) {}
+
+class BoundEmails extends Resource.Tag<BoundEmails>()("listen-d/BoundEmails", {
+  emails: Resource.effect(Schema.String),
+}).pipe(Resource.andNode(Worker)) {}
+
+const clientsBoundRest = Node.clients(BoundJobs, BoundEmails);
+void clientsBoundRest;
+
+const clientsBoundArr = Node.clients([BoundJobs, BoundEmails]);
+void clientsBoundArr;
