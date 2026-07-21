@@ -80,7 +80,3 @@ describe("Node.unix", () => {
     }).pipe(Effect.timeout(Duration.seconds(10))),
   );
 });
-
-class JobsAnon extends Resource.Tag<JobsAnon>()("unix/JobsAnon", {
-  jobs: Resource.effect(Schema.Number),
-}) {}
