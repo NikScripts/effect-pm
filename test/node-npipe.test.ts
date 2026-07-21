@@ -51,7 +51,7 @@ describe("Node.nPipe", () => {
 });
 
 describe.skipIf(process.platform !== "win32")("Node.nPipe (win32)", () => {
-  it.effect("nameless serve — named pipe + Lookup; clientLocal dials", () =>
+  it.effect("nameless serve — named pipe + Lookup; discoverClient dials", () =>
     Effect.gen(function* () {
       const lookupPath = `\\\\.\\pipe\\effect-pm-npipe-lookup-${process.pid}`;
       const serverCtx = yield* Layer.build(
@@ -61,7 +61,7 @@ describe.skipIf(process.platform !== "win32")("Node.nPipe (win32)", () => {
         }),
       );
       const clientCtx = yield* Layer.build(
-        Resource.clientLocal(JobsAnon, { lookupPath, unlink: false }),
+        Resource.discoverClient(JobsAnon, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* JobsAnon;
