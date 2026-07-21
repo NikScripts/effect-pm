@@ -853,3 +853,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — Owner: **`Resource.discoverClients`** (array/rest) — mergeAll of discover clients, one Lookup bootstrap.
 - **2026-07-21** — **X1 multi-protocol Eng’d** on `integration`: `{ http, ws, ipc }` Tag shorthand, `Node.withProtocol`, `connect`/`selectEndpoint`, P3 set-membership, dual-serve proof. Catalog row flipped OPEN → LOCKED + Eng’d.
 - **2026-07-21** — Owner “Do it” → **`verifyConnection` deep classification Eng’d:** `{ deep: true }` dials `NodeStatus` over `selectEndpoint` (or `{ all: true }`); `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged.
+- **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Resource.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
