@@ -21,7 +21,7 @@ import {
   Stream,
 } from "effect";
 import * as Resource from "../Resource";
-import { LogRelay } from "../Logs";
+import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
 import { queryDurableNode } from "./logs/durableRead";

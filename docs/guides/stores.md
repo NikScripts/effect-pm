@@ -76,7 +76,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 ## Logs vs `layerDefaultMemory`
 
 `Store.layerDefaultMemory` (what soft-default / `*Memory` toolkit layers use) is **engine observability only**.
-It does **not** install `LogRelay` / durable `_logs` tails. Durable logs need
+It does **not** install `Logs.Relay` / durable `_logs` tails. Durable logs need
 `Store.Service.layer*` (bakes `Logs.layer`) or an explicit `Logs.layer`.
 
 Node journal + resource `_logs` copies of the same live line are intentional — see the logs guide.

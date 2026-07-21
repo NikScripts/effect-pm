@@ -150,7 +150,7 @@ BillingNode process (node log key: billing/scores)
 ```
 
 - **Capture:** exactly one merged capture logger per node (`Logs.layer`, baked into `Store.Service`).
-- **Bus:** one `LogRelay` (PubSub + bounded tail).
+- **Bus:** one `Logs.Relay` (PubSub + bounded tail; internal Context tag remains `LogRelay`).
 - **Durable tails:** Stream pipeline per registration — level ∧ match → claim → batch append; claim seeded from durable `_logs` at layer acquire.
 - **Stream:** unfiltered on `Logs.stream`; `Resource.logs` applies lineage + optional `logStreamLevel`.
 

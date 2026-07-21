@@ -135,8 +135,11 @@ export {
   DuplicateInstance,
   DuplicateResourceKey,
   EffectFnMissingPayload,
+  IdentityMultiNode,
+  IdentitySelfRequired,
   InstanceRoutingError,
   LocalOnlyMethod,
+  LookupClientError,
   MissingClientProtocol,
   MissingContractMethod,
   ProtocolMismatch,
@@ -212,18 +215,7 @@ export {
   LogEntrySchema,
 } from "./LogEntry";
 export * as LogEntry from "./LogEntry";
-export {
-  LogRelay,
-  captureLogger,
-  captureLoggerLayer,
-  relayLayer,
-  logsRelayLayer,
-  replayLogEntry,
-  relayOnlyLayer as logRelayLayer,
-  relayWithCaptureLoggerLayer,
-} from "./Logs";
-// Module namespace (Effect-style) so `Logs.captureLoggerLayer` etc. resolve the
-// same bindings as the flat root re-exports above.
+// Module namespace (Effect-style): `Logs.layer` / `Logs.Relay` / `Logs.replay`.
 export * as Logs from "./Logs";
 export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";

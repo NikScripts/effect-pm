@@ -176,7 +176,7 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 ## Layers read as layers
 
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
-`layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`persistLayer`, `peersLayer`).
+`layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`clientVerify`, `peersLayer`).
 Either way the name says "layer."
 
 {#discriminant-tags-pascalcase .must appliesTo="src examples"}

@@ -20,7 +20,7 @@ A finished Node stack looks like this:
 ```
 Your Node (key: billing/scores)
   Store.Service
-    └── Logs.layer          — one capture Logger + LogRelay bus
+    └── Logs.layer          — one capture Logger + Logs.Relay bus
     └── BillingNode.logs    — match-all durable tail → node journal
     └── Process.store(Daily)— lineage durable tail → resource journal
   Process / Queue layers
@@ -29,7 +29,7 @@ Your Node (key: billing/scores)
 
 - **Capture** — exactly one merged capture Logger per Node (`Logs.layer`, baked into
   `Store.Service`).
-- **Bus** — one `LogRelay`: PubSub plus a bounded in-memory snapshot for late subscribers.
+- **Bus** — one `Logs.Relay`: PubSub plus a bounded in-memory snapshot for late subscribers.
 - **Durable tails** — one Stream follower per store registration: level gate → match → append to that
   registration’s private `_logs` journal (Effect-style underscore field — not on public handle types).
 - **Lineage** — a JSON array of segment keys on each line (`Logs.withScope`), so filters can select by
@@ -294,6 +294,7 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 |-----|-------------|
 | `Logs.persistLayer` + `store/Log` | `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` | `Logs.*` |
+| `LogRelay` / `replayLogEntry` / `*RelayLayer` flat aliases | `Logs.Relay` / `Logs.replay` / `Logs.layer` |
 | Engine `captureLogs` / handle `.logs` | `Logs.layer` + `Logs.withScope` + `Resource.logs` |
 | `HistoryStore` `` `${tag.key}/logs` `` | Registration `_logs` + `Resource.logs` / `Logs.by*` |
 
