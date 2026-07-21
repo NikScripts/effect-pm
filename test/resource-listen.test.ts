@@ -23,8 +23,8 @@ class Emails extends Resource.Tag<Emails>()("listen/Emails", {
 const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-describe("Node.listen + clientsFor (C2)", () => {
-  it.effect("listen on IpcSocket serves the catalog; clientsFor dials without repeating connect", () =>
+describe("Node.unix + clientsFor (C2)", () => {
+  it.effect("unix on IpcSocket serves the catalog; clientsFor dials without repeating connect", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog");
       class Worker extends Node.Tag<Worker, Jobs | Emails>(
