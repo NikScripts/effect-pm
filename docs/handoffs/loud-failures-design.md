@@ -1,6 +1,6 @@
 # Design: loud, eager transport failures
 
-**Status (2026-07-21):** Core loud-failure track **Eng’d** on `integration` / Agent 3 tip — topology (§8.1–8.2), serve assert (§8.3), `ProtocolMismatch` / `MissingClientProtocol` (§4.1–4.2a), tier-1 + deep `verifyConnection` (§4.3/§8.4 F3). **Still owner-gated:** default-on verify (§8.6), F4 `contractHash`.
+**Status (2026-07-21):** Core loud-failure track **Eng’d** — topology (§8.1–8.2), serve assert (§8.3), `ProtocolMismatch` / `MissingClientProtocol` (§4.1–4.2a), tier-1 + deep `verifyConnection`, **default-on client verify (§8.6)**. **In flight / next:** F4 `contractHash`.
 **Author intent:** kill the recurring "silent wiring failure" bug class at the library level.
 
 ---

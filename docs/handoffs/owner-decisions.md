@@ -29,6 +29,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (Eng):** Recipe guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md); lean helpers `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired` message; **no** magic baked into protocol listens (Lookup stays pipe-only).
 - **Supervisor impact:** Identity coordinator v1 (M1–M6) complete on tip.
 
+## 2026-07-21 — Unlock Soft fail-loud + default-on verify + contractHash + memo
+
+- **Owner said:** “All of them in whatever order” (after unlock menu).
+- **Chose:** Eng in order Soft fail-loud → default-on verify → F4 contractHash → store-layer lineId memo.
+- **Supervisor impact:** Agent 3 Eng on tip; Soft fail-loud + default-on verify landing first.
+
 ## 2026-07-21 — Protocol listen siblings stay in sync
 
 - **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.
