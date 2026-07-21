@@ -490,6 +490,14 @@ const isShorthandTarget = (
   t !== null &&
   ("http" in t || "ws" in t || "ipc" in t);
 
+/** The advertise policy a construction target carries, if any — the single reader of `target.onConflict`
+ *  for both {@link Tag} (default `"inherit"`) and {@link Lookup} (folds via {@link resolveOnConflict}).
+ *  @internal */
+const onConflictFromTarget = (
+  target: LooseNodeTarget | undefined,
+): OnConflict | undefined =>
+  typeof target === "object" && target !== null ? target.onConflict : undefined;
+
 /**
  * A node was built with inconsistent transport fields — a programming invariant, thrown at
  * declaration (like {@link DuplicateResourceKey}) so a malformed node fails loudly *there* instead of
@@ -776,14 +784,9 @@ export const Tag = <Self, ROut = never>() => {
             ? { Http: { url } }
             : {};
   }
-  // Advertise conflict policy — an explicit `{ onConflict }` on the target wins; an ordinary node
-  // defaults to `"inherit"` (resolved up the chain at advertise time). The shorthand carries it too.
-  const onConflict: OnConflict =
-    typeof target === "object" &&
-    target !== null &&
-    target.onConflict !== undefined
-      ? target.onConflict
-      : "inherit";
+  // Advertise conflict policy — an explicit `{ onConflict }` on the target wins (shorthand included);
+  // an ordinary node defaults to `"inherit"` (resolved up the chain at advertise time).
+  const onConflict: OnConflict = onConflictFromTarget(target) ?? "inherit";
   return assembleNode<
     Self,
     ROut,
@@ -1075,12 +1078,12 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
  */
 export const Lookup = <Self>() => {
   function build(
-    name: string,
+    key: string,
   ): NodeTagClass<Self, never, BareAddress> & {
     readonly isLookupNode: true
   };
   function build(
-    name: string,
+    key: string,
     target: {
       readonly path: string;
       readonly kind?: "IpcSocket";
@@ -1090,31 +1093,37 @@ export const Lookup = <Self>() => {
     readonly isLookupNode: true
   };
   function build(
-    name: string,
+    key: string,
     target: number | `:${number}`,
   ): NodeTagClass<Self, never, HttpAddress> & {
     readonly isLookupNode: true
   };
   function build(
-    name: string,
+    key: string,
     target: `ws://${string}` | `wss://${string}`,
   ): NodeTagClass<Self, never, WsAddress> & {
     readonly isLookupNode: true
   };
   function build(
-    name: string,
+    key: string,
     target: `http://${string}` | `https://${string}`,
   ): NodeTagClass<Self, never, HttpAddress> & {
     readonly isLookupNode: true
   };
   function build(
-    name: string,
+    key: string,
     target: string | { readonly url: string; readonly kind?: ProtocolKind },
   ): NodeTagClass<Self, never, UrlAddressLoose> & {
     readonly isLookupNode: true
   };
+  function build<const T extends ShorthandTarget>(
+    key: string,
+    target: T,
+  ): NodeTagClass<Self, never, MultiAddress<KindsOf<T>>> & {
+    readonly isLookupNode: true
+  };
   function build(
-    name: string,
+    key: string,
     target?: LooseNodeTarget,
   ): NodeTagClass<
     Self,
@@ -1129,7 +1138,7 @@ export const Lookup = <Self>() => {
     readonly isLookupNode: true
   };
   function build(
-    name: string,
+    key: string,
     target?: LooseNodeTarget,
   ): NodeTagClass<
     Self,
@@ -1143,16 +1152,10 @@ export const Lookup = <Self>() => {
   > & {
     readonly isLookupNode: true
   } {
-    const node = Tag<Self>()(name, target)
-    // Lookup is the fleet parent — concrete default (never leave as ordinary-node "inherit").
-    const onConflict: OnConflict =
-      typeof target === "object" &&
-      target !== null &&
-      target.onConflict !== undefined
-        ? target.onConflict === "inherit"
-          ? "livenessReplace"
-          : target.onConflict
-        : "livenessReplace";
+    const node = Tag<Self>()(key, target)
+    // Lookup is the fleet parent — its policy is always concrete (never the ordinary-node "inherit"):
+    // `resolveOnConflict` folds an explicit target policy, mapping "inherit"/absent → "livenessReplace".
+    const onConflict = resolveOnConflict(onConflictFromTarget(target))
     return Object.assign(node, {
       isLookupNode: true as const,
       onConflict,
