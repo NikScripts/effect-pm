@@ -8,11 +8,24 @@ import { Footer } from "../components/Footer.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
 import { CodeCopy } from "../islands/CodeCopy.js";
+import { ShortcutsHelp } from "../islands/ShortcutsHelp.js";
+import { Effect } from "effect";
+import * as FileSystem from "effect/FileSystem";
+import * as nodePath from "node:path";
+import { runServer } from "../lib/runtime.js";
+
+const readVersion = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const text = yield* fs.readFileString(nodePath.join(process.cwd(), "../..", "package.json"));
+  const m = /"version":\s*"([^"]+)"/.exec(text);
+  return m?.[1] ?? "";
+}).pipe(Effect.orElseSucceed(() => ""));
 
 // Root layout — owns all chrome. Nav is generated from the content manifest,
 // so adding a `.dj` file updates the nav with no edit here.
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const groups = await navGroups();
+  const version = await runServer(readVersion);
   // Standards is its own book: the desktop sidebar swaps to its chapters while you're inside
   // (ContextualNav), and the regular sidebar carries a single entry link instead of the group.
   const standardsGroup = groups.find((g) => g.label === "Standards");
@@ -63,7 +76,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       {/* Tint the mobile browser chrome (status bar / notch) to match the page in each mode. */}
       <meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />
-      <NavBar groups={groups} />
+      <NavBar groups={groups} version={version} />
       <div className="layout">
         <aside className="sidebar">
           <ContextualNav
@@ -78,6 +91,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <TwoslashHover />
       <GlossaryHover data={glossaryEntries()} />
       <CodeCopy />
+      <ShortcutsHelp />
     </>
   );
 }
