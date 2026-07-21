@@ -10,7 +10,7 @@
  * - {@link unix} — IpcSocket listen (nameless / Tag+impl / node+serves); pipe Lookup when needed
  * - {@link http} — local Http listen (localhost bind / nameless / Tag+impl); pipe Lookup when needed
  * - {@link ws} — local WebSocket listen (localhost bind / nameless / Tag+impl); pipe Lookup when needed
- * - {@link nPipe} — Windows named-pipe IpcSocket listen + Lookup (sibling of {@link unix})
+ * - {@link nPipe} — Windows named-pipe IpcSocket listen (sibling of {@link unix}); pipe Lookup when needed
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
@@ -104,7 +104,7 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
   : never
 
 /**
- * Sugar: {@link unix}`(node, serves)` — IPC listen + Lookup bootstrap.
+ * Sugar: {@link unix}`(node, serves)` — IPC listen (pipe Lookup when needed).
  * Prefer {@link unix} (also covers Tag+impl and nameless forms).
  *
  * @category listen

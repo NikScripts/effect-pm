@@ -32,10 +32,10 @@ const program = Effect.gen(function* () {
     [Resource.serve(Mail, { pending: Effect.succeed(3) })],
   ).pipe(Layer.provide(lookup))
 
-  // Dynamic instance factory — pipe Lookup on the returned listen layer
-  const spawn = MailWorker.listen(
-    [Resource.serve(Mail, { pending: Effect.succeed(9) })],
-  )
+  // Dynamic instance — same Lookup pipe + protocol siblings as Node.unix / http / ws
+  const spawn = MailWorker.listen([
+    Resource.serve(Mail, { pending: Effect.succeed(9) }),
+  ])
   const dynamic = spawn("w1").pipe(
     Layer.provide(Lookup.layerOptions({ path: lookupPath, unlink: false })),
   )
