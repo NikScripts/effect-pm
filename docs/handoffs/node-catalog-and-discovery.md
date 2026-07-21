@@ -787,7 +787,7 @@ Owner rethink: maybe **singletons and managers are the same thing** — identity
 
 Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); managed `R`s = **type params** (+ optional enforce at impl). Drop required value-level manages list unless a later Eng need appears.
 
-**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng identity liveness + coordinator pattern via [`identity-coordinator.md`](./identity-coordinator.md). Identity/lookup already Eng’d (S1 / L1); next = liveness + example, then placement advice.
+**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng via [`identity-coordinator.md`](./identity-coordinator.md). **M4 Eng’d** (identity liveness + coordinator example); next = placement advice (M5).
 
 ### `serve` naming (C5 — **LOCKED**)
 
@@ -854,3 +854,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — **X1 multi-protocol Eng’d** on `integration`: `{ http, ws, ipc }` Tag shorthand, `Node.withProtocol`, `connect`/`selectEndpoint`, P3 set-membership, dual-serve proof. Catalog row flipped OPEN → LOCKED + Eng’d.
 - **2026-07-21** — Owner “Do it” → **`verifyConnection` deep classification Eng’d:** `{ deep: true }` dials `NodeStatus` over `selectEndpoint` (or `{ all: true }`); `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged.
 - **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Resource.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
+- **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/resource/node-identity-coordinator.ts`.

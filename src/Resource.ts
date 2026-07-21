@@ -2184,16 +2184,23 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
 }
 
 /**
- * Identity-claiming resources need a dialable Node — Tag-bound (`nodes` / `{ node }`) and/or
- * the {@link ListenNode} from {@link Node.unix} / {@link Node.http} / {@link Node.ws}
- * (including minted address-less Nodes).
+ * Identity-claiming resources need Lookup's Identity client **and** a dialable Node —
+ * Tag-bound (`nodes` / `{ node }`) and/or the {@link ListenNode} from {@link Node.unix} /
+ * {@link Node.http} / {@link Node.ws} (including minted address-less Nodes).
  *
  * @category errors
  * @public
  */
 export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired")<{
   readonly tag: string;
-}> {}
+}> {
+  override get message() {
+    return (
+      `Identity "${this.tag}" needs Lookup.Identity and a dialable self ` +
+      `(listen or Resource.nodes([Node])). Provide Lookup.client / Lookup.layer.`
+    );
+  }
+}
 
 /**
  * Identity-stamped Tags may carry at most one Node (S1). Multi-node fleets use ordinary Tags +

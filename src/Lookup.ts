@@ -6,6 +6,8 @@
  * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
+ *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
+ *   (NodeStatus `ping`) → replace; alive → {@link DuplicateIdentity}.
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
  *   `nodeKey` conflict policy via {@link OnConflict} (default **livenessReplace**): ping
  *   incumbent {@link NodeStatus} `ping`; alive → {@link IncumbentAlive} (or ask
@@ -202,7 +204,9 @@ const identitySpec = {
     error: DuplicateIdentity,
   }).annotate({
     description:
-      "First claim for `key` wins and returns the endpoint; later claims fail with DuplicateIdentity.",
+      "First claim for `key` wins and returns the endpoint. Later claims: same dial " +
+      "refreshes; dead/unreachable incumbent (NodeStatus.ping) is replaced; a live " +
+      "different dial fails with DuplicateIdentity.",
   }),
   resolve: Resource.effectFn({
     payload: ResolveRequest,
@@ -214,7 +218,7 @@ const identitySpec = {
 };
 
 /**
- * Lookup identity service — claim resource keys (first wins).
+ * Lookup identity service — claim resource keys (first wins; dead winners replaceable).
  *
  * @category services
  * @public
@@ -319,7 +323,7 @@ const storedFromAdvertise = (
 
 /** Ping incumbent via NodeStatus.ping — true if reachable within timeout. */
 const incumbentAlive = (
-  entry: internal.StoredDirectoryEntry,
+  entry: internal.StoredEndpoint,
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
@@ -389,18 +393,48 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
       const registries = yield* internal.makeRegistries();
       const identity = Resource.serve(Identity, {
         claim: (req: ClaimRequest) =>
-          registries.claims.claim(req.key, storedFromClaim(req)).pipe(
-            Effect.flatMap((outcome) =>
-              outcome._tag === "Duplicate"
-                ? Effect.fail(
-                    new DuplicateIdentity({
-                      key: outcome.key,
-                      original: toEndpoint(outcome.original),
-                    }),
-                  )
-                : Effect.succeed(toEndpoint(outcome.endpoint)),
-            ),
-          ),
+          Effect.gen(function* () {
+            const next = storedFromClaim(req);
+            const outcome = yield* registries.claims.claim(req.key, next);
+            if (outcome._tag === "Won") {
+              return toEndpoint(outcome.endpoint);
+            }
+            // Idempotent reclaim / refresh of the same dial target.
+            if (internal.sameDialTarget(outcome.original, next)) {
+              return toEndpoint(outcome.original);
+            }
+            const alive = yield* incumbentAlive(outcome.original);
+            if (!alive) {
+              const removed = yield* registries.claims.removeIfSameDial(
+                req.key,
+                outcome.original,
+              );
+              if (removed) {
+                const retry = yield* registries.claims.claim(req.key, next);
+                if (retry._tag === "Won") {
+                  return toEndpoint(retry.endpoint);
+                }
+                // Raced with another claimant — surface their endpoint.
+                return yield* new DuplicateIdentity({
+                  key: retry.key,
+                  original: toEndpoint(retry.original),
+                });
+              }
+              // Concurrent replace already cleared the dead row — try once more.
+              const retry = yield* registries.claims.claim(req.key, next);
+              if (retry._tag === "Won") {
+                return toEndpoint(retry.endpoint);
+              }
+              return yield* new DuplicateIdentity({
+                key: retry.key,
+                original: toEndpoint(retry.original),
+              });
+            }
+            return yield* new DuplicateIdentity({
+              key: outcome.key,
+              original: toEndpoint(outcome.original),
+            });
+          }),
         resolve: (req: ResolveRequest) =>
           registries.claims.resolve(req.key).pipe(
             Effect.map(Option.map(toEndpoint)),

@@ -1,6 +1,6 @@
 # Identity coordinator — exclusive brain + many hands
 
-**Status:** **LOCKED for Eng** (owner “Oooh yes. Let’s build it.” / “Handoff is our next major goal”, 2026-07-21).  
+**Status:** **M4 Eng’d** (identity liveness + coordinator example, 2026-07-21). M5 placement advice still later.  
 **Work branch:** `cursor/logs-store-followers-plan-906e` — sync tip with `integration`.  
 **Related:** [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) (S1 identity, Lookup, directory) · [`owner-decisions.md`](./owner-decisions.md) · shipped `Resource.identity` / `Lookup.Identity` / `Lookup.Directory`.
 
@@ -61,33 +61,33 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | `lookupClient` + D4 `{ pick }` | **Eng’d** |
 | Nameless / Prototype / multi-protocol listen + clients | **Eng’d** |
 | Loud-failures: `verifyConnection({ deep })`, `ProtocolMismatch`, `MissingClientProtocol` | **Eng’d** |
-
-Identity today is **claim-at-layer-build** only. Winner death leaves a stale identity row until Lookup restarts — **that is the gap M4 closes.**
+| Identity claim liveness (dead winner → replaceable) + same-dial refresh | **Eng’d** (M4 slice 1) |
+| Coordinator+workers form (`node-identity-coordinator`) | **Eng’d** (M4 slice 2) |
 
 ---
 
 ## Gaps → Eng slices
 
-### Slice 1 — Identity liveness (**M4 core**)
+### Slice 1 — Identity liveness (**M4 core**) — **Eng’d**
 
 **Goal:** A dead winner does not own the key forever.
 
-Lean (Eng details may refine; behavior locked):
+Shipped:
 
-1. Lookup treats identity claims as **live** — ping winner via `NodeStatus` (same primitive directory uses), or an equivalent heartbeat.
-2. Dead / unreachable → claim **released** (or replaceable by next `claim`).
-3. Optional cooperative handoff for identity keys — reuse `askIncumbent` / `NodeStatus.yield` vocabulary where it fits (exact stamp surface in Eng).
-4. Tests: winner dies → second process claims and serves; loser still becomes client of the new winner.
+1. Lookup identity `claim` pings incumbent via `NodeStatus` (same primitive as directory).
+2. Dead / unreachable → claim released; newcomer wins. Alive → `DuplicateIdentity`.
+3. Same dial refreshes without error. Cooperative `askIncumbent` for identity keys left optional/later.
+4. Tests: `test/lookup-identity.test.ts`, `test/resource-identity.test.ts` (dead winner reclaim).
 
 **Not in slice 1:** placement advice wire, Manager naming, changing S1 fail-closed-when-Lookup-down.
 
-### Slice 2 — Teach the pattern (**M4 companion**)
+### Slice 2 — Teach the pattern (**M4 companion**) — **Eng’d**
 
 **Goal:** One copy-paste fleet story.
 
-- Forms or scenarios example: identity **Router** + N **Worker**s (directory / nameless listen) + Lookup.
+- Form: [`examples/forms/resource/node-identity-coordinator.ts`](../../examples/forms/resource/node-identity-coordinator.ts) — identity **Router** + N **Worker**s + Lookup.
 - README / catalog cross-link: “one brain, many hands.”
-- Tighten `IdentitySelfRequired` message if still opaque (Lookup + dialable self).
+- Clearer `IdentitySelfRequired` message (Lookup + dialable self).
 
 ### Slice 3 — Placement advice (**M5**, later bake/Eng)
 
@@ -133,8 +133,8 @@ class Worker extends Resource.Tag<Worker>()("fleet/Worker", {
 
 | Order | Slice | Owner unlock |
 |-------|-------|--------------|
-| 1 | Identity liveness | **Unlocked** (this handoff) |
-| 2 | Coordinator+workers example | **Unlocked** (same wave as 1 or immediately after) |
+| 1 | Identity liveness | **Eng’d** |
+| 2 | Coordinator+workers example | **Eng’d** |
 | 3 | Placement advice | Needs short wire bake, then Eng |
 | 4 | Sugar | After 1–2 |
 

@@ -45,6 +45,14 @@ export type ClaimRegistry = {
     key: string,
     endpoint: StoredEndpoint,
   ) => Effect.Effect<ClaimOutcome>;
+  /**
+   * Drop a claim only when the stored dial still matches `endpoint` — safe after
+   * a dead-incumbent probe so a concurrent newcomer is not wiped.
+   */
+  readonly removeIfSameDial: (
+    key: string,
+    endpoint: StoredEndpoint,
+  ) => Effect.Effect<boolean>;
   readonly resolve: (
     key: string,
   ) => Effect.Effect<Option.Option<StoredEndpoint>>;
@@ -107,6 +115,16 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
               return [{ _tag: "Won", endpoint }, next];
             },
           ),
+        removeIfSameDial: (key, endpoint) =>
+          Ref.modify(claimMap, (current) => {
+            const existing = current.get(key);
+            if (existing === undefined || !sameDialTarget(existing, endpoint)) {
+              return [false, current] as const;
+            }
+            const next = new Map(current);
+            next.delete(key);
+            return [true, next] as const;
+          }),
         resolve: (key) =>
           Ref.get(claimMap).pipe(
             Effect.map((current) => Option.fromNullishOr(current.get(key))),
