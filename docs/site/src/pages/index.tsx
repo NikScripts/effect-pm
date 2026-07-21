@@ -3,7 +3,7 @@ import { renderChapter } from "../lib/docs-content.js";
 import { PrevNext } from "../components/PrevNext.js";
 import { DraftBanner, PageAside } from "../components/PageAside.js";
 import { PageMeta } from "../components/PageMeta.js";
-import { firstParagraphs } from "../components/page-desc.js";
+import { firstParagraphs } from "../lib/page-desc.js";
 
 // Home = the "Getting started" overview chapter, rendered through the Effect pipeline.
 export default async function HomePage() {
