@@ -400,7 +400,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | **`reject`** | Strict never-steal (dead still replaceable? OPEN) |
 | **`lastWins`** (orphan first) | **Not** the default |
 
-#### `askIncumbent` advertise policy (**OPEN** — bake 2026-07-19)
+#### `askIncumbent` advertise policy (**OPEN** — bake 2026-07-21; inheritance lean)
 
 **Shipped today (fact):**
 
@@ -413,56 +413,76 @@ Lookup.directoryAdvertiseLayer(node, serves) // always livenessReplace
 
 **Gap:** rolling restart / takeover of a **named** Node (`Worker` / `Proto.make("East", …)`) while the old process is still up — today the newcomer is hard-rejected until the old process dies or unregisters.
 
-**Not this bake:** manager LB streams; queue/work drain across processes; changing default away from `livenessReplace`.
+**Not this bake:** manager LB streams; queue/work drain across processes; changing the **hard** fallback away from `livenessReplace`.
 
 ##### Job (lean)
 
-When policy is `askIncumbent` and the incumbent is **alive**, Lookup **asks it to yield** (cooperative). If it yields (unregisters / accepts), newcomer’s advertise succeeds. If it refuses or times out → same as today: `IncumbentAlive`. Dead incumbent still replaced (same as livenessReplace).
+When effective policy is `askIncumbent` and the incumbent is **alive**, Lookup **asks it to yield** (cooperative). If it yields (unregisters / accepts), newcomer’s advertise succeeds. If it refuses or times out → `IncumbentAlive`. Dead incumbent still replaced (same as livenessReplace).
 
-##### Surface options
-
-**A — Policy on advertise / listen (LEAN)**
+##### Surface + inheritance (LEAN — replaces A-only)
 
 ```ts
-// listen opts (or AdvertiseRequest field) — default stays livenessReplace
-Resource.listen(East, [Resource.serve(Mail, impl)], {
-  onConflict: "askIncumbent", // | "livenessReplace" | "reject"
+type OnConflict =
+  | "livenessReplace" // today’s behavior
+  | "askIncumbent"    // cooperative yield ask
+  | "reject"          // alive → IncumbentAlive; dead → still replace (AI.6)
+  | "inherit"         // take Lookup node’s concrete policy at advertise time
+
+// 1) Stamp fleet default on the Lookup node constructor
+class AppLookup extends Node.Lookup("app/Lookup", {
+  path: "/tmp/app-lookup.sock",
+  onConflict: "askIncumbent", // concrete — Lookup should not use "inherit"
+}) {}
+
+// 2) Ordinary nodes default to inherit (unless stamped)
+class Worker extends Node.Tag("app/Worker") {} // onConflict: "inherit"
+class Sticky extends Node.Tag("app/Sticky", {
+  path: "/tmp/sticky.sock",
+  onConflict: "reject", // node-definition override
+}) {}
+
+// 3) Call-site option still wins when provided
+Node.unix(Worker, [Resource.serve(Mail, impl)], {
+  onConflict: "livenessReplace",
 })
-
-// Lookup.advertise path mirrors the same tag when callers advertise by hand
 ```
 
-**B — Lookup server global default (sketch)**
+**Resolve order** (first concrete wins; `"inherit"` continues):
 
-```ts
-Lookup.layer(node, { onConflict: "askIncumbent" })
-```
+1. Call-site listen / advertise option (`unix` / `http` / `ws` / `nPipe` / `advertise`)
+2. Advertising node’s constructor stamp (`Tag` / `Prototype` / `Prototype.make` / `instance`)
+3. Lookup node’s constructor stamp (the directory being advertised into)
+4. Hard fallback: **`livenessReplace`**
 
-Forces one policy for all advertisers — less flexible for mixed fleets.
+So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the whole fleet asks — unless a node definition or call-site overrides.
 
-**C — Park (sketch)**
+| Surface | Default | Notes |
+|---------|---------|--------|
+| `Node.Lookup(...)` | `livenessReplace` (concrete) | Fleet parent; `"inherit"` on Lookup is meaningless / rejected |
+| `Node.Tag` / Prototype / clones / instances | `"inherit"` | Pulls from Lookup at advertise |
+| listen / advertise options | omit = inherit chain | Explicit tag short-circuits |
 
-Keep only `livenessReplace` until managers own handoff. Named-Node rolling restart = kill old first / wait for unregister.
+**Not lean:** `Lookup.layer(node, { onConflict })` as a second parent — constructor stamp on the Lookup node is enough; layer opts stay for other concerns unless we later need a runtime override.
 
-**Agent lean: A** — opt-in at the advertise/listen site; default unchanged.
-
-##### Yield mechanism (after A)
+##### Yield mechanism
 
 | # | Question | Lean |
 |---|----------|------|
-| AI.1 | Surface = A / B / C? | **A** |
+| AI.1 | Surface | **Inheritance chain** (call-site → node stamp → Lookup stamp → `livenessReplace`) |
 | AI.2 | Who dials the ask? | **Lookup server** (has incumbent endpoint; newcomer shouldn’t need to) |
 | AI.3 | RPC | Add **`NodeStatus.yield`** (or `askYield`) — reserved resource every node already serves |
 | AI.4 | Yield meaning v1 | Cooperative: incumbent **unregisters** its directory row (and may interrupt listen scope). **No** in-flight work drain |
 | AI.5 | Refuse / timeout | → **`IncumbentAlive`** (fail-closed; no steal) |
-| AI.6 | `reject` preset | Alive → always `IncumbentAlive`; dead → still replace (same liveness probe) — or strict never-replace? lean: dead still replace |
+| AI.6 | `reject` preset | Alive → always `IncumbentAlive`; dead → still replace (same liveness probe) |
+| AI.7 | Prototype cascade | Named `make` / `instance` default `"inherit"` (→ Lookup). Optional stamp on Prototype or `make(...)` overrides for that clone only |
+| AI.8 | Wire field | Advertise request carries **resolved** concrete policy (Lookup never sees `"inherit"`) |
 
 ```ts
 // Goal sketch after lock:
 // NodeStatus gains:
 yield: Resource.effect(Schema.Boolean) // true = accepted yield
 
-// Lookup advertise when onConflict: "askIncumbent":
+// Lookup advertise when effective onConflict: "askIncumbent":
 //   same dial → refresh serves (unchanged)
 //   different dial + dead → replace
 //   different dial + alive → client(NodeStatus).yield on incumbent
