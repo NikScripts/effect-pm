@@ -102,9 +102,9 @@ describe("Resource.lookupClient", () => {
       const lookup = Context.merge(lookupServer, lookupCtx);
 
       const worker = yield* Layer.build(
-        Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
-          Layer.provide(lookupClient),
-        ),
+        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+          bootstrapLookup: false,
+        }).pipe(Layer.provide(lookupClient)),
       );
 
       const dir = Context.get(lookup, Lookup.Directory);
@@ -142,9 +142,9 @@ describe("address-less listen", () => {
         const lookupClient = Lookup.client(lookupNode);
         const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
         const server = yield* Layer.build(
-          Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
-            Layer.provide(lookupClient),
-          ),
+          Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+            bootstrapLookup: false,
+          }).pipe(Layer.provide(lookupClient)),
         );
         const client = yield* Layer.build(
           Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
@@ -172,16 +172,16 @@ describe("address-less listen", () => {
 
         const lookup = Lookup.bootstrapDefaultLocal({ path: lookupPath });
         const first = yield* Layer.build(
-          Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
-            Layer.provide(lookup),
-          ),
+          Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+            bootstrapLookup: false,
+          }).pipe(Layer.provide(lookup)),
         );
 
         const exit = yield* Effect.exit(
           Layer.build(
-            Node.listen(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(
-              Layer.provide(lookup),
-            ),
+            Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+              bootstrapLookup: false,
+            }).pipe(Layer.provide(lookup)),
           ).pipe(Effect.scoped),
         );
         expectTaggedFailure(exit, "AddressLessClaimLost");

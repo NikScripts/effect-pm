@@ -65,6 +65,36 @@ const cases = [
     engine: ["src/internal/runResource.ts"],
     member: "Tag",
   },
+  {
+    // `Node.Tag` is light (nodeCore). Must not retain listen / unix / *Server / connect engines.
+    name: "Node",
+    entry: "src/Node.ts",
+    engine: [
+      "src/internal/nodeListen.ts",
+      "src/internal/nodeUnix.ts",
+      "src/internal/nodeHttpServer.ts",
+      "src/internal/nodeIpcServer.ts",
+      "src/internal/nodePrototype.ts",
+      "src/internal/node.ts",
+    ],
+    member: "Tag",
+  },
+  {
+    // Neutral `listen` must not retain protocol batteries (`unix` / `http`).
+    // Http *Server* may still soft-load Lookup (directory advertise) — gated later.
+    name: "Node",
+    entry: "src/Node.ts",
+    engine: [
+      "src/internal/nodeUnix.ts",
+      "src/internal/nodeHttp.ts",
+      "src/internal/nodeWs.ts",
+      "src/internal/nodeNPipe.ts",
+      "src/internal/nodePrototype.ts",
+      "src/internal/nodeHttpServer.ts",
+      "src/internal/nodeIpcServer.ts",
+    ],
+    member: "listen",
+  },
 ];
 
 const bundleTagOnly = async (entryAbs, member) => {

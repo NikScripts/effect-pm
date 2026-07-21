@@ -22,7 +22,7 @@ class Worker extends Node.Tag<Worker, Jobs>("forms/Worker", {
 }) {}
 
 const program = Effect.gen(function* () {
-  const server = Node.listen(Worker, [
+  const server = Node.unix(Worker, [
     Resource.serve(Jobs, { jobs: Effect.succeed(7) }),
   ])
   const serverCtx = yield* Layer.build(server)

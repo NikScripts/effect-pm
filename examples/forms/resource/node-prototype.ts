@@ -10,7 +10,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
-import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
 import * as Resource from "../../../src/Resource"
 
@@ -22,22 +21,22 @@ class MailWorker extends Node.Prototype<MailWorker, Mail>("forms/MailWorker") {}
 
 const program = Effect.gen(function* () {
   const sock = `/tmp/effect-pm-forms-proto-${process.pid}.sock`
-  const lookup = Lookup.bootstrapDefaultLocal({
-    path: `/tmp/effect-pm-forms-proto-lookup-${process.pid}.sock`,
-    unlink: true,
-  })
+  const lookupPath = `/tmp/effect-pm-forms-proto-lookup-${process.pid}.sock`
 
   // Named clone with a fixed address
   class East extends MailWorker.make("East", { path: sock }) {}
-  const named = Node.listen(East, [
-    Resource.serve(Mail, { pending: Effect.succeed(3) }),
-  ]).pipe(Layer.provide(lookup))
+  const named = Node.unix(
+    East,
+    [Resource.serve(Mail, { pending: Effect.succeed(3) })],
+    { lookupPath, unlinkLookup: true },
+  )
 
-  // Dynamic instance factory
-  const spawn = MailWorker.listen([
-    Resource.serve(Mail, { pending: Effect.succeed(9) }),
-  ])
-  const dynamic = spawn("w1").pipe(Layer.provide(lookup))
+  // Dynamic instance factory (unix + Lookup under the hood)
+  const spawn = MailWorker.listen(
+    [Resource.serve(Mail, { pending: Effect.succeed(9) })],
+    { lookupPath, unlinkLookup: false },
+  )
+  const dynamic = spawn("w1")
 
   yield* Layer.build(named)
   yield* Layer.build(dynamic)

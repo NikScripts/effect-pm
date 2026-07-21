@@ -78,11 +78,15 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
 
       // Leaf first so directory has West before East's peersLayer builds.
       const westCtx = yield* Layer.build(
-        Node.listen(West, [
-          Resource.serve(Pool, impl(5)).pipe(
-            Layer.provide(Resource.peersFrom(Pool, {})),
-          ),
-        ]).pipe(Layer.provide(lookupClient)),
+        Node.unix(
+          West,
+          [
+            Resource.serve(Pool, impl(5)).pipe(
+              Layer.provide(Resource.peersFrom(Pool, {})),
+            ),
+          ],
+          { bootstrapLookup: false },
+        ).pipe(Layer.provide(lookupClient)),
       );
 
       const dir = Context.get(lookup, Lookup.Directory);
@@ -104,11 +108,15 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
       expect(peerKeys).not.toContain(East.key);
 
       const eastCtx = yield* Layer.build(
-        Node.listen(East, [
-          Resource.serve(Pool, impl(2)).pipe(
-            Layer.provide(Resource.peersLayer(Pool, East)),
-          ),
-        ]).pipe(Layer.provide(lookupClient)),
+        Node.unix(
+          East,
+          [
+            Resource.serve(Pool, impl(2)).pipe(
+              Layer.provide(Resource.peersLayer(Pool, East)),
+            ),
+          ],
+          { bootstrapLookup: false },
+        ).pipe(Layer.provide(lookupClient)),
       );
 
       const total = yield* Effect.gen(function* () {

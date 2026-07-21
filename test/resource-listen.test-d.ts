@@ -21,13 +21,13 @@ class Worker extends Node.Tag<Worker, Jobs | Emails>("listen-d/Worker", {
 const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-const full: Layer.Layer<any, any, any> = Node.listen(Worker, [
+const full: Layer.Layer<any, any, any> = Node.unix(Worker, [
   Resource.serve(Jobs, jobsImpl),
   Resource.serve(Emails, emailsImpl),
 ]);
 
 // @ts-expect-error C3: Emails missing from listen catalog
-const partial: Layer.Layer<any, any, any> = Node.listen(Worker, [
+const partial: Layer.Layer<any, any, any> = Node.unix(Worker, [
   Resource.serve(Jobs, jobsImpl),
 ]);
 

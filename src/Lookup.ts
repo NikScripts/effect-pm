@@ -16,7 +16,8 @@ import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
 import type { AnyNode } from "./internal/nodeCore";
 import { Lookup as LookupNodeTag, Tag as NodeTag } from "./internal/nodeCore";
-import { connectIpc, ipcServer } from "./internal/node";
+import { connectIpc } from "./internal/node";
+import { ipcServer } from "./internal/nodeIpcServer";
 import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
 
@@ -407,12 +408,12 @@ export const layer = (
 };
 
 /**
- * Soft directory advertise for {@link Resource.listen}: when {@link Directory} is in the
- * environment, register `node` with the given `serves` keys and {@link unregister} on scope
- * close. No-op when Directory is absent (local-only listen).
+ * Soft directory advertise for {@link Node.unix} / {@link Node.http} / {@link Node.ws}: when
+ * {@link Directory} is in the environment, register `node` with the given `serves` keys and
+ * {@link unregister} on scope close. No-op when Directory is absent (local-only listen).
  *
- * `serves` is derived from the listen serve list (group ids) after registration. Duplicate
- * `nodeKey` with a live incumbent fails the layer with {@link IncumbentAlive}.
+ * `serves` is derived from the protocol-listen serve list (group ids) after registration.
+ * Duplicate `nodeKey` with a live incumbent fails the layer with {@link IncumbentAlive}.
  *
  * @public
  */
