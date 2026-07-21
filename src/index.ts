@@ -55,6 +55,7 @@
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
  * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
+ * **`@nikscripts/effect-pm/MultiNode`** (multi-instance gather/fold),
  * **`@nikscripts/effect-pm/Group`**,
  * **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
@@ -136,7 +137,9 @@ export {
   EffectFnMissingPayload,
   InstanceRoutingError,
   LocalOnlyMethod,
+  MissingClientProtocol,
   MissingContractMethod,
+  ProtocolMismatch,
   // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
   // per method from its kind/description/destructive/streaming). See examples/resource-tui.
   methodMeta,
@@ -148,6 +151,7 @@ export {
 // `Node.Tag` pull only what's used. Import `* as Resource` / `* as Node` from the subpath.
 export * as Resource from "./Resource";
 export * as Node from "./Node";
+export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
 export type {
   AnyLocalMethod,
@@ -290,7 +294,7 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./internal/queueResource";
+} from "./QueueResource";
 
 // Types - RunResource
 export type {
