@@ -1,10 +1,11 @@
 /**
  * @module examples/forms/resource/node-lookup
  *
- * **Node.asLookup** — brand a Tag node as the Lookup server, serve it with
+ * **(7) Node.asLookup** — brand a Tag node as the Lookup server, serve it with
  * {@link Lookup.layerNode}, dial with {@link Lookup.client}.
  *
  * Same-machine default bus (no Lookup node) is bare `Lookup.layer` — different story.
+ * Walkthrough: see `examples/README.md` Node module path.
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-lookup.ts

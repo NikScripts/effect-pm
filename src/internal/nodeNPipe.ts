@@ -52,7 +52,9 @@ const requireWindows = <A, E, R>(
 /**
  * Windows named-pipe IPC listen — same overload shapes as {@link unix}.
  * Same `IpcSocket` kind; paths are `\\.\pipe\…`. Prefer {@link unix} on POSIX.
- * Compose Lookup via `Layer.provide(Lookup.layerOptions(...))` when needed.
+ * Compose Lookup via `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when needed.
+ * Protocol listen sibling of {@link unix} / {@link http} / {@link ws} / {@link Prototype.listen}
+ * — keep in sync (handoff § Protocol listen siblings).
  *
  * @category listen
  * @public
