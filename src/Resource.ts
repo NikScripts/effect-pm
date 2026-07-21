@@ -231,8 +231,9 @@ export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
 /**
  * A nodeless {@link Resource.client}`(tag)` was built with no ambient {@link RpcClient.Protocol}.
  * Replaces Effect's opaque "Service not found: …/Protocol" die with a remediation message naming
- * the three ways to connect. The Layer still *requires* `RpcClient.Protocol` in `R` (compile-time);
- * this is the loud runtime backstop when that requirement is stripped or left unsatisfied.
+ * the three ways to connect. The Layer still *requires* `RpcClient.Protocol` in `R` (compile-time)
+ * and keeps `E = never` (this replaces a defect, not a typed channel callers already matched);
+ * catch via `Exit` / `_tag` when probing an unsatisfied build.
  *
  * @category errors
  * @public
