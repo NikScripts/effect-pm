@@ -565,7 +565,7 @@ mailWorker("w2").pipe(Layer.provide(Lookup.layer))
 1. **Lookup is pipe-only** — never `lookupPath` / `bootstrapLookup` listen opts. Apps compose `Layer.provide(Lookup.layer)` or `Lookup.layerOptions({ path, unlink })` / `Lookup.client` / `Lookup.layerNode`.
 2. **Same serve overload family** on protocol listens: Tag+impl, single `serve`, `[serve…]`, `node + serves` (Prototype keeps the curried `(serves) → (suffix?) => Layer` shape).
 3. **`ListenOptions` / `NamelessListenOptions`** — shared; no per-sibling Lookup knobs.
-4. **Forms:** [`examples/forms/resource/node-prototype.ts`](../../examples/forms/resource/node-prototype.ts) teaches Prototype + pipe; protocol entries teach `unix` / `http` / `ws`.
+4. **Forms:** walkthrough (5) unix nameless + (8) http/ws nameless + (6) Prototype all pipe Lookup the same way — see [`examples/README.md`](../../examples/README.md) Node module path.
 
 **Touch list when editing one sibling:** the four `node{Unix,Http,Ws,NPipe}.ts` files, `nodePrototype.ts`, `Node.ts` module overview bullets, this section, and any form that still assumes baked Lookup.
 
