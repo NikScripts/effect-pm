@@ -41,9 +41,9 @@ namespace standard. Work from THIS doc; do not regenerate shapes from memory.
 ## Deferred — since SHIPPED (2026-07-21)
 
 `Polling.adaptive` (work-aware decay), `Polling.cron` (calendar-aligned), and event-driven wake
-(`Polling.wakeOn(stream, wake)`) are all shipped with tests. The ONLY remaining open item from
-this doc is #5's follow-up: disarmedIdleSleep is orphaned in internal/ — wire into the supervisor
-or delete (process owner's call). Disarmed-policy public surface waits on that.
+(`Polling.wakeOn(stream, wake)`) are all shipped with tests. disarmedIdleSleep: owner ruled
+"no use → gone" — the orphaned module and its test are DELETED (2026-07-21). Nothing from this
+doc remains open.
 
 ## Verification bar
 

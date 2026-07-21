@@ -42,7 +42,7 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * - **`armed: Ref false`** — gate closed; **no** polling ticks.
  * - **`nextScheduleTransition: Ref Some(T)`** — tells **`Process`** “something about the gate
- *   might change near **T**”, so **`computeDisarmedIdleSleep`** can sleep **toward **T****
+ *   might change near **T**”, so the supervisor can sleep **toward **T****
  *   instead of only a coarse fallback interval.
  *
  * **Important:** the hint does **not** flip **`armed`** for you. Another fiber (or your ops
@@ -64,7 +64,6 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * - **`test/process-schedule.test.ts`** — schedule entry storage + mutation semantics.
  * - **`test/process.test.ts`** — schedule-driven instance behavior.
- * - **`test/disarmedIdleSleep.test.ts`** — pure sleep policy.
  */
 
 import { Cron, Duration, Effect, Option, Ref } from "effect";
