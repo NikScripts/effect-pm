@@ -36,6 +36,7 @@ const isUnaryUpdater = <F>(
  *   stay two-argument).
  * - **Full reducer** — `(previous) => next` over the whole spec (see {@link configureLayer}).
  *
+ * @category models
  * @public
  */
 export type ConfigPatch<T> = PartialConfigPatch<T> | ((previous: T) => T);
@@ -84,6 +85,7 @@ const applyPartialPatch = <T extends object>(
 /**
  * Fold `base` and `patches` left-to-right; later patches see earlier results.
  *
+ * @category combinators
  * @public
  */
 export const foldConfig = <T extends object>(
@@ -135,6 +137,7 @@ export const resourcePatches = <T extends object>(
  *
  * Provide or merge with the resource `.layer` so patches are visible when that layer builds.
  *
+ * @category layers & serving
  * @public
  */
 export const configureLayer = <T extends object>(

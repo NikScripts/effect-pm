@@ -53,6 +53,7 @@ const requireWindows = <A, E, R>(
  * Windows named-pipe IPC listen — same overload shapes as {@link unix}.
  * Same `IpcSocket` kind; paths are `\\.\pipe\…`. Prefer {@link unix} on POSIX.
  *
+ * @category listen
  * @public
  */
 export function nPipe<
@@ -372,6 +373,9 @@ const nPipeBind = (
       ? { serialization: options.serialization }
       : {}),
     ...(options?.node !== undefined ? { node: options.node } : {}),
+    ...(options?.onConflict !== undefined
+      ? { onConflict: options.onConflict }
+      : {}),
     advertiseNode,
   });
 };

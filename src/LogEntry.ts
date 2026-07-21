@@ -17,6 +17,7 @@ const logLevelSchema = Schema.Literals([
 /**
  * Serializable log event captured from an Effect {@link Logger} invocation.
  *
+ * @category models
  * @public
  */
 export interface LogEntry {
@@ -29,6 +30,7 @@ export interface LogEntry {
 }
 
 /**
+ * @category wire schemas
  * @public
  */
 export const LogEntrySchema = Schema.Struct({
@@ -43,6 +45,7 @@ export const LogEntrySchema = Schema.Struct({
 const LogEntryNdjson = Schema.fromJsonString(LogEntrySchema);
 
 /**
+ * @category wire schemas
  * @public
  */
 export const encodeLogEntryNdjson = (
@@ -51,6 +54,7 @@ export const encodeLogEntryNdjson = (
   Schema.encodeEffect(LogEntryNdjson)(entry);
 
 /**
+ * @category wire schemas
  * @public
  */
 export const decodeLogEntryNdjson = (
@@ -89,6 +93,7 @@ const encodeMessage = (message: unknown): string => {
 /**
  * Build a {@link LogEntry} from runtime logger options and fiber log context.
  *
+ * @category wire schemas
  * @public
  */
 export const logEntryFromLoggerOptions = (options: {
@@ -132,6 +137,7 @@ const parseLineageJson = (raw: string | undefined): ReadonlyArray<string> => {
  *
  * Reads annotation key {@link LogAnnotationKeys.lineage} only (JSON array of `Tag.key` segments).
  *
+ * @category getters
  * @public
  */
 export const lineage = (entry: LogEntry): ReadonlyArray<string> =>
@@ -142,6 +148,7 @@ export const lineage = (entry: LogEntry): ReadonlyArray<string> =>
  *
  * @param key - Usually a **resource key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `resource-web/hub.ts`).
  *
+ * @category guards
  * @public
  */
 export const hasKey = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
@@ -152,6 +159,7 @@ export const hasKey = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
  *
  * @param key - **Node log key** (`Node.key`, e.g. `wnba/live` from `LiveNode.key`).
  *
+ * @category guards
  * @public
  */
 export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
@@ -162,6 +170,7 @@ export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
  *
  * @param key - **Resource key** (`Tag.key`, e.g. `wnba/LiveScorePoller`).
  *
+ * @category guards
  * @public
  */
 export const atLeaf = (key: string): Predicate.Predicate<LogEntry> => (entry) => {

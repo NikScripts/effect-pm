@@ -124,6 +124,7 @@ import {
  * Two resources declared the same **instance key**. Effect's `Context` is keyed by the key
  * string and silently last-write-wins, so we fail fast at declaration.
  *
+ * @category errors
  * @public
  */
 export class DuplicateResourceKey extends Data.TaggedError(
@@ -134,6 +135,7 @@ export class DuplicateResourceKey extends Data.TaggedError(
  * Two resources declared the same **group id** (the wire prefix) — they'd collide on a
  * shared `RpcServer`.
  *
+ * @category errors
  * @public
  */
 export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
@@ -143,6 +145,7 @@ export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
 /**
  * An instance was passed to {@link Resource.serveInstances} more than once.
  *
+ * @category errors
  * @public
  */
 export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
@@ -153,6 +156,7 @@ export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
  * A family request reached the server with no routable instance key header — a
  * protocol-level fault (the contract was satisfied), surfaced as a defect.
  *
+ * @category errors
  * @public
  */
 export class InstanceRoutingError extends Data.TaggedError(
@@ -167,6 +171,7 @@ export class InstanceRoutingError extends Data.TaggedError(
  * A contract method was absent from the generated RPC client — a wiring bug (the group and
  * client derive from the same spec, so this should be unreachable).
  *
+ * @category errors
  * @public
  */
 export class MissingContractMethod extends Data.TaggedError(
@@ -177,6 +182,7 @@ export class MissingContractMethod extends Data.TaggedError(
  * A {@link Resource.local} (local-only) method was reached through a client. Unreachable by
  * construction — the {@link Local} it requires is never granted to a client.
  *
+ * @category errors
  * @public
  */
 export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
@@ -186,6 +192,7 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
 /**
  * {@link effectFn} was called without a payload — inputless members belong on {@link effect}.
  *
+ * @category errors
  * @public
  */
 export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPayload")<{
@@ -198,6 +205,7 @@ export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPay
  * - **`query`** — an idempotent read (CLI prints it, dashboard reads it as an Atom);
  * - **`mutate`** — a mutation (CLI confirms, dashboard calls it as `runtime.fn`).
  *
+ * @category models
  * @public
  */
 export type MethodKind = "query" | "mutate";
@@ -207,6 +215,7 @@ export type MethodKind = "query" | "mutate";
  * idiom. Inert to the type inference and the wire contract; it only feeds the tools that
  * render this resource.
  *
+ * @category models
  * @public
  */
 export interface MethodAnnotations {
@@ -246,6 +255,7 @@ declare const clientSym: unique symbol;
  * error** schema — they become an `RpcSchema.Stream` on the wire, and the service member
  * surfaces as a `Stream` rather than an `Effect`.
  *
+ * @category models
  * @public
  */
 export interface Method<
@@ -272,7 +282,12 @@ export interface Method<
   ) => Method<P, Su, E, Str, Ann & A, Client>;
 }
 
-/** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
+/**
+ * Any {@link Method}, erased — the element type of a {@link Spec}.
+ *
+ * @category models
+ * @public
+ */
 export type AnyMethod = Method<
   Schema.Struct.Fields | Schema.Top | undefined,
   Schema.Top,
@@ -284,7 +299,10 @@ export type AnyMethod = Method<
 
 /** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the nodes (in the
  *  layer via {@link peers}); served + client-visible like any query, but excluded from {@link peers}.
- *  Marked with a readable `fleet: true`. @public */
+ *  Marked with a readable `fleet: true`. @public
+ *
+ * @category models
+ */
 export type FleetField<M extends AnyMethod> = Marked<M, { readonly fleet: true }>;
 
 /**
@@ -298,6 +316,7 @@ export type FleetField<M extends AnyMethod> = Marked<M, { readonly fleet: true }
  * totalConnections: Resource.fleet(Resource.effect(Schema.Number)), // fleet — peers don't
  * ```
  *
+ * @category spec fields
  * @public
  */
 export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
@@ -314,6 +333,7 @@ declare const localTypeId: unique symbol;
  * same call resolves when the local layer is provided. Branded by `Self` so one resource's local
  * layer can't unlock another's.
  *
+ * @category models
  * @public
  */
 export interface Local<in out Self> {
@@ -324,6 +344,7 @@ export interface Local<in out Self> {
  * A local-only member as surfaced in {@link ServiceOf} — `Effect` requiring {@link Local} to
  * obtain the value.
  *
+ * @category models
  * @public
  */
 export type LocalEffect<A, E = never, Self = unknown> = Effect.Effect<A, E, Local<Self>>;
@@ -340,6 +361,7 @@ const LocalMethodTypeId = "~nikscripts/effect-pm/Resource/LocalMethod" as const;
  * `Effect<T, never, Local<Self>>` — you `yield*` it to obtain the value, which requires the
  * local layer ({@link Local}).
  *
+ * @category models
  * @public
  */
 export interface LocalMethod<T> {
@@ -348,13 +370,19 @@ export interface LocalMethod<T> {
   readonly value?: T;
 }
 
-/** Any {@link LocalMethod}, erased. @public */
+/**
+ * Any {@link LocalMethod}, erased.
+ *
+ * @category models
+ * @public
+ */
 export type AnyLocalMethod = LocalMethod<unknown>;
 
 /**
  * A resource contract: method name → wire {@link Method} or off-wire {@link LocalMethod}.
  * The single source of truth.
  *
+ * @category models
  * @public
  */
 export interface Spec {
@@ -513,6 +541,7 @@ const bareLocalSym: unique symbol = Symbol.for(
  * {@link fromService} contract, where the service interface at that key supplies its type. Using it
  * where no type can be resolved is a compile error (see {@link fromService}).
  *
+ * @category models
  * @public
  */
 export interface BareLocal {
@@ -527,6 +556,7 @@ export interface BareLocal {
  * - `Resource.local` — **bare**, no `()`; its type is taken from the service interface in a
  *   {@link fromService} contract. Rejected where no interface type is available.
  *
+ * @category spec fields
  * @public
  */
 export const local: typeof localFn & BareLocal = Object.assign(localFn, {
@@ -537,6 +567,7 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
 /**
  * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
  *
+ * @category models
  * @public
  */
 export interface MethodMeta {
@@ -554,6 +585,7 @@ export interface MethodMeta {
  * Read the tool metadata for a {@link Method}: its `kind`, `description`, `destructive`
  * flag, and whether it `streaming`s. Pure annotation — does not touch the wire contract.
  *
+ * @category introspection
  * @public
  */
 export const methodMeta = (m: AnyMethod): MethodMeta => ({
@@ -567,6 +599,7 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
  * True when a spec member is an inputless void command (`Resource.effect(Schema.Void)`),
  * as opposed to an inputless value read (`Resource.effect` with a non-void success).
  *
+ * @category guards
  * @public
  */
 export const isVoidCommand = (m: AnyMethod): boolean => {
@@ -590,6 +623,7 @@ export const isVoidCommand = (m: AnyMethod): boolean => {
  * unit run gates and value reads. Contrast {@link isVoidCommand}, which is only void commands.
  * Not {@link Effect.isEffect | `Effect.isEffect`} (runtime value guard).
  *
+ * @category guards
  * @public
  */
 export const isEffect = (m: AnyMethod): boolean =>
@@ -742,6 +776,7 @@ type NarrowedSuccess<Su extends Schema.Top, Client> = [Client] extends [Derive]
  * a read surfaces as `Effect<Success>`) that must **narrow** the schema-derived shape:
  * `effect<Client>()(success)`. Widening the success fails to compile. For a free override, see
  * {@link unsafeEffect}. @public
+ * @category spec fields
  */
 export function effect<Client = Derive>(): <Su extends Schema.Top>(
   success: NarrowedSuccess<Su, Client>,
@@ -787,6 +822,7 @@ export function effect(
  * replaced by `Client`. **Unsafe:** `Client` is not checked against the schema — you assert it matches.
  * For a *narrowing* (checked) read override, use the two-stage {@link effect} form instead.
  *
+ * @category spec fields
  * @public
  */
 export function unsafeEffect<Client = Derive>() {
@@ -804,7 +840,10 @@ export function unsafeEffect<Client = Derive>() {
 }
 
 /** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
- *  surfaced as a plain value. Tagged with a readable `_tag: "constant"`. @public */
+ *  surfaced as a plain value. Tagged with a readable `_tag: "constant"`. @public
+ *
+ * @category models
+ */
 export type ConstantField<M extends AnyMethod> = Marked<M, { readonly _tag: "constant" }>;
 
 /** Runtime guard: is a spec entry a {@link constant} field? */
@@ -817,6 +856,7 @@ const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * The impl supplies the value as an `Effect<A>` (run once at acquire; use `Effect.succeed` for a literal).
  * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/archive/2026-07/features/service-shape-redesign.md`.
  *
+ * @category spec fields
  * @public
  */
 export const constant = <Su extends Schema.Top>(
@@ -825,7 +865,10 @@ export const constant = <Su extends Schema.Top>(
   marked(effect(success), { _tag: "constant" as const });
 
 /** A {@link Method} marked as a **ref** field (via {@link ref}) — surfaces as a {@link Subscribable}.
- *  Tagged with a readable `_tag: "ref"`. @public */
+ *  Tagged with a readable `_tag: "ref"`. @public
+ *
+ * @category models
+ */
 export type RefField<M extends AnyMethod> = Marked<M, { readonly _tag: "ref" }>;
 
 /** Runtime guard: is a spec entry a {@link ref} field? */
@@ -839,6 +882,7 @@ const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use `constant`; for on-demand
  * calls use `effect`.
  *
+ * @category spec fields
  * @public
  */
 export const ref = <Su extends Schema.Top>(
@@ -849,6 +893,7 @@ export const ref = <Su extends Schema.Top>(
 /**
  * Narrow a resource contract object through the builder (prefer over `as const satisfies`).
  *
+ * @category constructors
  * @public
  */
 export const contract = <const S extends Spec>(spec: S): S => spec;
@@ -877,6 +922,7 @@ export {
  * ) {}
  * ```
  *
+ * @category serving
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(
@@ -907,6 +953,7 @@ bindNodeStore(store);
  * of every change ({@link Subscribable.changes}). This is what a {@link ref} field surfaces — uniform local
  * and remote — and it's exactly the read side of a `SubscriptionRef` (Effect ships no `Subscribable` type in
  * this beta, so we name it here). @public
+ * @category models
  */
 export interface Subscribable<A> {
   readonly get: Effect.Effect<A>;
@@ -916,6 +963,7 @@ export interface Subscribable<A> {
 /**
  * Build a {@link Subscribable} view over a `SubscriptionRef` — the impl side of a {@link ref} field: the
  * impl owns the ref (writes it), consumers get read + observe. @public
+ * @category reactivity
  */
 export const subscribable = <A>(
   source: SubscriptionRef.SubscriptionRef<A>,
@@ -927,6 +975,7 @@ export const subscribable = <A>(
 /**
  * Derive a {@link Subscribable} from another by mapping both its current value and its changes — one source
  * of truth feeds every view (a queue's `size`/`isEmpty` from its `status`). @public
+ * @category reactivity
  */
 export const mapSubscribable = <A, B>(
   source: Subscribable<A>,
@@ -972,6 +1021,7 @@ const mapEffectMember = (
  * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, Exclude<R, Ctx>>`; a bare `Effect<S, E, R>` →
  * `Effect<S, E, Exclude<R, Ctx>>`; a {@link Subscribable} (a {@link ref} field's impl) and a {@link Stream}
  * (a `stream` field's impl, or a group's `live`) pass through untouched; a nested method group recurses.
+ * @category models
  * @public
  */
 export type ProvidedContext<T, Ctx> = T extends Subscribable<infer A>
@@ -997,6 +1047,7 @@ export type ProvidedContext<T, Ctx> = T extends Subscribable<infer A>
  * `(...a) => Effect<S, E, R | Req>`; a bare `Effect<S, E, R>` → `Effect<S, E, R | Req>`; a
  * {@link Subscribable} / {@link Stream} member passes through untouched; a nested group recurses.
  *
+ * @category models
  * @public
  */
 export type WithRequirement<T, Req> = T extends Subscribable<infer A>
@@ -1031,6 +1082,7 @@ export type WithRequirement<T, Req> = T extends Subscribable<infer A>
  * const traced = Resource.mapEffects(impl, MyTag[Resource.specSym], (e) => Effect.withSpan(e, "resource"));
  * ```
  *
+ * @category reactivity
  * @public
  */
 export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
@@ -1082,6 +1134,7 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
  * return Resource.provideContext(impl, MyTag[Resource.specSym], context);
  * ```
  *
+ * @category serving
  * @public
  */
 export const provideContext = <Impl, const S extends Spec, Ctx>(
@@ -1106,6 +1159,7 @@ export const builtResourceSym: unique symbol = Symbol.for(
  * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
  * one materialization backs both paths.
  *
+ * @category models
  * @public
  */
 export interface BuiltResource<S extends Spec, R> {
@@ -1114,7 +1168,12 @@ export interface BuiltResource<S extends Spec, R> {
   readonly workerContext: Context.Context<R>;
 }
 
-/** True when `u` is a {@link BuiltResource} bundle. @public */
+/**
+ * True when `u` is a {@link BuiltResource} bundle.
+ *
+ * @category guards
+ * @public
+ */
 export const isBuiltResource = (u: unknown): u is BuiltResource<Spec, unknown> =>
   Predicate.hasProperty(u, builtResourceSym);
 
@@ -1122,6 +1181,7 @@ export const isBuiltResource = (u: unknown): u is BuiltResource<Spec, unknown> =
  * Pair a pre-provide impl with the worker context captured at build time. Pass `tag` so the concrete
  * {@link Spec} `S` is pinned for {@link BuiltResource} typing.
  *
+ * @category constructors
  * @public
  */
 export const builtResource = <Self, S extends Spec, R>(
@@ -1138,6 +1198,7 @@ export const builtResource = <Self, S extends Spec, R>(
  * Discharge a {@link BuiltResource}'s captured worker context into every Effect method — yields the
  * `R`-free {@link ImplOf} shape for {@link layer} / the local grant in {@link serve}.
  *
+ * @category constructors
  * @public
  */
 export const grantLocal = <Self, S extends Spec, R>(
@@ -1179,6 +1240,7 @@ type NarrowedPayload<P extends Schema.Top, Client> = [Client] extends [Derive]
  * the schema-derived shape: `effectFn<Client>()(payload)`. Reshape freely (e.g. add overloads), but a
  * `Client` that would accept payloads the wire rejects fails to compile (payload resolves to `never`).
  * For an override that can't be a narrowing (a generic library), use {@link unsafeEffectFn}. @public
+ * @category spec fields
  */
 export function effectFn<Client = Derive>(): <P extends Schema.Top>(
   payload: NarrowedPayload<P, Client>,
@@ -1262,6 +1324,7 @@ export function effectFn(
  * }>()(itemOrItems)
  * ```
  *
+ * @category spec fields
  * @public
  */
 export function unsafeEffectFn<Client = Derive>() {
@@ -1284,6 +1347,7 @@ type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
  * Like {@link effectFn}, but the payload must be a 2-tuple schema surfaced as two call
  * arguments `(first, second?)` — used by custom-queue `add(item, level?)`.
  *
+ * @category spec fields
  * @public
  */
 export function mutatePair<
@@ -1334,6 +1398,7 @@ export function mutatePair(
  * tail: Resource.stream(LogLine, { payload: Schema.Struct({ since: Schema.Number }) }),
  * ```
  *
+ * @category spec fields
  * @public
  */
 export function stream<Su extends Schema.Top>(
@@ -1412,6 +1477,7 @@ type PrettifyPayload<P> = P extends readonly unknown[]
  * `Schema.Struct.ReadonlySide<…>` alias, and with the schema's `readonly` dropped. Use it to spell out a
  * client-type override for the `effect`/`effectFn` two-stage forms without re-deriving the alias by hand.
  *
+ * @category models
  * @public
  */
 export type Decoded<S extends Schema.Top> = PrettifyPayload<S["Type"]>;
@@ -1482,6 +1548,7 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
  * `Effect<T, never, Local<Self>>` — `yield*` to obtain the value, requiring the local layer
  * ({@link Local}) (so they're uncallable through {@link Resource.client}).
  *
+ * @category models
  * @public
  */
 // NOTE on the gates below: each entry is `AnyMethod | AnyLocalMethod`, so we branch **only** on
@@ -1518,6 +1585,7 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
  * `Effect<T, never, Local<Self>>`. Regular (local) layers satisfy `Local`; a client layer can't, so
  * calling a local on a client is a compile error.
  *
+ * @category models
  * @public
  */
 export type InjectLocal<T, Self> = T extends Effect.Effect<infer A, infer E, infer R>
@@ -1535,7 +1603,10 @@ declare const localNeedsTypeSym: unique symbol;
 
 /** The error surface a bare {@link local} resolves to when the service interface has no member at that
  *  key — a required, unsatisfiable field, so the whole contract argument fails to type-check at the
- *  call. @public */
+ *  call. @public
+ *
+ * @category models
+ */
 export interface LocalNeedsType<K extends PropertyKey> {
   readonly [localNeedsTypeSym]: `Resource.local at '${K & string}' has no type — add '${K &
     string}' to the service interface, or use local<T>()`;
@@ -1547,6 +1618,7 @@ export interface LocalNeedsType<K extends PropertyKey> {
  * error the user's value can't satisfy, so the contract argument is rejected **at the call site**.
  * Every other entry (a wired method, an explicit `local<T>()`, a nested group) passes through.
  *
+ * @category models
  * @public
  */
 export type Validate<C, I> = {
@@ -1591,7 +1663,10 @@ type WireHonors<W, I> = [W] extends [I] ? true : false;
 declare const wireMismatchSym: unique symbol;
 
 /** The error surface a wired {@link fromService} member resolves to when its success schema disagrees
- *  with the service interface at that key — rejected at the call, naming the key. @public */
+ *  with the service interface at that key — rejected at the call, naming the key. @public
+ *
+ * @category models
+ */
 export interface WireMismatch<K extends PropertyKey> {
   readonly [wireMismatchSym]: `Resource.fromService: wired member '${K &
     string}' — its success type disagrees with the service interface`;
@@ -1606,6 +1681,7 @@ declare const fromLocalSym: unique symbol;
  * {@link InjectLocal} (its own `Effect`/function + `Local`) instead of the value-obtain
  * {@link LocalEffect} a plain `local<T>()` gets. Type-only; at runtime it's an ordinary bare
  * {@link local}. @public
+ * @category models
  */
 export interface FromLocalMethod<M> extends LocalMethod<M> {
   readonly [fromLocalSym]: M;
@@ -1616,6 +1692,7 @@ export interface FromLocalMethod<M> extends LocalMethod<M> {
  * becomes a {@link FromLocalMethod} carrying the service interface's type at that key, so the impl
  * ({@link ImplOf}) and service ({@link ServiceOf}) both derive from `I`. Wired methods and explicit
  * `local<T>()`s pass through unchanged. @public
+ * @category models
  */
 export type ResolveLocals<C, I> = {
   readonly [K in keyof C]: C[K] extends BareLocal
@@ -1640,7 +1717,12 @@ type WireServiceOf<S extends Spec> = {
         : never;
 };
 
-/** Wire-only {@link ServiceOf} — local members stripped. @public */
+/**
+ * Wire-only {@link ServiceOf} — local members stripped.
+ *
+ * @category models
+ * @public
+ */
 export type Wire<S extends Spec> = WireServiceOf<S>;
 
 /** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
@@ -1673,6 +1755,7 @@ type PeerServiceOf<S extends Spec> = {
  * and a `constant`'s is the `Effect<A>` resolved once — both differ from how they *surface* in
  * {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not `ServiceOf`.
  *
+ * @category models
  * @public
  */
 export type ImplOf<S extends Spec> = {
@@ -1693,6 +1776,7 @@ export type ImplOf<S extends Spec> = {
  * Recover the (possibly nested) {@link Spec} a tag was built from — for annotating an extracted impl
  * without hand-threading it: `obj satisfies ImplOf<SpecOf<typeof MyTag>>`. Usually you don't need it —
  * {@link Resource.make} infers it. @public
+ * @category models
  */
 export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spec }
   ? S
@@ -1711,6 +1795,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * Resource.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
  * ```
  *
+ * @category constructors
  * @public
  */
 export function make<Self, S extends Spec>(
@@ -1889,6 +1974,7 @@ export const identitySym: unique symbol = Symbol.for(
  * into a node's `/health` and `NodeStatus`. `ready: false` with a `detail` says *why* (surfaced in
  * the `/health` body and the dashboard health board).
  *
+ * @category models
  * @public
  */
 export interface Readiness {
@@ -1903,6 +1989,7 @@ export interface Readiness {
  * dependency checks), or ignore it to replace it. Stacks: each {@link withReadiness} wraps the prior.
  * Attach one with {@link withReadiness}; read the result with {@link readinessCheck}.
  *
+ * @category models
  * @public
  */
 export type ReadinessOf<Service> = (
@@ -1943,6 +2030,7 @@ const selfNodeSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/se
  * `<S extends Spec>(tag: ResourceTag<Self, S>)` and read the spec through named types
  * ({@link specOf} / {@link groupOf}) instead of a `Parameters<typeof specOf>` workaround.
  *
+ * @category models
  * @public
  */
 export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
@@ -1990,6 +2078,7 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
  * the {@link ListenNode} from {@link Node.unix} / {@link Node.http} / {@link Node.ws}
  * (including minted address-less Nodes).
  *
+ * @category errors
  * @public
  */
 export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired")<{
@@ -2000,6 +2089,7 @@ export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired
  * Identity-stamped Tags may carry at most one Node (S1). Multi-node fleets use ordinary Tags +
  * {@link distributed} / peers — not identity.
  *
+ * @category errors
  * @public
  */
 export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
@@ -2013,6 +2103,7 @@ export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
  * {@link lookupClient} could not resolve **exactly one** dial target for the Tag
  * (`missing` = none; `ambiguous` = more than one directory row and no {@link LookupClientOptions.pick}).
  *
+ * @category errors
  * @public
  */
 export class LookupClientError extends Data.TaggedError("LookupClientError")<{
@@ -2025,6 +2116,7 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
  * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4).
  * `"first"` = `rows[0]`; custom sync fn returns the dial target.
  *
+ * @category models
  * @public
  */
 export type LookupClientPick =
@@ -2036,6 +2128,7 @@ export type LookupClientPick =
 /**
  * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous.
  *
+ * @category models
  * @public
  */
 export type LookupClientOptions = {
@@ -2077,6 +2170,7 @@ type LocalizeMember<V> = V extends Effect.Effect<infer A, infer E, infer R>
 /**
  * Materialized service shape for tag `T` — `Resource.Shape<Test>` ≡ `Test["Service"]`.
  *
+ * @category models
  * @public
  */
 export type Shape<T extends TagIdentifier> = T["Service"];
@@ -2084,6 +2178,7 @@ export type Shape<T extends TagIdentifier> = T["Service"];
 /**
  * Materialized service shape from a {@link Spec} — `Resource.ShapeOf<typeof mySpec, MyTag>`.
  *
+ * @category models
  * @public
  */
 export type ShapeOf<S extends Spec, Self = unknown> = ServiceOf<S, Self>;
@@ -2092,6 +2187,7 @@ export type ShapeOf<S extends Spec, Self = unknown> = ServiceOf<S, Self>;
  * {@link ShapeOf} with {@link Local} stripped from local-member effects — for callers that
  * already hold the local layer.
  *
+ * @category models
  * @public
  */
 export type LocalShape<S extends Spec, Self = unknown> = LocalizeMember<ServiceOf<S, Self>>;
@@ -2099,6 +2195,7 @@ export type LocalShape<S extends Spec, Self = unknown> = LocalizeMember<ServiceO
 /**
  * {@link Shape} with {@link Local} stripped from local-member effects.
  *
+ * @category models
  * @public
  */
 export type LocalShapeOf<T extends TagIdentifier> = LocalizeMember<T["Service"]>;
@@ -2106,6 +2203,7 @@ export type LocalShapeOf<T extends TagIdentifier> = LocalizeMember<T["Service"]>
 /**
  * Wire-only {@link ShapeOf} — local members removed entirely.
  *
+ * @category models
  * @public
  */
 export type WireShape<S extends Spec> = Wire<S>;
@@ -2113,6 +2211,7 @@ export type WireShape<S extends Spec> = Wire<S>;
 /**
  * Wire-only {@link Shape} for tag `T`.
  *
+ * @category models
  * @public
  */
 export type WireOf<T extends TagIdentifier> = Wire<SpecOfTag<T>>;
@@ -2133,6 +2232,7 @@ export type WireOf<T extends TagIdentifier> = Wire<SpecOfTag<T>>;
  * type AcquireTag = Resource.Of<Counter>;
  * ```
  *
+ * @category models
  * @public
  */
 export type Resource<
@@ -2145,6 +2245,7 @@ export type Resource<
 /**
  * `yield* Tag` inferred from the tag identifier — `Resource.Of<Counter>`.
  *
+ * @category models
  * @public
  */
 export type Of<T extends TagIdentifier, E = never, R = never> = Effect.Effect<T["Service"], E, T | R>;
@@ -2209,6 +2310,7 @@ export declare namespace Resource {
  * by the node-bearing tag constructors. It's a **named** type (not an inline `& { [nodeSym] }`) so a
  * consumer can `export` a node-bearing tag without leaking the internal symbol (TS4020).
  *
+ * @category models
  * @public
  */
 export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Self>>
@@ -2220,6 +2322,7 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
  *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
  *  `@nikscripts/effect-pm/QueueResource`); a bare tag defaults to this so nothing is ever kind-less.
  *
+ * @category nodes & fleet
  * @public
  */
 export const kind = "@nikscripts/effect-pm/Resource";
@@ -2253,6 +2356,7 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
  * kind. A structural read (like {@link kindOf}) — the server uses it to reject a node-bound resource
  * served over a mismatched transport ({@link ProtocolKindMismatch}).
  *
+ * @category nodes & fleet
  * @public
  */
 export const nodeKindOf = (tag: unknown): ProtocolKind | undefined => {
@@ -2321,6 +2425,7 @@ export type PipeableTag = { readonly [specSym]: FlatSpec };
  * ) {}
  * ```
  *
+ * @category spec fields
  * @public
  */
 export const withReadiness: {
@@ -2441,6 +2546,7 @@ export const allReady = <R>(
 /**
  * Wire spec for a {@link monitoredDependency} — `status` effect + `changes` stream.
  *
+ * @category models
  * @public
  */
 export type MonitoredDependencySpec<
@@ -2456,6 +2562,7 @@ export type MonitoredDependencySpec<
  * Assignable into {@link withReadiness} for a full {@link MonitoredDependencySpec}
  * tag (extra `changes` is ignored).
  *
+ * @category models
  * @public
  */
 export interface MonitoredDependencyService<Status extends Schema.Top> {
@@ -2467,6 +2574,7 @@ export interface MonitoredDependencyService<Status extends Schema.Top> {
  * produced {@link MonitoredDependencySpec} (`status` / `changes`); `changes` is the
  * **element** schema of the live stream.
  *
+ * @category models
  * @public
  */
 export interface MonitoredDependencyOptions<
@@ -2483,6 +2591,7 @@ export interface MonitoredDependencyOptions<
  * Spec + readiness from {@link monitoredDependency}. Pass `spec` to
  * {@link Resource.Tag}; attach `readiness` with {@link withReadiness}.
  *
+ * @category models
  * @public
  */
 export interface MonitoredDependency<
@@ -2521,6 +2630,7 @@ export interface MonitoredDependency<
  * ) {}
  * ```
  *
+ * @category constructors
  * @public
  */
 export const monitoredDependency = <
@@ -2631,6 +2741,7 @@ const buildInstanceTag = <Self, S extends Spec>(
  * For a single resource the key is also its **group id** (the wire prefix for its
  * procedures), so a shared `RpcServer` can node it alongside other resource types.
  *
+ * @category constructors
  * @public
  */
 const makeTag = <Self>() => {
@@ -2714,6 +2825,7 @@ const makeTag = <Self>() => {
  * }) {}
  * ```
  *
+ * @category constructors
  * @public
  */
 export const fromService = <Self, I>() => {
@@ -2745,6 +2857,7 @@ export const fromService = <Self, I>() => {
  * (`groupId` / `description` / spec / group) that {@link serveInstances} reads without an
  * instance.
  *
+ * @category models
  * @public
  */
 export interface TagFactory<S extends Spec> {
@@ -2761,6 +2874,7 @@ export interface TagFactory<S extends Spec> {
  * {@link Node}, so each is a node-bearing tag ({@link Resource.client} resolves the transport
  * from it). Otherwise identical to {@link TagFactory}.
  *
+ * @category models
  * @public
  */
 export interface NodeTagFactory<S extends Spec, HSelf> {
@@ -2789,6 +2903,7 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
  * ```
  *
+ * @category constructors
  * @public
  */
 function tagFor<const S extends Spec, HSelf>(
@@ -3138,6 +3253,7 @@ const invokeWireMethodWithContext = (
  * readiness derivation. {@link serve} appends it; {@link httpServer} reads them for the merged server +
  * `/health` + node-status.
  *
+ * @category models
  * @public
  */
 export interface ServedResource {
@@ -3159,6 +3275,7 @@ export interface ServedResource {
  * and the server sees every one. Provided by {@link httpServer} (or {@link servedResourcesLayer}); `serve`
  * registers **only if it's present** (so `serve` also works standalone).
  *
+ * @category models
  * @public
  */
 export class ServedResources extends Context.Service<
@@ -3175,6 +3292,7 @@ export class ServedResources extends Context.Service<
  * process (e.g. Lookup + a Worker) do not share registrations via Layer memoization.
  * Provide this standalone only to collect `serve` registrations without a server.
  *
+ * @category serving
  * @public
  */
 export const servedResourcesLayer: Layer.Layer<ServedResources> = Layer.effect(
@@ -3193,6 +3311,7 @@ export const servedResourcesLayer: Layer.Layer<ServedResources> = Layer.effect(
  * **run-time requirement `R`** (a dependency it `yield*`s), which {@link serve} preserves so a
  * per-resource `Layer.provide` can discharge it in isolation.
  *
+ * @category models
  * @public
  */
 export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
@@ -3209,6 +3328,7 @@ export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
  * handler's requirement) and preserved on the returned layer, so it's discharged **per resource** by
  * `Layer.provide`, not shared ambiently.
  *
+ * @category models
  * @public
  */
 export type ServeImplOf<S extends Spec, R> = {
@@ -3228,6 +3348,7 @@ export type ServeImplOf<S extends Spec, R> = {
  * impl value (not a mapped-type parameter), so `serve` can **infer** it. Each member is one of the four
  * {@link ServeMethod} forms; a member that requires nothing contributes `never`.
  *
+ * @category models
  * @public
  */
 export type ServeRequirements<Impl> = {
@@ -3257,6 +3378,7 @@ export type ServeRequirements<Impl> = {
  * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
  * prefix-keyed).
  *
+ * @category serving
  * @public
  */
 export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
@@ -3438,6 +3560,7 @@ export const serve = <Self, S extends Spec, R = never>(
  * resource needs a private dependency and the rest share theirs — that is the escape hatch for the
  * old "rewrite the whole host off the bag API" cliff.
  *
+ * @category serving
  * @public
  */
 export const provide = <ROut, EL, RL, A, E, R>(
@@ -3453,6 +3576,7 @@ const INSTANCE_KEY_HEADER = "key";
  * One instance of a factory paired with its implementation — the element of
  * {@link Resource.serveInstances}. Built by {@link Resource.instance}.
  *
+ * @category models
  * @public
  */
 export interface ResourceInstance<S extends Spec> {
@@ -3468,6 +3592,7 @@ export interface ResourceInstance<S extends Spec> {
  * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Resource.httpServer},
  * then reach it with {@link Resource.client}.
  *
+ * @category constructors
  * @public
  */
 const instance = <Self, S extends Spec>(
@@ -3498,6 +3623,7 @@ const instance = <Self, S extends Spec>(
  * );
  * ```
  *
+ * @category serving
  * @public
  */
 const serveInstances = <S extends Spec>(
@@ -3664,6 +3790,7 @@ const dieIfHttpClientInBrowser = Effect.suspend(() =>
  * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
  * ```
  *
+ * @category clients
  * @public
  */
 const httpClient = <Self>(
@@ -3713,6 +3840,7 @@ const toWebSocketUrl = (raw: string): string => {
  * Effect.provide(app, Resource.layerProtocol(Resource.protocolHttp("http://edge/rpc")));
  * ```
  *
+ * @category transports
  * @public
  */
 export const layerProtocol = (
@@ -3724,6 +3852,7 @@ export const layerProtocol = (
  * `"/rpc"`, resolved same-origin in a browser) — the value you hand {@link layerProtocol} or
  * {@link Resource.connect}. The server/CLI/backend transport; a browser dashboard should prefer
  * {@link protocolWebsocket} (HTTP/1.1's ~6-connection cap starves many concurrent streams). @public
+ * @category transports
  */
 export const protocolHttp = (
   url = "/rpc",
@@ -3746,6 +3875,7 @@ export const protocolHttp = (
  * `ws(s)://` url; resolution is lazy, so this is safe at module scope in a file a Node server also
  * imports. The browser transport — every stream rides one connection, past the ~6-connection cap that
  * starves streams over {@link protocolHttp}. @public
+ * @category transports
  */
 export const protocolWebsocket = (
   url = "/rpc",
@@ -3789,6 +3919,7 @@ export const serverProtocolWebsocket = (
  * const EdgeLive = Resource.socketClient(EdgeNode, { url: "/rpc" }); // same origin as the page
  * ```
  *
+ * @category clients
  * @public
  */
 const socketClient = <Self>(
@@ -3809,6 +3940,7 @@ const socketClient = <Self>(
  * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
  * (`NodeSocket.layerNet({ path })`). Same-machine counterpart to {@link protocolHttp} /
  * {@link protocolWebsocket}. @public
+ * @category transports
  */
 export const protocolIpc = (
   path: string,
@@ -3838,6 +3970,7 @@ bindNodeProtocolBuilders({
 /**
  * Per-node ipc shortcut — {@link connect} + {@link protocolIpc} (same-machine Unix socket).
  *
+ * @category clients
  * @public
  */
 const ipcClient = <Self>(
@@ -3896,6 +4029,7 @@ const probeHttpReachable = (url: string, timeout: Duration.Input) =>
  * `connect` already makes the client dial the node's declared kind; a `socket` node pointed at a
  * non-socket server surfaces here as unreachable.
  *
+ * @category serving
  * @public
  */
 export const verifyConnection = (
@@ -3966,6 +4100,7 @@ export const verifyConnection = (
  * Effect.provide(program, Resource.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
  * ```
  *
+ * @category clients
  * @public
  */
 export function clientHttp<Self, S extends Spec>(
@@ -4044,6 +4179,7 @@ type AndNodeResult<T, N> = T extends {
  * ) {}
  * ```
  *
+ * @category nodes & fleet
  * @public
  */
 export const nodes: {
@@ -4112,6 +4248,7 @@ export const nodes: {
  * Node set. After a populated set, overwrite with {@link nodes}`([x])` if you need a
  * fresh typed sole bind for {@link client}`(Tag)`.
  *
+ * @category nodes & fleet
  * @public
  */
 export const andNode: {
@@ -4159,6 +4296,7 @@ export const andNode: {
 /**
  * Read a Tag's Node set (C1), or `[]` when undeclared.
  *
+ * @category nodes & fleet
  * @public
  */
 export const nodesOf = <Self, S extends Spec>(
@@ -4172,6 +4310,7 @@ export const nodesOf = <Self, S extends Spec>(
  * For a **fixed** fleet list, use {@link nodes}`([A, B])` (not this pipe). Identity-shaped
  * like {@link identity} so `class extends Tag()(…).pipe(Resource.distributed)` type-checks.
  *
+ * @category nodes & fleet
  * @public
  */
 export const distributed = <T extends PipeableTag>(tag: T): T =>
@@ -4180,6 +4319,7 @@ export const distributed = <T extends PipeableTag>(tag: T): T =>
 /**
  * Alias of {@link nodesOf}.
  *
+ * @category nodes & fleet
  * @public
  * @since 1.0.0
  */
@@ -4202,6 +4342,7 @@ export const distributedOf = nodesOf;
  * Resource.serve(Mail, impl).pipe(Layer.provide(Lookup.client(lookupNode)))
  * ```
  *
+ * @category nodes & fleet
  * @public
  */
 export const identity = <T extends PipeableTag>(
@@ -4223,6 +4364,7 @@ export const identity = <T extends PipeableTag>(
 /**
  * True when `tag` was piped through {@link identity}.
  *
+ * @category guards
  * @public
  */
 export const isIdentity = (tag: unknown): boolean =>
@@ -4256,6 +4398,7 @@ export const isIdentity = (tag: unknown): boolean =>
  * Resource.client(Mail, East)
  * ```
  *
+ * @category clients
  * @public
  */
 export const lookupClient = <Self, S extends Spec>(
@@ -4310,6 +4453,7 @@ export const lookupClient = <Self, S extends Spec>(
 /**
  * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} for same-machine demos.
  *
+ * @category clients
  * @public
  */
 export const clientLocal = <Self, S extends Spec>(
@@ -4405,6 +4549,7 @@ const peerProtocolRef = Context.Reference<PeerProtocolBuilder>(
  * );
  * ```
  *
+ * @category transports
  * @public
  */
 export const layerPeerProtocol = (
@@ -4485,6 +4630,7 @@ const buildPeerClientAt = <Self, S extends Spec>(
  * make it re-gather *its* peers (a cross-node fan-out, not what you want in a fold). The plain-query
  * model has no type-level leaf/fleet distinction, so this is a convention, not a compile error.
  *
+ * @category nodes & fleet
  * @public
  */
 export const peers = <Self, S extends Spec>(
@@ -4505,6 +4651,7 @@ export const peers = <Self, S extends Spec>(
  * })
  * ```
  *
+ * @category nodes & fleet
  * @public
  */
 export const selfNode = <Self, S extends Spec>(
@@ -4517,6 +4664,7 @@ export const selfNode = <Self, S extends Spec>(
  * keys per node but doesn't gather peers, or alongside {@link peersFrom} in a test. No transport, no
  * failure path — just the identity.
  *
+ * @category nodes & fleet
  * @public
  */
 export const selfNodeLayer = <Self, S extends Spec>(
@@ -4544,6 +4692,7 @@ export const selfNodeLayer = <Self, S extends Spec>(
  * {@link protocolIpc} when only `path` is set. The resolver's error and requirements flow to the
  * layer (typed).
  *
+ * @category nodes & fleet
  * @public
  */
 export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
@@ -4660,6 +4809,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
  * holds the per-node clients (a dashboard's per-node bundles), or for a test. {@link peersLayer} is
  * the auto-connecting form (from the tag's `distributed` set + urls); this one takes the clients as-is.
  *
+ * @category nodes & fleet
  * @public
  */
 export const peersFrom = <Self, S extends Spec>(
@@ -4681,6 +4831,7 @@ export const peersFrom = <Self, S extends Spec>(
  * Requires the {@link peersLayer} capability (which bundles {@link selfNode}). The only error /
  * requirement is `own`'s.
  *
+ * @category nodes & fleet
  * @public
  */
 export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
@@ -4753,6 +4904,7 @@ const buildClientService = <Self, S extends Spec>(
  *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / clientLocal) yourself.
  * - **nodeless tag, ambient transport** — ambient `RpcClient.Protocol`.
  *
+ * @category clients
  * @public
  */
 function clientLayer<Self, S extends Spec, HSelf>(
@@ -4841,6 +4993,7 @@ type InstanceIdentifiers<
  * Wire-only: instances declaring {@link Resource.local} members aren't accepted (their service
  * type is wider than the wire) — use {@link Resource.client} per instance for those.
  *
+ * @category clients
  * @public
  */
 const clientInstances = <
@@ -4879,6 +5032,7 @@ type TaggedEvent = { readonly _tag: string };
  * A partial set of per-`_tag` handlers over a tagged-event union — the handler-map form of
  * {@link Resource.runForEachTag}. Each handler receives the **narrowed** event for its tag.
  *
+ * @category models
  * @public
  */
 export type TagHandlers<A extends TaggedEvent, E, R> = Partial<{
@@ -4921,6 +5075,7 @@ type HandlersContext<Cases> = {
  * )
  * ```
  *
+ * @category reactivity
  * @public
  */
 export const runForEachTag: {
@@ -4993,6 +5148,7 @@ export const runForEachTag: {
  * }))
  * ```
  *
+ * @category reactivity
  * @public
  */
 export const runForEachTagScoped: {

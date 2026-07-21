@@ -65,7 +65,7 @@ export async function ApiSymbolPage({
             </div>
             <div className="api-chips">
               {refs.slice(0, MAX_REFS).map((url) => (
-                <a className="api-chip api-chip-link" href={url} key={url}>
+                <a className="api-chip api-chip-ref" href={url} key={url}>
                   {refLabel(url, pkg)}
                 </a>
               ))}

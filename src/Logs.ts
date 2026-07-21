@@ -60,6 +60,7 @@ import * as Node from "./Node";
  *
  * @see `docs/LOGS.md` — Key catalog → Node log keys
  *
+ * @category models
  * @public
  */
 export type NodeLogKey = string;
@@ -70,11 +71,17 @@ export type NodeLogKey = string;
  *
  * @see `docs/LOGS.md` — Key catalog → Resource keys
  *
+ * @category models
  * @public
  */
 export type ResourceLogKey = string;
 
-/** Source carrying a **node log key** (`Node.Tag.key`). @public */
+/**
+ * Source carrying a **node log key** (`Node.Tag.key`).
+ *
+ * @category models
+ * @public
+ */
 export type NodeLogKeySource = { readonly key: NodeLogKey };
 
 /**
@@ -83,6 +90,7 @@ export type NodeLogKeySource = { readonly key: NodeLogKey };
  * @param node - `Node.Tag` class or `{ key: NodeLogKey }`
  * @returns The node log key (`node.key`)
  *
+ * @category utils
  * @public
  */
 export const nodeLogKey = (node: NodeLogKeySource): NodeLogKey => node.key;
@@ -90,22 +98,51 @@ export const nodeLogKey = (node: NodeLogKeySource): NodeLogKey => node.key;
 const resolveNodeLogKey = (node: NodeLogKey | NodeLogKeySource): NodeLogKey =>
   typeof node === "string" ? node : node.key;
 
-/** In-process log bus tag. @public */
+/**
+ * In-process log bus tag.
+ *
+ * @category context
+ * @public
+ */
 export const Relay = relay.LogRelay;
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type LogRelayService = relay.LogRelayService;
 
-/** Node root: relay + one merged capture logger. @public */
+/**
+ * Node root: relay + one merged capture logger.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const layer = relay.layer;
 
-/** Unfiltered live bus (snapshot prefix + PubSub). @public */
+/**
+ * Unfiltered live bus (snapshot prefix + PubSub).
+ *
+ * @category reads
+ * @public
+ */
 export const stream = relay.stream;
 
-/** Bounded tail read. @public */
+/**
+ * Bounded tail read.
+ *
+ * @category reads
+ * @public
+ */
 export const snapshot = relay.snapshot;
 
-/** Replay one captured line through the ambient Logger. @public */
+/**
+ * Replay one captured line through the ambient Logger.
+ *
+ * @category utils
+ * @public
+ */
 export const replay = relay.replayLogEntry;
 
 /**
@@ -113,13 +150,19 @@ export const replay = relay.replayLogEntry;
  *
  * Idempotent when `tag.key` is already the last segment. Does not auto-inject a node root.
  *
+ * @category utils
  * @public
  */
 export const withScope = withLogScope;
 
 const queryLimitDefault = 200;
 
-/** Options shared by {@link byNode} / {@link byResource}. @public */
+/**
+ * Options shared by {@link byNode} / {@link byResource}.
+ *
+ * @category models
+ * @public
+ */
 export interface LogReadOptions {
   readonly limit?: number;
   readonly sort?: LogSort;
@@ -134,6 +177,7 @@ export interface LogReadOptions {
  * toolkit layer — see `docs/guides/stores.md`). Soft-default Memory alone is engine observability
  * only — no Logs platform / durable `_logs` tails.
  *
+ * @category reads
  * @public
  */
 export const byNode = (
@@ -144,7 +188,12 @@ export const byNode = (
     limit: options?.limit ?? queryLimitDefault,
   });
 
-/** Source carrying a **resource key** (`Resource.Tag.key` / store registration key). @public */
+/**
+ * Source carrying a **resource key** (`Resource.Tag.key` / store registration key).
+ *
+ * @category models
+ * @public
+ */
 export type ResourceLogKeySource = { readonly key: ResourceLogKey };
 
 const resolveResourceLogKey = (
@@ -165,6 +214,7 @@ const resolveResourceLogKey = (
  * @remarks
  * Prefer {@link Resource.logs} for new code. See `docs/LOGS.md` — Store / query parameters.
  *
+ * @category reads
  * @public
  */
 export const byResource = (
@@ -175,29 +225,74 @@ export const byResource = (
     limit: options?.limit ?? queryLimitDefault,
   });
 
-/** @deprecated Use {@link layer}. @public */
+/**
+ * @deprecated Use {@link layer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const relayWithCaptureLoggerLayer = layer;
 
-/** @deprecated Use {@link layer}. @public */
+/**
+ * @deprecated Use {@link layer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const logRelayLayer = relay.relayLayer;
 
-/** @deprecated Use {@link Relay}. @public */
+/**
+ * @deprecated Use {@link Relay}.
+ *
+ * @category context
+ * @public
+ */
 export const LogRelay = relay.LogRelay;
 
-/** @deprecated Use {@link replay}. @public */
+/**
+ * @deprecated Use {@link replay}.
+ *
+ * @category utils
+ * @public
+ */
 export const replayLogEntry = relay.replayLogEntry;
 
-/** @deprecated Use {@link layer} internals — prefer {@link layer}. @public */
+/**
+ * @deprecated Use {@link layer} internals — prefer {@link layer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const captureLogger = relay.captureLogger;
 
-/** @deprecated Use {@link layer}. @public */
+/**
+ * @deprecated Use {@link layer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const captureLoggerLayer = relay.captureLoggerLayer;
 
-/** @deprecated Use {@link relayLayer}. @public */
+/**
+ * @deprecated Use {@link relayLayer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const relayOnlyLayer = relay.relayLayer;
 
-/** @deprecated Use {@link relayLayer}. @public */
+/**
+ * @deprecated Use {@link relayLayer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const relayLayer = relay.relayLayer;
 
-/** @deprecated Use {@link relayLayer}. @public */
+/**
+ * @deprecated Use {@link relayLayer}.
+ *
+ * @category layers & serving
+ * @public
+ */
 export const logsRelayLayer = relay.relayLayer;

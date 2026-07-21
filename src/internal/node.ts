@@ -1,10 +1,12 @@
 /**
- * Node dial helpers — connect / clientsFor (no listen / unix / *Server).
+ * Node dial helpers — connect / clients (no listen / unix / *Server).
  *
  * @internal
  */
 import {
   Context,
+  Data,
+  Effect,
   Function as Fn,
   Layer,
 } from "effect"
@@ -16,6 +18,7 @@ import {
   AnyNode,
   catalogSym,
   InvalidHttpTarget,
+  isAddressedNode,
   NodeKey,
   UnaddressedNode,
 } from "./nodeCore"
@@ -33,7 +36,7 @@ import {
 } from "./nodeListenCommon"
 
 /**
- * Union of Tag `Self` identifiers from a {@link clientsFor} tag list.
+ * Union of Tag `Self` identifiers from a {@link clients} tag list.
  * Shallow {@link Resource.PipeableTag} only — `ResourceTag<…>` here reopens TS2589 under stock tsc.
  *
  * @internal
@@ -41,24 +44,48 @@ import {
 type ServicesOfTags<Tags extends ReadonlyArray<Resource.PipeableTag>> =
   Tags[number] extends Context.Key<infer S, any> ? S : never;
 
+/** Non-empty tag list for {@link clients}. @internal */
+type TagList = readonly [
+  Resource.PipeableTag,
+  ...ReadonlyArray<Resource.PipeableTag>,
+];
+
+/** Tags that cover a catalog node's `ROut` (C3). @internal */
+type TagsForCatalog<Node, Tags extends TagList> = [CatalogROut<Node>] extends [
+  ServicesOfTags<Tags>,
+]
+  ? Tags
+  : never;
+
 /**
- * Client layers for a catalog node's `ROut` (C2) — one {@link connect}, no repeated node in
- * each `client` line. Pass the Tag values that make up `ROut` (they must cover it).
+ * {@link clients} got bound tags that do not share one {@link AddressedNode}.
  *
  * @public
  */
-export const clientsFor = <
-  // Dialable catalog node — each `client(tag, node)` auto-wires the *same*
-  // memoized {@link connectAddressed} Layer (one MemoMap transport).
-  Node extends AddressedNode<unknown> & {
-    readonly [catalogSym]?: unknown;
-  },
-  const Tags extends readonly [Resource.PipeableTag, ...ReadonlyArray<Resource.PipeableTag>],
->(
-  node: Node,
-  // Tuple-wrap — same non-distributive rule as {@link ServesForCatalog}.
-  ...tags: [CatalogROut<Node>] extends [ServicesOfTags<Tags>] ? Tags : never
-): Layer.Layer<ServicesOfTags<Tags>> => {
+export class ClientsNodeMismatch extends Data.TaggedError("ClientsNodeMismatch")<{
+  readonly tags: ReadonlyArray<string>;
+}> {}
+
+/** Fail a Layer build with {@link ClientsNodeMismatch}. @internal */
+const clientsNodeMismatchLayer = (
+  tags: ReadonlyArray<string>,
+): Layer.Layer<never, ClientsNodeMismatch> =>
+  Layer.unwrap(
+    Effect.map(
+      Effect.fail(new ClientsNodeMismatch({ tags })),
+      (impossible: never): Layer.Layer<never> => impossible,
+    ),
+  );
+
+const tagKey = (tag: Resource.PipeableTag): string =>
+  typeof tag === "function" && tag !== null && "key" in tag
+    ? String((tag as { readonly key: string }).key)
+    : "?";
+
+const mergeClientLayers = (
+  node: AddressedNode<unknown>,
+  tags: ReadonlyArray<Resource.PipeableTag>,
+): Layer.Layer<never> => {
   const clients = tags.map((tag) =>
     Resource.client(
       tag as Resource.ResourceTag<any, any>,
@@ -71,8 +98,96 @@ export const clientsFor = <
       Layer.Layer<never, never, never>,
       ...Array<Layer.Layer<never, never, never>>,
     ]),
-  ) as Layer.Layer<ServicesOfTags<Tags>>;
+  ) as Layer.Layer<never>;
 };
+
+const isTagList = (value: unknown): value is TagList =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every(
+    (tag) =>
+      (typeof tag === "object" || typeof tag === "function") && tag !== null,
+  );
+
+const asAddressed = (node: unknown): AddressedNode<unknown> | undefined =>
+  isAddressedNode(node as AnyNode) ? (node as AddressedNode<unknown>) : undefined;
+
+const clientsFromBoundTags = (
+  tags: ReadonlyArray<Resource.PipeableTag>,
+): Layer.Layer<never, UnaddressedNode | ClientsNodeMismatch> => {
+  const first = asAddressed(Resource.nodeOf(tags[0]));
+  if (first === undefined) {
+    return unaddressedLayer(tagKey(tags[0]!));
+  }
+  for (const tag of tags) {
+    if (Resource.nodeOf(tag) !== first) {
+      return clientsNodeMismatchLayer(tags.map(tagKey));
+    }
+  }
+  return mergeClientLayers(first, tags);
+};
+
+/**
+ * Client layers for a catalog node's `ROut` (C2) — one shared {@link connect}, no repeated
+ * node on each `client` line.
+ *
+ * ```ts
+ * Node.clients(Worker, [Jobs, Emails])
+ * Node.clients(Worker, Jobs, Emails)
+ * Node.clients([Jobs, Emails]) // each tag carries Worker via andNode / { node }
+ * Node.clients(Jobs, Emails)
+ * ```
+ *
+ * @category connect
+ * @public
+ */
+export function clients<
+  Node extends AddressedNode<unknown> & {
+    readonly [catalogSym]?: unknown;
+  },
+  const Tags extends TagList,
+>(
+  node: Node,
+  tags: TagsForCatalog<Node, Tags>,
+): Layer.Layer<ServicesOfTags<Tags>>;
+export function clients<
+  Node extends AddressedNode<unknown> & {
+    readonly [catalogSym]?: unknown;
+  },
+  const Tags extends TagList,
+>(
+  node: Node,
+  ...tags: TagsForCatalog<Node, Tags>
+): Layer.Layer<ServicesOfTags<Tags>>;
+/** Bound tags — node from each tag's `andNode` / `{ node }` (array form). */
+export function clients<const Tags extends TagList>(
+  tags: Tags,
+): Layer.Layer<ServicesOfTags<Tags>, UnaddressedNode | ClientsNodeMismatch>;
+/** Bound tags — rest form. */
+export function clients<const Tags extends TagList>(
+  ...tags: Tags
+): Layer.Layer<ServicesOfTags<Tags>, UnaddressedNode | ClientsNodeMismatch>;
+export function clients(
+  first: unknown,
+  second?: unknown,
+  ...rest: ReadonlyArray<unknown>
+): Layer.Layer<never, UnaddressedNode | ClientsNodeMismatch> {
+  const addressed = asAddressed(first);
+  if (addressed !== undefined) {
+    const tags: ReadonlyArray<Resource.PipeableTag> = isTagList(second)
+      ? second
+      : second !== undefined
+        ? ([second, ...rest] as unknown as TagList)
+        : [];
+    return mergeClientLayers(addressed, tags);
+  }
+  const tags: ReadonlyArray<Resource.PipeableTag> = isTagList(first)
+    ? first
+    : second !== undefined
+      ? ([first, second, ...rest] as unknown as TagList)
+      : ([first] as unknown as TagList);
+  return clientsFromBoundTags(tags);
+}
 
 
 /**
@@ -94,6 +209,7 @@ export const clientsFor = <
  * Derived connect Layers are WeakMap-memoized per Node class so multiple
  * `Resource.client(Tag, MyNode)` call sites share one MemoMap transport.
  *
+ * @category connect
  * @public
  */
 export const connect: {
@@ -136,6 +252,7 @@ export const connect: {
  * `kind: "Http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
  * `MyNode.pipe(Resource.connectHttp(url))` overrides it.
  *
+ * @category connect
  * @public
  */
 export const connectHttp: {
@@ -156,6 +273,7 @@ export const connectHttp: {
  * browser), {@link connect} pinned to `kind: "WebSocket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
  * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Resource.connectSocket(url))` overrides it.
  *
+ * @category connect
  * @public
  */
 export const connectSocket: {
@@ -175,6 +293,7 @@ export const connectSocket: {
  * pinned to `kind: "IpcSocket"`. Dual: `MyNode.pipe(Resource.connectIpc)` uses the node's own `path`;
  * `MyNode.pipe(Resource.connectIpc(path))` overrides it.
  *
+ * @category connect
  * @public
  */
 export const connectIpc: {

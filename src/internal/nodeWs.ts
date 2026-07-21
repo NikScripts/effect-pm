@@ -39,6 +39,7 @@ import {
  * Local WebSocket listen — localhost bind + default Lookup bootstrap.
  * Same overload shapes as {@link unix}. Prefer this for same-machine WebSocket.
  *
+ * @category listen
  * @public
  */
 export function ws<
@@ -400,6 +401,9 @@ const wsBind = (
       : {}),
     ...(options?.health !== undefined ? { health: options.health } : {}),
     ...(options?.node !== undefined ? { node: options.node } : {}),
+    ...(options?.onConflict !== undefined
+      ? { onConflict: options.onConflict }
+      : {}),
     advertiseNode,
   });
 };

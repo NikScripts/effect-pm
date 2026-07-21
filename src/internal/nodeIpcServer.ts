@@ -16,6 +16,7 @@ import { unlinkBestEffort } from "./ipcPath"
 import * as Resource from "../Resource"
 import {
   AnyNode,
+  type OnConflict,
 } from "./nodeCore"
 import {
   assertProtocolKinds,
@@ -24,7 +25,12 @@ import {
   type ServerServeList,
 } from "./nodeServerCommon"
 
-/** Options for {@link ipcServer} — Unix-domain RPC (same-machine). @public */
+/**
+ * Options for {@link ipcServer} — Unix-domain RPC (same-machine).
+ *
+ * @category models
+ * @public
+ */
 export interface IpcServerOptions {
   /** Filesystem path for the Unix-domain listen socket (required). */
   readonly path: string;
@@ -45,6 +51,12 @@ export interface IpcServerOptions {
    * @internal
    */
   readonly advertiseNode?: AnyNode & { readonly key: string };
+  /**
+   * Call-site advertise conflict policy (forwarded to {@link Lookup.directoryAdvertiseLayer}).
+   *
+   * @internal
+   */
+  readonly onConflict?: OnConflict;
 }
 
 /**
@@ -66,6 +78,7 @@ export interface IpcServerOptions {
  * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route
  * (no HTTP listener) — probe readiness via NodeStatus over RPC.
  *
+ * @category servers
  * @public
  */
 export function ipcServer<Serve extends Layer.Layer<never, any, any>>(
@@ -208,6 +221,9 @@ const ipcServerBase = (
       const advertise = yield* directoryAdvertiseMerge(
         options.advertiseNode,
         entries,
+        options.onConflict !== undefined
+          ? { onConflict: options.onConflict }
+          : undefined,
       );
       return withUnlink.pipe(Layer.provideMerge(advertise));
     }),

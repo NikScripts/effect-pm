@@ -41,6 +41,7 @@ import {
  * A string-keyed swap targeted a key that wasn't declared swappable in this
  * runtime's allowlist.
  *
+ * @category errors
  * @public
  */
 export class ConfigKeyNotSwappable extends Data.TaggedError(
@@ -67,6 +68,7 @@ interface ConfigFieldMeta {
  * adds the control methods — so swappability is a structural distinction, not a
  * stored marker flag.
  *
+ * @category models
  * @public
  */
 export interface ConfigField<A>
@@ -80,6 +82,7 @@ export interface ConfigField<A>
  * itself (`yield* field` reads; `field.set(v)` / `field.reset` / `field.changes`
  * control).
  *
+ * @category models
  * @public
  */
 export interface SwappableField<A> extends ConfigField<A> {
@@ -97,7 +100,12 @@ export interface SwappableField<A> extends ConfigField<A> {
   >;
 }
 
-/** A read-only field — a {@link ConfigField} with no control methods. @public */
+/**
+ * A read-only field — a {@link ConfigField} with no control methods.
+ *
+ * @category models
+ * @public
+ */
 export type FixedField<A> = ConfigField<A>;
 
 // Yieldable prototype: a field reads by delegating to its underlying Config
@@ -143,7 +151,12 @@ const makeSwappableField = <A>(
   return field;
 };
 
-/** Type predicate for a {@link ConfigField}. @public */
+/**
+ * Type predicate for a {@link ConfigField}.
+ *
+ * @category guards
+ * @public
+ */
 export const isConfigField = (
   value: unknown,
 ): value is ConfigField<unknown> =>
@@ -171,7 +184,12 @@ type FieldOf<S> = S extends SwappableField<infer A>
       ? FixedField<A>
       : never;
 
-/** A bag of {@link ConfigField}s produced by {@link make} / {@link extend}. @public */
+/**
+ * A bag of {@link ConfigField}s produced by {@link make} / {@link extend}.
+ *
+ * @category models
+ * @public
+ */
 export type ConfigBag<F extends FieldsInput> = {
   readonly [K in keyof F]: FieldOf<F[K]>;
 };
@@ -185,6 +203,7 @@ export type ConfigBag<F extends FieldsInput> = {
  * field's `.set` / `.reset` (and {@link setByKey}), and read (as a
  * `ConfigProvider`) by every `Config`.
  *
+ * @category context
  * @public
  */
 export class DynamicConfigStore extends Context.Service<
@@ -212,6 +231,7 @@ const SwappableRegistryKey =
  * test or isolated program can substitute its own allowlist with
  * `Effect.provideService(SwappableRegistry, new Map())`.
  *
+ * @category context
  * @public
  */
 export const SwappableRegistry = Context.Reference<
@@ -259,6 +279,7 @@ const recordKeys = (config: Config.Config<unknown>): ReadonlyArray<string> => {
  * yield* DynamicConfig.setByKey("API_KEY", "rotated");  // string path — allowed process-wide
  * ```
  *
+ * @category constructors
  * @public
  */
 export const globalSwappable = <A>(
@@ -285,6 +306,7 @@ export const globalSwappable = <A>(
  * yield* apiKey.set("new");   // typed swap; no process-wide allowlist entry
  * ```
  *
+ * @category constructors
  * @public
  */
 export const swappable = <A>(config: Config.Config<A>): SwappableField<A> =>
@@ -312,6 +334,7 @@ type BagShape<Bag extends FieldRecord> = {
  * `yield* allCfg` resolves every field into one object. No per-field accessors —
  * {@link make} has those; pass either into the other to convert.
  *
+ * @category models
  * @public
  */
 export interface AllConfig<Bag extends FieldRecord>
@@ -359,6 +382,7 @@ const toFieldRecord = (
  *
  * @see {@link all} for the combined, yieldable-as-a-whole form.
  * @see {@link swappable} to mark a field hot-swappable.
+ * @category constructors
  * @public
  */
 export function make<const F extends FieldsInput>(fields: F): ConfigBag<F>;
@@ -383,6 +407,7 @@ export function make(input: FieldsInput | AllConfig<FieldRecord>): FieldRecord {
  * ```
  *
  * @see {@link make} for per-field accessors and control.
+ * @category constructors
  * @public
  */
 export const all = <const F extends FieldsInput>(
@@ -409,6 +434,7 @@ export const all = <const F extends FieldsInput>(
  * ```
  *
  * @see {@link make} for the base bag.
+ * @category constructors
  * @public
  */
 export const extend = <
@@ -462,6 +488,7 @@ const resetFieldImpl = (
  * ```
  *
  * @see The field method `field.set` for the typed, in-process path.
+ * @category utils
  * @public
  */
 export const setByKey = (
@@ -549,6 +576,7 @@ const rebuildBag = <Out>(
  * ```
  *
  * @see {@link freezeField} to freeze a single field instead of all of them.
+ * @category combinators
  * @public
  */
 export const freeze = <
@@ -569,6 +597,7 @@ export const freeze = <
  * ```
  *
  * @see {@link freeze} to freeze every field.
+ * @category combinators
  * @public
  */
 export const freezeField = <
@@ -611,6 +640,7 @@ const fieldsOf = (
  * program.pipe(Effect.provide(DynamicConfig.layer(scopedCfg)));  // + scopedCfg's swappable keys
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export const layer = (

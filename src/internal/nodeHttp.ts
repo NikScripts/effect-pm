@@ -39,6 +39,7 @@ import {
  * Local Http listen — localhost bind + default Lookup bootstrap.
  * Same overload shapes as {@link unix}. Prefer this for same-machine HTTP.
  *
+ * @category listen
  * @public
  */
 export function http<
@@ -400,6 +401,9 @@ const httpBind = (
       : {}),
     ...(options?.health !== undefined ? { health: options.health } : {}),
     ...(options?.node !== undefined ? { node: options.node } : {}),
+    ...(options?.onConflict !== undefined
+      ? { onConflict: options.onConflict }
+      : {}),
     advertiseNode,
   });
 };

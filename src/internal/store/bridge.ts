@@ -17,6 +17,7 @@ import type { StoreHandleOf, StoreSpec } from "./spec";
 /**
  * Scope bridge API carried by {@link Storage | Store.Storage}.
  *
+ * @category models
  * @public
  */
 export interface StorageApi {

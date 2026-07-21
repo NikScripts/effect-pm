@@ -39,6 +39,7 @@ const storeOrThrow = (tag: { readonly key: string }): unknown => {
  * transport {@link NodeProtocol}. Stored on a node-bearing tag under {@link nodeSym}; read by
  * {@link Resource.client} to resolve *where* to connect (its requirement channel).
  *
+ * @category models
  * @public
  */
 export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
@@ -54,6 +55,7 @@ export type NodeKey<HSelf> = Context.Key<HSelf, NodeProtocol>;
  * derive the transport from it. Inferred from a `ws(s)://` url, an http target, or `{ path }` →
  * IpcSocket; otherwise declare it explicitly.
  *
+ * @category models
  * @public
  */
 export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
@@ -68,18 +70,89 @@ export interface Endpoints {
   readonly IpcSocket?: { readonly path: string };
 }
 
-/** A {@link Tag} erased — its transport `endpoints` set, plus the **primary** `url`/`path`/`kind` (the
- *  first-declared endpoint, kept for single-protocol readers); a tag's `distributed` set is
- *  self-describing about *where* AND *how* to reach each one. @public */
+/**
+ * Directory advertise conflict policy when the same `nodeKey` already has a row.
+ *
+ * - `livenessReplace` — ping incumbent; alive → reject; dead → replace
+ * - `askIncumbent` — if alive, Lookup asks `NodeStatus.yield`; refuse/timeout → reject
+ * - `reject` — alive → reject; dead → still replace
+ * - `inherit` — continue up the resolve chain (call-site → node → Lookup → hard fallback)
+ *
+ * @category models
+ * @public
+ */
+export type OnConflict =
+  | "livenessReplace"
+  | "askIncumbent"
+  | "reject"
+  | "inherit";
+
+/**
+ * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
+ *
+ * @category models
+ * @public
+ */
+export type OnConflictResolved = Exclude<OnConflict, "inherit">;
+
+/**
+ * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
+ *
+ * @category utils
+ * @public
+ */
+export const resolveOnConflict = (
+  ...prefs: ReadonlyArray<OnConflict | undefined>
+): OnConflictResolved => {
+  for (const pref of prefs) {
+    if (pref !== undefined && pref !== "inherit") {
+      return pref;
+    }
+  }
+  return "livenessReplace";
+};
+
+/** Read a node's stamped {@link OnConflict}, if any. @internal */
+export const onConflictOf = (node: unknown): OnConflict | undefined => {
+  if (
+    (typeof node === "object" || typeof node === "function") &&
+    node !== null &&
+    "onConflict" in node
+  ) {
+    const value = (node as { readonly onConflict?: unknown }).onConflict;
+    if (
+      value === "livenessReplace" ||
+      value === "askIncumbent" ||
+      value === "reject" ||
+      value === "inherit"
+    ) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+/** A {@link Tag} erased — its transport `endpoints` set, plus the **primary** address
+ *  (`url` and/or Unix `path`) and {@link ProtocolKind} `kind` (the first-declared endpoint, kept for
+ *  single-protocol readers), so a tag's `distributed` set is self-describing about *where* AND *how* to
+ *  reach each one. @public
+ *
+ * @category models
+ */
 export type AnyNode = NodeKey<unknown> & {
   readonly url: string | undefined;
   readonly path: string | undefined;
   readonly kind: ProtocolKind | undefined;
   readonly endpoints?: Endpoints;
+  /** Stamped advertise conflict policy (default `"inherit"` on ordinary nodes). */
+  readonly onConflict?: OnConflict;
 };
 
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
- *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public */
+ *  `kind` set, and either a `url` (Http/WebSocket) or a Unix `path` (IpcSocket). @public
+ *
+ * @category models
+ */
 export type AddressedNode<HSelf> = NodeKey<HSelf> &
   (
     | {
@@ -116,11 +189,12 @@ export const catalogSym: unique symbol = Symbol.for(
 
 /**
  * A {@link Node} with typed catalog `ROut` (union of resource handles). Prefer
- * `import type` for those handles (C4). Use with {@link listen} / {@link clientsFor}.
+ * `import type` for those handles (C4). Use with {@link listen} / {@link clients}.
  *
  * Catalog members must be structurally distinct types (different specs / service shapes) —
  * identical Tag shapes collapse in TypeScript, so `Jobs | Emails` cannot prove C3.
  *
+ * @category models
  * @public
  */
 export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
@@ -134,6 +208,7 @@ export type CatalogNode<Self, ROut = never> = NodeKey<Self> & {
  * Address-less {@link unix} / {@link http} / {@link ws} lost the `Node.key` claim — another
  * process owns this Node. Winner endpoint is in `original` (dial via Lookup / `client`).
  *
+ * @category errors
  * @public
  */
 export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost")<{
@@ -150,6 +225,7 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
  * The Node a protocol listen (`unix` / `http` / `ws`) is binding (concrete or minted).
  * Identity claims prefer this over a Tag-bound Node when present.
  *
+ * @category models
  * @public
  */
 export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
@@ -160,6 +236,7 @@ export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
  * Shared options for {@link unix} / {@link http} / {@link ws} (and low-level `*Server`) —
  * rpc path / health / ipc unlink. Not the TCP bind port (platform layer owns that).
  *
+ * @category models
  * @public
  */
 export type ListenOptions = {
@@ -168,12 +245,18 @@ export type ListenOptions = {
   readonly health?: { readonly path?: HttpRouter.PathInput };
   readonly node?: string | { readonly key: string };
   readonly unlink?: boolean;
+  /**
+   * Directory advertise conflict policy for this listen (call-site; wins over node stamp).
+   * Omit / `"inherit"` → continue resolve chain.
+   */
+  readonly onConflict?: OnConflict;
 };
 
 /**
  * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal} —
  * {@link ListenOptions} plus Lookup bootstrap knobs.
  *
+ * @category models
  * @public
  */
 export type NamelessListenOptions = ListenOptions & {
@@ -192,6 +275,7 @@ export type NamelessListenOptions = ListenOptions & {
  * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
  * sync throw. Catch via `Exit` / `CatchTag` when building `clientHttp` or derived `connect`.
  *
+ * @category errors
  * @public
  */
 export class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
@@ -251,6 +335,7 @@ export const resolveHttpTarget = (
  * Dialable {@link Tag} targets — enough address for {@link connect} / auto-wired
  * {@link Resource.client} with no extra protocol argument.
  *
+ * @category models
  * @public
  */
 export type DialableTarget =
@@ -267,6 +352,7 @@ type LooseNodeTarget =
       readonly url?: string;
       readonly path?: string;
       readonly kind?: ProtocolKind;
+      readonly onConflict?: OnConflict;
     }
   | ShorthandTarget;
 
@@ -280,6 +366,7 @@ type NodeTagClass<Self, ROut, Address> =
     Address & {
       readonly [catalogSym]?: ROut;
       readonly logs: unknown;
+      readonly onConflict: OnConflict;
     };
 
 /** Bare (address-less) node fields. @internal */
@@ -344,6 +431,7 @@ type ShorthandTarget = {
   readonly http?: string;
   readonly ws?: string;
   readonly ipc?: string;
+  readonly onConflict?: OnConflict;
   readonly url?: never;
   readonly path?: never;
   readonly kind?: never;
@@ -381,6 +469,7 @@ export type WsNodeTagClass<Self, ROut = never> = NodeTagClass<
  * Runtime predicate: node declares a {@link ProtocolKind} and the matching address
  * (`path` for IpcSocket, `url` otherwise) so {@link connect} can derive a transport.
  *
+ * @category guards
  * @public
  */
 export const isAddressedNode = (
@@ -430,6 +519,7 @@ const assembleNode = <Self, ROut, Addr>(
     readonly path: string | undefined;
     readonly kind: ProtocolKind | undefined;
     readonly endpoints: Endpoints;
+    readonly onConflict: OnConflict;
     readonly invalidTarget?: InvalidHttpTarget;
   },
 ): NodeTagClass<Self, ROut, Addr> => {
@@ -464,6 +554,7 @@ const assembleNode = <Self, ROut, Addr>(
     path: fields.path,
     kind: fields.kind,
     endpoints: fields.endpoints,
+    onConflict: fields.onConflict,
     ...(fields.invalidTarget !== undefined
       ? { [invalidHttpTargetSym]: fields.invalidTarget }
       : {}),
@@ -523,13 +614,18 @@ const isNodeTagValue = <Self, ROut, Addr>(
  * `Resource.client(Tag, Worker)` can auto-wire {@link connect}; bare `Node.Tag<X>()("x")` stays
  * address-less.
  *
+ * @category constructors
  * @public
  */
 export const Tag = <Self, ROut = never>() => {
   function build(key: string): NodeTagClass<Self, ROut, BareAddress>;
   function build(
     key: string,
-    target: { readonly path: string; readonly kind?: "IpcSocket" },
+    target: {
+      readonly path: string;
+      readonly kind?: "IpcSocket";
+      readonly onConflict?: OnConflict;
+    },
   ): NodeTagClass<Self, ROut, IpcAddress>;
   function build(
     key: string,
@@ -548,15 +644,24 @@ export const Tag = <Self, ROut = never>() => {
     target: {
       readonly url: `ws://${string}` | `wss://${string}`;
       readonly kind?: "WebSocket";
+      readonly onConflict?: OnConflict;
     },
   ): NodeTagClass<Self, ROut, WsAddress>;
   function build(
     key: string,
-    target: { readonly url: string; readonly kind: "WebSocket" },
+    target: {
+      readonly url: string;
+      readonly kind: "WebSocket";
+      readonly onConflict?: OnConflict;
+    },
   ): NodeTagClass<Self, ROut, WsAddress>;
   function build(
     key: string,
-    target: { readonly url: string; readonly kind: "Http" },
+    target: {
+      readonly url: string;
+      readonly kind: "Http";
+      readonly onConflict?: OnConflict;
+    },
   ): NodeTagClass<Self, ROut, HttpAddress>;
   function build<const T extends ShorthandTarget>(
     key: string,
@@ -564,7 +669,13 @@ export const Tag = <Self, ROut = never>() => {
   ): NodeTagClass<Self, ROut, MultiAddress<KindsOf<T>>>;
   function build(
     key: string,
-    target: string | { readonly url: string; readonly kind?: ProtocolKind },
+    target:
+      | string
+      | {
+          readonly url: string;
+          readonly kind?: ProtocolKind;
+          readonly onConflict?: OnConflict;
+        },
   ): NodeTagClass<Self, ROut, UrlAddressLoose>;
   function build(
     key: string,
@@ -658,6 +769,14 @@ export const Tag = <Self, ROut = never>() => {
             ? { Http: { url } }
             : {};
   }
+  // Advertise conflict policy — an explicit `{ onConflict }` on the target wins; an ordinary node
+  // defaults to `"inherit"` (resolved up the chain at advertise time). The shorthand carries it too.
+  const onConflict: OnConflict =
+    typeof target === "object" &&
+    target !== null &&
+    target.onConflict !== undefined
+      ? target.onConflict
+      : "inherit";
   return assembleNode<
     Self,
     ROut,
@@ -667,7 +786,7 @@ export const Tag = <Self, ROut = never>() => {
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
-  >(key, { url, path, kind, endpoints, invalidTarget });
+  >(key, { url, path, kind, endpoints, onConflict, invalidTarget });
   }
 
   return build;
@@ -719,6 +838,8 @@ export const withProtocol =
       path: node.path ?? endpoints.IpcSocket?.path,
       kind,
       endpoints,
+      // Same-identity derived handle keeps the base node's advertise policy.
+      onConflict: node.onConflict,
     });
   };
 
@@ -727,6 +848,7 @@ export const withProtocol =
  * address/`kind`, so `connect` / `listen` can't know how to reach it. Surfaces on the Layer / Effect
  * error channel (never a sync `throw`).
  *
+ * @category errors
  * @public
  */
 export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
@@ -747,6 +869,7 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
  * `missing` = none; `ambiguous` = two or more (pick with `unix/http/ws(node, [serve…])`).
  * Anonymous transport stays `unix/http/ws([serve…])` / `unix/http/ws(serve)` — never this overload.
  *
+ * @category errors
  * @public
  */
 export class ListenTagNodeRequired extends Data.TaggedError(
@@ -775,6 +898,7 @@ export class ListenTagNodeRequired extends Data.TaggedError(
  * {@link unix} only speaks Unix-domain IPC. The Node (or Tag-bound Node) was Http / WebSocket
  * — use {@link http} / {@link ws} for those transports.
  *
+ * @category errors
  * @public
  */
 export class UnixListenRequiresIpc extends Data.TaggedError(
@@ -795,6 +919,7 @@ export class UnixListenRequiresIpc extends Data.TaggedError(
  * {@link http} only speaks local Http. The Node (or Tag-bound Node) was IpcSocket / WebSocket
  * (or a non-loopback URL) — use {@link unix} / {@link ws}, or {@link httpServer} for custom binds.
  *
+ * @category errors
  * @public
  */
 export class HttpListenRequiresHttp extends Data.TaggedError(
@@ -815,6 +940,7 @@ export class HttpListenRequiresHttp extends Data.TaggedError(
  * {@link ws} only speaks local WebSocket. The Node (or Tag-bound Node) was IpcSocket / Http
  * (or a non-loopback URL) — use {@link unix} / {@link http}, or {@link wsServer} for custom binds.
  *
+ * @category errors
  * @public
  */
 export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
@@ -833,6 +959,7 @@ export class WsListenRequiresWs extends Data.TaggedError("WsListenRequiresWs")<{
  * {@link nPipe} only speaks IpcSocket (named-pipe path). The Node was Http / WebSocket —
  * use {@link http} / {@link ws} for those transports.
  *
+ * @category errors
  * @public
  */
 export class NPipeListenRequiresIpc extends Data.TaggedError(
@@ -852,6 +979,7 @@ export class NPipeListenRequiresIpc extends Data.TaggedError(
 /**
  * {@link nPipe} is Windows-only. On POSIX use {@link unix}.
  *
+ * @category errors
  * @public
  */
 export class NPipeRequiresWindows extends Data.TaggedError(
@@ -870,6 +998,7 @@ export class NPipeRequiresWindows extends Data.TaggedError(
 /**
  * {@link listen} no longer binds a transport. Use the protocol entry instead.
  *
+ * @category errors
  * @public
  */
 export class ListenUseProtocol extends Data.TaggedError("ListenUseProtocol")<{
@@ -889,6 +1018,7 @@ export class ListenUseProtocol extends Data.TaggedError("ListenUseProtocol")<{
  * `socket` node) a server not speaking the socket protocol. Surfaced eagerly by {@link verifyConnection}
  * so a client fails fast at startup instead of hanging or erroring opaquely at the first call.
  *
+ * @category errors
  * @public
  */
 export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
@@ -909,6 +1039,7 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
  * dashboard / no live data" failure. The server refuses to boot with this instead, so the mismatch is
  * loud and immediate. A multi-protocol node served over any of its declared transports passes.
  *
+ * @category errors
  * @public
  */
 export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch")<{
@@ -932,6 +1063,7 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
  * Same-machine: `{ path }` (ipc). Cross-network: pass a full address — required; no elect (L1).
  * Dialable targets return an {@link AddressedNode} (same overloads as {@link Tag}).
  *
+ * @category constructors
  * @public
  */
 export function Lookup<Self>(
@@ -941,7 +1073,11 @@ export function Lookup<Self>(
 };
 export function Lookup<Self>(
   name: string,
-  target: { readonly path: string; readonly kind?: "IpcSocket" },
+  target: {
+    readonly path: string;
+    readonly kind?: "IpcSocket";
+    readonly onConflict?: OnConflictResolved;
+  },
 ): NodeTagClass<Self, never, IpcAddress> & {
   readonly isLookupNode: true
 };
@@ -1000,10 +1136,27 @@ export function Lookup<Self>(
   readonly isLookupNode: true
 } {
   const node = Tag<Self>()(name, target)
-  return Object.assign(node, { isLookupNode: true as const })
+  // Lookup is the fleet parent — concrete default (never leave as ordinary-node "inherit").
+  const onConflict: OnConflict =
+    typeof target === "object" &&
+    target !== null &&
+    target.onConflict !== undefined
+      ? target.onConflict === "inherit"
+        ? "livenessReplace"
+        : target.onConflict
+      : "livenessReplace";
+  return Object.assign(node, {
+    isLookupNode: true as const,
+    onConflict,
+  })
 }
 
-/** True when `node` was built with {@link Lookup}. @public */
+/**
+ * True when `node` was built with {@link Lookup}.
+ *
+ * @category guards
+ * @public
+ */
 export const isLookupNode = (
   node: unknown,
 ): node is AnyNode & { readonly isLookupNode: true } =>

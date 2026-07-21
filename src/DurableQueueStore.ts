@@ -17,17 +17,32 @@
  */
 import { Context, Data, type Effect, type Option } from "effect";
 
-/** Queue priority lane (strict: high before normal before low). @public */
+/**
+ * Queue priority lane (strict: high before normal before low).
+ *
+ * @category models
+ * @public
+ */
 export type DurablePriority = "high" | "normal" | "low";
 
-/** Numeric rank for ordering (lower = sooner). @public */
+/**
+ * Numeric rank for ordering (lower = sooner).
+ *
+ * @category utils
+ * @public
+ */
 export const durablePriorityRank: Record<DurablePriority, number> = {
   high: 0,
   normal: 1,
   low: 2,
 };
 
-/** An item offered to the store. `payload` is opaque encoded JSON (the caller owns the schema). @public */
+/**
+ * An item offered to the store. `payload` is opaque encoded JSON (the caller owns the schema).
+ *
+ * @category models
+ * @public
+ */
 export interface DurableEntryInput {
   /** Opaque per-entry handle (not the dedup key). */
   readonly id: string;
@@ -42,7 +57,12 @@ export interface DurableEntryInput {
   readonly schemaVersion?: number;
 }
 
-/** A leased entry returned by {@link DurableQueueStoreShape.take}. @public */
+/**
+ * A leased entry returned by {@link DurableQueueStoreShape.take}.
+ *
+ * @category models
+ * @public
+ */
 export interface DurableEntry {
   readonly id: string;
   readonly key: string;
@@ -55,20 +75,40 @@ export interface DurableEntry {
   readonly enqueuedAtMillis: number;
 }
 
-/** Outcome of {@link DurableQueueStoreShape.offer}. @public */
+/**
+ * Outcome of {@link DurableQueueStoreShape.offer}.
+ *
+ * @category models
+ * @public
+ */
 export type OfferResult = "inserted" | "escalated" | "deduplicated";
 
-/** Outcome of {@link DurableQueueStoreShape.fail}. @public */
+/**
+ * Outcome of {@link DurableQueueStoreShape.fail}.
+ *
+ * @category models
+ * @public
+ */
 export type FailResult = "requeued" | "deadLettered";
 
-/** Per-priority pending counts. @public */
+/**
+ * Per-priority pending counts.
+ *
+ * @category models
+ * @public
+ */
 export interface DurableSizes {
   readonly high: number;
   readonly normal: number;
   readonly low: number;
 }
 
-/** A backend failure (wraps the underlying driver error). @public */
+/**
+ * A backend failure (wraps the underlying driver error).
+ *
+ * @category errors
+ * @public
+ */
 export class DurableQueueError extends Data.TaggedError(
   "@nikscripts/effect-pm/DurableQueueError",
 )<{
@@ -80,6 +120,7 @@ export class DurableQueueError extends Data.TaggedError(
  * The durable store port. All operations are backend-agnostic; a backend (SQLite, …) provides the
  * concrete implementation.
  *
+ * @category models
  * @public
  */
 export interface DurableQueueStoreShape {
@@ -136,6 +177,7 @@ export interface DurableQueueStoreShape {
  * service; provide a backend (e.g. `SQLiteDurableQueueStore.layer` from
  * `@nikscripts/effect-pm/storage/sqlite`).
  *
+ * @category context
  * @public
  */
 export class DurableQueueStore extends Context.Service<

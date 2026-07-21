@@ -38,6 +38,7 @@ import {
  * Unix-domain IPC listen — all ipc mint/bind + default Lookup bootstrap.
  * Same overload shapes as the old multi-protocol `listen`. Prefer this for same-machine.
  *
+ * @category listen
  * @public
  */
 export function unix<
@@ -346,6 +347,9 @@ const ipcBind = (
       ? { serialization: options.serialization }
       : {}),
     ...(options?.node !== undefined ? { node: options.node } : {}),
+    ...(options?.onConflict !== undefined
+      ? { onConflict: options.onConflict }
+      : {}),
     advertiseNode,
   });
 };

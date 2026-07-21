@@ -22,6 +22,7 @@ import * as Resource from "../Resource"
 import {
   AnyNode,
   ProtocolKind,
+  type OnConflict,
 } from "./nodeCore"
 import {
   assertProtocolKinds,
@@ -30,7 +31,12 @@ import {
   type ServerServeList,
 } from "./nodeServerCommon"
 
-/** Options for {@link httpServer}. @public */
+/**
+ * Options for {@link httpServer}.
+ *
+ * @category models
+ * @public
+ */
 export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -47,6 +53,12 @@ export interface HttpServerOptions {
    * @internal
    */
   readonly advertiseNode?: AnyNode & { readonly key: string };
+  /**
+   * Call-site advertise conflict policy (forwarded to {@link Lookup.directoryAdvertiseLayer}).
+   *
+   * @internal
+   */
+  readonly onConflict?: OnConflict;
 }
 
 /** A server RPC-protocol builder — {@link Resource.serverProtocolHttp} or {@link Resource.serverProtocolWebsocket}. */
@@ -158,6 +170,9 @@ const httpServerBase = (
       const advertise = yield* directoryAdvertiseMerge(
         options?.advertiseNode,
         entries,
+        options?.onConflict !== undefined
+          ? { onConflict: options.onConflict }
+          : undefined,
       );
       return served.pipe(Layer.provideMerge(advertise));
     }),
@@ -198,6 +213,7 @@ const httpServerBase = (
  * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
  * a silent runtime gap.
  *
+ * @category servers
  * @public
  */
 export function httpServer<Serve extends Layer.Layer<never, any, any>>(
@@ -277,6 +293,7 @@ function serverImpl(
  * );
  * ```
  *
+ * @category servers
  * @public
  */
 export function wsServer<Serve extends Layer.Layer<never, any, any>>(

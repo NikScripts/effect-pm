@@ -173,6 +173,7 @@ export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, Stor
  * yield* store.record(event);
  * ```
  *
+ * @category models
  * @public
  */
 export class Storage extends Context.Service<Storage, StorageApi>()(
@@ -482,6 +483,7 @@ const applyStoreDefaultLogLevel = <
  * override by providing a {@link Service} (`Layer.provide` / `provideMerge`) so Soft unwrap sees
  * ambient {@link Storage} before the default.
  *
+ * @category layers & serving
  * @public
  */
 export const layerDefaultMemory: Layer.Layer<Storage> = Layer.unwrap(
@@ -501,6 +503,7 @@ export const layerDefaultMemory: Layer.Layer<Storage> = Layer.unwrap(
  * `Process.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` or
  * `httpServer([…]).pipe(Layer.provide(AppStore.layer…))`.
  *
+ * @category layers & serving
  * @public
  */
 export const withDefaultStorage = <A, E, R>(
@@ -519,6 +522,7 @@ export const withDefaultStorage = <A, E, R>(
 /**
  * A pipeable store contract — shapes plus optional custom methods.
  *
+ * @category models
  * @public
  */
 export type Contract<C extends StoreContractValue = StoreContractValue> = C;
@@ -526,6 +530,7 @@ export type Contract<C extends StoreContractValue = StoreContractValue> = C;
 /**
  * Handle inferred from a store contract.
  *
+ * @category models
  * @public
  */
 export type HandleOf<C extends StoreContractValue> = StoreHandleFromContract<C>;
@@ -576,6 +581,7 @@ export type CatchWriteError<T> = T extends (
  * `(...a) => Effect<S, E, R>` → `(...a) => Effect<S, E, Exclude<R, Ctx>>`; a bare {@link Effect} custom
  * member is subtracted too; the {@link StoreEffectsVariance} brand's non-effect members pass through
  * (the function-passthrough branch keeps `_C` intact); a sub-tree recurses. @public
+ * @category models
  */
 export type StoreProvidedContext<T, Ctx> = T extends (
   ...args: infer A
@@ -592,6 +598,7 @@ export type StoreProvidedContext<T, Ctx> = T extends (
 /**
  * Brand identifier for an {@link effects} object — Effect's v4 `TypeId` shape (a string-literal id,
  * present at runtime). @public
+ * @category models
  */
 export type TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
 
@@ -603,6 +610,7 @@ export const TypeId: TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
  * **covariant** (Effect's `(_: never) => C` encoding), so a specific contract's effects satisfy the wide
  * `StoreEffectsVariance<StoreContractValue>` constraint that {@link mapEffects} / {@link catchWriteErrors}
  * take. @public
+ * @category models
  */
 export interface StoreEffectsVariance<out C extends StoreContractValue> {
   readonly [TypeId]: { readonly _C: (_: never) => C };
@@ -613,16 +621,27 @@ export interface StoreEffectsVariance<out C extends StoreContractValue> {
  * custom methods) with {@link Storage} added to every method's requirement channel, carrying the
  * {@link StoreEffectsVariance} brand.
  *
+ * @category models
  * @public
  */
 export type StoreEffectsOf<C extends StoreContractValue> = AddStorageReq<StoreHandleFromContract<C>> &
   StoreEffectsVariance<C>;
 
-/** True for a value branded as a {@link effects} object. @public */
+/**
+ * True for a value branded as a {@link effects} object.
+ *
+ * @category guards
+ * @public
+ */
 export const isStoreEffects = (u: unknown): u is StoreEffectsOf<StoreContractValue> =>
   Predicate.hasProperty(u, TypeId);
 
-/** Scope keys (tuple registrations) or accessor keys (object registrations) on a store class. @public */
+/**
+ * Scope keys (tuple registrations) or accessor keys (object registrations) on a store class.
+ *
+ * @category models
+ * @public
+ */
 export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
   ? Regs extends ReadonlyArray<{ readonly scopeKey: infer K extends string }>
     ? K
@@ -635,6 +654,7 @@ export type KeysOf<T> = T extends { readonly [storeRegsSym]: infer Regs }
  * Declare a row shape. Every shape shares the baked-in read payload
  * (`limit` / `before` / `after` / nested RQB `where`).
  *
+ * @category constructors
  * @public
  */
 export function shape<Row extends Schema.Schema<unknown>>(row: Row): StoreShapeDef<Row> {
@@ -661,6 +681,7 @@ export function shape<Row extends Schema.Schema<unknown>>(row: Row): StoreShapeD
  * );
  * ```
  *
+ * @category constructors
  * @public
  */
 export const contract: {
@@ -826,54 +847,107 @@ export const extend: {
 // Registration log-level pipe modifiers
 // ============================================================================
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelAll = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationLogLevel(registration, "All");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelDebug = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationLogLevel(registration, "Debug");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelInfo = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationLogLevel(registration, "Info");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelWarn = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationLogLevel(registration, "Warn");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelError = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationLogLevel(registration, "Error");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelNone = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationLogLevel(registration, "None");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevel = logLevelAll;
 
-/** Per-registration live stream floor for {@link Resource.logs} (distinct from durable {@link logLevel}). @public */
+/**
+ * Per-registration live stream floor for {@link Resource.logs} (distinct from durable {@link logLevel}).
+ *
+ * @category logging
+ * @public
+ */
 export const streamLevelAll = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationStreamLevel(registration, "All");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const streamLevelDebug = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationStreamLevel(registration, "Debug");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const streamLevelInfo = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationStreamLevel(registration, "Info");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const streamLevelWarn = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationStreamLevel(registration, "Warn");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const streamLevelError = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationStreamLevel(registration, "Error");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const streamLevelNone = <R extends StoreRegistrationAny>(registration: R): R =>
   withRegistrationStreamLevel(registration, "None");
 
@@ -889,6 +963,7 @@ export const streamLevelNone = <R extends StoreRegistrationAny>(registration: R)
  * Store.register("events", contract).pipe(Store.retention(500))
  * ```
  *
+ * @category utils
  * @public
  */
 export const retention =
@@ -947,6 +1022,7 @@ const storeChangesStream = (
  * );
  * ```
  *
+ * @category getters
  * @public
  */
 export function changes<S extends StoreClassWithShapes, Row extends Schema.Schema<unknown>>(
@@ -1036,6 +1112,7 @@ const isStoreClassWithShapes = (value: unknown): value is StoreClassWithShapes =
  * **opt-in** path (e.g. persist only if the app wired durable storage for me). For the always-on
  * observability path, use {@link resolveOrDie}.
  *
+ * @category getters
  * @public
  */
 export const resolve = <const C extends StoreContractValue>(
@@ -1053,6 +1130,7 @@ export const resolve = <const C extends StoreContractValue>(
  * *custom* store is in context and lacks this scope, that's a wiring error and it dies with a clear
  * message (bake the default so it can materialize the scope).
  *
+ * @category getters
  * @public
  */
 export const resolveOrDie = <const C extends StoreContractValue>(
@@ -1155,6 +1233,7 @@ const mapMethod =
  * const rows = yield* store.sensors.temperature.read();       // Effect<ReadonlyArray<…>, never, Storage>
  * ```
  *
+ * @category combinators
  * @public
  */
 export const effects = <const C extends StoreContractValue>(
@@ -1207,6 +1286,7 @@ export const effects = <const C extends StoreContractValue>(
  * const traced = Store.mapEffects(store, (effect) => Effect.withSpan(effect, "store"));
  * ```
  *
+ * @category combinators
  * @public
  */
 export const mapEffects = <
@@ -1267,6 +1347,7 @@ const swallowWrite = (
  * - **Reads and every other error are left exactly as-is** — `Exclude<E, StoreWriteError>` is a no-op
  *   where `StoreWriteError` is absent.
  *
+ * @category combinators
  * @public
  */
 export const catchWriteErrors = <Effects extends StoreEffectsVariance<StoreContractValue>>(
@@ -1288,6 +1369,7 @@ export const catchWriteErrors = <Effects extends StoreEffectsVariance<StoreContr
  * const store = Store.provideContext(storeEffects, storageContext); // methods become Effect<void>
  * ```
  *
+ * @category combinators
  * @public
  */
 export const provideContext = <
@@ -1306,13 +1388,23 @@ export const provideContext = <
 // Aggregate factories
 // ============================================================================
 
-/** Aggregate store class produced by {@link Service}. @public */
+/**
+ * Aggregate store class produced by {@link Service}.
+ *
+ * @category models
+ * @public
+ */
 export type ServiceClass<
   Self = unknown,
   Id extends string = string,
 > = StoreServiceClass<Self, Id>;
 
-/** Registration-only aggregate (no layers) — browser-safe descriptor / remote client base. @public */
+/**
+ * Registration-only aggregate (no layers) — browser-safe descriptor / remote client base.
+ *
+ * @category models
+ * @public
+ */
 export type TagClass<
   Self = unknown,
   Id extends string = string,
@@ -1348,6 +1440,7 @@ export type TagClass<
  * Effect.provide(program, AppStore.layer({ filename: "data.sqlite" }));
  * ```
  *
+ * @category constructors
  * @public
  */
 export const Service = <Self>(id: string) => {
@@ -1365,6 +1458,7 @@ export const Service = <Self>(id: string) => {
 /**
  * Like {@link Service} without layers — registration descriptor for remote clients.
  *
+ * @category constructors
  * @public
  */
 export const Tag = <Self>(id: string) =>
@@ -1373,6 +1467,7 @@ export const Tag = <Self>(id: string) =>
 /**
  * Apply a store-wide default durable log export level (registration pipe overrides still win).
  *
+ * @category logging
  * @public
  */
 export const withDefaultLogLevel =
@@ -1380,29 +1475,58 @@ export const withDefaultLogLevel =
   <T extends StoreServiceClass>(storeClass: T): T =>
     applyStoreDefaultLogLevel(storeClass, logLevel) as T;
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelAllDefault = withDefaultLogLevel("All");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelDebugDefault = withDefaultLogLevel("Debug");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelInfoDefault = withDefaultLogLevel("Info");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelWarnDefault = withDefaultLogLevel("Warn");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelErrorDefault = withDefaultLogLevel("Error");
 
-/** @public */
+/**
+ *
+ * @category logging
+ * @public
+ */
 export const logLevelNoneDefault = withDefaultLogLevel("None");
 
 // ============================================================================
 // Standalone + tag attachment
 // ============================================================================
 
-/** Standalone single-scope store class from {@link scoped}. @public */
+/**
+ * Standalone single-scope store class from {@link scoped}.
+ *
+ * @category models
+ * @public
+ */
 export type Standalone<
   Self,
   Id extends string,
@@ -1420,6 +1544,7 @@ export type Standalone<
  * Effect.provide(program, ThermoStore.layer({ filename: "data.sqlite" }));
  * ```
  *
+ * @category constructors
  * @public
  */
 export const scoped = <
@@ -1458,6 +1583,7 @@ export const scoped = <
  * ) {}
  * ```
  *
+ * @category spec fields
  * @public
  */
 export const withStore = <const C extends StoreContractValue>(
@@ -1483,6 +1609,7 @@ export const withStore = <const C extends StoreContractValue>(
 /**
  * Register a scope on an aggregate {@link Service} without creating a standalone class.
  *
+ * @category constructors
  * @public
  */
 export const register = <
@@ -1508,7 +1635,11 @@ export const register = <
 // Namespace type helpers
 // ============================================================================
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export declare namespace Store {
   /** @public */
   export type Contract<C extends StoreContractValue = StoreContractValue> = C;

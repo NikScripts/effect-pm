@@ -55,6 +55,7 @@ import * as Node from "./Node";
 /**
  * Where the linked outbound client id is stored on an {@link ApiMetrics} tag.
  *
+ * @category utils
  * @public
  */
 export const clientIdSym: unique symbol = Symbol.for(
@@ -67,6 +68,7 @@ export const metricsKeySuffix = "/metrics";
 /**
  * Default Resource key for a metrics tag bound to `clientId`.
  *
+ * @category utils
  * @public
  */
 export const metricsKeyFor = (clientId: string): string =>
@@ -75,6 +77,7 @@ export const metricsKeyFor = (clientId: string): string =>
 /**
  * Options for {@link ApiMetrics.Tag} (second stage).
  *
+ * @category models
  * @public
  */
 export interface ApiMetricsTagOptions {
@@ -87,6 +90,7 @@ export interface ApiMetricsTagOptions {
 /**
  * An {@link ApiMetrics} instance tag — a {@link ResourceTag} plus the linked client id.
  *
+ * @category models
  * @public
  */
 export type ApiMetricsTag<Self> = ResourceTag<Self, ApiMetricsSpec> & {
@@ -98,6 +102,7 @@ export type ApiMetricsTag<Self> = ResourceTag<Self, ApiMetricsSpec> & {
  * resolves the transport). A **named** type so a consumer can `export` a node-bound metrics tag
  * without leaking the internal `clientIdSym` (TS4020). Returned by `ApiMetrics.Tag()(id, { node })`.
  *
+ * @category models
  * @public
  */
 export type ApiMetricsNodeTag<Self, HSelf> = NodeBoundTag<
@@ -126,7 +131,10 @@ const apiMetricsSpec = {
 };
 
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. @public */
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @public
+ *
+ * @category utils
+ */
 export const kind = "@nikscripts/effect-pm/ApiMetrics";
 
 /** The per-instance Resource key (wire group prefix) for a metrics tag. A node-bound tag prefixes by
@@ -138,6 +146,7 @@ const keyFor = (clientId: string, node: NodeKey<unknown> | undefined): string =>
 /**
  * Read the linked outbound client id from an {@link ApiMetrics} tag.
  *
+ * @category utils
  * @public
  */
 export const clientIdOf = <Self>(tag: ApiMetricsTag<Self>): string =>
@@ -165,6 +174,7 @@ const buildImpl = (
 /**
  * Local layer for one {@link ApiMetrics} tag — reads the in-process usage registry.
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <Self>(
@@ -182,6 +192,7 @@ export const layer = <Self>(
  * proves the metrics tag's `clientId` matches that client's Context key (correct by construction).
  * `_client` is type-only — erased at runtime; the layer is exactly `layer(tag, options)`.
  *
+ * @category layers & serving
  * @public
  */
 export const layerFor = <
@@ -196,6 +207,7 @@ export const layerFor = <
 
 /** Tag-construction options for {@link ApiMetrics.Tag}: bind the metrics resource to a {@link
  *  Node.Tag} (so it's served + reached on that node) and/or set its dashboard panel title.
+ * @category models
  *  @public */
 export interface ApiMetricsConstructOptions<HSelf = never> {
   readonly node?: NodeKey<HSelf>;
@@ -208,6 +220,7 @@ export interface ApiMetricsConstructOptions<HSelf = never> {
  * {@link Resource.servedResourcesLayer} **without** granting the local instance. For a pure
  * gateway/edge; use {@link serve} when the serving node also reads the metrics in-process.
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <Self>(
@@ -226,6 +239,7 @@ export const serveRemote = <Self>(
  * ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add the tag to the served node's
  * `Group` and drop this into {@link Node.httpServer}; a served-**only** edge uses {@link serveRemote}.
  *
+ * @category layers & serving
  * @public
  */
 export const serve = <Self>(
@@ -243,6 +257,7 @@ export const serve = <Self>(
  * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId, { node: NwslNode }) {}
  * ```
  *
+ * @category constructors
  * @public
  */
 // `Context.Service`-shaped: `<Self>()(clientId, options?)`. Only `Self` is explicit; the client id's

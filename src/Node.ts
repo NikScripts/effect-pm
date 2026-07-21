@@ -14,7 +14,7 @@
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
- * - {@link clientsFor} — bundle clients for a catalog node's `ROut`
+ * - {@link clients} — bundle clients for a catalog node's `ROut`
  *
  * @module Node
  */
@@ -25,6 +25,7 @@ export {
   isLookupNode,
   isAddressedNode,
   catalogSym,
+  resolveOnConflict,
   AddressLessClaimLost,
   ListenNode,
   ListenTagNodeRequired,
@@ -49,6 +50,8 @@ export type {
   DialableTarget,
   ListenOptions,
   NamelessListenOptions,
+  OnConflict,
+  OnConflictResolved,
 } from "./internal/nodeCore"
 export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"
@@ -61,7 +64,8 @@ export { ipcServer } from "./internal/nodeIpcServer"
 export type { IpcServerOptions } from "./internal/nodeIpcServer"
 export { Prototype } from "./internal/nodePrototype"
 export {
-  clientsFor,
+  clients,
+  ClientsNodeMismatch,
   connect,
   connectHttp,
   connectSocket,
@@ -103,6 +107,7 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
  * Sugar: {@link unix}`(node, serves)` — IPC listen + Lookup bootstrap.
  * Prefer {@link unix} (also covers Tag+impl and nameless forms).
  *
+ * @category listen
  * @public
  */
 export function listenLocal<

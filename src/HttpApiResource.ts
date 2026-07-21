@@ -56,6 +56,7 @@ import { makeRunnerFromConcurrency } from "./internal/runResource";
 /**
  * Configuration for {@link HttpApiResource.make} / {@link HttpApiResource.Service}.
  *
+ * @category models
  * @public
  */
 export interface HttpApiResourceConfig<
@@ -77,6 +78,7 @@ export interface HttpApiResourceConfig<
 /**
  * Configuration for {@link HttpApiResource.layerEffect}.
  *
+ * @category models
  * @public
  */
 export interface HttpApiResourceLayerEffectConfig<
@@ -98,6 +100,7 @@ export interface HttpApiResourceLayerEffectConfig<
 /**
  * `Accept: application/json` header on every request.
  *
+ * @category combinators
  * @public
  */
 export const acceptJson = <E, R>(
@@ -195,6 +198,7 @@ const wrapEndpointCall = <Fn extends (...args: Array<never>) => Effect.Effect<un
 /**
  * Wrap every endpoint on a built HttpApi client with usage metrics and registry hooks.
  *
+ * @category combinators
  * @public
  */
 export const instrumentEndpoints = <
@@ -419,6 +423,7 @@ function layerEffect<
  * const client = yield* MyClient
  * ```
  *
+ * @category constructors
  * @public
  */
 export const Service = httpApiResourceService;
@@ -426,6 +431,7 @@ export const Service = httpApiResourceService;
 /**
  * Functional equivalent of {@link Service} — returns a tag value with `.layer`.
  *
+ * @category constructors
  * @public
  */
 export const make = makeHttpApiResource;

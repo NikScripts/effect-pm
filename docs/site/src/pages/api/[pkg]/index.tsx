@@ -101,7 +101,12 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
         ) : (
           <div className="api-index">
             {p.modules.map((m) => (
-              <a className="api-index-item" key={m.slug} href={`/api/${p.slug}/${m.slug}`}>
+              <a
+                className="api-index-item"
+                key={m.slug}
+                href={`/api/${p.slug}/${m.slug}`}
+                title={m.summary !== undefined ? plain(m.summary) : undefined}
+              >
                 <span className="api-index-name">{m.entry}</span>
                 <span className="api-index-count">{m.count}</span>
               </a>

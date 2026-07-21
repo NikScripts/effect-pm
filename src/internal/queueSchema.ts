@@ -11,6 +11,7 @@ import { Schema } from "effect";
 /**
  * Runtime schema for a queue item's codec descriptor (id / version / encoding / jsonSchema).
  *
+ * @category item codecs
  * @public
  */
 export const QueueItemCodecDescriptorSchema = Schema.Struct({
@@ -26,6 +27,7 @@ export const QueueItemCodecDescriptorSchema = Schema.Struct({
  * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
  * part of the `releaseEncoded` RPC error channel.
  *
+ * @category errors
  * @public
  */
 export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingItemSchemaError>()(
@@ -41,6 +43,7 @@ export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMi
  * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
  * part of the `releaseEncoded` RPC error channel.
  *
+ * @category errors
  * @public
  */
 export class QueueItemEncodingError extends Schema.TaggedErrorClass<QueueItemEncodingError>()(

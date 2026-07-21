@@ -59,6 +59,13 @@ export type DirectoryRegistry = {
     entry: StoredDirectoryEntry,
   ) => Effect.Effect<StoredDirectoryEntry>;
   readonly remove: (nodeKey: string) => Effect.Effect<boolean>;
+  /**
+   * Remove only when the stored dial target matches `endpoint` — safe after
+   * askIncumbent handoff so a late incumbent finalizer cannot wipe the newcomer.
+   */
+  readonly removeIfSameDial: (
+    endpoint: StoredEndpoint,
+  ) => Effect.Effect<boolean>;
   readonly nodesServing: (
     resourceKey: string,
   ) => Effect.Effect<ReadonlyArray<StoredDirectoryEntry>>;
@@ -123,6 +130,16 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
             }
             const next = new Map(current);
             next.delete(nodeKey);
+            return [true, next] as const;
+          }),
+        removeIfSameDial: (endpoint) =>
+          Ref.modify(directoryMap, (current) => {
+            const existing = current.get(endpoint.nodeKey);
+            if (existing === undefined || !sameDialTarget(existing, endpoint)) {
+              return [false, current] as const;
+            }
+            const next = new Map(current);
+            next.delete(endpoint.nodeKey);
             return [true, next] as const;
           }),
         nodesServing: (resourceKey) =>

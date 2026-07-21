@@ -64,7 +64,12 @@ export type { CustomQueueStatus } from "./queueProjection";
 // Public types
 // ============================================================================
 
-/** Named level registry and default lane for {@link CustomQueueResource}. @public */
+/**
+ * Named level registry and default lane for {@link CustomQueueResource}.
+ *
+ * @category models
+ * @public
+ */
 export interface CustomQueueLevelConfig {
   /** Required lane count — one bounded queue per level index `0 … levelCount - 1`. */
   readonly levelCount: number;
@@ -74,7 +79,11 @@ export interface CustomQueueLevelConfig {
   readonly defaultLevel?: number;
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface CustomQueueEnqueue<T, EEnqueue = never, R = never> {
   (
     items: T | ReadonlyArray<T>,
@@ -120,7 +129,11 @@ export interface CustomQueueHandleApi<
   ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
 }
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueHandle<
   T,
   E = never,
@@ -129,7 +142,11 @@ export type CustomQueueHandle<
 > = CustomQueueHandleApi<T, E, EEnqueue, R> &
   QueueHandlePhantomWorkerFailures<E>;
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueResourceConfigWithoutItemSchema<T, E, R> = Omit<
   QueueResourceConfigBase<T>,
   "levelCount"
@@ -144,7 +161,11 @@ export type CustomQueueResourceConfigWithoutItemSchema<T, E, R> = Omit<
     readonly refill?: CustomQueueRefill<T, E, never, R>;
   };
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
   QueueResourceConfigBase<T>,
   "levelCount"
@@ -161,7 +182,11 @@ export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
     readonly store?: QueueStoreWriter<T, E, void>;
   };
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type CustomQueueResourceConfig<T, E, R> =
   | CustomQueueResourceConfigWithoutItemSchema<T, E, R>
   | CustomQueueResourceConfigWithItemSchema<T, E, R>;
@@ -178,7 +203,11 @@ export type CustomQueueResourceOptionsWithItemSchema<T, E, R> = Omit<
   "effect"
 >;
 
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export interface CustomQueueRefill<T, E, EEnqueue, R> {
   readonly onStart?: boolean;
   readonly onDrained?: boolean;

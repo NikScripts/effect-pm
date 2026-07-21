@@ -42,6 +42,7 @@ import * as Node from "./Node";
 /**
  * This node's readiness aggregate — same element shape as {@link NodeStatus.resourceReadiness}.
  *
+ * @category models
  * @public
  */
 export class LocalHealth extends Schema.Class<LocalHealth>("FleetHealthLocal")({
@@ -52,6 +53,7 @@ export class LocalHealth extends Schema.Class<LocalHealth>("FleetHealthLocal")({
 /**
  * Peer answered — carry its local aggregate.
  *
+ * @category models
  * @public
  */
 export class Reachable extends Schema.TaggedClass<Reachable>()("Reachable", {
@@ -62,18 +64,37 @@ export class Reachable extends Schema.TaggedClass<Reachable>()("Reachable", {
 /**
  * Peer `pick` failed (timeout / connect / RPC) — not the same as `ready: false`.
  *
+ * @category models
  * @public
  */
 export class Unreachable extends Schema.TaggedClass<Unreachable>()("Unreachable", {}) {}
 
-/** One node's row in {@link byNode}. @public */
+/**
+ * One node's row in {@link byNode}.
+ *
+ * @category wire schemas
+ * @public
+ */
 export const nodeReport = Schema.Union([Reachable, Unreachable]);
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type NodeReport = typeof nodeReport.Type;
 
-/** Fleet rollup over {@link byNode}. @public */
+/**
+ * Fleet rollup over {@link byNode}.
+ *
+ * @category wire schemas
+ * @public
+ */
 export const fleetStatus = Schema.Literals(["ok", "degraded", "partial"]);
-/** @public */
+/**
+ *
+ * @category models
+ * @public
+ */
 export type FleetStatus = typeof fleetStatus.Type;
 
 const byNodeSchema = Schema.Record(Schema.String, nodeReport);
@@ -96,16 +117,36 @@ const fleetHealthSpec = {
 /** @internal */
 export type FleetHealthSpec = typeof fleetHealthSpec;
 
-/** This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`). @public */
+/**
+ * This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`).
+ *
+ * @category utils
+ * @public
+ */
 export const kind = "@nikscripts/effect-pm/FleetHealth";
 
-/** A FleetHealth instance tag. @public */
+/**
+ * A FleetHealth instance tag.
+ *
+ * @category models
+ * @public
+ */
 export type FleetHealthTag<Self> = ResourceTag<Self, FleetHealthSpec>;
 
-/** A node-bound {@link FleetHealthTag}. @public */
+/**
+ * A node-bound {@link FleetHealthTag}.
+ *
+ * @category models
+ * @public
+ */
 export type FleetHealthNodeTag<Self, HSelf> = NodeBoundTag<Self, FleetHealthSpec, HSelf>;
 
-/** Tag-construction options for {@link Tag}. @public */
+/**
+ * Tag-construction options for {@link Tag}.
+ *
+ * @category models
+ * @public
+ */
 export interface FleetHealthConstructOptions<HSelf = never> {
   readonly node?: NodeKey<HSelf>;
   readonly description?: string;
@@ -124,6 +165,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  * ) {}
  * ```
  *
+ * @category constructors
  * @public
  */
 export const Tag = <Self>() => {
@@ -161,6 +203,7 @@ export const Tag = <Self>() => {
  * Pass the **same** per-resource readiness Effect {@link Node.httpServer} uses for `/health`
  * when you want FleetHealth's leaf to match NodeStatus. Absent ⇒ empty resources / `ok`.
  *
+ * @category models
  * @public
  */
 export interface FleetHealthOptions {
@@ -175,6 +218,7 @@ class FleetHealthAloneNode extends Node.Tag<FleetHealthAloneNode>()(
 /**
  * Discharge the mesh with **no peers** — this node's readiness alone.
  *
+ * @category layers & serving
  * @public
  */
 export const alone = <Self>(
@@ -202,6 +246,7 @@ const reachableOf = (local: LocalHealth): Reachable =>
  * Roll up {@link byNode}: any {@link Unreachable} ⇒ `partial`; else any degraded ⇒ `degraded`;
  * else `ok`.
  *
+ * @category combinators
  * @public
  */
 export const rollup = (byNode: Readonly<Record<string, NodeReport>>): FleetStatus => {
@@ -274,6 +319,7 @@ const buildImpl = <Self>(
 /**
  * Local layer — wires leaf + fleet fields. Requires {@link alone} or {@link Resource.peersLayer}.
  *
+ * @category layers & serving
  * @public
  */
 export const layer = <Self>(
@@ -292,6 +338,7 @@ export const layer = <Self>(
 /**
  * Serve remotely (handlers only). Requires mesh capability.
  *
+ * @category layers & serving
  * @public
  */
 export const serveRemote = <Self>(
@@ -312,6 +359,7 @@ export const serveRemote = <Self>(
  * )
  * ```
  *
+ * @category layers & serving
  * @public
  */
 export const serve = <Self>(

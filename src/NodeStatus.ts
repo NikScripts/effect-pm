@@ -32,23 +32,36 @@ import * as Node from "./Node";
 
 /** Live node status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
  *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.
+ * @category wire schemas
  *  @public */
 export const status = nodeStatus;
 
-/** Live node status. @public */
+/**
+ * Live node status.
+ *
+ * @category models
+ * @public
+ */
 export type Status = NodeStatusType;
 
 /** One served resource's readiness as reported by its node — the element of `status.resources`.
+ * @category wire schemas
  *  @public */
 export const resourceReadiness = nodeResourceReadiness;
 
-/** A served resource's readiness as reported by its node. @public */
+/**
+ * A served resource's readiness as reported by its node.
+ *
+ * @category models
+ * @public
+ */
 export type ResourceReadiness = NodeResourceReadinessType;
 
 /**
  * The reserved node status resource tag — nodeless. Drive it with {@link NodeStatus.clientHttp}
  * (or any `RpcClient.Protocol` layer) pointed at a node's `/rpc`.
  *
+ * @category constructors
  * @public
  */
 export const Tag = NodeStatusResource;
@@ -58,6 +71,7 @@ export const Tag = NodeStatusResource;
  * matching `Node.httpServer`'s default). Provide it to a program that reads
  * {@link NodeStatus.Tag}.
  *
+ * @category clients
  * @public
  */
 export const clientHttp = (url: string): Layer.Layer<NodeStatusResource> =>

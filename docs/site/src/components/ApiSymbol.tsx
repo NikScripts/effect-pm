@@ -54,9 +54,11 @@ const firstSentence = (s: string): string => {
 };
 
 export const ApiSymbolRow = ({ s, href }: { s: Row; href: string }): React.ReactElement => (
-  <a className="api-row" href={href}>
-    <code className="api-row-name">{s.qualifiedName}</code>
-    <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
+  <a className="api-row" href={href} data-kind={s.kind} title={s.qualifiedName}>
+    <span className="api-row-head">
+      <code className="api-row-name">{s.name}</code>
+      <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
+    </span>
     <span className="api-row-sum">{firstSentence(plain(s.summary))}</span>
   </a>
 );

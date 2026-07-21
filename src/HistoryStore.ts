@@ -22,6 +22,7 @@ import { Clock, Context, DateTime, Effect, Layer } from "effect";
  * Filters for {@link HistoryStore.read} — newest `limit` entries within an optional `[since, until]`
  * window (by append time).
  *
+ * @category models
  * @public
  */
 export interface HistoryReadOptions {
@@ -34,6 +35,7 @@ export interface HistoryReadOptions {
  * The service shape: append an (already-encoded) entry to a stream, and read a stream back. Entries
  * are opaque (`unknown`) — callers encode/decode with their own schema; the store just persists.
  *
+ * @category models
  * @public
  */
 export interface HistoryStoreShape {
@@ -44,7 +46,12 @@ export interface HistoryStoreShape {
   ) => Effect.Effect<ReadonlyArray<unknown>>;
 }
 
-/** The {@link HistoryStore} tag. @public */
+/**
+ * The {@link HistoryStore} tag.
+ *
+ * @category context
+ * @public
+ */
 export class HistoryStoreTag extends Context.Service<
   HistoryStoreTag,
   HistoryStoreShape
@@ -98,6 +105,7 @@ const layerMemory = (options?: {
  * History store — a keyed append-log for stream history. `yield* HistoryStore` for the service;
  * `HistoryStore.layerMemory()` to provide the in-memory backend.
  *
+ * @category context
  * @public
  */
 export const HistoryStore = Object.assign(HistoryStoreTag, {
