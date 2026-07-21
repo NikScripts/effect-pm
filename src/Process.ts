@@ -80,7 +80,6 @@ import {
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import {
   makeProcessExecutionEvent,
-  processEventReadPayload,
   processExecutionEventVoid,
 } from "./internal/processEvent";
 import {
@@ -1548,14 +1547,6 @@ export const processStatus = Schema.Struct({
  * @public
  */
 export const processLogEntry = LogEntrySchema;
-
-/**
- * Read payload for process store `events` queries.
- *
- * @deprecated Shape reads use the baked-in Store read payload (`limit` / nested `where`).
- * @public
- */
-export { processEventReadPayload };
 
 /**
  * Execution event union for void processes (no `success` field on `Completed`).

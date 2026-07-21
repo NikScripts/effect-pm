@@ -107,7 +107,7 @@ it. If they wouldn't, stay silent — never narrate what the code already says.
 ``` ts
 // ✅ good — answers the "why?" a junior would have
 // provideMerge, not provide: a bare provide prunes the serve layers off httpServer
-const node = Resource.httpServer([Counter.serve]).pipe(Layer.provideMerge(deps))
+const node = Node.httpServer([Counter.serve]).pipe(Layer.provideMerge(deps))
 
 // ❌ bad — restates the obvious
 const total = a + b // add a and b

@@ -166,7 +166,7 @@ because `httpServer`'s own type doesn't demand them.
 
 ``` ts
 // ✅ good — serve layers preserved
-const live = Resource.httpServer([
+const live = Node.httpServer([
   Resource.serve(Counter, counterImpl),
   Resource.serve(Mail, mailImpl),
 ])

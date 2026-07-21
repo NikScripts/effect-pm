@@ -16,9 +16,10 @@ One tag. Distribute it across the droplets you actually run.
 ``` ts
 import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
 import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 // ---cut---
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
   Resource.distributed([DropletEast, DropletWest]),
@@ -34,9 +35,10 @@ Discharge the mesh with `Resource.peersLayer` (or `FleetHealth.alone` for a sing
 ``` ts
 import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
 import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 import { Effect, Layer } from "effect"
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
   Resource.distributed([DropletEast, DropletWest]),
 ) {}
@@ -64,9 +66,10 @@ FleetHealth.serve(MeshHealth, { readiness }).pipe(
 ``` ts
 import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
 import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 import { Effect } from "effect"
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
   Resource.distributed([DropletEast, DropletWest]),
 ) {}

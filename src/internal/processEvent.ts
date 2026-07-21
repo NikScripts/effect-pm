@@ -7,15 +7,6 @@
 
 import { Schema } from "effect";
 
-/**
- * @deprecated Prefer the baked-in Store read payload (`limit` / nested `where`).
- * Kept as a thin `{ limit? }` schema for one-release compat on the public Process export.
- * @internal
- */
-export const processEventReadPayload = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
-});
-
 const runFinishedBase = {
   key: Schema.String,
   scheduleKey: Schema.NullOr(Schema.String),

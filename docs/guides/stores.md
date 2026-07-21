@@ -20,11 +20,13 @@ Override by providing your app store **into** the toolkit layer so Soft unwrap s
 
 ```ts
 import { Layer } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
 import * as Process from "@nikscripts/effect-pm/Process"
 import * as Store from "@nikscripts/effect-pm/Store"
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 
-class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -38,7 +40,7 @@ const live = Process.layer(Daily, { effect: poll }).pipe(
 )
 
 // httpServer form — Layer.provide is fine when you do not `yield* AppStore` in-process:
-Resource.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
+Node.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
   Layer.provide(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 )

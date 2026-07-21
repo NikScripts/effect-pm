@@ -105,7 +105,7 @@ A one-shot handshake at `connect` that pings the server and returns eagerly with
 
 1. **Per-failure-mode matrix** — **SHIPPED for F1/F2/F3/F4:** `ProtocolMismatch`, `MissingClientProtocol`, `verifyConnection` deep classification + `ContractMismatch` via `contractHash`.
 2. **Headless fleet smoke** — **SHIPPED:** `test/fleet-smoke.test.ts` (ws producer + NodeStatus).
-3. **Transport conformance matrix** — **SHIPPED** for queue/process/run/shardmap × {http, ws} + http→ws mismatch → `ProtocolMismatch` (`test/transport-conformance.test.ts`, `test/shardmap-remote.test.ts`). httpapi row still open if needed.
+3. **Transport conformance matrix** — **SHIPPED** for queue/process/run/shardmap × {http, ws} + http→ws mismatch → `ProtocolMismatch` (`test/transport-conformance.test.ts`, `test/shardmap-remote.test.ts`). **HttpApi row = N/A** — `HttpApiResource` is Effect `HttpApiClient` + concurrency gate, not RpcClient transport / `ProtocolMismatch`.
 
 ## 6. Success criteria
 

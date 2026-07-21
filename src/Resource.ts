@@ -30,11 +30,9 @@
  * - {@link Resource.serveInstances} — serve many factory instances behind one group,
  *   routed by the per-call instance-key header.
  *
- * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
- * default on both, so client/server can't disagree on the codec):
- * - {@link Resource.httpServer} — expose one or more {@link Resource.serve} layers on an http
- *   `RpcServer` in one call;
- * - {@link Resource.httpClient} — wire a {@link Resource.Node}'s transport from a `url`.
+ * Over **http**, pair {@link Resource.serve} with {@link Node.httpServer} (ndjson by default so
+ * client/server can't disagree on the codec). Dial with {@link Resource.clientHttp} /
+ * {@link Node.connect} against a {@link Node.Tag}.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
@@ -1953,7 +1951,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * ```ts
  * const scoresImpl = Resource.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
  * Resource.layer(ScoresDb, scoresImpl);                    // local
- * Resource.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
+ * Node.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
  * ```
  *
  * @category constructors
@@ -3784,7 +3782,7 @@ export interface ResourceInstance<S extends Spec> {
  *
  * **Not** how you serve a single custom resource on a shared node: this returns a
  * {@link ResourceInstance} for the {@link serveInstances} family. To serve a custom `Resource.Tag`
- * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Resource.httpServer},
+ * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Node.httpServer},
  * then reach it with {@link Resource.client}.
  *
  * @category constructors
@@ -5862,5 +5860,5 @@ export {
 // `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
 // exported above under their public names. The whole surface is now a tree-shakeable module
 // namespace: **`import * as Resource from "@nikscripts/effect-pm/Resource"`** — `Resource.Tag`
-// / `Resource.Node` pull only what's used.
+// pulls only what's used. Transport nodes: `import * as Node from "@nikscripts/effect-pm/Node"`.
 
