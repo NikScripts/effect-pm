@@ -1269,3 +1269,73 @@ pre:hover > .copy-btn, pre:focus-within > .copy-btn { opacity: 1; }
   border: 1px solid var(--border);
   border-radius: 4px;
 }
+
+/* package page, effect-pm layout: flagship hero cards + compact module grid */
+.api-pkg-stats { margin: -0.4rem 0 1.4rem; color: var(--muted-fg); font-size: 0.9rem; }
+.api-pkg-sub {
+  margin: 1.8rem 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+}
+.api-heroes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.api-hero {
+  display: block;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.api-hero:hover { border-color: var(--primary); }
+.api-hero-top { display: flex; justify-content: space-between; align-items: baseline; }
+.api-hero-name { font-family: var(--font-mono); font-weight: 700; font-size: 1.02rem; }
+.api-hero-desc {
+  margin: 0.35rem 0 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.api-hero-syms { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.api-hero-chip {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  background: var(--bg);
+}
+.api-hero-more { color: var(--muted-fg); }
+.api-minis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem; }
+.api-mini {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  background: var(--bg);
+}
+.api-mini:hover { border-color: var(--primary); }
+.api-mini-name {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .api-heroes { grid-template-columns: 1fr; }
+  .api-minis { grid-template-columns: repeat(2, 1fr); }
+}

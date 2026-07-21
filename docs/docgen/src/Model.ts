@@ -88,6 +88,8 @@ export interface Symbol extends Schema.Schema.Type<typeof symbol> {}
  */
 export const entry = Schema.Struct({
   entry: Schema.String,
+  /** First paragraph of the module's leading `@module` JSDoc header ("" when the file has none). */
+  summary: Schema.optional(Schema.String),
   symbols: Schema.Array(symbol),
 });
 
