@@ -6,7 +6,6 @@ import { GroupedNav } from "../components/GroupedNav.js";
 import { Footer } from "../components/Footer.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
-import { SearchModal } from "../islands/SearchModal.js";
 import { CodeCopy } from "../islands/CodeCopy.js";
 
 // Root layout — owns all chrome. Nav is generated from the content manifest,
@@ -26,7 +25,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <NavBar groups={groups} />
       <div className="layout">
         <aside className="sidebar">
-          <SearchModal />
           <GroupedNav groups={groups} />
         </aside>
         <main>{children}</main>

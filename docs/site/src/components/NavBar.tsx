@@ -14,6 +14,7 @@ import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
 import { GroupedNav } from "./GroupedNav.js";
 import { SearchPanel, type SearchPanelControl } from "../islands/SearchPanel.js";
+import { SearchModal } from "../islands/SearchModal.js";
 
 const MENU_ID = "menu-toggle";
 
@@ -116,32 +117,36 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
         aria-label="Toggle navigation menu"
       />
       <header className="topbar">
-        <a className="brand" href="/">
-          effect-pm
-        </a>
-        <div className="topbar-actions">
-          {/* A button, not a checkbox label: iOS only shows the keyboard when focus() runs
+        <div className="topbar-inner">
+          <a className="brand" href="/">
+            effect-pm
+          </a>
+          {/* desktop search lives in the header (hidden on narrow widths — the icon buttons take over) */}
+          <SearchModal />
+          <div className="topbar-actions">
+            {/* A button, not a checkbox label: iOS only shows the keyboard when focus() runs
               synchronously inside the tap's call stack, so open + focus must happen inline here.
               (The hamburger keeps its deferred focus — opening the NAV shouldn't raise a keyboard.) */}
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Search"
-            onClick={() => {
-              const cb = cbRef.current;
-              if (cb !== null && !cb.checked) {
-                cb.checked = true;
-                document.body.style.overflow = "hidden";
-              }
-              inputRef.current?.focus();
-            }}
-          >
-            {Icon.search}
-          </button>
-          <label htmlFor={MENU_ID} className="icon-btn menu-btn">
-            <span className="i-menu">{Icon.menu}</span>
-            <span className="i-close">{Icon.close}</span>
-          </label>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Search"
+              onClick={() => {
+                const cb = cbRef.current;
+                if (cb !== null && !cb.checked) {
+                  cb.checked = true;
+                  document.body.style.overflow = "hidden";
+                }
+                inputRef.current?.focus();
+              }}
+            >
+              {Icon.search}
+            </button>
+            <label htmlFor={MENU_ID} className="icon-btn menu-btn">
+              <span className="i-menu">{Icon.menu}</span>
+              <span className="i-close">{Icon.close}</span>
+            </label>
+          </div>
         </div>
       </header>
 
