@@ -9,7 +9,7 @@
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
-import { Effect, Layer, Schema } from "effect"
+import { Effect, Schema } from "effect"
 import * as Resource from "../../../src/Resource"
 
 class Jobs extends Resource.Tag<Jobs>()("forms/nameless/Jobs", {
@@ -20,10 +20,7 @@ class Emails extends Resource.Tag<Emails>()("forms/nameless/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-const clients = Layer.mergeAll(
-  Resource.discoverClient(Jobs),
-  Resource.discoverClient(Emails),
-)
+const clients = Resource.discoverClients(Jobs, Emails)
 
 const program = Effect.gen(function* () {
   const jobs = yield* Jobs

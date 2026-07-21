@@ -4451,6 +4451,18 @@ export const lookupClient = <Self, S extends Spec>(
   >;
 
 /**
+ * Options for {@link discoverClient} / {@link discoverClients} — Lookup soft-pick
+ * plus default-lookup bootstrap knobs.
+ *
+ * @category models
+ * @public
+ */
+export type DiscoverClientOptions = LookupClientOptions & {
+  readonly lookupPath?: string;
+  readonly unlink?: boolean;
+};
+
+/**
  * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} — discover an
  * endpoint for `tag` via Lookup (identity, then directory) and dial it. Not Effect
  * “local” vs remote; name is **discover**.
@@ -4464,10 +4476,7 @@ export const lookupClient = <Self, S extends Spec>(
  */
 export const discoverClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-  options?: LookupClientOptions & {
-    readonly lookupPath?: string;
-    readonly unlink?: boolean;
-  },
+  options?: DiscoverClientOptions,
 ): Layer.Layer<Self, LookupClientError> => {
   const { lookupPath, unlink, ...clientOptions } = options ?? {};
   return Layer.unwrap(
@@ -4485,6 +4494,84 @@ export const discoverClient = <Self, S extends Spec>(
     ),
   ) as Layer.Layer<Self, LookupClientError>;
 };
+
+/** Non-empty tag list for {@link discoverClients}. @internal */
+type DiscoverTagList = readonly [
+  PipeableTag,
+  ...ReadonlyArray<PipeableTag>,
+];
+
+/** Union of Tag `Self` ids from a {@link discoverClients} list. @internal */
+type ServicesOfDiscoverTags<Tags extends ReadonlyArray<PipeableTag>> =
+  Tags[number] extends Context.Key<infer S, any> ? S : never;
+
+const isDiscoverTagList = (value: unknown): value is DiscoverTagList =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every(
+    (tag) =>
+      (typeof tag === "object" || typeof tag === "function") && tag !== null,
+  );
+
+/**
+ * {@link discoverClient} for many tags — one Lookup bootstrap, then
+ * {@link Layer.mergeAll} of each {@link lookupClient}.
+ *
+ * Options (`lookupPath`, `pick`, …) ride the **array** form; rest uses Lookup defaults.
+ *
+ * ```ts
+ * Resource.discoverClients([Jobs, Emails], { lookupPath })
+ * Resource.discoverClients(Jobs, Emails)
+ * ```
+ *
+ * @category clients
+ * @public
+ */
+export function discoverClients<const Tags extends DiscoverTagList>(
+  tags: Tags,
+  options?: DiscoverClientOptions,
+): Layer.Layer<ServicesOfDiscoverTags<Tags>, LookupClientError>;
+export function discoverClients<const Tags extends DiscoverTagList>(
+  ...tags: Tags
+): Layer.Layer<ServicesOfDiscoverTags<Tags>, LookupClientError>;
+export function discoverClients(
+  first: unknown,
+  second?: unknown,
+  ...rest: ReadonlyArray<unknown>
+): Layer.Layer<never, LookupClientError> {
+  const fromArray = isDiscoverTagList(first);
+  const tags: DiscoverTagList = fromArray
+    ? first
+    : second !== undefined
+      ? ([first, second, ...rest] as unknown as DiscoverTagList)
+      : ([first] as unknown as DiscoverTagList);
+  const options: DiscoverClientOptions | undefined = fromArray
+    ? (second as DiscoverClientOptions | undefined)
+    : undefined;
+  const { lookupPath, unlink, ...clientOptions } = options ?? {};
+  const clients = tags.map((tag) =>
+    lookupClient(tag as ResourceTag<any, any>, clientOptions),
+  );
+  return Layer.unwrap(
+    Effect.promise(() => import("./Lookup")).pipe(
+      Effect.map((Lookup) =>
+        Layer.mergeAll(
+          ...(clients as unknown as [
+            Layer.Layer<never, LookupClientError, never>,
+            ...Array<Layer.Layer<never, LookupClientError, never>>,
+          ]),
+        ).pipe(
+          Layer.provide(
+            Lookup.bootstrapDefaultLocal({
+              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+              ...(unlink !== undefined ? { unlink } : {}),
+            }),
+          ),
+        ),
+      ),
+    ),
+  ) as Layer.Layer<never, LookupClientError>;
+}
 
 // [extracted to Node module — was Resource.ts:5053-5132]
 
