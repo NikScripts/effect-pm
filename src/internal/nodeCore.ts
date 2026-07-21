@@ -257,7 +257,8 @@ type LooseNodeTarget =
       readonly url?: string;
       readonly path?: string;
       readonly kind?: ProtocolKind;
-    };
+    }
+  | ShorthandTarget;
 
 /**
  * Constructable {@link Tag} result — `Context.ServiceClass` plus address fields.
@@ -309,6 +310,33 @@ type UrlAddressLoose = {
   readonly url: string;
   readonly path: undefined;
   readonly kind: "Http" | "WebSocket";
+};
+
+/** A **multi-protocol** node's fields — its transport `endpoints` set, `kind` the union of the set
+ *  (the primary at runtime), plus the primary `url`/`path`. Single object type (not a union) so
+ *  `class extends Tag(…)` stays constructable. @internal */
+type MultiAddress<Kinds extends ProtocolKind> = {
+  readonly url: string | undefined;
+  readonly path: string | undefined;
+  readonly kind: Kinds;
+  readonly endpoints: Endpoints;
+};
+
+/** The {@link ProtocolKind}s present in a `{ http, ws, ipc }` shorthand target. @internal */
+type KindsOf<T> =
+  | (T extends { readonly http: string } ? "Http" : never)
+  | (T extends { readonly ws: string } ? "WebSocket" : never)
+  | (T extends { readonly ipc: string } ? "IpcSocket" : never);
+
+/** The `{ http, ws, ipc }` multi-protocol shorthand target. `url`/`path`/`kind` are pinned to `never`
+ *  so it stays disjoint from the single-address `{ url, kind }` / `{ path }` forms. @internal */
+type ShorthandTarget = {
+  readonly http?: string;
+  readonly ws?: string;
+  readonly ipc?: string;
+  readonly url?: never;
+  readonly path?: never;
+  readonly kind?: never;
 };
 
 /** Constructable ipc {@link Tag} (for {@link Prototype}.make). @internal */
@@ -385,6 +413,14 @@ export const isAddressedNode = (
  *
  * @public
  */
+/** Is a target the `{ http, ws, ipc }` multi-protocol shorthand? @internal */
+const isShorthandTarget = (
+  t: LooseNodeTarget | undefined,
+): t is ShorthandTarget =>
+  typeof t === "object" &&
+  t !== null &&
+  ("http" in t || "ws" in t || "ipc" in t);
+
 export function Tag<Self, ROut = never>(
   name: string,
 ): NodeTagClass<Self, ROut, BareAddress>;
@@ -419,6 +455,11 @@ export function Tag<Self, ROut = never>(
   name: string,
   target: { readonly url: string; readonly kind: "Http" },
 ): NodeTagClass<Self, ROut, HttpAddress>;
+export function Tag<
+  Self,
+  ROut = never,
+  const T extends ShorthandTarget = ShorthandTarget,
+>(name: string, target: T): NodeTagClass<Self, ROut, MultiAddress<KindsOf<T>>>;
 export function Tag<Self, ROut = never>(
   name: string,
   target: string | { readonly url: string; readonly kind?: ProtocolKind },
@@ -429,7 +470,12 @@ export function Tag<Self, ROut = never>(
 ): NodeTagClass<
   Self,
   ROut,
-  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+  | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
 >;
 export function Tag<Self, ROut = never>(
   name: string,
@@ -437,49 +483,79 @@ export function Tag<Self, ROut = never>(
 ): NodeTagClass<
   Self,
   ROut,
-  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+  | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
 > {
-  const path =
-    typeof target === "object" && target !== null ? target.path : undefined;
   // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
   // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
   // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
   let url: string | undefined;
+  let path: string | undefined;
+  let kind: ProtocolKind | undefined;
+  let endpoints: Endpoints;
   let invalidTarget: InvalidHttpTarget | undefined;
-  if (path !== undefined || target === undefined) {
-    url = undefined;
-  } else if (typeof target === "object") {
-    url = target.url;
-  } else {
-    const resolved = resolveHttpTarget(target);
-    if (Result.isSuccess(resolved)) {
-      url = resolved.success;
-    } else {
-      invalidTarget = resolved.failure;
-      url = undefined;
-    }
-  }
-  // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` →
-  // IpcSocket, `ws(s)://` → WebSocket, any other url → Http. Bare / invalid leave kind undefined.
-  const kind: ProtocolKind | undefined =
-    (typeof target === "object" && target !== null ? target.kind : undefined) ??
-    (path !== undefined
-      ? "IpcSocket"
-      : url === undefined
-        ? undefined
-        : url.startsWith("ws://") || url.startsWith("wss://")
+  if (isShorthandTarget(target)) {
+    // Multi-protocol shorthand `{ http?, ws?, ipc? }` — build the transport set; the primary
+    // (for single-protocol readers) is http > ws > ipc. `connect` selects from the full set.
+    const httpUrl = target.http;
+    const wsUrl = target.ws;
+    const ipcPath = target.ipc;
+    endpoints = {
+      ...(httpUrl !== undefined ? { Http: { url: httpUrl } } : {}),
+      ...(wsUrl !== undefined ? { WebSocket: { url: wsUrl } } : {}),
+      ...(ipcPath !== undefined ? { IpcSocket: { path: ipcPath } } : {}),
+    };
+    url = httpUrl ?? wsUrl;
+    path = ipcPath;
+    kind =
+      httpUrl !== undefined
+        ? "Http"
+        : wsUrl !== undefined
           ? "WebSocket"
-          : "Http");
-  // The transport set — one entry from the resolved primary (multi-protocol shorthand / `over*` add
-  // more). `connect` selects from it; the server asserts its transport is a member.
-  const endpoints: Endpoints =
-    kind === "IpcSocket" && path !== undefined
-      ? { IpcSocket: { path } }
-      : kind === "WebSocket" && url !== undefined
-        ? { WebSocket: { url } }
-        : kind === "Http" && url !== undefined
-          ? { Http: { url } }
-          : {};
+          : ipcPath !== undefined
+            ? "IpcSocket"
+            : undefined;
+  } else {
+    path = typeof target === "object" && target !== null ? target.path : undefined;
+    if (path !== undefined || target === undefined) {
+      url = undefined;
+    } else if (typeof target === "object") {
+      url = target.url;
+    } else {
+      const resolved = resolveHttpTarget(target);
+      if (Result.isSuccess(resolved)) {
+        url = resolved.success;
+      } else {
+        invalidTarget = resolved.failure;
+        url = undefined;
+      }
+    }
+    // `kind` is the SSOT for *how* to reach the node: explicit `{ kind }` wins; else `path` →
+    // IpcSocket, `ws(s)://` → WebSocket, any other url → Http. Bare / invalid leave kind undefined.
+    kind =
+      (typeof target === "object" && target !== null ? target.kind : undefined) ??
+      (path !== undefined
+        ? "IpcSocket"
+        : url === undefined
+          ? undefined
+          : url.startsWith("ws://") || url.startsWith("wss://")
+            ? "WebSocket"
+            : "Http");
+    // The transport set — one entry from the resolved primary (multi-protocol shorthand / `over*`
+    // add more). `connect` selects from it; the server asserts its transport is a member.
+    endpoints =
+      kind === "IpcSocket" && path !== undefined
+        ? { IpcSocket: { path } }
+        : kind === "WebSocket" && url !== undefined
+          ? { WebSocket: { url } }
+          : kind === "Http" && url !== undefined
+            ? { Http: { url } }
+            : {};
+  }
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
     url,
     path,
@@ -504,7 +580,12 @@ export function Tag<Self, ROut = never>(
   }) as NodeTagClass<
     Self,
     ROut,
-    BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+    | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
   >;
 }
 
@@ -613,7 +694,12 @@ export function Lookup<Self>(
 ): NodeTagClass<
   Self,
   never,
-  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+  | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
 > & {
   readonly isLookupNode: true
 };
@@ -623,7 +709,12 @@ export function Lookup<Self>(
 ): NodeTagClass<
   Self,
   never,
-  BareAddress | IpcAddress | HttpAddress | WsAddress | UrlAddressLoose
+  | BareAddress
+    | IpcAddress
+    | HttpAddress
+    | WsAddress
+    | UrlAddressLoose
+    | MultiAddress<ProtocolKind>
 > & {
   readonly isLookupNode: true
 } {
