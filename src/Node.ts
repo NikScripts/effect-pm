@@ -63,6 +63,7 @@ export type { HttpServerOptions } from "./internal/nodeHttpServer"
 export { ipcServer } from "./internal/nodeIpcServer"
 export type { IpcServerOptions } from "./internal/nodeIpcServer"
 export { Prototype } from "./internal/nodePrototype"
+export type { PrototypeOptions } from "./internal/nodePrototype"
 export {
   clients,
   ClientsNodeMismatch,
