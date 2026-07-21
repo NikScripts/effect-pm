@@ -10,7 +10,7 @@
 | Export | Role |
 |--------|------|
 | `Node.Tag` / `Node.Prototype` / `Node.asLookup` | Node constructors (was `Resource.Node` / `.Prototype` / `Lookup.LookupNode`) |
-| `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen + local batteries (Lookup bootstrap) |
+| `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen siblings — see [§ Protocol listen siblings](#protocol-listen-siblings-keep-in-sync) |
 | `Node.listen` | Neutral spine — **no transport bind** (`ListenUseProtocol` → use protocol entry) |
 | `httpServer` / `wsServer` / `ipcServer` | Low-level escape hatches (caller provides platform) |
 | `Node.connect*` / `clients` | Dial helpers |
@@ -536,16 +536,38 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
 | Decision | Lock |
 |----------|------|
 | API | `MailWorker.listen([serve…])` → `(suffix?: string) => Layer` |
-| Semantics | Same as `Resource.listen(MailWorker.instance(suffix), serves)` — ephemeral ipc, `#suffix`, no claim, advertise |
+| Semantics | Sugar over `unix` / `http` / `ws` / `nPipe`(instance(suffix), serves) by `kind` / `ipc` — see [§ Protocol listen siblings](#protocol-listen-siblings-keep-in-sync) |
 | Return | **Layer only** — after `Layer.build`, instance Node is {@link ListenNode} in context |
 | `instance()` | Stays **public** (peers `self`, escape hatch) |
-| Named clones | Unchanged — `Resource.listen(East, serves)`; no per-clone `.listen` |
+| Named clones | Unchanged — `Node.unix(East, serves)` (etc.); no per-clone `.listen` |
+| Lookup | **Not baked** — same pipe as siblings (`Lookup.layer` / `layerOptions` / `client`) |
 
 ```ts
 const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
-mailWorker()
-mailWorker("w2")
+mailWorker().pipe(Layer.provide(Lookup.layer))
+mailWorker("w2").pipe(Layer.provide(Lookup.layer))
 ```
+
+#### Protocol listen siblings (keep in sync)
+
+**SSOT for Eng:** when changing listen options, Lookup composition, serve overloads, or error channels on any of these, update **all** of them in the same change (or document an intentional exception).
+
+| Sibling | Module | Selects when |
+|---------|--------|----------------|
+| `Node.unix` | `src/internal/nodeUnix.ts` | IpcSocket (POSIX / default ipc) |
+| `Node.http` | `src/internal/nodeHttp.ts` | Http |
+| `Node.ws` | `src/internal/nodeWs.ts` | WebSocket |
+| `Node.nPipe` | `src/internal/nodeNPipe.ts` | IpcSocket on Windows (`\\.\pipe\…`) |
+| `Prototype.listen` | `src/internal/nodePrototype.ts` | Dispatches to the four above (`kind` / `{ ipc: "nPipe" }`) |
+
+**Shared contract (LOCKED by practice — keep aligned):**
+
+1. **Lookup is pipe-only** — never `lookupPath` / `bootstrapLookup` listen opts. Apps compose `Layer.provide(Lookup.layer)` or `Lookup.layerOptions({ path, unlink })` / `Lookup.client` / `Lookup.layerNode`.
+2. **Same serve overload family** on protocol listens: Tag+impl, single `serve`, `[serve…]`, `node + serves` (Prototype keeps the curried `(serves) → (suffix?) => Layer` shape).
+3. **`ListenOptions` / `NamelessListenOptions`** — shared; no per-sibling Lookup knobs.
+4. **Forms:** [`examples/forms/resource/node-prototype.ts`](../../examples/forms/resource/node-prototype.ts) teaches Prototype + pipe; protocol entries teach `unix` / `http` / `ws`.
+
+**Touch list when editing one sibling:** the four `node{Unix,Http,Ws,NPipe}.ts` files, `nodePrototype.ts`, `Node.ts` module overview bullets, this section, and any form that still assumes baked Lookup.
 
 #### `lookupClient` naming (**LOCKED** 2026-07-19)
 

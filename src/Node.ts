@@ -7,10 +7,9 @@
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link asLookup} — brand a Tag node as the Lookup-server (`isLookupNode: true`)
  * - {@link listen} — neutral spine (**no transport bind** — use {@link unix} / {@link http} / {@link ws})
- * - {@link unix} — IpcSocket listen (nameless / Tag+impl / node+serves); pipe Lookup when needed
- * - {@link http} — local Http listen (localhost bind / nameless / Tag+impl); pipe Lookup when needed
- * - {@link ws} — local WebSocket listen (localhost bind / nameless / Tag+impl); pipe Lookup when needed
- * - {@link nPipe} — Windows named-pipe IpcSocket listen (sibling of {@link unix}); pipe Lookup when needed
+ * - {@link unix} / {@link http} / {@link ws} / {@link nPipe} — protocol listen **siblings** (keep in sync;
+ *   Lookup via pipe — see handoff § Protocol listen siblings)
+ * - {@link Prototype}`.listen` — curried dynamic spawn; dispatches to those siblings
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial

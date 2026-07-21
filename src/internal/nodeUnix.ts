@@ -36,8 +36,9 @@ import {
 
 /**
  * Unix-domain IPC listen — all ipc mint/bind. Compose Lookup via
- * `Layer.provide(Lookup.layerOptions(...))` when claim / advertise needs it.
- * Same overload shapes as the old multi-protocol `listen`. Prefer this for same-machine.
+ * `Layer.provide(Lookup.layer)` / {@link Lookup.layerOptions} when claim / advertise needs it.
+ * Protocol listen sibling of {@link http} / {@link ws} / {@link nPipe} / {@link Prototype.listen}
+ * — keep in sync (handoff § Protocol listen siblings). Prefer this for same-machine.
  *
  * @category listen
  * @public

@@ -6,6 +6,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-21 — Protocol listen siblings stay in sync
+
+- **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.
+- **Chose:** SSOT section [Protocol listen siblings](./node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync) — Lookup pipe-only, shared options, Prototype dispatches to the four protocol listens; Eng updates all siblings together.
+- **Supervisor impact:** Cross-links from `Node` / Prototype TSDoc + examples README.
+
 ## 2026-07-21 — Lookup `layer` / `layerOptions` (Effect `layerAgent` shape)
 
 - **Owner said:** Prefer Effect-consistent naming; avoid `local` / `bootstrap`; can `Lookup.layer` work with no `()`?; what would Effect do?

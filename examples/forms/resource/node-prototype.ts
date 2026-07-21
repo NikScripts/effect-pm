@@ -2,6 +2,8 @@
  * @module examples/forms/resource/node-prototype
  *
  * **Node.Prototype** — `.make` named clone + `.listen(serves)` dynamic instance.
+ * `.listen` dispatches to `unix` / `http` / `ws` / `nPipe` — keep in sync with those
+ * siblings (handoff § Protocol listen siblings).
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-prototype.ts

@@ -172,6 +172,7 @@ export const Prototype = <Self, ROut = never>(
      * {@link unix} / {@link http} / {@link ws} / {@link nPipe}
      * `(proto.instance(suffix), serves)` by `kind` / `ipc`.
      * Same Lookup story as those siblings: pipe `Lookup.layer` when advertise needs it.
+     * Keep in sync with the protocol listen siblings (handoff § Protocol listen siblings).
      * Returns a **Layer** only — after `Layer.build`, the minted Node is
      * {@link ListenNode} in context.
      */

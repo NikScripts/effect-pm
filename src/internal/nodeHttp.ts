@@ -37,8 +37,9 @@ import {
 
 /**
  * Local Http listen — localhost bind. Compose Lookup via
- * `Layer.provide(Lookup.layerOptions(...))` when claim / advertise needs it.
- * Same overload shapes as {@link unix}. Prefer this for same-machine HTTP.
+ * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
+ * Protocol listen sibling of {@link unix} / {@link ws} / {@link nPipe} / {@link Prototype.listen}
+ * — keep in sync (handoff § Protocol listen siblings). Prefer this for same-machine HTTP.
  *
  * @category listen
  * @public
