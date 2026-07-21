@@ -16,7 +16,8 @@ import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Resource from "./Resource";
 import type { AnyNode } from "./internal/nodeCore";
 import { Lookup as LookupNodeTag, Tag as NodeTag } from "./internal/nodeCore";
-import { connectIpc, ipcServer } from "./internal/node";
+import { connectIpc } from "./internal/node";
+import { ipcServer } from "./internal/nodeIpcServer";
 import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
 

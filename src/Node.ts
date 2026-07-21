@@ -41,23 +41,23 @@ export type {
   ListenOptions,
   NamelessListenOptions,
 } from "./internal/nodeCore"
+export { listen } from "./internal/nodeListen"
+export { unix } from "./internal/nodeUnix"
+export { httpServer, wsServer } from "./internal/nodeHttpServer"
+export type { HttpServerOptions } from "./internal/nodeHttpServer"
+export { ipcServer } from "./internal/nodeIpcServer"
+export type { IpcServerOptions } from "./internal/nodeIpcServer"
+export { Prototype } from "./internal/nodePrototype"
 export {
-  Prototype,
-  listen,
-  unix,
-  httpServer,
-  wsServer,
-  ipcServer,
   clientsFor,
   connect,
   connectHttp,
   connectSocket,
   connectIpc,
 } from "./internal/node"
-export type { HttpServerOptions, IpcServerOptions } from "./internal/node"
 
 import { Layer } from "effect"
-import { unix } from "./internal/node"
+import { unix } from "./internal/nodeUnix"
 import {
   AddressLessClaimLost,
   AnyNode,
