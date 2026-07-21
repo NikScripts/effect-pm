@@ -5,7 +5,7 @@
  *
  * @internal
  */
-import { Context, Data, Result } from "effect"
+import { Context, Data, Predicate, Result } from "effect"
 import type { Layer } from "effect"
 import type { HttpRouter } from "effect/unstable/http"
 import type { RpcClient } from "effect/unstable/rpc"
@@ -132,6 +132,23 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
   return undefined;
 };
 
+/**
+ * A node declared with a bare **port** (`Node.Tag()("x", 3009)`) carries that port here. The eager
+ * `url` is a `localhost` **preview** (pure, sync at class-definition — no runtime to read a Config);
+ * the authoritative dial host is resolved at the dial boundary (an Effect context) via
+ * {@link Resource.protocolHttp}`(port)` + the client `Config`. So the port is the SSOT and the effect
+ * stays at the edge. @internal
+ */
+export const portSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/nodePort",
+);
+
+/** The bare port a node was declared with, if any (see {@link portSym}). @internal */
+export const portOf = (node: unknown): number | undefined =>
+  Predicate.hasProperty(node, portSym) && typeof node[portSym] === "number"
+    ? node[portSym]
+    : undefined;
+
 /** A {@link Tag} erased — its transport `endpoints` set, plus the **primary** address
  *  (`url` and/or Unix `path`) and {@link ProtocolKind} `kind` (the first-declared endpoint, kept for
  *  single-protocol readers), so a tag's `distributed` set is self-describing about *where* AND *how* to
@@ -146,6 +163,8 @@ export type AnyNode = NodeKey<unknown> & {
   readonly endpoints?: Endpoints;
   /** Stamped advertise conflict policy (default `"inherit"` on ordinary nodes). */
   readonly onConflict?: OnConflict;
+  /** The bare port a node was declared with ({@link portSym}) — the dial resolves the host via Config. */
+  readonly [portSym]?: number;
 };
 
 /** An {@link AnyNode} that can derive {@link connect} with no protocol argument —
@@ -521,6 +540,7 @@ const assembleNode = <Self, ROut, Addr>(
     readonly kind: ProtocolKind | undefined;
     readonly endpoints: Endpoints;
     readonly onConflict: OnConflict;
+    readonly httpPort?: number;
     readonly invalidTarget?: InvalidHttpTarget;
   },
 ): NodeTagClass<Self, ROut, Addr> => {
@@ -556,6 +576,7 @@ const assembleNode = <Self, ROut, Addr>(
     kind: fields.kind,
     endpoints: fields.endpoints,
     onConflict: fields.onConflict,
+    ...(fields.httpPort !== undefined ? { [portSym]: fields.httpPort } : {}),
     ...(fields.invalidTarget !== undefined
       ? { [invalidHttpTargetSym]: fields.invalidTarget }
       : {}),
@@ -714,6 +735,7 @@ export const Tag = <Self, ROut = never>() => {
   // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
   // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
   // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
+  let httpPort: number | undefined;
   let url: string | undefined;
   let path: string | undefined;
   let kind: ProtocolKind | undefined;
@@ -747,6 +769,14 @@ export const Tag = <Self, ROut = never>() => {
     } else if (typeof target === "object") {
       url = target.url;
     } else {
+      // Bare-**port** shorthand (`3009` / `":3009"`) — carry the port so the DIAL resolves the host via
+      // the client Config (`url` below is only a localhost preview). A full url has no port to carry.
+      httpPort =
+        typeof target === "number"
+          ? target
+          : /^:\d+$/.test(target)
+            ? Number(target.slice(1))
+            : undefined;
       const resolved = resolveHttpTarget(target);
       if (Result.isSuccess(resolved)) {
         url = resolved.success;
@@ -789,7 +819,7 @@ export const Tag = <Self, ROut = never>() => {
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
-  >(key, { url, path, kind, endpoints, onConflict, invalidTarget });
+  >(key, { url, path, kind, endpoints, onConflict, httpPort, invalidTarget });
   }
 
   return build;

@@ -17,12 +17,14 @@ import type {
 import {
   InvalidHttpTarget,
   invalidHttpTargetOf,
+  portOf,
   UnaddressedNode,
 } from "./nodeCore"
 
 /** Protocol builders injected from Resource (avoids Resource↔Node import cycles). */
 export type NodeProtocolBuilders = {
-  readonly protocolHttp: (url: string) => Layer.Layer<RpcClient.Protocol>
+  // `protocolHttp` takes a port too — a bare-port node resolves its host via Config at the dial.
+  readonly protocolHttp: (target: number | string) => Layer.Layer<RpcClient.Protocol>
   readonly protocolWebsocket: (url: string) => Layer.Layer<RpcClient.Protocol>
   readonly protocolIpc: (path: string) => Layer.Layer<RpcClient.Protocol>
 }
@@ -135,9 +137,11 @@ export const protocolForNode = (
   if (sel.url === undefined) {
     return unaddressedLayer(node.key)
   }
+  // A bare-port node dials via `protocolHttp(port)` — the host resolves from the client Config; a full
+  // url uses `sel.url` as-is. (`sel.url` is the localhost preview for a bare port.)
   return sel.kind === "WebSocket"
     ? protocolWebsocket(sel.url)
-    : protocolHttp(sel.url)
+    : protocolHttp(portOf(node) ?? sel.url)
 }
 
 /** Protocol for a type-narrowed {@link AddressedNode} — no error channel. @internal */
@@ -153,7 +157,7 @@ export const protocolForDialable = (
     if (sel.kind !== "IpcSocket" && sel.url !== undefined) {
       return sel.kind === "WebSocket"
         ? protocolWebsocket(sel.url)
-        : protocolHttp(sel.url)
+        : protocolHttp(portOf(node) ?? sel.url)
     }
   }
   // primary fallback — an AddressedNode always carries a dialable primary.
@@ -162,7 +166,7 @@ export const protocolForDialable = (
   }
   return node.kind === "WebSocket"
     ? protocolWebsocket(node.url)
-    : protocolHttp(node.url)
+    : protocolHttp(portOf(node) ?? node.url)
 }
 
 /**
