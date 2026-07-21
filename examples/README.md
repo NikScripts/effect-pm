@@ -63,6 +63,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
 | [`forms/resource/node-http-nameless-serve.ts`](./forms/resource/node-http-nameless-serve.ts) | Nameless `Node.http(serve)` — localhost Http + Lookup |
 | [`forms/resource/node-ws-nameless-serve.ts`](./forms/resource/node-ws-nameless-serve.ts) | Nameless `Node.ws(serve)` — localhost WebSocket + Lookup |
+| — | `Node.nPipe` — Windows named-pipe sibling of `unix` (same `IpcSocket` kind; see `test/node-npipe.test.ts`) |
 | [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Resource.client(Jobs)` |
 | [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve (`Node.unix`) — terminal A |
 | [`forms/resource/node-tag-addressless-call.ts`](./forms/resource/node-tag-addressless-call.ts) | Address-less call (`Resource.clientLocal`) — terminal B |
