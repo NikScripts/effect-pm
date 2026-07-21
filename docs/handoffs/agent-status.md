@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | `cursor/logs-store-followers-plan-906e` | [cutover follow-through](./agent-03-storage-cutover-followthrough.md) · [loud-failures](./loud-failures-design.md) · [verify-connection](./verify-connection-classification.md) | **on tip** — loud-failures F2/F3 Eng’d; synced with `integration` | same tip as `integration` | typecheck + verify/mismatch/MissingClientProtocol tests | Soft/memo parked; managers bake OPEN; contractHash later | 2026-07-21 |
+| **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **managers collapse LOCKED** — handoff up; next Eng = identity liveness + example | same tip as `integration` | sync policy on tip | Slice 1–2 unlocked; placement advice later; Soft/memo parked | 2026-07-21 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -28,7 +28,7 @@
 3. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 multi-protocol Eng’d**; managers still OPEN
+4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) LOCKED** (liveness + example next)
 5. Store-layer `(scopeKey, lineId)` memo — **deferred**
 6. Fail-loud Soft when AppStore lacks engine registration — **parked** (Agent 3 out of scope unless unlocked)
 7. `main` merge + `pnpm run version` — still deferred

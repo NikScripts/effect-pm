@@ -6,6 +6,13 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-21 — Identity coordinator (managers collapse) LOCKED
+
+- **Owner said:** Sell the dream; “Oooh yes. Let’s build it.” Handoff first as the major goal.
+- **Chose (LOCKED — M1–M6):** No `Resource.Manager`. Exclusive brain = `Resource.identity` (S1). Pattern = one brain + many hands (directory / nameless / Prototype). v1 Eng = **identity liveness** (dead winner → claim replaceable) + **coordinator+workers example**. Placement advice streams into Lookup = later slice (still no Manager type). Sugar last.
+- **Rejected / deferred:** Second first-wins product surface; required `manages[]` value list; advice wire before liveness.
+- **Supervisor impact:** SSOT [`identity-coordinator.md`](./identity-coordinator.md). Work branch `cursor/logs-store-followers-plan-906e` synced with `integration`.
+
 ## 2026-07-21 — Protocol listen siblings stay in sync
 
 - **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.

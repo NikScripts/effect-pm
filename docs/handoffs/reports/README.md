@@ -2,6 +2,8 @@
 
 **Live supervisor bus:** [`agent-status.md`](../agent-status.md) · [`supervisor-protocol.md`](../supervisor-protocol.md) · [`owner-decisions.md`](../owner-decisions.md).
 
+**Active major Eng (2026-07-21):** [`identity-coordinator.md`](../identity-coordinator.md) — managers collapse; identity liveness + coordinator+workers example next.
+
 Historical review reports and session closeouts from the 2026-07 store cutover land under [`../archive/2026-07/`](../archive/2026-07/). This folder keeps only the **index** (so `AGENTS.md` / legacy links stay stable).
 
 ## Archived review reports (2026-07-07)

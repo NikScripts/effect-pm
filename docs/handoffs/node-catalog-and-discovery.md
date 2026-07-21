@@ -360,7 +360,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
 > **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`** + **`askIncumbent`**.  
-> Managers still OPEN; **X1 multi-protocol Eng’d**.  
+> **Managers → identity coordinator LOCKED** — see [`identity-coordinator.md`](./identity-coordinator.md). **X1 multi-protocol Eng’d**.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 #### D3 — directory-backed peers (**LOCKED** 2026-07-19)
@@ -787,7 +787,7 @@ Owner rethink: maybe **singletons and managers are the same thing** — identity
 
 Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); managed `R`s = **type params** (+ optional enforce at impl). Drop required value-level manages list unless a later Eng need appears.
 
-**Do not Eng managers/singletons/lookup yet** — bake until the collapse (or split) is locked.
+**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng identity liveness + coordinator pattern via [`identity-coordinator.md`](./identity-coordinator.md). Identity/lookup already Eng’d (S1 / L1); next = liveness + example, then placement advice.
 
 ### `serve` naming (C5 — **LOCKED**)
 
