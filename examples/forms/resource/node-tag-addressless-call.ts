@@ -30,7 +30,7 @@ const program = Effect.gen(function* () {
   yield* Effect.sleep("200 millis")
   const client = Resource.lookupClient(Jobs).pipe(
     Layer.provide(
-      Lookup.bootstrapDefaultLocal({ path, unlink: false }),
+      Lookup.layerOptions({ path, unlink: false }),
     ),
   )
   const jobs = yield* Jobs.pipe(Effect.provide(client))

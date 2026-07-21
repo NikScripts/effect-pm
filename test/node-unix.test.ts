@@ -3,6 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import * as Lookup from "../src/Lookup";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 const tmpSock = (label: string) =>
@@ -26,10 +27,11 @@ describe("Node.unix", () => {
       }).pipe(Resource.andNode(Worker)) {}
 
       const serverCtx = yield* Layer.build(
-        Node.unix(Jobs, { jobs: Effect.succeed(11) }, {
-          lookupPath,
-          unlinkLookup: true,
-        }),
+        Node.unix(Jobs, { jobs: Effect.succeed(11) }).pipe(
+          Layer.provide(
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
+          ),
+        ),
       );
       const clientCtx = yield* Layer.build(Resource.client(Jobs));
 
@@ -46,10 +48,11 @@ describe("Node.unix", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
-        Node.unix(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) }), {
-          lookupPath,
-          unlinkLookup: true,
-        }),
+        Node.unix(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
+          Layer.provide(
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
+          ),
+        ),
       );
       const clientCtx = yield* Layer.build(
         Resource.discoverClient(JobsAnon, { lookupPath, unlink: false }),

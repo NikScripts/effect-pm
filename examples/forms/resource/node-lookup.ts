@@ -1,7 +1,11 @@
 /**
  * @module examples/forms/resource/node-lookup
  *
- * **Node.asLookup** (brand a Tag node as the lookup server) + Lookup.bootstrapDefaultLocal / layer / client.
+ * **(7) Node.asLookup** — brand a Tag node as the Lookup server, serve it with
+ * {@link Lookup.layerNode}, dial with {@link Lookup.client}.
+ *
+ * Same-machine default bus (no Lookup node) is bare `Lookup.layer` — different story.
+ * Walkthrough: see `examples/README.md` Node module path.
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-lookup.ts
@@ -17,19 +21,16 @@ const program = Effect.gen(function* () {
   const path = `/tmp/effect-pm-forms-lookup-${process.pid}.sock`
   const lookupNode = Node.Tag()("forms/Lookup", { path }).pipe(Node.asLookup)
 
-  // bootstrap = bind-or-dial default-local style on an explicit path
-  const boot = Lookup.bootstrapDefaultLocal({ path, unlink: true })
-  yield* Layer.build(boot)
+  // Exclusive serve on the branded node (not bind-or-dial beside it)
+  yield* Layer.build(Lookup.layerNode(lookupNode, { unlink: true }))
 
-  // Explicit layer on the Lookup Node (same path — second binder loses; we already hold it)
   yield* Effect.logInfo(
     `Lookup Node key=${lookupNode.key} isLookup=${Node.isLookupNode(lookupNode)} path=${path}`,
   )
 
-  // Client dials the same sock
   const client = Lookup.client(lookupNode)
   yield* Layer.build(client)
-  yield* Effect.logInfo("Lookup.bootstrapDefaultLocal + client ok")
+  yield* Effect.logInfo("Lookup.layerNode + client ok")
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 
 NodeRuntime.runMain(program)

@@ -4,7 +4,7 @@
 
 **D7 vertical** — address-less listen, Lookup bootstrap, nodeless `lookupClient`.
 
-- `Lookup.bootstrapDefaultLocal` — bind-or-dial default ipc (`unlink: false` by default so second process cannot steal the sock).
+- `Lookup.layerOptions` — bind-or-dial default ipc (`unlink: false` by default so second process cannot steal the sock).
 - `Lookup.Identity.resolve` — read a claim without claiming.
 - `Resource.lookupClient(Tag)` — Lookup-resolved nodeless client (bake sketch `unsafeLookupClient`); fail-closed via resolve then `nodesServing` (0 or >1 → error; not a soft N>1 pick).
 - Address-less `Resource.listen(Node)` — mint ephemeral ipc path, claim `Node.key`, advertise; lose → `AddressLessClaimLost`.

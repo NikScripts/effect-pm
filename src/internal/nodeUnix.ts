@@ -1,5 +1,5 @@
 /**
- * {@link unix} — IpcSocket listen + Lookup batteries (mint/claim/bind).
+ * {@link unix} — IpcSocket listen (mint/claim/bind). Lookup via pipe, not options.
  *
  * @internal
  */
@@ -35,8 +35,10 @@ import {
 } from "./nodeListenCommon"
 
 /**
- * Unix-domain IPC listen — all ipc mint/bind + default Lookup bootstrap.
- * Same overload shapes as the old multi-protocol `listen`. Prefer this for same-machine.
+ * Unix-domain IPC listen — all ipc mint/bind. Compose Lookup via
+ * `Layer.provide(Lookup.layer)` / {@link Lookup.layerOptions} when claim / advertise needs it.
+ * Protocol listen sibling of {@link http} / {@link ws} / {@link nPipe} / {@link Prototype.listen}
+ * — keep in sync (handoff § Protocol listen siblings). Prefer this for same-machine.
  *
  * @category listen
  * @public
@@ -106,35 +108,11 @@ export function unix(
   | UnixListenRequiresIpc,
   unknown
 > {
-  const rawOpts = (
+  const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  const {
-    lookupPath,
-    unlinkLookup,
-    bootstrapLookup = true,
-    ...listenOptions
-  } = rawOpts ?? {};
-  const withLookup = <A, E, R>(
-    layer: Layer.Layer<A, E, R>,
-  ): Layer.Layer<A, E, R> => {
-    if (bootstrapLookup === false) {
-      return layer;
-    }
-    return Layer.unwrap(
-      Effect.gen(function* () {
-        const Lookup = yield* Effect.promise(() => import("../Lookup"));
-        return layer.pipe(
-          Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlinkLookup !== undefined ? { unlink: unlinkLookup } : {}),
-            }),
-          ),
-        );
-      }),
-    ) as Layer.Layer<A, E, R>;
-  };
+  // Lookup is not baked in — pipe `Layer.provide(Lookup.layer)` (default) or
+  // `Lookup.layerOptions({ path })` / `Lookup.client` when claim / advertise needs it.
 
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
@@ -142,7 +120,7 @@ export function unix(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return withLookup(ipcNameless(list, listenOptions)) as Layer.Layer<
+    return ipcNameless(list, listenOptions) as Layer.Layer<
       never,
       | UnaddressedNode
       | AddressLessClaimLost
@@ -194,12 +172,10 @@ export function unix(
       tag: Resource.PipeableTag,
       impl: unknown,
     ) => Layer.Layer<never, never, never>;
-    return withLookup(
-      ipcListenOn(
-        bound as AnyNode,
-        [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
-        listenOptions,
-      ),
+    return ipcListenOn(
+      bound as AnyNode,
+      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
+      listenOptions,
     ) as Layer.Layer<
       never,
       | UnaddressedNode
@@ -229,7 +205,7 @@ export function unix(
     | Layer.Layer<never, any, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return withLookup(ipcListenOn(node, list, listenOptions)) as Layer.Layer<
+  return ipcListenOn(node, list, listenOptions) as Layer.Layer<
     never,
     | UnaddressedNode
     | AddressLessClaimLost
@@ -239,7 +215,7 @@ export function unix(
   >;
 }
 
-/** Nameless anonymous ipc Node + bind (Lookup added by {@link unix}). @internal */
+/** Nameless anonymous ipc Node + bind (pipe Lookup when needed). @internal */
 const ipcNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
