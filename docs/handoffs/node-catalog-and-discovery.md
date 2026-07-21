@@ -396,26 +396,24 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 | Preset | v1 |
 |--------|-----|
 | **`livenessReplace`** (default) | **SHIPPED** — ping incumbent via **NodeStatus.ping**; timeout/fail ⇒ replace row; alive ⇒ `IncumbentAlive` |
-| **`askIncumbent`** | **LEAN / baking** — opt-in; ask live incumbent to yield before reject (see § askIncumbent) |
-| **`reject`** | Strict never-steal (dead still replaceable? OPEN) |
+| **`askIncumbent`** | **SHIPPED** — inherit chain + `NodeStatus.yield` (see § askIncumbent) |
+| **`reject`** | **SHIPPED** — alive → `IncumbentAlive`; dead → still replace |
+| **`inherit`** | **SHIPPED** — call-site → node stamp → Lookup stamp → `livenessReplace` |
 | **`lastWins`** (orphan first) | **Not** the default |
 
 #### `askIncumbent` advertise policy (**LOCKED + ENG’D** 2026-07-21)
 
-**Shipped today (fact):**
+**Shipped (fact):**
 
 ```ts
-// Same nodeKey + different dial target:
-//   ping incumbent → alive → IncumbentAlive (layer/advertise fails)
-//                 → dead/unreachable → replace directory row
-Lookup.directoryAdvertiseLayer(node, serves) // always livenessReplace
+// Resolve: call-site → node stamp → Lookup stamp → livenessReplace
+// askIncumbent + alive → NodeStatus.yield; refuse/timeout → IncumbentAlive
+Lookup.directoryAdvertiseLayer(node, serves, { onConflict })
 ```
-
-**Gap:** rolling restart / takeover of a **named** Node (`Worker` / `Proto.make("East", …)`) while the old process is still up — today the newcomer is hard-rejected until the old process dies or unregisters.
 
 **Not this bake:** manager LB streams; queue/work drain across processes; changing the **hard** fallback away from `livenessReplace`.
 
-##### Job (lean)
+##### Job (shipped)
 
 When effective policy is `askIncumbent` and the incumbent is **alive**, Lookup **asks it to yield** (cooperative). If it yields (unregisters / accepts), newcomer’s advertise succeeds. If it refuses or times out → `IncumbentAlive`. Dead incumbent still replaced (same as livenessReplace).
 
