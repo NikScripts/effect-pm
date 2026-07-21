@@ -1,7 +1,8 @@
 # Inventory: `anyUnknownInErrorContext`
 
-**Status:** inventory only — rule stays **off** in `tsconfig.json` until owner unlocks a fix wave.  
-**Captured:** 2026-07-21 on tip after public-surface hygiene.
+**Status:** rule stays **off** in tsconfig; fix in batches (owner: all, internal first).  
+**Baseline (pre-batch-1):** 224 hits / 49 files.  
+**After batch 1 (Node transports):** ~169 hits / 42 files.
 
 ## How to reproduce
 
@@ -10,38 +11,26 @@ pnpm exec effect-language-service diagnostics --project tsconfig.json \
   --lspconfig '{"diagnosticSeverity":{"anyUnknownInErrorContext":"error"}}'
 ```
 
-## Counts
+## Kind split (baseline)
 
-| Metric | Value |
-|--------|------:|
-| Files checked | 371 |
-| Total diagnostics | 256 |
-| Rule hits (`anyUnknownInErrorContext`) | ~224 |
-| Files with hits | 49 |
+| Kind | Hits | Meaning |
+|------|-----:|---------|
+| Requirements `unknown`/`any` | ~180 | Layer/Effect `R` not a service id |
+| Error `unknown`/`any` | ~44 | Untyped `E` |
 
-Approximate split: `src/internal` ~95 · `test` ~74 · public `src` ~52 · `examples` ~3.
+## Batches
 
-## Heaviest files
+| Batch | Scope | Status |
+|------|--------|--------|
+| **1** | Node transports (`src/internal/node*`, `Node.ts`) | **Mostly Eng’d** — listen/connect **0 hits**. Residual ~19 on `httpServer`/`wsServer`/`ipcServer` open-`R` `any` variance (Effect `mergeAll` shape). |
+| **2** | `Resource.ts` + Process/Store/Run/Queue serveRemote | Next |
+| **3** | Tests | After 2 |
+| **4** | Examples + consider stage-enable | Last |
 
-| Hits | File |
-|-----:|------|
-| 21 | `src/Resource.ts` |
-| 13 | `test/resource-verify-connection.test.ts` |
-| 13 | `src/internal/nodeWs.ts` |
-| 13 | `src/internal/nodeHttp.ts` |
-| 12 | `src/internal/nodeUnix.ts` |
-| 12 | `src/internal/nodeNPipe.ts` |
-| 12 | `src/internal/nodeHttpServer.ts` |
-| 10 | `test/transport-conformance.test.ts` |
-| 9 | `src/internal/nodeIpcServer.ts` |
-| 8 | `src/Store.ts` |
-| 8 | `src/Process.ts` |
+## Residual batch-1 note
 
-## Suggested Eng batches (when unlocked)
+Public `Node.httpServer` / `wsServer` / `ipcServer` must accept serve layers with open `R` (deps provided outside). That forces `Layer.Layer<never, any, any>` bounds — the same variance hole Effect's `Layer.mergeAll` uses. Clearing those hits means either dropping open-`R` servers or waiting on a tighter Effect pattern. **Do not** flip the rule on for those three files until decided.
 
-1. **Node transport Layer E channels** — `nodeHttp` / `nodeWs` / `nodeUnix` / `nPipe` / `*Server` (clustered ~70 hits).
-2. **`Resource.ts` serve/client surfaces** — widen typed E instead of `unknown` leaks.
-3. **Tests** — prefer typed Exit/`TaggedError` harnesses over `unknown` casts (`transport-conformance`, verify-connection).
-4. **Examples** — drop `as Effect.Effect<…, unknown>` at `NodeRuntime.runMain`.
+## Phase C / B2–B4 timing
 
-Do **not** flip the tsconfig diagnostic to error until batch 1 is green (or owner accepts a staged per-project enable).
+Run **after** batches 1–2 (typing churn on Store/Logs would collide with refuse-second-bus Eng).

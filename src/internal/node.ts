@@ -231,8 +231,8 @@ export const connect: {
   (args: IArguments) => args.length >= 2 || !Layer.isLayer(args[0]),
   (
     node: AnyNode,
-    protocol?: Layer.Layer<RpcClient.Protocol, never, unknown>,
-  ): Layer.Layer<unknown, UnaddressedNode | InvalidHttpTarget, unknown> => {
+    protocol?: Layer.Layer<RpcClient.Protocol, never, never>,
+  ): Layer.Layer<never, UnaddressedNode | InvalidHttpTarget, never> => {
     if (protocol !== undefined) {
       return connectLayer(node, protocol);
     }

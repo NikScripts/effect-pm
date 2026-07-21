@@ -23,8 +23,8 @@ import {
  * @internal
  */
 export type ServeLayerList = readonly [
-  Layer.Layer<never, any, never>,
-  ...ReadonlyArray<Layer.Layer<never, any, never>>,
+  Layer.Layer<never, never, never>,
+  ...ReadonlyArray<Layer.Layer<never, never, never>>,
 ];
 
 /**
@@ -54,7 +54,7 @@ export const isResourceTagArg = (u: unknown): u is Resource.PipeableTag =>
 /** True when the first arg is a serve layer or non-empty serve list. @internal */
 export const isServeArg = (
   u: unknown,
-): u is Layer.Layer<never, any, never> | ServeLayerList => {
+): u is Layer.Layer<never, never, never> | ServeLayerList => {
   if (Layer.isLayer(u)) return true;
   return (
     Array.isArray(u) &&

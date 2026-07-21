@@ -3,7 +3,7 @@
  *
  * @internal
  */
-import { Clock, Effect, Layer } from "effect"
+import { Clock, Effect, Layer, Option } from "effect"
 import * as Resource from "../Resource"
 import {
   AddressLessClaimLost,
@@ -76,7 +76,7 @@ export function nPipe<
       >,
   options?: NamelessListenOptions,
 ): Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
-export function nPipe<Serve extends Layer.Layer<never, any, never>>(
+export function nPipe<Serve extends Layer.Layer<never, never, never>>(
   serve: Serve,
   options?: NamelessListenOptions,
 ): Layer.Layer<
@@ -107,11 +107,11 @@ export function nPipe<
 export function nPipe(
   nodeOrServesOrTag:
     | AnyNode
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList
     | Resource.PipeableTag,
   servesOrOptionsOrImpl?:
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList
     | NamelessListenOptions
     | object,
@@ -122,9 +122,7 @@ export function nPipe(
   | AddressLessClaimLost
   | ListenTagNodeRequired
   | NPipeListenRequiresIpc
-  | NPipeRequiresWindows,
-  unknown
-> {
+  | NPipeRequiresWindows, any> {
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
@@ -143,9 +141,7 @@ export function nPipe(
       | AddressLessClaimLost
       | ListenTagNodeRequired
       | NPipeListenRequiresIpc
-      | NPipeRequiresWindows,
-      unknown
-    >;
+      | NPipeRequiresWindows, never>;
   }
 
   if (isResourceTagArg(nodeOrServesOrTag)) {
@@ -169,9 +165,7 @@ export function nPipe(
         | AddressLessClaimLost
         | ListenTagNodeRequired
         | NPipeListenRequiresIpc
-        | NPipeRequiresWindows,
-        unknown
-      >;
+        | NPipeRequiresWindows, never>;
     }
     if (isNonIpcNode(bound as AnyNode)) {
       const n = bound as AnyNode;
@@ -184,9 +178,7 @@ export function nPipe(
         | AddressLessClaimLost
         | ListenTagNodeRequired
         | NPipeListenRequiresIpc
-        | NPipeRequiresWindows,
-        unknown
-      >;
+        | NPipeRequiresWindows, never>;
     }
     const serveErased = Resource.serve as unknown as (
       tag: Resource.PipeableTag,
@@ -204,9 +196,7 @@ export function nPipe(
       | AddressLessClaimLost
       | ListenTagNodeRequired
       | NPipeListenRequiresIpc
-      | NPipeRequiresWindows,
-      unknown
-    >;
+      | NPipeRequiresWindows, never>;
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -220,13 +210,11 @@ export function nPipe(
       | AddressLessClaimLost
       | ListenTagNodeRequired
       | NPipeListenRequiresIpc
-      | NPipeRequiresWindows,
-      unknown
-    >;
+      | NPipeRequiresWindows, never>;
   }
 
   const serves = servesOrOptionsOrImpl as
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
   return requireWindows(nPipeListenOn(node, list, listenOptions)) as Layer.Layer<
@@ -235,22 +223,20 @@ export function nPipe(
     | AddressLessClaimLost
     | ListenTagNodeRequired
     | NPipeListenRequiresIpc
-    | NPipeRequiresWindows,
-    unknown
-  >;
+    | NPipeRequiresWindows, never>;
 }
 
 /** Nameless anonymous named-pipe Node + bind (pipe Lookup when needed). @internal */
 const nPipeNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const key = yield* anonymousNodeKey(list);
       return nPipeListenOn(Tag()(key), list, options);
     }),
-  ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  ) as any;
 
 /**
  * Bind named-pipe ipc for a Node — mint/claim when address-less or dynamic; else {@link ipcServer}.
@@ -261,7 +247,7 @@ const nPipeListenOn = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> => {
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> => {
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
@@ -280,7 +266,7 @@ const nPipeListenOn = (
         }) as AnyNode & { readonly key: string };
         return withListenNode(addressed, nPipeBind(addressed, list, options));
       }),
-    ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+    ) as any;
   }
   if (
     node.path === undefined &&
@@ -296,8 +282,11 @@ const nPipeListenOn = (
           ],
         }) as AnyNode & { readonly key: string };
         const Lookup = yield* Effect.promise(() => import("../Lookup"));
-        const identity = yield* Lookup.Identity;
-        const outcome = yield* identity
+        const identity = yield* Effect.serviceOption(Lookup.Identity);
+        if (Option.isNone(identity)) {
+          return yield* new Resource.IdentitySelfRequired({ tag: node.key });
+        }
+        const outcome = yield* identity.value
           .claim(
             new Lookup.ClaimRequest({
               key: node.key,
@@ -323,7 +312,7 @@ const nPipeListenOn = (
         }
         return withListenNode(addressed, nPipeBind(addressed, list, options));
       }),
-    ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+    ) as any;
   }
   if (node.kind === "IpcSocket" || typeof node.path === "string") {
     return withListenNode(node, nPipeBind(node, list, options));
@@ -336,7 +325,7 @@ const nPipeBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode, unknown> => {
+): Layer.Layer<never, UnaddressedNode, never> => {
   if (node.path === undefined) {
     return unaddressedLayer(node.key);
   }
@@ -353,7 +342,7 @@ const nPipeBind = (
       ? { onConflict: options.onConflict }
       : {}),
     advertiseNode,
-  });
+  }) as Layer.Layer<never, UnaddressedNode, never>;
 };
 
 

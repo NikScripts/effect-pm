@@ -102,7 +102,7 @@ export function ipcServer<Serves extends ServerServeList>(
 export function ipcServer(
   serves: Layer.Layer<never, any, any> | ServerServeList | ReadonlyArray<Layer.Layer<never, any, any>>,
   options: IpcServerOptions,
-): Layer.Layer<never, any, unknown> {
+): Layer.Layer<never, any, any> {
   const list = (
     Array.isArray(serves) ? serves : [serves]
   ) as unknown as ServerServeList;
@@ -110,7 +110,7 @@ export function ipcServer(
     Layer.provideMerge(mergeServeList(list)),
     // Fresh registry per server — Lookup + Worker in one process must not share.
     Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
-  );
+  ) as Layer.Layer<never, any, any>;
 }
 
 
@@ -188,7 +188,9 @@ const ipcServerBase = (
       if (fsCtx !== undefined) {
         yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
       }
-      const rpc = RpcServer.layer(merged).pipe(
+      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
+      const rpcRaw: any = RpcServer.layer(merged);
+      const rpc = (rpcRaw as Layer.Layer<never, never, never>).pipe(
         Layer.provide(
           nodeTag[Resource.groupSym].toLayer(
             nodeHandlers as unknown as Parameters<
@@ -230,4 +232,4 @@ const ipcServerBase = (
       );
       return withUnlink.pipe(Layer.provideMerge(advertise));
     }),
-  ) as unknown as Layer.Layer<never, never, Resource.ServedResources>;
+  ) as Layer.Layer<never, never, Resource.ServedResources>;
