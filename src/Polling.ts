@@ -16,6 +16,7 @@
  * | `Polling.acceleratingWithRefs` | Accelerating cadence with externally-owned refs |
  * | `Polling.adaptive` | Fast after a work signal, decays toward an idle cap |
  * | `Polling.dynamic` | Cadence from a DynamicConfig field; wakes on swap |
+ * | `Polling.cron` | Ticks on cron-expression occurrences (calendar-aligned) |
  *
  * ## Usage
  *
@@ -34,6 +35,9 @@
  */
 
 import {
+  Clock,
+  Cron,
+  DateTime,
   Duration,
   Effect,
   Layer,
@@ -674,3 +678,71 @@ export const wakeOn = <A, R>(
   wake: Effect.Effect<void>
 ): Effect.Effect<void, never, R | Scope.Scope> =>
   Effect.asVoid(Effect.forkScoped(Stream.runForEach(stream, () => wake)));
+
+// ============================================================================
+// Preset: cron (calendar-scheduled ticks)
+// ============================================================================
+
+/**
+ * Ticks on a cron schedule — each wait sleeps until the expression's NEXT occurrence (UTC),
+ * so ticks land on calendar boundaries instead of relative intervals. `requestWake` /
+ * `resetCadence` end the current wait early (the tick runs now; the next wait re-aims at the
+ * following occurrence). An invalid expression fails AT CONSTRUCTION, not at the first tick.
+ *
+ * For arming/disarming by calendar windows use a schedule ({@link ProcessSchedule}); `cron` is
+ * cadence WITHIN the armed window.
+ *
+ * @example
+ * ```ts
+ * Polling.cron("0 * * * *")   // every hour, on the hour
+ * Polling.cron("*\/5 * * * *") // every five minutes
+ * ```
+ * @category presets
+ * @public
+ */
+export const cron = (
+  expression: string | Cron.Cron
+): Layer.Layer<PollingTag> => {
+  // eager + loud: a bad expression is a construction defect, never a silent never-ticking poll
+  const parsed =
+    typeof expression === "string" ? Cron.parseUnsafe(expression) : expression;
+  return registerPollingLayer(
+    Layer.effect(
+      PollingTag,
+      Effect.gen(function* () {
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined)
+        ).pipe(Effect.asVoid);
+        const untilNext = Effect.map(Clock.currentTimeMillis, (now) =>
+          Duration.millis(
+            Math.max(
+              0,
+              Cron.next(
+                parsed,
+                DateTime.toDateUtc(DateTime.makeUnsafe(now))
+              ).getTime() - now
+            )
+          )
+        );
+        const awaitNextTick = Effect.gen(function* () {
+          const d = Deferred.makeUnsafe<void, never>();
+          yield* Ref.set(wakeRef, d);
+          const dur = yield* untilNext;
+          yield* Effect.race(Effect.sleep(dur), Deferred.await(d)).pipe(
+            Effect.asVoid
+          );
+        });
+        return {
+          awaitNextTick,
+          requestWake,
+          resetCadence: requestWake,
+          afterTick: Effect.void,
+          peekCadence: Effect.map(untilNext, Option.some),
+        } satisfies PollingService;
+      })
+    )
+  );
+};
