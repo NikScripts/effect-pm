@@ -38,10 +38,12 @@ namespace standard. Work from THIS doc; do not regenerate shapes from memory.
   `nextTickAt` as a Subscribable on process status (dashboard countdown + Wake button;
   `peekCadence` becomes the stream's source rather than a UI-polled effect).
 
-## Deferred (not approved yet)
+## Deferred — since SHIPPED (2026-07-21)
 
-`Polling.adaptive` (work-aware decay), `Polling.cron`, event-driven wake (store event →
-`requestWake`). Disarmed-policy public surface (`Polling.disarmed(...)`) waits on follow-up #5.
+`Polling.adaptive` (work-aware decay), `Polling.cron` (calendar-aligned), and event-driven wake
+(`Polling.wakeOn(stream, wake)`) are all shipped with tests. The ONLY remaining open item from
+this doc is #5's follow-up: disarmedIdleSleep is orphaned in internal/ — wire into the supervisor
+or delete (process owner's call). Disarmed-policy public surface waits on that.
 
 ## Verification bar
 
