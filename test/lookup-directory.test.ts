@@ -298,3 +298,151 @@ describe("Node.unix directory wire", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 });
+
+describe("resolveOnConflict", () => {
+  it("walks prefs until a concrete policy; hard fallback livenessReplace", () => {
+    expect(Node.resolveOnConflict("inherit", "askIncumbent")).toBe(
+      "askIncumbent",
+    );
+    expect(Node.resolveOnConflict(undefined, "inherit", "reject")).toBe(
+      "reject",
+    );
+    expect(Node.resolveOnConflict("livenessReplace", "askIncumbent")).toBe(
+      "livenessReplace",
+    );
+    expect(Node.resolveOnConflict("inherit", undefined)).toBe(
+      "livenessReplace",
+    );
+  });
+
+  it("Lookup stamps concrete default; Tag defaults inherit", () => {
+    const lookup = Node.Lookup("lookup/policy-default", {
+      path: "/tmp/lookup-policy.sock",
+    });
+    const worker = Node.Tag("lookup/policy-worker", {
+      path: "/tmp/worker-policy.sock",
+    });
+    expect(lookup.onConflict).toBe("livenessReplace");
+    expect(worker.onConflict).toBe("inherit");
+
+    const askLookup = Node.Lookup("lookup/policy-ask", {
+      path: "/tmp/lookup-ask.sock",
+      onConflict: "askIncumbent",
+    });
+    expect(askLookup.onConflict).toBe("askIncumbent");
+  });
+});
+
+describe("Lookup directory askIncumbent", () => {
+  it.effect("alive incumbent yields → newcomer replaces the row", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("ask-lookup");
+      const workerPath = yield* tmpSock("ask-worker");
+      const lookupNode = Node.Lookup("lookup/dir-ask", {
+        path: lookupPath,
+        onConflict: "askIncumbent",
+      });
+
+      class Worker extends Node.Tag<Worker, Jobs>("lookup-dir/AskWorker", {
+        path: workerPath,
+      }) {}
+
+      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
+      const lookupCtx = Context.merge(lookupServer, lookupClient);
+
+      const workerCtx = yield* Layer.build(
+        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+          bootstrapLookup: false,
+        }).pipe(Layer.provide(Lookup.client(lookupNode))),
+      );
+
+      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const replaced = yield* dir
+        .advertise(
+          new Lookup.AdvertiseRequest({
+            nodeKey: Worker.key,
+            kind: "IpcSocket",
+            path: "/tmp/ask-newcomer.sock",
+            serves: ["lookup-dir/Jobs"],
+            onConflict: "inherit",
+          }),
+        )
+        .pipe(Effect.provide(lookupCtx));
+
+      expect(replaced.path).toBe("/tmp/ask-newcomer.sock");
+
+      // Late incumbent unregister (dial-matched) must not wipe the newcomer.
+      const removed = yield* dir
+        .unregister(
+          new Lookup.UnregisterRequest({
+            nodeKey: Worker.key,
+            kind: "IpcSocket",
+            path: workerPath,
+          }),
+        )
+        .pipe(Effect.provide(lookupCtx));
+      expect(removed).toBe(false);
+
+      const listed = yield* dir
+        .nodesServing(
+          new Lookup.NodesServingRequest({
+            resourceKey: "lookup-dir/Jobs",
+          }),
+        )
+        .pipe(Effect.provide(lookupCtx));
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.path).toBe("/tmp/ask-newcomer.sock");
+
+      yield* Effect.sync(() => workerCtx);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("call-site livenessReplace wins over Lookup askIncumbent", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("ask-override-lookup");
+      const workerPath = yield* tmpSock("ask-override-worker");
+      const lookupNode = Node.Lookup("lookup/dir-ask-override", {
+        path: lookupPath,
+        onConflict: "askIncumbent",
+      });
+
+      class Worker extends Node.Tag<Worker, Jobs>(
+        "lookup-dir/AskOverrideWorker",
+        { path: workerPath },
+      ) {}
+
+      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
+      const lookupCtx = Context.merge(lookupServer, lookupClient);
+
+      const workerCtx = yield* Layer.build(
+        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)], {
+          bootstrapLookup: false,
+        }).pipe(Layer.provide(Lookup.client(lookupNode))),
+      );
+
+      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const conflict = yield* dir
+        .advertise(
+          new Lookup.AdvertiseRequest({
+            nodeKey: Worker.key,
+            kind: "IpcSocket",
+            path: "/tmp/ask-blocked.sock",
+            serves: ["lookup-dir/Jobs"],
+            onConflict: "livenessReplace",
+          }),
+        )
+        .pipe(
+          Effect.map((entry) => ({ _tag: "ok" as const, entry })),
+          Effect.catchTag("IncumbentAlive", (error) =>
+            Effect.succeed({ _tag: "alive" as const, error }),
+          ),
+          Effect.provide(lookupCtx),
+        );
+
+      expect(conflict._tag).toBe("alive");
+      yield* Effect.sync(() => workerCtx);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+});

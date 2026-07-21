@@ -400,6 +400,9 @@ const wsBind = (
       : {}),
     ...(options?.health !== undefined ? { health: options.health } : {}),
     ...(options?.node !== undefined ? { node: options.node } : {}),
+    ...(options?.onConflict !== undefined
+      ? { onConflict: options.onConflict }
+      : {}),
     advertiseNode,
   });
 };

@@ -85,6 +85,15 @@ export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
   ping: Resource.effect(Schema.Number).annotate({
     description: "Server epoch milliseconds — a round-trip liveness probe.",
   }),
+  /**
+   * Cooperative handoff ask (Lookup `askIncumbent`) — `true` = step aside so a
+   * newcomer may take this `nodeKey`. Not Effect `yield*`; wire RPC only.
+   */
+  yield: Resource.effect(Schema.Boolean).annotate({
+    description:
+      "Cooperative handoff: true = accept yield (Lookup may replace the directory row). " +
+      "Refuse with false. Distinct from Effect generator yield*.",
+  }),
   logs: {
     stream: Resource.stream(LogEntrySchema).annotate({
       description:
@@ -111,6 +120,11 @@ export const buildNodeStatusImpl = (options: {
    * When omitted, query returns `[]`.
    */
   readonly nodeLogKey?: string;
+  /**
+   * Cooperative handoff handler for {@link NodeStatusResource}.`yield`.
+   * Default: accept (`true`) — Lookup then replaces the directory row.
+   */
+  readonly onYield?: Effect.Effect<boolean>;
 }) => {
   const readiness = options.readiness ?? Effect.succeed([]);
   const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
@@ -142,6 +156,9 @@ export const buildNodeStatusImpl = (options: {
   return {
     status: statusSub,
     ping: Clock.currentTimeMillis,
+    // Default accept — Lookup askIncumbent replaces the row; dial-matched unregister
+    // prevents a late finalizer from wiping the newcomer.
+    yield: options.onYield ?? Effect.succeed(true),
     logs: {
       stream: logsLive,
       query: (payload: { readonly limit: number }) =>
