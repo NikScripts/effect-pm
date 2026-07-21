@@ -90,7 +90,7 @@ import {
   successSym,
 } from "./internal/processTagSchemas";
 import { withLogScope } from "./internal/logs/scope";
-import { PollingTag } from "./internal/pollingTag";
+import { PollingTag, type PollingService } from "./internal/pollingTag";
 import { ProcessSchedule, ProcessScheduleTag } from "./internal/processSchedule";
 import type {
   ProcessScheduleEntry,
@@ -198,6 +198,16 @@ export interface Process<out R> {
    * store is wired. Sliding buffer: subscribe before runs you care about; the store is durable SSOT.
    */
   readonly events: Stream.Stream<ProcessLiveEvent>;
+  /**
+   * Cadence controls over the RUNNING supervisor's polling service. `wake` ends the current
+   * polling wait immediately (the next tick runs now; cadence unchanged); `resetCadence`
+   * returns the preset to its initial state (backoff → `initial`, accelerating → slow) and
+   * wakes. Both are no-ops while the driver isn't supervising or no polling layer is wired.
+   */
+  readonly polling: {
+    readonly wake: Effect.Effect<void>;
+    readonly resetCadence: Effect.Effect<void>;
+  };
 }
 
 /**
@@ -496,6 +506,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   };
 
   const { name, userEffect, store, storeScopeTag, resultRef } = state;
+
+  // The RUNNING driver's polling service — written when the driver builds its step context,
+  // cleared when that scope closes. The handle's `polling` controls read it, so wake works
+  // regardless of who forked the driver (same contract as the status mirror).
+  const pollingRef = MutableRef.make<Option.Option<PollingService>>(Option.none());
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
@@ -1014,12 +1029,23 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const events: Stream.Stream<ProcessLiveEvent> = Stream.fromPubSub(eventsHub);
 
+  const withPolling = (use: (svc: PollingService) => Effect.Effect<void>): Effect.Effect<void> =>
+    Effect.suspend(() =>
+      Option.match(MutableRef.get(pollingRef), {
+        onNone: () => Effect.void,
+        onSome: use,
+      }),
+    );
   const base = {
     name,
     type: "managed" as const,
     run,
     snapshot,
     events,
+    polling: {
+      wake: withPolling((svc) => svc.requestWake),
+      resetCadence: withPolling((svc) => svc.resetCadence),
+    },
   };
 
   const annotateProcessLogs = (
@@ -1042,7 +1068,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     ...base,
     effect: annotateProcessLogs(
       Effect.scoped(
-        Effect.flatMap(Layer.build(stepLayer), (context) => Effect.provide(supervisedCore, context)),
+        Effect.flatMap(Layer.build(stepLayer), (context) => {
+          MutableRef.set(pollingRef, Context.getOption(context, PollingTag));
+          return Effect.provide(supervisedCore, context).pipe(
+            Effect.ensuring(Effect.sync(() => MutableRef.set(pollingRef, Option.none()))),
+          );
+        }),
       ),
     ),
   };
@@ -1530,6 +1561,16 @@ export const processControlSpec = {
   stop: Resource.effect(Schema.Void).annotate({
     description: "Stop supervising — interrupt the driver and any active run instances.",
     destructive: true,
+  }),
+
+  // ── cadence commands (no-ops while not supervising / no polling layer) ──
+  wake: Resource.effect(Schema.Void).annotate({
+    description:
+      "End the current polling wait immediately — the next tick runs now; cadence unchanged.",
+  }),
+  resetCadence: Resource.effect(Schema.Void).annotate({
+    description:
+      "Reset the cadence preset to its initial state (backoff → initial, accelerating → slow) and wake.",
   }),
 };
 
@@ -2353,6 +2394,8 @@ const buildProcessImpl = <A, E, R>(
       status: { get: readStatus, changes: statusChanges },
       start,
       stop,
+      wake: handle.polling.wake,
+      resetCadence: handle.polling.resetCadence,
       events: handle.events,
       run: handle.run().pipe(tapLogs),
       ...scheduleMembers,

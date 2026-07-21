@@ -31,8 +31,9 @@
  * @module Polling
  */
 
-import { Duration, Effect, Layer, Option, Random, Ref, Deferred } from "effect";
+import { Duration, Effect, Layer, Option, Random, Ref, Deferred, Stream } from "effect";
 import { registerPollingLayer } from "./internal/processLayerBrand";
+import { DynamicConfigStore, type FixedField, type SwappableField } from "./DynamicConfig";
 
 // ============================================================================
 // Service interface
@@ -49,6 +50,7 @@ export type { PollingService as Service } from "./internal/pollingTag";
  * The polling service of the CURRENT process tick context — yield inside a process
  * effect to wake, reset, or peek the cadence. Provided by the supervisor.
  *
+ * @category context
  * @public
  */
 export const current: Effect.Effect<PollingService, never, PollingTag> = PollingTag;
@@ -57,6 +59,7 @@ export const current: Effect.Effect<PollingService, never, PollingTag> = Polling
  * A custom cadence policy as a polling layer for `Process.make({ polling })`.
  * Replaces the old `Layer.succeed(Polling, impl)` form; the tag stays internal.
  *
+ * @category constructors
  * @public
  */
 export const layer = (impl: PollingService): Layer.Layer<PollingTag> =>
@@ -104,6 +107,7 @@ const makeWakeableAwait = (duration: Duration.Duration) =>
  * Polling.spaced("30 seconds")
  * Polling.spaced(Duration.minutes(1))
  * ```
+ * @category presets
  * @public
  */
 export const spaced = (
@@ -137,6 +141,7 @@ export const spaced = (
  * Polling.jittered("5 seconds", { jitter: 0.2 })
  * // Each tick: 5s ± 20% → between 4s and 6s
  * ```
+ * @category presets
  * @public
  */
 export const jittered = (
@@ -192,6 +197,7 @@ export const jittered = (
  * // 1s → 2s → 4s → 8s → 16s → 30s → 30s → ...
  * // resetCadence → back to 1s
  * ```
+ * @category presets
  * @public
  */
 export const backoff = (options: {
@@ -258,6 +264,7 @@ export const backoff = (options: {
  * })
  * ```
  *
+ * @category models
  * @public
  */
 export interface AcceleratingConfig {
@@ -300,6 +307,7 @@ const delayMsForIteration = (
  *   excitement: 1,
  * })
  * ```
+ * @category presets
  * @public
  */
 export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag> => {
@@ -350,6 +358,7 @@ export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag
  * Accelerating cadence with externally-managed refs for live tuning.
  * Prefer {@link accelerating} unless you need runtime parameter changes via refs.
  *
+ * @category presets
  * @public
  */
 export const acceleratingWithRefs = (options: {
@@ -396,3 +405,72 @@ export const acceleratingWithRefs = (options: {
 // ============================================================================
 // Public API
 // ============================================================================
+
+// ============================================================================
+// Preset: dynamic (cadence from a DynamicConfig field)
+// ============================================================================
+
+/**
+ * Cadence read from a DynamicConfig field on EVERY tick — swap the field's value (locally or
+ * over a ProcessManager control verb) and the new interval applies from the next wait. When the
+ * field is swappable AND a `DynamicConfigStore` is in context, the current wait also WAKES on
+ * swap, so a shorter interval takes effect immediately instead of after the old one elapses
+ * (presence-driven, like durability: no store → no subscription, and R stays `never`).
+ *
+ * Read failures fall back to `options.fallback` when given; otherwise they are defects — a
+ * misconfigured cadence should be loud, not a silent default.
+ *
+ * @example
+ * ```ts
+ * const pollInterval = DynamicConfig.swappable(Config.duration("POLL_INTERVAL"))
+ * Process.make("sync", { polling: Polling.dynamic(pollInterval), effect })
+ * ```
+ * @category presets
+ * @public
+ */
+export const dynamic = (
+  field: FixedField<Duration.Duration> | SwappableField<Duration.Duration>,
+  options?: { readonly fallback?: Duration.Input },
+): Layer.Layer<PollingTag> => {
+  const fallback =
+    options?.fallback === undefined ? undefined : Duration.fromInputUnsafe(options.fallback);
+  const read: Effect.Effect<Duration.Duration> = Effect.catch(field, (error) =>
+    fallback === undefined ? Effect.die(error) : Effect.succeed(fallback),
+  );
+  return registerPollingLayer(
+    Layer.effect(
+      PollingTag,
+      Effect.gen(function* () {
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined),
+        ).pipe(Effect.asVoid);
+        const awaitNextTick = Effect.gen(function* () {
+          const d = Deferred.makeUnsafe<void, never>();
+          yield* Ref.set(wakeRef, d);
+          const dur = yield* read;
+          yield* Effect.race(Effect.sleep(dur), Deferred.await(d)).pipe(Effect.asVoid);
+        });
+        // wake-on-swap: only when the field is swappable and the store is around
+        const store = yield* Effect.serviceOption(DynamicConfigStore);
+        if ("changes" in field && Option.isSome(store)) {
+          yield* Effect.forkScoped(
+            Stream.runForEach(field.changes, () => requestWake).pipe(
+              Effect.provideService(DynamicConfigStore, store.value),
+            ),
+          );
+        }
+        return {
+          awaitNextTick,
+          requestWake,
+          resetCadence: requestWake,
+          afterTick: Effect.void,
+          peekCadence: field.pipe(
+            Effect.map(Option.some),
+            Effect.catch(() => Effect.succeed(fallback === undefined ? Option.none() : Option.some(fallback))),
+          ),
+        } satisfies PollingService;
+      }),
+    ),
+  );
+};

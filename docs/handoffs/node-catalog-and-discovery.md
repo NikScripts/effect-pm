@@ -3,18 +3,20 @@
 **Status:** **DESIGN** — living bake notes. Phase 1 IPC **LOCKED + SHIPPED**. Catalog / discovery / managers / lookup = mostly **thoughts** until explicitly locked in a bake row.  
 **Thesis:** Make cross-runtime **seamless, easier, safer** — Node address + typed service catalog; optional discovery for same-machine (esp. Unix sockets).  
 **Related:** [`transport-dependency-decisions.md`](./transport-dependency-decisions.md) · [`loud-failures-design.md`](./loud-failures-design.md) · [`docs/resources/fleets-and-peers.md`](../resources/fleets-and-peers.md)  
-**Naming note:** Shipped surface is split: **`@nikscripts/effect-pm/Node`** (Tag / listen / connect / *Server) + **`Resource`** (Tag / serve / client / identity / nodes). Product rename (e.g. Unbounded services) is **parked**.
+**Naming note:** Shipped surface is split: **`@nikscripts/effect-pm/Node`** (Tag / protocol listen / connect / *Server) + **`Resource`** (Tag / serve / client / identity / nodes). Product rename (e.g. Unbounded services) is **parked**.
 
-### Node module — **LOCKED + Eng** (2026-07-20)
+### Node module — **LOCKED + Eng** (2026-07-20; protocol split 2026-07-21)
 
 | Export | Role |
 |--------|------|
 | `Node.Tag` / `Node.Prototype` / `Node.Lookup` | Node constructors (was `Resource.Node` / `.Prototype` / `Lookup.LookupNode`) |
-| `Node.listen` / `httpServer` / `wsServer` / `ipcServer` | Catalog-proving / transport servers |
+| `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen + local batteries (Lookup bootstrap) |
+| `Node.listen` | Neutral spine — **no transport bind** (`ListenUseProtocol` → use protocol entry) |
+| `httpServer` / `wsServer` / `ipcServer` | Low-level escape hatches (caller provides platform) |
 | `Node.connect*` / `clientsFor` | Dial helpers |
 | Types | `AnyNode`, `ProtocolKind`, `ListenNode`, `UnaddressedNode`, … |
 
-No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts`.
+No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts` (path includes `node-clients-for`).
 
 ### How to read locks in this file
 
@@ -798,3 +800,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-19** — Owner “Okay next” → **`askIncumbent` bake opened.** Lean **A:** `onConflict` on listen/advertise; Lookup asks `NodeStatus.yield`; timeout → `IncumbentAlive`. Awaiting owner lock.
 - **2026-07-20** — Bake tip for merge into `integration`: AddressedNode auto-connect + MemoMap-shared connect; kind-precise Tags; `nodes([X])` / `andNode(X)` sole-bind; `InvalidHttpTarget` Layer/Effect (not throw); `listenLocal` catalog proof; `*Server`/`listen` serve-list bounds match Effect `Layer.mergeAll`. `askIncumbent` still OPEN.
 - **2026-07-20** — **Nameless `Node.listen([serve…])` Eng:** mint address-less anonymous Node + D7 claim + Lookup bootstrap; dial via `clientLocal`.
+- **2026-07-21** — **Protocol listen Phases A–E Eng + on `integration`:** `Node.unix` / `http` / `ws` / `nPipe`; neutral `listen` binds nothing; module split for tree-shake; forms teach protocol entries + `clientsFor`. `askIncumbent` still OPEN.
