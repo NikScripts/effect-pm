@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessMakeInvalidLayerArgument } from "../src";
+import { PollingTag } from "../src/internal/pollingTag";
 // Engine schedule constructors live on the `Process` namespace now (the standalone `ProcessSchedule`
 // module was retired): `Process.scheduleInMemory` (call with no args for an empty schedule) +
 // `Process.at` / `Process.window`.
@@ -27,8 +28,7 @@ describe("Process.make", () => {
   });
 
   it("throws ProcessMakeInvalidLayerArgument for unregistered positional layers", () => {
-    const customPolling = Layer.succeed(Polling, {
-      overlap: "serial",
+    const customPolling = Layer.succeed(PollingTag, {
       awaitNextTick: Effect.void,
       requestWake: Effect.void,
       resetCadence: Effect.void,

@@ -3,7 +3,7 @@ import { Data, DateTime, Deferred, Duration, Effect, Layer, Schema } from "effec
 import { TestClock } from "effect/testing";
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
-import { Polling } from "../src/Polling";
+import * as Polling from "../src/Polling";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });

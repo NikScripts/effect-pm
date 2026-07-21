@@ -9,7 +9,7 @@ import * as Process from "../src/Process";
 import * as QueueResource from "../src/QueueResource";
 import * as RunResource from "../src/RunResource";
 import * as Store from "../src/Store";
-import { Polling } from "../src/Polling";
+import * as Polling from "../src/Polling";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
 import * as Node from "../src/Node";
 

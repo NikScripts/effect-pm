@@ -32,8 +32,6 @@
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`@nikscripts/effect-pm/storage/sqlite`).
- * - **`DisarmedIdleSleep`** — Policy helpers for custom schedule layers (root aliases:
- *   `computeDisarmedIdleSleep`, `DEFAULT_SCHEDULE_POLL_WHILE_DISARMED`, …).
  *
  * ## Where to read next
  *
@@ -94,7 +92,7 @@
 export * as Process from "./Process";
 export { ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
-export { Polling } from "./Polling";
+export * as Polling from "./Polling";
 // The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
 // member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
@@ -264,7 +262,6 @@ export type {
 } from "./Process";
 
 // Types - Polling
-export type { PollingService, AcceleratingPollConfig } from "./Polling";
 
 // Types - QueueResource
 export * as CustomQueueResource from "./CustomQueueResource";
