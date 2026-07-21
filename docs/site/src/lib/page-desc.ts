@@ -1,6 +1,5 @@
 // First-paragraph extraction from raw chapter markdown for meta descriptions. Heuristic on
-// purpose: this feeds a <meta> tag, not the page. Lives beside PageMeta (not src/lib) so hover
-// pipeline hashing doesn't churn; fold into the content lib on its next planned edit.
+// purpose: this feeds a <meta> tag, not the page.
 
 const stripInline = (s: string): string =>
   s
