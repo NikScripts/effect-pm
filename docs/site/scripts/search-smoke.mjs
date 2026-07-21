@@ -16,11 +16,12 @@ const browser = await chromium.launch();
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto(`${base}/`, { waitUntil: "networkidle" });
 
-  const input = page.locator('.sidebar-search input[type="search"]');
+  await page.locator(".search-trigger").click();
+  const input = page.locator('.search-modal input[type="search"]');
   await input.waitFor({ timeout: 15000 });
   await input.fill("subscribable");
 
-  const panel = page.locator(".search-panel");
+  const panel = page.locator(".search-modal .search-panel");
   await panel.waitFor({ timeout: 15000 });
   const heads = await panel.locator(".search-section-head span").allTextContents();
   if (!heads.includes("API Reference")) fail(`typeahead sections: ${heads.join(", ")}`);
@@ -44,6 +45,7 @@ const browser = await chromium.launch();
 
   // back to the panel for the Enter → full page path
   await page.goto(`${base}/`, { waitUntil: "networkidle" });
+  await page.locator(".search-trigger").click();
   await input.waitFor({ timeout: 15000 });
   await input.fill("subscribable");
   await panel.locator(".search-hit").first().waitFor({ timeout: 15000 });
@@ -98,13 +100,15 @@ const browser = await chromium.launch();
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(`${base}/docs/core-concepts`, { waitUntil: "networkidle" });
-  // ⌘K focuses the sidebar search
+  // ⌘K opens the spotlight modal with the input focused; Escape closes it
   await page.keyboard.press("Meta+KeyK");
-  const focused = await page
-    .locator(".sidebar-search input")
-    .evaluate((el) => document.activeElement === el);
-  if (!focused) fail("Meta+K did not focus the sidebar search");
-  console.log("cmd-k focuses sidebar search");
+  const modalInput = page.locator('.search-modal input[type="search"]');
+  await modalInput.waitFor({ timeout: 15000 });
+  const focused = await modalInput.evaluate((el) => document.activeElement === el);
+  if (!focused) fail("Meta+K did not focus the search modal input");
+  await page.keyboard.press("Escape");
+  await page.locator(".search-modal").waitFor({ state: "detached", timeout: 5000 });
+  console.log("cmd-k opens spotlight modal; esc closes");
 
   // API pages get the portaled copy button (guide .code-block pres render theirs server-side)
   await page.goto(`${base}/api/effect-pm/Resource/ref`, { waitUntil: "networkidle" });

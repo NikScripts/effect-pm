@@ -96,34 +96,6 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
         close();
         return;
       }
-      // ⌘K / Ctrl-K anywhere, or "/" outside editable fields → focus search: the sidebar input
-      // when the wide layout shows it, else the overlay input (opened like the search button).
-      const cmdK = (e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey);
-      const slash =
-        e.key === "/" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !(
-          e.target instanceof HTMLElement &&
-          (e.target.tagName === "INPUT" ||
-            e.target.tagName === "TEXTAREA" ||
-            e.target.isContentEditable)
-        );
-      if (!cmdK && !slash) return;
-      e.preventDefault();
-      const sidebar = document.querySelector(".sidebar-search input");
-      if (sidebar instanceof HTMLInputElement && sidebar.offsetParent !== null) {
-        sidebar.focus();
-        sidebar.select();
-        return;
-      }
-      const cb = cbRef.current;
-      if (cb !== null && !cb.checked) {
-        cb.checked = true;
-        document.body.style.overflow = "hidden";
-      }
-      inputRef.current?.focus();
     };
     cb.addEventListener("change", onChange);
     window.addEventListener("keydown", onKey);
