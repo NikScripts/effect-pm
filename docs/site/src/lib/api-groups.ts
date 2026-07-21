@@ -16,6 +16,7 @@ export interface SymbolGroup {
 // then the verbs. Unknown categories follow alphabetically; kind buckets close the page.
 const categoryOrder = [
   "constructors",
+  "presets",
   "models",
   "type ids",
   "guards",
