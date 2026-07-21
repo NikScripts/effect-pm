@@ -41,6 +41,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (LOCKED + Eng’d):** `contractHash` on `NodeStatus.resources[]`; `Resource.contractHash(tag)`; deep verify + tag-aware default-on client compare → `ContractMismatch`. Nested verify opted out for Lookup.client / identity ping / `clientLayerForEndpoint` (Layer.unwrap deadlock).
 - **Supervisor impact:** loud-failures F4 closed; memo remains.
 
+## 2026-07-21 — Store-layer `(scopeKey, lineId)` memo Eng’d
+
+- **Owner said:** “All of them” (unlock wave).
+- **Chose (LOCKED + Eng’d):** Durable tails seed the in-memory lineId claim from `_logs.read` at layer acquire; rematerialize/restart does not double-append. Unrelated to `memoizedAt` handle cache.
+- **Supervisor impact:** Soft / verify / F4 / memo unlock wave complete.
+
 ## 2026-07-21 — Protocol listen siblings stay in sync
 
 - **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.

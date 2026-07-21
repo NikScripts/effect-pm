@@ -2,7 +2,7 @@
 
 **Status:** **Soft stack SHIPPED** on `integration` — bake+override [#62](https://github.com/NikScripts/effect-pm/pull/62) + follow-through S1–S3 [#65](https://github.com/NikScripts/effect-pm/pull/65) (living prose + CustomQueue Soft SQLite / sibling-merge parity). Agent 3 Soft **idle**.  
 **SSOT (wiring):** [`docs/guides/stores.md`](../guides/stores.md) — toolkit soft-default Memory (R fulfilled); override by providing AppStore **into** the toolkit layer (`Layer.provide` / `provideMerge`). `*Memory` = aliases.  
-**Not this plan:** Agent D handles; docs-site chrome; Postgres. Soft fail-loud (missing engine registration) **unlocked + Eng’d** 2026-07-21. Store-layer `(scopeKey, lineId)` memo unlocked same wave.
+**Not this plan:** Agent D handles; docs-site chrome; Postgres. Soft fail-loud **Eng’d** 2026-07-21. Store-layer `(scopeKey, lineId)` memo **Eng’d** same wave (seed claim from `_logs` at tail acquire).
 
 ---
 
@@ -70,7 +70,7 @@ There is no “later-wins Soft override.” Soft peeks ambient `Storage` **at to
 | **P1** | Missing `Node.logs` / toolkit `.store(tag)` | Empty durable queries | docs / empty-query honesty |
 | **P2** | Nested / second `Logs.layer` or second `Store.Service` in one Node | Two buses/journals | Document-only (Phase C) |
 | **P3** | Legacy bag / `processId` identity docs | Confusion | mostly fixed (#59); Agent 1 archive if leftovers |
-| **—** | Store-layer lineId memo | Deferred | Out of scope |
+| **—** | Store-layer lineId memo | **Eng’d** — seed claim from `_logs` at acquire | rematerialize / restart safe |
 
 ---
 
