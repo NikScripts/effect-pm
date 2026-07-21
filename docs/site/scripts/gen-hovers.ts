@@ -219,7 +219,11 @@ const program = Effect.gen(function* () {
         continue;
       }
       const slice = lineEls.slice(start, start + n);
-      const preClass = String(pre?.properties?.class ?? "shiki");
+      // properties.class is an ARRAY of tokens — String() would comma-join it into one bogus
+      // class ("shiki,shiki-themes,…"), which silently broke every `.shiki` selector on
+      // sidecar-rendered code (dark-mode colors most visibly).
+      const preClassRaw = pre?.properties?.class ?? "shiki";
+      const preClass = Array.isArray(preClassRaw) ? preClassRaw.join(" ") : String(preClassRaw);
       const inner = slice
         .map((l, i) => hastToHtml(l) + (i < slice.length - 1 ? "\n" : ""))
         .join("");

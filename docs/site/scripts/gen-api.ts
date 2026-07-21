@@ -323,7 +323,7 @@ const program = Effect.gen(function* () {
 
   for (const [specIndex, spec] of specs.entries()) {
     const model = yield* extractPackage(spec);
-    const modules: Array<{ slug: string; entry: string; count: number }> = [];
+    const modules: Array<{ slug: string; entry: string; count: number; summary?: string }> = [];
     yield* Effect.forEach(model, (e) =>
       Effect.gen(function* () {
         const nsSlug = slugForEntry(e.entry);
@@ -344,7 +344,12 @@ const program = Effect.gen(function* () {
         yield* Effect.forEach(e.symbols, (s) =>
           writeJson(nodePath.join(dataDir, spec.slug, nsSlug, `${symbolFileKey(s.name)}.json`), s)
         );
-        modules.push({ slug: nsSlug, entry: e.entry, count: e.symbols.length });
+        modules.push({
+          slug: nsSlug,
+          entry: e.entry,
+          count: e.symbols.length,
+          ...(e.summary !== undefined && e.summary !== "" ? { summary: e.summary } : {}),
+        });
         for (const s of e.symbols) {
           paths.push([spec.slug, nsSlug, s.name]);
           if (Object.keys(s.docLinks).length > 0) {

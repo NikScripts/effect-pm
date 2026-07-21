@@ -40,7 +40,11 @@ const strip = (text: string): string =>
 
 // Display formatting via Prettier: the checker emits one long line, so wrap in a valid TS construct,
 // format so long overloads break across lines, and unwrap. Best-effort — unparseable text is kept.
-const prettierOptions = { parser: "typescript" as const, printWidth: 76, semi: false };
+const prettierOptions = {
+  parser: "typescript" as const,
+  printWidth: 76,
+  semi: false,
+};
 const formatSignature = (sig: string): string => {
   try {
     return prettier
@@ -70,7 +74,9 @@ const formatType = (type: string): string => {
 // Re-exports (`export { x } from "./y"`) arrive as Alias symbols carrying no docs of their own —
 // resolve to the real symbol before reading anything.
 const resolveAlias = (checker: ts.TypeChecker, sym: ts.Symbol): ts.Symbol =>
-  (sym.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(sym) : sym;
+  (sym.flags & ts.SymbolFlags.Alias) !== 0
+    ? checker.getAliasedSymbol(sym)
+    : sym;
 
 const kindOf = (sym: ts.Symbol): string => {
   const f = sym.flags;
@@ -79,7 +85,11 @@ const kindOf = (sym: ts.Symbol): string => {
   if ((f & ts.SymbolFlags.Interface) !== 0) return "interface";
   if ((f & ts.SymbolFlags.TypeAlias) !== 0) return "type";
   if ((f & ts.SymbolFlags.Namespace) !== 0) return "namespace";
-  if ((f & (ts.SymbolFlags.Variable | ts.SymbolFlags.BlockScopedVariable)) !== 0) return "const";
+  if (
+    (f & (ts.SymbolFlags.Variable | ts.SymbolFlags.BlockScopedVariable)) !==
+    0
+  )
+    return "const";
   return "value";
 };
 
@@ -126,7 +136,8 @@ export interface Extractor {
  * @category tags
  * @since 1.0.0
  */
-export const Extractor: Context.Service<Extractor, Extractor> = Context.Service("docgen/Extractor");
+export const Extractor: Context.Service<Extractor, Extractor> =
+  Context.Service("docgen/Extractor");
 
 /**
  * A program entry point — the export name it is reached by (`"index"` names the barrel) and its
@@ -180,12 +191,15 @@ const makeSymbol = (
   const decl = symbol.getDeclarations()?.[0];
   if (decl === undefined) return Option.none();
   // Only document what THIS package defines — a re-export resolving into a dependency belongs there.
-  if (!decl.getSourceFile().fileName.startsWith(options.srcDir)) return Option.none();
+  if (!decl.getSourceFile().fileName.startsWith(options.srcDir))
+    return Option.none();
   if (!options.isPublic(symbol, checker)) return Option.none();
 
   const isType =
     (symbol.flags &
-      (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface | ts.SymbolFlags.Class)) !==
+      (ts.SymbolFlags.TypeAlias |
+        ts.SymbolFlags.Interface |
+        ts.SymbolFlags.Class)) !==
     0;
   const type = isType
     ? checker.getDeclaredTypeOfSymbol(symbol)
@@ -195,7 +209,14 @@ const makeSymbol = (
     .getCallSignatures()
     .map((sig) =>
       formatSignature(
-        strip(checker.signatureToString(sig, decl, formatFlags, ts.SignatureKind.Call))
+        strip(
+          checker.signatureToString(
+            sig,
+            decl,
+            formatFlags,
+            ts.SignatureKind.Call
+          )
+        )
       )
     );
   const fullType = strip(checker.typeToString(type, decl, formatFlags));
@@ -244,11 +265,17 @@ const makeSymbol = (
       signatures,
       typeText,
       sourceText,
-      summary: strip(ts.displayPartsToString(symbol.getDocumentationComment(checker))),
+      summary: strip(
+        ts.displayPartsToString(symbol.getDocumentationComment(checker))
+      ),
       rawComment,
       tags,
       category: tags.find((tag) => tag.name === "category")?.text,
-      linkTargets: [...new Set([...rawComment.matchAll(/\{@link\s+([^}|\s]+)/g)].map((m) => m[1]))],
+      linkTargets: [
+        ...new Set(
+          [...rawComment.matchAll(/\{@link\s+([^}|\s]+)/g)].map((m) => m[1])
+        ),
+      ],
       docLinks: {}, // filled by the {@link} second pass once every symbol has a URL
       source: {
         file: relFile,
@@ -281,7 +308,8 @@ const preferRename = (
   }
   return [...byResolved].map(
     ([resolved, candidates]) =>
-      candidates.find((c) => c.getName() !== resolved.getName()) ?? candidates[0]
+      candidates.find((c) => c.getName() !== resolved.getName()) ??
+      candidates[0]
   );
 };
 
@@ -315,7 +343,8 @@ const walkPackage = (
     );
 
   const barrel = entryPoints.find((e) => e.name === "index");
-  const barrelModule = barrel === undefined ? Option.none<ts.Symbol>() : moduleOf(barrel.file);
+  const barrelModule =
+    barrel === undefined ? Option.none<ts.Symbol>() : moduleOf(barrel.file);
   const subpathFiles = new Set(entryPoints.map((e) => e.file));
   const groups: Array<{
     readonly ns: string;
@@ -332,7 +361,11 @@ const walkPackage = (
     for (const exportSymbol of checker.getExportsOfModule(barrelModule.value)) {
       const resolved = resolveAlias(checker, exportSymbol);
       const decl = resolved.getDeclarations()?.[0];
-      if (decl !== undefined && ts.isSourceFile(decl) && !subpathFiles.has(decl.fileName)) {
+      if (
+        decl !== undefined &&
+        ts.isSourceFile(decl) &&
+        !subpathFiles.has(decl.fileName)
+      ) {
         groups.push({ ns: exportSymbol.getName(), module: resolved });
       }
     }
@@ -354,10 +387,39 @@ const walkPackage = (
         onNone: () => [],
         onSome: (extracted) => [extracted],
       });
-  const byName = (a: Extracted, b: Extracted): number => a.model.name.localeCompare(b.model.name);
+  const byName = (a: Extracted, b: Extracted): number =>
+    a.model.name.localeCompare(b.model.name);
+
+  // The module's own one-liner: first paragraph of the source file's leading /** */ header
+  // (the `@module` doc). Same zero-guess rule as everything else — no header, no summary.
+  const moduleSummary = (module: ts.Symbol): string => {
+    const decl = module.getDeclarations()?.[0];
+    if (decl === undefined || !ts.isSourceFile(decl)) return "";
+    const full = decl.getFullText();
+    const ranges = ts.getLeadingCommentRanges(full, 0) ?? [];
+    for (const range of ranges) {
+      const text = full.slice(range.pos, range.end);
+      if (!text.startsWith("/**")) continue;
+      const lines = text
+        .split("\n")
+        .map((line) => line.replace(/^\s*\/?\*+\/?\s?/, "").trimEnd());
+      const body: Array<string> = [];
+      for (const line of lines) {
+        if (line.startsWith("@")) break;
+        if (line.trim() === "") {
+          if (body.length > 0) break;
+          continue;
+        }
+        body.push(line.trim());
+      }
+      if (body.length > 0) return body.join(" ");
+    }
+    return "";
+  };
 
   const nsEntries = groups.map((group) => ({
     entry: group.ns,
+    summary: moduleSummary(group.module),
     symbols: preferRename(checker, checker.getExportsOfModule(group.module))
       .flatMap(extract(Option.some(group.ns)))
       .sort(byName),
@@ -379,6 +441,7 @@ const walkPackage = (
     ...nsEntries,
     {
       entry: "(top-level)",
+      summary: "",
       symbols: topLevel,
     },
   ];
@@ -418,7 +481,9 @@ const docLinksOf = (
   const out: Record<string, string> = {};
   const visit = (node: ts.Node): void => {
     if (
-      (ts.isJSDocLink(node) || ts.isJSDocLinkCode(node) || ts.isJSDocLinkPlain(node)) &&
+      (ts.isJSDocLink(node) ||
+        ts.isJSDocLinkCode(node) ||
+        ts.isJSDocLinkPlain(node)) &&
       node.name !== undefined
     ) {
       const name = node.name;
@@ -441,7 +506,9 @@ const docLinksOf = (
  * @category layers
  * @since 1.0.0
  */
-export const layer = (options: Options): Layer.Layer<Extractor, never, TsProgram.TsProgram> =>
+export const layer = (
+  options: Options
+): Layer.Layer<Extractor, never, TsProgram.TsProgram> =>
   Layer.effect(Extractor)(
     Effect.gen(function* () {
       const program = yield* TsProgram.TsProgram;
@@ -449,7 +516,9 @@ export const layer = (options: Options): Layer.Layer<Extractor, never, TsProgram
       // can't match a sibling (`…/src2`) of the intended directory.
       const normalized: Options = {
         ...options,
-        srcDir: options.srcDir.endsWith("/") ? options.srcDir : `${options.srcDir}/`,
+        srcDir: options.srcDir.endsWith("/")
+          ? options.srcDir
+          : `${options.srcDir}/`,
       };
       const packageModel = (
         entryPoints: ReadonlyArray<EntryPoint>
@@ -460,6 +529,7 @@ export const layer = (options: Options): Layer.Layer<Extractor, never, TsProgram
           Effect.map((resolver) =>
             walked.entries.map((entry) => ({
               entry: entry.entry,
+              ...(entry.summary !== "" ? { summary: entry.summary } : {}),
               symbols: entry.symbols.map(({ decl, model }) => ({
                 ...model,
                 docLinks: docLinksOf(resolver, decl),
@@ -468,7 +538,12 @@ export const layer = (options: Options): Layer.Layer<Extractor, never, TsProgram
           ),
           Effect.provide(
             LinkResolver.layer({ repoRoot: normalized.repoRoot }).pipe(
-              Layer.provide(Layer.mergeAll(Layer.succeed(TsProgram.TsProgram)(program), index))
+              Layer.provide(
+                Layer.mergeAll(
+                  Layer.succeed(TsProgram.TsProgram)(program),
+                  index
+                )
+              )
             )
           )
         );

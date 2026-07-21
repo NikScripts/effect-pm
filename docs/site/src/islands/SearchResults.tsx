@@ -37,27 +37,14 @@ export function SearchResults(): React.ReactElement {
   }, []);
 
   const q = query.trim();
-  const submit = (value: string): void => {
-    setQuery(value);
-    const params = new URLSearchParams();
-    if (value.trim() !== "") params.set("q", value.trim());
-    if (only !== undefined) params.set("type", only);
-    window.history.replaceState(null, "", `/search${params.size > 0 ? `?${params}` : ""}`);
-  };
 
   return (
     <div className="search-page">
-      <input
-        className="menu-search"
-        type="search"
-        value={query}
-        onChange={(e) => submit(e.target.value)}
-        placeholder="Search the docs…"
-        aria-label="Search the docs"
-        autoFocus
-      />
       {failed ? <p className="search-note">Search index unavailable.</p> : null}
       {!failed && index === undefined ? <p className="search-note">Loading search…</p> : null}
+      {index !== undefined && q === "" ? (
+        <p className="search-note">No query — open search (⌘K) and press Enter to land here.</p>
+      ) : null}
       {index !== undefined && q !== "" ? (
         only !== undefined ? (
           <section className="search-section">

@@ -85,7 +85,9 @@ export const HitRow = ({
     onClick={onNavigate}
   >
     <span className="search-hit-title">
-      <Highlight text={hit.doc.title} query={query} />
+      <span className="search-hit-name">
+        <Highlight text={hit.doc.title} query={query} />
+      </span>
       {hit.doc.kind !== undefined ? (
         <span className={`api-kind api-kind-${hit.doc.kind}`}>{hit.doc.kind}</span>
       ) : null}

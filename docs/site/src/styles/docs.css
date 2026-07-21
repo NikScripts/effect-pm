@@ -80,6 +80,17 @@ body {
   font-family: var(--font-mono);
   font-size: 0.82rem;
 }
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 66rem;
+  margin: 0 auto;
+}
+@media (min-width: 1100px) {
+  .topbar-inner { max-width: 84rem; }
+}
 .topbar .brand { color: var(--fg); font-weight: 600; margin-right: auto; text-decoration: none; }
 .topbar-actions { display: flex; align-items: center; gap: 0.3rem; }
 .icon-btn {
@@ -313,7 +324,10 @@ main {
   .topbar-actions { display: none; }
   /* the sidebar owns nav on wide screens; never show the overlay even if left checked on resize */
   .menu-cb:checked ~ .menu-overlay { display: none; }
-  main { margin: 0; padding-left: 0; padding-right: 0; }
+  main { flex: 1 1 auto; min-width: 0; margin: 0; padding-left: 0; padding-right: 0; }
+}
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  main > .prose { max-width: 46rem; margin: 0 auto; }
 }
 
 h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0.6rem 0 1rem; text-wrap: balance; }
@@ -784,9 +798,11 @@ td:first-child code { display: block; width: fit-content; margin-bottom: 0.15rem
 
 /* three columns once there's room: nav | content | this-page aside */
 @media (min-width: 1100px) {
+  /* 84rem total = 14 (nav) + 1.5 + ~53 (content, capped 56) + 2.5 + 13 (aside): the CENTER
+     absorbs the width — a fixed prose cap here sent all extra space to the right gutter. */
   .layout { max-width: 84rem; }
   main { max-width: none; display: flex; align-items: flex-start; gap: 2.5rem; }
-  .prose { flex: 1 1 auto; max-width: 46rem; }
+  .prose { flex: 1 1 auto; min-width: 0; max-width: 56rem; }
   .page-aside {
     display: block;
     flex: 0 0 13rem;
@@ -1112,7 +1128,6 @@ a.api-src:hover { color: var(--primary); }
 .search-hit-sum { display: block; font-size: 0.76rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-all { display: block; padding: 0.5rem 0.85rem; border-top: 1px solid var(--border); font-size: 0.8rem; }
 .search-note { padding: 0.5rem 0.2rem; font-size: 0.85rem; opacity: 0.75; }
-.search-page .menu-search { width: 100%; margin: 0.6rem 0 1rem; }
 /* module-page symbol groups: jump chips under the title, section headers over the rows */
 .api-group-toc {
   display: flex;
@@ -1151,11 +1166,8 @@ pre:hover > .copy-btn, pre:focus-within > .copy-btn { opacity: 1; }
 .notfound { max-width: 34rem; margin: 3rem auto; padding: 0 1.25rem; }
 .notfound-search { margin: 1.2rem 0; }
 
-/* ⌘K hint chip on the sidebar input */
+/* ⌘K hint chip (search trigger + 404 field) */
 .search-kbd {
-  position: absolute;
-  right: 0.6rem;
-  top: 0.55rem;
   padding: 0.08rem 0.4rem;
   font-family: var(--font-sans);
   font-size: 0.68rem;
@@ -1167,6 +1179,62 @@ pre:hover > .copy-btn, pre:focus-within > .copy-btn { opacity: 1; }
   pointer-events: none;
 }
 
+/* Spotlight-style search: sidebar trigger shaped like a field; centered modal over a dim backdrop */
+.search-trigger {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 15rem;
+  padding: 0.45rem 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--muted-fg, color-mix(in oklab, var(--fg) 55%, transparent));
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.search-trigger:hover { border-color: var(--primary); }
+@media (min-width: 900px) {
+  .search-trigger { display: flex; }
+}
+.search-modal .menu-search:focus,
+.search-modal .menu-search:focus-visible { outline: none; box-shadow: none; }
+.search-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 14vh 1rem 1rem;
+  background: color-mix(in oklab, var(--bg) 40%, transparent);
+  backdrop-filter: blur(3px);
+}
+.search-modal {
+  width: min(41rem, 100%);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 60px color-mix(in oklab, black 35%, transparent);
+  overflow: hidden;
+}
+.search-modal .menu-search {
+  margin: 0.75rem 0.75rem 0.25rem;
+  width: calc(100% - 1.5rem);
+}
+.search-modal-results {
+  overflow-y: auto;
+  padding: 0.25rem 0.75rem 0.75rem;
+}
+.search-modal .search-panel { border: none; background: transparent; }
+.search-modal .search-note { padding: 0.6rem 0.4rem; }
+
 /* desktop sidebar entry: tighter input, hits ellipsize into the narrow column */
 .sidebar-search { position: relative; margin-bottom: 0.9rem; }
 .sidebar-search .menu-search { padding: 0.45rem 0.7rem; font-size: 0.85rem; }
@@ -1175,3 +1243,99 @@ pre:hover > .copy-btn, pre:focus-within > .copy-btn { opacity: 1; }
 .sidebar-search .search-hit-title .api-kind { margin-left: 0.35rem; }
 .search-page .search-section { margin-bottom: 1.2rem; }
 .search-page .search-hit-sum { white-space: normal; }
+
+/* aside variants for API + search pages */
+.aside-count { color: var(--muted-fg); font-size: 0.72rem; }
+.aside-facts { margin: 0 0 0.8rem; font-size: 0.82rem; }
+.aside-facts dt {
+  margin-top: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+}
+.aside-facts dd { margin: 0.1rem 0 0; }
+.aside-facts dd a { color: var(--fg); text-decoration: none; }
+.aside-facts dd a:hover { color: var(--primary); }
+.aside-source { font-family: var(--font-mono); font-size: 0.74rem; word-break: break-all; }
+.aside-facts-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.8rem; color: var(--muted-fg); }
+.aside-facts-list kbd {
+  padding: 0.04rem 0.35rem;
+  margin-right: 0.15rem;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* package page, effect-pm layout: flagship hero cards + compact module grid */
+.api-pkg-stats { margin: -0.4rem 0 1.4rem; color: var(--muted-fg); font-size: 0.9rem; }
+.api-pkg-sub {
+  margin: 1.8rem 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+}
+.api-heroes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.api-hero {
+  display: block;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.api-hero:hover { border-color: var(--primary); }
+.api-hero-top { display: flex; justify-content: space-between; align-items: baseline; }
+.api-hero-name { font-family: var(--font-mono); font-weight: 700; font-size: 1.02rem; }
+.api-hero-desc {
+  margin: 0.35rem 0 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.api-hero-syms { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.api-hero-chip {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  background: var(--bg);
+}
+.api-hero-more { color: var(--muted-fg); }
+.api-minis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem; }
+.api-mini {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  background: var(--bg);
+}
+.api-mini:hover { border-color: var(--primary); }
+.api-mini-name {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .api-heroes { grid-template-columns: 1fr; }
+  .api-minis { grid-template-columns: repeat(2, 1fr); }
+}

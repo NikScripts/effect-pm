@@ -52,6 +52,7 @@ const ModuleInfoS = Schema.Struct({
   slug: Schema.String,
   entry: Schema.String,
   count: Schema.Number,
+  summary: Schema.optional(Schema.String),
 });
 const PackageInfoS = Schema.Struct({
   slug: Schema.String,

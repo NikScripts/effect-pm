@@ -1,5 +1,6 @@
 import { ApiSymbolCard } from "./ApiSymbol.js";
 import { PageMeta } from "./PageMeta.js";
+import { SymbolAside } from "./ApiAside.js";
 import { readSourceFile, referencedBy, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
 import { loadHighlighter } from "../lib/highlight.js";
 import { runServer } from "../lib/runtime.js";
@@ -58,7 +59,7 @@ export async function ApiSymbolPage({
         </p>
         <ApiSymbolCard s={s} fileText={fileText} sourceHtml={sourceHtml} />
         {refs.length > 0 ? (
-          <section className="api-source">
+          <section className="api-source" id="referenced-by">
             <div className="api-source-head">
               Referenced by <span className="api-source-lines">{refs.length} symbols</span>
             </div>
@@ -75,6 +76,7 @@ export async function ApiSymbolPage({
           </section>
         ) : null}
       </article>
+      <SymbolAside s={s} pkg={pkg} module={module} refsCount={refs.length} />
     </>
   );
 }
