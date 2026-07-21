@@ -21,15 +21,18 @@ WebSocket and/or IpcSocket, chosen at connect — not baked into a second copy.
    Keys `http` / `ws` / `ipc` → per-kind endpoints. Single-endpoint nodes (`{ http }`, or the current
    port / `{ url, kind }` forms) keep working — they're just the one-element case.
 
-2. **Extension — `over*` pipe combinators, deriving same-identity handles via `class extends`:**
+2. **Extension — a single `Node.withProtocol({...})` pipe combinator (owner-chosen name), deriving
+   same-identity handles via `class extends`:**
    ```ts
-   class DropletWs extends Droplet.pipe(Node.overSocket("/rpc")) {}
+   class DropletWs extends Droplet.pipe(Node.withProtocol({ ws: "/rpc" })) {}
    //   → Node<Droplet, "Http" | "WebSocket">, key STILL "droplet"
    ```
-   `Node.overHttp(url?)` / `Node.overSocket(url?)` / `Node.overIpc(path?)` add a transport, **preserve
-   the base key + Self**, and **widen the type's `Kinds`**. `url?` resolves like `protocolWebsocket`
-   already does (bare → derive from the node's host; path → same-origin/host-relative; absolute → used
-   as-is). **Same-key identity is a hard rule** — peers/lookup/fleet must see one node.
+   `Node.withProtocol(transports)` takes the **same `{ http?, ws?, ipc? }` record as the declaration**
+   (one vocabulary for transports, whether declaring or extending — no separate `over*` trio; that idea
+   was dropped). It adds the transports, **preserves the base key + Self**, and **widens the type's
+   `Kinds`**. `url`/`path` values resolve like `protocolWebsocket` (bare → derive from host; path →
+   same-origin; absolute → as-is). **Same-key identity is a hard rule** — peers/lookup/fleet see one
+   node. Confirmed: node tags are `Pipeable`, so `Droplet.pipe(...)` works.
 
 3. **Selection — `connect` auto-picks by runtime, explicit overrides win:**
    - `Droplet.pipe(connect)` → browser prefers **WebSocket** (past HTTP/1.1's ~6-conn cap, per P5),
@@ -60,8 +63,8 @@ WebSocket and/or IpcSocket, chosen at connect — not baked into a second copy.
 ## Risks / watch-items
 
 - **TS2589** with `class extends Base.pipe(over*)` — piping onto a class-based tag reopens the
-  "excessively deep" blowups that bit `withReadiness`. `over*` MUST use a shallow tag bound (the
-  `PipeableTag`-style pattern), never `NodeTag<Self, Kinds>` in the data-last position.
+  "excessively deep" blowups that bit `withReadiness`. `withProtocol` MUST use a shallow tag bound (the
+  `PipeableTag`-style pattern), never the deep node type in the data-last position (widen via shallow field-extraction of Self/ROut/kind).
 - **Integration ripple** — the single-kind `AddressedNode` + `connect` (`node.kind`/`node.url`) are
   woven through `nodeCore` / `nodeConnect`. Migrate to the endpoints record; keep single-kind
   consumers reading a resolved "primary" endpoint where a set isn't needed.
@@ -70,7 +73,7 @@ WebSocket and/or IpcSocket, chosen at connect — not baked into a second copy.
 
 1. Type model in `nodeCore` (`Node<Self, Kinds>`, endpoints record, `KindsOf`, shorthand `Tag`
    overload) → full `tsc` to measure ripple.
-2. `over*` combinators (shallow-bound, TS2589-safe).
+2. `Node.withProtocol({...})` combinator (shallow-bound, TS2589-safe widening).
 3. `connect` auto-select over the set + explicit overrides.
 4. P3 → set-membership (`nodeKindsOf`).
 5. `verifyConnection` → RPC-ping over the selected protocol.
