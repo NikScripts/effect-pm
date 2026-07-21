@@ -201,3 +201,48 @@ describe("Resource.verifyConnection", () => {
     }).pipe(Effect.provide(httpSrv), Effect.scoped, Effect.timeout(Duration.seconds(10))),
   );
 });
+
+describe("Resource.client default-on verify", () => {
+  it.live("addressed client fails Layer build when the peer is down", () =>
+    Effect.gen(function* () {
+      class Dead extends Node.Tag<Dead>()("verify/dead-client", {
+        url: "http://127.0.0.1:1/rpc",
+      }) {}
+      class Ping extends Resource.Tag<Ping>()("verify/dead-Ping", {
+        ping: Resource.effect(Schema.String),
+      }) {}
+      const exit = yield* Effect.exit(
+        Layer.build(Resource.client(Ping, Dead)).pipe(Effect.scoped),
+      );
+      expectTaggedFailure(exit, "NodeUnreachable");
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
+
+  it.live("clientVerify(false) skips the probe", () =>
+    Effect.gen(function* () {
+      class Dead extends Node.Tag<Dead>()("verify/skip-dead", {
+        url: "http://127.0.0.1:1/rpc",
+      }) {}
+      class Ping extends Resource.Tag<Ping>()("verify/skip-Ping", {
+        ping: Resource.effect(Schema.String),
+      }) {}
+      // Build succeeds; RPC would still fail later — verify was opted out.
+      yield* Layer.build(
+        Resource.client(Ping, Dead).pipe(
+          Layer.provide(Resource.clientVerify(false)),
+        ),
+      );
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
+  );
+
+  it.live("addressed client builds when the peer is up", () =>
+    onServer(httpSrv, (port) =>
+      Effect.gen(function* () {
+        class Live extends Node.Tag<Live>()("verify/live-client", {
+          url: `http://127.0.0.1:${port}/rpc`,
+        }) {}
+        yield* Layer.build(Resource.client(VQueue, Live));
+      }).pipe(Effect.scoped),
+    ).pipe(Effect.timeout(Duration.seconds(15))),
+  );
+});

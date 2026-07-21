@@ -253,6 +253,39 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
 }
 
 /**
+ * Default-on verify mode for addressed {@link client} / {@link clientHttp} / {@link socketClient}.
+ * - `"reject"` (default) — layer build runs {@link verifyConnection}; peer down → {@link NodeUnreachable}
+ * - `"status"` — probe runs but failure is ignored (connect proceeds)
+ * - `false` — skip verify
+ *
+ * Opt out: `Resource.client(Tag).pipe(Layer.provide(Resource.clientVerify(false)))`.
+ *
+ * @category models
+ * @public
+ */
+export type ClientVerifyMode = false | "reject" | "status";
+
+/**
+ * Ambient default-on client verify mode (§8.6). Defaults to `"reject"`.
+ *
+ * @category services
+ * @public
+ */
+export const ClientVerify = Context.Reference<ClientVerifyMode>(
+  "@nikscripts/effect-pm/Resource/ClientVerify",
+  { defaultValue: (): ClientVerifyMode => "reject" },
+);
+
+/**
+ * Override {@link ClientVerify} for addressed client layers.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const clientVerify = (mode: ClientVerifyMode): Layer.Layer<never> =>
+  Layer.succeed(ClientVerify, mode);
+
+/**
  * Effect's http RPC client surfaces a wrong-protocol peer as `RpcClientDefect` with these
  * fixed messages (see `effect/unstable/rpc/RpcClient`). Match the defect `_tag` + those
  * strings — the only discriminant the wire gives us.
@@ -4055,13 +4088,21 @@ const socketClient = <Self>(
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self> =>
+): Layer.Layer<Self, NodeUnreachable | UnaddressedNode> => {
   // a per-node shortcut = `connect` + {@link protocolWebsocket}. Same url resolution as
   // {@link httpClient}: `options.url` → the node's own url → `"/rpc"` (same-origin) fallback.
-  connectLayer(
+  const url = options?.url ?? node.url ?? "/rpc";
+  const wired = connectLayer(
     node,
-    protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
+    protocolWebsocket(url, options?.serialization),
   );
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      yield* applyClientVerify(node as AnyNode, { url });
+      return wired;
+    }),
+  ) as Layer.Layer<Self, NodeUnreachable | UnaddressedNode>;
+};
 
 /**
  * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
@@ -4395,6 +4436,54 @@ export function verifyConnection(
   );
 }
 
+/** Absolute dial targets we can probe at layer build (skip relative same-origin `/rpc`). */
+const isProbeableAddress = (options?: {
+  readonly url?: string;
+  readonly path?: string;
+}): boolean =>
+  options?.path !== undefined ||
+  (options?.url !== undefined &&
+    (options.url.startsWith("http://") ||
+      options.url.startsWith("https://") ||
+      options.url.startsWith("ws://") ||
+      options.url.startsWith("wss://")));
+
+/**
+ * Default-on client verify (§8.6) — `"reject"` unless {@link ClientVerify} overrides.
+ * @internal
+ */
+const applyClientVerify = (
+  node: AnyNode,
+  options?: VerifyConnectionOptions,
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode> =>
+  Effect.gen(function* () {
+    const mode = yield* ClientVerify;
+    if (mode === false) {
+      return;
+    }
+    // Relative browser same-origin URLs are not probeable from Node — skip.
+    if (
+      options !== undefined &&
+      !isProbeableAddress(options) &&
+      !isAddressedNode(node)
+    ) {
+      return;
+    }
+    if (
+      !isAddressedNode(node) &&
+      options?.url === undefined &&
+      options?.path === undefined
+    ) {
+      return;
+    }
+    const probe = verifyConnection(node, options);
+    if (mode === "status") {
+      yield* Effect.ignore(Effect.exit(probe));
+      return;
+    }
+    yield* probe;
+  });
+
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 // [extracted to Node module — was Resource.ts:4780-4795]
 
@@ -4435,14 +4524,25 @@ export function clientHttp<Self, S extends Spec>(
   options?: {
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self, InvalidHttpTarget> {
+): Layer.Layer<Self, InvalidHttpTarget | NodeUnreachable | UnaddressedNode> {
   const resolved = resolveHttpTarget(target);
   if (Result.isFailure(resolved)) {
     return invalidHttpTargetLayer(resolved.failure);
   }
-  return clientLayer(tag).pipe(
-    Layer.provide(protocolHttp(resolved.success, options?.serialization)),
+  const url = resolved.success;
+  const wired = clientLayer(tag).pipe(
+    Layer.provide(protocolHttp(url, options?.serialization)),
   );
+  // Nodeless clientHttp — probe the resolved URL (default-on verify).
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      yield* applyClientVerify(
+        { key: tag.key } as AnyNode,
+        { url },
+      );
+      return wired;
+    }),
+  ) as Layer.Layer<Self, InvalidHttpTarget | NodeUnreachable | UnaddressedNode>;
 }
 
 // ── multi-node: the fleet + peer clients ──
@@ -5334,14 +5434,14 @@ function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf> & {
     readonly [nodeSym]: AddressedNode<HSelf>;
   },
-): Layer.Layer<Self>;
+): Layer.Layer<Self, NodeUnreachable | UnaddressedNode>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
   node: AddressedNode<HSelf>,
-): Layer.Layer<Self>;
+): Layer.Layer<Self, NodeUnreachable | UnaddressedNode>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
   node: NodeKey<HSelf>,
@@ -5352,7 +5452,11 @@ function clientLayer<Self, S extends Spec>(
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   node?: NodeKey<unknown>,
-): Layer.Layer<Self, never, RpcClient.Protocol> {
+): Layer.Layer<
+  Self,
+  NodeUnreachable | UnaddressedNode,
+  RpcClient.Protocol
+> {
   const group = tag[groupSym];
   // an explicit `node` (for a nodeless tag) wins; otherwise the tag's own node, if any.
   const nodeKey = node ?? tag[nodeSym];
@@ -5398,12 +5502,26 @@ function clientLayer<Self, S extends Spec>(
   );
   // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
+  // Default-on verify (reject): peer down fails Layer build — opt out via {@link clientVerify}.
   if (isAddressedNode(nodeKey as AnyNode)) {
-    return layer.pipe(
-      Layer.provide(connectAddressed(nodeKey as AddressedNode<unknown>)),
-    ) as Layer.Layer<Self, never, RpcClient.Protocol>;
+    const addressed = nodeKey as AddressedNode<unknown>;
+    const connected = layer.pipe(Layer.provide(connectAddressed(addressed)));
+    return Layer.unwrap(
+      Effect.gen(function* () {
+        yield* applyClientVerify(addressed);
+        return connected;
+      }),
+    ) as Layer.Layer<
+      Self,
+      NodeUnreachable | UnaddressedNode,
+      RpcClient.Protocol
+    >;
   }
-  return layer as Layer.Layer<Self, never, RpcClient.Protocol>;
+  return layer as Layer.Layer<
+    Self,
+    NodeUnreachable | UnaddressedNode,
+    RpcClient.Protocol
+  >;
 }
 
 /** A wire-only instance tag for {@link clientInstances} — keyed via the covariant
