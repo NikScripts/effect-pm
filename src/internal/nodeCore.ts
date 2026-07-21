@@ -542,7 +542,7 @@ export class ListenTagNodeRequired extends Data.TaggedError(
 
 /**
  * {@link unix} only speaks Unix-domain IPC. The Node (or Tag-bound Node) was Http / WebSocket
- * — use {@link listen} for those transports.
+ * — use {@link http} / {@link ws} for those transports.
  *
  * @public
  */
@@ -556,6 +556,26 @@ export class UnixListenRequiresIpc extends Data.TaggedError(
     return (
       `Node.unix requires an IpcSocket Node (Unix-domain path); ` +
       `"${this.node}" is ${this.kind}. Use Node.http / Node.ws (or httpServer / wsServer) for those transports.`
+    );
+  }
+}
+
+/**
+ * {@link http} only speaks local Http. The Node (or Tag-bound Node) was IpcSocket / WebSocket
+ * (or a non-loopback URL) — use {@link unix} / {@link ws}, or {@link httpServer} for custom binds.
+ *
+ * @public
+ */
+export class HttpListenRequiresHttp extends Data.TaggedError(
+  "HttpListenRequiresHttp",
+)<{
+  readonly node: string;
+  readonly kind: string;
+}> {
+  override get message() {
+    return (
+      `Node.http requires a local Http Node (loopback url or address-less mint); ` +
+      `"${this.node}" is ${this.kind}. Use Node.unix / Node.ws (or httpServer / wsServer) for other transports.`
     );
   }
 }

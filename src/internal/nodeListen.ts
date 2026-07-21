@@ -20,6 +20,7 @@ import {
   failListenTagNode,
   failUseProtocol,
   isDynamicInstanceNode,
+  isHttpListenNode,
   isIpcListenNode,
   isPrototypeNode,
   isResourceTagArg,
@@ -29,7 +30,6 @@ import {
   type ServesForCatalog,
 } from "./nodeListenCommon"
 import {
-  httpServer,
   wsServer,
   type HttpServerOptions,
 } from "./nodeHttpServer"
@@ -110,6 +110,12 @@ export function listen(
         `Tag "${tagKey}" is bound to an IpcSocket Node`,
       );
     }
+    if (isHttpListenNode(bound as AnyNode)) {
+      return failUseProtocol(
+        "http",
+        `Tag "${tagKey}" is bound to an Http Node`,
+      );
+    }
     const serveErased = Resource.serve as unknown as (
       tag: Resource.PipeableTag,
       impl: unknown,
@@ -136,16 +142,19 @@ export function listen(
       `node "${node.key}" needs IpcSocket bind`,
     );
   }
-  // Http / WebSocket only until Node.http / Node.ws (Phase B/C).
-  return withListenNode(node, httpWsTransport(node, list, options));
+  if (isHttpListenNode(node)) {
+    return failUseProtocol("http", `node "${node.key}" needs Http bind`);
+  }
+  // WebSocket only until Node.ws (Phase C).
+  return withListenNode(node, wsTransport(node, list, options));
 }
 
 
 /**
- * Http / WebSocket bind for neutral {@link listen} only (Phase A interim).
- * Ipc is {@link unix} → {@link ipcBind}. @internal
+ * WebSocket bind for neutral {@link listen} only (Phase B interim).
+ * Http is {@link http}; ipc is {@link unix}. @internal
  */
-const httpWsTransport = (
+const wsTransport = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
@@ -165,9 +174,6 @@ const httpWsTransport = (
         };
   if (node.kind === "WebSocket") {
     return wsServer(list, httpOpts);
-  }
-  if (node.kind === "Http") {
-    return httpServer(list, httpOpts);
   }
   return unaddressedLayer(node.key);
 };

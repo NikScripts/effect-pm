@@ -8,6 +8,7 @@ import * as Resource from "../Resource"
 import {
   AnyNode,
   catalogSym,
+  HttpListenRequiresHttp,
   ListenNode,
   ListenTagNodeRequired,
   ListenUseProtocol,
@@ -102,6 +103,36 @@ export const unixRequiresIpcLayer = (
   kind: string,
 ): Layer.Layer<never, UnixListenRequiresIpc> =>
   failLayer(new UnixListenRequiresIpc({ node, kind }));
+
+/** Fail a Layer build with {@link HttpListenRequiresHttp}. @internal */
+export const httpRequiresHttpLayer = (
+  node: string,
+  kind: string,
+): Layer.Layer<never, HttpListenRequiresHttp> =>
+  failLayer(new HttpListenRequiresHttp({ node, kind }));
+
+/**
+ * Nodes that are not Http for {@link http} (IpcSocket / WebSocket / ws urls / unix paths).
+ * @internal
+ */
+export const isNonHttpNode = (node: AnyNode): boolean =>
+  node.kind === "IpcSocket" ||
+  node.kind === "WebSocket" ||
+  typeof node.path === "string" ||
+  (typeof node.url === "string" &&
+    (node.url.startsWith("ws://") || node.url.startsWith("wss://")));
+
+/** Nodes that need {@link http} (Http kind / http(s) url). @internal */
+export const isHttpListenNode = (node: AnyNode): boolean => {
+  if (isNonHttpNode(node)) return false;
+  if (node.kind === "Http") return true;
+  if (typeof node.url === "string") {
+    return (
+      node.url.startsWith("http://") || node.url.startsWith("https://")
+    );
+  }
+  return false;
+};
 
 /** True when `node` was built with {@link Node}.Prototype. @internal */
 export const isPrototypeNode = (node: unknown): boolean =>

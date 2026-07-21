@@ -24,6 +24,7 @@ import {
   type ServeLayerList,
   type ServesForCatalog,
 } from "./nodeListenCommon"
+import { http } from "./nodeHttp"
 import { unix } from "./nodeUnix"
 
 /**
@@ -130,6 +131,9 @@ export const Prototype = <Self, ROut = never>(
         // Explicit type args — avoid re-inferring `Serves` from the already-proven
         // intersection (nested `ServesForCatalog` would otherwise fail to unify).
         const node = instance(suffix);
+        if (options?.kind === "Http") {
+          return http<typeof node, Serves>(node, serves, listenOptions);
+        }
         return unix<typeof node, Serves>(node, serves, listenOptions);
       },
   });

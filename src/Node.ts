@@ -6,8 +6,9 @@
  * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
- * - {@link listen} — neutral spine (Http/WS interim only; **no ipc** — use {@link unix})
+ * - {@link listen} — neutral spine (WS interim only; **no ipc/http** — use {@link unix} / {@link http})
  * - {@link unix} — IpcSocket listen + Lookup batteries (nameless / Tag+impl / node+serves)
+ * - {@link http} — local Http listen + Lookup batteries (localhost bind / nameless / Tag+impl)
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
@@ -26,6 +27,7 @@ export {
   ListenTagNodeRequired,
   ListenUseProtocol,
   UnixListenRequiresIpc,
+  HttpListenRequiresHttp,
   UnaddressedNode,
   NodeUnreachable,
   ProtocolKindMismatch,
@@ -43,6 +45,7 @@ export type {
 } from "./internal/nodeCore"
 export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"
+export { http } from "./internal/nodeHttp"
 export { httpServer, wsServer } from "./internal/nodeHttpServer"
 export type { HttpServerOptions } from "./internal/nodeHttpServer"
 export { ipcServer } from "./internal/nodeIpcServer"

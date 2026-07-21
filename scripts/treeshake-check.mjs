@@ -80,11 +80,15 @@ const cases = [
     member: "Tag",
   },
   {
-    // Neutral `listen` must not retain `unix` (mint/claim/bind). Http servers may still
-    // soft-load Lookup (directory advertise) which imports `ipcServer` — gated separately later.
+    // Neutral `listen` must not retain protocol batteries (`unix` / `http`).
+    // Http *Server* may still soft-load Lookup (directory advertise) — gated later.
     name: "Node",
     entry: "src/Node.ts",
-    engine: ["src/internal/nodeUnix.ts", "src/internal/nodePrototype.ts"],
+    engine: [
+      "src/internal/nodeUnix.ts",
+      "src/internal/nodeHttp.ts",
+      "src/internal/nodePrototype.ts",
+    ],
     member: "listen",
   },
 ];
