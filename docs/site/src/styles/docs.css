@@ -1484,47 +1484,63 @@ a.api-src:hover {
 
 /* API namespace page: a light list of symbol rows (full detail lives on each symbol's own page) */
 .api-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin-top: 1.2rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+@media (min-width: 900px) {
+  .api-rows { grid-template-columns: 1fr 1fr; }
 }
 .api-row {
-  display: grid;
-  grid-template-columns: minmax(9rem, auto) auto 1fr;
-  align-items: baseline;
-  gap: 0.6rem;
-  padding: 0.42rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: color-mix(in oklab, var(--primary) 55%, transparent);
+  border-radius: 8px;
   text-decoration: none;
   color: var(--fg);
+  background: var(--bg);
+  min-width: 0;
 }
-.api-row:hover {
-  background: var(--panel);
-  border-color: var(--border);
+.api-row[data-kind="type"],
+.api-row[data-kind="interface"] { border-left-color: color-mix(in oklab, var(--should) 55%, transparent); }
+.api-row[data-kind="const"] { border-left-color: color-mix(in oklab, var(--may) 60%, transparent); }
+.api-row:hover { background: var(--panel); border-color: var(--primary); border-left-color: var(--primary); }
+.api-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
 }
 .api-row-name {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--primary);
-  white-space: nowrap;
-}
-.api-row-sum {
-  color: var(--muted-fg);
-  font-size: 0.85rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width: 640px) {
-  .api-row {
-    grid-template-columns: 1fr auto;
-  }
-  .api-row-sum {
-    display: none;
-  }
+.api-row-sum {
+  color: var(--muted-fg);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* group headers pin under the topbar while their section scrolls */
+.api-group-title {
+  position: sticky;
+  top: 3.1rem;
+  z-index: 5;
+  background: color-mix(in oklab, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
 }
 
 /* long-press-to-copy: toast confirmation for the twoslash type popups */
