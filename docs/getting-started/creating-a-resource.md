@@ -143,5 +143,5 @@ Serve or client the same Tag without rewriting the program body. Only the Layer 
 That tour is [Managing Layers](/docs/managing-layers).
 
 **Sharp edge.** A browser dashboard that opens many live streams hits the browser HTTP connection
-cap if you pair `httpServer` with `clientHttp`. Serve with `Resource.wsServer` and connect with
+cap if you pair `httpServer` with `connect(tag, protocolHttp(port))`. Serve with `Resource.wsServer` and connect with
 `Resource.ws`. Same Tag, different wire. Details live on Managing Layers.

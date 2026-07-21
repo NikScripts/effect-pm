@@ -496,7 +496,7 @@ This is the payoff of the tag/layer split. The **tag is the contract**; the
 Provide `QueueResource.layer` and the queue is local. Provide
 `QueueResource.serve` instead and the worker runs behind an RPC server, its
 handlers mounted for callers. A *different* process then provides
-`Resource.client(Tag)` (or `Resource.clientHttp(Tag, port)` over HTTP), and the
+`Resource.client(Tag)` (or `Resource.connect(Tag, Resource.protocolHttp(port))` over HTTP), and the
 **same `yield* Tag` code** drives the remote queue — `add`, `size`, `events`,
 `pause`, all of it — as if it were in-process. The handle's `Requirements` param is
 the only tell: `never` locally, the transport for a client.

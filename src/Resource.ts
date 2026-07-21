@@ -52,7 +52,6 @@ import {
   Duration,
   Effect,
   Fiber,
-  Result,
   Function as Fn,
   Layer,
   Match,
@@ -100,13 +99,11 @@ import {
   AnyNode,
   bindNodeStore,
   Endpoints,
-  InvalidHttpTarget,
   isAddressedNode,
   ListenNode,
   NodeKey,
   NodeUnreachable,
   ProtocolKind,
-  resolveHttpTarget,
   Tag as makeNode,
   UnaddressedNode,
 } from "./internal/nodeCore";
@@ -114,7 +111,6 @@ import {
   bindNodeProtocolBuilders,
   connectAddressed,
   connectLayer,
-  invalidHttpTargetLayer,
   unaddressedLayer,
 } from "./internal/nodeConnect";
 // Node listen/connect used only inside functions via dynamic import where needed;
@@ -4162,55 +4158,7 @@ export const verifyConnection = (
     : probeHttpReachable(url, timeout).pipe(fail);
 };
 
-/** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 // [extracted to Node module — was Resource.ts:4780-4795]
-
-/**
- * The single-resource client mirror of {@link httpServer}. Wire a served resource `tag` to a remote
- * over **http** and get a ready client `Layer` in one call — {@link client}`(tag)` plus the
- * batteries-included transport (Fetch + ndjson serialization), bundled.
- *
- * The `target` is a **port** (`3009` or `":3009"` → `http://localhost:3009/rpc`) for a runtime on the
- * same machine, or a full **url** for one across the network. A bad target fails the Layer with
- * {@link InvalidHttpTarget} (not a sync throw):
- *
- * ```ts
- * Effect.provide(program, Resource.clientHttp(Emails, 3001));                       // same machine
- * Effect.provide(program, Resource.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
- * ```
- *
- * @category clients
- * @public
- */
-export function clientHttp<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  target: number | `:${number}` | `http://${string}` | `https://${string}`,
-  options?: {
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self>;
-export function clientHttp<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  target: number | string,
-  options?: {
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self, InvalidHttpTarget>;
-export function clientHttp<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
-  target: number | string,
-  options?: {
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self, InvalidHttpTarget> {
-  const resolved = resolveHttpTarget(target);
-  if (Result.isFailure(resolved)) {
-    return invalidHttpTargetLayer(resolved.failure);
-  }
-  return clientLayer(tag).pipe(
-    Layer.provide(protocolHttp(resolved.success, options?.serialization)),
-  );
-}
 
 // ── multi-node: the fleet + peer clients ──
 

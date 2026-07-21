@@ -72,7 +72,7 @@ const counterImpl = Effect.gen(function* () {
 // ---cut---
 const inProcess = Resource.layer(Counter, counterImpl) // run it in this runtime
 const served = Resource.serve(Counter, counterImpl)    // expose it over HTTP
-const client = Resource.clientHttp(Counter, 4000)      // reach one running elsewhere (server / CLI)
+const client = Resource.connect(Counter, Resource.protocolHttp(4000))      // reach one running elsewhere (server / CLI)
 // A browser dashboard opens many live streams — serve with Resource.wsServer and connect with
 // Resource.ws (WebSocket), or an HTTP client starves at the browser's connection cap.
 // See Managing Layers for the full set of provide/serve/client layers.

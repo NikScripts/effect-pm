@@ -55,7 +55,7 @@ served tag is self-describing and a client knows where to dial.
 
 ``` ts
 // One resource by port or url — batteries included (transport + client in one call):
-program.pipe(Effect.provide(Resource.clientHttp(Jobs, 3000)))
+program.pipe(Effect.provide(Resource.connect(Jobs, Resource.protocolHttp(3000))))
 
 // Or wire a Node's transport once and read any resource bound to it:
 const transport = Resource.ws(JobsNode, { url: "/rpc" }) // WebSocket (browser)
@@ -113,7 +113,7 @@ Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …)
 
 | | Server | Client | Peers |
 |---|---|---|---|
-| **HTTP** (default) | `httpServer([...])` | `http(node)` / `clientHttp(tag, port)` | default |
+| **HTTP** (default) | `httpServer([...])` | `http(node)` / `connect(tag, protocolHttp(port))` | default |
 | **WebSocket** (browser, many streams) | `wsServer([...])` | `ws(node)` | `layerPeerProtocol(protocolWebsocket)` |
 
 Pick per **deployment**, not per call — every side of one wire must agree. In-process resources

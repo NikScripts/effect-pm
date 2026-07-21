@@ -89,7 +89,7 @@ const scheduler = Process.layer(Digest, {
     yield* emails.add(email)                // add(email: EmailJob): Effect<void>
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(Layer.provide(Resource.clientHttp(Emails, 3001)))
+}).pipe(Layer.provide(Resource.connect(Emails, Resource.protocolHttp(3001))))
 // scheduler: Layer — the scheduler runtime
 ```
 
@@ -272,7 +272,7 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
 // ---cut---
 Resource.layer(Counter, counterImpl)                        // in-process
 Resource.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
-Resource.clientHttp(Counter, 4000)                          // reached from another runtime
+Resource.connect(Counter, Resource.protocolHttp(4000))                          // reached from another runtime
 ```
 
 And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,
