@@ -22,6 +22,7 @@ export function Footer(): React.ReactElement {
             <span className="site-footer-heading">Docs</span>
             <a href="/api">API Reference</a>
             <a href="/docs/glossary">Glossary</a>
+            <a href="/releases">Releases</a>
           </div>
           <div className="site-footer-col">
             <span className="site-footer-heading">Project</span>

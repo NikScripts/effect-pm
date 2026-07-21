@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { navGroups, glossaryEntries } from "../lib/docs-content.js";
 import { NavBar } from "../components/NavBar.js";
 import { GroupedNav } from "../components/GroupedNav.js";
+import { ContextualNav } from "../islands/ContextualNav.js";
 import { Footer } from "../components/Footer.js";
 import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
@@ -12,6 +13,46 @@ import { CodeCopy } from "../islands/CodeCopy.js";
 // so adding a `.dj` file updates the nav with no edit here.
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const groups = await navGroups();
+  // Standards is its own book: the desktop sidebar swaps to its chapters while you're inside
+  // (ContextualNav), and the regular sidebar carries a single entry link instead of the group.
+  const standardsGroup = groups.find((g) => g.label === "Standards");
+  const mainGroups = groups
+    .filter((g) => g.label !== "Standards")
+    .concat(
+      standardsGroup !== undefined && standardsGroup.items[0] !== undefined
+        ? [
+            {
+              label: "Standards",
+              items: [
+                {
+                  slug: "",
+                  href: standardsGroup.items[0].href,
+                  title: "Standards",
+                },
+              ],
+              lone: true,
+            },
+          ]
+        : []
+    );
+  const standardsGroups =
+    standardsGroup !== undefined
+      ? [
+          {
+            label: "Docs",
+            items: [
+              {
+                slug: "",
+                href: "/",
+                title: "← All docs",
+              },
+            ],
+            lone: true,
+          },
+          standardsGroup,
+        ]
+      : groups;
+  const standardsHrefs = standardsGroup?.items.map((i) => i.href) ?? [];
   return (
     <>
       {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
@@ -25,7 +66,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <NavBar groups={groups} />
       <div className="layout">
         <aside className="sidebar">
-          <GroupedNav groups={groups} />
+          <ContextualNav
+            main={mainGroups}
+            standards={standardsGroups}
+            standardsHrefs={standardsHrefs}
+          />
         </aside>
         <main>{children}</main>
       </div>
