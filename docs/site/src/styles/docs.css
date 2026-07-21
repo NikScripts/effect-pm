@@ -2010,3 +2010,14 @@ pre:focus-within > .copy-btn {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* /releases — one section per version, anchored */
+.release { margin-bottom: 2.4rem; }
+.release-version {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+.release ul { padding-left: 1.2rem; }
+.release li { margin: 0.35rem 0; }

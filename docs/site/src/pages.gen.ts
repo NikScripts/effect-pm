@@ -19,6 +19,8 @@ import type { getConfig as File_ApiIndex_getConfig } from './pages/api/index';
 import type { getConfig as File_DocsChapter_getConfig } from './pages/docs/[chapter]';
 // prettier-ignore
 import type { getConfig as File_Index_getConfig } from './pages/index';
+// prettier-ignore
+import type { getConfig as File_Releases_getConfig } from './pages/releases';
 
 // prettier-ignore
 type Page =
@@ -30,6 +32,7 @@ type Page =
 | ({ path: '/api' } & GetConfigResponse<typeof File_ApiIndex_getConfig>)
 | ({ path: '/docs/[chapter]' } & GetConfigResponse<typeof File_DocsChapter_getConfig>)
 | ({ path: '/' } & GetConfigResponse<typeof File_Index_getConfig>)
+| ({ path: '/releases' } & GetConfigResponse<typeof File_Releases_getConfig>)
 | { path: '/search'; render: 'static' };
 
 // prettier-ignore

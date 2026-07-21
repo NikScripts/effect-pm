@@ -10,7 +10,10 @@ export interface NavGroup {
   readonly href?: string;
   // Direct route links as GROUP CHILDREN (label + href, no doc slugs) — for a collapsible group
   // over non-doc routes, e.g. the API Reference group's package links.
-  readonly links?: ReadonlyArray<{ readonly label: string; readonly href: string }>;
+  readonly links?: ReadonlyArray<{
+    readonly label: string;
+    readonly href: string;
+  }>;
   // A standalone page, not a group: rendered as a lone top-level link (no header, no collapse).
   // Use for a single-page entry that doesn't belong in a collapsible section.
   readonly lone?: boolean;
@@ -24,7 +27,13 @@ export const nav: ReadonlyArray<NavGroup> = [
   },
   {
     label: "Resources",
-    slugs: ["creating-a-resource", "contracts", "fleets-and-peers", "readiness", "configuration"],
+    slugs: [
+      "creating-a-resource",
+      "contracts",
+      "fleets-and-peers",
+      "readiness",
+      "configuration",
+    ],
   },
   {
     label: "Guides",
@@ -43,7 +52,12 @@ export const nav: ReadonlyArray<NavGroup> = [
   {
     // Tentative group name — "Observe and Control" per the outline, may change.
     label: "Observe and Control",
-    slugs: ["observation-and-control", "dashboard", "react-components", "tui-cli"],
+    slugs: [
+      "observation-and-control",
+      "dashboard",
+      "react-components",
+      "tui-cli",
+    ],
   },
   {
     // A collapsible group over the API routes: our own package first, then the all-packages index.
@@ -56,6 +70,11 @@ export const nav: ReadonlyArray<NavGroup> = [
   {
     label: "Examples",
     slugs: ["examples"],
+    lone: true,
+  },
+  {
+    label: "Releases",
+    href: "/releases",
     lone: true,
   },
   {
