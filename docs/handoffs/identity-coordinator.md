@@ -1,8 +1,8 @@
 # Identity coordinator — exclusive brain + many hands
 
-**Status:** **M4 + M5 Eng’d** (2026-07-21). M6 sugar still later.  
+**Status:** **M4–M6 Eng’d** (2026-07-21) — identity coordinator v1 complete.  
 **Work branch:** `cursor/logs-store-followers-plan-906e` — sync tip with `integration`.  
-**Related:** [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) (S1 identity, Lookup, directory) · [`owner-decisions.md`](./owner-decisions.md) · shipped `Resource.identity` / `Lookup.Identity` / `Lookup.Directory` / `Lookup.Advice`.
+**Related:** [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) · [`owner-decisions.md`](./owner-decisions.md) · guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md).
 
 ---
 
@@ -40,7 +40,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | **M3** | **Pattern** | One brain (identity) + many hands (directory / nameless / `Prototype` / `distributed`). Taught as the fleet recipe. |
 | **M4** | **v1 Eng spine** | **Identity liveness** (dead winner → claim releasable / replaceable) + **coordinator+workers example**. |
 | **M5** | **Placement advice** | **Eng’d** — `Lookup.Advice` last-write prefer; `lookupClient` honors live preferred `nodeKey` before D4 `pick`. Not a separate Manager type. |
-| **M6** | **Sugar** | After the pattern is proven — recipes / clearer `IdentitySelfRequired` remediation; no magic baked into every listen. |
+| **M6** | **Sugar** | **Eng’d** — recipe guide + `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired`; Lookup stays pipe-only. |
 
 **Rejected / deferred:**
 
@@ -64,6 +64,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | Identity claim liveness (dead winner → replaceable) + same-dial refresh | **Eng’d** (M4 slice 1) |
 | Coordinator+workers form (`node-identity-coordinator`) | **Eng’d** (M4 slice 2) |
 | `Lookup.Advice` + `lookupClient` honors prefer | **Eng’d** (M5) |
+| Recipe guide + `Lookup.prefer*` + IdentitySelfRequired clarity | **Eng’d** (M6) |
 
 ---
 
@@ -110,9 +111,12 @@ yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
 Resource.lookupClient(Worker) // honors advice; pick only if absent/stale
 ```
 
-### Slice 4 — Sugar (**M6**, last)
+### Slice 4 — Sugar (**M6**, last) — **Eng’d**
 
-Documented recipes; optional helpers after M4–M5. Lookup stays pipe-only on listens (existing invariant).
+- Guide: [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md)
+- Helpers: `Lookup.prefer(tag\|key, nodeKey)`, `Lookup.preferEntry(resourceKey, entry)`
+- Clearer `IdentitySelfRequired` message (Lookup pipe + dialable self)
+- Lookup stays pipe-only on listens (no magic in listen options)
 
 ---
 
@@ -141,19 +145,19 @@ class Worker extends Resource.Tag<Worker>()("fleet/Worker", {
 | 1 | Identity liveness | **Eng’d** |
 | 2 | Coordinator+workers example | **Eng’d** |
 | 3 | Placement advice | **Eng’d** |
-| 4 | Sugar | After 1–3 |
+| 4 | Sugar | **Eng’d** |
 
 **Agent:** work on `cursor/logs-store-followers-plan-906e`; sync so work branch and `integration` share the same tip. **No PRs** unless owner asks.
 
 ---
 
-## Success criteria (v1 = slices 1–3)
+## Success criteria (v1 = slices 1–4) — **met**
 
 - Kill winner process → next claimant can win the identity key without restarting Lookup by hand.
 - Example runs: one Router, two Workers, enqueue reaches the **advised** worker.
-- `Lookup.advise` + bare `lookupClient` dials prefer when live.
-- No `Resource.Manager` API; docs say collapse + this handoff.
-- Typecheck + identity / lookup / advice tests green; changeset when public behavior ships.
+- `Lookup.prefer` / `advise` + bare `lookupClient` dials prefer when live.
+- Recipe guide + IdentitySelfRequired remediation; no `Resource.Manager`.
+- Typecheck + identity / lookup / advice tests green; changesets on tip.
 
 ---
 

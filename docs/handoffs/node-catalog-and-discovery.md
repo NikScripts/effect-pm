@@ -787,7 +787,7 @@ Owner rethink: maybe **singletons and managers are the same thing** — identity
 
 Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); managed `R`s = **type params** (+ optional enforce at impl). Drop required value-level manages list unless a later Eng need appears.
 
-**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng via [`identity-coordinator.md`](./identity-coordinator.md). **M4+M5 Eng’d** (liveness + `Lookup.Advice` + coordinator); next = sugar (M6).
+**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng via [`identity-coordinator.md`](./identity-coordinator.md). **M4–M6 Eng’d** (v1 complete); guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md).
 
 ### `serve` naming (C5 — **LOCKED**)
 
@@ -856,3 +856,4 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Resource.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
 - **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/resource/node-identity-coordinator.ts`.
 - **2026-07-21** — **M5 Eng’d:** `Lookup.Advice` (`advise` / `clear` / `preferred`); `lookupClient` honors live prefer before D4 `pick`.
+- **2026-07-21** — **M6 Eng’d:** recipe guide + `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired`.

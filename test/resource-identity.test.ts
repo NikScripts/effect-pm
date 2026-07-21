@@ -28,6 +28,13 @@ describe("Resource.identity", () => {
     expect(Resource.isIdentity(Mail)).toBe(true);
   });
 
+  it("IdentitySelfRequired message points at Lookup + dialable self", () => {
+    const err = new Resource.IdentitySelfRequired({ tag: "app/Mail" });
+    expect(err.message).toContain("Lookup.Identity");
+    expect(err.message).toContain("dialable self");
+    expect(err.message).toContain("Lookup.layer");
+  });
+
   it("rejects multi-node distributed on an identity Tag (S1)", () => {
     class A extends Node.Tag<A>()("identity/multi-a", {
       path: "/tmp/identity-multi-a.sock",

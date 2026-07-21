@@ -29,10 +29,7 @@ describe("Lookup Advice", () => {
       const ctx = Context.merge(server, client);
 
       yield* Effect.gen(function* () {
-        const set = yield* Lookup.advise({
-          resourceKey: Jobs.key,
-          prefer: "worker-a",
-        });
+        const set = yield* Lookup.prefer(Jobs, "worker-a");
         expect(set).toBe("worker-a");
 
         const first = yield* Lookup.preferred(Jobs.key);
@@ -41,10 +38,7 @@ describe("Lookup Advice", () => {
           expect(first.value).toBe("worker-a");
         }
 
-        yield* Lookup.advise({
-          resourceKey: Jobs.key,
-          prefer: "worker-b",
-        });
+        yield* Lookup.preferEntry(Jobs.key, { nodeKey: "worker-b" });
         const second = yield* Lookup.preferred(Jobs.key);
         expect(second._tag).toBe("Some");
         if (second._tag === "Some") {

@@ -65,10 +65,7 @@ const program = Effect.gen(function* () {
   )
 
   const preferB = Context.get(workerB, Node.ListenNode).key
-  yield* Lookup.advise({
-    resourceKey: Worker.key,
-    prefer: preferB,
-  }).pipe(Effect.provide(lookupCtx))
+  yield* Lookup.prefer(Worker, preferB).pipe(Effect.provide(lookupCtx))
 
   // Bare lookupClient — M5 honors advice (no D4 pick needed).
   const workerCtx = yield* Layer.build(

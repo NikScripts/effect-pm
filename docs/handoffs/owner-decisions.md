@@ -23,6 +23,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - Algorithms stay app-owned (identity Router decides prefer).
 - **Supervisor impact:** Eng on tip. SSOT [`identity-coordinator.md`](./identity-coordinator.md).
 
+## 2026-07-21 — Identity coordinator sugar (M6) Eng’d
+
+- **Owner said:** “Keep it up” (after M5 tip).
+- **Chose (Eng):** Recipe guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md); lean helpers `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired` message; **no** magic baked into protocol listens (Lookup stays pipe-only).
+- **Supervisor impact:** Identity coordinator v1 (M1–M6) complete on tip.
+
 ## 2026-07-21 — Protocol listen siblings stay in sync
 
 - **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.

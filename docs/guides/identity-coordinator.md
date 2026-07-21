@@ -1,0 +1,77 @@
+{#identity-coordinator title="Identity coordinator" status="stable" done="api" appliesTo=all}
+# Identity coordinator — one brain, many hands
+
+Exclusive resources claim at Lookup. Workers advertise. The winning brain can publish
+placement advice. Clients dial through Lookup — no `Resource.Manager`.
+
+Handoff SSOT: [`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md).
+Runnable form: [`examples/forms/resource/node-identity-coordinator.ts`](../../examples/forms/resource/node-identity-coordinator.ts).
+
+## The picture
+
+```text
+Lookup
+  Identity  →  Router (only one live winner)
+  Directory →  Worker#w1, Worker#w2, …
+  Advice    →  prefer Worker#w2 right now
+```
+
+Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers become clients of
+the winner; hands come and go; Lookup stays the truth.
+
+## Recipe
+
+### 1. Stamp the brain
+
+```ts
+class Router extends Resource.Tag<Router>()("fleet/Router", {
+  enqueue: Resource.effectFn({ job: Job }, Schema.Void),
+}).pipe(Resource.identity) {}
+```
+
+`Resource.identity` makes `layer` / `serve` claim `fleet/Router` at Lookup. First live
+claimant serves; later claimants dial the winner. Dead winners are replaceable (NodeStatus
+ping).
+
+### 2. Hold Lookup; pipe it on listens
+
+```ts
+yield* Layer.build(Lookup.layerOptions({ path: lookupSock, unlink: true }))
+const lookup = Lookup.clientOptions({ path: lookupSock })
+
+Node.unix(RouterNode, [Resource.serve(Router, impl)]).pipe(Layer.provide(lookup))
+Node.unix([Resource.serve(Worker, impl)]).pipe(Layer.provide(lookup)) // advertise
+```
+
+Lookup stays **pipe-only** on listens — never bake `lookupPath` into listen options.
+
+### 3. Publish prefer (optional, M5)
+
+```ts
+const listen = Context.get(workerBCtx, Node.ListenNode)
+yield* Lookup.prefer(Worker, listen.key) // sugar over Lookup.advise
+```
+
+Last write wins. Stale prefer (node not in `nodesServing`) is ignored.
+
+### 4. Dial hands
+
+```ts
+Resource.lookupClient(Worker) // honors live Advice; else D4 { pick } / fail-closed
+// or
+Resource.lookupClient(Worker, { pick: "first" })
+```
+
+## When identity fails closed
+
+`IdentitySelfRequired` means the Tag is identity-stamped but the layer graph is missing
+**Lookup.Identity** and/or a **dialable self**:
+
+1. Provide `Lookup.client` / `Lookup.layer` / `Lookup.layerOptions` (pipe on the listen or layer).
+2. Give the Tag a dialable endpoint — `Node.unix` / `http` / `ws` listen (ListenNode) or
+   `Resource.nodes([SomeNode])` / Tag-bound `{ path }` Node.
+
+## What not to build
+
+- Do **not** invent `Resource.Manager` — identity + directory + advice is the pattern.
+- Do **not** put Lookup bootstrap inside protocol listen options — pipe `Layer.provide`.

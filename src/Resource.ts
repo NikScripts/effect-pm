@@ -2189,6 +2189,10 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
  * Tag-bound (`nodes` / `{ node }`) and/or the {@link ListenNode} from {@link Node.unix} /
  * {@link Node.http} / {@link Node.ws} (including minted address-less Nodes).
  *
+ * Remediation: (1) `Layer.provide(Lookup.client / layer / layerOptions)` on the listen or
+ * resource layer; (2) give the Tag a dialable self via protocol listen or
+ * {@link nodes}`([Node])`. Recipe: `docs/guides/identity-coordinator.md`.
+ *
  * @category errors
  * @public
  */
@@ -2198,7 +2202,8 @@ export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired
   override get message() {
     return (
       `Identity "${this.tag}" needs Lookup.Identity and a dialable self ` +
-      `(listen or Resource.nodes([Node])). Provide Lookup.client / Lookup.layer.`
+      `(Node.unix/http/ws listen or Resource.nodes([Node])). ` +
+      `Pipe Layer.provide(Lookup.client) / Lookup.layer / Lookup.layerOptions.`
     );
   }
 }

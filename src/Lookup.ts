@@ -378,6 +378,43 @@ export const advise = (input: {
   );
 
 /**
+ * Prefer `nodeKey` when dialing `resource` (Tag or key string).
+ * Coordinator sugar over {@link advise} — algorithms stay app-owned.
+ *
+ * ```ts
+ * yield* Lookup.prefer(Worker, "fleet/Worker#w2")
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const prefer = (
+  resource: string | { readonly key: string },
+  nodeKey: string,
+): Effect.Effect<string, never, Advice> =>
+  advise({
+    resourceKey: typeof resource === "string" ? resource : resource.key,
+    prefer: nodeKey,
+  });
+
+/**
+ * Prefer a directory row's `nodeKey` for `resourceKey`.
+ *
+ * ```ts
+ * const rows = yield* directory.nodesServing(...)
+ * yield* Lookup.preferEntry(Worker.key, rows[0]!)
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const preferEntry = (
+  resourceKey: string,
+  entry: { readonly nodeKey: string },
+): Effect.Effect<string, never, Advice> =>
+  advise({ resourceKey, prefer: entry.nodeKey });
+
+/**
  * Clear placement advice for a resource key (requires {@link Advice} in context).
  *
  * @category constructors
