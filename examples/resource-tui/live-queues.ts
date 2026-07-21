@@ -31,7 +31,7 @@ import * as Store from "../../src/Store";
 import * as Node from "../../src/Node";
 
 /** Node log key for the local TUI fleet — pairs with `TuiNode.logs` on {@link TuiStore}. */
-class TuiNode extends Node.Tag<TuiNode>("acme/tui") {}
+class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 

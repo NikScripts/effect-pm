@@ -29,7 +29,7 @@ it("protocolHttp DIES in a browser context (window defined)", () => {
 
 it("the browser guard covers httpClient (built on protocolHttp)", () => {
   setBrowser();
-  class Edge extends Node.Tag<Edge>("guard/Edge", "http://x/rpc") {}
+  class Edge extends Node.Tag<Edge>()("guard/Edge", "http://x/rpc") {}
   return buildLayer(Edge.pipe(Node.connectHttp)).then((exit) => {
     expect(Exit.isFailure(exit)).toBe(true);
     expect(JSON.stringify(exit)).toContain("HttpClientInBrowser");
@@ -38,7 +38,7 @@ it("the browser guard covers httpClient (built on protocolHttp)", () => {
 
 it("socketClient is NOT guarded — it's the correct browser transport", () => {
   setBrowser();
-  class Hub extends Node.Tag<Hub>("guard/Hub", { url: "wss://x/rpc" }) {}
+  class Hub extends Node.Tag<Hub>()("guard/Hub", { url: "wss://x/rpc" }) {}
   return buildLayer(Resource.socketClient(Hub, { url: "wss://x/rpc" })).then((exit) =>
     expect(Exit.isSuccess(exit)).toBe(true),
   );

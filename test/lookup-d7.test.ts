@@ -92,7 +92,7 @@ describe("Resource.lookupClient", () => {
       const lookupNode = Node.Lookup("d7/lc-lookup", {
         path: lookupPath,
       });
-      class Worker extends Node.Tag<Worker, Jobs>("d7/lc-worker", {
+      class Worker extends Node.Tag<Worker, Jobs>()("d7/lc-worker", {
         path: workerPath,
       }) {}
 
@@ -137,7 +137,7 @@ describe("address-less listen", () => {
         const lookupNode = Node.Lookup("d7/al-lookup", {
           path: lookupPath,
         });
-        class Worker extends Node.Tag<Worker, Jobs>("d7/al-worker") {}
+        class Worker extends Node.Tag<Worker, Jobs>()("d7/al-worker") {}
 
         const lookupClient = Lookup.client(lookupNode);
         const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
@@ -168,7 +168,7 @@ describe("address-less listen", () => {
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("al2-lookup");
-        class Worker extends Node.Tag<Worker, Jobs>("d7/al2-worker") {}
+        class Worker extends Node.Tag<Worker, Jobs>()("d7/al2-worker") {}
 
         const lookup = Lookup.bootstrapDefaultLocal({ path: lookupPath });
         const first = yield* Layer.build(

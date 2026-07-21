@@ -6,13 +6,13 @@ import * as Node from "../src/Node";
 
 // C1 — unified Node set: nodes overwrite, andNode append, client(Tag) when size === 1.
 
-class NodeA extends Node.Tag<NodeA>("nodes/A", {
+class NodeA extends Node.Tag<NodeA>()("nodes/A", {
   path: "/tmp/effect-pm-nodes-a.sock",
 }) {}
-class NodeB extends Node.Tag<NodeB>("nodes/B", {
+class NodeB extends Node.Tag<NodeB>()("nodes/B", {
   path: "/tmp/effect-pm-nodes-b.sock",
 }) {}
-class NodeC extends Node.Tag<NodeC>("nodes/C", {
+class NodeC extends Node.Tag<NodeC>()("nodes/C", {
   path: "/tmp/effect-pm-nodes-c.sock",
 }) {}
 
@@ -79,7 +79,7 @@ describe("Resource.nodes / andNode (C1)", () => {
   it.effect("client dials the sole node after nodes([X])", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-client-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>("nodes/Worker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("nodes/Worker", { path }) {}
       class Ping extends Resource.Tag<Ping>()("nodes/Ping", {
         ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
       }).pipe(Resource.nodes([Worker])) {}
@@ -102,7 +102,7 @@ describe("Resource.nodes / andNode (C1)", () => {
   it.effect("client dials the sole node after andNode(X) from empty", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-andnode-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>("nodes/AndWorker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("nodes/AndWorker", { path }) {}
       class Ping extends Resource.Tag<Ping>()("nodes/AndPing", {
         ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
       }).pipe(Resource.andNode(Worker)) {}
@@ -124,7 +124,7 @@ describe("Resource.nodes / andNode (C1)", () => {
   it.effect("Resource.client(Tag, Worker) auto-connects without Node.connect", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-autoconnect-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>("nodes/AutoWorker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("nodes/AutoWorker", { path }) {}
       class Ping extends Resource.Tag<Ping>()("nodes/AutoPing", {
         ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
       }) {}
@@ -147,7 +147,7 @@ describe("Resource.nodes / andNode (C1)", () => {
   it.effect("node-bearing client(Tag) auto-connects when { node } is addressed", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-hosted-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>("nodes/HostedWorker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("nodes/HostedWorker", { path }) {}
       class Ping extends Resource.Tag<Ping>()(
         "nodes/HostedPing",
         { ping: Resource.effectFn({ n: Schema.Number }, Schema.Number) },

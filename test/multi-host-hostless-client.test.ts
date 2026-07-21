@@ -8,7 +8,7 @@ import * as Node from "../src/Node";
 
 // Set-of-one fleet via distributed/nodes — C1 syncs nodeSym so client(Tag) would bind DbNode;
 // this test still names the node explicitly: client(tag, node).
-class DbNode extends Node.Tag<DbNode>("nodeless-client/DbNode") {}
+class DbNode extends Node.Tag<DbNode>()("nodeless-client/DbNode") {}
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("nodeless-client/FleetDatabase", {
   status: Resource.effect(Schema.Boolean),
 }).pipe(

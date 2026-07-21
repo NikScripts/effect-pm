@@ -51,7 +51,7 @@ export const Prototype = <Self, ROut = never>(
   const instance = (suffix?: string) => {
     const key =
       suffix !== undefined && suffix.length > 0 ? `${name}#${suffix}` : name;
-    return Object.assign(Tag<Self, ROut>(key), {
+    return Object.assign(Tag<Self, ROut>()(key), {
       isDynamicInstance: true as const,
       dynamicPrototypeKey: name,
       ...(suffix !== undefined && suffix.length > 0
@@ -90,12 +90,12 @@ export const Prototype = <Self, ROut = never>(
   ): IpcNodeTagClass<Self, ROut> | UrlNodeTagClass<Self, ROut> {
     // Branch so each Tag call hits a dialable overload (not the loose union catch-all).
     if ("path" in target) {
-      return Tag<Self, ROut>(`${name}#${cloneName}`, {
+      return Tag<Self, ROut>()(`${name}#${cloneName}`, {
         path: target.path,
         ...(target.kind !== undefined ? { kind: target.kind } : {}),
       });
     }
-    return Tag<Self, ROut>(`${name}#${cloneName}`, {
+    return Tag<Self, ROut>()(`${name}#${cloneName}`, {
       url: target.url,
       ...(target.kind !== undefined ? { kind: target.kind } : {}),
     });

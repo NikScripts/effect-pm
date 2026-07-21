@@ -278,11 +278,11 @@ const incumbentAlive = (
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
-      ? NodeTag(`@pm/lookup-ping/${entry.nodeKey}`, {
+      ? NodeTag()(`@pm/lookup-ping/${entry.nodeKey}`, {
           path: entry.path,
         })
       : entry.url !== undefined
-        ? NodeTag(`@pm/lookup-ping/${entry.nodeKey}`, {
+        ? NodeTag()(`@pm/lookup-ping/${entry.nodeKey}`, {
             url: entry.url,
             kind: entry.kind,
           })

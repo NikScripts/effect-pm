@@ -238,7 +238,7 @@ describe("Node.Prototype.instance / .listen", () => {
         .pipe(Effect.provide(lookup));
       const eastRow = rows.find((r) => r.nodeKey === east.key);
       expect(eastRow?.path).toBeDefined();
-      const dialEast = Node.Tag(east.key, {
+      const dialEast = Node.Tag()(east.key, {
         path: eastRow?.path as string,
       });
 

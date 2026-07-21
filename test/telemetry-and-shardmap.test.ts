@@ -6,8 +6,8 @@ import * as ShardMap from "../src/ShardMap";
 import * as Telemetry from "../src/Telemetry";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 describe("Telemetry fleet elevation", () => {
   class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(

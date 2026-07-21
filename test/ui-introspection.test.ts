@@ -7,7 +7,7 @@ import * as Node from "../src/Node";
 //  1. walk a Group.Tag tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
 //  3. drive it over the wire (Resource.client / httpClient — proven in the node/topology tests).
-class MiniNode extends Node.Tag<MiniNode>("ui/miniNode") {}
+class MiniNode extends Node.Tag<MiniNode>()("ui/miniNode") {}
 class Roster extends Process.Tag<Roster>()("ui/Roster") {}
 class Poller extends Process.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
 class Nwsl extends Group.Tag<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}

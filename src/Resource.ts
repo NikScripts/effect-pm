@@ -2298,7 +2298,7 @@ export type PipeableTag = { readonly [specSym]: FlatSpec };
  */
 export const withReadiness: {
   // Data-last: `T extends PipeableTag` (shallow) — do not constrain against ResourceTag|NodeBoundTag
-  // or stock tsc TS2589s on node-bound `class extends Tag(…).pipe(withReadiness(…))` (expands Svc).
+  // or stock tsc TS2589s on node-bound `class extends Tag()(…).pipe(withReadiness(…))` (expands Svc).
   // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
   // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
   //
@@ -2950,7 +2950,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
     endpoint.kind === "IpcSocket"
       ? { path: endpoint.path as string, kind: "IpcSocket" as const }
       : { url: endpoint.url as string, kind: endpoint.kind };
-  const node = makeNode(endpoint.nodeKey, target);
+  const node = makeNode()(endpoint.nodeKey, target);
   // Dialable makeNode → AddressedNode; clientLayer auto-wires connect.
   return clientLayer(tag, node) as Layer.Layer<Self>;
 };
@@ -4121,7 +4121,7 @@ export const nodesOf = <Self, S extends Spec>(
  * {@link nodes}`([])`. {@link peersLayer} then reads Lookup `Directory.nodesServing`.
  *
  * For a **fixed** fleet list, use {@link nodes}`([A, B])` (not this pipe). Identity-shaped
- * like {@link identity} so `class extends Tag(…).pipe(Resource.distributed)` type-checks.
+ * like {@link identity} so `class extends Tag()(…).pipe(Resource.distributed)` type-checks.
  *
  * @public
  */

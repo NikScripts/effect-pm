@@ -13,7 +13,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import * as Node from "../../../src/Node"
 import * as Resource from "../../../src/Resource"
 
-class Worker extends Node.Tag<Worker>("forms/bound/Worker", {
+class Worker extends Node.Tag<Worker>()("forms/bound/Worker", {
   path: `/tmp/effect-pm-forms-bound-${process.pid}.sock`,
 }) {}
 

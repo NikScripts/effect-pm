@@ -20,7 +20,7 @@ describe("Node.ws", () => {
     Effect.gen(function* () {
       const port = 20000 + (process.pid % 1000);
       const lookupPath = yield* tmpSock("bound-lookup");
-      class Worker extends Node.Tag<Worker>("ws/Worker", {
+      class Worker extends Node.Tag<Worker>()("ws/Worker", {
         url: `ws://127.0.0.1:${String(port)}/rpc`,
         kind: "WebSocket",
       }) {}
@@ -70,7 +70,7 @@ describe("Node.ws", () => {
 
   it.effect("rejects Ipc Node with WsListenRequiresWs", () =>
     Effect.gen(function* () {
-      class IpcWorker extends Node.Tag<IpcWorker>("ws/IpcWorker", {
+      class IpcWorker extends Node.Tag<IpcWorker>()("ws/IpcWorker", {
         path: "/tmp/effect-pm-ws-reject.sock",
       }) {}
       const exit = yield* Effect.exit(
@@ -87,7 +87,7 @@ describe("Node.ws", () => {
 
   it.effect("listen on WebSocket Node fails with ListenUseProtocol", () =>
     Effect.gen(function* () {
-      class Worker extends Node.Tag<Worker>("ws/ListenReject", {
+      class Worker extends Node.Tag<Worker>()("ws/ListenReject", {
         url: "ws://127.0.0.1:9/rpc",
         kind: "WebSocket",
       }) {}

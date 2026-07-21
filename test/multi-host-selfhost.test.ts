@@ -4,7 +4,7 @@ import { combineByNode, combineQuery } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-class NwslNode extends Node.Tag<NwslNode>("selfnode/NwslNode") {}
+class NwslNode extends Node.Tag<NwslNode>()("selfnode/NwslNode") {}
 
 // a fleet health view: `status` per instance, `fleetStatus` a per-node map (combineByNode)
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("selfnode/FleetDatabase", {

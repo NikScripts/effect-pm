@@ -8,7 +8,7 @@ import * as Resource from "../src/Resource";
 import * as ShardMap from "../src/ShardMap";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 
 const Session = Schema.Struct({
   id: Schema.String,

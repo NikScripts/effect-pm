@@ -10,7 +10,7 @@ import * as Node from "../src/Node";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-class BillingNode extends Node.Tag<BillingNode>(testBillingNodeKey) {}
+class BillingNode extends Node.Tag<BillingNode>()(testBillingNodeKey) {}
 class SyncProc extends Process.Tag<SyncProc>()(testSyncProcessKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/log-pipeline/Store")(

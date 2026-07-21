@@ -20,7 +20,7 @@ class LogQueue extends QueueResource.Tag<LogQueue>()("test/logs-resource/Q", {
 
 class LogProc extends Process.Tag<LogProc>()("test/logs-resource/Proc").pipe(Process.schedule([])) {}
 
-class EnvNode extends Node.Tag<EnvNode>(testBillingNodeKey) {}
+class EnvNode extends Node.Tag<EnvNode>()(testBillingNodeKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   EnvNode.logs,

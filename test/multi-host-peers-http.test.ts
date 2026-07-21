@@ -6,7 +6,7 @@ import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-class DbNode extends Node.Tag<DbNode>("peers-http/node") {}
+class DbNode extends Node.Tag<DbNode>()("peers-http/node") {}
 class Database extends Resource.Tag<Database>()(
   "peers-http/Database",
   {

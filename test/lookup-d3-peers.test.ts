@@ -42,10 +42,10 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
   });
 
   it("list form still stamps fixed membership", () => {
-    class East extends Node.Tag<East>("d3/East", {
+    class East extends Node.Tag<East>()("d3/East", {
       path: "/tmp/d3-east.sock",
     }) {}
-    class West extends Node.Tag<West>("d3/West", {
+    class West extends Node.Tag<West>()("d3/West", {
       path: "/tmp/d3-west.sock",
     }) {}
     class Fixed extends Resource.Tag<Fixed>()("d3/Fixed", {
@@ -64,10 +64,10 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
       const eastPath = yield* tmpSock("east");
       const westPath = yield* tmpSock("west");
       const lookupNode = Node.Lookup("d3/lookup", { path: lookupPath });
-      class East extends Node.Tag<East, Pool>("d3/East", {
+      class East extends Node.Tag<East, Pool>()("d3/East", {
         path: eastPath,
       }) {}
-      class West extends Node.Tag<West, Pool>("d3/West", {
+      class West extends Node.Tag<West, Pool>()("d3/West", {
         path: westPath,
       }) {}
 
@@ -136,7 +136,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
 
   it.effect("undeclared tag peersLayer stays empty without Directory (not discoverable)", () =>
     Effect.gen(function* () {
-      class Lonely extends Node.Tag<Lonely>("d3/Lonely", {
+      class Lonely extends Node.Tag<Lonely>()("d3/Lonely", {
         path: "/tmp/d3-lonely.sock",
       }) {}
       class Undeclared extends Resource.Tag<Undeclared>()("d3/Undeclared", {

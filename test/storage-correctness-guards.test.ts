@@ -55,7 +55,7 @@ class RunStore extends Store.Service<RunStore>("@test/storage-correctness/RunSto
   gateRegistration,
 ) {}
 
-class NodeOnly extends Node.Tag<NodeOnly>("test/storage-correctness/node") {}
+class NodeOnly extends Node.Tag<NodeOnly>()("test/storage-correctness/node") {}
 class NodeOnlyStore extends Store.Service<NodeOnlyStore>("@test/storage-correctness/NodeOnly")(
   NodeOnly.logs,
 ) {}

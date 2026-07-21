@@ -161,7 +161,7 @@ describe("Lookup directory livenessReplace", () => {
         path: lookupPath,
       });
 
-      class Worker extends Node.Tag<Worker, Jobs>("lookup-dir/Worker", {
+      class Worker extends Node.Tag<Worker, Jobs>()("lookup-dir/Worker", {
         path: workerPath,
       }) {}
 
@@ -261,7 +261,7 @@ describe("Node.unix directory wire", () => {
         path: lookupPath,
       });
 
-      class Worker extends Node.Tag<Worker, Jobs>("lookup-dir/CloseWorker", {
+      class Worker extends Node.Tag<Worker, Jobs>()("lookup-dir/CloseWorker", {
         path: workerPath,
       }) {}
 

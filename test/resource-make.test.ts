@@ -42,8 +42,8 @@ it("Resource.make is runtime identity + type-anchored", () => {
 class Fleet extends Resource.Tag<Fleet>()("make-test/Fleet", {
   n: Resource.effect(Schema.Number),
 }) {} // no `.distributed([…])`
-class NodeA extends Node.Tag<NodeA>("make-test/A") {}
-class NodeB extends Node.Tag<NodeB>("make-test/B") {}
+class NodeA extends Node.Tag<NodeA>()("make-test/A") {}
+class NodeB extends Node.Tag<NodeB>()("make-test/B") {}
 
 it("peersLayer sources the fleet from options.nodes (shared tag has no baked nodes)", () =>
   Effect.runPromise(

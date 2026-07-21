@@ -168,7 +168,7 @@ export interface FleetHealthOptions {
 }
 
 /** Identity node for a **non-meshed** FleetHealth instance. @internal */
-class FleetHealthAloneNode extends Node.Tag<FleetHealthAloneNode>(
+class FleetHealthAloneNode extends Node.Tag<FleetHealthAloneNode>()(
   "@nikscripts/effect-pm/FleetHealth/alone",
 ) {}
 

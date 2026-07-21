@@ -14,7 +14,7 @@ class Emails extends Resource.Tag<Emails>()("listen-d/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs | Emails>("listen-d/Worker", {
+class Worker extends Node.Tag<Worker, Jobs | Emails>()("listen-d/Worker", {
   path: "/tmp/listen-d.sock",
 }) {}
 

@@ -3,7 +3,7 @@
  *
  * Consume as `import * as Node from "@nikscripts/effect-pm/Node"`.
  *
- * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag(…) {}`)
+ * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
  * - {@link listen} — neutral spine (**no transport bind** — use {@link unix} / {@link http} / {@link ws})

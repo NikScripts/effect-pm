@@ -16,7 +16,7 @@ export interface NodeProtocol {
   readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>
 }
 
-/** Late-bound {@link Resource.store} for `Node.Tag(...).logs`. @internal */
+/** Late-bound {@link Resource.store} for `Node.Tag()(...).logs`. @internal */
 type StoreFn = (tag: { readonly key: string }) => unknown
 let storeImpl: StoreFn | undefined
 
@@ -187,7 +187,7 @@ export type NamelessListenOptions = ListenOptions & {
 };
 
 /**
- * {@link resolveHttpTarget} / a positional `Node.Tag(name, badString)` got a string that is
+ * {@link resolveHttpTarget} / a positional `Node.Tag()(name, badString)` got a string that is
  * neither a port (`":3009"`), a port number, nor an `http(s)://` url. Surfaces on the
  * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
  * sync throw. Catch via `Exit` / `CatchTag` when building `clientHttp` or derived `connect`.
@@ -311,7 +311,7 @@ type WsAddress = {
 };
 
 /**
- * Loose dialable url node — single object type (not a union) so `class extends Tag(…)`
+ * Loose dialable url node — single object type (not a union) so `class extends Tag()(…)`
  * stays constructable. Precise overloads return {@link HttpAddress} / {@link WsAddress}.
  *
  * @internal
@@ -324,7 +324,7 @@ type UrlAddressLoose = {
 
 /** A **multi-protocol** node's fields — its transport `endpoints` set, `kind` the union of the set
  *  (the primary at runtime), plus the primary `url`/`path`. Single object type (not a union) so
- *  `class extends Tag(…)` stays constructable. @internal */
+ *  `class extends Tag()(…)` stays constructable. @internal */
 type MultiAddress<Kinds extends ProtocolKind> = {
   readonly url: string | undefined;
   readonly path: string | undefined;
@@ -393,36 +393,6 @@ export const isAddressedNode = (
   return false;
 };
 
-/**
- * Declare a **node** — a named transport endpoint a resource connects to. A `Context.Service`
- * whose value is the RPC client {@link NodeProtocol}; extend it like any Effect service.
- * Optional catalog type param `ROut` (C2) — prefer `import type` for those handles (C4).
- * Templates (no address until cloned) live on {@link Node}.Prototype:
- *
- * ```ts
- * class EdgeNode extends Node.Tag<EdgeNode>("edge") {}                       // no address yet
- * class Worker extends Node.Tag<Worker>("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "Http"
- * class Mail extends Node.Tag<Mail>("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "Http"
- * class Live extends Node.Tag<Live>("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
- * class Push extends Node.Tag<Push>("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
- * class Local extends Node.Tag<Local>("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
- * import type { Jobs, Emails } from "@app/contracts"
- * class AppWorker extends Node.Tag<AppWorker, Jobs | Emails>("app/Worker", { path: "/tmp/w.sock" }) {}
- * class MailWorker extends Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
- * ```
- *
- * The address is optional and matches {@link clientHttp}'s `target`: a **port** (`3001` or `":3001"`
- * → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for an explicit
- * endpoint, or `{ path }` for a **Unix-domain** socket (`kind: "IpcSocket"`). The node carries
- * {@link ProtocolKind} so the topology is self-describing about *where* AND *how*:
- * {@link connect}`(node)` derives the transport with no protocol argument.
- *
- * Dialable targets return an {@link AddressedNode} (`kind: ProtocolKind`) so
- * `Resource.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag("x")`
- * stays address-less (`kind: undefined`) — still needs explicit connect / lookup.
- *
- * @public
- */
 /** Is a target the `{ http, ws, ipc }` multi-protocol shorthand? @internal */
 const isShorthandTarget = (
   t: LooseNodeTarget | undefined,
@@ -431,75 +401,100 @@ const isShorthandTarget = (
   t !== null &&
   ("http" in t || "ws" in t || "ipc" in t);
 
-export function Tag<Self, ROut = never>(
-  name: string,
-): NodeTagClass<Self, ROut, BareAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: { readonly path: string; readonly kind?: "IpcSocket" },
-): NodeTagClass<Self, ROut, IpcAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: number | `:${number}`,
-): NodeTagClass<Self, ROut, HttpAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: `ws://${string}` | `wss://${string}`,
-): NodeTagClass<Self, ROut, WsAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: `http://${string}` | `https://${string}`,
-): NodeTagClass<Self, ROut, HttpAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: {
-    readonly url: `ws://${string}` | `wss://${string}`;
-    readonly kind?: "WebSocket";
-  },
-): NodeTagClass<Self, ROut, WsAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: { readonly url: string; readonly kind: "WebSocket" },
-): NodeTagClass<Self, ROut, WsAddress>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: { readonly url: string; readonly kind: "Http" },
-): NodeTagClass<Self, ROut, HttpAddress>;
-export function Tag<
-  Self,
-  ROut = never,
-  const T extends ShorthandTarget = ShorthandTarget,
->(name: string, target: T): NodeTagClass<Self, ROut, MultiAddress<KindsOf<T>>>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target: string | { readonly url: string; readonly kind?: ProtocolKind },
-): NodeTagClass<Self, ROut, UrlAddressLoose>;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target?: LooseNodeTarget,
-): NodeTagClass<
-  Self,
-  ROut,
-  | BareAddress
+/**
+ * Declare a **node** — a named transport endpoint a resource connects to. **Two-stage** and keyed by
+ * a string, mirroring Effect's `Context.Service<Self, Shape>()(key)` (a node *is* a `Context.Key`,
+ * resolved by its `key` in the Context map) and every sibling factory (`Resource.Tag<Self>()`, …).
+ * The second call infers the target shape, so the `{ http, ws }` shorthand types its
+ * {@link ProtocolKind} set precisely. Optional catalog type param `ROut` (C2) — prefer `import type`
+ * for those handles (C4). Templates (no address until cloned) live on {@link Node}.Prototype:
+ *
+ * ```ts
+ * class EdgeNode extends Node.Tag<EdgeNode>()("edge") {}                       // no address yet
+ * class Worker extends Node.Tag<Worker>()("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "Http"
+ * class Mail extends Node.Tag<Mail>()("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "Http"
+ * class Live extends Node.Tag<Live>()("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
+ * class Local extends Node.Tag<Local>()("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
+ * class Droplet extends Node.Tag<Droplet>()("droplet", { http: "http://d/rpc", ws: "ws://d/rpc" }) {} // multi-protocol
+ * import type { Jobs, Emails } from "@app/contracts"
+ * class AppWorker extends Node.Tag<AppWorker, Jobs | Emails>()("app/Worker", { path: "/tmp/w.sock" }) {}
+ * ```
+ *
+ * The `key` is the service key. The optional address matches {@link clientHttp}'s `target`: a **port**
+ * (`3001` / `":3001"`), a full **url**, `{ url, kind }`, `{ path }` for a **Unix** socket, or the
+ * `{ http, ws, ipc }` multi-protocol shorthand. Dialable targets return an {@link AddressedNode} so
+ * `Resource.client(Tag, Worker)` can auto-wire {@link connect}; bare `Node.Tag<X>()("x")` stays
+ * address-less.
+ *
+ * @public
+ */
+export const Tag = <Self, ROut = never>() => {
+  function build(key: string): NodeTagClass<Self, ROut, BareAddress>;
+  function build(
+    key: string,
+    target: { readonly path: string; readonly kind?: "IpcSocket" },
+  ): NodeTagClass<Self, ROut, IpcAddress>;
+  function build(
+    key: string,
+    target: number | `:${number}`,
+  ): NodeTagClass<Self, ROut, HttpAddress>;
+  function build(
+    key: string,
+    target: `ws://${string}` | `wss://${string}`,
+  ): NodeTagClass<Self, ROut, WsAddress>;
+  function build(
+    key: string,
+    target: `http://${string}` | `https://${string}`,
+  ): NodeTagClass<Self, ROut, HttpAddress>;
+  function build(
+    key: string,
+    target: {
+      readonly url: `ws://${string}` | `wss://${string}`;
+      readonly kind?: "WebSocket";
+    },
+  ): NodeTagClass<Self, ROut, WsAddress>;
+  function build(
+    key: string,
+    target: { readonly url: string; readonly kind: "WebSocket" },
+  ): NodeTagClass<Self, ROut, WsAddress>;
+  function build(
+    key: string,
+    target: { readonly url: string; readonly kind: "Http" },
+  ): NodeTagClass<Self, ROut, HttpAddress>;
+  function build<const T extends ShorthandTarget>(
+    key: string,
+    target: T,
+  ): NodeTagClass<Self, ROut, MultiAddress<KindsOf<T>>>;
+  function build(
+    key: string,
+    target: string | { readonly url: string; readonly kind?: ProtocolKind },
+  ): NodeTagClass<Self, ROut, UrlAddressLoose>;
+  function build(
+    key: string,
+    target?: LooseNodeTarget,
+  ): NodeTagClass<
+    Self,
+    ROut,
+    | BareAddress
     | IpcAddress
     | HttpAddress
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
->;
-export function Tag<Self, ROut = never>(
-  name: string,
-  target?: LooseNodeTarget,
-): NodeTagClass<
-  Self,
-  ROut,
-  | BareAddress
+  >;
+  function build(
+    key: string,
+    target?: LooseNodeTarget,
+  ): NodeTagClass<
+    Self,
+    ROut,
+    | BareAddress
     | IpcAddress
     | HttpAddress
     | WsAddress
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
-> {
+  > {
   // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
   // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
   // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
@@ -566,7 +561,7 @@ export function Tag<Self, ROut = never>(
             ? { Http: { url } }
             : {};
   }
-  const node = Object.assign(Context.Service<Self, NodeProtocol>()(name), {
+  const node = Object.assign(Context.Service<Self, NodeProtocol>()(key), {
     url,
     path,
     kind,
@@ -597,10 +592,13 @@ export function Tag<Self, ROut = never>(
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
   >;
-}
+  }
+
+  return build;
+};
 
 /**
- * Deriving a transport from a node that never declared one — a bare `Node.Tag("x")` has no
+ * Deriving a transport from a node that never declared one — a bare `Node.Tag()("x")` has no
  * address/`kind`, so `connect` / `listen` can't know how to reach it. Surfaces on the Layer / Effect
  * error channel (never a sync `throw`).
  *
@@ -612,7 +610,7 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
   override get message() {
     return (
       `Node "${this.node}" declares no address/kind, so a transport can't be derived from it. ` +
-      `Give the node an address (e.g. Node.Tag("${this.node}", 3001), { url, kind }, or { path }), ` +
+      `Give the node an address (e.g. Node.Tag()("${this.node}", 3001), { url, kind }, or { path }), ` +
       `or pass a protocol explicitly: connect(node, protocol).`
     );
   }
@@ -871,7 +869,7 @@ export function Lookup<Self>(
 > & {
   readonly isLookupNode: true
 } {
-  const node = Tag<Self>(name, target)
+  const node = Tag<Self>()(name, target)
   return Object.assign(node, { isLookupNode: true as const })
 }
 

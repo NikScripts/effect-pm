@@ -246,7 +246,7 @@ const ipcNameless = (
     Effect.gen(function* () {
       const suffix = yield* uniqueInstanceSuffix();
       const key = `effect-pm/anonymous#${suffix}`;
-      return ipcListenOn(Tag(key), list, options);
+      return ipcListenOn(Tag()(key), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
 
@@ -271,7 +271,7 @@ const ipcListenOn = (
           dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
         const wireKey = `${protoKey}#${suffix}`;
         const path = yield* ephemeralIpcPath(wireKey);
-        const addressed = Object.assign(Tag(wireKey, { path }), {
+        const addressed = Object.assign(Tag()(wireKey, { path }), {
           [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
             catalogSym
           ],
@@ -288,7 +288,7 @@ const ipcListenOn = (
     return Layer.unwrap(
       Effect.gen(function* () {
         const path = yield* ephemeralIpcPath(node.key);
-        const addressed = Object.assign(Tag(node.key, { path }), {
+        const addressed = Object.assign(Tag()(node.key, { path }), {
           [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
             catalogSym
           ],

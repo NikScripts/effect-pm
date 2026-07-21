@@ -22,7 +22,7 @@ class Emails extends Resource.Tag<Emails>()("forms/clientsFor/Emails", {
   emails: Resource.effect(Schema.String),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs | Emails>(
+class Worker extends Node.Tag<Worker, Jobs | Emails>()(
   "forms/clientsFor/Worker",
   {
     path: `/tmp/effect-pm-forms-clients-for-${process.pid}.sock`,

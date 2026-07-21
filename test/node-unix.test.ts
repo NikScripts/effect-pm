@@ -20,7 +20,7 @@ describe("Node.unix", () => {
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
       const lookupPath = yield* tmpSock("bound-lookup");
-      class Worker extends Node.Tag<Worker>("unix/Worker", { path }) {}
+      class Worker extends Node.Tag<Worker>()("unix/Worker", { path }) {}
       class Jobs extends Resource.Tag<Jobs>()("unix/Jobs", {
         jobs: Resource.effect(Schema.Number),
       }).pipe(Resource.andNode(Worker)) {}
@@ -64,7 +64,7 @@ describe("Node.unix", () => {
 
   it.effect("rejects Http Node with UnixListenRequiresIpc", () =>
     Effect.gen(function* () {
-      class HttpWorker extends Node.Tag<HttpWorker>("unix/HttpWorker", {
+      class HttpWorker extends Node.Tag<HttpWorker>()("unix/HttpWorker", {
         url: "http://127.0.0.1:9",
         kind: "Http",
       }) {}

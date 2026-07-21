@@ -257,7 +257,7 @@ const wsNameless = (
     Effect.gen(function* () {
       const suffix = yield* uniqueInstanceSuffix();
       const key = `effect-pm/anonymous#${suffix}`;
-      return wsListenOn(Tag(key, { kind: "WebSocket" }), list, options);
+      return wsListenOn(Tag()(key, { kind: "WebSocket" }), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
 
@@ -336,7 +336,7 @@ const ephemeralWsListen = (
             server.address._tag === "TcpAddress" ? server.address.port : 0;
           const url = `ws://127.0.0.1:${String(port)}/rpc`;
           const addressed = Object.assign(
-            Tag(wireKey, { url, kind: "WebSocket" as const }),
+            Tag()(wireKey, { url, kind: "WebSocket" as const }),
             {
               [catalogSym]: (
                 catalogSource as { readonly [catalogSym]?: unknown }

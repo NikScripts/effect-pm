@@ -15,9 +15,9 @@ import * as ShardMap from "../../../src/ShardMap";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>(
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Tag<DropletCentral>()(
   "app/DropletCentral",
 ) {}
 
