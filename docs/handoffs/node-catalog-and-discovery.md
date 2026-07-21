@@ -470,7 +470,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 |---|----------|------|
 | AI.1 | Surface | **Inheritance chain** (call-site → node stamp → Lookup stamp → `livenessReplace`) |
 | AI.2 | Who dials the ask? | **Lookup server** (has incumbent endpoint; newcomer shouldn’t need to) |
-| AI.3 | RPC | Add **`NodeStatus.yield`** (or `askYield`) — reserved resource every node already serves |
+| AI.3 | RPC | **`NodeStatus.yield`** — LOCKED (best word for “step aside”; note: may confuse with Effect `yield*`, but keep) |
 | AI.4 | Yield meaning v1 | Cooperative: incumbent **unregisters** its directory row (and may interrupt listen scope). **No** in-flight work drain |
 | AI.5 | Refuse / timeout | → **`IncumbentAlive`** (fail-closed; no steal) |
 | AI.6 | `reject` preset | Alive → always `IncumbentAlive`; dead → still replace (same liveness probe) |
@@ -479,8 +479,9 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 
 ```ts
 // Goal sketch after lock:
-// NodeStatus gains:
+// NodeStatus gains (AI.3 LOCKED — name is `yield`, not askYield/concede):
 yield: Resource.effect(Schema.Boolean) // true = accepted yield
+// Mental note: wire/API `status.yield` ≠ Effect `yield*`; docs should call that out once.
 
 // Lookup advertise when effective onConflict: "askIncumbent":
 //   same dial → refresh serves (unchanged)
