@@ -89,7 +89,7 @@ body {
   margin: 0 auto;
 }
 @media (min-width: 1100px) {
-  .topbar-inner { max-width: 69rem; }
+  .topbar-inner { max-width: 84rem; }
 }
 .topbar .brand { color: var(--fg); font-weight: 600; margin-right: auto; text-decoration: none; }
 .topbar-actions { display: flex; align-items: center; gap: 0.3rem; }
@@ -324,7 +324,10 @@ main {
   .topbar-actions { display: none; }
   /* the sidebar owns nav on wide screens; never show the overlay even if left checked on resize */
   .menu-cb:checked ~ .menu-overlay { display: none; }
-  main { margin: 0; padding-left: 0; padding-right: 0; }
+  main { flex: 1 1 auto; min-width: 0; margin: 0; padding-left: 0; padding-right: 0; }
+}
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  main > .prose { max-width: 46rem; margin: 0 auto; }
 }
 
 h1 { font-size: clamp(1.7rem, 5vw, 2.1rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0.6rem 0 1rem; text-wrap: balance; }
@@ -795,9 +798,11 @@ td:first-child code { display: block; width: fit-content; margin-bottom: 0.15rem
 
 /* three columns once there's room: nav | content | this-page aside */
 @media (min-width: 1100px) {
-  .layout { max-width: 69rem; }
+  /* 84rem total = 14 (nav) + 1.5 + ~53 (content, capped 56) + 2.5 + 13 (aside): the CENTER
+     absorbs the width — a fixed prose cap here sent all extra space to the right gutter. */
+  .layout { max-width: 84rem; }
   main { max-width: none; display: flex; align-items: flex-start; gap: 2.5rem; }
-  .prose { flex: 1 1 auto; max-width: 46rem; }
+  .prose { flex: 1 1 auto; min-width: 0; max-width: 56rem; }
   .page-aside {
     display: block;
     flex: 0 0 13rem;
@@ -1238,3 +1243,29 @@ pre:hover > .copy-btn, pre:focus-within > .copy-btn { opacity: 1; }
 .sidebar-search .search-hit-title .api-kind { margin-left: 0.35rem; }
 .search-page .search-section { margin-bottom: 1.2rem; }
 .search-page .search-hit-sum { white-space: normal; }
+
+/* aside variants for API + search pages */
+.aside-count { color: var(--muted-fg); font-size: 0.72rem; }
+.aside-facts { margin: 0 0 0.8rem; font-size: 0.82rem; }
+.aside-facts dt {
+  margin-top: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted-fg);
+}
+.aside-facts dd { margin: 0.1rem 0 0; }
+.aside-facts dd a { color: var(--fg); text-decoration: none; }
+.aside-facts dd a:hover { color: var(--primary); }
+.aside-source { font-family: var(--font-mono); font-size: 0.74rem; word-break: break-all; }
+.aside-facts-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.8rem; color: var(--muted-fg); }
+.aside-facts-list kbd {
+  padding: 0.04rem 0.35rem;
+  margin-right: 0.15rem;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}

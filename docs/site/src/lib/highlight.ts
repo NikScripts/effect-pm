@@ -259,6 +259,13 @@ const formatHoverType = (text: string): string => {
 // Cache per-block hover info (expanded type + owner location) — dev re-renders the same block often.
 const blockCache = new Map<string, ReturnType<typeof expandTypes>>();
 
+// In-code links for twoslash blocks WITHOUT precomputed source links (guide snippets): each hover
+// whose symbol owns a page contributes its token range. One STABLE array — the Annotate
+// transformer captures it before the render and reads it lazily at span time, and the twoslasher
+// (which runs first, in preprocessing) clears + refills it per render. Renders are synchronous,
+// so the instance is never shared across two in-flight blocks.
+const hoverCodeLinks: Array<Annotate.Link> = [];
+
 const twoslasher = Object.assign(
   (
     code: string,
@@ -266,6 +273,7 @@ const twoslasher = Object.assign(
     options: Parameters<typeof baseTwoslasher>[2]
   ): ReturnType<typeof baseTwoslasher> => {
     const result = baseTwoslasher(code, extension, options);
+    hoverCodeLinks.length = 0;
     try {
       const hovers = result.nodes.filter(
         (n): n is typeof n & { text: string; start: number; docs?: string } =>
@@ -281,6 +289,15 @@ const twoslasher = Object.assign(
       }
       hovers.forEach((h, i) => {
         const info = expansions!.get(offsets[i]);
+        // In-code anchor for the hovered token (guides have no precomputed source links): the
+        // hovered symbol's own page, same zero-guess resolution the popup name-link uses.
+        if (info?.ownerUrl !== undefined && typeof h.length === "number") {
+          hoverCodeLinks.push({
+            start: h.start,
+            end: h.start + h.length,
+            url: info.ownerUrl,
+          });
+        }
         // Embed compiler-resolved {@link} urls into the docs. Source panel: the owner is the page's
         // symbol (currentOwnerDocLinks). Doc blocks: an imported symbol resolves to its real
         // location (ownerLoc) in the shared doc-links map.
@@ -770,8 +787,12 @@ export const highlightToHast = (
     themes: THEMES,
     transformers: [
       ...(opts?.twoslash ? [twoslash] : []),
+      // Precomputed source links win (API pages); twoslash blocks without them fall back to the
+      // hover-derived collector the twoslasher fills during preprocessing.
       ...(opts?.links !== undefined && opts.links.length > 0
         ? [Annotate.transformer({ links: opts.links })]
+        : opts?.twoslash
+        ? [Annotate.transformer({ links: hoverCodeLinks })]
         : []),
     ],
   });
