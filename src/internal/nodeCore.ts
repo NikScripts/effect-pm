@@ -402,12 +402,27 @@ const isShorthandTarget = (
   ("http" in t || "ws" in t || "ipc" in t);
 
 /**
+ * A node was built with inconsistent transport fields — a programming invariant, thrown at
+ * declaration (like {@link DuplicateResourceKey}) so a malformed node fails loudly *there* instead of
+ * as a confusing dial/serve failure later. @public
+ */
+export class MalformedNode extends Data.TaggedError("MalformedNode")<{
+  readonly key: string;
+  readonly reason: string;
+}> {
+  override get message() {
+    return `Node "${this.key}" is malformed: ${this.reason}.`;
+  }
+}
+
+/**
  * Assemble a node tag value from resolved address fields — a `Context.Service` class stamped with the
  * transport fields, the `logs` accessor, and the catalog brand. **The single place** the runtime →
  * `NodeTagClass` impedance is bridged: a node's runtime `kind` is always looser (`ProtocolKind |
  * undefined`) than any precise address form `Addr`, so exactly one construction cast lives here and
  * every caller ({@link Tag}, {@link withProtocol}) stays cast-free. @internal
  */
+
 const assembleNode = <Self, ROut, Addr>(
   key: string,
   fields: {
@@ -418,6 +433,32 @@ const assembleNode = <Self, ROut, Addr>(
     readonly invalidTarget?: InvalidHttpTarget;
   },
 ): NodeTagClass<Self, ROut, Addr> => {
+  // Validate the fields are well-formed BEFORE the (generic-`Addr`) construction cast — the cast can't
+  // be type-checked, so a runtime check is what makes it safe. NOTE: a node may declare a `kind`
+  // WITHOUT a `url`/`path` — an address-less listen node (e.g. the anonymous http/ws mint) knows *how*
+  // it'll be reached but binds *where* only at listen. So we validate the invariants that always hold:
+  // a non-empty key, and that any endpoint actually present in the set carries a non-empty address.
+  const { endpoints } = fields;
+  if (typeof key !== "string" || key.length === 0) {
+    throw new MalformedNode({
+      key,
+      reason: "empty key (a node needs a Context service key)",
+    });
+  }
+  for (const [transport, endpoint] of Object.entries(endpoints)) {
+    const address =
+      "url" in endpoint
+        ? endpoint.url
+        : "path" in endpoint
+          ? endpoint.path
+          : undefined;
+    if (typeof address !== "string" || address.length === 0) {
+      throw new MalformedNode({
+        key,
+        reason: `${transport} endpoint has an empty ${"url" in endpoint ? "url" : "path"}`,
+      });
+    }
+  }
   const node = Object.assign(Context.Service<Self, NodeProtocol>()(key), {
     url: fields.url,
     path: fields.path,
@@ -434,7 +475,8 @@ const assembleNode = <Self, ROut, Addr>(
     },
     [catalogSym]: undefined,
     // Through `unknown`: `Addr` is generic, so TS can't see the (real) overlap between the loose
-    // runtime `kind` and the precise address form — the single, contained construction assertion.
+    // runtime `kind` and the precise address form — the single, contained construction assertion,
+    // now backed by the field validation above (the built value is a well-formed node).
   }) as unknown as NodeTagClass<Self, ROut, Addr>;
 };
 

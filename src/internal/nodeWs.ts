@@ -28,6 +28,7 @@ import {
   isPrototypeNode,
   isResourceTagArg,
   isServeArg,
+  anonymousNodeKey,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -255,8 +256,7 @@ const wsNameless = (
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const suffix = yield* uniqueInstanceSuffix();
-      const key = `effect-pm/anonymous#${suffix}`;
+      const key = yield* anonymousNodeKey(list);
       return wsListenOn(Tag()(key, { kind: "WebSocket" }), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;

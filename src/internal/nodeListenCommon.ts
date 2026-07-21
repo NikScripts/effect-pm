@@ -3,7 +3,7 @@
  *
  * @internal
  */
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Random } from "effect"
 import * as Resource from "../Resource"
 import {
   AnyNode,
@@ -189,3 +189,21 @@ export const withListenNode = <A, E, R>(
   server: Layer.Layer<A, E, R>,
 ): Layer.Layer<A | ListenNode, E, R> =>
   server.pipe(Layer.provideMerge(Layer.succeed(ListenNode, node)));
+
+/**
+ * The key an anonymous `unix` / `http` / `ws` / `nPipe` listen mints for its address-less node: a
+ * **legible name** from the first served resource's key (`@app/Emails` → `Emails` — last segment only)
+ * plus a random tail, under the full package prefix — e.g.
+ * `@nikscripts/effect-pm/anonymous-node/Emails#k3f9q`. `Random` (a default Reference, no service to
+ * provide) gives the tail; the random keeps it unique per materialization (a generated key is a local,
+ * ephemeral identity — a shared identity needs an explicit `Node.Tag` key). @internal
+ */
+export const anonymousNodeKey = (
+  list: ServeLayerList,
+): Effect.Effect<string> =>
+  Effect.map(Random.next, (n) => {
+    const rand = n.toString(36).slice(2, 8)
+    const firstKey = Resource.servedKeyOf(list[0])
+    const name = firstKey?.split("/").pop() ?? "node"
+    return `@nikscripts/effect-pm/anonymous-node/${name}#${rand}`
+  })

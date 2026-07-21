@@ -3376,6 +3376,21 @@ const servePlain = <Self, S extends Spec, R = never>(
     }),
   );
 
+/** Stamped on a {@link serve} layer with the served tag's key — lets an anonymous `listen` derive a
+ *  legible node name from the first resource it serves without building the layer. @public */
+export const servedKeySym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/servedKey",
+);
+
+/** The served tag's key stamped on a {@link serve} layer, or `undefined`. @public */
+export const servedKeyOf = (layer: unknown): string | undefined => {
+  if (Predicate.hasProperty(layer, servedKeySym)) {
+    const k = layer[servedKeySym];
+    return typeof k === "string" ? k : undefined;
+  }
+  return undefined;
+};
+
 export const serve = <Self, S extends Spec, R = never>(
   tag: ResourceTag<Self, S>,
   impl:
@@ -3383,17 +3398,23 @@ export const serve = <Self, S extends Spec, R = never>(
     | BuiltResource<S, R>
     | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
-  const plain = servePlain(tag, impl);
+  // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
+  // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
+  // paths return (servePlain re-merges, which would drop an earlier stamp).
+  const plain = Object.assign(servePlain(tag, impl), {
+    [servedKeySym]: tag.groupId,
+  });
   if (!isIdentity(tag)) {
     return plain;
   }
   // Identity path requires Lookup.Identity at runtime (fail-closed). Kept off the public
   // `R` channel so plain `serve` stays TS2589-free (ResourceTag & identity brand blows up).
-  return identityClaimLayer(tag, plain) as Layer.Layer<
+  const claimed = identityClaimLayer(tag, plain) as Layer.Layer<
     Self | Local<Self> | HandlerContextOf<S>,
     never,
     R
   >;
+  return Object.assign(claimed, { [servedKeySym]: tag.groupId });
 };
 
 // [extracted to Node module — was Resource.ts:3193-3978]

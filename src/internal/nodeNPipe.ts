@@ -28,6 +28,7 @@ import {
   isResourceTagArg,
   isServeArg,
   nPipeRequiresIpcLayer,
+  anonymousNodeKey,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -269,8 +270,7 @@ const nPipeNameless = (
 ): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const suffix = yield* uniqueInstanceSuffix();
-      const key = `effect-pm/anonymous#${suffix}`;
+      const key = yield* anonymousNodeKey(list);
       return nPipeListenOn(Tag()(key), list, options);
     }),
   ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;

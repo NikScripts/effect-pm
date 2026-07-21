@@ -37,6 +37,7 @@ export {
   UnaddressedNode,
   NodeUnreachable,
   ProtocolKindMismatch,
+  MalformedNode,
   InvalidHttpTarget,
 } from "./internal/nodeCore"
 export type {
