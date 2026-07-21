@@ -20,15 +20,15 @@ class Jobs extends Resource.Tag<Jobs>()("d7/Jobs", {
 
 const jobsImpl = { jobs: Effect.succeed(7) };
 
-describe("Lookup.bootstrapDefaultLocal", () => {
+describe("Lookup.layerOptions", () => {
   it.effect("first process serves; second dials the same path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("boot");
       const first = yield* Layer.build(
-        Lookup.bootstrapDefaultLocal({ path, unlink: false }),
+        Lookup.layerOptions({ path, unlink: false }),
       );
       const second = yield* Layer.build(
-        Lookup.bootstrapDefaultLocal({ path, unlink: false }),
+        Lookup.layerOptions({ path, unlink: false }),
       );
       const id = Context.get(second, Lookup.Identity);
       const won = yield* id
@@ -52,7 +52,7 @@ describe("Lookup.Identity.resolve", () => {
     Effect.gen(function* () {
       const path = yield* tmpSock("resolve");
       const node = Node.Tag()("d7/resolve", { path }).pipe(Node.asLookup);
-      const serverCtx = yield* Layer.build(Lookup.layer(node));
+      const serverCtx = yield* Layer.build(Lookup.layerNode(node));
       const clientCtx = yield* Layer.build(Lookup.client(node));
       const ctx = Context.merge(serverCtx, clientCtx);
       const id = Context.get(ctx, Lookup.Identity);
@@ -97,7 +97,7 @@ describe("Resource.lookupClient", () => {
       }) {}
 
       const lookupClient = Lookup.client(lookupNode);
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupCtx = yield* Layer.build(lookupClient);
       const lookup = Context.merge(lookupServer, lookupCtx);
 
@@ -138,7 +138,7 @@ describe("address-less listen", () => {
         class Worker extends Node.Tag<Worker, Jobs>()("d7/al-worker") {}
 
         const lookupClient = Lookup.client(lookupNode);
-        const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+        const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
         const server = yield* Layer.build(
           Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
         );
@@ -166,7 +166,7 @@ describe("address-less listen", () => {
         const lookupPath = yield* tmpSock("al2-lookup");
         class Worker extends Node.Tag<Worker, Jobs>()("d7/al2-worker") {}
 
-        const lookup = Lookup.bootstrapDefaultLocal({ path: lookupPath });
+        const lookup = Lookup.layerOptions({ path: lookupPath });
         const first = yield* Layer.build(
           Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookup)),
         );

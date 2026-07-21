@@ -6,6 +6,18 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-21 — Lookup `layer` / `layerOptions` (Effect `layerAgent` shape)
+
+- **Owner said:** Prefer Effect-consistent naming; avoid `local` / `bootstrap`; can `Lookup.layer` work with no `()`?; what would Effect do?
+- **Chose (LOCKED + Eng):**
+  - `Lookup.layer` — **Layer value** (bind-or-dial {@link defaultIpcPath}); `Layer.provide(Lookup.layer)`.
+  - `Lookup.layerOptions({ path?, unlink? })` — options factory (Effect `layerAgentOptions`).
+  - `Lookup.layerNode(node)` — exclusive serve on addressed asLookup-branded node (was `Lookup.layer(node)`).
+  - `Lookup.clientOptions({ path? })` — dial default path (was `clientDefaultLocal`).
+  - **Removed (no shim):** `bootstrapDefaultLocal`, `layerDefaultLocal`, `clientDefaultLocal`.
+- **Not chosen:** Repo-wide rename of every `layer(…)` factory — Effect uses both value and function forms; only zero-config defaults become Layer values.
+- **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
+
 ## 2026-07-20 — Node module extract LOCKED + Eng
 
 - **Owner said:** Extract Node from Resource/Lookup on tip (`cursor/bake-catalog-thoughts-906e`); Effect-true `import * as Node`; no shims; forms replace spawn demo.
@@ -13,7 +25,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - Public module **`@nikscripts/effect-pm/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clients` + catalog types.
   - **Removed:** `Resource.Node`, `Lookup.LookupNode`, `Resource.listen` / `connect*` / `httpServer` / `wsServer` / `ipcServer` / `clientsFor` (no shims).
   - **Stays Resource:** Tag/serve/layer/client, `lookupClient`, identity, nodes/andNode/distributed, peers, Spec builders; sugar `discoverClient`.
-  - **Stays Lookup:** Identity, Directory, layer, client, `bootstrapDefaultLocal`; sugar `Node.listenLocal`.
+  - **Stays Lookup:** Identity, Directory, layer, client, `layerOptions`; sugar `Node.listenLocal`.
 - **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — D4 soft pick LOCKED (`lookupClient` `{ pick }`)
@@ -76,7 +88,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (LOCKED — D7 vertical):**
   - Address-less `Node(key)` at `listen` → mint ephemeral **ipc** path; **claim `node.key`**; win → bind+advertise; lose → fail Layer (winner endpoint in error); no silent double-serve.
   - Identity claim endpoint = **Tag’s bound Node** (`nodes` / `{ node }`) or **listen’s Node** (minted) — **remove `{ self }` bag**.
-  - `Lookup.bootstrapDefaultLocal` — bind-or-dial default ipc (OS exclusivity).
+  - `Lookup.layerOptions` — bind-or-dial default ipc (OS exclusivity).
   - `Resource.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
   - `Node.Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
 - **Still LEAN / later:** ~~bare `distributed` / D3~~ → **LOCKED** (see D3 entry); `askIncumbent`; ~~dynamic `instance`~~ → **LOCKED**; D4 picker/LB.

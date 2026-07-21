@@ -463,7 +463,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 | `Node.Tag` / Prototype / clones / instances | `"inherit"` | Pulls from Lookup at advertise |
 | listen / advertise options | omit = inherit chain | Explicit tag short-circuits |
 
-**Not lean:** `Lookup.layer(node, { onConflict })` as a second parent — constructor stamp on the Lookup node is enough; layer opts stay for other concerns unless we later need a runtime override.
+**Not lean:** `Lookup.layerNode(node, { onConflict })` as a second parent — constructor stamp on the Lookup node is enough; layer opts stay for other concerns unless we later need a runtime override.
 
 ##### Yield mechanism
 
@@ -476,7 +476,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 | AI.5 | Refuse / timeout | **LOCKED** — `IncumbentAlive` (fail-closed) |
 | AI.6 | `reject` preset | **LOCKED** — alive → `IncumbentAlive`; dead → still replace |
 | AI.7 | Prototype cascade | **LOCKED** — `make` / `instance` default `"inherit"`; stamp on Prototype or `make` overrides that clone only |
-| AI.8 | Wire field | **LOCKED** — advertise carries advertiser preference (`callSite`∋`nodeStamp`, may still be `"inherit"` / omit); **Lookup server** finishes resolve with its node stamp (so `bootstrapDefaultLocal` stays `livenessReplace` unless an asLookup-branded node is served) |
+| AI.8 | Wire field | **LOCKED** — advertise carries advertiser preference (`callSite`∋`nodeStamp`, may still be `"inherit"` / omit); **Lookup server** finishes resolve with its node stamp (so `layer` / `layerOptions` stay `livenessReplace` unless an asLookup-branded node is served) |
 
 ```ts
 // Goal sketch after lock:
@@ -508,14 +508,14 @@ class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
 
 // Dynamic — curry serves once; factory takes suffix (auto when omitted)
 const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
-mailWorker().pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
-mailWorker("w1").pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+mailWorker().pipe(Layer.provide(Lookup.layer))
+mailWorker("w1").pipe(Layer.provide(Lookup.layer))
 
 class Worker extends Resource.Node<Worker, Mail>("app/Worker") {} // address-less (claim)
 Resource.listen(Worker, [Resource.serve(Mail, impl)]).pipe(
-  Layer.provide(Lookup.bootstrapDefaultLocal()),
+  Layer.provide(Lookup.layer),
 )
-Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
 ```
 
 #### Dynamic `Node.Prototype.instance` (**LOCKED** 2026-07-19)
@@ -692,7 +692,7 @@ Detecting “two lookups both reachable” (misconfig: two explicit addresses, o
 
 **Yes.** Encode as layers/types roughly:
 
-- `Lookup.layerDefaultLocal` (name sketch) — only legal for local defaults (`IpcSocket` path and/or `127.0.0.1:port`); implements bind-exclusive serve **or** dial that slot.
+- `Lookup.layer` / `Lookup.layerOptions` — same-machine default (`IpcSocket` path); bind-or-dial that slot. Exclusive serve on a path remains `layerIpc` / `layerNode`.
 - `LookupNode("…", { url | path })` / `Resource.LookupNode` — **address required** for non-default topologies.
 - Starting a graph that needs lookup with **neither** a local default applicable **nor** an explicit LookupNode → **compile or layer-build error**, not silent elect across the LAN.
 
@@ -802,7 +802,7 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18 (bake)** — Owner: prefer `_tag`-style protocol names (e.g. `"WebSocket"`); follow Effect layer names as best we can; noted nobody types `ProtocolKind` out. X5 thought added — not locked / not Eng’d.
 - **2026-07-18 (bake)** — Owner: UDS tag **`IpcSocket`** for clarity; Singleton: **`andNode` disabled**, override OK but **only one Node** at a time. Still not formal LOCKED rows / not Eng’d.
 - **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
-- **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerDefaultLocal / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
+- **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerIpc / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
 - **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.
 - **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean; owner “good enough for now.” **S1 LOCKED.**
 - **2026-07-18** — **S1 Eng shipped:** `Resource.identity` pipe; `layer`/`serve` claim→local-or-client; `IdentitySelfRequired` / `IdentityMultiNode`; tests over ipc Lookup. Next bake: **C1**.

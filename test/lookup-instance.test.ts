@@ -48,7 +48,7 @@ describe("Node.Prototype.instance / .listen", () => {
         "inst/CurryWorker",
       ) {}
       const lookupClient = Lookup.client(lookupNode);
-      yield* Layer.build(Lookup.layer(lookupNode));
+      yield* Layer.build(Lookup.layerNode(lookupNode));
 
       const mailWorker = MailWorker.listen(
         [Resource.serve(Jobs, jobsImpl(9))],
@@ -80,7 +80,7 @@ describe("Node.Prototype.instance / .listen", () => {
       ) {}
 
       const lookupClient = Lookup.client(lookupNode);
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupCtx = yield* Layer.build(lookupClient);
       const lookup = Context.merge(lookupServer, lookupCtx);
 
@@ -183,7 +183,7 @@ describe("Node.Prototype.instance / .listen", () => {
         });
 
       const lookupClient = Lookup.client(lookupNode);
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupCtx = yield* Layer.build(lookupClient);
       const lookup = Context.merge(lookupServer, lookupCtx);
 

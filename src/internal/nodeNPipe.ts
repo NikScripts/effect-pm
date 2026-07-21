@@ -52,7 +52,7 @@ const requireWindows = <A, E, R>(
 /**
  * Windows named-pipe IPC listen — same overload shapes as {@link unix}.
  * Same `IpcSocket` kind; paths are `\\.\pipe\…`. Prefer {@link unix} on POSIX.
- * Compose Lookup via `Layer.provide(Lookup.bootstrapDefaultLocal(...))` when needed.
+ * Compose Lookup via `Layer.provide(Lookup.layerOptions(...))` when needed.
  *
  * @category listen
  * @public
@@ -126,7 +126,7 @@ export function nPipe(
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  // Lookup is not baked in — pipe `Layer.provide(Lookup.bootstrapDefaultLocal(…))`
+  // Lookup is not baked in — pipe `Layer.provide(Lookup.layerOptions(…))`
   // when claim / advertise needs it. Windows gate stays on every path.
 
   if (isServeArg(nodeOrServesOrTag)) {

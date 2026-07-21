@@ -33,7 +33,7 @@ describe("Node.http", () => {
       const serverCtx = yield* Layer.build(
         Node.http(Worker, [Resource.serve(Jobs, { jobs: Effect.succeed(11) })]).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
@@ -54,7 +54,7 @@ describe("Node.http", () => {
       const serverCtx = yield* Layer.build(
         Node.http(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true }),
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );

@@ -1,8 +1,9 @@
 /**
  * Lookup — identity claims (first wins) + node directory (advertise / list).
  *
- * Same-machine default: bind a well-known {@link Resource} `ipc` path (OS exclusivity).
- * Cross-network: pass an explicit {@link Node.asLookup}-branded node with an address — no self-elect (L1).
+ * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
+ * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
+ * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
@@ -172,12 +173,8 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
 ) {}
 
 /**
- * {@link LookupNode} has no dialable address (need `{ path }` / url, or use {@link layerDefaultLocal}).
- *
- * @public
- */
-/**
- * Lookup node has no dialable address — Layer error channel (not a sync throw).
+ * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
+ * {@link layerOptions}. Layer error channel (not a sync throw).
  *
  * @category errors
  * @public
@@ -492,25 +489,6 @@ export const layerIpc = (
     },
   );
 
-/**
- * L1 same-machine default — bind {@link defaultIpcPath} (or `options.path`).
- * Second binder loses with `EADDRINUSE` (OS exclusivity).
- *
- * @category layers & serving
- * @public
- */
-export const layerDefaultLocal = (options?: {
-  readonly path?: string;
-  readonly unlink?: boolean;
-  readonly onConflict?: OnConflictResolved;
-}) => layerIpc(options?.path ?? defaultIpcPath, options);
-
-/**
- * Serve Lookup on an addressed {@link LookupNode} (ipc `{ path }` in v1).
- * Reads concrete {@link OnConflict} from the Lookup node stamp.
- *
- * @public
- */
 /** Fail a Layer build with {@link LookupUnaddressed}. @internal */
 const lookupUnaddressedLayer = <A = never>(
   node: string,
@@ -522,7 +500,15 @@ const lookupUnaddressedLayer = <A = never>(
     ),
   );
 
-export const layer = (
+/**
+ * Serve Lookup exclusively on an addressed {@link Node.Lookup} (ipc `{ path }` in v1).
+ * Reads concrete {@link OnConflict} from the Lookup node stamp.
+ * Same-machine bind-or-dial without a Node: {@link layer} / {@link layerOptions}.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const layerNode = (
   node: AnyNode & { readonly key: string },
   options?: { readonly unlink?: boolean },
 ): Layer.Layer<never, LookupUnaddressed> => {
@@ -623,12 +609,13 @@ export const client = (
 };
 
 /**
- * Client for the same-machine default lookup path.
+ * Dial the same-machine Lookup path ({@link defaultIpcPath} or `options.path`).
+ * Effect precedent: options factory beside a default Layer value (`layerAgentOptions`).
  *
  * @category clients
  * @public
  */
-export const clientDefaultLocal = (options?: {
+export const clientOptions = (options?: {
   readonly path?: string;
 }): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
@@ -637,22 +624,35 @@ export const clientDefaultLocal = (options?: {
 };
 
 /**
- * Bind-or-dial the same-machine default Lookup path (D7).
- * First process serves Identity+Directory; later processes dial it (`Layer.catchCause`).
+ * Bind-or-dial a same-machine Lookup path (L1 / D7).
+ * First process serves {@link Identity}+{@link Directory}; later processes dial
+ * (`Layer.catchCause`). Default `unlink: false` so a second process cannot unlink-steal
+ * a live sock (stale socks: pass `unlink: true` or a fresh `path`).
+ *
+ * Effect precedent: `layerAgentOptions` — pair with {@link layer} for the zero-config value.
  *
  * @category layers & serving
  * @public
  */
-export const bootstrapDefaultLocal = (options?: {
+export const layerOptions = (options?: {
   readonly path?: string;
   readonly unlink?: boolean;
 }): Layer.Layer<Identity | Directory> => {
   const path = options?.path ?? defaultIpcPath;
-  // Bind-or-dial: try serve first. Default `unlink: false` so a second process cannot
-  // unlink-steal a live Lookup sock (stale socks: pass `unlink: true` or use a fresh path).
   return layerIpc(path, {
     unlink: options?.unlink ?? false,
   }).pipe(
-    Layer.catchCause(() => clientDefaultLocal({ path })),
+    Layer.catchCause(() => clientOptions({ path })),
   ) as Layer.Layer<Identity | Directory>;
 };
+
+/**
+ * Same-machine default Lookup — {@link layerOptions}() on {@link defaultIpcPath}.
+ * Use `Layer.provide(Lookup.layer)` with no call. Override path via {@link layerOptions}.
+ *
+ * Effect precedent: `layerAgent` = `layerAgentOptions()`.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const layer: Layer.Layer<Identity | Directory> = layerOptions();

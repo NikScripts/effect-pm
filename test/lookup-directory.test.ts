@@ -42,7 +42,7 @@ describe("Lookup directory advertise / nodesServing", () => {
       const node = Node.Tag()("lookup/dir-adv", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
-        Lookup.layer(node),
+        Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
           const dir = yield* Lookup.Directory;
@@ -85,7 +85,7 @@ describe("Lookup directory advertise / nodesServing", () => {
       const node = Node.Tag()("lookup/dir-unreg", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
-        Lookup.layer(node),
+        Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
           const dir = yield* Lookup.Directory;
@@ -122,7 +122,7 @@ describe("Lookup directory advertise / nodesServing", () => {
       const node = Node.Tag()("lookup/dir-refresh", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
-        Lookup.layer(node),
+        Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
           const dir = yield* Lookup.Directory;
@@ -165,7 +165,7 @@ describe("Lookup directory livenessReplace", () => {
         path: workerPath,
       }) {}
 
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
       const lookupCtx = Context.merge(lookupServer, lookupClient);
 
@@ -221,7 +221,7 @@ describe("Lookup directory livenessReplace", () => {
       const node = Node.Tag()("lookup/dir-dead", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
-        Lookup.layer(node),
+        Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
           const dir = yield* Lookup.Directory;
@@ -263,7 +263,7 @@ describe("Node.unix directory wire", () => {
         path: workerPath,
       }) {}
 
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
       const lookupCtx = Context.merge(lookupServer, lookupClient);
 
@@ -343,7 +343,7 @@ describe("Lookup directory askIncumbent", () => {
         path: workerPath,
       }) {}
 
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
       const lookupCtx = Context.merge(lookupServer, lookupClient);
 
@@ -406,7 +406,7 @@ describe("Lookup directory askIncumbent", () => {
         { path: workerPath },
       ) {}
 
-      const lookupServer = yield* Layer.build(Lookup.layer(lookupNode));
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
       const lookupCtx = Context.merge(lookupServer, lookupClient);
 

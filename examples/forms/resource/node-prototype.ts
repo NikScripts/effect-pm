@@ -26,7 +26,7 @@ const program = Effect.gen(function* () {
 
   // Named clone with a fixed address
   class East extends MailWorker.make("East", { path: sock }) {}
-  const lookup = Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: true })
+  const lookup = Lookup.layerOptions({ path: lookupPath, unlink: true })
   const named = Node.unix(
     East,
     [Resource.serve(Mail, { pending: Effect.succeed(3) })],
@@ -37,7 +37,7 @@ const program = Effect.gen(function* () {
     [Resource.serve(Mail, { pending: Effect.succeed(9) })],
   )
   const dynamic = spawn("w1").pipe(
-    Layer.provide(Lookup.bootstrapDefaultLocal({ path: lookupPath, unlink: false })),
+    Layer.provide(Lookup.layerOptions({ path: lookupPath, unlink: false })),
   )
 
   yield* Layer.build(named)
