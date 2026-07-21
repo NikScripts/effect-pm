@@ -284,7 +284,7 @@ function serverImpl(
  * client**, so a dashboard never trips the browser's ~6-connection-per-origin HTTP/1.1 cap that
  * starves streams over plain HTTP. Identical to {@link httpServer} in every other way — same serve
  * list, same options, same `/health` — it just speaks WebSocket instead of HTTP POST. Clients connect
- * with {@link socketClient} (or `Resource.layerProtocol(Resource.protocolWebsocket())`); a fleet whose
+ * with {@link Resource.ws} (or `Resource.layerProtocol(Resource.protocolWebsocket())`); a fleet whose
  * peers also serve over this should add `Resource.layerPeerProtocol(Resource.protocolWebsocket)`.
  *
  * ```ts

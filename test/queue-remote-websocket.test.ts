@@ -22,7 +22,7 @@ interface Item {
 }
 class WsQueue extends QueueResource.Tag<WsQueue>()("queue-remote-ws/Q", { payload: Item }) {}
 
-// ws client transport (matches `Resource.socketClient` / a `{protocol:"websocket"}` server).
+// ws client transport (matches `Resource.ws` / a `{protocol:"websocket"}` server).
 const clientWs = (port: number) =>
   RpcClient.layerProtocolSocket().pipe(
     Layer.provide(RpcSerialization.layerNdjson),

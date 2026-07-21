@@ -6,7 +6,7 @@ import * as Node from "../src/Node";
 // A dashboard/TUI needs three things from the package, all proven here:
 //  1. walk a Group.Tag tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
-//  3. drive it over the wire (Resource.client / httpClient — proven in the node/topology tests).
+//  3. drive it over the wire (Resource.client / http — proven in the node/topology tests).
 class MiniNode extends Node.Tag<MiniNode>()("ui/miniNode") {}
 class Roster extends Process.Tag<Roster>()("ui/Roster") {}
 class Poller extends Process.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}

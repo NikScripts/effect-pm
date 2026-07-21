@@ -65,7 +65,7 @@ const readFleet = (peerProtocol: Layer.Layer<never>) =>
       expect(yield* pool.active).toBe(2); // this instance
       return yield* pool.fleetActive; // own (2) + peer NodeB (5), folded across the wire
     }).pipe(
-      Effect.provide(Resource.client(Pool, NodeA).pipe(Layer.provide(Resource.httpClient(NodeA)))),
+      Effect.provide(Resource.client(Pool, NodeA).pipe(Layer.provide(Resource.http(NodeA)))),
       Effect.scoped,
     );
   }).pipe(Effect.scoped);

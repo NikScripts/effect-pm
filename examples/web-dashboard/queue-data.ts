@@ -77,16 +77,16 @@ export const kindOf = (member: unknown): "queue" | "process" => {
 // In Node (the TUI) there's no proxy, so reach the servers directly.
 const inBrowser = typeof window !== "undefined";
 const dropletRpc = inBrowser ? "/rpc" : "http://localhost:7777/rpc";
-/** The Mini node's rpc endpoint (used by `httpClient`). */
+/** The Mini node's rpc endpoint (used by `http`). */
 export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 
 // One transport per HOST — each node serves its whole group on one /rpc (httpServer),
 // so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini. WebSocket
 // (not http) so the browser's many live streams multiplex over one connection per node instead
-// of starving at the ~6-connection HTTP/1.1 cap — see docs/observe/dashboard.md. `socketClient`
+// of starving at the ~6-connection HTTP/1.1 cap — see docs/observe/dashboard.md. `ws`
 // resolves a "/path" against the page origin, and swaps http→ws for the non-browser (CLI) url.
-const dropletTransport = Resource.socketClient(Droplet, { url: dropletRpc });
-const miniTransport = Resource.socketClient(MiniNode, { url: miniUrl });
+const dropletTransport = Resource.ws(Droplet, { url: dropletRpc });
+const miniTransport = Resource.ws(MiniNode, { url: miniUrl });
 
 // Point the nodeless NodeStatus client at a specific node with the 2-arg `client(tag, node)` form — it
 // reads the node's value and unwraps its transport. (The node is exposed in `appLayer` below.)

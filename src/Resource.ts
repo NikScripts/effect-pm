@@ -34,7 +34,7 @@
  * default on both, so client/server can't disagree on the codec):
  * - {@link Resource.httpServer} — expose one or more {@link Resource.serve} layers on an http
  *   `RpcServer` in one call;
- * - {@link Resource.httpClient} — wire a {@link Resource.Node}'s transport from a `url`.
+ * - {@link Resource.http} — wire a {@link Resource.Node}'s transport from a `url`.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
@@ -98,6 +98,7 @@ import {
   AddressedNode,
   AnyNode,
   bindNodeStore,
+  Endpoints,
   InvalidHttpTarget,
   isAddressedNode,
   ListenNode,
@@ -3752,20 +3753,20 @@ export const forwardClient = <S extends Spec>(
 // [extracted to Node module — was Resource.ts:4183-4261]
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
- * **streaming** responses, and is shared by {@link httpClient} + {@link httpServer} so a
+ * **streaming** responses, and is shared by {@link http} + {@link httpServer} so a
  * client and server can't silently disagree on the codec. */
 /** @internal */
 export const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
   RpcSerialization.layerNdjson;
 
 const httpClientInBrowserMessage =
-  "Resource.protocolHttp / httpClient cannot run in a browser: a dashboard opens many concurrent " +
+  "Resource.protocolHttp / http cannot run in a browser: a dashboard opens many concurrent " +
   "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
   "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
-  "Resource.socketClient / a socket-kind node for the browser. See docs/observe/dashboard.md.";
+  "Resource.ws / a socket-kind node for the browser. See docs/observe/dashboard.md.";
 
 /** The http client transport was built in a browser — it starves at the ~6-connection HTTP/1.1 cap and
- *  ships a blank dashboard. `socketClient` is the browser transport. A hard failure, not a warning: the
+ *  ships a blank dashboard. `ws` is the browser transport. A hard failure, not a warning: the
  *  starving transport is never the right choice in a browser. @internal */
 class HttpClientInBrowser extends Data.TaggedError("HttpClientInBrowser")<{
   readonly message: string;
@@ -3784,33 +3785,35 @@ const dieIfHttpClientInBrowser = Effect.suspend(() =>
  * `Protocol` (Fetch + serialization) from a `url` and re-keys it under the node. Serialization defaults
  * to {@link defaultSerialization} (ndjson), matching {@link httpServer}'s default so the two sides agree
  * by construction. **In a browser this fails hard** (`HttpClientInBrowser`) — http starves at the
- * ~6-connection cap; use {@link socketClient} there.
+ * ~6-connection cap; use {@link ws} there.
  *
  * ```ts
- * const EdgeLive = Resource.httpClient(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
+ * const EdgeLive = Resource.http(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
  * ```
  *
  * @category clients
  * @public
  */
-const httpClient = <Self>(
-  node: NodeKey<Self> & { readonly url?: string },
+const http = <Self>(
+  node: NodeKey<Self> & { readonly url?: string; readonly endpoints?: Endpoints },
   options?: {
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self> =>
-  // a per-node shortcut = `connect` + {@link protocolHttp}. The url lives on the node by default
-  // (decision 2 — the node carries how to reach it); `options.url` overrides; `"/rpc"` (same-origin)
-  // is the final fallback, matching {@link httpServer}'s default path.
-  // the browser guard lives in `protocolHttp` (the root), so it applies here too.
+  // The client sibling of {@link Node.http} = `connect` + {@link protocolHttp}. Prefers the node's own
+  // Http endpoint (multi-protocol), then its primary `url`, then `"/rpc"` (same-origin) — `options.url`
+  // overrides. The browser guard lives in `protocolHttp` (the root), so it applies here too.
   connectLayer(
     node,
-    protocolHttp(options?.url ?? node.url ?? "/rpc", options?.serialization),
+    protocolHttp(
+      options?.url ?? node.endpoints?.Http?.url ?? node.url ?? "/rpc",
+      options?.serialization,
+    ),
   );
 
-// Normalize a `socketClient` url to `ws://` / `wss://`, resolved **lazily** (in the enclosing
-// `Effect.sync`, at layer-build time) so the module doesn't read `location` at import — `socketClient`
+// Normalize a `ws` url to `ws://` / `wss://`, resolved **lazily** (in the enclosing
+// `Effect.sync`, at layer-build time) so the module doesn't read `location` at import — `ws`
 // is called at module scope in files a Node server also imports. Accepts an absolute `ws(s)://` url
 // (used as-is), an `http(s)://` url (scheme swapped), or a same-origin **path** like `"/rpc"`
 // (resolved against the page `location`, so the browser follows its own host + http/https→ws/wss).
@@ -3820,7 +3823,7 @@ const toWebSocketUrl = (raw: string): string => {
   if (raw.startsWith("https://")) return `wss://${raw.slice(8)}`;
   if (typeof location === "undefined") {
     throw new Error(
-      `Resource.socketClient: a relative url ("${raw}") resolves against the browser's location; ` +
+      `Resource.ws: a relative url ("${raw}") resolves against the browser's location; ` +
         `pass an absolute ws:// / wss:// url when not in a browser`,
     );
   }
@@ -3832,7 +3835,7 @@ const toWebSocketUrl = (raw: string): string => {
  * The **standard way to set the RPC client transport**: hand it any `RpcClient.Protocol` layer and
  * it becomes the ambient transport that every nodeless {@link Resource.client} — and each node's
  * {@link peers} fold — reads. This is the primitive; {@link protocolHttp} / {@link protocolWebsocket}
- * build the two common protocols, and {@link socketClient} / {@link httpClient} are per-node
+ * build the two common protocols, and {@link ws} / {@link http} are per-node
  * shortcuts layered on top. Provide it once and the whole app agrees on a wire:
  *
  * ```ts
@@ -3858,7 +3861,7 @@ export const protocolHttp = (
   url = "/rpc",
   serialization: Layer.Layer<RpcSerialization.RpcSerialization> = defaultSerialization,
 ): Layer.Layer<RpcClient.Protocol> =>
-  // guard at the root: `httpClient` / `clientHttp` / `connectHttp` all build on this, so the browser
+  // guard at the root: `http` / `clientHttp` / `connectHttp` all build on this, so the browser
   // footgun is closed for every http-client path in one place.
   Layer.merge(
     RpcClient.layerProtocolHttp({ url }).pipe(
@@ -3905,9 +3908,9 @@ export const serverProtocolWebsocket = (
 
 /**
  * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
- * {@link httpClient}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
+ * {@link http}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
  * multiplexed connection**, so a dashboard never trips the browser's ~6-connection-per-origin
- * HTTP/1.1 limit that starves streams over {@link httpClient} (in a browser {@link httpClient} now
+ * HTTP/1.1 limit that starves streams over {@link http} (in a browser {@link http} now
  * fails hard — see its note). The server must be a {@link wsServer}.
  *
  * The `url` may be a same-origin **path** (`"/rpc"` — resolved against the page `location`, so the
@@ -3916,24 +3919,28 @@ export const serverProtocolWebsocket = (
  * scope in a file a Node server also imports. Uses the browser's global `WebSocket`.
  *
  * ```ts
- * const EdgeLive = Resource.socketClient(EdgeNode, { url: "/rpc" }); // same origin as the page
+ * const EdgeLive = Resource.ws(EdgeNode, { url: "/rpc" }); // same origin as the page
  * ```
  *
  * @category clients
  * @public
  */
-const socketClient = <Self>(
-  node: NodeKey<Self> & { readonly url?: string },
+const ws = <Self>(
+  node: NodeKey<Self> & { readonly url?: string; readonly endpoints?: Endpoints },
   options?: {
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self> =>
-  // a per-node shortcut = `connect` + {@link protocolWebsocket}. Same url resolution as
-  // {@link httpClient}: `options.url` → the node's own url → `"/rpc"` (same-origin) fallback.
+  // The client sibling of {@link Node.ws} = `connect` + {@link protocolWebsocket}. Prefers the node's
+  // own WebSocket endpoint (multi-protocol — its primary `url` is the Http one on an `{ http, ws }`
+  // node), then the primary `url`, then `"/rpc"`; `options.url` overrides.
   connectLayer(
     node,
-    protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
+    protocolWebsocket(
+      options?.url ?? node.endpoints?.WebSocket?.url ?? node.url ?? "/rpc",
+      options?.serialization,
+    ),
   );
 
 /**
@@ -3973,19 +3980,24 @@ bindNodeProtocolBuilders({
  * @category clients
  * @public
  */
-const ipcClient = <Self>(
-  node: NodeKey<Self> & { readonly path?: string },
+const unix = <Self>(
+  node: NodeKey<Self> & { readonly path?: string; readonly endpoints?: Endpoints },
   options?: {
     readonly path?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self, UnaddressedNode> => {
-  const sock = options?.path ?? node.path;
+  // The client sibling of {@link Node.unix} — dial a Unix-domain ipc path.
+  const sock = options?.path ?? node.endpoints?.IpcSocket?.path ?? node.path;
   if (sock === undefined) {
     return unaddressedLayer(node.key);
   }
   return connectLayer(node, protocolIpc(sock, options?.serialization));
 };
+
+/** Dial a {@link Node} over a **Windows named pipe** — the client sibling of {@link Node.nPipe}.
+ *  Same ipc dial as {@link unix} (the `path` is a `\\.\pipe\…` name). @public @category clients */
+const nPipe = unix;
 
 // [extracted to Node module — was Resource.ts:4669-4685]
 
@@ -5306,9 +5318,10 @@ export {
   makeTag as Tag,
   tagFor,
   // Node module: import * as Node from "@nikscripts/effect-pm/Node"
-  httpClient,
-  socketClient,
-  ipcClient,
+  http,
+  ws,
+  unix,
+  nPipe,
   instance,
   localLayer as layer,
   serveInstances,

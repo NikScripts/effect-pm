@@ -9,7 +9,7 @@ import * as Node from "../src/Node";
 // type-checks if the hole is closed (the `@ts-expect-error` fires).
 
 class Droplet extends Node.Tag<Droplet>()("np/Droplet", { url: "wss://x/rpc" }) {}
-const transport = Resource.socketClient(Droplet, { url: "ws://x/rpc" });
+const transport = Resource.ws(Droplet, { url: "ws://x/rpc" });
 
 // A sink that only accepts a FULLY-WIRED layer (requires `never`).
 declare const runFullyWired: <A>(layer: Layer.Layer<A, never, never>) => void;

@@ -20,9 +20,9 @@ wants.
 
 A resource client reaches its node over an RPC **transport**. The library ships two:
 
-- **`Resource.httpClient(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
+- **`Resource.http(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
   or backend-to-backend** caller, or any client that opens only a handful of streams.
-- **`Resource.socketClient(node, { url })`** — a single **WebSocket**. Use this for a **browser
+- **`Resource.ws(node, { url })`** — a single **WebSocket**. Use this for a **browser
   dashboard**.
 
 ### Why the browser needs the WebSocket
@@ -37,7 +37,7 @@ even get a response. The visible symptom is a dashboard that half-works: some ca
 sit frozen, **no charts, no logs** — with no error, because the requests are simply queued forever.
 
 A **WebSocket multiplexes every stream for a node over one connection**, so the 6-connection cap
-never applies. `socketClient` is the browser-shaped transport; `httpClient` is not.
+never applies. `ws` is the browser-shaped transport; `http` is not.
 
 {.note}
 HTTP/2 (a TLS production server) multiplexes too, so the cap is an HTTP/1.1 phenomenon — but your
@@ -57,12 +57,12 @@ Resource.wsServer(
 )
 ```
 
-**2. Client** — one `socketClient` per node. A same-origin **path** resolves against the page
+**2. Client** — one `ws` per node. A same-origin **path** resolves against the page
 `location` (its host, and `http→ws` / `https→wss`), so you just pass `"/rpc"` — no URL assembly, and
 it's safe in a module a server also imports (resolution is lazy):
 
 ``` ts
-const transport = Resource.socketClient(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
+const transport = Resource.ws(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
 
 const appLayer = Layer.mergeAll(
   transport,
@@ -102,7 +102,7 @@ Resource.wsServer([Resource.serve(WorkerPool, poolImpl) /* … */]).pipe(
 
 Under the hood every client transport is the same seam — `Resource.layerProtocol(protocol)` sets a
 client wire from an `RpcClient.Protocol` (build one with `Resource.protocolHttp` /
-`Resource.protocolWebsocket`), and `socketClient` / `httpClient` are per-node shortcuts over it.
+`Resource.protocolWebsocket`), and `ws` / `http` are per-node shortcuts over it.
 
 ## Widgets
 

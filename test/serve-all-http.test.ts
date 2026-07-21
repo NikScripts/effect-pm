@@ -35,7 +35,7 @@ it("serves many resources on one node/port", () =>
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
-      const transport = Resource.httpClient(LeagueNode, { url: `http://127.0.0.1:${port}/rpc` });
+      const transport = Resource.http(LeagueNode, { url: `http://127.0.0.1:${port}/rpc` });
       yield* Effect.gen(function* () {
         const a = yield* Alpha;
         const b = yield* Beta;

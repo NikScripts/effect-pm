@@ -3,7 +3,7 @@
  *
  * The **Mini** — a second machine (your home server). It nodes only `KeyRotation` (the
  * wnba key-rotation process), served over http on its own port. The dashboard reaches
- * it via `Resource.httpClient(MiniNode, …)` and shows it under the same group tree as
+ * it via `Resource.http(MiniNode, …)` and shows it under the same group tree as
  * the Droplet's queues — proving nested groups across separate nodes (the wow topology).
  * Run: `pnpm run example:mini-server` (alongside `example:queue-server`).
  */

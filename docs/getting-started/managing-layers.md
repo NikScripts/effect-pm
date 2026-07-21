@@ -58,7 +58,7 @@ served tag is self-describing and a client knows where to dial.
 program.pipe(Effect.provide(Resource.clientHttp(Jobs, 3000)))
 
 // Or wire a Node's transport once and read any resource bound to it:
-const transport = Resource.socketClient(JobsNode, { url: "/rpc" }) // WebSocket (browser)
+const transport = Resource.ws(JobsNode, { url: "/rpc" }) // WebSocket (browser)
 const appLayer = Layer.mergeAll(
   transport,
   Resource.client(Jobs).pipe(Layer.provide(transport)),
@@ -67,13 +67,13 @@ const appLayer = Layer.mergeAll(
 
 Per-node transport shortcuts, matching the two server entry points:
 
-- **`Resource.httpClient(node, { url? })`** — HTTP. The server side is `httpServer`.
-- **`Resource.socketClient(node, { url? })`** — WebSocket. The server side is `wsServer`. The `url`
+- **`Resource.http(node, { url? })`** — HTTP. The server side is `httpServer`.
+- **`Resource.ws(node, { url? })`** — WebSocket. The server side is `wsServer`. The `url`
   may be a same-origin path (`"/rpc"`, resolved against the page — `http→ws`, `https→wss`), an
   `http(s)://` url (scheme swapped), or an absolute `ws(s)://` url. Both shortcuts resolve the `url`
   as: the option you pass → the Node's own url → `"/rpc"` (same-origin) as the final fallback.
 
-**The client and server must speak the same wire** — a `socketClient` cannot talk to an `httpServer`.
+**The client and server must speak the same wire** — a `ws` cannot talk to an `httpServer`.
 
 ## The transport primitive
 
@@ -86,7 +86,7 @@ Effect.provide(app, Resource.layerProtocol(Resource.protocolWebsocket())) // one
 ```
 
 `Resource.connect(node, protocol)` is the per-node form (it re-keys a protocol under a node);
-`socketClient(node)` is exactly `connect(node, protocolWebsocket(node.url))`. You rarely reach for the
+`ws(node)` is exactly `connect(node, protocolWebsocket(node.url))`. You rarely reach for the
 primitive directly — the named shortcuts cover the common cases — but it's there when you need a
 custom serialization or a hand-rolled transport.
 
@@ -113,8 +113,8 @@ Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …)
 
 | | Server | Client | Peers |
 |---|---|---|---|
-| **HTTP** (default) | `httpServer([...])` | `httpClient(node)` / `clientHttp(tag, port)` | default |
-| **WebSocket** (browser, many streams) | `wsServer([...])` | `socketClient(node)` | `layerPeerProtocol(protocolWebsocket)` |
+| **HTTP** (default) | `httpServer([...])` | `http(node)` / `clientHttp(tag, port)` | default |
+| **WebSocket** (browser, many streams) | `wsServer([...])` | `ws(node)` | `layerPeerProtocol(protocolWebsocket)` |
 
 Pick per **deployment**, not per call — every side of one wire must agree. In-process resources
 (`Resource.layer`) have no transport at all.

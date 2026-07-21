@@ -145,7 +145,7 @@ Four verbs, one axis — how a resource is made available:
 - **`serveRemote`** — served only, not runnable in-process.
 - **`client`** — a remote handle to a served resource.
 
-Transport is a **separate** line: `httpServer` / `httpClient` / `connect`. `Http` appears **only**
+Transport is a **separate** line: `httpServer` / `http` / `connect`. `Http` appears **only**
 there — the core verbs stay transport-agnostic, so the same resource can be served over any protocol.
 
 {#serve-through-spec-checked-forms .must appliesTo="src examples"}

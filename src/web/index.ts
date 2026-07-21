@@ -11,7 +11,7 @@
  * ```tsx
  * import { Dashboard } from "@nikscripts/effect-pm/web";
  * import { Atom } from "effect/unstable/reactivity";
- * const runtime = Atom.runtime(appLayer); // appLayer: Resource.client(...) over httpClient
+ * const runtime = Atom.runtime(appLayer); // appLayer: Resource.client(...) over http
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *

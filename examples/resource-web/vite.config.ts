@@ -20,7 +20,7 @@ export default defineConfig({
     // The browser is a thin client; proxy each node's RPC so the client is same-origin (no CORS).
     // `/rpc` → WnbaNode, `/live` → LiveNode, `/stats` → StatsNode (all from server.ts).
     proxy: {
-      // `ws: true` — the dashboard talks WebSocket (Resource.socketClient), so vite must upgrade+proxy it.
+      // `ws: true` — the dashboard talks WebSocket (Resource.ws), so vite must upgrade+proxy it.
       "/rpc": { target: "http://localhost:7780", changeOrigin: true, ws: true },
       "/live": {
         target: "http://localhost:7781",

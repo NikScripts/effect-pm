@@ -21,7 +21,7 @@ const Server = Node.httpServer([
 
 // The fix for #3: a nodeless tag has N instances, so the *client* names which one — `client(tag, node)`.
 // The transport resolves from that node service, so the layer requires the node (satisfied by
-// httpClient) — the requirement is enforced at compile time, so it can't fail at runtime with a
+// http) — the requirement is enforced at compile time, so it can't fail at runtime with a
 // "Service not found: RpcClient/Protocol" the way `client(tag)` (ambient Protocol) did when wired to a
 // node service instead.
 describe("hostless client(tag, node)", () => {
@@ -29,7 +29,7 @@ describe("hostless client(tag, node)", () => {
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((server) => server.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
-      const transport = Resource.httpClient(DbNode, {
+      const transport = Resource.http(DbNode, {
         url: `http://127.0.0.1:${port}/rpc`,
       });
       yield* Effect.gen(function* () {

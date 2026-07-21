@@ -4,7 +4,7 @@
  * The review fixture for the shipped `@nikscripts/effect-pm/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled process (the WNBA live-score
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
- * nodes (served by `server.ts`); the browser reaches each via `Resource.httpClient` (vite proxies
+ * nodes (served by `server.ts`); the browser reaches each via `Resource.http` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
  * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serve`. `ScoresDb` is a dependency
  * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
@@ -164,13 +164,13 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // node's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaNode` alongside the box-score queue.
 // One transport per node → one pip each, auto-fed by `NodeStatus`.
 // A browser opens many concurrent live streams (each resource's status + metrics + logs); over
-// HTTP/1.1 that dies at the ~6-connection-per-origin cap. `socketClient` rides ONE multiplexed
+// HTTP/1.1 that dies at the ~6-connection-per-origin cap. `ws` rides ONE multiplexed
 // WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
 // A `"/path"` url resolves against the page origin (browser host + http/https→ws/wss), lazily — so
 // `hub.ts` is safe to import from the Node server too (nothing reads `location` at load).
-const wnbaTransport = Resource.socketClient(WnbaNode, { url: "/rpc" });
-const liveTransport = Resource.socketClient(LiveNode, { url: "/live/rpc" });
-const statsTransport = Resource.socketClient(StatsNode, { url: "/stats/rpc" });
+const wnbaTransport = Resource.ws(WnbaNode, { url: "/rpc" });
+const liveTransport = Resource.ws(LiveNode, { url: "/live/rpc" });
+const statsTransport = Resource.ws(StatsNode, { url: "/stats/rpc" });
 
 // Expose each node itself in the runtime (not only the resource clients): the node-status die reads
 // `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one
