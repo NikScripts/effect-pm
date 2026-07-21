@@ -241,21 +241,14 @@ export type ListenOptions = {
 };
 
 /**
- * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal} —
- * {@link ListenOptions} plus Lookup bootstrap knobs.
+ * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal}.
+ * Same as {@link ListenOptions} — Lookup is composed with `.pipe(Layer.provide(…))`,
+ * not listen options (`lookupPath` / `bootstrapLookup` removed).
  *
  * @category models
  * @public
  */
-export type NamelessListenOptions = ListenOptions & {
-  readonly lookupPath?: string;
-  readonly unlinkLookup?: boolean;
-  /**
-   * When `false`, skip {@link Lookup.bootstrapDefaultLocal} — caller provides
-   * Identity / Directory (e.g. a custom Lookup server). Default `true`.
-   */
-  readonly bootstrapLookup?: boolean;
-};
+export type NamelessListenOptions = ListenOptions;
 
 /**
  * {@link resolveHttpTarget} / a positional `Node.Tag()(name, badString)` got a string that is

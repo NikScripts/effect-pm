@@ -66,7 +66,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | — | `Node.nPipe` — Windows named-pipe sibling of `unix` (same `IpcSocket` kind; see `test/node-npipe.test.ts`) |
 | [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Resource.client(Jobs)` |
 | [`forms/resource/node-clients.ts`](./forms/resource/node-clients.ts) | Catalog `ROut` + `Node.clients(Worker, [Jobs, Emails])` |
-| [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve — Lookup **piped** (`bootstrapLookup: false`) — terminal A |
+| [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve — Lookup **piped** (`Layer.provide(Lookup.bootstrapDefaultLocal)`) — terminal A |
 | [`forms/resource/node-tag-addressless-call.ts`](./forms/resource/node-tag-addressless-call.ts) | Address-less call — `lookupClient` + Lookup **piped** — terminal B |
 | [`forms/resource/node-nameless-listen-serve.ts`](./forms/resource/node-nameless-listen-serve.ts) | Nameless `Node.unix([serve…])` — two resources, terminal A |
 | [`forms/resource/node-nameless-listen-call.ts`](./forms/resource/node-nameless-listen-call.ts) | Nameless call (`discoverClients(Jobs, Emails)`) — terminal B |

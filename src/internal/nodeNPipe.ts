@@ -1,5 +1,5 @@
 /**
- * {@link nPipe} — Windows named-pipe IpcSocket listen + Lookup batteries (mint/claim/bind).
+ * {@link nPipe} — Windows named-pipe IpcSocket listen (mint/claim/bind). Lookup via pipe.
  *
  * @internal
  */
@@ -51,6 +51,7 @@ const requireWindows = <A, E, R>(
 /**
  * Windows named-pipe IPC listen — same overload shapes as {@link unix}.
  * Same `IpcSocket` kind; paths are `\\.\pipe\…`. Prefer {@link unix} on POSIX.
+ * Compose Lookup via `Layer.provide(Lookup.bootstrapDefaultLocal(...))` when needed.
  *
  * @category listen
  * @public
@@ -121,38 +122,11 @@ export function nPipe(
   | NPipeRequiresWindows,
   unknown
 > {
-  const rawOpts = (
+  const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  const {
-    lookupPath,
-    unlinkLookup,
-    bootstrapLookup = true,
-    ...listenOptions
-  } = rawOpts ?? {};
-  const withLookup = <A, E, R>(
-    layer: Layer.Layer<A, E, R>,
-  ): Layer.Layer<A, E | NPipeRequiresWindows, R> => {
-    const bootstrapped: Layer.Layer<A, E, R> =
-      bootstrapLookup === false
-        ? layer
-        : (Layer.unwrap(
-            Effect.gen(function* () {
-              const Lookup = yield* Effect.promise(() => import("../Lookup"));
-              return layer.pipe(
-                Layer.provide(
-                  Lookup.bootstrapDefaultLocal({
-                    ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-                    ...(unlinkLookup !== undefined
-                      ? { unlink: unlinkLookup }
-                      : {}),
-                  }),
-                ),
-              );
-            }),
-          ) as Layer.Layer<A, E, R>);
-    return requireWindows(bootstrapped);
-  };
+  // Lookup is not baked in — pipe `Layer.provide(Lookup.bootstrapDefaultLocal(…))`
+  // when claim / advertise needs it. Windows gate stays on every path.
 
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
@@ -160,7 +134,7 @@ export function nPipe(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return withLookup(nPipeNameless(list, listenOptions)) as Layer.Layer<
+    return requireWindows(nPipeNameless(list, listenOptions)) as Layer.Layer<
       never,
       | UnaddressedNode
       | AddressLessClaimLost
@@ -192,7 +166,7 @@ export function nPipe(
         | AddressLessClaimLost
         | ListenTagNodeRequired
         | NPipeListenRequiresIpc
-  | NPipeRequiresWindows,
+        | NPipeRequiresWindows,
         unknown
       >;
     }
@@ -207,7 +181,7 @@ export function nPipe(
         | AddressLessClaimLost
         | ListenTagNodeRequired
         | NPipeListenRequiresIpc
-  | NPipeRequiresWindows,
+        | NPipeRequiresWindows,
         unknown
       >;
     }
@@ -215,7 +189,7 @@ export function nPipe(
       tag: Resource.PipeableTag,
       impl: unknown,
     ) => Layer.Layer<never, never, never>;
-    return withLookup(
+    return requireWindows(
       nPipeListenOn(
         bound as AnyNode,
         [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
@@ -227,7 +201,7 @@ export function nPipe(
       | AddressLessClaimLost
       | ListenTagNodeRequired
       | NPipeListenRequiresIpc
-  | NPipeRequiresWindows,
+      | NPipeRequiresWindows,
       unknown
     >;
   }
@@ -243,7 +217,7 @@ export function nPipe(
       | AddressLessClaimLost
       | ListenTagNodeRequired
       | NPipeListenRequiresIpc
-  | NPipeRequiresWindows,
+      | NPipeRequiresWindows,
       unknown
     >;
   }
@@ -252,18 +226,18 @@ export function nPipe(
     | Layer.Layer<never, any, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return withLookup(nPipeListenOn(node, list, listenOptions)) as Layer.Layer<
+  return requireWindows(nPipeListenOn(node, list, listenOptions)) as Layer.Layer<
     never,
     | UnaddressedNode
     | AddressLessClaimLost
     | ListenTagNodeRequired
     | NPipeListenRequiresIpc
-  | NPipeRequiresWindows,
+    | NPipeRequiresWindows,
     unknown
   >;
 }
 
-/** Nameless anonymous named-pipe Node + bind (Lookup added by {@link nPipe}). @internal */
+/** Nameless anonymous named-pipe Node + bind (pipe Lookup when needed). @internal */
 const nPipeNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,

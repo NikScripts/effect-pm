@@ -7,9 +7,9 @@
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link Lookup} — Lookup-server Node (`isLookupNode: true`)
  * - {@link listen} — neutral spine (**no transport bind** — use {@link unix} / {@link http} / {@link ws})
- * - {@link unix} — IpcSocket listen + Lookup batteries (nameless / Tag+impl / node+serves)
- * - {@link http} — local Http listen + Lookup batteries (localhost bind / nameless / Tag+impl)
- * - {@link ws} — local WebSocket listen + Lookup batteries (localhost bind / nameless / Tag+impl)
+ * - {@link unix} — IpcSocket listen (nameless / Tag+impl / node+serves); pipe Lookup when needed
+ * - {@link http} — local Http listen (localhost bind / nameless / Tag+impl); pipe Lookup when needed
+ * - {@link ws} — local WebSocket listen (localhost bind / nameless / Tag+impl); pipe Lookup when needed
  * - {@link nPipe} — Windows named-pipe IpcSocket listen + Lookup (sibling of {@link unix})
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
