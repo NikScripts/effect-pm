@@ -468,17 +468,35 @@ const assembleNode = <Self, ROut, Addr>(
       ? { [invalidHttpTargetSym]: fields.invalidTarget }
       : {}),
   });
-  return Object.assign(node, {
+  const built = Object.assign(node, {
     /** Node-wide durable log registration — same as {@link store}`(this node)`. */
     get logs() {
       return storeOrThrow(node);
     },
     [catalogSym]: undefined,
-    // Through `unknown`: `Addr` is generic, so TS can't see the (real) overlap between the loose
-    // runtime `kind` and the precise address form — the single, contained construction assertion,
-    // now backed by the field validation above (the built value is a well-formed node).
-  }) as unknown as NodeTagClass<Self, ROut, Addr>;
+  });
+  // Narrow to the node-tag type with a guard instead of a blind `as unknown` — the guard verifies the
+  // built value carries the node-tag shape (the checkable part) and catches a broken build. `Addr` is
+  // an erased type parameter, so its precision is asserted by the predicate rather than checked.
+  if (!isNodeTagValue<Self, ROut, Addr>(built)) {
+    throw new MalformedNode({
+      key,
+      reason: "assembled value is not a well-formed node tag",
+    });
+  }
+  return built;
 };
+
+/** Does a freshly-assembled value carry the node-tag shape? The type-guard form of the construction
+ *  assertion — verifies the checkable structure; `Addr`'s precision is trusted (erased). @internal */
+const isNodeTagValue = <Self, ROut, Addr>(
+  x: unknown,
+): x is NodeTagClass<Self, ROut, Addr> =>
+  (typeof x === "object" || typeof x === "function") &&
+  x !== null &&
+  "endpoints" in x &&
+  "logs" in x &&
+  catalogSym in x;
 
 /**
  * Declare a **node** — a named transport endpoint a resource connects to. **Two-stage** and keyed by
