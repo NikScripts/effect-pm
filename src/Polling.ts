@@ -14,6 +14,8 @@
  * | `Polling.backoff` | Exponential backoff: initial → max (resetCadence resets) |
  * | `Polling.accelerating` | Exponential decay: starts slow, speeds up with excitement |
  * | `Polling.acceleratingWithRefs` | Accelerating cadence with externally-owned refs |
+ * | `Polling.adaptive` | Fast after a work signal, decays toward an idle cap |
+ * | `Polling.dynamic` | Cadence from a DynamicConfig field; wakes on swap |
  *
  * ## Usage
  *
@@ -31,9 +33,23 @@
  * @module Polling
  */
 
-import { Duration, Effect, Layer, Option, Random, Ref, Deferred, Scope, Stream } from "effect";
+import {
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Random,
+  Ref,
+  Deferred,
+  Scope,
+  Stream,
+} from "effect";
 import { registerPollingLayer } from "./internal/processLayerBrand";
-import { DynamicConfigStore, type FixedField, type SwappableField } from "./DynamicConfig";
+import {
+  DynamicConfigStore,
+  type FixedField,
+  type SwappableField,
+} from "./DynamicConfig";
 
 // ============================================================================
 // Service interface
@@ -53,7 +69,8 @@ export type { PollingService as Service } from "./internal/pollingTag";
  * @category context
  * @public
  */
-export const current: Effect.Effect<PollingService, never, PollingTag> = PollingTag;
+export const current: Effect.Effect<PollingService, never, PollingTag> =
+  PollingTag;
 
 /**
  * A custom cadence policy as a polling layer for `Process.make({ polling })`.
@@ -87,12 +104,14 @@ const makeWakeableAwait = (duration: Duration.Duration) =>
         const d = Deferred.makeUnsafe<void, never>();
         yield* Ref.set(wakeRef, d);
         // Race: either the sleep completes naturally, or wake fires
-        yield* Effect.race(Effect.sleep(duration), Deferred.await(d)).pipe(Effect.asVoid);
+        yield* Effect.race(Effect.sleep(duration), Deferred.await(d)).pipe(
+          Effect.asVoid
+        );
       }),
-      requestWake: Effect.flatMap(Ref.get(wakeRef), (d) => Deferred.succeed(d, undefined)).pipe(
-        Effect.asVoid,
-      ),
-    }),
+      requestWake: Effect.flatMap(Ref.get(wakeRef), (d) =>
+        Deferred.succeed(d, undefined)
+      ).pipe(Effect.asVoid),
+    })
   );
 
 // ============================================================================
@@ -110,21 +129,22 @@ const makeWakeableAwait = (duration: Duration.Duration) =>
  * @category presets
  * @public
  */
-export const spaced = (
-  interval: Duration.Input,
-): Layer.Layer<PollingTag> => {
+export const spaced = (interval: Duration.Input): Layer.Layer<PollingTag> => {
   const dur = Duration.fromInputUnsafe(interval);
   return registerPollingLayer(
     Layer.effect(
       PollingTag,
-      Effect.map(makeWakeableAwait(dur), ({ awaitNextTick, requestWake }): PollingService => ({
-        awaitNextTick,
-        requestWake,
-        resetCadence: requestWake,
-        afterTick: Effect.void,
-        peekCadence: Effect.succeed(Option.some(dur)),
-      })),
-    ),
+      Effect.map(
+        makeWakeableAwait(dur),
+        ({ awaitNextTick, requestWake }): PollingService => ({
+          awaitNextTick,
+          requestWake,
+          resetCadence: requestWake,
+          afterTick: Effect.void,
+          peekCadence: Effect.succeed(Option.some(dur)),
+        })
+      )
+    )
   );
 };
 
@@ -146,7 +166,7 @@ export const spaced = (
  */
 export const jittered = (
   interval: Duration.Input,
-  options: { readonly jitter: number } = { jitter: 0.1 },
+  options: { readonly jitter: number } = { jitter: 0.1 }
 ): Layer.Layer<PollingTag> => {
   const baseMs = Duration.toMillis(Duration.fromInputUnsafe(interval));
   const jitterFraction = Math.abs(options.jitter);
@@ -155,31 +175,38 @@ export const jittered = (
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
-        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
 
         const awaitNextTick: Effect.Effect<void> = Effect.gen(function* () {
           const d = Deferred.makeUnsafe<void, never>();
           yield* Ref.set(wakeRef, d);
           // Random offset: base +/- jitter%.
-        const random = yield* Random.next;
-        const offset = (random * 2 - 1) * jitterFraction * baseMs;
-        const ms = Math.max(0, baseMs + offset);
-        yield* Effect.race(Effect.sleep(Duration.millis(ms)), Deferred.await(d)).pipe(Effect.asVoid);
-      });
+          const random = yield* Random.next;
+          const offset = (random * 2 - 1) * jitterFraction * baseMs;
+          const ms = Math.max(0, baseMs + offset);
+          yield* Effect.race(
+            Effect.sleep(Duration.millis(ms)),
+            Deferred.await(d)
+          ).pipe(Effect.asVoid);
+        });
 
-      const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) => Deferred.succeed(d, undefined)).pipe(
-        Effect.asVoid,
-      );
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined)
+        ).pipe(Effect.asVoid);
 
-      return {
-        awaitNextTick,
-        requestWake,
-        resetCadence: requestWake,
-        afterTick: Effect.void,
-        peekCadence: Effect.succeed(Option.some(Duration.fromInputUnsafe(interval))),
+        return {
+          awaitNextTick,
+          requestWake,
+          resetCadence: requestWake,
+          afterTick: Effect.void,
+          peekCadence: Effect.succeed(
+            Option.some(Duration.fromInputUnsafe(interval))
+          ),
         } satisfies PollingService;
-      }),
-    ),
+      })
+    )
   );
 };
 
@@ -205,7 +232,9 @@ export const backoff = (options: {
   readonly max: Duration.Input;
   readonly factor?: number;
 }): Layer.Layer<PollingTag> => {
-  const initialMs = Duration.toMillis(Duration.fromInputUnsafe(options.initial));
+  const initialMs = Duration.toMillis(
+    Duration.fromInputUnsafe(options.initial)
+  );
   const maxMs = Duration.toMillis(Duration.fromInputUnsafe(options.max));
   const factor = options.factor ?? 2;
 
@@ -214,36 +243,45 @@ export const backoff = (options: {
       PollingTag,
       Effect.gen(function* () {
         const currentMs = yield* Ref.make(initialMs);
-        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
 
         const awaitNextTick: Effect.Effect<void> = Effect.gen(function* () {
           const d = Deferred.makeUnsafe<void, never>();
           yield* Ref.set(wakeRef, d);
           const ms = yield* Ref.get(currentMs);
-        yield* Effect.race(Effect.sleep(Duration.millis(ms)), Deferred.await(d)).pipe(Effect.asVoid);
-      });
+          yield* Effect.race(
+            Effect.sleep(Duration.millis(ms)),
+            Deferred.await(d)
+          ).pipe(Effect.asVoid);
+        });
 
-      const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) => Deferred.succeed(d, undefined)).pipe(
-        Effect.asVoid,
-      );
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined)
+        ).pipe(Effect.asVoid);
 
-      const afterTick = Ref.update(currentMs, (ms) => Math.min(ms * factor, maxMs));
+        const afterTick = Ref.update(currentMs, (ms) =>
+          Math.min(ms * factor, maxMs)
+        );
 
-      const resetCadence = Ref.set(currentMs, initialMs).pipe(
-        Effect.andThen(requestWake),
-      );
+        const resetCadence = Ref.set(currentMs, initialMs).pipe(
+          Effect.andThen(requestWake)
+        );
 
-      const peekCadence = Effect.map(Ref.get(currentMs), (ms) => Option.some(Duration.millis(ms)));
+        const peekCadence = Effect.map(Ref.get(currentMs), (ms) =>
+          Option.some(Duration.millis(ms))
+        );
 
-      return {
-        awaitNextTick,
-        requestWake,
-        resetCadence,
-        afterTick,
-        peekCadence,
+        return {
+          awaitNextTick,
+          requestWake,
+          resetCadence,
+          afterTick,
+          peekCadence,
         } satisfies PollingService;
-      }),
-    ),
+      })
+    )
   );
 };
 
@@ -287,7 +325,7 @@ const delayMsForIteration = (
   slowestMs: number,
   decay: number,
   excitement: number,
-  iteration: number,
+  iteration: number
 ): number => {
   const span = slowestMs - fastestMs;
   const t = Math.exp(-decay * iteration * excitement);
@@ -310,9 +348,14 @@ const delayMsForIteration = (
  * @category presets
  * @public
  */
-export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag> => {
+export const accelerating = (
+  config: AcceleratingConfig
+): Layer.Layer<PollingTag> => {
   const fastestMs = Duration.toMillis(Duration.fromInputUnsafe(config.fastest));
-  const slowestMs = Math.max(fastestMs, Duration.toMillis(Duration.fromInputUnsafe(config.slowest)));
+  const slowestMs = Math.max(
+    fastestMs,
+    Duration.toMillis(Duration.fromInputUnsafe(config.slowest))
+  );
   const decay = config.decay ?? 0.3;
   const excitement = config.excitement ?? 1;
 
@@ -321,36 +364,53 @@ export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag
       PollingTag,
       Effect.gen(function* () {
         const iterationRef = yield* Ref.make(0);
-        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
 
         const awaitNextTick: Effect.Effect<void> = Effect.gen(function* () {
           const d = Deferred.makeUnsafe<void, never>();
           yield* Ref.set(wakeRef, d);
           const n = yield* Ref.get(iterationRef);
-          const ms = delayMsForIteration(fastestMs, slowestMs, decay, excitement, n);
-        yield* Effect.race(Effect.sleep(Duration.millis(ms)), Deferred.await(d)).pipe(Effect.asVoid);
-      });
+          const ms = delayMsForIteration(
+            fastestMs,
+            slowestMs,
+            decay,
+            excitement,
+            n
+          );
+          yield* Effect.race(
+            Effect.sleep(Duration.millis(ms)),
+            Deferred.await(d)
+          ).pipe(Effect.asVoid);
+        });
 
-      const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) => Deferred.succeed(d, undefined)).pipe(
-        Effect.asVoid,
-      );
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined)
+        ).pipe(Effect.asVoid);
 
-      const resetCadence = Ref.set(iterationRef, 0).pipe(Effect.andThen(requestWake));
-      const afterTick = Ref.update(iterationRef, (n) => n + 1);
+        const resetCadence = Ref.set(iterationRef, 0).pipe(
+          Effect.andThen(requestWake)
+        );
+        const afterTick = Ref.update(iterationRef, (n) => n + 1);
 
-      const peekCadence = Effect.map(Ref.get(iterationRef), (n) =>
-        Option.some(Duration.millis(delayMsForIteration(fastestMs, slowestMs, decay, excitement, n))),
-      );
+        const peekCadence = Effect.map(Ref.get(iterationRef), (n) =>
+          Option.some(
+            Duration.millis(
+              delayMsForIteration(fastestMs, slowestMs, decay, excitement, n)
+            )
+          )
+        );
 
-      return {
-        awaitNextTick,
-        requestWake,
-        resetCadence,
-        afterTick,
-        peekCadence,
+        return {
+          awaitNextTick,
+          requestWake,
+          resetCadence,
+          afterTick,
+          peekCadence,
         } satisfies PollingService;
-      }),
-    ),
+      })
+    )
   );
 };
 
@@ -362,7 +422,11 @@ export const accelerating = (config: AcceleratingConfig): Layer.Layer<PollingTag
  * @public
  */
 export const acceleratingWithRefs = (options: {
-  readonly config: Ref.Ref<{ minIntervalMs: number; maxIntervalMs: number; decayK: number }>;
+  readonly config: Ref.Ref<{
+    minIntervalMs: number;
+    maxIntervalMs: number;
+    decayK: number;
+  }>;
   readonly iteration: Ref.Ref<number>;
   readonly excitement: Ref.Ref<number>;
 }): Layer.Layer<PollingTag> =>
@@ -370,36 +434,69 @@ export const acceleratingWithRefs = (options: {
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
-        const { config: configRef, iteration: iterationRef, excitement: excRef } = options;
-      const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const {
+          config: configRef,
+          iteration: iterationRef,
+          excitement: excRef,
+        } = options;
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
 
-      const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) => Deferred.succeed(d, undefined)).pipe(
-        Effect.asVoid,
-      );
+        const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
+          Deferred.succeed(d, undefined)
+        ).pipe(Effect.asVoid);
 
-      const awaitNextTick: Effect.Effect<void> = Effect.gen(function* () {
-        const d = Deferred.makeUnsafe<void, never>();
-        yield* Ref.set(wakeRef, d);
-        const n = yield* Ref.get(iterationRef);
-        const cfg = yield* Ref.get(configRef);
-        const exc = yield* Ref.get(excRef);
-        const ms = delayMsForIteration(cfg.minIntervalMs, cfg.maxIntervalMs, cfg.decayK, exc, n);
-        yield* Effect.race(Effect.sleep(Duration.millis(ms)), Deferred.await(d)).pipe(Effect.asVoid);
-      });
+        const awaitNextTick: Effect.Effect<void> = Effect.gen(function* () {
+          const d = Deferred.makeUnsafe<void, never>();
+          yield* Ref.set(wakeRef, d);
+          const n = yield* Ref.get(iterationRef);
+          const cfg = yield* Ref.get(configRef);
+          const exc = yield* Ref.get(excRef);
+          const ms = delayMsForIteration(
+            cfg.minIntervalMs,
+            cfg.maxIntervalMs,
+            cfg.decayK,
+            exc,
+            n
+          );
+          yield* Effect.race(
+            Effect.sleep(Duration.millis(ms)),
+            Deferred.await(d)
+          ).pipe(Effect.asVoid);
+        });
 
-      const resetCadence = Ref.set(iterationRef, 0).pipe(Effect.andThen(requestWake));
-      const afterTick = Ref.update(iterationRef, (n) => n + 1);
+        const resetCadence = Ref.set(iterationRef, 0).pipe(
+          Effect.andThen(requestWake)
+        );
+        const afterTick = Ref.update(iterationRef, (n) => n + 1);
 
-      const peekCadence = Effect.gen(function* () {
-        const n = yield* Ref.get(iterationRef);
-        const cfg = yield* Ref.get(configRef);
-        const exc = yield* Ref.get(excRef);
-        return Option.some(Duration.millis(delayMsForIteration(cfg.minIntervalMs, cfg.maxIntervalMs, cfg.decayK, exc, n)));
-      });
+        const peekCadence = Effect.gen(function* () {
+          const n = yield* Ref.get(iterationRef);
+          const cfg = yield* Ref.get(configRef);
+          const exc = yield* Ref.get(excRef);
+          return Option.some(
+            Duration.millis(
+              delayMsForIteration(
+                cfg.minIntervalMs,
+                cfg.maxIntervalMs,
+                cfg.decayK,
+                exc,
+                n
+              )
+            )
+          );
+        });
 
-        return { awaitNextTick, requestWake, resetCadence, afterTick, peekCadence } satisfies PollingService;
-      }),
-    ),
+        return {
+          awaitNextTick,
+          requestWake,
+          resetCadence,
+          afterTick,
+          peekCadence,
+        } satisfies PollingService;
+      })
+    )
   );
 
 // ============================================================================
@@ -430,34 +527,40 @@ export const acceleratingWithRefs = (options: {
  */
 export const dynamic = (
   field: FixedField<Duration.Duration> | SwappableField<Duration.Duration>,
-  options?: { readonly fallback?: Duration.Input },
+  options?: { readonly fallback?: Duration.Input }
 ): Layer.Layer<PollingTag> => {
   const fallback =
-    options?.fallback === undefined ? undefined : Duration.fromInputUnsafe(options.fallback);
+    options?.fallback === undefined
+      ? undefined
+      : Duration.fromInputUnsafe(options.fallback);
   const read: Effect.Effect<Duration.Duration> = Effect.catch(field, (error) =>
-    fallback === undefined ? Effect.die(error) : Effect.succeed(fallback),
+    fallback === undefined ? Effect.die(error) : Effect.succeed(fallback)
   );
   return registerPollingLayer(
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
-        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
         const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
-          Deferred.succeed(d, undefined),
+          Deferred.succeed(d, undefined)
         ).pipe(Effect.asVoid);
         const awaitNextTick = Effect.gen(function* () {
           const d = Deferred.makeUnsafe<void, never>();
           yield* Ref.set(wakeRef, d);
           const dur = yield* read;
-          yield* Effect.race(Effect.sleep(dur), Deferred.await(d)).pipe(Effect.asVoid);
+          yield* Effect.race(Effect.sleep(dur), Deferred.await(d)).pipe(
+            Effect.asVoid
+          );
         });
         // wake-on-swap: only when the field is swappable and the store is around
         const store = yield* Effect.serviceOption(DynamicConfigStore);
         if ("changes" in field && Option.isSome(store)) {
           yield* Effect.forkScoped(
             Stream.runForEach(field.changes, () => requestWake).pipe(
-              Effect.provideService(DynamicConfigStore, store.value),
-            ),
+              Effect.provideService(DynamicConfigStore, store.value)
+            )
           );
         }
         return {
@@ -467,11 +570,15 @@ export const dynamic = (
           afterTick: Effect.void,
           peekCadence: field.pipe(
             Effect.map(Option.some),
-            Effect.catch(() => Effect.succeed(fallback === undefined ? Option.none() : Option.some(fallback))),
+            Effect.catch(() =>
+              Effect.succeed(
+                fallback === undefined ? Option.none() : Option.some(fallback)
+              )
+            )
           ),
         } satisfies PollingService;
-      }),
-    ),
+      })
+    )
   );
 };
 
@@ -513,9 +620,11 @@ export const adaptive = (options: {
       PollingTag,
       Effect.gen(function* () {
         const iteration = yield* Ref.make(0);
-        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
+        const wakeRef = yield* Ref.make<Deferred.Deferred<void, never>>(
+          Deferred.makeUnsafe()
+        );
         const requestWake = Effect.flatMap(Ref.get(wakeRef), (d) =>
-          Deferred.succeed(d, undefined),
+          Deferred.succeed(d, undefined)
         ).pipe(Effect.asVoid);
         const awaitNextTick = Effect.gen(function* () {
           const d = Deferred.makeUnsafe<void, never>();
@@ -523,7 +632,7 @@ export const adaptive = (options: {
           const n = yield* Ref.get(iteration);
           yield* Effect.race(
             Effect.sleep(Duration.millis(delayMs(n))),
-            Deferred.await(d),
+            Deferred.await(d)
           ).pipe(Effect.asVoid);
         });
         return {
@@ -533,11 +642,11 @@ export const adaptive = (options: {
           resetCadence: Ref.set(iteration, 0).pipe(Effect.andThen(requestWake)),
           afterTick: Ref.update(iteration, (n) => n + 1),
           peekCadence: Effect.map(Ref.get(iteration), (n) =>
-            Option.some(Duration.millis(delayMs(n))),
+            Option.some(Duration.millis(delayMs(n)))
           ),
         } satisfies PollingService;
-      }),
-    ),
+      })
+    )
   );
 };
 
@@ -562,6 +671,6 @@ export const adaptive = (options: {
  */
 export const wakeOn = <A, R>(
   stream: Stream.Stream<A, never, R>,
-  wake: Effect.Effect<void>,
+  wake: Effect.Effect<void>
 ): Effect.Effect<void, never, R | Scope.Scope> =>
   Effect.asVoid(Effect.forkScoped(Stream.runForEach(stream, () => wake)));
