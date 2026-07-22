@@ -23,11 +23,8 @@ pnpm build
 
 echo "==> docker build"
 BASE="registry.digitalocean.com/${REGISTRY}/hyperlink-docs"
-(cd .. && docker build --platform linux/amd64 -f site/Dockerfile -t "${BASE}:${SHA}" -t "${BASE}:latest" .)
+(cd .. && docker buildx build --platform linux/amd64 --push -f site/Dockerfile -t "${BASE}:${SHA}" -t "${BASE}:latest" .)
 
-echo "==> push (sha-tagged for rollback + latest for the app spec)"
-docker push "${BASE}:${SHA}"
-docker push "${BASE}:latest"
 
 echo "==> done — deploy: doctl apps update <app-id> --spec deploy/do-app.yaml"
 echo "    rollback: retag a previous sha as latest and update again"

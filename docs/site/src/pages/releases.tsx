@@ -43,8 +43,8 @@ export default async function ReleasesPage() {
   return (
     <>
       <PageMeta
-        title="Releases — hyperlink-ts"
-        description="Release history for hyperlink-ts — every version's changes, from the changelog."
+        title="Releases — Hyperlink"
+        description="Release history for Hyperlink — every version's changes, from the changelog."
       />
       <article className="prose">
         <h1>Releases</h1>

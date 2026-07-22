@@ -7,7 +7,7 @@
 # Core Concepts
 
 Every program depends on capabilities it does not build itself — a clock, a database, somewhere to send
-email. Effect models each of these as a [**Service**](/docs/glossary#service), and hyperlink-ts's Hyperlinks
+email. Effect models each of these as a [**Service**](/docs/glossary#service), and Hyperlinks
 build directly on that model. This page starts with Services and adds one idea at a time.
 
 ## Services and Tags
@@ -36,7 +36,7 @@ depends on it.
 
 ## From Services to Contracts
 
-hyperlink-ts starts where Effect's Services leave off. A Hyperlink is a Service, but its Tag declares a
+Hyperlink starts where Effect's Services leave off. A Hyperlink is a Service, but its Tag declares a
 [**Contract**](/docs/glossary#contract): the Hyperlink's methods, together with a schema for every value that passes through them.
 
 {.twoslash}

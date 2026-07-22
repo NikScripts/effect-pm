@@ -4,7 +4,7 @@
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > and live type previews — is at <https://hyperlink.cool/docs/index>.
 <!-- docs-site-link:end -->
-# hyperlink-ts
+# Effect Hyperlink
 
 **Build cross-runtime Services on Effect.**
 

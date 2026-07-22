@@ -85,7 +85,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
   return (
     <>
       <PageMeta
-        title={`${p.name} — API — hyperlink-ts`}
+        title={`${p.name} — API — Hyperlink`}
         description={`API reference for ${p.name}: ${p.modules.length} documented modules.`}
       />
       <article className="prose">
