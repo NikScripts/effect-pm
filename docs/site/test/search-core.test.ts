@@ -11,7 +11,7 @@ import {
 
 describe("search-core", () => {
   it("tokenizes identifiers: camelCase and dot-paths split, full word kept", () => {
-    expect(tokenize("QueueHyperlink")).toContain("queueresource");
+    expect(tokenize("QueueHyperlink")).toContain("queuehyperlink");
     expect(tokenize("QueueHyperlink")).toContain("queue");
     expect(tokenize("QueueHyperlink")).toContain("hyperlink");
     expect(tokenize("Hyperlink.ref")).toContain("hyperlink");
