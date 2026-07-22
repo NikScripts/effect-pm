@@ -39,15 +39,15 @@ import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
 import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Scope } from "effect";
-import * as HttpClientRunGate from "./HttpClientRunGate";
+import * as HttpClientRunGate from "../HttpClientRunGate";
 import {
   ensureClientUsage,
   recordEndpointUsage as recordRegistryUsage,
   usageEnter,
   usageExit,
-} from "./internal/apiUsageRegistry";
-import type { GateRunner } from "./Gate";
-import { makeRunnerFromConcurrency } from "./internal/runHyperlink";
+} from "./apiUsageRegistry";
+import type { GateRunner } from "../Gate";
+import { makeRunnerFromConcurrency } from "./runHyperlink";
 
 // ============================================================================
 // Public Types

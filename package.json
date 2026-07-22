@@ -120,10 +120,6 @@
       "types": "./dist/ApiUsageSchema.d.ts",
       "default": "./dist/ApiUsageSchema.js"
     },
-    "./HttpApiHyperlink": {
-      "types": "./dist/HttpApiHyperlink.d.ts",
-      "default": "./dist/HttpApiHyperlink.js"
-    },
     "./Gate": {
       "types": "./dist/Gate.d.ts",
       "default": "./dist/Gate.js"

@@ -38,7 +38,6 @@ export default defineConfig([
       Lookup: "src/Lookup.ts",
       DynamicConfig: "src/DynamicConfig.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
-      HttpApiHyperlink: "src/HttpApiHyperlink.ts",
       Gate: "src/Gate.ts",
       HttpClientRunGate: "src/HttpClientRunGate.ts",
       cli: "src/cli/index.ts",

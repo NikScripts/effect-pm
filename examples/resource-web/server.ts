@@ -107,7 +107,7 @@ const pollerWindows = wnbaGames.map((g) => ({
 }));
 
 // ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
-// A real consumer instruments its outbound client (`HttpApiHyperlink.instrumentEndpoints`) and serves
+// A real consumer instruments its outbound client (`Gate.instrumentEndpoints`) and serves
 // `ApiMetrics.serve(tag)` (fed from the Metric registry). For the fixture there's no real
 // client, so we hand the served tag a mock `{ metrics, usage }` with synthetic windows — a
 // realistic-ish WNBA stats surface (HttpApi groups × endpoints), accumulated for `topEndpoints`.

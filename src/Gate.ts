@@ -1035,3 +1035,21 @@ export const makeRunner = <const Name extends string>(
   const runnerLayer = Layer.effect(tag)(internal.makeRunnerEffect(config));
   return Object.assign(tag, { layer: runnerLayer });
 };
+
+// ── HTTP API client ─────────────────────────────────────────────────────────
+// A concurrency-gated typed HttpApiClient — the former HttpApiHyperlink module folded into Gate.
+// `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
+// HttpClient transport via HttpClientRunGate); the engine lives in ./internal/httpApiClient and is
+// pulled in only when these are referenced.
+
+export {
+  make as httpApiClient,
+  Service as httpApiClientService,
+  layerEffect as httpApiClientLayer,
+  acceptJson,
+  instrumentEndpoints,
+} from "./internal/httpApiClient";
+export type {
+  HttpApiHyperlinkConfig as HttpApiClientConfig,
+  HttpApiHyperlinkLayerEffectConfig as HttpApiClientLayerEffectConfig,
+} from "./internal/httpApiClient";

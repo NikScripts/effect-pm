@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/http-api-resource-service-layer
  *
- * HttpApiHyperlink.Service + ApiMetrics — class client and observability tag.
+ * Gate.httpApiClientService + ApiMetrics — class client and observability tag.
  * Run: `pnpm run example:http-api-resource`
  */
 
@@ -9,7 +9,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../../../src/ApiMetrics";
-import * as HttpApiHyperlink from "../../../src/HttpApiHyperlink";
+import * as Gate from "../../../src/Gate";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const DemoClientId = "examples/jsonplaceholder/DemoApiClient" as const;
@@ -30,12 +30,12 @@ const DemoApi = HttpApi.make("jsonplaceholder-demo").add(
   ),
 );
 
-class DemoApiClient extends HttpApiHyperlink.Service<DemoApiClient>()(
+class DemoApiClient extends Gate.httpApiClientService<DemoApiClient>()(
   DemoClientId,
   DemoApi,
   {
     baseUrl: "https://jsonplaceholder.typicode.com",
-    transformClient: HttpApiHyperlink.acceptJson,
+    transformClient: Gate.acceptJson,
     concurrency: 2,
   },
 ) {}

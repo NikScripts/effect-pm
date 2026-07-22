@@ -28,7 +28,7 @@
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See the live book under `docs/resources/` and `docs/guides/`.
- * - **`Gate`**, **`HttpClientRunGate`**, **`HttpApiHyperlink`** —
+ * - **`Gate`**, **`HttpClientRunGate`**, **`Gate.httpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
@@ -103,10 +103,9 @@ export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
   acceptJson,
   instrumentEndpoints,
-  type HttpApiHyperlinkConfig,
-  type HttpApiHyperlinkLayerEffectConfig,
-} from "./HttpApiHyperlink";
-export * as HttpApiHyperlink from "./HttpApiHyperlink";
+  type HttpApiClientConfig,
+  type HttpApiClientLayerEffectConfig,
+} from "./Gate";
 export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,

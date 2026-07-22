@@ -6,7 +6,7 @@
  * `transform` sees the **entire** `execute` pipeline (DNS/TLS/body included), whereas
  * `HttpApiClient`’s `transformResponse` only wraps decode stages after the fetch completes.
  * Pair with {@link Gate.makeRunner} or the runner produced inside
- * {@link HttpApiHyperlink.make}.
+ * {@link Gate.httpApiClient}.
  *
  * @module HttpClientRunGate
  */
