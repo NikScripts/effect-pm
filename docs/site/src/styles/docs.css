@@ -2139,3 +2139,9 @@ body:has(.landing) .sidebar {
 .landing-preview:hover {
   color: var(--primary);
 }
+.landing-credit {
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted-fg);
+  opacity: 0.8;
+}

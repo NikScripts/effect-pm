@@ -20,12 +20,10 @@ export default function LandingPage() {
             </span>
           </div>
           <p className="landing-pitch">
-            An Effect Service lives inside one runtime. A Hyperlink doesn&apos;t: declare its
-            contract once, run the implementation wherever it belongs — in-process, another
-            process, another machine — and reach it from every runtime through the same typed
-            Handle. Queues, long-running processes, and scheduled work included, with a dashboard
-            that already knows them.
+            Effect Services written with Hyperlink level up modularity and composability — across
+            runtimes, and across the network.
           </p>
+          <p className="landing-credit">Inspired by and built on Effect RPC.</p>
           <p className="landing-soon">Coming soon</p>
           <a className="landing-preview" href="/docs/index">
             Preview the docs →
