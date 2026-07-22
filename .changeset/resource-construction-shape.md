@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Unified tag construction shape (BREAKING).** Service tags now all follow the Effect `Context.Service` idiom — `Tag<Self>()(identity, …, options?)` — so `Resource.Tag` and `ApiMetrics.Tag` match the queue/process/custom-queue/run factories (which already used it). The old divergent shapes are removed (no back-compat).

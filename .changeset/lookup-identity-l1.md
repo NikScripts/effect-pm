@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Lookup identity server (L1)** — first-wins claims over IPC.

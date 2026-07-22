@@ -1,5 +1,5 @@
 /**
- * Per-tag live stream level stamps for {@link Resource.logs}.
+ * Per-tag live stream level stamps for {@link Hyperlink.logs}.
  *
  * @module internal/logs/streamLevel
  * @internal
@@ -8,7 +8,7 @@
 import type { StoreLogLevel } from "../store/types";
 
 export const logStreamLevelSym = Symbol.for(
-  "@nikscripts/effect-pm/Resource/logStreamLevel",
+  "hyperlink-ts/Hyperlink/logStreamLevel",
 );
 
 /** @internal */

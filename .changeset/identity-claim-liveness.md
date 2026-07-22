@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Identity claim liveness** — Lookup Identity mirrors directory `livenessReplace`.

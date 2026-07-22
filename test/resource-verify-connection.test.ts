@@ -5,11 +5,11 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { QueueResource } from "../src";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
-// `Resource.verifyConnection(node)` is the eager reachability backstop (F3): tier-1 opens one
+// `Hyperlink.verifyConnection(node)` is the eager reachability backstop (F3): tier-1 opens one
 // bounded transport connection; `{ deep: true }` escalates to NodeStatus RPC classification.
 const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
@@ -18,10 +18,10 @@ interface Item {
 class VNode extends Node.Tag<VNode>()("verify/node") {} // bare — url supplied per-check at runtime
 class VQueue extends QueueResource.Tag<VQueue>()("verify/Q", { payload: Item, node: VNode }) {}
 
-class Warming extends Resource.Tag<Warming>()("verify/Warming", {
-  ping: Resource.effect(Schema.String),
+class Warming extends Hyperlink.Tag<Warming>()("verify/Warming", {
+  ping: Hyperlink.effect(Schema.String),
 }).pipe(
-  Resource.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
+  Hyperlink.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
 ) {}
 
 // Run `check(port)` against a live test server (its layer is inlined per-`it` so its type infers).
@@ -39,7 +39,7 @@ const onWarmingServer = (
   check: (port: number) => Effect.Effect<unknown, unknown, never>,
 ) => {
   const server = Node.httpServer([
-    Resource.serve(Warming, { ping: Effect.succeed("pong") }),
+    Hyperlink.serve(Warming, { ping: Effect.succeed("pong") }),
   ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
   return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
@@ -55,23 +55,23 @@ const httpSrv = Node.httpServer([
   QueueResource.serveMemory(VQueue, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
-describe("Resource.verifyConnection", () => {
+describe("Hyperlink.verifyConnection", () => {
   it.live("verifyConnection succeeds against a reachable ws server", () =>
     onServer(wsSrv, (port) =>
-      Resource.verifyConnection(VNode, { url: `ws://127.0.0.1:${port}/rpc` }),
+      Hyperlink.verifyConnection(VNode, { url: `ws://127.0.0.1:${port}/rpc` }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
   );
 
   it.live("verifyConnection succeeds against a reachable http server", () =>
     onServer(httpSrv, (port) =>
-      Resource.verifyConnection(VNode, { url: `http://127.0.0.1:${port}/rpc` }),
+      Hyperlink.verifyConnection(VNode, { url: `http://127.0.0.1:${port}/rpc` }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
   );
 
   it.live("verifyConnection fails with NodeUnreachable against a dead socket port", () =>
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
-        Resource.verifyConnection(VNode, {
+        Hyperlink.verifyConnection(VNode, {
           url: "ws://127.0.0.1:1/rpc",
           timeout: "2 seconds",
         }).pipe(Effect.timeout(Duration.seconds(10))),
@@ -83,7 +83,7 @@ describe("Resource.verifyConnection", () => {
   it.live("verifyConnection fails with NodeUnreachable against a dead http port", () =>
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
-        Resource.verifyConnection(VNode, {
+        Hyperlink.verifyConnection(VNode, {
           url: "http://127.0.0.1:1/rpc",
           timeout: "2 seconds",
         }).pipe(Effect.timeout(Duration.seconds(10))),
@@ -94,7 +94,7 @@ describe("Resource.verifyConnection", () => {
 
   it.live("deep verifyConnection succeeds against a live NodeStatus http server", () =>
     onServer(httpSrv, (port) =>
-      Resource.verifyConnection(VNode, {
+      Hyperlink.verifyConnection(VNode, {
         url: `http://127.0.0.1:${port}/rpc`,
         deep: true,
       }),
@@ -103,7 +103,7 @@ describe("Resource.verifyConnection", () => {
 
   it.live("deep verifyConnection succeeds against a live NodeStatus ws server", () =>
     onServer(wsSrv, (port) =>
-      Resource.verifyConnection(VNode, {
+      Hyperlink.verifyConnection(VNode, {
         url: `ws://127.0.0.1:${port}/rpc`,
         deep: true,
       }),
@@ -133,7 +133,7 @@ describe("Resource.verifyConnection", () => {
           }),
       );
       const exit = yield* Effect.exit(
-        Resource.verifyConnection(VNode, {
+        Hyperlink.verifyConnection(VNode, {
           url: `http://127.0.0.1:${port}/rpc`,
           deep: true,
           timeout: "2 seconds",
@@ -147,7 +147,7 @@ describe("Resource.verifyConnection", () => {
     onWarmingServer((port) =>
       Effect.gen(function* () {
         const exit = yield* Effect.exit(
-          Resource.verifyConnection(VNode, {
+          Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
             resource: "verify/Missing",
@@ -162,7 +162,7 @@ describe("Resource.verifyConnection", () => {
     onWarmingServer((port) =>
       Effect.gen(function* () {
         const exit = yield* Effect.exit(
-          Resource.verifyConnection(VNode, {
+          Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
             resource: "verify/Warming",
@@ -175,7 +175,7 @@ describe("Resource.verifyConnection", () => {
 
   it.live("deep verifyConnection succeeds when the target resource is ready", () =>
     onServer(httpSrv, (port) =>
-      Resource.verifyConnection(VNode, {
+      Hyperlink.verifyConnection(VNode, {
         url: `http://127.0.0.1:${port}/rpc`,
         deep: true,
         resource: "verify/Q",
@@ -185,11 +185,11 @@ describe("Resource.verifyConnection", () => {
 
   it.live("deep verifyConnection succeeds when contractHash matches", () =>
     onServer(httpSrv, (port) =>
-      Resource.verifyConnection(VNode, {
+      Hyperlink.verifyConnection(VNode, {
         url: `http://127.0.0.1:${port}/rpc`,
         deep: true,
         resource: VQueue.groupId,
-        contractHash: Resource.contractHash(VQueue),
+        contractHash: Hyperlink.contractHash(VQueue),
       }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
   );
@@ -198,7 +198,7 @@ describe("Resource.verifyConnection", () => {
     onServer(httpSrv, (port) =>
       Effect.gen(function* () {
         const exit = yield* Effect.exit(
-          Resource.verifyConnection(VNode, {
+          Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
             resource: VQueue.groupId,
@@ -219,27 +219,27 @@ describe("Resource.verifyConnection", () => {
         http: `http://127.0.0.1:${port}/rpc`,
         ws: `ws://127.0.0.1:1/rpc`,
       }) {}
-      yield* Resource.verifyConnection(Dual);
+      yield* Hyperlink.verifyConnection(Dual);
       // `{ all: true }` also probes the dead ws endpoint → NodeUnreachable.
       const exit = yield* Effect.exit(
-        Resource.verifyConnection(Dual, { all: true, timeout: "2 seconds" }),
+        Hyperlink.verifyConnection(Dual, { all: true, timeout: "2 seconds" }),
       );
       expectTaggedFailure(exit, "NodeUnreachable");
     }).pipe(Effect.provide(httpSrv), Effect.scoped, Effect.timeout(Duration.seconds(10))),
   );
 });
 
-describe("Resource.client default-on verify", () => {
+describe("Hyperlink.client default-on verify", () => {
   it.live("addressed client fails Layer build when the peer is down", () =>
     Effect.gen(function* () {
       class Dead extends Node.Tag<Dead>()("verify/dead-client", {
         url: "http://127.0.0.1:1/rpc",
       }) {}
-      class Ping extends Resource.Tag<Ping>()("verify/dead-Ping", {
-        ping: Resource.effect(Schema.String),
+      class Ping extends Hyperlink.Tag<Ping>()("verify/dead-Ping", {
+        ping: Hyperlink.effect(Schema.String),
       }) {}
       const exit = yield* Effect.exit(
-        Layer.build(Resource.client(Ping, Dead)).pipe(Effect.scoped),
+        Layer.build(Hyperlink.client(Ping, Dead)).pipe(Effect.scoped),
       );
       expectTaggedFailure(exit, "NodeUnreachable");
     }).pipe(Effect.timeout(Duration.seconds(15))),
@@ -250,13 +250,13 @@ describe("Resource.client default-on verify", () => {
       class Dead extends Node.Tag<Dead>()("verify/skip-dead", {
         url: "http://127.0.0.1:1/rpc",
       }) {}
-      class Ping extends Resource.Tag<Ping>()("verify/skip-Ping", {
-        ping: Resource.effect(Schema.String),
+      class Ping extends Hyperlink.Tag<Ping>()("verify/skip-Ping", {
+        ping: Hyperlink.effect(Schema.String),
       }) {}
       // Build succeeds; RPC would still fail later — verify was opted out.
       yield* Layer.build(
-        Resource.client(Ping, Dead).pipe(
-          Layer.provide(Resource.clientVerify(false)),
+        Hyperlink.client(Ping, Dead).pipe(
+          Layer.provide(Hyperlink.clientVerify(false)),
         ),
       );
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
@@ -268,7 +268,7 @@ describe("Resource.client default-on verify", () => {
         class Live extends Node.Tag<Live>()("verify/live-client", {
           url: `http://127.0.0.1:${port}/rpc`,
         }) {}
-        yield* Layer.build(Resource.client(VQueue, Live));
+        yield* Layer.build(Hyperlink.client(VQueue, Live));
       }).pipe(Effect.scoped),
     ).pipe(Effect.timeout(Duration.seconds(15))),
   );

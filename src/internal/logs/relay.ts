@@ -38,7 +38,7 @@ export interface LogRelayService {
 
 /** @internal */
 export class LogRelay extends Context.Service<LogRelay, LogRelayService>()(
-  "@nikscripts/effect-pm/internal/logs/relay/LogRelay",
+  "hyperlink-ts/internal/logs/relay/LogRelay",
 ) {}
 
 const pushHistory = (

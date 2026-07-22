@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **D3** — directory-backed peers + bare `Resource.distributed`.

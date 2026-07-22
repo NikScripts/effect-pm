@@ -36,7 +36,7 @@ const QueueResource = {
   layer: queueResourceLayer,
   Service: engineQueueService,
 };
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import { testLogsEnv } from "./fixtures/logsEnv";
 
 const fastConfig = { concurrency: 2 };
@@ -1191,7 +1191,7 @@ describe("QueueResource.make — itemSchema", () => {
   );
 });
 
-describe("QueueResource.make — Resource.runForEachTag over .events", () => {
+describe("QueueResource.make — Hyperlink.runForEachTag over .events", () => {
   it.live("dispatches lifecycle tags from a live queue's events stream", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<Array<string>>([]);
@@ -1204,7 +1204,7 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
       const fiber = yield* Effect.forkChild(
         queue.events.pipe(
           Stream.takeUntil((e) => e._tag === "Drained"),
-          Resource.runForEachTag({
+          Hyperlink.runForEachTag({
             Enqueued: (e) =>
               Ref.update(seen, (a) => [...a, `+${String(e.entries.length)}`]),
             Completed: () => Ref.update(seen, (a) => [...a, "done"]),
@@ -1235,7 +1235,7 @@ describe("QueueResource.make — Resource.runForEachTag over .events", () => {
       const fiber = yield* Effect.forkChild(
         queue.events.pipe(
           Stream.take(3),
-          Resource.runForEachTag({
+          Hyperlink.runForEachTag({
             Failed: (e) =>
               Effect.failCause(e.cause).pipe(
                 Effect.catchTag("Boom", (err) =>
@@ -1444,10 +1444,10 @@ describe("QueueResource.make — OTEL metrics", () => {
   );
 });
 
-describe("QueueResource.make — Resource.logs", () => {
+describe("QueueResource.make — Hyperlink.logs", () => {
   const scopeTag = (name: string) => ({ key: name });
 
-  it.live("scopes worker-effect logs readable via Resource.logs", () =>
+  it.live("scopes worker-effect logs readable via Hyperlink.logs", () =>
     Effect.gen(function* () {
       const name = "test-logs-worker";
       const queue = yield* QueueResource.make({
@@ -1455,7 +1455,7 @@ describe("QueueResource.make — Resource.logs", () => {
         effect: (n: number) => Effect.logInfo(`processing ${String(n)}`),
         concurrency: 1,
       });
-      const { stream } = yield* Resource.logs(scopeTag(name));
+      const { stream } = yield* Hyperlink.logs(scopeTag(name));
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.take(
@@ -1472,7 +1472,7 @@ describe("QueueResource.make — Resource.logs", () => {
     }).pipe(Effect.provide(testLogsEnv()), Effect.scoped),
   );
 
-  it.live("scopes engine shutdown logs readable via Resource.logs", () =>
+  it.live("scopes engine shutdown logs readable via Hyperlink.logs", () =>
     Effect.gen(function* () {
       const name = "test-logs-engine";
       const queue = yield* QueueResource.make({
@@ -1480,7 +1480,7 @@ describe("QueueResource.make — Resource.logs", () => {
         effect: (_n: number) => Effect.void,
         concurrency: 1,
       });
-      const { stream } = yield* Resource.logs(scopeTag(name));
+      const { stream } = yield* Hyperlink.logs(scopeTag(name));
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.take(

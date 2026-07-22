@@ -1,6 +1,6 @@
 /**
  * **Queue contract (control surface)** — the fixed-schema half of a queue's service
- * expressed as a {@link Resource} {@link Spec}, so a queue can be driven **remotely** over
+ * expressed as a {@link Hyperlink} {@link Spec}, so a queue can be driven **remotely** over
  * RPC through the toolkit's location-transparent layers (the same `yield* Tag` code runs
  * local or remote; only the layer changes).
  *
@@ -19,22 +19,22 @@
  * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
  * items natively on both sides (no codec descriptor, no manual encode/decode). This is the
  * "model B / fully per-instance" approach; the shared-spec + `key`-header path
- * ({@link Resource.serveInstances}) remains for resources whose contract is identical
+ * ({@link Hyperlink.serveInstances}) remains for resources whose contract is identical
  * across instances (e.g. RunResource).
  *
- * This module is the **public `QueueResource` namespace** — the `@nikscripts/effect-pm/QueueResource`
+ * This module is the **public `QueueResource` namespace** — the `hyperlink-ts/QueueResource`
  * subpath and the barrel `export * as QueueResource` both resolve here. The light `Tag` / spec /
  * schemas live in this file (engine-free, tree-shakeable); the heavy engine lives in
  * `./internal/queueResource` and is pulled in only by the runtime verbs (`layer` / `serve` /
  * `serveRemote` / `make`). Consume it as a module namespace:
  *
- *   import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
+ *   import * as QueueResource from "hyperlink-ts/QueueResource";
  *   class Mail extends QueueResource.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
  *
  * @module QueueResource
  */
 import { DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import { HistoryStore } from "./HistoryStore";
 import type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 import type {
@@ -42,8 +42,8 @@ import type {
   ImplOf,
   Local,
   NodeBoundTag,
-  ResourceTag,
-} from "./Resource";
+  HyperlinkTag,
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 // Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
 import {
@@ -91,7 +91,7 @@ import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
 import type { ConfigPatch } from "./ResourceConfigure";
 
 /**
- * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Resource.logs}.
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Hyperlink.logs}.
  *
  * @category wire schemas
  * @public
@@ -517,36 +517,36 @@ export const historyQuery = {
 export const queueControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; the scalars are `Stream.map` derivations of it (SSOT). All are
-  // plain reads (`p.size`) and subscribable (`Resource.changes(p, (s) => s.size)`).
-  status: Resource.ref(queueStatus).annotate({
+  // plain reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
+  status: Hyperlink.ref(queueStatus).annotate({
     description:
       "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
   }),
-  size: Resource.ref(Schema.Number).annotate({
+  size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all priority levels.",
   }),
-  isEmpty: Resource.ref(Schema.Boolean).annotate({
+  isEmpty: Hyperlink.ref(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effect(Schema.Void).annotate({
+  start: Hyperlink.effect(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
   }),
-  pause: Resource.effect(Schema.Void).annotate({
+  pause: Hyperlink.effect(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
   }),
-  resume: Resource.effect(Schema.Void).annotate({
+  resume: Hyperlink.effect(Schema.Void).annotate({
     description: "Resume processing after a pause.",
   }),
-  shutdown: Resource.effect(Schema.Void).annotate({
+  shutdown: Hyperlink.effect(Schema.Void).annotate({
     description:
       "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.effect(Schema.Number).annotate({
+  clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
@@ -554,11 +554,11 @@ export const queueControlSpec = {
 
   // ── observability — stream + query, paired by nesting ──
   metrics: {
-    stream: Resource.stream(queueMetrics).annotate({
+    stream: Hyperlink.stream(queueMetrics).annotate({
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
+    query: Hyperlink.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
         "empty unless a HistoryStore layer is provided.",
@@ -566,16 +566,16 @@ export const queueControlSpec = {
   },
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
-// `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site.
+// `unknown`. The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
 /**
  * Build a queue **instance** spec (model B): the shared {@link queueControlSpec} plus
  * per-instance data-plane procedures typed by `itemSchema` — the enqueue verbs (`add`,
  * `prioritize`, `defer`, `enqueue`) and the `events` stream. Pass the result to
- * {@link Resource.Tag} — each instance is its own resource (its own RPC group):
+ * {@link Hyperlink.Tag} — each instance is its own resource (its own RPC group):
  *
  * ```ts
- * class Jobs extends Resource.Tag<Jobs>()("@app/Jobs", queueSpec(JobSchema)) {}
+ * class Jobs extends Hyperlink.Tag<Jobs>()("@app/Jobs", queueSpec(JobSchema)) {}
  * const q = yield* Jobs;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
  * ```
@@ -606,35 +606,35 @@ export const queueSpec = <
   );
   return {
   ...queueControlSpec,
-  add: Resource.unsafeEffectFn<{
-    (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>;
-    (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
-    (itemOrItems: Resource.Decoded<typeof itemSchema> | readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+  add: Hyperlink.unsafeEffectFn<{
+    (item: Hyperlink.Decoded<typeof itemSchema>): Effect.Effect<void>;
+    (items: readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+    (itemOrItems: Hyperlink.Decoded<typeof itemSchema> | readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
   }>()(itemOrItems).annotate({
     description: "Enqueue an item (or a batch) at normal priority.",
   }),
-  prioritize: Resource.unsafeEffectFn<{
-    (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>;
-    (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
-    (itemOrItems: Resource.Decoded<typeof itemSchema> | readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+  prioritize: Hyperlink.unsafeEffectFn<{
+    (item: Hyperlink.Decoded<typeof itemSchema>): Effect.Effect<void>;
+    (items: readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+    (itemOrItems: Hyperlink.Decoded<typeof itemSchema> | readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
   }>()(itemOrItems).annotate({
     description:
       "Enqueue an item (or a batch) at high priority (processed before normal and low).",
   }),
-  defer: Resource.unsafeEffectFn<{
-    (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>;
-    (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
-    (itemOrItems: Resource.Decoded<typeof itemSchema> | readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+  defer: Hyperlink.unsafeEffectFn<{
+    (item: Hyperlink.Decoded<typeof itemSchema>): Effect.Effect<void>;
+    (items: readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
+    (itemOrItems: Hyperlink.Decoded<typeof itemSchema> | readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>;
   }>()(itemOrItems).annotate({
     description: "Enqueue an item (or a batch) at low priority (processed after high and normal).",
   }),
   // `enqueue` takes the entry array directly (same shape `events`/`release` produce).
-  enqueue: Resource.effectFn(Schema.Array(queueEntry(itemSchema))).annotate({
+  enqueue: Hyperlink.effectFn(Schema.Array(queueEntry(itemSchema))).annotate({
     description:
       "Re-inject existing entries (e.g. off the events stream / a release) — each re-enters " +
       "at its own priority with its attempts preserved. The handoff / round-trip primitive.",
   }),
-  release: Resource.effectFn(
+  release: Hyperlink.effectFn(
     { options: Schema.optionalKey(queueReleaseOptions) },
     Schema.Array(queueEntry(itemSchema)),
   ).annotate({
@@ -642,7 +642,7 @@ export const queueSpec = <
       "Export pending entries for handoff and remove them from this queue; returns them decoded.",
     destructive: true,
   }),
-  releaseEncoded: Resource.effectFn(
+  releaseEncoded: Hyperlink.effectFn(
     { options: Schema.optionalKey(queueReleaseOptions) },
     Schema.Array(queueEncodedEntry),
     queueReleaseEncodingError,
@@ -651,7 +651,7 @@ export const queueSpec = <
       "Export pending entries in encoded/wire form for remote handoff (requires an itemSchema).",
     destructive: true,
   }),
-  deadLetter: Resource.effectFn(
+  deadLetter: Hyperlink.effectFn(
     {
       selector: queueEntrySelector(itemSchema),
       options: queueRouteOptions,
@@ -661,7 +661,7 @@ export const queueSpec = <
     description: "Remove pending entries matching the selector and route them to a dead letter.",
     destructive: true,
   }),
-  drop: Resource.effectFn(
+  drop: Hyperlink.effectFn(
     {
       selector: queueEntrySelector(itemSchema),
       options: queueRouteOptions,
@@ -671,7 +671,7 @@ export const queueSpec = <
     description: "Remove pending entries matching the selector without preserving them.",
     destructive: true,
   }),
-  events: Resource.stream(eventSchema).annotate({
+  events: Hyperlink.stream(eventSchema).annotate({
     description: "Discrete entry / worker / queue lifecycle events.",
   }),
   };
@@ -738,16 +738,16 @@ type QueueInstanceSpec<
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
  * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec). Pass
  * `options.node` to bind the queue to a {@link Node.Tag} — the tag then carries its own
- * transport (ship only the tag; see {@link Resource.client} / {@link Node.connect}).
+ * transport (ship only the tag; see {@link Hyperlink.client} / {@link Node.connect}).
  *
  * @public
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. @public
+ *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. @public
  *
  * @category utils
  */
-export const kind = "@nikscripts/effect-pm/QueueResource";
+export const kind = "hyperlink-ts/QueueResource";
 
 /**
  * Config-object overload of {@link Tag}. `payload` is the item schema (required); `success` (worker
@@ -794,7 +794,7 @@ const materializeQueueTag = <
     readonly description?: string;
     readonly node?: NodeKey<unknown>;
   },
-): ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
+): HyperlinkTag<Self, QueueInstanceSpec<F, Success, Error>> &
   QueueItemSchemaCarrier<F> => {
   const wire = { success: resolved.success, error: resolved.error };
   // The wired spec carries the tag's real `success`/`error` wire slots; its type
@@ -807,9 +807,9 @@ const materializeQueueTag = <
   const tagOptions = { description: resolved.description, kind };
   const base =
     resolved.node === undefined
-      ? Resource.Tag<Self>()(key, spec, tagOptions)
-      : Resource.Tag<Self>()(key, spec, { ...tagOptions, node: resolved.node });
-  const ready = Resource.withReadiness(base, (svc) =>
+      ? Hyperlink.Tag<Self>()(key, spec, tagOptions)
+      : Hyperlink.Tag<Self>()(key, spec, { ...tagOptions, node: resolved.node });
+  const ready = Hyperlink.withReadiness(base, (svc) =>
     Effect.map(svc.status.get, (status) => ({
       ready: status.phase === "running",
       ...(status.phase === "running"
@@ -836,7 +836,7 @@ const materializeQueueTag = <
  * @typeParam Success - the worker success value (`Completed.success` on {@link QueueResource.events})
  * @typeParam Error - the worker failure channel (`Failed.cause`)
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol`
- *   for a remote {@link Resource.client})
+ *   for a remote {@link Hyperlink.client})
  *
  * @category models
  * @public
@@ -848,11 +848,11 @@ export interface QueueResource<
   Requirements = never,
 > {
   /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
-  readonly status: Resource.Subscribable<QueueStatus>;
+  readonly status: Hyperlink.Subscribable<QueueStatus>;
   /** Total pending items across all priority levels. */
-  readonly size: Resource.Subscribable<number>;
+  readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
-  readonly isEmpty: Resource.Subscribable<boolean>;
+  readonly isEmpty: Hyperlink.Subscribable<boolean>;
   /** Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown). */
   readonly start: Effect.Effect<void, never, Requirements>;
   /** Pause processing; items can still be enqueued and accumulate. */
@@ -890,7 +890,7 @@ export interface QueueResource<
   readonly releaseEncoded: (input: {
     readonly options?: QueueReleaseOptions;
   }) => Effect.Effect<
-    ReadonlyArray<Resource.Decoded<typeof queueEncodedEntry>>,
+    ReadonlyArray<Hyperlink.Decoded<typeof queueEncodedEntry>>,
     QueueReleaseEncodingError,
     Requirements
   >;
@@ -909,11 +909,11 @@ export interface QueueResource<
 }
 
 /** This queue's decoded item type — the `Payload` of its {@link QueueResource} handle. @internal */
-type QueueItemOf<F extends Schema.Struct.Fields> = Resource.Decoded<Schema.Struct<F>>;
+type QueueItemOf<F extends Schema.Struct.Fields> = Hyperlink.Decoded<Schema.Struct<F>>;
 
 /**
- * The queue's {@link Resource.Tag} whose service value is the **named** {@link QueueResource} handle
- * (via the `Svc` seam on {@link ResourceTag}), so `yield* MyQueue` hovers as
+ * The queue's {@link Hyperlink.Tag} whose service value is the **named** {@link QueueResource} handle
+ * (via the `Svc` seam on {@link HyperlinkTag}), so `yield* MyQueue` hovers as
  * `QueueResource<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
  * @category models
  */
@@ -922,7 +922,7 @@ export type QueueTag<
   F extends Schema.Struct.Fields,
   Success extends Schema.Top = typeof Schema.Void,
   Error extends Schema.Top = typeof Schema.Never,
-> = ResourceTag<
+> = HyperlinkTag<
   Self,
   QueueInstanceSpec<F, Success, Error>,
   QueueResource<QueueItemOf<F>, Success["Type"], Error["Type"]>
@@ -962,7 +962,7 @@ const nameQueueService = <
   Success extends Schema.Top = typeof Schema.Void,
   Error extends Schema.Top = typeof Schema.Never,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
+  tag: HyperlinkTag<Self, QueueInstanceSpec<F, Success, Error>> &
     QueueItemSchemaCarrier<F>,
 ): QueueTag<Self, F, Success, Error> & QueueItemSchemaCarrier<F> =>
   tag as unknown as QueueTag<Self, F, Success, Error> & QueueItemSchemaCarrier<F>;
@@ -1121,10 +1121,10 @@ type QueueItemFields = Record<
 >;
 
 /** The `tag:` param shape shared by every queue verb ({@link buildQueueImpl} / {@link layer} /
- *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link ResourceTag} over
+ *  {@link serve} / {@link serveRemote} / {@link configure}): the instance's {@link HyperlinkTag} over
  *  the **threaded** {@link QueueInstanceSpec}`<F, Success, Error>` (so `events` carries the real
  *  `Cause<Error>` / `Completed.success`, matching {@link materializeQueueTag}), **plus** the
- *  worker-`success`/`error` carriers. Both are needed: the spec sits at `ResourceTag`'s invariant
+ *  worker-`success`/`error` carriers. Both are needed: the spec sits at `HyperlinkTag`'s invariant
  *  Shape position (unreliable for inference), so the covariant carriers give the verbs a stable
  *  surface to infer `Success`/`Error` from the passed tag. @internal */
 type QueueTagFor<
@@ -1132,7 +1132,7 @@ type QueueTagFor<
   F extends QueueItemFields,
   Success extends Schema.Top,
   Error extends Schema.Top,
-> = ResourceTag<Self, QueueInstanceSpec<F, Success, Error>> &
+> = HyperlinkTag<Self, QueueInstanceSpec<F, Success, Error>> &
   QueueSuccessCarrier<Success> &
   QueueErrorCarrier<Error> &
   QueueItemSchemaCarrier<F>;
@@ -1149,8 +1149,8 @@ type QueueVerbConfig<F extends QueueItemFields, E, R, RR, Success extends Schema
  * provided to each method, so the impl requires nothing beyond the scope; the engine queue
  * `name` defaults to the tag id (telemetry attribution) unless `config.name` overrides.
  *
- * The queue spec has no {@link Resource.local} members, so the resulting impl satisfies both
- * `ImplOf` (for `Resource.layer` / `Resource.serve`) and `ServeImplOf` (for `Resource.serveRemote`).
+ * The queue spec has no {@link Hyperlink.local} members, so the resulting impl satisfies both
+ * `ImplOf` (for `Hyperlink.layer` / `Hyperlink.serve`) and `ServeImplOf` (for `Hyperlink.serveRemote`).
  */
 const buildQueueImpl = <
   Self,
@@ -1275,12 +1275,12 @@ const buildQueueImpl = <
     // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built UNWRAPPED (each still carrying the worker `R | RR` in its requirement);
-    // `Resource.provideContext` below discharges `context` into every Effect method uniformly (a no-op
+    // `Hyperlink.provideContext` below discharges `context` into every Effect method uniformly (a no-op
     // on the ones that carry no `R`, like pause/resume/shutdown) — a single subtractive
     // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
     // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
     // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
-    const impl: Resource.WithRequirement<
+    const impl: Hyperlink.WithRequirement<
       ImplOf<QueueInstanceSpec<F, Success, Error>>,
       R | RR
     > = {
@@ -1320,14 +1320,14 @@ const buildQueueImpl = <
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return Resource.builtResource(tag, impl, context);
+    return Hyperlink.builtHyperlink(tag, impl, context);
   });
 
 /**
  * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
  * tag's contract. It builds the engine handle in a scope and maps it onto the toolkit service
  * (location-transparent — the same `yield* Tag` then drives the queue locally, or remotely via
- * {@link Resource.client} when served).
+ * {@link Hyperlink.client} when served).
  *
  * The tag carries the `itemSchema` (recovered from its spec), so the config only supplies the
  * worker (`effect`, `concurrency`, `attempts`, `onFailure`, …). The worker `R` is captured at
@@ -1369,7 +1369,7 @@ export const layer = <
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildQueueImpl(tag, config), (built) =>
-        Resource.layer(tag, Resource.grantLocal(tag, built)),
+        Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
       ),
     ),
   );
@@ -1395,10 +1395,10 @@ export const layerMemory = <
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
- * engine behind the tag, mount its RPC handlers, and register into {@link Resource.servedResourcesLayer},
+ * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperlinksLayer},
  * **without** granting the local instance (no `yield* Tag` in the serving process). The engine's worker
  * requirement `R` is **preserved**, so a per-resource `Layer.provide` discharges it in isolation — the
- * queue's counterpart to {@link Resource.serveRemote}.
+ * queue's counterpart to {@link Hyperlink.serveRemote}.
  *
  * Reach for this (with {@link Node.httpServer}) for a pure gateway/edge that exposes the queue for
  * remote clients but never consumes it locally; use {@link serve} when the serving node also drives it.
@@ -1427,7 +1427,7 @@ export const serveRemote = <
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildQueueImpl(tag, config), (built) =>
-        Resource.serveRemote(tag, built) as any,
+        Hyperlink.serveRemote(tag, built) as any,
       ),
     ) as any,
   ) as any;
@@ -1453,10 +1453,10 @@ export const serveRemoteMemory = <
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
  * refill / `persist` engine behind the tag, mount its RPC handlers, register into
- * {@link Resource.servedResourcesLayer}, **and** grant `Self | Local<Self>` so co-located code
+ * {@link Hyperlink.servedHyperlinksLayer}, **and** grant `Self | Local<Self>` so co-located code
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
  * worker requirement `R` is preserved for per-resource `Layer.provide`. This is the queue's counterpart
- * to {@link Resource.serve}; a served-**only** gateway uses {@link serveRemote}.
+ * to {@link Hyperlink.serve}; a served-**only** gateway uses {@link serveRemote}.
  *
  * ```ts
  * Node.httpServer([
@@ -1485,7 +1485,7 @@ export const serve = <
 > =>
   withDefaultMemory(
     Layer.unwrap(
-      Effect.map(buildQueueImpl(tag, config), (built) => Resource.serve(tag, built)),
+      Effect.map(buildQueueImpl(tag, config), (built) => Hyperlink.serve(tag, built)),
     ),
   );
 
@@ -1512,10 +1512,10 @@ export const serveMemory = <
 > => serve(tag, config);
 
 /**
- * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.
+ * Queue resource toolkit — managed priority queues on the {@link Hyperlink} toolkit.
  * (Model B: each instance is its own resource; data-plane procedures are typed by the
  * instance's `itemSchema`.) `layer` runs it locally; `serve` / `serveRemote` node it remotely;
- * a remote {@link Resource.client} drives it with the same `yield* Tag` surface.
+ * a remote {@link Hyperlink.client} drives it with the same `yield* Tag` surface.
  *
  * @public
  */
@@ -1581,7 +1581,7 @@ export function store(tag: QueueStoreTag, extended?: StoreShapes) {
 }
 
 // The light `Tag` lives here (no engine) so `QueueResource.Tag` member access tree-shakes.
-// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` → `QueueResource.Tag`.
+// DX: `import * as QueueResource from "hyperlink-ts/QueueResource"` → `QueueResource.Tag`.
 export { queueTag as Tag };
 
 /**

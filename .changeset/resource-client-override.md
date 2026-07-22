@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Cleaner resource-handle types + a client-type override API, and drop the redundant `Kind` type param.

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add semantic `ProcessStore.QueueResource` helpers for queue entry, lifecycle, and dedupe-key records, and wire `QueueResource` to write indexed runtime records through `ProcessStore` when it is available.

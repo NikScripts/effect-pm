@@ -5,7 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Node from "../src/Node";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import { portOf } from "../src/internal/nodeCore";
 
 // Option B: a bare-port node keeps its port as data; the eager `url` is a localhost PREVIEW, and the
@@ -14,9 +14,9 @@ import { portOf } from "../src/internal/nodeCore";
 
 const PORT = 7813;
 
-class Echo extends Resource.Tag<Echo>()(
+class Echo extends Hyperlink.Tag<Echo>()(
   "cfg-dial/Echo",
-  { ping: Resource.effect(Schema.String) },
+  { ping: Hyperlink.effect(Schema.String) },
   { node: Node.Tag<never>()("cfg-dial/node", PORT) },
 ) {}
 
@@ -30,7 +30,7 @@ describe("bare-port node: localhost preview, Config-resolved dial host", () => {
   });
 
   const server = Node.httpServer([
-    Resource.serve(Echo, { ping: Effect.succeed("pong") }),
+    Hyperlink.serve(Echo, { ping: Effect.succeed("pong") }),
   ]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })));
 
   it.live("default Config → dials the localhost preview and reaches the server", () =>
@@ -39,7 +39,7 @@ describe("bare-port node: localhost preview, Config-resolved dial host", () => {
       const pong = yield* Effect.gen(function* () {
         const echo = yield* Echo;
         return yield* echo.ping;
-      }).pipe(Effect.provide(Resource.client(Echo)), Effect.scoped);
+      }).pipe(Effect.provide(Hyperlink.client(Echo)), Effect.scoped);
       expect(pong).toBe("pong");
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
@@ -52,7 +52,7 @@ describe("bare-port node: localhost preview, Config-resolved dial host", () => {
   // sanity: the Config itself reads the env key with a localhost default
   it.effect("clientHost defaults to localhost", () =>
     Effect.gen(function* () {
-      expect(yield* Resource.clientHost).toBe("localhost");
+      expect(yield* Hyperlink.clientHost).toBe("localhost");
     }),
   );
 });

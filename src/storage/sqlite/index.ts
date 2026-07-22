@@ -9,7 +9,7 @@
  * import {
  *   SQLiteDurableQueueStore,
  *   SQLiteHistoryStore,
- * } from "@nikscripts/effect-pm/storage/sqlite";
+ * } from "hyperlink-ts/storage/sqlite";
  * ```
  *
  * Structured log persistence uses an app {@link Store.Service} with `Node.logs` /

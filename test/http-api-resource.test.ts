@@ -239,7 +239,7 @@ describe("HttpApiResource.layerEffect", () => {
       })
       type ClientShape = Effect.Success<typeof makeClient>
       class Tag extends Context.Service<Tag, ClientShape>()(
-        "@nikscripts/effect-pm/test/http-api-resource.test/Tag",
+        "hyperlink-ts/test/http-api-resource.test/Tag",
       ) {}
       const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
         concurrency: 1,

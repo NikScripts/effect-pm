@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 `Node.Tag` and `Node.Lookup` are now two-stage, matching `Resource.Tag` / `Context.Service`

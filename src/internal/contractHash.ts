@@ -7,9 +7,9 @@
  * @internal
  */
 import { Hash, Predicate, Schema } from "effect";
-import type { AnyMethod, FlatSpec } from "../Resource";
+import type { AnyMethod, FlatSpec } from "../Hyperlink";
 
-const LocalMethodTypeId = "~nikscripts/effect-pm/Resource/LocalMethod";
+const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod";
 
 /** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. */
 const fingerprintAst = (ast: unknown): unknown => {

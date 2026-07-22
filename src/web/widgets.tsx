@@ -54,7 +54,7 @@ import {
   resourceNodeRef,
   tagWireKey,
 } from "./data";
-import { kindOf as resourceKindOf, kind as resourceKind } from "../Resource";
+import { kindOf as resourceKindOf, kind as resourceKind } from "../Hyperlink";
 import { kind as queueKind } from "../QueueResource";
 import { kind as customQueueKind } from "../CustomQueueResource";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
@@ -2319,7 +2319,7 @@ export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactEleme
 };
 
 /**
- * Basic fallback card — a resource whose kind has no registered widget (a bare `…/Resource`, or an
+ * Basic fallback card — a resource whose kind has no registered widget (a bare `…/Hyperlink`, or an
  * unregistered kind). Shows the resource's name, its kind, and a degraded banner; a richer card is
  * left to a dedicated widget registered for that kind. @public
  */
@@ -2337,7 +2337,7 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
 );
 
 /**
- * The card for a plain resource — a bare `Resource.Tag` with no richer widget (a dependency like a
+ * The card for a plain resource — a bare `Hyperlink.Tag` with no richer widget (a dependency like a
  * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
  * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */

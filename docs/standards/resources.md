@@ -1,5 +1,5 @@
-{#resources title="Resource Factories" order=60 appliesTo=src}
-# Resource Factories
+{#resources title="Hyperlink Factories" order=60 appliesTo=src}
+# Hyperlink Factories
 
 How a resource is defined, served, and meshed across nodes. Covers the tag/layer split, the serve vocabulary, and multi-node meshing.
 
@@ -60,7 +60,7 @@ and you add only what you need (this is *Principles → Don't fight the framewor
 class Ingest extends Process.Tag<Ingest>()("app/Ingest", { success: Report })
   .pipe(
     Process.schedule([Process.window(openAt, closeAt)]),  // when it may run
-    Resource.withReadiness(isWarm),                        // when it counts as ready
+    Hyperlink.withReadiness(isWarm),                        // when it counts as ready
   ) {}
 ```
 
@@ -68,7 +68,7 @@ class Ingest extends Process.Tag<Ingest>()("app/Ingest", { success: Report })
 ## Data-last tag duals must not constrain `Svc`-bearing tag unions
 
 A combinator meant for `class X extends Tag<X>()(…).pipe(combinator(…))` must not constrain its
-data-last `T` as `ResourceTag | NodeBoundTag`. Those types carry a default `Svc = ServiceOf<S, Self>`;
+data-last `T` as `HyperlinkTag | NodeBoundTag`. Those types carry a default `Svc = ServiceOf<S, Self>`;
 stock tsc expands that while `Self` is still being declared and hits **TS2589** (tsgo often stays
 quiet — gate with **both**). Constrain `T` with a shallow brand that only needs the spec (the package
 uses `PipeableTag = { readonly [specSym]: FlatSpec }` for `withReadiness` / `distributed`). `T` is
@@ -79,7 +79,7 @@ still inferred as the concrete tag, so `(tag: T) => T` preserves it.
 <T extends PipeableTag>(…): (tag: T) => T
 
 // ❌ deep — reopens TS2589 on node-bound class .pipe under stock tsc
-<T extends ResourceTag<any, any, any> | NodeBoundTag<any, any, any, any>>(…): (tag: T) => T
+<T extends HyperlinkTag<any, any, any> | NodeBoundTag<any, any, any, any>>(…): (tag: T) => T
 ```
 
 {#polling-vs-schedule .must appliesTo="src examples"}
@@ -152,7 +152,7 @@ there — the core verbs stay transport-agnostic, so the same resource can be se
 ## Serve through the engine's spec-checked form, never a bare literal
 
 Serve a resource through its engine form (`QueueResource.serve`, `Process.serve`) — these mount the
-handlers **and** keep the worker or tick alive. `Resource.serve` only mounts handlers; using it for a
+handlers **and** keep the worker or tick alive. `Hyperlink.serve` only mounts handlers; using it for a
 queue leaves the worker dead. Never hand-write a `{ tag, impl }` literal: it types as
 `Record<string, unknown>` and silently swallows typos — the engine form spec-checks the impl against
 the tag.
@@ -167,12 +167,12 @@ because `httpServer`'s own type doesn't demand them.
 ``` ts
 // ✅ good — serve layers preserved
 const live = Node.httpServer([
-  Resource.serve(Counter, counterImpl),
-  Resource.serve(Mail, mailImpl),
+  Hyperlink.serve(Counter, counterImpl),
+  Hyperlink.serve(Mail, mailImpl),
 ])
 
 // ❌ bad — provide prunes the serve layers off the server
-program.pipe(Layer.provide(Resource.serve(Counter, counterImpl)))
+program.pipe(Layer.provide(Hyperlink.serve(Counter, counterImpl)))
 ```
 
 {#declare-dont-provide-in-workers .must appliesTo="src examples"}
@@ -202,7 +202,7 @@ One class. Each node runs its own instance; `peers` gives you the per-node handl
 // one tag — not one-per-node
 class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job) {}
 
-const perNode = yield* Resource.peers(Prices)
+const perNode = yield* Hyperlink.peers(Prices)
 // { "node-a": handle, "node-b": handle, … } — keyed by node
 ```
 
@@ -215,12 +215,12 @@ into a peer to decide your own readiness cascades one node's failure into its ne
 ``` ts
 // ✅ derived from this instance's own status
 class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
-  .pipe(Resource.withReadiness((svc) =>
+  .pipe(Hyperlink.withReadiness((svc) =>
     Effect.map(svc.status.get, (s) => s.phase === "running"),
   )) {}
 
 // ❌ readiness that hops to peers — a down neighbour drags this node down
-Resource.withReadiness(() => Effect.map(Resource.peers(Prices), allReady))
+Hyperlink.withReadiness(() => Effect.map(Hyperlink.peers(Prices), allReady))
 ```
 
 For a **stadium-board** view of the pack (Reachable / Unreachable), use
@@ -237,11 +237,11 @@ your own node explicitly.
 ``` ts
 // a combined field is marked fleet → not re-fanned-out by peers
 class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job) {
-  static readonly totalDepth = Resource.fleet(Resource.effect(Schema.Number))
+  static readonly totalDepth = Hyperlink.fleet(Hyperlink.effect(Schema.Number))
 }
 
 // fold over leaves, self included explicitly (never silently)
-const depthByNode = { ...(yield* Resource.peers(Prices)), [self.key]: local }
+const depthByNode = { ...(yield* Hyperlink.peers(Prices)), [self.key]: local }
 ```
 
 {#peers-are-lazy .must appliesTo="src examples"}
@@ -251,7 +251,7 @@ const depthByNode = { ...(yield* Resource.peers(Prices)), [self.key]: local }
 `Config` — never frozen into the contract.
 
 ``` ts
-Resource.peersLayer(Prices, self, {
+Hyperlink.peersLayer(Prices, self, {
   nodes,
   url: (node) => Config.option(Config.string(`${node.key}_URL`)),
   //   Config.option → undefined skips a peer (partial mesh)

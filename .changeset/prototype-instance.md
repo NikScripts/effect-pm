@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Resource.Node.Prototype`** — Node-family templates + dynamic instances.

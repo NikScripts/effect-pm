@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 `QueueResource`: add a first-class **`refill`** config — a self-feeding queue that loads work from a

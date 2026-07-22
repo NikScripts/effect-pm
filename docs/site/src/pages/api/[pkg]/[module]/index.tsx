@@ -21,7 +21,7 @@ export default async function ApiModulePage({ pkg, module }: { pkg: string; modu
   return (
     <>
       <PageMeta
-        title={`${m.entry} — API — effect-pm`}
+        title={`${m.entry} — API — hyperlink-ts`}
         description={`API reference for the ${m.entry} module: ${
           m.symbols.length
         } exported symbols${

@@ -13,13 +13,13 @@
  *   incumbent {@link NodeStatus} `ping`; alive → {@link IncumbentAlive} (or ask
  *   {@link NodeStatus}.`yield` when `askIncumbent`); dead/unreachable → replace row.
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
- *   resource key). {@link Resource.lookupClient} honors a live preferred row before D4 `pick`.
+ *   resource key). {@link Hyperlink.lookupClient} honors a live preferred row before D4 `pick`.
  *
  * @module Lookup
  * @since 0.8.0
  */
 import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import type { AnyNode, OnConflict, OnConflictResolved } from "./internal/nodeCore";
 import {
   asLookup,
@@ -235,10 +235,10 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
  * @category utils
  * @public
  */
-export const kind = "@nikscripts/effect-pm/Lookup";
+export const kind = "hyperlink-ts/Lookup";
 
 const identitySpec = {
-  claim: Resource.effectFn({
+  claim: Hyperlink.effectFn({
     payload: ClaimRequest,
     success: Endpoint,
     error: DuplicateIdentity,
@@ -248,7 +248,7 @@ const identitySpec = {
       "refreshes; dead/unreachable incumbent (NodeStatus.ping) is replaced; a live " +
       "different dial fails with DuplicateIdentity.",
   }),
-  resolve: Resource.effectFn({
+  resolve: Hyperlink.effectFn({
     payload: ResolveRequest,
     success: Schema.Option(Endpoint),
   }).annotate({
@@ -263,14 +263,14 @@ const identitySpec = {
  * @category services
  * @public
  */
-export class Identity extends Resource.Tag<Identity>()(
-  "@nikscripts/effect-pm/Lookup/Identity",
+export class Identity extends Hyperlink.Tag<Identity>()(
+  "hyperlink-ts/Lookup/Identity",
   identitySpec,
   { kind },
 ) {}
 
 const directorySpec = {
-  advertise: Resource.effectFn({
+  advertise: Hyperlink.effectFn({
     payload: AdvertiseRequest,
     success: DirectoryEntry,
     error: IncumbentAlive,
@@ -280,7 +280,7 @@ const directorySpec = {
       "a different dial target runs onConflict (default livenessReplace via NodeStatus.ping; " +
       "askIncumbent asks NodeStatus.yield on a live incumbent).",
   }),
-  unregister: Resource.effectFn({
+  unregister: Hyperlink.effectFn({
     payload: UnregisterRequest,
     success: Schema.Boolean,
   }).annotate({
@@ -288,7 +288,7 @@ const directorySpec = {
       "Remove a directory row by nodeKey (clean listen scope close). " +
       "With dial fields, removes only if the stored dial still matches.",
   }),
-  nodesServing: Resource.effectFn({
+  nodesServing: Hyperlink.effectFn({
     payload: NodesServingRequest,
     success: Schema.Array(DirectoryEntry),
   }).annotate({
@@ -302,14 +302,14 @@ const directorySpec = {
  * @category services
  * @public
  */
-export class Directory extends Resource.Tag<Directory>()(
-  "@nikscripts/effect-pm/Lookup/Directory",
+export class Directory extends Hyperlink.Tag<Directory>()(
+  "hyperlink-ts/Lookup/Directory",
   directorySpec,
   { kind },
 ) {}
 
 const adviceSpec = {
-  advise: Resource.effectFn({
+  advise: Hyperlink.effectFn({
     payload: AdviseRequest,
     success: Schema.String,
   }).annotate({
@@ -317,13 +317,13 @@ const adviceSpec = {
       "Last-write placement advice: prefer this directory nodeKey when dialing resourceKey. " +
       "Stale prefer (not in nodesServing) is ignored by lookupClient.",
   }),
-  clear: Resource.effectFn({
+  clear: Hyperlink.effectFn({
     payload: ClearAdviceRequest,
     success: Schema.Boolean,
   }).annotate({
     description: "Drop placement advice for resourceKey (true if a row was removed).",
   }),
-  preferred: Resource.effectFn({
+  preferred: Hyperlink.effectFn({
     payload: PreferredRequest,
     success: Schema.Option(Schema.String),
   }).annotate({
@@ -332,7 +332,7 @@ const adviceSpec = {
 };
 
 /**
- * Lookup placement board — coordinator advice for nodeless / {@link Resource.lookupClient} dial.
+ * Lookup placement board — coordinator advice for nodeless / {@link Hyperlink.lookupClient} dial.
  *
  * v1: last-write-wins, in-memory, no advisor ACL. Algorithms stay app-owned (who calls
  * {@link advise}); Lookup only stores and surfaces the preference.
@@ -340,8 +340,8 @@ const adviceSpec = {
  * @category services
  * @public
  */
-export class Advice extends Resource.Tag<Advice>()(
-  "@nikscripts/effect-pm/Lookup/Advice",
+export class Advice extends Hyperlink.Tag<Advice>()(
+  "hyperlink-ts/Lookup/Advice",
   adviceSpec,
   { kind },
 ) {}
@@ -449,7 +449,7 @@ export const preferred = (
  * @category utils
  * @public
  */
-export const defaultIpcPath = "/tmp/effect-pm-lookup.sock";
+export const defaultIpcPath = "/tmp/hyperlink-ts-lookup.sock";
 
 // ============================================================================
 // Codec helpers
@@ -510,13 +510,13 @@ const incumbentAlive = (
     return Effect.succeed(false);
   }
   // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
-  // Addressed target → Resource.client auto-wires connect (shared MemoMap Layer).
+  // Addressed target → Hyperlink.client auto-wires connect (shared MemoMap Layer).
   // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
   // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
     const ctx = yield* Layer.build(
-      Resource.client(NodeStatus.Tag, target).pipe(
-        Layer.provide(Resource.clientVerify(false)),
+      Hyperlink.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Hyperlink.clientVerify(false)),
       ),
     );
     yield* Effect.gen(function* () {
@@ -553,8 +553,8 @@ const incumbentYield = (
   // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
     const ctx = yield* Layer.build(
-      Resource.client(NodeStatus.Tag, target).pipe(
-        Layer.provide(Resource.clientVerify(false)),
+      Hyperlink.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Hyperlink.clientVerify(false)),
       ),
     );
     return yield* Effect.gen(function* () {
@@ -572,7 +572,7 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const registries = yield* internal.makeRegistries();
-      const identity = Resource.serve(Identity, {
+      const identity = Hyperlink.serve(Identity, {
         claim: (req: ClaimRequest) =>
           Effect.gen(function* () {
             const next = storedFromClaim(req);
@@ -621,7 +621,7 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
             Effect.map(Option.map(toEndpoint)),
           ),
       });
-      const directory = Resource.serve(Directory, {
+      const directory = Hyperlink.serve(Directory, {
         advertise: (req: AdvertiseRequest) =>
           Effect.gen(function* () {
             const next = storedFromAdvertise(req);
@@ -672,7 +672,7 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
             Effect.map((entries) => entries.map(toDirectoryEntry)),
           ),
       });
-      const advice = Resource.serve(Advice, {
+      const advice = Hyperlink.serve(Advice, {
         advise: (req: AdviseRequest) =>
           registries.advice.set(req.resourceKey, req.prefer),
         clear: (req: ClearAdviceRequest) =>
@@ -830,13 +830,13 @@ export const client = (
   // dial side without a guaranteed live peer at Layer.build. Connectivity fails on
   // the first Identity/Directory call instead.
   const clients: any = Layer.mergeAll(
-    Resource.client(Identity, node) as any,
-    Resource.client(Directory, node) as any,
-    Resource.client(Advice, node) as any,
+    Hyperlink.client(Identity, node) as any,
+    Hyperlink.client(Directory, node) as any,
+    Hyperlink.client(Advice, node) as any,
   ) as any;
   return clients.pipe(
     Layer.provide(node.pipe(connectIpc(path))),
-    Layer.provide(Resource.clientVerify(false)),
+    Layer.provide(Hyperlink.clientVerify(false)),
   ) as any;
 };
 
@@ -851,7 +851,7 @@ export const clientOptions = (options?: {
   readonly path?: string;
 }): Layer.Layer<Services, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
-  const node = NodeTag()("effect-pm/Lookup/default", { path }).pipe(asLookup);
+  const node = NodeTag()("hyperlink-ts/Lookup/default", { path }).pipe(asLookup);
   return client(node);
 };
 

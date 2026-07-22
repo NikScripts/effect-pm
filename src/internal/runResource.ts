@@ -18,7 +18,7 @@ import {
   type RunResourceStateChangeReason,
   type RunStateChange,
 } from "./store/runResourceStoreSpec";
-import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+import { mapSubscribable, subscribable, type Subscribable } from "../Hyperlink";
 import * as Store from "../Store";
 import type { StoreScopeTag } from "./store/registration";
 import { errorOf, successOf } from "./runTagSchemas";

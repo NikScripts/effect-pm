@@ -69,7 +69,7 @@ fully live (incl. background worker progress) with **zero** refresh wiring. One 
 
 The only seam is the layer in `Atom.runtime(layer)`. Today `DemoQueue.layer` (a real
 local queue). For a server-backed queue: an **RPC-backed client layer** for the same
-tag — built from `Resource.Tag`'s contract via `effect/unstable/reactivity/AtomRpc`.
+tag — built from `Hyperlink.Tag`'s contract via `effect/unstable/reactivity/AtomRpc`.
 The widget and atoms don't change.
 
 ## Next slices

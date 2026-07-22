@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Queue store: merged full-capture + three-tier contract + analytics (breaking).** A queue's lifecycle

@@ -4,7 +4,7 @@
  * @internal
  */
 import { Effect, Layer } from "effect"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AddressLessClaimLost,
   AnyNode,
@@ -23,7 +23,7 @@ import {
   isHttpListenNode,
   isIpcListenNode,
   isPrototypeNode,
-  isResourceTagArg,
+  isHyperlinkTagArg,
   isWsListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -41,21 +41,21 @@ import {
  */
 export function listen<
   Self,
-  S extends Resource.Spec,
+  S extends Hyperlink.Spec,
   HSelf,
   R = never,
 >(
-  tag: Resource.NodeBoundTag<Self, S, HSelf>,
+  tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
   impl:
-    | Resource.ImplOf<S>
-    | Resource.BuiltResource<S, R>
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.BuiltHyperlink<S, R>
     | Effect.Effect<
-        Resource.ImplOf<S> | Resource.BuiltResource<S, R>,
+        Hyperlink.ImplOf<S> | Hyperlink.BuiltHyperlink<S, R>,
         never,
         R
       >,
   options?: ListenOptions,
-): Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
 export function listen<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
   Serves extends ServeLayerList,
@@ -69,7 +69,7 @@ export function listen<
   Layer.Services<Serves[number]>
 >;
 export function listen(
-  nodeOrTag: AnyNode | Resource.PipeableTag,
+  nodeOrTag: AnyNode | Hyperlink.PipeableTag,
   _servesOrImpl?:
     | Layer.Layer<never, any, never>
     | ServeLayerList
@@ -83,15 +83,15 @@ export function listen(
   | ListenUseProtocol,
   unknown
 > {
-  if (isResourceTagArg(nodeOrTag)) {
+  if (isHyperlinkTagArg(nodeOrTag)) {
     const tag = nodeOrTag;
     const tagKey = (() => {
       const key = (tag as unknown as { readonly key?: unknown }).key;
       return typeof key === "string" ? key : "unknown";
     })();
-    const bound = Resource.nodeOf(tag);
-    const fleet = Resource.nodesOf(
-      tag as unknown as Resource.ResourceTag<unknown, Resource.Spec>,
+    const bound = Hyperlink.nodeOf(tag);
+    const fleet = Hyperlink.nodesOf(
+      tag as unknown as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
     );
     if (bound === undefined) {
       return failListenTagNode({

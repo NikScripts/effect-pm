@@ -168,7 +168,7 @@ export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
 /**
  * `true` when the last lineage segment equals the **lineage segment key** (usually the **resource key**).
  *
- * @param key - **Resource key** (`Tag.key`, e.g. `wnba/LiveScorePoller`).
+ * @param key - **Hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller`).
  *
  * @category guards
  * @public

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Breaking:** remove overloaded `Store.store` / `Resource.store`; single-registration `Store.Service` yields the handle directly.

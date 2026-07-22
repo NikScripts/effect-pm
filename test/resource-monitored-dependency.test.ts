@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 const DbStatus = Schema.Struct({
@@ -10,20 +10,20 @@ const DbStatus = Schema.Struct({
   latencyMs: Schema.Number,
 });
 
-const { spec, readiness } = Resource.monitoredDependency({
+const { spec, readiness } = Hyperlink.monitoredDependency({
   status: DbStatus,
   changes: DbStatus,
   readyWhen: (s) => s.connected,
   detail: (s) => (s.connected ? `${s.latencyMs}ms` : "disconnected"),
 });
 
-class Database extends Resource.withReadiness(
-  Resource.Tag<Database>()("monitored/Database", spec),
+class Database extends Hyperlink.withReadiness(
+  Hyperlink.Tag<Database>()("monitored/Database", spec),
   readiness,
 ) {}
 
 const Server = Node.httpServer([
-  Resource.serve(Database, {
+  Hyperlink.serve(Database, {
     status: Effect.succeed({ connected: false, latencyMs: 0 }),
     changes: Stream.empty,
   }),
@@ -37,7 +37,7 @@ const withPort = <A, E, R>(
     return yield* use(addr._tag === "TcpAddress" ? addr.port : 0);
   });
 
-describe("Resource.monitoredDependency", () => {
+describe("Hyperlink.monitoredDependency", () => {
   it.effect("wires status + changes + readiness into /health", () =>
     withPort((port) =>
       Effect.gen(function* () {
@@ -53,12 +53,12 @@ describe("Resource.monitoredDependency", () => {
 
   it.effect("readinessCheck derives readyWhen from status", () =>
     Effect.gen(function* () {
-      const down = yield* Resource.readinessCheck(Database, {
+      const down = yield* Hyperlink.readinessCheck(Database, {
         status: Effect.succeed({ connected: false, latencyMs: 0 }),
       });
       expect(down).toEqual({ ready: false, detail: "disconnected" });
 
-      const up = yield* Resource.readinessCheck(Database, {
+      const up = yield* Hyperlink.readinessCheck(Database, {
         status: Effect.succeed({ connected: true, latencyMs: 12 }),
       });
       expect(up).toEqual({ ready: true, detail: "12ms" });

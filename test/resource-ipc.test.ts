@@ -1,20 +1,20 @@
 import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// Unix-domain RPC — Phase 1 ipc transport. Plain Resource.Tag (no Queue/Store).
+// Unix-domain RPC — Phase 1 ipc transport. Plain Hyperlink.Tag (no Queue/Store).
 // Build server Context first, then client — mergeAll races listen vs connect (SocketOpenError).
 
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-ipc-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-ipc-${label}-${process.pid}-${now}.sock`;
   });
 
-class Echo extends Resource.Tag<Echo>()("ipc/Echo", {
-  ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+class Echo extends Hyperlink.Tag<Echo>()("ipc/Echo", {
+  ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
 }) {}
 
 const echoImpl = {
@@ -62,8 +62,8 @@ describe("Node.ipcServer + connectIpc", () => {
       class Worker extends Node.Tag<Worker>()("ipc/worker", { path }) {}
 
       const n = yield* withIpc(
-        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
-        Resource.client(Echo, Worker).pipe(
+        Node.ipcServer([Hyperlink.serve(Echo, echoImpl)], { path }),
+        Hyperlink.client(Echo, Worker).pipe(
           Layer.provide(Worker.pipe(Node.connectIpc)),
         ),
         Effect.gen(function* () {
@@ -82,9 +82,9 @@ describe("Node.ipcServer + connectIpc", () => {
       class Worker extends Node.Tag<Worker>()("ipc/derive", { path }) {}
 
       const n = yield* withIpc(
-        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path }),
+        Node.ipcServer([Hyperlink.serve(Echo, echoImpl)], { path }),
         // Addressed Worker — auto-connect; no Layer.provide(Node.connect(Worker)).
-        Resource.client(Echo, Worker),
+        Hyperlink.client(Echo, Worker),
         Effect.gen(function* () {
           const echo = yield* Echo;
           return yield* echo.ping({ n: 1 });
@@ -101,7 +101,7 @@ describe("Node.ipcServer + connectIpc", () => {
       class Worker extends Node.Tag<Worker>()("ipc/stale", { path }) {}
 
       const serve = () =>
-        Node.ipcServer([Resource.serve(Echo, echoImpl)], {
+        Node.ipcServer([Hyperlink.serve(Echo, echoImpl)], {
           path,
           unlink: true,
         });
@@ -110,7 +110,7 @@ describe("Node.ipcServer + connectIpc", () => {
 
       const n = yield* withIpc(
         serve(),
-        Resource.client(Echo, Worker).pipe(
+        Hyperlink.client(Echo, Worker).pipe(
           Layer.provide(Node.connectIpc(Worker)),
         ),
         Effect.gen(function* () {

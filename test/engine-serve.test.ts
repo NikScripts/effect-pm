@@ -1,11 +1,11 @@
 import { Context, Duration, Effect, Layer } from "effect";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Process from "../src/Process";
 import * as Polling from "../src/Polling";
 import * as PmNode from "../src/Node";
-// The engine-serve gap: Resource.serve is query-only (no worker/tick engine). QueueResource.serve /
+// The engine-serve gap: Hyperlink.serve is query-only (no worker/tick engine). QueueResource.serve /
 // Process.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
 // dependency. Proof: two processes whose TICK reads the same Dep tag with different values; each engine
 // must actually fire, and each must see its own value.
@@ -13,10 +13,10 @@ import * as PmNode from "../src/Node";
 const observed: Array<string> = [];
 
 class Dep extends Context.Service<Dep, string>()(
-  "@nikscripts/effect-pm/test/engine-serve.test/Dep",
+  "hyperlink-ts/test/engine-serve.test/Dep",
 ) {}
 class Recorder extends Context.Service<Recorder, (dep: string) => Effect.Effect<void>>()(
-  "@nikscripts/effect-pm/test/engine-serve.test/Recorder",
+  "hyperlink-ts/test/engine-serve.test/Recorder",
 ) {}
 const recorderLayer = Layer.succeed(Recorder, (dep) =>
   Effect.sync(() => {
@@ -43,7 +43,7 @@ const Node = PmNode.httpServer().pipe(
     ),
   ),
   Layer.provide(recorderLayer), // Dep discharged per resource; Recorder shared
-  Layer.provide(Resource.servedResourcesLayer),
+  Layer.provide(Hyperlink.servedHyperlinksLayer),
   Layer.provide(NodeHttpServer.layerTest),
 );
 

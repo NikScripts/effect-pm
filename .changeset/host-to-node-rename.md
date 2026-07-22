@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Rename `Host` → `Node` (breaking), plus export cleanups.** "Host" implied a machine, but a fleet member

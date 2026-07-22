@@ -31,5 +31,5 @@ export interface PollingService {
 
 /** Context tag for the Polling service — provided by the Process supervisor. @internal */
 export class PollingTag extends Context.Service<PollingTag, PollingService>()(
-  "@nikscripts/effect-pm/internal/pollingTag",
+  "hyperlink-ts/internal/pollingTag",
 ) {}

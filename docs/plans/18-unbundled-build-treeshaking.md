@@ -4,7 +4,7 @@
 
 ## The goal
 
-Make `import { QueueResource } from "@nikscripts/effect-pm"` + `QueueResource.Tag` (the **barrel
+Make `import { QueueResource } from "hyperlink-ts"` + `QueueResource.Tag` (the **barrel
 namespace** access) tree-shake the engine in **every** bundler — the full Effect treatment, where
 `Effect.map` pulls only `map`, not all of `Effect`.
 
@@ -17,8 +17,8 @@ Public modules match Effect’s flat namespace layout (`src/QueueResource.ts` �
   **Tag / spec** path stays engine-free.
 - The public file is a flat namespace of named exports; the barrel does
   `export * as QueueResource from "./QueueResource"`.
-- Subpath imports (e.g. `@nikscripts/effect-pm/QueueResource`) are **proven engine-free** for Tag-only
-  pulls. Prefer `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` in browser bundles.
+- Subpath imports (e.g. `hyperlink-ts/QueueResource`) are **proven engine-free** for Tag-only
+  pulls. Prefer `import * as QueueResource from "hyperlink-ts/QueueResource"` in browser bundles.
 
 **Proven (esbuild):** Tag-only subpath pulls stay small with **zero engine symbols**. The **subpath is
 the guaranteed engine-free path.**

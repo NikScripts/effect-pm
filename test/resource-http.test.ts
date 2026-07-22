@@ -3,15 +3,15 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
-import { groupOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { groupOf } from "../src/Hyperlink";
 
 // The toolkit driven over a REAL http transport (not the in-memory RpcTest path): the same
-// `yield* Tag` code, the real `Resource.serveRemote` mounted on an http RpcServer, and the real
-// `Resource.client` forwarding over `RpcClient`'s http protocol.
-class Echo extends Resource.Tag<Echo>()("http/Echo", {
-  ping: Resource.effect(Schema.String),
-  shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
+// `yield* Tag` code, the real `Hyperlink.serveRemote` mounted on an http RpcServer, and the real
+// `Hyperlink.client` forwarding over `RpcClient`'s http protocol.
+class Echo extends Hyperlink.Tag<Echo>()("http/Echo", {
+  ping: Hyperlink.effect(Schema.String),
+  shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
 
 const ServerLive = HttpRouter.serve(
@@ -21,7 +21,7 @@ const ServerLive = HttpRouter.serve(
     protocol: "http",
   }).pipe(
     Layer.provide(
-      Resource.serveRemote(Echo, {
+      Hyperlink.serveRemote(Echo, {
         ping: Effect.succeed("pong"),
         shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
       }),
@@ -51,7 +51,7 @@ it("drives a resource over real http (server + client through the toolkit)", () 
       expect(yield* echo.ping).toBe("pong");
       expect(yield* echo.shout({ msg: "hi" })).toBe("HI");
     }).pipe(
-      Effect.provide(Resource.client(Echo).pipe(Layer.provide(httpProtocol))),
+      Effect.provide(Hyperlink.client(Echo).pipe(Layer.provide(httpProtocol))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(ServerLive), Effect.scoped);

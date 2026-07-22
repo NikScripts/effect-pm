@@ -3,7 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 // L1 identity lookup over ipc — claim first-wins; OS bind exclusivity for default-local.
 // Alive winners keep the key; dead/unreachable winners are replaceable (NodeStatus.ping).
@@ -11,7 +11,7 @@ import * as Resource from "../src/Resource";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-lookup-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-lookup-${label}-${process.pid}-${now}.sock`;
   });
 
 /** Server Context first, then client — avoids listen/connect race. */
@@ -28,8 +28,8 @@ const withLookup = <A, E>(
     );
   }).pipe(Effect.scoped);
 
-class Jobs extends Resource.Tag<Jobs>()("lookup-id/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("lookup-id/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 const jobsImpl = { jobs: Effect.succeed(1) };
@@ -64,7 +64,7 @@ describe("Lookup identity claim", () => {
 
       // Live process so NodeStatus.ping succeeds for the incumbent.
       const winnerCtx = yield* Layer.build(
-        Node.unix(WinnerNode, [Resource.serve(Jobs, jobsImpl)]).pipe(
+        Node.unix(WinnerNode, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(
           Layer.provide(Lookup.client(lookupNode)),
         ),
       );
@@ -154,7 +154,7 @@ describe("Lookup identity claim", () => {
               key: "app/Mail",
               nodeKey: "worker-stale",
               kind: "IpcSocket",
-              path: `/tmp/effect-pm-lookup-id-missing-${process.pid}.sock`,
+              path: `/tmp/hyperlink-ts-lookup-id-missing-${process.pid}.sock`,
             }),
           );
 

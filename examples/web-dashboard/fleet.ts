@@ -2,7 +2,7 @@
  * @module examples/web-dashboard/fleet
  *
  * The fleet, defined **once, as tags** — shared by the server (which nodes them) and
- * the browser (which reaches them via `Resource.client`). The `Group.Tag` tree IS the
+ * the browser (which reaches them via `Hyperlink.client`). The `Group.Tag` tree IS the
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";

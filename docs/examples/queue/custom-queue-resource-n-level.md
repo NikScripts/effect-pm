@@ -13,7 +13,7 @@
 {.twoslash}
 ``` ts
 import { Effect, Schema } from "effect"
-import { CustomQueueResource } from "@nikscripts/effect-pm"
+import { CustomQueueResource } from "hyperlink-ts"
 
 const JobSchema = Schema.Struct({ id: Schema.String, kind: Schema.String })
 

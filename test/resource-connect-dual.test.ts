@@ -4,7 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as QueueResource from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // `Node.connect` and its `connectHttp` / `connectSocket` shortcuts are dual (data-first + pipeable
@@ -40,7 +40,7 @@ describe("Node ProtocolKind inference", () => {
 
 // ── end-to-end: node-derived clients round-trip over BOTH transports ──────────────────────────────
 // One harness, two transports. The tag's bound node is wired with the pipeable node client (url
-// overridden to the test port); `Resource.client(tag)` resolves the bound node, so no ambient protocol
+// overridden to the test port); `Hyperlink.client(tag)` resolves the bound node, so no ambient protocol
 // is threaded by hand (the class of the HealthBoard's "connecting…" bug). Proves the derived-connect
 // path streams live over a real ws server AND a real http server.
 const Item = Schema.Struct({ n: Schema.Number });
@@ -75,7 +75,7 @@ const withPortClient = (connectAt: (port: number) => Layer.Layer<HubNode>) =>
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* assertStreams.pipe(
-      Effect.provide(Resource.client(HubQueue).pipe(Layer.provide(connectAt(port)))),
+      Effect.provide(Hyperlink.client(HubQueue).pipe(Layer.provide(connectAt(port)))),
       Effect.scoped,
     );
   });

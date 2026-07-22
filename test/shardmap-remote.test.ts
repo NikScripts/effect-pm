@@ -4,7 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
 import { ShardMap } from "../src";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // Extends the transport conformance matrix to the last resource type — ShardMap must put/get over the
@@ -17,15 +17,15 @@ class SM extends ShardMap.Tag<SM>()("shardconf/SM", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.nodes([Node1])) {}
+}).pipe(Hyperlink.nodes([Node1])) {}
 
-const served = ShardMap.serve(SM).pipe(Layer.provide(Resource.peersLayer(SM, Node1)));
+const served = ShardMap.serve(SM).pipe(Layer.provide(Hyperlink.peersLayer(SM, Node1)));
 
 type Kind = "ws" | "http";
 const proto = (kind: Kind, port: number): Layer.Layer<RpcClient.Protocol> =>
   kind === "ws"
-    ? Resource.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`)
-    : Resource.protocolHttp(`http://127.0.0.1:${port}/rpc`);
+    ? Hyperlink.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`)
+    : Hyperlink.protocolHttp(`http://127.0.0.1:${port}/rpc`);
 
 const remote = <A, E>(
   serverKind: Kind,
@@ -42,7 +42,7 @@ const remote = <A, E>(
       // C1: distributed([Node1]) is set-of-one — dial via that Node (not ambient Protocol).
       return yield* op.pipe(
         Effect.provide(
-          Resource.client(SM, Node1).pipe(
+          Hyperlink.client(SM, Node1).pipe(
             Layer.provide(Node.connect(Node1, proto(clientKind, port))),
           ),
         ),

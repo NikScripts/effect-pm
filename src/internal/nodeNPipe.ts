@@ -4,7 +4,7 @@
  * @internal
  */
 import { Clock, Effect, Layer, Option } from "effect"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AddressLessClaimLost,
   AnyNode,
@@ -25,7 +25,7 @@ import {
   isDynamicInstanceNode,
   isNonIpcNode,
   isPrototypeNode,
-  isResourceTagArg,
+  isHyperlinkTagArg,
   isServeArg,
   nPipeRequiresIpcLayer,
   anonymousNodeKey,
@@ -61,21 +61,21 @@ const requireWindows = <A, E, R>(
  */
 export function nPipe<
   Self,
-  S extends Resource.Spec,
+  S extends Hyperlink.Spec,
   HSelf,
   R = never,
 >(
-  tag: Resource.NodeBoundTag<Self, S, HSelf>,
+  tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
   impl:
-    | Resource.ImplOf<S>
-    | Resource.BuiltResource<S, R>
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.BuiltHyperlink<S, R>
     | Effect.Effect<
-        Resource.ImplOf<S> | Resource.BuiltResource<S, R>,
+        Hyperlink.ImplOf<S> | Hyperlink.BuiltHyperlink<S, R>,
         never,
         R
       >,
   options?: NamelessListenOptions,
-): Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
 export function nPipe<Serve extends Layer.Layer<never, never, never>>(
   serve: Serve,
   options?: NamelessListenOptions,
@@ -109,7 +109,7 @@ export function nPipe(
     | AnyNode
     | Layer.Layer<never, never, never>
     | ServeLayerList
-    | Resource.PipeableTag,
+    | Hyperlink.PipeableTag,
   servesOrOptionsOrImpl?:
     | Layer.Layer<never, never, never>
     | ServeLayerList
@@ -144,15 +144,15 @@ export function nPipe(
       | NPipeRequiresWindows, never>;
   }
 
-  if (isResourceTagArg(nodeOrServesOrTag)) {
+  if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
     const tagKey = (() => {
       const key = (tag as unknown as { readonly key?: unknown }).key;
       return typeof key === "string" ? key : "unknown";
     })();
-    const bound = Resource.nodeOf(tag);
-    const fleet = Resource.nodesOf(
-      tag as unknown as Resource.ResourceTag<unknown, Resource.Spec>,
+    const bound = Hyperlink.nodeOf(tag);
+    const fleet = Hyperlink.nodesOf(
+      tag as unknown as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
     );
     if (bound === undefined) {
       return failListenTagNode({
@@ -180,8 +180,8 @@ export function nPipe(
         | NPipeListenRequiresIpc
         | NPipeRequiresWindows, never>;
     }
-    const serveErased = Resource.serve as unknown as (
-      tag: Resource.PipeableTag,
+    const serveErased = Hyperlink.serve as unknown as (
+      tag: Hyperlink.PipeableTag,
       impl: unknown,
     ) => Layer.Layer<never, never, never>;
     return requireWindows(
@@ -284,7 +284,7 @@ const nPipeListenOn = (
         const Lookup = yield* Effect.promise(() => import("../Lookup"));
         const identity = yield* Effect.serviceOption(Lookup.Identity);
         if (Option.isNone(identity)) {
-          return yield* new Resource.IdentitySelfRequired({ tag: node.key });
+          return yield* new Hyperlink.IdentitySelfRequired({ tag: node.key });
         }
         const outcome = yield* identity.value
           .claim(
@@ -377,5 +377,5 @@ const ephemeralNPipePath = (nodeKey: string): Effect.Effect<string> =>
   Effect.map(Clock.currentTimeMillis, (now) => {
     dynamicInstanceSeq += 1;
     const safe = nodeKey.replace(/[/\\:]+/g, "-");
-    return `\\\\.\\pipe\\effect-pm-${safe}-${now}-${dynamicInstanceSeq}`;
+    return `\\\\.\\pipe\\hyperlink-ts-${safe}-${now}-${dynamicInstanceSeq}`;
   });

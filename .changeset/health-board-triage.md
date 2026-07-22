@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Full-screen health board.** Tapping the host-status die now opens a full-screen health board (reading every host's `HostStatus.resources[]`):

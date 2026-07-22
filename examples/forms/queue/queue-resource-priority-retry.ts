@@ -2,13 +2,13 @@
  * @module examples/forms/queue/queue-resource-priority-retry
  *
  * QueueResource priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
- * observation via `events` + `Resource.runForEachTag`.
+ * observation via `events` + `Hyperlink.runForEachTag`.
  *
  * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:queue-resource`
  */
 
 import { Cause, Duration, Effect, Schema } from "effect";
-import { QueueResource, Resource } from "../../../src";
+import { QueueResource, Hyperlink } from "../../../src";
 
 // ── Contract: payload + typed worker failure ──────────────────────────────────
 
@@ -79,7 +79,7 @@ const program = Effect.gen(function* () {
   // Fork one subscriber before resume so early Enqueued / Started events aren't missed.
   yield* Effect.forkScoped(
     queue.events.pipe(
-      Resource.runForEachTag({
+      Hyperlink.runForEachTag({
         Enqueued: (e) =>
           Effect.logInfo(`enqueued ${String(e.entries.length)} ${e.priority} job(s)`),
         Completed: (e) =>

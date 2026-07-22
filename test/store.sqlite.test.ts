@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, FileSystem, Path, Schema, Stream } from "effect";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
 const readingSchema = Schema.Struct({ value: Schema.Number });
@@ -27,7 +27,7 @@ describe("Store SQLite layer", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-store-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-store-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -55,7 +55,7 @@ describe("Store SQLite layer", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-store-solo-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-store-solo-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -107,15 +107,15 @@ describe("Store SQLite layer", () => {
     }).pipe(Effect.provide(RetentionStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("Resource.store tag attachment works with sqlite layer", () =>
+  it.effect("Hyperlink.store tag attachment works with sqlite layer", () =>
     Effect.gen(function* () {
-      class Sensor extends Resource.Tag<Sensor>()("@test/Sensor", {
-        value: Resource.ref(Schema.Number),
-      }).pipe(Resource.withStore(thermometerContract)) {}
+      class Sensor extends Hyperlink.Tag<Sensor>()("@test/Sensor", {
+        value: Hyperlink.ref(Schema.Number),
+      }).pipe(Hyperlink.withStore(thermometerContract)) {}
 
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-store-tag-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-store-tag-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),

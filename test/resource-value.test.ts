@@ -3,14 +3,14 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
 // `ref` fields surface as a `Subscribable`: `yield* p.x.get` (current value) + `p.x.changes` (stream),
-// uniform local and remote. The impl owns the `SubscriptionRef` (provided via `Resource.subscribable`).
+// uniform local and remote. The impl owns the `SubscriptionRef` (provided via `Hyperlink.subscribable`).
 
-class Live extends Resource.Tag<Live>()("ref-test/Live", {
-  count: Resource.ref(Schema.Number),
+class Live extends Hyperlink.Tag<Live>()("ref-test/Live", {
+  count: Hyperlink.ref(Schema.Number),
 }) {}
 
 const protocol = (url: string) =>
@@ -29,7 +29,7 @@ it("ref.get reads the current value — LOCAL (no mirror, no sleep)", () =>
         yield* SubscriptionRef.set(cell, 5);
         expect(yield* p.count.get).toBe(5); // get reads the source directly — always current
       }).pipe(
-        Effect.provide(Resource.layer(Live, { count: Resource.subscribable(cell) })),
+        Effect.provide(Hyperlink.layer(Live, { count: Hyperlink.subscribable(cell) })),
         Effect.scoped,
       );
     }),
@@ -40,7 +40,7 @@ it("ref.get reads the current value — REMOTE (same shape over the wire)", () =
     Effect.gen(function* () {
       const cell = yield* SubscriptionRef.make(42);
       const Node = PmNode.httpServer([
-        Resource.serve(Live, { count: Resource.subscribable(cell) }),
+        Hyperlink.serve(Live, { count: Hyperlink.subscribable(cell) }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
       yield* Effect.gen(function* () {
@@ -52,7 +52,7 @@ it("ref.get reads the current value — REMOTE (same shape over the wire)", () =
           const p = yield* Live;
           expect(yield* p.count.get).toBe(42); // current, reconstructed from the RPC changes stream
         }).pipe(
-          Effect.provide(Resource.client(Live).pipe(Layer.provide(protocol(`${base}/rpc`)))),
+          Effect.provide(Hyperlink.client(Live).pipe(Layer.provide(protocol(`${base}/rpc`)))),
           Effect.scoped,
         );
       }).pipe(Effect.provide(Node), Effect.scoped);

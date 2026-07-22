@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Soft fail-loud** — toolkit layers die at build when Soft captured an AppStore missing the engine registration.

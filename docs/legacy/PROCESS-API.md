@@ -1,6 +1,6 @@
 # Process, polling, and schedule — API reference
 
-This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process engine (`Process.make`, `Polling`, the internal schedule primitive, disarmed idle policy). The **`Process`** module surfaces this stack as a location-transparent `Resource` — `Process.Tag` (a managed process) and `Process.Schedule` (a reusable schedule resource) — see [guides/toolkit-by-example.md](./guides/toolkit-by-example.md).
+This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process engine (`Process.make`, `Polling`, the internal schedule primitive, disarmed idle policy). The **`Process`** module surfaces this stack as a location-transparent `Hyperlink` — `Process.Tag` (a managed process) and `Process.Schedule` (a reusable schedule resource) — see [guides/toolkit-by-example.md](./guides/toolkit-by-example.md).
 
 ---
 
@@ -11,7 +11,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | **`Process.make`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. **Does not** auto-append execution store rows. |
 | **Schedule primitive** (internal) | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. Surfaced publicly via `Process.scheduleInMemory` / `Process.scheduleDefine` and the `Process.Schedule` resource. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
-| **`Process.Tag` + toolkit layers** | Location-transparent `Resource` (lifecycle + observation + schedule). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**. |
+| **`Process.Tag` + toolkit layers** | Location-transparent `Hyperlink` (lifecycle + observation + schedule). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**. |
 | **Legacy `ProcessStorage` facets** | Optional analytics rows (`RuntimeStorage`) — queue entries, lifecycle, logs. **Not** process execution history (that is **`Process.store`** on the EventJournal `Store`). |
 
 **`start` / `run`** drive supervision and manual execution. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
@@ -103,7 +103,7 @@ resource.
 | **`Process.at(startAt)` / `at(id, startAt)`** | One-shot window entry (no `stopAt`); `id` optional. |
 | **`Process.window(startAt, stopAt)` / `window(id, startAt, stopAt)`** | Bounded run window; `id` optional. |
 | **`Process.scheduleDefine((api) => [...])`** | Compositional layer builder using `at`, `window`, `fromStarts`, `all`. |
-| **`Process.Schedule<Self>()(id)`** + **`Process.scheduleLayer` / `scheduleServe`** | A reusable schedule as a first-class `Resource` (CRUD + `reconcile` + `changes` stream + RPC), gate processes with `Process.schedule(Schedule)`. |
+| **`Process.Schedule<Self>()(id)`** + **`Process.scheduleLayer` / `scheduleServe`** | A reusable schedule as a first-class `Hyperlink` (CRUD + `reconcile` + `changes` stream + RPC), gate processes with `Process.schedule(Schedule)`. |
 
 ### Schedule service (`Process.ScheduleService`)
 
@@ -189,13 +189,13 @@ engine writes `String(cause)` per store-core §5. Journal codecs round-trip stam
 see `test/process-store-engine.test.ts` and `test/process-store-sqlite.test.ts`.
 
 **RPC `run` slot:** Per-tag `buildProcessSpec` wires tag `success` / `error` onto the manual **`run`**
-verb (`Resource.effect` — inputless `Effect`, not `effectFn`). Remote `yield* Tag.run` returns typed
+verb (`Hyperlink.effect` — inputless `Effect`, not `effectFn`). Remote `yield* Tag.run` returns typed
 success and fails with typed `E` when the worker fails — store rows are still written on failure.
 Lifecycle verbs (`start`, `stop`) are `effectFn` void commands; schedule mutations use `effectFn` with
 payload. Per-invocation input on manual run is a future separate `effectFn` member, not payload on
-`Resource.effect`.
+`Hyperlink.effect`.
 
-**Removed:** `ProcessExecutionStore` facet, `@nikscripts/effect-pm/store/ProcessExecution`,
+**Removed:** `ProcessExecutionStore` facet, `hyperlink-ts/store/ProcessExecution`,
 `process.execution.completed` runtime facet. Do not import execution history from `ProcessStorage`.
 
 ### `ProcessStorage` and legacy facets (optional)
@@ -206,7 +206,7 @@ when you need facet analytics; use **`Process.store`** + **`Store.Service`** for
 
 ### `RunResource.store` (run facts / state history)
 
-> The legacy **`RunResourceStore`** ProcessStorage facet and `@nikscripts/effect-pm/store/RunResource`
+> The legacy **`RunResourceStore`** ProcessStorage facet and `hyperlink-ts/store/RunResource`
 > subpath are removed. Run persistence goes through the app **Store bridge** only.
 
 | Member | Role |

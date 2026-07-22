@@ -6,7 +6,7 @@
  *
  * Terminal A:
  * ```bash
- * LOOKUP_SOCK=/tmp/effect-pm-forms-addressless.sock \\
+ * LOOKUP_SOCK=/tmp/hyperlink-ts-forms-addressless.sock \\
  *   pnpm exec tsx examples/forms/resource/node-tag-addressless-serve.ts
  * ```
  *
@@ -17,24 +17,24 @@ import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Config, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 /** Address-less — `Node.unix` mints path + claims this key. */
 class Worker extends Node.Tag<Worker, Jobs>()("forms/AddresslessWorker") {}
 
 const lookupSock = Config.string("LOOKUP_SOCK").pipe(
-  Config.withDefault("/tmp/effect-pm-forms-addressless.sock"),
+  Config.withDefault("/tmp/hyperlink-ts-forms-addressless.sock"),
 )
 
 const program = Effect.gen(function* () {
   const path = yield* lookupSock
   const live = Node.unix(
     Worker,
-    [Resource.serve(Jobs, { jobs: Effect.succeed(42) })],
+    [Hyperlink.serve(Jobs, { jobs: Effect.succeed(42) })],
   ).pipe(
     Layer.provide(
       Lookup.layerOptions({ path, unlink: true }),

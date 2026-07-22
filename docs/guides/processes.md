@@ -14,8 +14,8 @@ schedule and records its execution history.
 driving the `effect` on a `Polling` cadence.
 
 ``` ts
-import * as Process from "@nikscripts/effect-pm/Process"
-import { Polling } from "@nikscripts/effect-pm"
+import * as Process from "hyperlink-ts/Process"
+import { Polling } from "hyperlink-ts"
 import { Duration, Effect, Schema } from "effect"
 
 class Prices extends Process.Tag<Prices>()("app/Prices", {
@@ -35,7 +35,7 @@ process store as a typed event — `Started`, `Completed`, `Failed`, or
 `Interrupted` — which the dashboards read back as a timeline.
 
 ``` ts
-import * as Store from "@nikscripts/effect-pm/Store"
+import * as Store from "hyperlink-ts/Store"
 
 const store = yield* MyStore.at(Prices)
 const events = yield* store.events()       // [{ _tag: "Completed", success, … }, …]

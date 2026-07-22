@@ -14,41 +14,41 @@ One tag. Distribute it across the droplets you actually run.
 
 {.twoslash}
 ``` ts
-import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as FleetHealth from "hyperlink-ts/FleetHealth"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 // ---cut---
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([DropletEast, DropletWest]),
+  Hyperlink.distributed([DropletEast, DropletWest]),
 ) {}
 ```
 
 ## Serve with peers + optional readiness
 
 Pass the same readiness rows `/health` uses when you want the leaf to match `NodeStatus`.
-Discharge the mesh with `Resource.peersLayer` (or `FleetHealth.alone` for a single node).
+Discharge the mesh with `Hyperlink.peersLayer` (or `FleetHealth.alone` for a single node).
 
 {.twoslash}
 ``` ts
-import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as FleetHealth from "hyperlink-ts/FleetHealth"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Effect, Layer } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([DropletEast, DropletWest]),
+  Hyperlink.distributed([DropletEast, DropletWest]),
 ) {}
 // ---cut---
 const readiness = Effect.succeed([
-  { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
+  { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
 ])
 
 FleetHealth.serve(MeshHealth, { readiness }).pipe(
-  Layer.provide(Resource.peersLayer(MeshHealth, DropletEast)),
+  Layer.provide(Hyperlink.peersLayer(MeshHealth, DropletEast)),
 )
 ```
 
@@ -64,14 +64,14 @@ FleetHealth.serve(MeshHealth, { readiness }).pipe(
 
 {.twoslash}
 ``` ts
-import * as FleetHealth from "@nikscripts/effect-pm/FleetHealth"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as FleetHealth from "hyperlink-ts/FleetHealth"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Effect } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.distributed([DropletEast, DropletWest]),
+  Hyperlink.distributed([DropletEast, DropletWest]),
 ) {}
 const program = Effect.gen(function* () {
 // ---cut---
@@ -91,9 +91,9 @@ const status = yield* glass.status
 })
 ```
 
-Peers only expose the **leaf** (`local`). `byNode` / `status` are `Resource.fleet` — excluded from
+Peers only expose the **leaf** (`local`). `byNode` / `status` are `Hyperlink.fleet` — excluded from
 fan-out so a fold can't re-aggregate an aggregate. When you need to keep every peer `Exit` yourself,
-use `MultiNode.combineByNodeExit` (FleetHealth does); `combineByNode` / `Resource.fleetHealth` still
+use `MultiNode.combineByNodeExit` (FleetHealth does); `combineByNode` / `Hyperlink.fleetHealth` still
 skip-omit for metric-style folds.
 
 ## What not to do

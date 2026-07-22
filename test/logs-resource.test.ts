@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
 import * as QueueResource from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import { Schema } from "effect";
 import { testBillingNodeKey } from "./fixtures/logKeys";
@@ -28,11 +28,11 @@ class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   QueueResource.store(LogQueue),
 ) {}
 
-it("Resource.logs surfaces queue worker lines on stream + query", () =>
+it("Hyperlink.logs surfaces queue worker lines on stream + query", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const q = yield* LogQueue;
-      const { stream, query } = yield* Resource.logs(LogQueue);
+      const { stream, query } = yield* Hyperlink.logs(LogQueue);
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.take(
@@ -65,11 +65,11 @@ it("Resource.logs surfaces queue worker lines on stream + query", () =>
     ),
   ));
 
-it("Resource.logs surfaces process worker lines on query", () =>
+it("Hyperlink.logs surfaces process worker lines on query", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      const { query } = yield* Resource.logs(LogProc);
+      const { query } = yield* Hyperlink.logs(LogProc);
       yield* proc.run;
       yield* Effect.gen(function* () {
         while ((yield* query({})).length === 0) {
@@ -88,11 +88,11 @@ it("Resource.logs surfaces process worker lines on query", () =>
     ),
   ));
 
-it("Resource.logs query is empty without store registration (live relay only)", () =>
+it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      const { query } = yield* Resource.logs(LogProc);
+      const { query } = yield* Hyperlink.logs(LogProc);
       expect(yield* query({})).toEqual([]);
       yield* proc.run;
       yield* Effect.sleep(Duration.millis(50));

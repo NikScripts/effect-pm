@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Replace the generic `ProcessStoreRuntime` facet with a per-domain

@@ -29,7 +29,7 @@ one.
 Core (`effect`):
 
 - **Runtime & structure** — `Effect`, `Layer`, `Context`, `Runtime`, `ManagedRuntime`, `Scope`,
-  `Resource`
+  `Hyperlink`
 - **State & concurrency** — `Ref`, `SubscriptionRef`, `Deferred`, `Queue`, `PubSub`, `Fiber`
   (`FiberHandle` / `FiberMap` / `FiberSet`), `Pool`
 - **Data & errors** — `Data`, `Cause`, `Exit`, `Option`, `Result`, `Match`, `Predicate`, `Schema`

@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
 import { queueSpec } from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 // ── The soundness guard for the ONE cast in `nameQueueService` ───────────────
 // `yield* MyQueue` is asserted to be `QueueResource<Decoded<F>>`; that assertion is only sound if
@@ -13,9 +13,9 @@ const EmailJob = Schema.Struct({ to: Schema.String });
 type F = typeof EmailJob.fields;
 
 // the raw contract the tag actually carries, pre-cast:
-type Contract = Resource.ShapeOf<ReturnType<typeof queueSpec<F>>>;
+type Contract = Hyperlink.ShapeOf<ReturnType<typeof queueSpec<F>>>;
 // the named handle the tag is asserted to expose:
-type Handle = QueueResource.QueueResource<Resource.Decoded<typeof EmailJob>>;
+type Handle = QueueResource.QueueResource<Hyperlink.Decoded<typeof EmailJob>>;
 
 declare const contract: Contract;
 declare const handle: Handle;
@@ -29,19 +29,19 @@ void [_handleToContract, _contractToHandle];
 class Emails extends QueueResource.Tag<Emails>()("test/queue-handle/Emails", {
   payload: EmailJob,
 }) {}
-declare const emailsService: Resource.Shape<typeof Emails>;
+declare const emailsService: Hyperlink.Shape<typeof Emails>;
 const _yieldToHandle: Handle = emailsService;
-const _handleToYield: Resource.Shape<typeof Emails> = handle;
+const _handleToYield: Hyperlink.Shape<typeof Emails> = handle;
 void [_yieldToHandle, _handleToYield];
 
 // ── threaded guard: the cast is now over `QueueInstanceSpec<F, Success, Error>` ──────────────────
 // nameQueueService asserts `ServiceOf<QueueInstanceSpec<F, Success, Error>>` ⇄
 // `QueueResource<Decoded<F>, Success["Type"], Error["Type"], never>`. Prove it for concrete slots.
-type ContractSE = Resource.ShapeOf<
+type ContractSE = Hyperlink.ShapeOf<
   ReturnType<typeof queueSpec<F, typeof Schema.Number, typeof Schema.String>>
 >;
 type HandleSE = QueueResource.QueueResource<
-  Resource.Decoded<typeof EmailJob>,
+  Hyperlink.Decoded<typeof EmailJob>,
   number,
   string
 >;
@@ -57,8 +57,8 @@ type Exact<A, B> =
 const assertExact = <_ extends true>(): void => {};
 assertExact<
   Exact<
-    Resource.Shape<typeof Emails>,
-    QueueResource.QueueResource<Resource.Decoded<typeof EmailJob>, void, never, never>
+    Hyperlink.Shape<typeof Emails>,
+    QueueResource.QueueResource<Hyperlink.Decoded<typeof EmailJob>, void, never, never>
   >
 >();
 
@@ -71,7 +71,7 @@ class Failing extends QueueResource.Tag<Failing>()("test/queue-handle/Failing", 
 }) {}
 assertExact<
   Exact<
-    Resource.Shape<typeof Failing>,
-    QueueResource.QueueResource<Resource.Decoded<typeof EmailJob>, number, string, never>
+    Hyperlink.Shape<typeof Failing>,
+    QueueResource.QueueResource<Hyperlink.Decoded<typeof EmailJob>, number, string, never>
   >
 >();

@@ -4,9 +4,9 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as QueueResource from "../src/QueueResource";
-import * as Resource from "../src/Resource";
-import { flattenResourceSpec } from "../src/Resource";
-import type { AnyMethod } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { flattenHyperlinkSpec } from "../src/Hyperlink";
+import type { AnyMethod } from "../src/Hyperlink";
 import {
   assertQueueInstanceSpec,
   QueueSpecShapeError,
@@ -35,8 +35,8 @@ describe("queueSpec wire — structural validation", () => {
   it("wired spec keys and method kinds match erased baseline (only events schema differs)", () => {
     const wired = QueueResource.queueSpec(jobSchema, { success: Schema.Number });
     const baseline = QueueResource.queueSpec(jobSchema);
-    const flatWired = flattenResourceSpec(wired);
-    const flatBaseline = flattenResourceSpec(baseline);
+    const flatWired = flattenHyperlinkSpec(wired);
+    const flatBaseline = flattenHyperlinkSpec(baseline);
     expect(Object.keys(flatWired).sort()).toEqual(Object.keys(flatBaseline).sort());
     for (const key of Object.keys(flatWired)) {
       if (key === "events") {
@@ -92,7 +92,7 @@ describe("queueSpec wire — RPC round-trip", () => {
         const values = yield* Ref.get(successes);
         expect(values).toContain(4);
       }).pipe(
-        Effect.provide(Resource.client(NumberQueue).pipe(Layer.provide(clientHttp(port)))),
+        Effect.provide(Hyperlink.client(NumberQueue).pipe(Layer.provide(clientHttp(port)))),
         Effect.scoped,
       );
     }).pipe(Effect.provide(numberQueueServer), Effect.scoped),

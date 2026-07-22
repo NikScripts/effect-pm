@@ -3,7 +3,7 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as RunResource from "../src/RunResource";
 import * as Node from "../src/Node";
 
@@ -37,7 +37,7 @@ const withServer = <A, E>(
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
       Effect.provide(
-        Resource.client(RemoteGate).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(RemoteGate).pipe(Layer.provide(clientHttp(port))),
       ),
       Effect.scoped,
     );

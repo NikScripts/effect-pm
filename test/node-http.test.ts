@@ -1,7 +1,7 @@
 import { Clock, Context, Duration, Effect, Exit, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import * as Lookup from "../src/Lookup";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -9,11 +9,11 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-http-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-http-${label}-${process.pid}-${now}.sock`;
   });
 
-class JobsAnon extends Resource.Tag<JobsAnon>()("http/JobsAnon", {
-  jobs: Resource.effect(Schema.Number),
+class JobsAnon extends Hyperlink.Tag<JobsAnon>()("http/JobsAnon", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 describe("Node.http", () => {
@@ -26,18 +26,18 @@ describe("Node.http", () => {
         url: `http://127.0.0.1:${String(port)}/rpc`,
         kind: "Http",
       }) {}
-      class Jobs extends Resource.Tag<Jobs>()("http/Jobs", {
-        jobs: Resource.effect(Schema.Number),
-      }).pipe(Resource.andNode(Worker)) {}
+      class Jobs extends Hyperlink.Tag<Jobs>()("http/Jobs", {
+        jobs: Hyperlink.effect(Schema.Number),
+      }).pipe(Hyperlink.andNode(Worker)) {}
 
       const serverCtx = yield* Layer.build(
-        Node.http(Worker, [Resource.serve(Jobs, { jobs: Effect.succeed(11) })]).pipe(
+        Node.http(Worker, [Hyperlink.serve(Jobs, { jobs: Effect.succeed(11) })]).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
-      const clientCtx = yield* Layer.build(Resource.client(Jobs));
+      const clientCtx = yield* Layer.build(Hyperlink.client(Jobs));
 
       const n = yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
@@ -52,14 +52,14 @@ describe("Node.http", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
-        Node.http(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
+        Node.http(Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
       const clientCtx = yield* Layer.build(
-        Resource.discoverClient(JobsAnon, { lookupPath, unlink: false }),
+        Hyperlink.discoverClient(JobsAnon, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* JobsAnon;
@@ -75,12 +75,12 @@ describe("Node.http", () => {
   it.effect("rejects Ipc Node with HttpListenRequiresHttp", () =>
     Effect.gen(function* () {
       class IpcWorker extends Node.Tag<IpcWorker>()("http/IpcWorker", {
-        path: "/tmp/effect-pm-http-reject.sock",
+        path: "/tmp/hyperlink-ts-http-reject.sock",
       }) {}
       const exit = yield* Effect.exit(
         Layer.build(
           Node.http(IpcWorker, [
-            Resource.serve(JobsAnon, { jobs: Effect.succeed(1) }),
+            Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(1) }),
           ]),
         ).pipe(Effect.scoped),
       );
@@ -98,7 +98,7 @@ describe("Node.http", () => {
       const exit = yield* Effect.exit(
         Layer.build(
           Node.listen(Worker, [
-            Resource.serve(JobsAnon, { jobs: Effect.succeed(1) }),
+            Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(1) }),
           ]),
         ).pipe(Effect.scoped),
       );

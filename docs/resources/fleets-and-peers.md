@@ -3,10 +3,10 @@
 
 Running one resource across many runtimes and having its instances coordinate.
 
-**Fleets** — declare nodes with `Resource.nodes([...])` (or bare `Resource.distributed` for
-directory discovery), mark fields with `Resource.fleet` so peers don't recurse into them.
-**Peers** — inside a layer, `Resource.peers` / `Resource.selfNode` (discharged by
-`Resource.peersLayer`) let an instance reach siblings.
+**Fleets** — declare nodes with `Hyperlink.nodes([...])` (or bare `Hyperlink.distributed` for
+directory discovery), mark fields with `Hyperlink.fleet` so peers don't recurse into them.
+**Peers** — inside a layer, `Hyperlink.peers` / `Hyperlink.selfNode` (discharged by
+`Hyperlink.peersLayer`) let an instance reach siblings.
 
 Two shipped factories lean on this mesh:
 
@@ -17,5 +17,5 @@ Two shipped factories lean on this mesh:
 - **[ShardMap](/docs/shardmap)** — partitioned key/value; routed `get` / `put` / `delete`
   forward to the owning node; leaf `*Local` ops; fleet `size` / `sizeByNode`.
 
-`Resource.distributedOf(tag)` reads the declared node set (empty when undeclared) — partition
+`Hyperlink.distributedOf(tag)` reads the declared node set (empty when undeclared) — partition
 strategies use that fixed membership rather than remapping when a peer is briefly down.

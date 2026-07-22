@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Default-on client verify (§8.6)** — addressed `Resource.client` / `clientHttp` / `socketClient` probe the peer at layer build.

@@ -11,24 +11,24 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 class Worker extends Node.Tag<Worker, Jobs>()("forms/Worker", {
-  path: `/tmp/effect-pm-forms-node-tag-addressed-${process.pid}.sock`,
+  path: `/tmp/hyperlink-ts-forms-node-tag-addressed-${process.pid}.sock`,
 }) {}
 
 const program = Effect.gen(function* () {
   const server = Node.unix(Worker, [
-    Resource.serve(Jobs, { jobs: Effect.succeed(7) }),
+    Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
   ])
   const serverCtx = yield* Layer.build(server)
   void serverCtx
   // AddressedNode → client auto-wires Node.connect(Worker)
-  const client = Resource.client(Jobs, Worker)
+  const client = Hyperlink.client(Jobs, Worker)
   const n = yield* Jobs.pipe(
     Effect.flatMap((jobs) => jobs.jobs),
     Effect.provide(client),

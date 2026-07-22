@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import * as RunResource from "../src/RunResource";
 import { runSpec } from "../src/internal/runResourceSchema";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 // ── The soundness guard for the ONE cast in `nameRunService` ─────────────────
 // `yield* MyRun` is asserted to be `RunResource<Decoded<I>, A["Type"], E["Type"]>`; that assertion is
@@ -11,7 +11,7 @@ import * as Resource from "../src/Resource";
 // THE BUILD — which is what licenses the cast.
 
 // ── param gate with a typed error: bidirectional Contract ⇄ Handle ───────────
-type ContractIE = Resource.ShapeOf<
+type ContractIE = Hyperlink.ShapeOf<
   ReturnType<typeof runSpec<typeof Schema.Number, typeof Schema.String, typeof Schema.Boolean>>
 >;
 type HandleIE = RunResource.RunResource<number, string, boolean>;
@@ -25,7 +25,7 @@ const _contractToHandleIE: HandleIE = contractIE;
 void [_handleToContractIE, _contractToHandleIE];
 
 // ── unit gate (void payload → `run` is a bare Effect): bidirectional ─────────
-type ContractUnit = Resource.ShapeOf<
+type ContractUnit = Hyperlink.ShapeOf<
   ReturnType<typeof runSpec<typeof Schema.Void, typeof Schema.Number>>
 >;
 type HandleUnit = RunResource.RunResource<void, number, never>;
@@ -41,9 +41,9 @@ class Fetch extends RunResource.Tag<Fetch>()("test/run-handle/Fetch", {
   success: Schema.String,
   error: Schema.Boolean,
 }) {}
-declare const fetchService: Resource.Shape<typeof Fetch>;
+declare const fetchService: Hyperlink.Shape<typeof Fetch>;
 const _yieldToHandle: HandleIE = fetchService;
-const _handleToYield: Resource.Shape<typeof Fetch> = handleIE;
+const _handleToYield: Hyperlink.Shape<typeof Fetch> = handleIE;
 void [_yieldToHandle, _handleToYield];
 
 // ── DoD: hover exactness. A payload/success/error tag types as `RunResource<number, string, boolean, never>`.
@@ -52,7 +52,7 @@ type Exact<A, B> =
 const assertExact = <_ extends true>(): void => {};
 assertExact<
   Exact<
-    Resource.Shape<typeof Fetch>,
+    Hyperlink.Shape<typeof Fetch>,
     RunResource.RunResource<number, string, boolean, never>
   >
 >();
@@ -63,7 +63,7 @@ class Tick extends RunResource.Service<Tick>()("test/run-handle/Tick", {
   effect: () => Effect.succeed(1),
 }) {}
 assertExact<
-  Exact<Resource.Shape<typeof Tick>, RunResource.RunResource<void, number, never, never>>
+  Exact<Hyperlink.Shape<typeof Tick>, RunResource.RunResource<void, number, never, never>>
 >();
 
 // ── DoD: the static `.run` shortcut is Effect (unit) vs a call (parameterized) ───────────────────────

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Location-transparent resource toolkit: drive processes, queues, and schedules with the same `yield* Tag` code whether they run local or remote.

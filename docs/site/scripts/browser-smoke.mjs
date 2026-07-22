@@ -5,7 +5,7 @@
 import { chromium, devices } from "playwright";
 
 const base = process.argv[2] ?? "http://localhost:5190";
-const pages = ["/docs/core-concepts", "/api/effect-pm/FleetHealth/rollup"];
+const pages = ["/docs/core-concepts", "/api/hyperlink-ts/FleetHealth/rollup"];
 let failed = false;
 const browser = await chromium.launch();
 

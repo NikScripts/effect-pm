@@ -1,7 +1,7 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { expect, it } from "@effect/vitest";
 import { CustomQueueResource } from "../src";
-import { methodMeta, specOf } from "../src/Resource";
+import { methodMeta, specOf } from "../src/Hyperlink";
 
 const JobSchema = Schema.Struct({ id: Schema.String });
 

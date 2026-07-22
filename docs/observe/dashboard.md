@@ -6,7 +6,7 @@ API / group cards, each with stats, charts, controls, and streaming logs. You po
 reactive runtime and a root `Group`:
 
 ``` tsx
-import { Dashboard } from "@nikscripts/effect-pm/web"
+import { Dashboard } from "hyperlink-ts/web"
 import { Atom } from "effect/unstable/reactivity"
 
 const runtime = Atom.runtime(appLayer) // appLayer: your resource clients over a transport
@@ -20,9 +20,9 @@ wants.
 
 A resource client reaches its node over an RPC **transport**. The library ships two:
 
-- **`Resource.http(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
+- **`Hyperlink.http(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
   or backend-to-backend** caller, or any client that opens only a handful of streams.
-- **`Resource.ws(node, { url })`** — a single **WebSocket**. Use this for a **browser
+- **`Hyperlink.ws(node, { url })`** — a single **WebSocket**. Use this for a **browser
   dashboard**.
 
 ### Why the browser needs the WebSocket
@@ -53,7 +53,7 @@ serve list and options, it just speaks WebSocket):
 
 ``` ts
 Node.wsServer(
-  [Resource.serve(Jobs, jobsImpl) /* … */],
+  [Hyperlink.serve(Jobs, jobsImpl) /* … */],
 )
 ```
 
@@ -62,11 +62,11 @@ Node.wsServer(
 it's safe in a module a server also imports (resolution is lazy):
 
 ``` ts
-const transport = Resource.ws(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
+const transport = Hyperlink.ws(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
 
 const appLayer = Layer.mergeAll(
   transport,
-  Resource.client(Jobs).pipe(Layer.provide(transport)),
+  Hyperlink.client(Jobs).pipe(Layer.provide(transport)),
 )
 ```
 
@@ -94,15 +94,15 @@ default to HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh 
 or the fold 404s against the ws-only `/rpc`. One knob per node, alongside `peersLayer`:
 
 ``` ts
-Node.wsServer([Resource.serve(WorkerPool, poolImpl) /* … */]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
-  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)), // peers speak ws too
+Node.wsServer([Hyperlink.serve(WorkerPool, poolImpl) /* … */]).pipe(
+  Layer.provide(Hyperlink.peersLayer(WorkerPool, ThisNode)),
+  Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)), // peers speak ws too
 )
 ```
 
-Under the hood every client transport is the same seam — `Resource.layerProtocol(protocol)` sets a
-client wire from an `RpcClient.Protocol` (build one with `Resource.protocolHttp` /
-`Resource.protocolWebsocket`), and `ws` / `http` are per-node shortcuts over it.
+Under the hood every client transport is the same seam — `Hyperlink.layerProtocol(protocol)` sets a
+client wire from an `RpcClient.Protocol` (build one with `Hyperlink.protocolHttp` /
+`Hyperlink.protocolWebsocket`), and `ws` / `http` are per-node shortcuts over it.
 
 ## Widgets
 

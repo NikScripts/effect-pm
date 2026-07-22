@@ -113,7 +113,7 @@ const emptyPatches = <T extends object>(): ReadonlyArray<ConfigPatch<T>> => [];
  * @internal
  */
 export const resourceConfigureTagKey = (resourceId: string): string =>
-  `@nikscripts/effect-pm/ResourceConfigure/${resourceId}`;
+  `hyperlink-ts/ResourceConfigure/${resourceId}`;
 
 const resourceConfigureTag = <T extends object>(resourceId: string) =>
   Context.Service<never, ReadonlyArray<ConfigPatch<T>>>()(

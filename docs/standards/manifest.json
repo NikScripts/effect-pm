@@ -673,7 +673,7 @@
     },
     {
       "chapter": "resources",
-      "title": "Resource Factories",
+      "title": "Hyperlink Factories",
       "slug": "resources",
       "rules": [
         {

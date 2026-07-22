@@ -2,17 +2,17 @@ import { render } from "ink-testing-library";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import { makeResourceTui } from "./make-resource-tui";
 
-class Counter extends Resource.Tag<Counter>()("TuiCounter", {
-  current: Resource.effect(Schema.Number),
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
+class Counter extends Hyperlink.Tag<Counter>()("TuiCounter", {
+  current: Hyperlink.effect(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 let v = 0;
-const layer = Resource.layer(Counter, {
+const layer = Hyperlink.layer(Counter, {
   current: Effect.sync(() => v),
   increment: ({ by }) =>
     Effect.sync(() => {

@@ -2,26 +2,26 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // Node-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
 // transport (EdgeNode), the server is one `Node.httpServer([serve(...)])` call, and the client wires the
-// node with one `Resource.http`. Ship ONLY the tag — `Resource.client(tag)` resolves
+// node with one `Hyperlink.http`. Ship ONLY the tag — `Hyperlink.client(tag)` resolves
 // where to connect from the node. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
 class EdgeNode extends Node.Tag<EdgeNode>()("nodeHttp/edge") {}
-class Echo extends Resource.Tag<Echo>()("nodeHttp/Echo", 
+class Echo extends Hyperlink.Tag<Echo>()("nodeHttp/Echo", 
   {
-    ping: Resource.effect(Schema.String),
-    shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
+    ping: Hyperlink.effect(Schema.String),
+    shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
   },
   { node: EdgeNode },
 ) {}
 
 // the whole server, collapsed — only the platform HttpServer is left to provide
 const ServerLive = Node.httpServer([
-  Resource.serve(Echo, {
+  Hyperlink.serve(Echo, {
     ping: Effect.succeed("pong"),
     shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
   }),
@@ -34,7 +34,7 @@ it("drives a node-bearing resource over real http (ship only the tag)", () => {
       Effect.map((server) => server.address),
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
-    const EdgeLive = Resource.http(EdgeNode, {
+    const EdgeLive = Hyperlink.http(EdgeNode, {
       url: `http://127.0.0.1:${port}/rpc`,
     });
 
@@ -44,7 +44,7 @@ it("drives a node-bearing resource over real http (ship only the tag)", () => {
       expect(yield* echo.shout({ msg: "hi" })).toBe("HI");
     }).pipe(
       // ship only the tag: client(Echo) requires EdgeNode; http(EdgeNode, …) supplies it.
-      Effect.provide(Resource.client(Echo).pipe(Layer.provide(EdgeLive))),
+      Effect.provide(Hyperlink.client(Echo).pipe(Layer.provide(EdgeLive))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(ServerLive), Effect.scoped);

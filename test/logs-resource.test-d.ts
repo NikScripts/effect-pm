@@ -1,10 +1,10 @@
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
-class WithLogs extends Resource.Tag<WithLogs>()("@test/WithLogs", {}).pipe(
-  Resource.withLogExport,
+class WithLogs extends Hyperlink.Tag<WithLogs>()("@test/WithLogs", {}).pipe(
+  Hyperlink.withLogExport,
 ) {}
 
-class WithoutLogs extends Resource.Tag<WithoutLogs>()("@test/WithoutLogs", {}) {}
+class WithoutLogs extends Hyperlink.Tag<WithoutLogs>()("@test/WithoutLogs", {}) {}
 
 void WithLogs.logs;
 

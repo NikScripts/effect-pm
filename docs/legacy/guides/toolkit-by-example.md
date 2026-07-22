@@ -1,17 +1,17 @@
 # Toolkit by example — every unique pattern a consumer writes
 
-The complete DX surface for building services on the `Resource` toolkit, one example per
+The complete DX surface for building services on the `Hyperlink` toolkit, one example per
 unique API. Code the way the downstream repo (e.g. `services-hub`) would actually write it.
 
 > **Style:** PascalCase is for classes, types, and namespaces only (tags, hosts, groups).
 > Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
 
-> **Imports:** everything is on the barrel (`@nikscripts/effect-pm`). `QueueResource` is a single
+> **Imports:** everything is on the barrel (`hyperlink-ts`). `QueueResource` is a single
 > unified namespace — the toolkit `Tag` / `layer` / `serve` / `serveRemote` / `configure` plus the
 > engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
 >
 > **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
-> the subpath — `import { queueTag, queueStatus, configure } from "@nikscripts/effect-pm/QueueResource"`
+> the subpath — `import { queueTag, queueStatus, configure } from "hyperlink-ts/QueueResource"`
 > — which is **proven engine-free** (≈23kb, zero engine code) and tree-shakes in any bundler. The
 > barrel `QueueResource.Tag` is functionally identical but may include the queue engine code
 > depending on your bundler (it's pure-Effect with **no native deps**, so it never *breaks* a build —
@@ -23,8 +23,8 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > subpath. You get the same `QueueResource.Tag` ergonomics, and it **tree-shakes** — zero engine code:
 >
 > ```ts
-> import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
-> import * as Process from "@nikscripts/effect-pm/Process";
+> import * as QueueResource from "hyperlink-ts/QueueResource";
+> import * as Process from "hyperlink-ts/Process";
 >
 > class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
 > // QueueResource.Tag / Process.Tag bundle with ZERO engine symbols (proven by the tree-shake check).
@@ -45,7 +45,7 @@ worker `effect` — lives in the **layer**, not the tag.
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm";
+import { QueueResource } from "hyperlink-ts";
 import { NwslsoccerClient } from "@services/api/nwslsoccer";
 
 const rosterJob = Schema.Struct({ teamId: Schema.String, seasonId: Schema.String });
@@ -123,7 +123,7 @@ disarmed.
 
 ```ts
 import { Duration, Effect } from "effect";
-import { Polling, Process } from "@nikscripts/effect-pm";
+import { Polling, Process } from "hyperlink-ts";
 
 class SeasonMatches extends Process.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
 
@@ -139,7 +139,7 @@ const seasonMatchesLayer = Process.layer(SeasonMatches, {
 ## 6. Schedule context from inside a process effect
 
 ```ts
-import { Process } from "@nikscripts/effect-pm";
+import { Process } from "hyperlink-ts";
 
 const tick = Effect.gen(function* () {
   const id = yield* Process.currentScheduleId; // Option<string> — which window triggered this run
@@ -155,7 +155,7 @@ const tick = Effect.gen(function* () {
 ```ts
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
-  yield* proc.run;                    // out-of-band manual run (inputless Resource.effect)
+  yield* proc.run;                    // out-of-band manual run (inputless Hyperlink.effect)
   const status = yield* proc.status.get;      // { supervising, armed, activeInstances, nextTriggerRun,
                                               //   runsStarted, runsSucceeded, runsFailed, lastRunDurationMillis, ... }
   yield* proc.stop;                           // pause supervision
@@ -183,8 +183,8 @@ const armWindows = Effect.gen(function* () {
 
 ```ts
 import { Duration, Effect, Layer, Schema } from "effect";
-import { Polling, Process } from "@nikscripts/effect-pm";
-import * as Store from "@nikscripts/effect-pm/Store";
+import { Polling, Process } from "hyperlink-ts";
+import * as Store from "hyperlink-ts/Store";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
@@ -214,13 +214,13 @@ See [process.md](./process.md) and `examples/forms/process-store/process-layer-s
 
 ## 8. A schedule as its own resource (reusable window manager)
 
-`Process.Schedule` is a standalone schedule `Resource` — full CRUD (`set` / `add` / `upsert` /
+`Process.Schedule` is a standalone schedule `Hyperlink` — full CRUD (`set` / `add` / `upsert` /
 `remove` / `removeMany` / `clear`), lookups (`get` / `has`), and a reactive `entries` ref. Gate any
 number of processes with `Process.schedule(TheSchedule)`.
 
 ```ts
 import { Effect, Stream } from "effect";
-import { Process } from "@nikscripts/effect-pm";
+import { Process } from "hyperlink-ts";
 
 class NwslCron extends Process.Schedule<NwslCron>()("nwsl/Cron") {}
 
@@ -240,7 +240,7 @@ const syncFromDb = Effect.gen(function* () {
 A `Group.Tag` is pure organization — a record of member tags (which can be other groups).
 
 ```ts
-import { Group } from "@nikscripts/effect-pm";
+import { Group } from "hyperlink-ts";
 
 class NwslGroup extends Group.Tag<NwslGroup>("hub/Nwsl")({
   RosterQueue,
@@ -264,9 +264,9 @@ const useIt = Effect.gen(function* () {
 ## 10. Bind a resource to a host (lives on another machine)
 
 ```ts
-import { Resource } from "@nikscripts/effect-pm";
+import { Hyperlink } from "hyperlink-ts";
 
-class MiniHost extends Resource.Host<MiniHost>("hosts/mini") {}
+class MiniHost extends Hyperlink.Host<MiniHost>("hosts/mini") {}
 
 class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
@@ -277,7 +277,7 @@ class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
 ## 11. The Droplet entrypoint — run local resources + reach the remote one
 
 Each machine's entrypoint decides what it **runs** (provide its `.layer`, auto-starts) vs what it
-**reaches** (`Resource.client` + `connect`). `Layer.launch` keeps the runtime alive.
+**reaches** (`Hyperlink.client` + `connect`). `Layer.launch` keeps the runtime alive.
 
 ```ts
 import { Layer } from "effect";
@@ -289,9 +289,9 @@ const dropletLayer = Layer.mergeAll(
   seasonMatchesLayer,
   nwslCronLayer,
   // the poller runs on the mini — wire a client to reach it
-  Resource.client(LiveScorePoller).pipe(
+  Hyperlink.client(LiveScorePoller).pipe(
     Layer.provide(
-      Resource.connectHttp(MiniHost, { url: "http://mini.local:3010/rpc" }),
+      Hyperlink.connectHttp(MiniHost, { url: "http://mini.local:3010/rpc" }),
     ),
   ),
   nwslClientLayer, // your worker-dependency layers (HTTP clients, import sources, …)
@@ -308,7 +308,7 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const miniLayer = Resource.httpServer([
+const miniLayer = Hyperlink.httpServer([
   Process.serve(LiveScorePoller, {
     effect: pollLiveScores,
     polling: Polling.spaced(Duration.seconds(5)),
@@ -320,22 +320,22 @@ NodeRuntime.runMain(Layer.launch(miniLayer));
 
 ## 12b. Serve many resources on one host (`serve` / `httpServer`)
 
-A host usually runs **several** resources on **one** port. `Resource.httpServer([...serve-layers])` mounts
+A host usually runs **several** resources on **one** port. `Hyperlink.httpServer([...serve-layers])` mounts
 them all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each layer is built with a **spec-checked**
 `serve` — `QueueResource.serve` / `Process.serve` (they carry the engine) or
-`Resource.serve(tag, impl)` for a raw resource. It **unions** each layer's requirement (a queue's
+`Hyperlink.serve(tag, impl)` for a raw resource. It **unions** each layer's requirement (a queue's
 worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast. Use
 `serveRemote` in place of `serve` for a served-only (gateway) node.
 
 ```ts
-const dropletLayer = Resource.httpServer([
+const dropletLayer = Hyperlink.httpServer([
   QueueResource.serve(RosterImportQueue, { effect: importRoster }),
   Process.serve(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
-  Resource.serve(Database, { status: pingStatus }),
+  Hyperlink.serve(Database, { status: pingStatus }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })));
 ```
 
-Clients reach each member with `Resource.client(Tag)` over **one** `connectHttp(Host)` transport (§13).
+Clients reach each member with `Hyperlink.client(Tag)` over **one** `connectHttp(Host)` transport (§13).
 Working references: `test/serve-all-queues.test.ts` (two real queue engines, one host, one port) and
 `test/serve-all-http.test.ts`.
 
@@ -352,7 +352,7 @@ const program = Effect.gen(function* () {
   const poller = yield* LiveScorePoller; // resolves to the MiniHost transport
   const status = yield* poller.status.get;
 });
-// provided with: Resource.client(LiveScorePoller).pipe(Layer.provide(connectHttp(MiniHost, ...)))
+// provided with: Hyperlink.client(LiveScorePoller).pipe(Layer.provide(connectHttp(MiniHost, ...)))
 ```
 
 ## 14. CustomQueueResource — N-level queues
@@ -361,7 +361,7 @@ Use when you need more than high/normal/low. Same toolkit pattern as `QueueResou
 takes **lane config positionally** and `add` is **`add(item, level?)`**:
 
 ```ts
-import { CustomQueueResource } from "@nikscripts/effect-pm";
+import { CustomQueueResource } from "hyperlink-ts";
 import { Schema } from "effect";
 
 const Job = Schema.Struct({ id: Schema.String });
@@ -391,7 +391,7 @@ const program = Effect.gen(function* () {
 Contract-only import (tree-shake engine):
 
 ```ts
-import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueResource";
+import * as CustomQueueResource from "hyperlink-ts/CustomQueueResource";
 ```
 
 See [`docs/RESOURCE-API.md`](../RESOURCE-API.md#customqueueresource) and
@@ -400,7 +400,7 @@ See [`docs/RESOURCE-API.md`](../RESOURCE-API.md#customqueueresource) and
 ## 15. HttpApiResource — a concurrency-gated client (compat helper)
 
 ```ts
-import { HttpApiResource } from "@nikscripts/effect-pm";
+import { HttpApiResource } from "hyperlink-ts";
 
 const nwslClientLayer = HttpApiResource.layerEffect(
   NwslsoccerClient,
@@ -414,7 +414,7 @@ const nwslClientLayer = HttpApiResource.layerEffect(
 This is all a dashboard/TUI needs: enumerate, introspect, drive.
 
 ```ts
-import { Group, specOf, methodMeta, Resource } from "@nikscripts/effect-pm";
+import { Group, specOf, methodMeta, Hyperlink } from "hyperlink-ts";
 
 const renderNode = (node: { readonly members: Record<string, unknown> }) => {
   for (const [name, member] of Object.entries(Group.members(node))) {
@@ -432,7 +432,7 @@ const renderNode = (node: { readonly members: Record<string, unknown> }) => {
 };
 
 // drive any member over RPC the same way:
-// const svc = yield* SomeTag  // provided via Resource.client(SomeTag) + connect(host)
+// const svc = yield* SomeTag  // provided via Hyperlink.client(SomeTag) + connect(host)
 ```
 
 ---
@@ -460,12 +460,12 @@ ServicesHub
 
 **Migration state:** the consumer's services are being migrated onto the `.Tag` toolkit surface
 (`.Tag` + a separate `.layer` / `serve`, examples 1–14 above). Build the dashboard against that
-toolkit surface — `Resource.client` + the resource tags (see
+toolkit surface — `Hyperlink.client` + the resource tags (see
 [history-and-persistence.md](./history-and-persistence.md) for the data layer).
 
 **Deploy topology** (see examples 10–13): the hub and all three league groups run on **one
 Droplet**; **one or two processes** (most likely a live-score poller) are peeled off to the
-**Mini** via a `Host`. The dashboard reaches every member uniformly with `Resource.client` +
+**Mini** via a `Host`. The dashboard reaches every member uniformly with `Hyperlink.client` +
 `connect` — a member on the Mini looks identical to a local one; only its host differs.
 
 ### Dashboard build priority

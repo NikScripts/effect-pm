@@ -12,25 +12,25 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Context, Effect, Layer, Schema } from "effect"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/clients/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/clients/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Resource.Tag<Emails>()("forms/clients/Emails", {
-  emails: Resource.effect(Schema.String),
+class Emails extends Hyperlink.Tag<Emails>()("forms/clients/Emails", {
+  emails: Hyperlink.effect(Schema.String),
 }) {}
 
 class Worker extends Node.Tag<Worker, Jobs | Emails>()("forms/clients/Worker", {
-  path: `/tmp/effect-pm-forms-clients-${process.pid}.sock`,
+  path: `/tmp/hyperlink-ts-forms-clients-${process.pid}.sock`,
 }) {}
 
 const program = Effect.gen(function* () {
   const serverCtx = yield* Layer.build(
     Node.unix(Worker, [
-      Resource.serve(Jobs, { jobs: Effect.succeed(7) }),
-      Resource.serve(Emails, { emails: Effect.succeed("ok") }),
+      Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
+      Hyperlink.serve(Emails, { emails: Effect.succeed("ok") }),
     ]),
   )
   // Array or rest — tags must cover Worker's ROut.

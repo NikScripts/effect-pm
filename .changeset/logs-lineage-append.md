@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Logs.withScope appends lineage (nested scopes combine).**

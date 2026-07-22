@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add **`Resource.serveAllHttp`** — serve many resources on **one** HTTP `RpcServer`/port (the

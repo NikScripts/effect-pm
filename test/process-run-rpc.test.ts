@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Option, Schema, SubscriptionRef } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import * as Process from "../src/Process";
-import { forwardClient, groupOf, specOf } from "../src/Resource";
+import { forwardClient, groupOf, specOf } from "../src/Hyperlink";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 

@@ -2,7 +2,7 @@
  * ShardMap helpers — partition, key wire encoding, options, schema stamps.
  *
  * The RPC engine (`buildImpl`) lives in `ShardMap.ts` (Telemetry posture): generic over the
- * public Tag so `Resource.peers` / `selfNode` stay typed. This module stays tag-agnostic.
+ * public Tag so `Hyperlink.peers` / `selfNode` stay typed. This module stays tag-agnostic.
  *
  * @module shardMap
  * @internal

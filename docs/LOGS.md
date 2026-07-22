@@ -2,19 +2,19 @@
 
 **Narrative guide (start here):** [`docs/guides/logs.md`](./guides/logs.md) — architecture, live bus, durable journals, lineage, remote clients, migration.
 
-This file remains the **lookup SSOT**: every identifier below is labeled by **key kind** and mapped to a **package import path**, **source file**, and **example file** (short path under `examples/` or `test/`). Per-resource export uses `Resource.logs` / `Resource.withLogExport`.
+This file remains the **lookup SSOT**: every identifier below is labeled by **key kind** and mapped to a **package import path**, **source file**, and **example file** (short path under `examples/` or `test/`). Per-resource export uses `Hyperlink.logs` / `Hyperlink.withLogExport`.
 
 ## Module paths
 
 | Module | Package import | Source |
 |--------|----------------|--------|
-| Logs platform | `@nikscripts/effect-pm/Logs` | `src/Logs.ts` |
-| Log annotations | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
-| Log entry + predicates | `@nikscripts/effect-pm/LogEntry` | `src/LogEntry.ts` |
-| Resource foundation | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` |
-| Store (registrations) | `@nikscripts/effect-pm/Store` | `src/Store.ts` |
-| Process tags | `@nikscripts/effect-pm/Process` | `src/Process.ts` |
-| Queue tags | `@nikscripts/effect-pm/QueueResource` | `src/QueueResource.ts` |
+| Logs platform | `hyperlink-ts/Logs` | `src/Logs.ts` |
+| Log annotations | `hyperlink-ts/LogContext` | `src/LogContext.ts` |
+| Log entry + predicates | `hyperlink-ts/LogEntry` | `src/LogEntry.ts` |
+| Hyperlink foundation | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` |
+| Store (registrations) | `hyperlink-ts/Store` | `src/Store.ts` |
+| Process tags | `hyperlink-ts/Process` | `src/Process.ts` |
+| Queue tags | `hyperlink-ts/QueueResource` | `src/QueueResource.ts` |
 
 | Example | Short path | Role |
 |---------|------------|------|
@@ -22,16 +22,16 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | WNBA servers | `resource-web/server.ts` | `Store.Service` + `Node.logs` / toolkit `.store` per node |
 | Test key constants | `test/fixtures/logKeys.ts` | Canonical keys for unit tests |
 | Logs env helper | `test/fixtures/logsEnv.ts` | `EnvNode.logs` on `Store.Service.layerMemory` for tests |
-| Resource.logs integration | `test/logs-resource.test.ts` | Runtime `Resource.logs` stream + query |
+| Hyperlink.logs integration | `test/logs-resource.test.ts` | Runtime `Hyperlink.logs` stream + query |
 
 ## Key kinds (vocabulary)
 
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
 | **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
-| **Resource key** | One queue, process, or custom tag | `Resource.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | registration scope; lineage JSON |
+| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
-| **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Resource.logs` / `Logs.by*` |
+| **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **RPC `groupId`** | Wire routing prefix for multi-host RPC | Tag `groupId` when set | **Not** a log key |
 | **Group catalog key** | Dashboard / CLI grouping | `Group.Tag` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
@@ -42,44 +42,44 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
-| `WnbaNode.key` | node log key | `wnba/scores` | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` | `resource-web/hub.ts` |
-| `LiveNode.key` | node log key | `wnba/live` | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` | `resource-web/hub.ts` |
-| `StatsNode.key` | node log key | `wnba/stats` | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` | `resource-web/hub.ts` |
-| `Resource.selfNode(tag)` | node log key (runtime) | same as host `Node.key` | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` | `resource-web/server.ts` |
-| `Logs.NodeLogKey` | node log key (type) | `string` constrained to `Node.key` | `@nikscripts/effect-pm/Logs` | `src/Logs.ts` | — |
-| `Logs.nodeLogKey(node)` | node log key (resolver) | `node.key` | `@nikscripts/effect-pm/Logs` | `src/Logs.ts` | — |
+| `WnbaNode.key` | node log key | `wnba/scores` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
+| `LiveNode.key` | node log key | `wnba/live` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
+| `StatsNode.key` | node log key | `wnba/stats` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
+| `Hyperlink.selfNode(tag)` | node log key (runtime) | same as host `Node.key` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/server.ts` |
+| `Logs.NodeLogKey` | node log key (type) | `string` constrained to `Node.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
+| `Logs.nodeLogKey(node)` | node log key (resolver) | `node.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 | `testBillingNodeKey` | node log key (test) | `billing/scores` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/host-logs-history.test.ts` |
 | `testRelayNodeKey` | node log key (test) | `test/relay` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/logs-relay.test.ts` |
 | `testTuiNodeKey` | node log key (example) | `acme/tui` | — (example fixture) | `resource-tui/live-queues.ts` | `resource-tui/queue-live.tsx` |
 
-### Resource keys (resource-web)
+### Hyperlink keys (resource-web)
 
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
-| `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `@nikscripts/effect-pm/QueueResource` | `src/QueueResource.ts` | `resource-web/hub.ts` |
-| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `@nikscripts/effect-pm/Process` | `src/Process.ts` | `resource-web/hub.ts` |
-| `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `@nikscripts/effect-pm/QueueResource` | `src/QueueResource.ts` | `resource-web/hub.ts` |
-| `ScoresDb.key` | resource key | `wnba/ScoresDb` | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` | `resource-web/hub.ts` |
-| `ScoresApi.key` | resource key | `@wnba/ScoresApi` | `@nikscripts/effect-pm/ApiMetrics` | `src/ApiMetrics.ts` | `resource-web/hub.ts` |
-| `WorkerPool.key` | resource key | `wnba/WorkerPool` | `@nikscripts/effect-pm/Resource` | `src/Resource.ts` | `resource-web/hub.ts` |
+| `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `hyperlink-ts/QueueResource` | `src/QueueResource.ts` | `resource-web/hub.ts` |
+| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Process` | `src/Process.ts` | `resource-web/hub.ts` |
+| `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-ts/QueueResource` | `src/QueueResource.ts` | `resource-web/hub.ts` |
+| `ScoresDb.key` | resource key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
+| `ScoresApi.key` | resource key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `resource-web/hub.ts` |
+| `WorkerPool.key` | resource key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
 | `testSyncProcessKey` | resource key (test) | `billing/SyncWorker` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/log-pipeline.test.ts` |
-| `Logs.ResourceLogKey` | resource key (type) | `string` constrained to `Tag.key` | `@nikscripts/effect-pm/Logs` | `src/Logs.ts` | — |
+| `Logs.ResourceLogKey` | resource key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 
 ### Annotation keys (`LogAnnotationKeys`)
 
 | Symbol | Key kind | Field name (value) | Holds | Package import | Source |
 |--------|----------|-------------------|-------|----------------|--------|
-| `LogAnnotationKeys.node` | annotation key | `"node"` | **node log key** value | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
-| `LogAnnotationKeys.lineage` | annotation key | `"@nikscripts/effect-pm/lineage"` | JSON array of **lineage segment keys** | `@nikscripts/effect-pm/LogContext` | `src/LogContext.ts` |
+| `LogAnnotationKeys.node` | annotation key | `"node"` | **node log key** value | `hyperlink-ts/LogContext` | `src/LogContext.ts` |
+| `LogAnnotationKeys.lineage` | annotation key | `"hyperlink-ts/lineage"` | JSON array of **lineage segment keys** | `hyperlink-ts/LogContext` | `src/LogContext.ts` |
 
 ### Store / query parameters
 
 | Parameter | Key kind | Must be | API | Source |
 |-----------|----------|---------|-----|--------|
-| `Node.logs` / `Resource.store(Node)` | node log key | `Node.key` | store registration | `src/Resource.ts` |
+| `Node.logs` / `Hyperlink.store(Node)` | node log key | `Node.key` | store registration | `src/Hyperlink.ts` |
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
 | `byResource(tag \| key)` | resource key / scope tag | `Tag.key` | `Logs.byResource` | `src/Logs.ts` |
-| `Logs.byResource` / `Resource.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
+| `Logs.byResource` / `Hyperlink.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
 | `LogEntry.atLeaf(key)` | lineage segment key | usually **resource key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
@@ -87,17 +87,17 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 ## Node log key rules
 
 1. **Must equal** the `Node.Tag` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
-2. **Register** `Node.logs` (or `Resource.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
+2. **Register** `Node.logs` (or `Hyperlink.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
 3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
 4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
 5. Use **slash-separated** paths (`domain/role`), not placeholders (`my-node`, `node-a`, bare `wnba`).
 
 ```ts
-import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as Node from "@nikscripts/effect-pm/Node"
-import * as Logs from "@nikscripts/effect-pm/Logs";
-import * as Process from "@nikscripts/effect-pm/Process";
-import * as Store from "@nikscripts/effect-pm/Store";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import * as Node from "hyperlink-ts/Node"
+import * as Logs from "hyperlink-ts/Logs";
+import * as Process from "hyperlink-ts/Process";
+import * as Store from "hyperlink-ts/Store";
 
 class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
@@ -117,15 +117,15 @@ Logs.byNode("my-node")
 Logs.byNode("wnba") // WnbaNode.key is "wnba/scores", not "wnba"
 ```
 
-## Resource keys (per-resource logs)
+## Hyperlink keys (per-resource logs)
 
-Resource identity uses **`tag.key`** (may contain `/`; metrics tags may use `@` prefix).
+Hyperlink identity uses **`tag.key`** (may contain `/`; metrics tags may use `@` prefix).
 
 ```ts
-import * as Process from "@nikscripts/effect-pm/Process";
-import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as Logs from "@nikscripts/effect-pm/Logs";
-import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as Process from "hyperlink-ts/Process";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import * as Logs from "hyperlink-ts/Logs";
+import * as LogEntry from "hyperlink-ts/LogEntry";
 // example: resource-web/hub.ts
 import { LiveNode, LiveScorePoller } from "./hub";
 
@@ -136,7 +136,7 @@ Logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 
 yield* Logs.byResource(resourceKey);
 
-const { stream, query } = yield* Resource.logs(LiveScorePoller);
+const { stream, query } = yield* Hyperlink.logs(LiveScorePoller);
 ```
 
 ## Architecture
@@ -147,20 +147,20 @@ BillingNode process (node log key: billing/scores)
   BillingNode.logs              → match-all follower → private `_logs` journal (node)
   Process.store(Daily)          → lineage follower → private `_logs` journal (resource)
   Logs.withScope(tag)           → appends resource key onto fiber lineage path
-  Resource.logs(tag)            → { stream, query } (live + durable)
+  Hyperlink.logs(tag)            → { stream, query } (live + durable)
 ```
 
 - **Capture:** exactly one merged capture logger per node (`Logs.layer`, baked into `Store.Service`).
 - **Bus:** one `Logs.Relay` (PubSub + bounded tail; internal Context tag remains `LogRelay`).
 - **Durable tails:** Stream pipeline per registration — level ∧ match → claim → batch append; claim seeded from durable `_logs` at layer acquire.
-- **Stream:** unfiltered on `Logs.stream`; `Resource.logs` applies lineage + optional `logStreamLevel`.
+- **Stream:** unfiltered on `Logs.stream`; `Hyperlink.logs` applies lineage + optional `logStreamLevel`.
 
 ## Node runtime
 
 ### Live only
 
 ```ts
-import * as Logs from "@nikscripts/effect-pm/Logs";
+import * as Logs from "hyperlink-ts/Logs";
 
 Effect.provide(program, Logs.layer);
 
@@ -171,9 +171,9 @@ const live = yield* Logs.stream;
 ### Live + durable (registration followers)
 
 ```ts
-import * as Logs from "@nikscripts/effect-pm/Logs";
-import * as Process from "@nikscripts/effect-pm/Process";
-import * as Store from "@nikscripts/effect-pm/Store";
+import * as Logs from "hyperlink-ts/Logs";
+import * as Process from "hyperlink-ts/Process";
+import * as Store from "hyperlink-ts/Store";
 // example: resource-web/server.ts
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -192,32 +192,32 @@ Effect.provide(
 ### Query durable history
 
 ```ts
-import * as Logs from "@nikscripts/effect-pm/Logs";
+import * as Logs from "hyperlink-ts/Logs";
 
 // node journal — everything this node's match-all follower captured
 yield* Logs.byNode(WnbaNode, { limit: 500 });
 
-// resource scope — durable journal for that registration (same as Resource.logs().query locally)
+// resource scope — durable journal for that registration (same as Hyperlink.logs().query locally)
 yield* Logs.byResource(LiveScorePoller, { limit: 100 });
 
-const { query } = yield* Resource.logs(LiveScorePoller);
+const { query } = yield* Hyperlink.logs(LiveScorePoller);
 yield* query({ limit: 100 });
 ```
 
 ## Per-resource export
 
 ```ts
-import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
-import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as LogEntry from "hyperlink-ts/LogEntry";
 
 class MailQueue extends QueueResource.Tag<MailQueue>()("app/Mail", spec).pipe(
-  Resource.withLogExport,
+  Hyperlink.withLogExport,
 ) {}
 
 const resourceKey = MailQueue.key; // "app/Mail"
 
-const { stream, query } = yield* Resource.logs(MailQueue);
+const { stream, query } = yield* Hyperlink.logs(MailQueue);
 
 stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 const history = yield* query({ limit: 50 });
@@ -228,7 +228,7 @@ const history = yield* query({ limit: 50 });
 All predicate arguments are **lineage segment keys** (usually a **resource key** or **node log key**).
 
 ```ts
-import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as LogEntry from "hyperlink-ts/LogEntry";
 import { LiveNode, LiveScorePoller } from "resource-web/hub";
 
 const nodeLogKey = LiveNode.key;           // "wnba/live"
@@ -240,7 +240,7 @@ LogEntry.atRoot(nodeLogKey)(entry);              // lineage[0]
 LogEntry.atLeaf(resourceKey)(entry);             // last segment
 ```
 
-Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Resource kind is `Resource.kindOf(tag)` — there are no `processId` / `queueId` log annotations.
+Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is `Hyperlink.kindOf(tag)` — there are no `processId` / `queueId` log annotations.
 
 ## Multi-node fixture (`resource-web`)
 
@@ -260,11 +260,11 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Resource kind is `
 
 ## Remote dashboard (browser → node)
 
-When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal (`NodeStatus.logs.query`) filtered by **resource key**. Locally, `Resource.logs(tag).query` prefers registration Storage and falls back to NodeStatus when remote.
+When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal (`NodeStatus.logs.query`) filtered by **resource key**. Locally, `Hyperlink.logs(tag).query` prefers registration Storage and falls back to NodeStatus when remote.
 
 ```ts
-import * as NodeStatus from "@nikscripts/effect-pm/NodeStatus";
-import * as LogEntry from "@nikscripts/effect-pm/LogEntry";
+import * as NodeStatus from "hyperlink-ts/NodeStatus";
+import * as LogEntry from "hyperlink-ts/LogEntry";
 
 const resourceKey = LiveScorePoller.key;
 
@@ -282,12 +282,12 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 
 | Old | New |
 |-----|-----|
-| `Logs.persistLayer` + `@nikscripts/effect-pm/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
-| `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `@nikscripts/effect-pm/Logs` |
+| `Logs.persistLayer` + `hyperlink-ts/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
+| `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `hyperlink-ts/Logs` |
 | `ProcessStore` log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
-| `queue.logs` / `proc.logs` on handle | `Resource.logs(tag)` (local Storage / remote NodeStatus) |
-| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Resource.logs` / `Logs.by*` |
+| `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote NodeStatus) |
+| `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Hyperlink.logs` / `Logs.by*` |
 | `HostLogs` (docs) | `Logs` |
 
 ## Verification

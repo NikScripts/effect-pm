@@ -1,7 +1,7 @@
 /**
  * **Node** — transport endpoints, catalog listen, and connect helpers.
  *
- * Consume as `import * as Node from "@nikscripts/effect-pm/Node"`.
+ * Consume as `import * as Node from "hyperlink-ts/Node"`.
  *
  * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)

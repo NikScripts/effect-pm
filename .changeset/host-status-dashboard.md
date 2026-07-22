@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Hosts in the dashboard.** The web dashboard now surfaces the hosts its resources are served on, read straight off the tags — no registry.

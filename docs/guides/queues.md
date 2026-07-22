@@ -24,7 +24,7 @@ thing:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 
 // The item: a plain schema. This is the queue's payload type.
@@ -50,7 +50,7 @@ That's a complete, running queue. To use it, `yield* Emails` for the handle and
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -71,7 +71,7 @@ Hover `emails` and you'll see its type — the named handle:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -120,7 +120,7 @@ how it drains:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -159,7 +159,7 @@ rides the `Failed` event's `cause`:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 // ---cut---
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
@@ -191,7 +191,7 @@ Four verbs put work in. Three are priority lanes:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -219,7 +219,7 @@ stream you can render:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema, Stream } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -239,7 +239,7 @@ Subscribe once, off-fiber, and dispatch by tag:
 
 {.twoslash}
 ``` ts
-import { QueueResource, Resource } from "@nikscripts/effect-pm"
+import { QueueResource, Hyperlink } from "hyperlink-ts"
 import { Cause, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -248,7 +248,7 @@ const emails = yield* Emails
 // ---cut---
 yield* Effect.forkScoped(
   emails.events.pipe(
-    Resource.runForEachTag({
+    Hyperlink.runForEachTag({
       Completed: (e) => Effect.log(`sent → ${e.entry.item.to}`),
       RetryExhausted: (e) =>
         Effect.logError(`dead-letter ${e.entry.item.to}: ${Cause.pretty(e.cause)}`),
@@ -288,7 +288,7 @@ the `Completed` event and the store's analytics:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 // ---cut---
 const Job = Schema.Struct({ id: Schema.String })
@@ -315,7 +315,7 @@ self-contained [**Service**](/docs/glossary#service):
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 // ---cut---
@@ -345,7 +345,7 @@ next — retry, dead-letter, or drop:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Cause, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", {
@@ -380,7 +380,7 @@ ceiling bites:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Duration, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -403,7 +403,7 @@ subscriber, then let it rip. Start it paused and `resume` when ready:
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -428,7 +428,7 @@ queue into a durable poller over an external source (a table, a topic, an inbox)
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
@@ -459,7 +459,7 @@ and they fall into four families:
 - *queue-level* — `Start`, `RateLimitExceeded`, `ShutdownRequested`, `ShutdownComplete`, `Drained`
 
 You never handle all of them — pick the tags you care about with
-`Resource.runForEachTag` and ignore the rest.
+`Hyperlink.runForEachTag` and ignore the rest.
 
 **`status`** is the current-state snapshot (a `Subscribable`): per-priority pending
 `sizes`, how many are `inFlight`, the running `completed` count, whether it's
@@ -496,7 +496,7 @@ This is the payoff of the tag/layer split. The **tag is the contract**; the
 Provide `QueueResource.layer` and the queue is local. Provide
 `QueueResource.serve` instead and the worker runs behind an RPC server, its
 handlers mounted for callers. A *different* process then provides
-`Resource.client(Tag)` (or `Resource.connect(Tag, Resource.protocolHttp(port))` over HTTP), and the
+`Hyperlink.client(Tag)` (or `Hyperlink.connect(Tag, Hyperlink.protocolHttp(port))` over HTTP), and the
 **same `yield* Tag` code** drives the remote queue — `add`, `size`, `events`,
 `pause`, all of it — as if it were in-process. The handle's `Requirements` param is
 the only tell: `never` locally, the transport for a client.
@@ -513,7 +513,7 @@ of the base — `Layer.provideMerge` it, and the queue drains under the merged c
 
 {.twoslash}
 ``` ts
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 import { Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}

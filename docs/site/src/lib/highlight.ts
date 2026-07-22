@@ -58,7 +58,7 @@ const ALIAS: Record<string, string> = {
 
 // Twoslash type-checks each opted-in block against OUR types. Omitting `fsMap` makes it read the
 // real filesystem (rooted at the repo), so `effect` resolves from node_modules; `paths` maps the
-// package name to its source so `@nikscripts/effect-pm/*` → `src/*`.
+// package name to its source so `hyperlink-ts/*` → `src/*`.
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const compilerOptions: ts.CompilerOptions = {
   module: ts.ModuleKind.ESNext,
@@ -71,8 +71,8 @@ const compilerOptions: ts.CompilerOptions = {
   noEmit: true, // twoslasher renders both our package (extension-less) and effect deps (gen-hovers);
   baseUrl: repoRoot, // noEmit is required alongside allowImportingTsExtensions (twoslash never emits)
   paths: {
-    "@nikscripts/effect-pm": ["src/index.ts"],
-    "@nikscripts/effect-pm/*": ["src/*"],
+    "hyperlink-ts": ["src/index.ts"],
+    "hyperlink-ts/*": ["src/*"],
   },
 };
 

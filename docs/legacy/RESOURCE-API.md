@@ -1,33 +1,33 @@
-# Resource API Reference
+# Hyperlink API Reference
 
-Complete guide to `QueueResource`, `CustomQueueResource`, `RunResource`, and `HttpApiResource` — the managed resource modules in `@nikscripts/effect-pm`.
+Complete guide to `QueueResource`, `CustomQueueResource`, `RunResource`, and `HttpApiResource` — the managed resource modules in `hyperlink-ts`.
 
 ---
 
-## Resource kinds
+## Hyperlink kinds
 
 Every contract's `.Tag` factory stamps a canonical **kind** id on the tag it builds, so consumers can classify a tag by *what it is* rather than sniffing its spec members (which is fragile — e.g. a queue and an `ApiMetrics` tap both expose a `metrics` stream).
 
 ```ts
-import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import * as QueueResource from "hyperlink-ts/QueueResource";
 
-Resource.kindOf(MyQueue);        // "@nikscripts/effect-pm/QueueResource"
-Resource.kindOf(MyQueue) === QueueResource.kind; // true
-Resource.kindOf(SomePlainTag);   // undefined  (a bare Resource.Tag carries no kind)
+Hyperlink.kindOf(MyQueue);        // "hyperlink-ts/QueueResource"
+Hyperlink.kindOf(MyQueue) === QueueResource.kind; // true
+Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no kind)
 ```
 
-`Resource.kindOf(tag)` accepts `unknown` (so a `Group` member passes straight in) and returns the kind id or `undefined`. Each contract exports its id as `kind`:
+`Hyperlink.kindOf(tag)` accepts `unknown` (so a `Group` member passes straight in) and returns the kind id or `undefined`. Each contract exports its id as `kind`:
 
 | Contract | `kind` |
 | --- | --- |
-| `QueueResource` (`…/QueueContract`) | `@nikscripts/effect-pm/QueueResource` |
-| `Process` (`Process.Tag`) | `@nikscripts/effect-pm/Process` |
-| `Process.Schedule` (standalone schedule) | `@nikscripts/effect-pm/Process/Schedule` |
-| `CustomQueueResource` (`…/CustomQueueContract`) | `@nikscripts/effect-pm/CustomQueueResource` |
-| `ApiMetrics` | `@nikscripts/effect-pm/ApiMetrics` |
+| `QueueResource` (`…/QueueContract`) | `hyperlink-ts/QueueResource` |
+| `Process` (`Process.Tag`) | `hyperlink-ts/Process` |
+| `Process.Schedule` (standalone schedule) | `hyperlink-ts/Process/Schedule` |
+| `CustomQueueResource` (`…/CustomQueueContract`) | `hyperlink-ts/CustomQueueResource` |
+| `ApiMetrics` | `hyperlink-ts/ApiMetrics` |
 
-This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Resource.Tag` has no stamped kind; pass `{ kind }` to `Resource.Tag(key, { kind })` / `Resource.tagFor(groupId, spec, { kind })` to give a custom contract its own.
+This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` / `Hyperlink.tagFor(groupId, spec, { kind })` to give a custom contract its own.
 
 ---
 
@@ -41,7 +41,7 @@ Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 
 ```typescript
 import { Effect, Exit } from "effect"
-import { QueueResource } from "@nikscripts/effect-pm"
+import { QueueResource } from "hyperlink-ts"
 
 class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
@@ -292,7 +292,7 @@ default import graph stays lightweight (scheduled lane code is dynamically impor
 Tag factory arity mirrors positional lane config:
 
 ```typescript
-import { CustomQueueResource } from "@nikscripts/effect-pm"
+import { CustomQueueResource } from "hyperlink-ts"
 import { Schema } from "effect"
 
 const Job = Schema.Struct({ id: Schema.String })
@@ -323,7 +323,7 @@ const numeric = yield* queue.levelSizes // number[] indexed by lane
 Tree-shake the contract only (no engine on the tag import path):
 
 ```typescript
-import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueResource"
+import * as CustomQueueResource from "hyperlink-ts/CustomQueueResource"
 ```
 
 ### Layer / engine
@@ -338,7 +338,7 @@ CustomQueueResource.layer(Jobs, {
 })
 
 // Local engine without toolkit tag:
-import { CustomQueueResource as CustomQueueEngine } from "@nikscripts/effect-pm/CustomQueueResource"
+import { CustomQueueResource as CustomQueueEngine } from "hyperlink-ts/CustomQueueResource"
 
 const queue = yield* CustomQueueEngine.make({
   levelCount: 4,
@@ -354,7 +354,7 @@ const queue = yield* CustomQueueEngine.make({
 - **`levelSizes`** — `number[]` parallel to lane indices.
 - No `prioritize` / `defer` — pick the lane explicitly on `add`.
 
-Subpaths: `@nikscripts/effect-pm/CustomQueueResource` (namespace + engine), `@nikscripts/effect-pm/CustomQueueResource` (tag/layer/server only).
+Subpaths: `hyperlink-ts/CustomQueueResource` (namespace + engine), `hyperlink-ts/CustomQueueResource` (tag/layer/server only).
 
 Example: [`examples/forms/queue/custom-queue-resource-n-level.ts`](../examples/forms/queue/custom-queue-resource-n-level.ts) (`pnpm run example:custom-queue-resource`).
 
@@ -514,7 +514,7 @@ Typed HTTP API client with transport-level concurrency gating.
 ```typescript
 import { HttpApi, HttpApiGroup, HttpApiEndpoint } from "effect/unstable/httpapi"
 import { Schema } from "effect"
-import { HttpApiResource } from "@nikscripts/effect-pm"
+import { HttpApiResource } from "hyperlink-ts"
 
 // Define your API schema
 const getUser = HttpApiEndpoint.get("getUser", "/users/:id", {
@@ -552,7 +552,7 @@ const AuthClient = HttpApiResource.make(MyApi, {
 #### With Accept: application/json
 
 ```typescript
-import { acceptJson } from "@nikscripts/effect-pm"
+import { acceptJson } from "hyperlink-ts"
 
 const JsonClient = HttpApiResource.make(MyApi, {
   name: "@app/JsonClient",
@@ -596,13 +596,13 @@ const MyClientLive = HttpApiResource.layerEffect(MyClient, myCustomMake, {
 
 Any resource can report **readiness** — whether it's actually able to serve, beyond merely being up. A host aggregates its resources' readiness into one result with two faces (SSOT): the plain `GET /health` route (`200` ok / `503` degraded) and `HostStatus` (the dashboard health board).
 
-`Readiness` is `{ ready: boolean; detail?: string }`. Attach a derivation with **`Resource.withReadiness`** — dual, so it reads naturally in a class `extends`:
+`Readiness` is `{ ready: boolean; detail?: string }`. Attach a derivation with **`Hyperlink.withReadiness`** — dual, so it reads naturally in a class `extends`:
 
 ```ts
-class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
-  warm: Resource.effect(Schema.Boolean),
+class EdgeCache extends Hyperlink.Tag<EdgeCache>()("edge/Cache", {
+  warm: Hyperlink.effect(Schema.Boolean),
 }).pipe(
-  Resource.withReadiness((svc) =>
+  Hyperlink.withReadiness((svc) =>
     Effect.map(svc.warm, (warm) => (warm ? { ready: true } : { ready: false, detail: "cold" })),
   ),
 ) {}
@@ -610,17 +610,17 @@ class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
 
 Derivations **stack**: a later `withReadiness` receives the previous one as a second arg, `base`, so you extend a contract's built-in check (e.g. a queue's `phase === "running"`) instead of replacing it.
 
-**Depend on another resource.** `Resource.readinessOf(tag)` yields a resource's service and runs *its* derivation; `Resource.allReady([...])` combines checks with AND (first not-ready wins). So a queue can report degraded when a dependency (e.g. a `Database` resource) is down — compile-time-checked (the dependency lands in the readiness Effect's requirements), and it works whether the dependency is local or reached over RPC:
+**Depend on another resource.** `Hyperlink.readinessOf(tag)` yields a resource's service and runs *its* derivation; `Hyperlink.allReady([...])` combines checks with AND (first not-ready wins). So a queue can report degraded when a dependency (e.g. a `Database` resource) is down — compile-time-checked (the dependency lands in the readiness Effect's requirements), and it works whether the dependency is local or reached over RPC:
 
 ```ts
 class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }).pipe(
-  Resource.withReadiness((_svc, base) =>
-    Resource.allReady([base, Resource.readinessOf(Database)]),
+  Hyperlink.withReadiness((_svc, base) =>
+    Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
   ),
 ) {}
 ```
 
-`Resource.readinessCheck(tag, service)` runs a tag's derivation (a tag with none is **ready by default**); `httpServer` calls it to build the host aggregate.
+`Hyperlink.readinessCheck(tag, service)` runs a tag's derivation (a tag with none is **ready by default**); `httpServer` calls it to build the host aggregate.
 
 On the dashboard, the host **health board** (tap the host die) lists degraded resources across every host with their root cause, and each resource's own detail page shows a `degraded — <root cause>` banner (`ResourceReadinessBanner`).
 
@@ -630,38 +630,38 @@ On the dashboard, the host **health board** (tap the host die) lists degraded re
 
 ## Serving custom resources (`serve` / `serveRemote` / `httpServer`)
 
-`Resource.httpServer([...serve-layers], options?)` serves **many** resources on **one** host/port (one `/rpc` + the auto-mounted `/health` + `HostStatus`); a client reaches each via `Resource.client(Tag)` over one `connectHttp` transport. Each layer carries **its own** requirement `R`, and `httpServer` **unions** them (a queue's worker `R`, an `ApiMetrics` `Scope`, a plain resource's `never`) — no per-entry cast — while exposing the union of every layer's grants.
+`Hyperlink.httpServer([...serve-layers], options?)` serves **many** resources on **one** host/port (one `/rpc` + the auto-mounted `/health` + `HostStatus`); a client reaches each via `Hyperlink.client(Tag)` over one `connectHttp` transport. Each layer carries **its own** requirement `R`, and `httpServer` **unions** them (a queue's worker `R`, an `ApiMetrics` `Scope`, a plain resource's `never`) — no per-entry cast — while exposing the union of every layer's grants.
 
 Build each layer with **`serve`** (local **and** served — the default) or **`serveRemote`** (served-only, a pure gateway):
 
-- **`Resource.serve(tag, impl)`** / **`Resource.serveRemote(tag, impl)`** — for a **raw** `Resource.Tag`. Both **spec-check** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). `serve` additionally grants `Self | LocalCapability<Self>` from the **same** materialization, so the serving node also `yield*`s the resource in-process; `serveRemote` mounts wire handlers only. Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
-- **`QueueResource.serve(tag, config)`** / **`Process.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Resource.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
+- **`Hyperlink.serve(tag, impl)`** / **`Hyperlink.serveRemote(tag, impl)`** — for a **raw** `Hyperlink.Tag`. Both **spec-check** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). `serve` additionally grants `Self | LocalCapability<Self>` from the **same** materialization, so the serving node also `yield*`s the resource in-process; `serveRemote` mounts wire handlers only. Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
+- **`QueueResource.serve(tag, config)`** / **`Process.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
 
 ```ts
-Resource.httpServer([
+Hyperlink.httpServer([
   QueueResource.serve(RosterQueue, { effect }),        // worker R
   ApiMetrics.serve(SdpApi),                            // Scope
-  Resource.serve(Database, { status: pingStatus }),    // raw, spec-checked
+  Hyperlink.serve(Database, { status: pingStatus }),    // raw, spec-checked
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
 ```
 
-> `Resource.instance` is **not** for this — it builds a `ResourceInstance` for the `serveInstances` family (one factory, many keyed instances). To serve one custom resource, pass its `serve` layer to `httpServer`.
+> `Hyperlink.instance` is **not** for this — it builds a `HyperlinkInstance` for the `serveInstances` family (one factory, many keyed instances). To serve one custom resource, pass its `serve` layer to `httpServer`.
 
 ### Per-resource dependencies
 
 Because each `serve` layer carries **its own** `Layer.provide`, resources on one host that need **different implementations of the same tag** (mutually exclusive — e.g. one worker fires post-persist hooks, another must not) stay isolated — no shared union-provide can confuse them. Resources that **share** a dependency memoize one instance (same `dependency` value → one build; `Layer.fresh(dependency)` to isolate).
 
-- **`Resource.httpServer(serves, options?)`** — reads the `ServedResources` registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. Pass the `serve` layers as the first arg (recommended) and it **bundles** the `provideMerge` + `servedResourcesLayer` — you provide only the platform (+ any shared dependency). The low-level `httpServer(options)` form still exists (then you `provideMerge` the `serve` layers, not `provide`, + `servedResourcesLayer` yourself).
-- **`Resource.servedResourcesLayer`** / **`Resource.ServedResources`** — the `Ref`-backed registry `serve` appends to and `httpServer` reads.
-- **`Resource.provide(dependency, [resources])`** — sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency."
+- **`Hyperlink.httpServer(serves, options?)`** — reads the `ServedHyperlinks` registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. Pass the `serve` layers as the first arg (recommended) and it **bundles** the `provideMerge` + `servedHyperlinksLayer` — you provide only the platform (+ any shared dependency). The low-level `httpServer(options)` form still exists (then you `provideMerge` the `serve` layers, not `provide`, + `servedHyperlinksLayer` yourself).
+- **`Hyperlink.servedHyperlinksLayer`** / **`Hyperlink.ServedHyperlinks`** — the `Ref`-backed registry `serve` appends to and `httpServer` reads.
+- **`Hyperlink.provide(dependency, [resources])`** — sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency."
 
 ```ts
-Resource.httpServer([
-  Resource.provide(importHandlers, [                          // a group sharing one dependency
-    Resource.serve(SeasonMatches,   seasonMatchesImpl),
-    Resource.serve(LiveScorePoller, pollerImpl),
+Hyperlink.httpServer([
+  Hyperlink.provide(importHandlers, [                          // a group sharing one dependency
+    Hyperlink.serve(SeasonMatches,   seasonMatchesImpl),
+    Hyperlink.serve(LiveScorePoller, pollerImpl),
   ]),
-  Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(hookedImport)), // its own — isolated
+  Hyperlink.serve(SeasonImport, importImpl).pipe(Layer.provide(hookedImport)), // its own — isolated
 ], { health: { path: "/health" } }).pipe(
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
 );
@@ -673,25 +673,25 @@ The tick/worker body just **declares** its dependency (`const h = yield* ImportH
 
 ## Multi-host resources (one shape, N instances)
 
-One resource served as **N instances**, one per host (`Database` on three league hosts). Combined/fleet values are **plain queries** you tag with `Resource.fleet` and implement in the layer by folding `Resource.peers` + your own value — no special field kind.
+One resource served as **N instances**, one per host (`Database` on three league hosts). Combined/fleet values are **plain queries** you tag with `Hyperlink.fleet` and implement in the layer by folding `Hyperlink.peers` + your own value — no special field kind.
 
 ```ts
-import { Combine, combineQuery } from "@nikscripts/effect-pm/MultiHost";
+import { Combine, combineQuery } from "hyperlink-ts/MultiHost";
 
 // hosts carry their own url; pipe the fleet on with `multiHost([...])` (hostless — every instance an
 // equal peer, no primary host).
-class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
-class Database extends Resource.Tag<Database>()("app/Database", {
-  connections:      Resource.effect(Schema.Number),                 // per-instance ("leaf")
-  totalConnections: Resource.effect(Schema.Number).pipe(Resource.fleet), // combined across the fleet
-}).pipe(Resource.multiHost([NwslHost, EbwslHost, WnbaHost])) {}
+class NwslHost extends Hyperlink.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
+class Database extends Hyperlink.Tag<Database>()("app/Database", {
+  connections:      Hyperlink.effect(Schema.Number),                 // per-instance ("leaf")
+  totalConnections: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet), // combined across the fleet
+}).pipe(Hyperlink.multiHost([NwslHost, EbwslHost, WnbaHost])) {}
 
-// the layer, Effect form (`Resource.layer` also takes an `Effect` that builds the impl): resolve
+// the layer, Effect form (`Hyperlink.layer` also takes an `Effect` that builds the impl): resolve
 // `peers` once, then `totalConnections` folds them + this host's own value.
-const database = Resource.layer(
+const database = Hyperlink.layer(
   Database,
   Effect.gen(function* () {
-    const peers = yield* Resource.peers(Database); // the other hosts' leaf clients (keyed by host)
+    const peers = yield* Hyperlink.peers(Database); // the other hosts' leaf clients (keyed by host)
     return {
       connections: Effect.sync(() => pool.activeCount()),
       totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
@@ -702,29 +702,29 @@ const database = Resource.layer(
 );
 
 // serve on each host: the layer + `peersLayer` (the opt-in mesh — only where a host reaches its peers)
-Resource.httpServer([Resource.serve(Database, database)]).pipe(
-  Layer.provide(Resource.peersLayer(Database, NwslHost)),
+Hyperlink.httpServer([Hyperlink.serve(Database, database)]).pipe(
+  Layer.provide(Hyperlink.peersLayer(Database, NwslHost)),
 );
 ```
 
-- **`Resource.fleet(method)`** (or `query(...).pipe(Resource.fleet)`) — a combined field: served + client-visible like any query, but **excluded from `Resource.peers`**, so a fold can't call a peer's own fleet field (a fan-out). Fold over **leaf** fields.
-- **`Resource.peers(tag)`** — the other hosts' leaf clients, keyed by host. Fold with `/MultiHost`'s `combineQuery`/`combineStream` + `Combine` (`sum`/`byHost`/`mergeStreams`/`mergeByHost`/…). Requires the peers capability, provided by **`Resource.peersLayer(tag, self)`** (connects the `multiHost` set minus self) or **`Resource.peersFrom(tag, clients)`** (an explicit client map — a holder's bundles, or a test). Peer urls default to each `Host.url` (the standard — the host carries how to reach it); pass **`peersLayer(tag, self, { url: (host) => Effect<string | undefined> })`** to override per host (env-specific ports, tunnels, Effect `Config`), falling back to `Host.url`. A host with no url from either source is skipped — a partial mesh, never a throw.
-- **`Resource.selfHost(tag)`** — the host key this instance runs as, the **same key** its peers are keyed by. For `Combine.byHost` folds (one row per host), so the impl keys its **own** row without hand-threading: `return { ...byHost, [yield* Resource.selfHost(tag)]: ownValue }`. Provided by `peersLayer` (bundled) or standalone **`Resource.selfHostLayer(tag, self)`** (with `peersFrom`, or when a resource keys per host without a mesh).
-- **`Resource.fleetHealth(tag, pick, own)`** — the canned droplet-health fold: `pick` a leaf from every peer, key it **by host**, and add this host's `own` value keyed by `selfHost`. `fleetStatus: Resource.fleetHealth(FleetDatabase, (p) => p.status, ownStatus)`. A down peer is skipped (captured, not thrown); the only error/requirement is `own`'s. Sugar over `peers` + `selfHost` + `combineQuery(…, Combine.byHost)`.
-- **`Resource.layer(tag, effect)`** — the Effect form: build the impl effectfully; its requirement (e.g. `peers`) becomes the layer's, discharged by providing `peersLayer` alongside. `Resource.serve` has the same Effect form (`httpServer` unions the requirement).
-- **`Resource.client(tag, host)`** — a hostless multi-host tag is N instances, so the client names *which* one: `Resource.client(FleetDatabase, NwslHost).pipe(Layer.provide(connectHttp(NwslHost)))`. The transport resolves from that host, so the layer requires the host (satisfied by `connectHttp`) — enforced at compile time, so there's no runtime "Service not found" for a hostless client. (Host-bound tags still use the one-arg `Resource.client(tag)`.)
+- **`Hyperlink.fleet(method)`** (or `query(...).pipe(Hyperlink.fleet)`) — a combined field: served + client-visible like any query, but **excluded from `Hyperlink.peers`**, so a fold can't call a peer's own fleet field (a fan-out). Fold over **leaf** fields.
+- **`Hyperlink.peers(tag)`** — the other hosts' leaf clients, keyed by host. Fold with `/MultiHost`'s `combineQuery`/`combineStream` + `Combine` (`sum`/`byHost`/`mergeStreams`/`mergeByHost`/…). Requires the peers capability, provided by **`Hyperlink.peersLayer(tag, self)`** (connects the `multiHost` set minus self) or **`Hyperlink.peersFrom(tag, clients)`** (an explicit client map — a holder's bundles, or a test). Peer urls default to each `Host.url` (the standard — the host carries how to reach it); pass **`peersLayer(tag, self, { url: (host) => Effect<string | undefined> })`** to override per host (env-specific ports, tunnels, Effect `Config`), falling back to `Host.url`. A host with no url from either source is skipped — a partial mesh, never a throw.
+- **`Hyperlink.selfHost(tag)`** — the host key this instance runs as, the **same key** its peers are keyed by. For `Combine.byHost` folds (one row per host), so the impl keys its **own** row without hand-threading: `return { ...byHost, [yield* Hyperlink.selfHost(tag)]: ownValue }`. Provided by `peersLayer` (bundled) or standalone **`Hyperlink.selfHostLayer(tag, self)`** (with `peersFrom`, or when a resource keys per host without a mesh).
+- **`Hyperlink.fleetHealth(tag, pick, own)`** — the canned droplet-health fold: `pick` a leaf from every peer, key it **by host**, and add this host's `own` value keyed by `selfHost`. `fleetStatus: Hyperlink.fleetHealth(FleetDatabase, (p) => p.status, ownStatus)`. A down peer is skipped (captured, not thrown); the only error/requirement is `own`'s. Sugar over `peers` + `selfHost` + `combineQuery(…, Combine.byHost)`.
+- **`Hyperlink.layer(tag, effect)`** — the Effect form: build the impl effectfully; its requirement (e.g. `peers`) becomes the layer's, discharged by providing `peersLayer` alongside. `Hyperlink.serve` has the same Effect form (`httpServer` unions the requirement).
+- **`Hyperlink.client(tag, host)`** — a hostless multi-host tag is N instances, so the client names *which* one: `Hyperlink.client(FleetDatabase, NwslHost).pipe(Layer.provide(connectHttp(NwslHost)))`. The transport resolves from that host, so the layer requires the host (satisfied by `connectHttp`) — enforced at compile time, so there's no runtime "Service not found" for a hostless client. (Host-bound tags still use the one-arg `Hyperlink.client(tag)`.)
 - A **client calling a fleet field on any host** gets the whole-fleet value — that host gathered its peers + itself. No cross-host hop at `/health`; readiness stays per-host.
 
-The **combine primitives** (`@nikscripts/effect-pm/MultiHost`) are isomorphic (browser + node): `combineQuery`/`combineStream` capture each host's outcome (`HostResult`), so a fold owns the down-host policy.
+The **combine primitives** (`hyperlink-ts/MultiHost`) are isomorphic (browser + node): `combineQuery`/`combineStream` capture each host's outcome (`HostResult`), so a fold owns the down-host policy.
 
 ---
 
 ## ProcessStorage Integration
 
-Resource modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `ProcessStorage.layer` or a durable storage layer.
+Hyperlink modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `ProcessStorage.layer` or a durable storage layer.
 
 ```typescript
-import { ProcessStorage } from "@nikscripts/effect-pm"
+import { ProcessStorage } from "hyperlink-ts"
 
 // Without storage — resources work fine, no analytics
 program.pipe(Effect.provide(EmailQueue.layer))
@@ -743,8 +743,8 @@ Register `QueueResource.store(EmailQueue)` on an app `Store.Service` for durable
 the baked-in default:
 
 ```typescript
-import * as Store from "@nikscripts/effect-pm/Store";
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
+import * as Store from "hyperlink-ts/Store";
+import * as QueueResource from "hyperlink-ts/QueueResource";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   QueueResource.store(EmailQueue),

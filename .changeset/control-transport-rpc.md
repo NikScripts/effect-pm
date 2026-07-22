@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add `ControlTransportRpc`, an Effect RPC adapter for dispatching existing `ControlProtocol` envelopes.

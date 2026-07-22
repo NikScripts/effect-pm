@@ -3,7 +3,7 @@
  *
  * A small fleet of **real toolkit `QueueResource`s** + their live atoms — the data
  * layer behind the dashboard. Each queue is a tag with a local layer (worker +
- * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Resource.client`
+ * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Hyperlink.client`
  * per tag for remote later). One bundle per queue exposes the live `status` /
  * `metrics` / `logs` atoms and the control fns.
  *
@@ -26,7 +26,7 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
 import * as Node from "../../src/Node";
 
@@ -253,7 +253,7 @@ const daemonsFor = <Id extends AllQueues>(
 ): Effect.Effect<void, never, Id> =>
   Effect.gen(function* () {
     const q = yield* tag;
-    const { stream } = yield* Resource.logs(tag);
+    const { stream } = yield* Hyperlink.logs(tag);
     yield* Effect.forkDetach(
       Effect.forever(
         Effect.gen(function* () {

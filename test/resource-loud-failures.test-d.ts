@@ -10,7 +10,7 @@ import {
   LookupClientError,
   MissingClientProtocol,
   ProtocolMismatch,
-} from "../src/Resource";
+} from "../src/Hyperlink";
 
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 

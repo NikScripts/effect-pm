@@ -20,7 +20,7 @@ export default defineConfig([
       Polling: "src/Polling.ts",
       QueueResource: "src/QueueResource.ts",
       CustomQueueResource: "src/CustomQueueResource.ts",
-      Resource: "src/Resource.ts",
+      Hyperlink: "src/Hyperlink.ts",
       Node: "src/Node.ts",
       MultiNode: "src/MultiNode.ts",
       ResourceConfigure: "src/ResourceConfigure.ts",

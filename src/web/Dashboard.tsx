@@ -2,10 +2,10 @@
  * @module web/Dashboard
  *
  * The batteries-included resource dashboard: point it at a reactive `runtime` (an
- * `Atom.runtime(layer)` over your tags — local engine or `Resource.client` over http) and a
+ * `Atom.runtime(layer)` over your tags — local engine or `Hyperlink.client` over http) and a
  * root `Group`, and it renders the responsive drill-down — a grid of queue / process /
  * subgroup cards, a detail view per resource (stats + chart + controls + logs), and a routed
- * fullscreen log viewer (`/Group/Resource/logs`). Navigation is URL-backed (deep links +
+ * fullscreen log viewer (`/Group/Hyperlink/logs`). Navigation is URL-backed (deep links +
  * back/forward) and animated with view transitions.
  *
  * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` with the
@@ -109,7 +109,7 @@ const LogBox = (props: {
   );
 };
 
-/** Fullscreen logs page for a resource — its own route (`/…/Resource/logs`). */
+/** Fullscreen logs page for a resource — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
   const bundle = isProcessTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);

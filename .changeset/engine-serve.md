@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Engine-aware `serve` — `QueueResource.serve` / `ScheduledProcess.serve`.** The beta.18 `Resource.serve`

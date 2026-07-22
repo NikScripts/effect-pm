@@ -17,7 +17,7 @@ import {
   Stream,
   Types,
 } from "effect";
-import * as Resource from "../Resource";
+import * as Hyperlink from "../Hyperlink";
 import { isJsonValue } from "./json";
 import { resolveCustomQueueLevel } from "./customQueueLevels";
 import { levelToDefaultPriority } from "./priorityMapping";
@@ -100,13 +100,13 @@ export interface CustomQueueHandleApi<
 > {
   readonly add: CustomQueueEnqueue<T, EEnqueue, R>;
   readonly enqueue: QueueEnqueueEntries<T, R>;
-  readonly size: Resource.Subscribable<number>;
+  readonly size: Hyperlink.Subscribable<number>;
   readonly sizes: Effect.Effect<Record<string, number>, never, R>;
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
-  readonly isEmpty: Resource.Subscribable<boolean>;
+  readonly isEmpty: Hyperlink.Subscribable<boolean>;
   readonly completed: Effect.Effect<number>;
   readonly events: Stream.Stream<QueueEvent<T, E>>;
-  readonly status: Resource.Subscribable<CustomQueueStatus>;
+  readonly status: Hyperlink.Subscribable<CustomQueueStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 `Polling.cron(expression)` — ticks on cron-expression occurrences (UTC calendar-aligned) instead

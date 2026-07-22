@@ -4,7 +4,7 @@
  */
 import { Schema } from "effect";
 import type * as Layer from "effect/Layer";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as ShardMap from "../src/ShardMap";
 import * as Node from "../src/Node";
 
@@ -19,12 +19,12 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.nodes([DropletEast])) {}
+}).pipe(Hyperlink.nodes([DropletEast])) {}
 
-type Mesh = Resource.PeersId<Sessions> | Resource.SelfNodeId<Sessions>;
+type Mesh = Hyperlink.PeersId<Sessions> | Hyperlink.SelfNodeId<Sessions>;
 
 type LayerOut = Layer.Layer<
-  Sessions | Resource.Local<Sessions>,
+  Sessions | Hyperlink.Local<Sessions>,
   never,
   Mesh
 >;

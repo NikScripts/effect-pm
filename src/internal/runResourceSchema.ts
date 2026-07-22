@@ -6,8 +6,8 @@
  */
 
 import { Schema } from "effect";
-import * as Resource from "../Resource";
-import type { Method, RefField } from "../Resource";
+import * as Hyperlink from "../Hyperlink";
+import type { Method, RefField } from "../Hyperlink";
 
 /** Live gate counters on the wire — element of the reactive `status` ref. @internal */
 export const runGateStatus = Schema.Struct({
@@ -33,7 +33,7 @@ type RunCountRef = RefField<
   Method<undefined, typeof Schema.Number, typeof Schema.Never, true>
 >;
 
-/** `run` wire member — inputless {@link Resource.effect} for unit gates, {@link Resource.effectFn} otherwise. @internal */
+/** `run` wire member — inputless {@link Hyperlink.effect} for unit gates, {@link Hyperlink.effectFn} otherwise. @internal */
 export type RunWireMember<
   I extends Schema.Top,
   A extends Schema.Top,
@@ -48,23 +48,23 @@ const RUN_DESCRIPTION =
   "Acquire a permit, run the gated effect, release the permit — returns the effect result.";
 
 const runObservationRefs = () => ({
-  status: Resource.ref(runGateStatus).annotate({
+  status: Hyperlink.ref(runGateStatus).annotate({
     description:
       "Live current-state snapshot: waiting, in-flight, completed, failed, interrupted, total duration.",
   }),
-  waiting: Resource.ref(Schema.Number).annotate({
+  waiting: Hyperlink.ref(Schema.Number).annotate({
     description: "Count of runs waiting for a concurrency permit.",
   }),
-  inFlight: Resource.ref(Schema.Number).annotate({
+  inFlight: Hyperlink.ref(Schema.Number).annotate({
     description: "Count of runs currently executing.",
   }),
-  completed: Resource.ref(Schema.Number).annotate({
+  completed: Hyperlink.ref(Schema.Number).annotate({
     description: "Count of runs that completed successfully.",
   }),
-  failed: Resource.ref(Schema.Number).annotate({
+  failed: Hyperlink.ref(Schema.Number).annotate({
     description: "Count of runs that failed (excluding interrupts).",
   }),
-  interrupted: Resource.ref(Schema.Number).annotate({
+  interrupted: Hyperlink.ref(Schema.Number).annotate({
     description: "Count of runs interrupted while waiting or executing.",
   }),
 });
@@ -88,7 +88,7 @@ const runSpecVoid = <A extends Schema.Top>(
   success: A,
 ): RunInstanceSpec<Void, A, typeof Schema.Never> => ({
   ...runObservationRefs(),
-  run: Resource.effect(success).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
+  run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
     Void,
     A,
     typeof Schema.Never
@@ -100,7 +100,7 @@ const runSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   error: E,
 ): RunInstanceSpec<Void, A, E> => ({
   ...runObservationRefs(),
-  run: Resource.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
+  run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
     Void,
     A,
     E
@@ -117,7 +117,7 @@ const runSpecWithPayload = <
   error: E,
 ): RunInstanceSpec<I, A, E> => ({
   ...runObservationRefs(),
-  run: Resource.effectFn({ payload, success, error }).annotate({
+  run: Hyperlink.effectFn({ payload, success, error }).annotate({
     description: RUN_DESCRIPTION,
   }) as unknown as RunWireMember<I, A, E>,
 });

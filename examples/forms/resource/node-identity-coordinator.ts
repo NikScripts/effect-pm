@@ -16,7 +16,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Context, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
 const Job = Schema.Struct({
   id: Schema.String,
@@ -24,18 +24,18 @@ const Job = Schema.Struct({
 })
 
 /** Exclusive coordinator — only one live winner via Lookup Identity. */
-class Router extends Resource.Tag<Router>()("forms/Router", {
-  enqueue: Resource.effectFn({ job: Job }, Schema.Void),
-}).pipe(Resource.identity) {}
+class Router extends Hyperlink.Tag<Router>()("forms/Router", {
+  enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
+}).pipe(Hyperlink.identity) {}
 
 /** Many hands — advertise via Directory; dial with lookupClient. */
-class Worker extends Resource.Tag<Worker>()("forms/Worker", {
-  run: Resource.effectFn({ job: Job }, Schema.String),
+class Worker extends Hyperlink.Tag<Worker>()("forms/Worker", {
+  run: Hyperlink.effectFn({ job: Job }, Schema.String),
 }) {}
 
 const program = Effect.gen(function* () {
-  const lookupPath = `/tmp/effect-pm-forms-coord-lookup-${process.pid}.sock`
-  const routerPath = `/tmp/effect-pm-forms-coord-router-${process.pid}.sock`
+  const lookupPath = `/tmp/hyperlink-ts-forms-coord-lookup-${process.pid}.sock`
+  const routerPath = `/tmp/hyperlink-ts-forms-coord-router-${process.pid}.sock`
 
   // Hold one Lookup server for the whole demo; everyone else dials.
   yield* Layer.build(Lookup.layerOptions({ path: lookupPath, unlink: true }))
@@ -49,7 +49,7 @@ const program = Effect.gen(function* () {
   // Hands: distinct impls so advice can target worker B.
   const workerA = yield* Layer.build(
     Node.unix([
-      Resource.serve(Worker, {
+      Hyperlink.serve(Worker, {
         run: ({ job }: { readonly job: Schema.Schema.Type<typeof Job> }) =>
           Effect.succeed(`A:${job.id}`),
       }),
@@ -57,7 +57,7 @@ const program = Effect.gen(function* () {
   )
   const workerB = yield* Layer.build(
     Node.unix([
-      Resource.serve(Worker, {
+      Hyperlink.serve(Worker, {
         run: ({ job }: { readonly job: Schema.Schema.Type<typeof Job> }) =>
           Effect.succeed(`B:${job.id}`),
       }),
@@ -69,12 +69,12 @@ const program = Effect.gen(function* () {
 
   // Bare lookupClient — M5 honors advice (no D4 pick needed).
   const workerCtx = yield* Layer.build(
-    Resource.lookupClient(Worker).pipe(Layer.provide(lookup)),
+    Hyperlink.lookupClient(Worker).pipe(Layer.provide(lookup)),
   )
 
   const routerCtx = yield* Layer.build(
     Node.unix(RouterNode, [
-      Resource.serve(Router, {
+      Hyperlink.serve(Router, {
         enqueue: ({ job }: { readonly job: Schema.Schema.Type<typeof Job> }) =>
           Effect.gen(function* () {
             const worker = yield* Worker

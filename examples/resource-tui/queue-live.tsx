@@ -3,13 +3,13 @@
  *
  * The queue widget driven by a **real toolkit `QueueResource`** — no mock. A real
  * local queue (worker + producer) feeds the shared `PageXL` from its live `status`
- * and `metrics` streams; the log tail comes from {@link Resource.logs}.
+ * and `metrics` streams; the log tail comes from {@link Hyperlink.logs}.
  *
  * Soft Storage: `QueueResource.layerMemory(…).pipe(Layer.provide(TuiStore.layerMemory))`
  * — provide AppStore into the toolkit layer (see `docs/guides/stores.md`).
  *
  * `Atom.runtime(layer)` is the seam: this is `QueueResource.layer` (local) today;
- * swapping in `Resource.client(tag)` (remote) changes nothing else.
+ * swapping in `Hyperlink.client(tag)` (remote) changes nothing else.
  *
  * Ctrl+E enters edit mode (red border) for [p] pause [r] resume [c] clear
  * [x] shutdown. Quit with Ctrl+C.
@@ -23,7 +23,7 @@ import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
@@ -63,7 +63,7 @@ const hexKey = (): string =>
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
-// Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
+// Hyperlink.logs surfaces those lines on the live log tail (filter relay by resource key).
 class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
 const QueueLayer = QueueResource.layerMemory(MailQueue, {
   effect: (job: { readonly id: string }) =>
@@ -127,10 +127,10 @@ const LEVEL_COLOR: Record<string, string> = {
   Fatal: "red",
 };
 
-// live log tail via Resource.logs — newest accumulated, capped
+// live log tail via Hyperlink.logs — newest accumulated, capped
 const logsAtom = runtime.atom(
   Stream.unwrap(
-    Effect.map(Resource.logs(MailQueue), (h) =>
+    Effect.map(Hyperlink.logs(MailQueue), (h) =>
       h.stream.pipe(Stream.filter(LogEntry.hasKey(MailQueue.key))),
     ),
   ).pipe(

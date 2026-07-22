@@ -87,7 +87,7 @@ npm publish --dry-run
 npm pack --dry-run
 
 # Check published package info
-npm info @nikscripts/effect-pm
+npm info hyperlink-ts
 ```
 
 ### Troubleshooting
@@ -110,6 +110,6 @@ npm run build
 
 **Want to unpublish (within 72 hours):**
 ```bash
-npm unpublish @nikscripts/effect-pm@0.x.x
+npm unpublish hyperlink-ts@0.x.x
 ```
 ⚠️ Only use for serious issues, not recommended

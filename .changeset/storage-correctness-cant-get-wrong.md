@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Storage composition — soft-default Memory (R fulfilled), override via provide.**

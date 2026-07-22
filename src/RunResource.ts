@@ -61,14 +61,14 @@
  */
 
 import { Context, Effect, Layer, Schema, Scope } from "effect";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import type {
-  BuiltResource,
+  BuiltHyperlink,
   HandlerContextOf,
   ImplOf,
   Local,
-  ResourceTag,
-} from "./Resource";
+  HyperlinkTag,
+} from "./Hyperlink";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   makeRunResourceStoreAnalyticsContract,
@@ -108,10 +108,10 @@ export { runGateStatus };
  * @category utils
  * @public
  */
-export const kind = "@nikscripts/effect-pm/RunResource";
+export const kind = "hyperlink-ts/RunResource";
 
 /**
- * Build a run-gate **instance** spec from wire schemas — pass to {@link Resource.Tag} or use via
+ * Build a run-gate **instance** spec from wire schemas — pass to {@link Hyperlink.Tag} or use via
  * {@link Tag} / {@link Service}.
  *
  * @public
@@ -160,7 +160,7 @@ export type RunResourceHandle<T, A, E> = internal.RunResourceHandle<T, A, E>;
  * @typeParam Success - the gated effect's success value
  * @typeParam Error - the gated effect's failure channel
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
- *   a remote {@link Resource.client})
+ *   a remote {@link Hyperlink.client})
  *
  * @category models
  * @public
@@ -172,17 +172,17 @@ export interface RunResource<
   Requirements = never,
 > {
   /** Live gate counters (waiting / in-flight / completed / failed / interrupted / durations). */
-  readonly status: Resource.Subscribable<RunGateStatus>;
+  readonly status: Hyperlink.Subscribable<RunGateStatus>;
   /** Count of runs waiting for a concurrency permit. */
-  readonly waiting: Resource.Subscribable<number>;
+  readonly waiting: Hyperlink.Subscribable<number>;
   /** Count of runs currently executing. */
-  readonly inFlight: Resource.Subscribable<number>;
+  readonly inFlight: Hyperlink.Subscribable<number>;
   /** Count of runs that completed successfully. */
-  readonly completed: Resource.Subscribable<number>;
+  readonly completed: Hyperlink.Subscribable<number>;
   /** Count of runs that failed (excluding interrupts). */
-  readonly failed: Resource.Subscribable<number>;
+  readonly failed: Hyperlink.Subscribable<number>;
   /** Count of runs interrupted while waiting or executing. */
-  readonly interrupted: Resource.Subscribable<number>;
+  readonly interrupted: Hyperlink.Subscribable<number>;
   /**
    * Acquire a permit, run the gated effect, release the permit on completion. A unit gate (`void`
    * input) is a bare {@link Effect}; a parameterized gate is `(input) => Effect`.
@@ -247,7 +247,7 @@ export interface RunResourceServiceDefinition<
 
 /**
  * Tag + static `.run` shortcut, whose service value is the **named** {@link RunResource} handle (via the
- * `Svc` seam on {@link ResourceTag}), so `yield* MyRun` hovers as `RunResource<Ticket, Price>` rather
+ * `Svc` seam on {@link HyperlinkTag}), so `yield* MyRun` hovers as `RunResource<Ticket, Price>` rather
  * than the expanded `ServiceOf<…>` wall. @internal
  */
 type RunTagWithStaticRun<
@@ -255,16 +255,16 @@ type RunTagWithStaticRun<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
-> = ResourceTag<
+> = HyperlinkTag<
   Self,
   RunInstanceSpec<I, A, E>,
-  RunResource<Resource.Decoded<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>>
+  RunResource<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>>
 > & {
   readonly run: RunResourceStaticRun<I, A, E, Self>;
 };
 
 /**
- * Tag factory result — Resource tag + wire schemas + static {@link RunResourceStaticRun}.
+ * Tag factory result — Hyperlink tag + wire schemas + static {@link RunResourceStaticRun}.
  *
  * @category models
  * @public
@@ -472,7 +472,7 @@ const makeStaticRun = <
   // accepted; `svc.run` is read below through a concrete union regardless. The result — a bare Effect
   // (unit) or an input function (parameterized) — is blessed as the deferred `RunResourceStaticRun`
   // conditional by {@link nameRunService}'s single cast, so this builder needs no return cast.
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   payload: Schema.Top,
 ):
   | Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>
@@ -522,7 +522,7 @@ const nameRunService = <
   // `run` is accepted loosely (the concrete Effect/function {@link makeStaticRun} builds): this one cast
   // blesses both the invariant service `Shape` (`ServiceOf ⇄ RunResource`) *and* the static `.run`'s
   // deferred `[void] extends …` conditional in a single boundary.
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>> & { readonly run: unknown },
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>> & { readonly run: unknown },
 ): RunTagWithStaticRun<Self, I, A, E> =>
   tag as unknown as RunTagWithStaticRun<Self, I, A, E>;
 
@@ -542,11 +542,11 @@ const materializeRunTag = <Self>() =>
   ): RunTagWithStaticRun<Self, I, A, E> => {
     const resolved = resolveRunWireSchemas(config);
     const spec = runSpec(resolved.payload, resolved.success, resolved.error);
-    const tag = Resource.Tag<Self>()(key, spec, {
+    const tag = Hyperlink.Tag<Self>()(key, spec, {
       description: config.description,
       kind,
     });
-    const ready = Resource.withReadiness(tag, (svc) =>
+    const ready = Hyperlink.withReadiness(tag, (svc) =>
       Effect.map(svc.status.get, () => ({ ready: true })),
     );
     const stamped = stampRunWireSchemas(ready, {
@@ -632,14 +632,14 @@ const runTag = <Self>() => {
 
 /**
  * Whether the tag's `run` spec verb is an inputless unit gate — its `run` method carries no `payload`
- * (an inputless {@link Resource.effect}) vs a parameterized {@link Resource.effectFn}. A `LocalMethod`
+ * (an inputless {@link Hyperlink.effect}) vs a parameterized {@link Hyperlink.effectFn}. A `LocalMethod`
  * has no `payload` field, so `"payload" in m` narrows the erased flat-spec member
- * (`AnyMethod | AnyLocalMethod`) to the wire {@link Resource.Method} cast-free. @internal
+ * (`AnyMethod | AnyLocalMethod`) to the wire {@link Hyperlink.Method} cast-free. @internal
  */
 const runVerbIsInputless = (tag: {
-  readonly [Resource.specSym]: Resource.FlatSpec;
+  readonly [Hyperlink.specSym]: Hyperlink.FlatSpec;
 }): boolean => {
-  const method = tag[Resource.specSym].run;
+  const method = tag[Hyperlink.specSym].run;
   return method !== undefined && "payload" in method && method.payload === undefined;
 };
 
@@ -667,10 +667,10 @@ const buildRunImpl = <
   // Svc left open (`any`): the named {@link RunResource} handle's `[Payload] extends [void]` `run`
   // conditional can't be reduced for generic params, so the redundant service slot (fully determined
   // by the pinned `RunInstanceSpec<I, A, E>`) is not re-checked here — the tag flows in cast-free.
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Effect.Effect<
-  BuiltResource<RunInstanceSpec<I, A, E>, R>,
+  BuiltHyperlink<RunInstanceSpec<I, A, E>, R>,
   never,
   R | Scope.Scope | Store.Storage
 > =>
@@ -717,8 +717,8 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       run: runImpl,
-    } as Resource.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>;
-    return Resource.builtResource(tag, impl, context);
+    } as Hyperlink.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>;
+    return Hyperlink.builtHyperlink(tag, impl, context);
   });
 
 // ============================================================================
@@ -740,7 +740,7 @@ export const make = internal.makeRunGateHandleEffect;
  * @public
  */
 export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   patch: ConfigPatch<
     RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, never>
   >,
@@ -767,13 +767,13 @@ export const layer = <
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (built) =>
-        Resource.layer(tag, Resource.grantLocal(tag, built)),
+        Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
       ),
     ),
   );
@@ -791,7 +791,7 @@ export const layerMemory = <
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   layer(tag, config);
@@ -811,22 +811,22 @@ export function serveRemote<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemote(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `BuiltResource` and
-  // `Resource.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
+  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `BuiltHyperlink` and
+  // `Hyperlink.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
   // overload above). Mirrors `Process.serveRemote`.
-  const baseTag: ResourceTag<any, RunInstanceSpec<any, any, any>> = tag;
+  const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(
         buildRunImpl(baseTag, config),
-        (built) => Resource.serveRemote(baseTag, built) as any,
+        (built) => Hyperlink.serveRemote(baseTag, built) as any,
       ),
     ) as any,
   ) as any;
@@ -845,11 +845,11 @@ export function serveRemoteMemory<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemoteMemory(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
   return serveRemote(tag as any, config as any) as any;
@@ -870,7 +870,7 @@ export function serve<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
@@ -878,15 +878,15 @@ export function serve<
   R
 >;
 export function serve(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: ResourceTag<any, RunInstanceSpec<any, any, any>> = tag;
+  const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(
         buildRunImpl(baseTag, config),
-        (built) => Resource.serve(baseTag, built) as any,
+        (built) => Hyperlink.serve(baseTag, built) as any,
       ),
     ) as any,
   ) as any;
@@ -905,7 +905,7 @@ export function serveMemory<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: ResourceTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>>,
   config: RunResourceLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
@@ -913,7 +913,7 @@ export function serveMemory<
   R
 >;
 export function serveMemory(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
   return serve(tag as any, config as any) as any;

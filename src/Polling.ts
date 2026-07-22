@@ -22,7 +22,7 @@
  *
  * ```ts
  * import { Duration } from "effect"
- * import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm"
+ * import { Process, Polling, ProcessSchedule } from "hyperlink-ts"
  *
  * const myProcess = Process.make("heartbeat", {
  *   polling: Polling.spaced("10 seconds"),

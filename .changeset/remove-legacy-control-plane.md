@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Remove the pre-toolkit legacy layer (plan 17). The `Resource` toolkit + persistence now

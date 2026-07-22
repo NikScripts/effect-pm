@@ -10,17 +10,17 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Schema } from "effect"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/nameless/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/nameless/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Resource.Tag<Emails>()("forms/nameless/Emails", {
-  emails: Resource.effect(Schema.String),
+class Emails extends Hyperlink.Tag<Emails>()("forms/nameless/Emails", {
+  emails: Hyperlink.effect(Schema.String),
 }) {}
 
-const clients = Resource.discoverClients(Jobs, Emails)
+const clients = Hyperlink.discoverClients(Jobs, Emails)
 
 const program = Effect.gen(function* () {
   const jobs = yield* Jobs

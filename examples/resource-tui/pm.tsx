@@ -11,7 +11,7 @@
  *   pnpm run example:pm KeyRotation start
  *   pnpm run example:pm --help
  *
- * Resource command names are the tag's display name (its last id segment: `Mail`,
+ * Hyperlink command names are the tag's display name (its last id segment: `Mail`,
  * `KeyRotation`). If two resources share one, the resolver lengthens just those to the
  * shortest unique slash-suffix (`Regional/RegionUS`) — everything else stays short.
  *

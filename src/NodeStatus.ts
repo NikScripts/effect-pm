@@ -7,7 +7,7 @@
  * `logs.query` query — empty unless `Logs.layer` is provided) and a `ping`. The node author wires nothing; clients just point a transport
  * at the node. — query a specific node by pointing the ambient `RpcClient.Protocol` at
  * that node's `/rpc`. {@link NodeStatus.clientHttp} is the batteries-included http client; for any
- * other transport, provide your own `RpcClient.Protocol` to `Resource.client(NodeStatus.Tag)`.
+ * other transport, provide your own `RpcClient.Protocol` to `Hyperlink.client(NodeStatus.Tag)`.
  *
  * ```ts
  * yield* Effect.gen(function* () {
@@ -20,7 +20,7 @@
 import { Layer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import {
   NodeStatusResource,
   nodeStatus,
@@ -74,7 +74,7 @@ export const Tag = NodeStatusResource;
  * @public
  */
 export const clientHttp = (url: string): Layer.Layer<NodeStatusResource> =>
-  Resource.client(NodeStatusResource).pipe(
+  Hyperlink.client(NodeStatusResource).pipe(
     Layer.provide(
       RpcClient.layerProtocolHttp({ url }).pipe(
         Layer.provide(RpcSerialization.layerNdjson),

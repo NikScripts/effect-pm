@@ -2,7 +2,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Group from "../src/Group";
 import * as Node from "../src/Node";
 
@@ -13,12 +13,12 @@ import * as Node from "../src/Node";
 class NodeA extends Node.Tag<NodeA>()("multi/nodeA") {}
 class NodeB extends Node.Tag<NodeB>()("multi/nodeB") {}
 
-class Alpha extends Resource.Tag<Alpha>()("multi/Alpha", 
-  { where: Resource.effect(Schema.String) },
+class Alpha extends Hyperlink.Tag<Alpha>()("multi/Alpha", 
+  { where: Hyperlink.effect(Schema.String) },
   { node: NodeA },
 ) {}
-class Beta extends Resource.Tag<Beta>()("multi/Beta", 
-  { where: Resource.effect(Schema.String) },
+class Beta extends Hyperlink.Tag<Beta>()("multi/Beta", 
+  { where: Hyperlink.effect(Schema.String) },
   { node: NodeB },
 ) {}
 
@@ -26,12 +26,12 @@ class Beta extends Resource.Tag<Beta>()("multi/Beta",
 class Cluster extends Group.Tag<Cluster>("multi/Cluster")({ Alpha, Beta }) {}
 
 const AlphaServer = Node.httpServer([
-  Resource.serve(Alpha, {
+  Hyperlink.serve(Alpha, {
     where: Effect.succeed("alpha@nodeA"),
   }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 const BetaServer = Node.httpServer([
-  Resource.serve(Beta, {
+  Hyperlink.serve(Beta, {
     where: Effect.succeed("beta@nodeB"),
   }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
@@ -50,16 +50,16 @@ it("a group's members each resolve their own node (mixed nodes, one group)", () 
       const portB = portOf(yield* Layer.build(BetaServer));
 
       const clients = Layer.mergeAll(
-        Resource.client(Cluster.Alpha).pipe(
+        Hyperlink.client(Cluster.Alpha).pipe(
           Layer.provide(
-            Resource.http(NodeA, {
+            Hyperlink.http(NodeA, {
               url: `http://127.0.0.1:${portA}/rpc`,
             }),
           ),
         ),
-        Resource.client(Cluster.Beta).pipe(
+        Hyperlink.client(Cluster.Beta).pipe(
           Layer.provide(
-            Resource.http(NodeB, {
+            Hyperlink.http(NodeB, {
               url: `http://127.0.0.1:${portB}/rpc`,
             }),
           ),

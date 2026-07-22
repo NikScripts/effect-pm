@@ -1,13 +1,13 @@
 import { Context, Duration, Effect, Exit, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import * as Lookup from "../src/Lookup";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
-class JobsAnon extends Resource.Tag<JobsAnon>()("npipe/JobsAnon", {
-  jobs: Resource.effect(Schema.Number),
+class JobsAnon extends Hyperlink.Tag<JobsAnon>()("npipe/JobsAnon", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 describe("Node.nPipe", () => {
@@ -15,7 +15,7 @@ describe("Node.nPipe", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         Layer.build(
-          Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(1) })),
+          Node.nPipe(Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(1) })),
         ).pipe(Effect.scoped),
       );
       if (process.platform === "win32") {
@@ -39,7 +39,7 @@ describe("Node.nPipe", () => {
       const exit = yield* Effect.exit(
         Layer.build(
           Node.nPipe(HttpWorker, [
-            Resource.serve(JobsAnon, { jobs: Effect.succeed(1) }),
+            Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(1) }),
           ]),
         ).pipe(Effect.scoped),
       );
@@ -52,16 +52,16 @@ describe("Node.nPipe", () => {
 describe.skipIf(process.platform !== "win32")("Node.nPipe (win32)", () => {
   it.effect("nameless serve — named pipe + Lookup; discoverClient dials", () =>
     Effect.gen(function* () {
-      const lookupPath = `\\\\.\\pipe\\effect-pm-npipe-lookup-${process.pid}`;
+      const lookupPath = `\\\\.\\pipe\\hyperlink-ts-npipe-lookup-${process.pid}`;
       const serverCtx = yield* Layer.build(
-        Node.nPipe(Resource.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
+        Node.nPipe(Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(5) })).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: false }),
           ),
         ),
       );
       const clientCtx = yield* Layer.build(
-        Resource.discoverClient(JobsAnon, { lookupPath, unlink: false }),
+        Hyperlink.discoverClient(JobsAnon, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* JobsAnon;

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **IPC path hygiene default matches Lookup** — `Node.ipcServer` / unix IPC listen no longer unlink the sock by default.

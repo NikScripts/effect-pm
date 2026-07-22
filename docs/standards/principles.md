@@ -42,7 +42,7 @@ const remaining = (e: Entry) => maxAttempts - e.attempts
 ## Don't fight the framework
 
 Compose *with* Effect, never around it. Behavior is added as post-construction combinators
-(`Resource.withReadiness`), not baked constructor options or plugin arrays. Dependencies flow
+(`Hyperlink.withReadiness`), not baked constructor options or plugin arrays. Dependencies flow
 through `Layer.provide` — a `Layer` is never passed as config *data*. When the framework already has
 a shape for something, use that shape.
 

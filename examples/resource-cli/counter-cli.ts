@@ -1,8 +1,8 @@
 /**
  * @module examples/resource-cli/counter-cli
  *
- * A runnable CLI built from a single `Resource` tag with a local layer — the
- * resource runs in-process. Swap `Resource.layer` for an RPC client layer later
+ * A runnable CLI built from a single `Hyperlink` tag with a local layer — the
+ * resource runs in-process. Swap `Hyperlink.layer` for an RPC client layer later
  * to drive a running server; the command tree is unchanged.
  *
  *   tsx examples/resource-cli/counter-cli.ts counter current
@@ -14,17 +14,17 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import { makeResourceCli } from "../../src/cli";
 
-class Counter extends Resource.Tag<Counter>()("Counter", {
-  current: Resource.effect(Schema.Number),
-  reset: Resource.effect(Schema.Void),
-  increment: Resource.effectFn({ by: Schema.Number }),
+class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+  current: Hyperlink.effect(Schema.Number),
+  reset: Hyperlink.effect(Schema.Void),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
 }) {}
 
 let value = 0;
-const counterLayer = Resource.layer(Counter, {
+const counterLayer = Hyperlink.layer(Counter, {
   current: Effect.sync(() => value),
   reset: Effect.sync(() => {
       value = 0;

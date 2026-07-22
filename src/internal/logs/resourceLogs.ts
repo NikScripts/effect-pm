@@ -1,5 +1,5 @@
 /**
- * {@link Resource.logs} — per-resource log export surface.
+ * {@link Hyperlink.logs} — per-resource log export surface.
  *
  * @module internal/logs/resourceLogs
  * @internal
@@ -70,7 +70,7 @@ const queryResourceLogs = (
 };
 
 /**
- * Live stream: lineage + optional {@link Resource.logStreamLevel} gate.
+ * Live stream: lineage + optional {@link Hyperlink.logStreamLevel} gate.
  * Local {@link LogRelay} when present; otherwise NodeStatus.logs (remote client).
  * Durable `query` prefers registration Storage, else NodeStatus (remote).
  *

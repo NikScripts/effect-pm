@@ -1,8 +1,8 @@
 # Per-resource dependencies at the serve
 
 When several resources run on one host, they usually **share** their dependencies — one database, one
-HTTP client, provided once. `Resource.httpServer([...serve-layers])` handles that directly: provide the
-shared dependency once (to the whole set, or via `Resource.provide`) and every resource memoizes the
+HTTP client, provided once. `Hyperlink.httpServer([...serve-layers])` handles that directly: provide the
+shared dependency once (to the whole set, or via `Hyperlink.provide`) and every resource memoizes the
 same instance.
 
 But sometimes resources on the same host need **different implementations of the same dependency tag**,
@@ -28,25 +28,25 @@ layer memoization, not by data.
 
 | Primitive | Role |
 |-----------|------|
-| `Resource.serve(tag, impl)` | A **raw resource's** layer (impl is the query record) that grants the local instance **and** mounts the wire handlers, **preserving** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. (`serveRemote` is the served-only variant — same isolation, no local grant.) |
-| `QueueResource.serve(tag, config)` / `Process.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Resource.serve` only mounts handlers and would leave the worker/tick dead. |
-| `Resource.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
-| `Resource.servedResourcesLayer` | The registry the `serve` forms write to and `httpServer` reads. |
-| `Resource.provide(dependency, [resources])` | Sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency." |
+| `Hyperlink.serve(tag, impl)` | A **raw resource's** layer (impl is the query record) that grants the local instance **and** mounts the wire handlers, **preserving** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. (`serveRemote` is the served-only variant — same isolation, no local grant.) |
+| `QueueResource.serve(tag, config)` / `Process.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. |
+| `Hyperlink.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
+| `Hyperlink.servedHyperlinksLayer` | The registry the `serve` forms write to and `httpServer` reads. |
+| `Hyperlink.provide(dependency, [resources])` | Sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency." |
 
-> **Query resource vs. engine resource.** A bare `Resource.Tag` (status queries, streams) uses
-> `Resource.serve(tag, recordImpl)`. A `QueueResource` / `Process` is an **engine** — its worker
+> **Query resource vs. engine resource.** A bare `Hyperlink.Tag` (status queries, streams) uses
+> `Hyperlink.serve(tag, recordImpl)`. A `QueueResource` / `Process` is an **engine** — its worker
 > or tick must actually run — so use `QueueResource.serve(tag, config)` / `Process.serve(tag,
 > config)`. Both are `serve`-style layers (preserve `R`, register for `/health`); the engine forms just
-> also start the engine. Composing an engine tag with `Resource.serve` would mount its RPC surface but
+> also start the engine. Composing an engine tag with `Hyperlink.serve` would mount its RPC surface but
 > never run the worker.
 
 ## A complete example
 
 ```ts
 import { Layer } from "effect";
-import * as Resource from "@nikscripts/effect-pm/Resource";
-import * as Process from "@nikscripts/effect-pm/Process";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import * as Process from "hyperlink-ts/Process";
 import { NodeHttpServer } from "@effect/platform-node";
 import { createServer } from "node:http";
 
@@ -55,10 +55,10 @@ import { createServer } from "node:http";
 
 // httpServer([...serve layers], options) bundles the provideMerge + registry — list resources, provide
 // only the platform (and any shared dependency).
-const Host = Resource.httpServer(
+const Host = Hyperlink.httpServer(
   [
     // processes that share the plain handler → state it once with `provide`
-    Resource.provide(plainImportHandlers, [
+    Hyperlink.provide(plainImportHandlers, [
       Process.serve(SeasonMatches,   seasonMatchesCfg),
       Process.serve(LiveScorePoller, pollerCfg),
     ]),
@@ -70,21 +70,21 @@ const Host = Resource.httpServer(
 ```
 
 > The low-level form `httpServer(options)` still exists — then you `Layer.provideMerge` the `serve` layers
-> (kept, not pruned) + `Resource.servedResourcesLayer` yourself. The `serves` form removes that boilerplate
+> (kept, not pruned) + `Hyperlink.servedHyperlinksLayer` yourself. The `serves` form removes that boilerplate
 > and the `provideMerge`-vs-`provide` footgun.
 
 `SeasonImport` gets the hooked handler; `SeasonMatches` and `LiveScorePoller` get the plain one — on one
-`/rpc`, with `/health` listing all three. A client reaches each with `Resource.client(Tag)` as usual.
+`/rpc`, with `/health` listing all three. A client reaches each with `Hyperlink.client(Tag)` as usual.
 
 ## How it works
 
-- **Isolation.** `Resource.serve` keeps the handlers' requirement in the layer's type, so
+- **Isolation.** `Hyperlink.serve` keeps the handlers' requirement in the layer's type, so
   `Layer.provide(dep)` discharges *that* resource's dependency before anything merges. Two resources with
   different implementations of the same tag are two separate provides — they can't collide.
 - **One server.** RPC groups are namespaced by the resource's wire id, so many served groups merge onto a
   single `RpcServer` with no clash. `httpServer` does that merge from the registry.
 - **The registry + ordering.** Each `serve` layer appends its `{ group, kind, readiness }` to a
-  `Ref`-backed `ServedResources`; `httpServer` reads it to build the server and `/health`. Because you
+  `Ref`-backed `ServedHyperlinks`; `httpServer` reads it to build the server and `/health`. Because you
   `provideMerge` the `serve` layers **onto** `httpServer`, they build (and register) **before**
   `httpServer` reads — the dependency chain guarantees it.
 - **Sharing by memoization.** Provide the *same* dependency `Layer` value to two resources and they share
@@ -114,7 +114,7 @@ move the provide to the serve:
 ```ts
 // after — the body declares R; the serve carries the layer
 const tick = myEffect;                                  // just `yield* Handlers` inside
-Resource.serve(MyResource, { run: tick }).pipe(Layer.provide(handlersLayer));
+Hyperlink.serve(MyResource, { run: tick }).pipe(Layer.provide(handlersLayer));
 ```
 
 Nothing in the body changes except deleting the `Effect.provide`.
@@ -133,4 +133,4 @@ Classic case: an outer windowing/scheduler path must **not** capture a handler, 
 must. If you hoist that handler to the resource edge, the outer path can see it too.
 
 Do **not** look for a package `locally` / `withImport` helper for this — consumer handler tags aren’t
-effect-pm types. Keep your own small scoping combinator next to the handler service.
+hyperlink-ts types. Keep your own small scoping combinator next to the handler service.

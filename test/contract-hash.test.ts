@@ -1,36 +1,36 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import {
   contractDescriptor,
   hashContract,
 } from "../src/internal/contractHash";
 
-class Probe extends Resource.Tag<Probe>()("hash/Probe", {
-  ping: Resource.effectFn({ n: Schema.Number }, Schema.Number),
+class Probe extends Hyperlink.Tag<Probe>()("hash/Probe", {
+  ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
 }) {}
 
 describe("contractHash / hashContract", () => {
   it("is stable for the same Spec", () => {
-    const a = Resource.contractHash(Probe);
-    const b = Resource.contractHash(Probe);
+    const a = Hyperlink.contractHash(Probe);
+    const b = Hyperlink.contractHash(Probe);
     expect(a).toBe(b);
     expect(a).toMatch(/^[0-9a-f]{8}$/);
   });
 
   it("matches hashContract on the tag Spec", () => {
-    const kind = Resource.kindOf(Probe) ?? "resource";
-    expect(Resource.contractHash(Probe)).toBe(
-      hashContract(Probe.groupId, kind, Probe[Resource.specSym]),
+    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    expect(Hyperlink.contractHash(Probe)).toBe(
+      hashContract(Probe.groupId, kind, Probe[Hyperlink.specSym]),
     );
   });
 
   it("changes when a method payload schema drifts", () => {
-    const kind = Resource.kindOf(Probe) ?? "resource";
-    const base = Probe[Resource.specSym];
+    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    const base = Probe[Hyperlink.specSym];
     const drifted = {
       ...base,
-      ping: Resource.effectFn({ n: Schema.String }, Schema.Number),
+      ping: Hyperlink.effectFn({ n: Schema.String }, Schema.Number),
     };
     expect(hashContract(Probe.groupId, kind, base)).not.toBe(
       hashContract(Probe.groupId, kind, drifted),
@@ -38,11 +38,11 @@ describe("contractHash / hashContract", () => {
   });
 
   it("changes when a wire method is added", () => {
-    const kind = Resource.kindOf(Probe) ?? "resource";
-    const base = Probe[Resource.specSym];
+    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    const base = Probe[Hyperlink.specSym];
     const extra = {
       ...base,
-      pong: Resource.effect(Schema.Void),
+      pong: Hyperlink.effect(Schema.Void),
     };
     expect(hashContract(Probe.groupId, kind, base)).not.toBe(
       hashContract(Probe.groupId, kind, extra),
@@ -50,12 +50,12 @@ describe("contractHash / hashContract", () => {
   });
 
   it("contractDescriptor is JSON-stable (sorted keys)", () => {
-    const kind = Resource.kindOf(Probe) ?? "resource";
+    const kind = Hyperlink.kindOf(Probe) ?? "resource";
     const d1 = JSON.stringify(
-      contractDescriptor(Probe.groupId, kind, Probe[Resource.specSym]),
+      contractDescriptor(Probe.groupId, kind, Probe[Hyperlink.specSym]),
     );
     const d2 = JSON.stringify(
-      contractDescriptor(Probe.groupId, kind, Probe[Resource.specSym]),
+      contractDescriptor(Probe.groupId, kind, Probe[Hyperlink.specSym]),
     );
     expect(d1).toBe(d2);
     expect(d1).toContain('"ping"');

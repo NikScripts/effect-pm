@@ -1,8 +1,8 @@
 {
-  "name": "@nikscripts/effect-pm-docs",
+  "name": "hyperlink-ts-docs",
   "private": true,
   "type": "module",
-  "description": "Official docs/website for @nikscripts/effect-pm — bespoke Waku RSC app, Djot content, Effect pipeline.",
+  "description": "Official docs/website for hyperlink-ts — bespoke Waku RSC app, Djot content, Effect pipeline.",
   "scripts": {
     "predev": "[ -f api-data/index.json ] && [ -z \"$DOCS_REGEN\" ] && (echo 'api-data present — fast dev start (DOCS_REGEN=1 pnpm dev to regenerate)' && tsx scripts/gen-search.ts && tsx scripts/gen-llms.ts) || (tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts && tsx scripts/gen-llms.ts)",
     "dev": "NODE_OPTIONS=--max-old-space-size=8192 waku dev --host 0.0.0.0 --port 5190",

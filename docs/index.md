@@ -1,5 +1,5 @@
 {#index title="Introduction" done="api previews types" appliesTo=all}
-# effect-pm
+# hyperlink-ts
 
 **Build cross-runtime Services on Effect.**
 
@@ -7,16 +7,16 @@ An Effect Service lives inside one runtime. A *cross-runtime Service* doesn't: d
 on one runtime, and call it from another over RPC — with the same typed Handle.
 
 A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
-there. Wiring those together normally means one side owns a Resource and the others reach it through
-a hand-rolled HTTP client. Cross-runtime Services drop that: every Resource is reached with the same
+there. Wiring those together normally means one side owns a Hyperlink and the others reach it through
+a hand-rolled HTTP client. Cross-runtime Services drop that: every Hyperlink is reached with the same
 typed Handle, wherever it runs.
 
-Here are two Resources — a queue and a scheduled process — on two runtimes, working together.
+Here are two Hyperlinks — a queue and a scheduled process — on two runtimes, working together.
 
 {.twoslash}
 ``` ts
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
-import * as Process from "@nikscripts/effect-pm/Process"
+import * as QueueResource from "hyperlink-ts/QueueResource"
+import * as Process from "hyperlink-ts/Process"
 import { Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 // ---cut---
@@ -31,8 +31,8 @@ for Bun, Deno, or an edge runtime is the only line that changes:
 
 {.twoslash}
 ``` ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
@@ -49,9 +49,9 @@ that drains each job), piped onto port 3001:
 
 {.twoslash}
 ``` ts
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as QueueResource from "hyperlink-ts/QueueResource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema, Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
@@ -74,10 +74,10 @@ that lives on the *other* runtime, reached by port:
 
 {.twoslash}
 ``` ts
-import * as Process from "@nikscripts/effect-pm/Process"
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import { Polling } from "@nikscripts/effect-pm/Polling"
+import * as Process from "hyperlink-ts/Process"
+import * as QueueResource from "hyperlink-ts/QueueResource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Polling } from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
@@ -91,12 +91,12 @@ const scheduler = Process.layer(Digest, {
     yield* emails.add(email)                // add(email: EmailJob): Effect<void>
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(Layer.provide(Resource.connect(Emails, Resource.protocolHttp(3001))))
+}).pipe(Layer.provide(Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001))))
 // scheduler: Layer — the scheduler runtime
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
-`emails.add(…)` read exactly as if the two shared one process. **Two Resources, two runtimes, one
+`emails.add(…)` read exactly as if the two shared one process. **Two Hyperlinks, two runtimes, one
 program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
 
 ## Operate them live
@@ -107,7 +107,7 @@ anywhere it's reached:
 
 {.twoslash}
 ``` ts
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as QueueResource from "hyperlink-ts/QueueResource"
 import { Effect, Stream, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends QueueResource.Tag<Emails>()("app/Emails", EmailJob) {}
@@ -124,20 +124,20 @@ yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEv
 ```
 
 And it comes with dashboards over the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
-each reading the Resource without ever touching its Implementation.
+each reading the Hyperlink without ever touching its Implementation.
 
 ## Working with peers
 
-The same Tag also lets a Resource reach its **peers** — its own other instances — and coordinate with
+The same Tag also lets a Hyperlink reach its **peers** — its own other instances — and coordinate with
 them. Take sessions sharded across droplets: each Node holds the entries it owns, and a lookup for
 someone else's session is **forwarded to the Node that owns it**. [`ShardMap`](/docs/shardmap) is that
-pattern as a Resource factory — schemas on the Tag, routed ops, leaf shards, fleet sizes.
+pattern as a Hyperlink factory — schemas on the Tag, routed ops, leaf shards, fleet sizes.
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as ShardMap from "hyperlink-ts/ShardMap"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Schema } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
@@ -150,7 +150,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
@@ -158,9 +158,9 @@ Serve a droplet with the mesh discharge — local shard + peer clients from one 
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as ShardMap from "hyperlink-ts/ShardMap"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
@@ -174,7 +174,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
@@ -182,16 +182,16 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
   )
 // ---cut---
 const east = ShardMap.serve(Sessions).pipe(
-  Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
+  Layer.provide(Hyperlink.peersLayer(Sessions, DropletEast)),
   nodeServer(3001),
 )
 ```
 
-From any Node, a caller just asks — ownership and the cross-Node hop stay inside the Resource:
+From any Node, a caller just asks — ownership and the cross-Node hop stay inside the Hyperlink:
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
+import * as ShardMap from "hyperlink-ts/ShardMap"
 import { Effect, Schema } from "effect"
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
@@ -214,19 +214,19 @@ reaching others, through the same Tag.**
 ## Build your own
 
 Everything so far — `Emails`, `Digest`, `Sessions` — is built on one primitive you use directly. A
-Resource is a **Contract** plus an **Implementation**, and it's first-class, not an escape hatch.
+Hyperlink is a **Contract** plus an **Implementation**, and it's first-class, not an escape hatch.
 
 Describe the Contract — methods and their schemas:
 
 {.twoslash}
 ``` ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
 // ---cut---
-class Counter extends Resource.Tag<Counter>()("app/Counter", {
-  value: Resource.ref(Schema.Number),          // an observable value — get + live changes
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void),
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),          // an observable value — get + live changes
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
 }) {}
 ```
 
@@ -234,18 +234,18 @@ Give it an Implementation:
 
 {.twoslash}
 ``` ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef } from "effect"
-class Counter extends Resource.Tag<Counter>()("app/Counter", {
-  value: Resource.ref(Schema.Number),
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void),
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
 }) {}
 // ---cut---
 const counterImpl = Effect.gen(function* () {
   const ref = yield* SubscriptionRef.make(0)
   return {
-    value: Resource.subscribable(ref),                    // surface the ref as the observable field
+    value: Hyperlink.subscribable(ref),                    // surface the ref as the observable field
     increment: ({ by }: { by: number }) => SubscriptionRef.update(ref, (n) => n + by),
     reset: SubscriptionRef.set(ref, 0),
   }
@@ -257,26 +257,26 @@ three ways:
 
 {.twoslash}
 ``` ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef, Layer } from "effect"
-class Counter extends Resource.Tag<Counter>()("app/Counter", {
-  value: Resource.ref(Schema.Number),
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void),
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
 }) {}
 const counterImpl = Effect.gen(function* () {
   const ref = yield* SubscriptionRef.make(0)
   return {
-    value: Resource.subscribable(ref),
+    value: Hyperlink.subscribable(ref),
     increment: ({ by }: { by: number }) => SubscriptionRef.update(ref, (n) => n + by),
     reset: SubscriptionRef.set(ref, 0),
   }
 })
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) => resource
 // ---cut---
-Resource.layer(Counter, counterImpl)                        // in-process
-Resource.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
-Resource.connect(Counter, Resource.protocolHttp(4000))                          // reached from another runtime
+Hyperlink.layer(Counter, counterImpl)                        // in-process
+Hyperlink.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
+Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))                          // reached from another runtime
 ```
 
 And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,

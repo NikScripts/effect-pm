@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Node module extract** — transport / catalog / connect APIs move to `@nikscripts/effect-pm/Node` (`import * as Node from "…/Node"`).

@@ -11,17 +11,17 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
-import { groupOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { groupOf } from "../src/Hyperlink";
 import { queueStatus } from "../src/QueueResource";
 import * as Node from "../src/Node";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a
 // newline-delimited serialization for chunked responses, so client + server use ndjson.
-class Ticker extends Resource.Tag<Ticker>()("stream/Ticker", {
-  current: Resource.effect(Schema.Number),
-  changes: Resource.stream(Schema.Number),
+class Ticker extends Hyperlink.Tag<Ticker>()("stream/Ticker", {
+  current: Hyperlink.effect(Schema.Number),
+  changes: Hyperlink.stream(Schema.Number),
 }) {}
 
 const TickerServer = HttpRouter.serve(
@@ -31,7 +31,7 @@ const TickerServer = HttpRouter.serve(
     protocol: "http",
   }).pipe(
     Layer.provide(
-      Resource.serveRemote(Ticker, {
+      Hyperlink.serveRemote(Ticker, {
         current: Effect.succeed(0),
         // a finite snapshot stream — deterministic proof the elements cross the wire in order
         changes: Stream.fromIterable([1, 2, 3]),
@@ -66,7 +66,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
       // one-shot reads still work on the same resource
       expect(yield* ticker.current).toBe(0);
     }).pipe(
-      Effect.provide(Resource.client(Ticker).pipe(Layer.provide(clientHttp(port)))),
+      Effect.provide(Hyperlink.client(Ticker).pipe(Layer.provide(clientHttp(port)))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(TickerServer), Effect.scoped);
@@ -78,16 +78,16 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
 // then each subsequent change (dashboard atom / CLI --watch / TUI). Exercised in-process
 // (local layer) with a `Deferred` ready-latch so the subscription is established before the
 // updates — deterministic, no cross-wire timing race.
-class Status extends Resource.Tag<Status>()("stream/Status", {
-  set: Resource.effectFn({ value: Schema.String }),
-  changes: Resource.stream(Schema.String),
+class Status extends Hyperlink.Tag<Status>()("stream/Status", {
+  set: Hyperlink.effectFn({ value: Schema.String }),
+  changes: Hyperlink.stream(Schema.String),
 }) {}
 
 // The queue contract's `status` snapshot streams over http — proves the real `queueStatus`
 // (per-priority sizes + paused + in-flight + completed) crosses the wire as stream elements,
 // using the batteries-included `httpServer([serve(...)])` (ndjson by default, which streaming needs).
-class QueueWatch extends Resource.Tag<QueueWatch>()("stream/QueueWatch", {
-  status: Resource.stream(queueStatus),
+class QueueWatch extends Hyperlink.Tag<QueueWatch>()("stream/QueueWatch", {
+  status: Hyperlink.stream(queueStatus),
 }) {}
 
 const snapA = {
@@ -106,7 +106,7 @@ const snapB = {
 };
 
 const QueueWatchServer = Node.httpServer([
-  Resource.serve(QueueWatch, {
+  Hyperlink.serve(QueueWatch, {
     status: Stream.fromIterable([snapA, snapB]),
   }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
@@ -123,7 +123,7 @@ it("streams the queue status snapshot over real http", () => {
       expect(Array.from(seen)).toEqual([snapA, snapB]);
     }).pipe(
       Effect.provide(
-        Resource.client(QueueWatch).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(QueueWatch).pipe(Layer.provide(clientHttp(port))),
       ),
       Effect.scoped,
     );
@@ -134,7 +134,7 @@ it("streams the queue status snapshot over real http", () => {
 it("a SubscriptionRef-backed `changes` drives live status updates", () => {
   const program = Effect.gen(function* () {
     const ref = yield* SubscriptionRef.make("idle");
-    const StatusLive = Resource.layer(Status, {
+    const StatusLive = Hyperlink.layer(Status, {
       set: ({ value }) => SubscriptionRef.set(ref, value),
       changes: SubscriptionRef.changes(ref),
     });

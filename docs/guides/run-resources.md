@@ -15,7 +15,7 @@ once.
 caps how many bodies run in parallel; extra callers queue.
 
 ``` ts
-import { RunResource } from "@nikscripts/effect-pm"
+import { RunResource } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 
 class Double extends RunResource.Service<Double>()("app/Double", {

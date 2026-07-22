@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Queue engine handle exposes `size`/`isEmpty` as reactive `Subscribable`s** (previously one-shot `Effect`s), matching the resource-contract shape. Read the current value via `handle.size.get` / `handle.isEmpty.get` and subscribe to live updates via `.changes`. `.get` keeps the authoritative one-shot computation (so behavior is unchanged); `.changes` projects the live `status` stream.

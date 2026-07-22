@@ -55,7 +55,7 @@ export interface HistoryStoreShape {
 export class HistoryStoreTag extends Context.Service<
   HistoryStoreTag,
   HistoryStoreShape
->()("@nikscripts/effect-pm/HistoryStore/HistoryStoreTag") {}
+>()("hyperlink-ts/HistoryStore/HistoryStoreTag") {}
 
 /**
  * In-memory {@link HistoryStore}: a bounded ring per stream id (oldest dropped past `capacity`).

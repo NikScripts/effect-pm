@@ -1,7 +1,7 @@
 import { Effect, Layer, Schema } from "effect";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // A node-bound resource declares HOW it's reached (its node's ProtocolKind). A client derives its
@@ -11,9 +11,9 @@ import * as Node from "../src/Node";
 
 // `WsNode` declares WebSocket; `WsRes` is bound to it.
 class WsNode extends Node.Tag<WsNode>()("p3/ws", { url: "/rpc", kind: "WebSocket" }) {}
-class WsRes extends Resource.Tag<WsRes>()(
+class WsRes extends Hyperlink.Tag<WsRes>()(
   "p3/WsRes",
-  { ping: Resource.effect(Schema.String) },
+  { ping: Hyperlink.effect(Schema.String) },
   { node: WsNode },
 ) {}
 
@@ -21,7 +21,7 @@ it("a WebSocket-declared resource served on httpServer refuses to boot (Protocol
   Effect.runPromise(
     Effect.gen(function* () {
       const server = Node.httpServer([
-        Resource.serve(WsRes, { ping: Effect.succeed("pong") }),
+        Hyperlink.serve(WsRes, { ping: Effect.succeed("pong") }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
       // providing the server builds it — the mismatch dies at boot; catch the defect and inspect it.
@@ -42,7 +42,7 @@ it("the same resource served on wsServer boots fine — the kind matches", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const server = Node.wsServer([
-        Resource.serve(WsRes, { ping: Effect.succeed("pong") }),
+        Hyperlink.serve(WsRes, { ping: Effect.succeed("pong") }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
       // no die → the boot assertion passed (a mismatch would have died before completing).
@@ -57,9 +57,9 @@ class DualNode extends Node.Tag<DualNode>()("p3/dual", {
   http: "http://d/rpc",
   ws: "ws://d/rpc",
 }) {}
-class DualRes extends Resource.Tag<DualRes>()(
+class DualRes extends Hyperlink.Tag<DualRes>()(
   "p3/DualRes",
-  { ping: Resource.effect(Schema.String) },
+  { ping: Hyperlink.effect(Schema.String) },
   { node: DualNode },
 ) {}
 
@@ -68,7 +68,7 @@ it("a multi-protocol (http+ws) node boots on httpServer AND wsServer — server 
     Effect.gen(function* () {
       for (const make of [Node.httpServer, Node.wsServer]) {
         const server = make([
-          Resource.serve(DualRes, { ping: Effect.succeed("pong") }),
+          Hyperlink.serve(DualRes, { ping: Effect.succeed("pong") }),
         ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
         // neither dies — Http and WebSocket are both members of DualNode's declared set.
         yield* Effect.void.pipe(Effect.provide(server), Effect.scoped);

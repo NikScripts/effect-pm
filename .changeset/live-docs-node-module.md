@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Live book uses `Node.Tag` / `Node.httpServer` (not removed `Resource.Node` / `Resource.httpServer`).

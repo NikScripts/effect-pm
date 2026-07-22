@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Service-shape redesign — shape-named builders, `constant`/`value`, single-schema payloads, and nested

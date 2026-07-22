@@ -1,6 +1,6 @@
 /**
  * Node core — Tag / Prototype constructors, withProtocol / asLookup combinators + catalog types.
- * No Resource runtime imports (avoids circular init). Store binding is late via
+ * No Hyperlink runtime imports (avoids circular init). Store binding is late via
  * {@link bindNodeStore}.
  *
  * @internal
@@ -16,11 +16,11 @@ export interface NodeProtocol {
   readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>
 }
 
-/** Late-bound {@link Resource.store} for `Node.Tag()(...).logs`. @internal */
+/** Late-bound {@link Hyperlink.store} for `Node.Tag()(...).logs`. @internal */
 type StoreFn = (tag: { readonly key: string }) => unknown
 let storeImpl: StoreFn | undefined
 
-/** Called from Resource after `store` is defined. @internal */
+/** Called from Hyperlink after `store` is defined. @internal */
 export const bindNodeStore = (fn: StoreFn): void => {
   storeImpl = fn
 }
@@ -28,7 +28,7 @@ export const bindNodeStore = (fn: StoreFn): void => {
 const storeOrThrow = (tag: { readonly key: string }): unknown => {
   if (storeImpl === undefined) {
     throw new Error(
-      "@nikscripts/effect-pm: Node.logs used before Resource.store was bound",
+      "hyperlink-ts: Node.logs used before Hyperlink.store was bound",
     )
   }
   return storeImpl(tag)
@@ -37,7 +37,7 @@ const storeOrThrow = (tag: { readonly key: string }): unknown => {
 /**
  * The Context key of a {@link Node} (`HSelf` = its identity): a service whose value is the
  * transport {@link NodeProtocol}. Stored on a node-bearing tag under {@link nodeSym}; read by
- * {@link Resource.client} to resolve *where* to connect (its requirement channel).
+ * {@link Hyperlink.client} to resolve *where* to connect (its requirement channel).
  *
  * @category models
  * @public
@@ -136,11 +136,11 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
  * A node declared with a bare **port** (`Node.Tag()("x", 3009)`) carries that port here. The eager
  * `url` is a `localhost` **preview** (pure, sync at class-definition — no runtime to read a Config);
  * the authoritative dial host is resolved at the dial boundary (an Effect context) via
- * {@link Resource.protocolHttp}`(port)` + the client `Config`. So the port is the SSOT and the effect
+ * {@link Hyperlink.protocolHttp}`(port)` + the client `Config`. So the port is the SSOT and the effect
  * stays at the edge. @internal
  */
 export const portSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/nodePort",
+  "hyperlink-ts/Hyperlink/nodePort",
 );
 
 /** The bare port a node was declared with, if any (see {@link portSym}). @internal */
@@ -203,7 +203,7 @@ export type AddressedNode<HSelf> = NodeKey<HSelf> &
  * @internal
  */
 export const catalogSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/catalog",
+  "hyperlink-ts/Hyperlink/catalog",
 );
 
 /**
@@ -248,7 +248,7 @@ export class AddressLessClaimLost extends Data.TaggedError("AddressLessClaimLost
  * @public
  */
 export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
-  "@nikscripts/effect-pm/internal/nodeCore/ListenNode",
+  "hyperlink-ts/internal/nodeCore/ListenNode",
 ) {}
 
 /**
@@ -301,7 +301,7 @@ export class InvalidHttpTarget extends Data.TaggedError("InvalidHttpTarget")<{
  * @internal
  */
 export const invalidHttpTargetSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Node/invalidHttpTarget",
+  "hyperlink-ts/Node/invalidHttpTarget",
 );
 
 /** Read a stamped {@link InvalidHttpTarget}, if any. @internal */
@@ -345,7 +345,7 @@ export const resolveHttpTarget = (
 
 /**
  * Dialable {@link Tag} targets — enough address for {@link connect} / auto-wired
- * {@link Resource.client} with no extra protocol argument.
+ * {@link Hyperlink.client} with no extra protocol argument.
  *
  * @category models
  * @public
@@ -512,7 +512,7 @@ const onConflictFromTarget = (
 
 /**
  * A node was built with inconsistent transport fields — a programming invariant, thrown at
- * declaration (like {@link DuplicateResourceKey}) so a malformed node fails loudly *there* instead of
+ * declaration (like {@link DuplicateHyperlinkKey}) so a malformed node fails loudly *there* instead of
  * as a confusing dial/serve failure later. @public
  */
 export class MalformedNode extends Data.TaggedError("MalformedNode")<{
@@ -614,7 +614,7 @@ const isNodeTagValue = <Self, ROut, Addr>(
 /**
  * Declare a **node** — a named transport endpoint a resource connects to. **Two-stage** and keyed by
  * a string, mirroring Effect's `Context.Service<Self, Shape>()(key)` (a node *is* a `Context.Key`,
- * resolved by its `key` in the Context map) and every sibling factory (`Resource.Tag<Self>()`, …).
+ * resolved by its `key` in the Context map) and every sibling factory (`Hyperlink.Tag<Self>()`, …).
  * The second call infers the target shape, so the `{ http, ws }` shorthand types its
  * {@link ProtocolKind} set precisely. Optional catalog type param `ROut` (C2) — prefer `import type`
  * for those handles (C4). Templates (no address until cloned) live on {@link Node}.Prototype:
@@ -640,7 +640,7 @@ const isNodeTagValue = <Self, ROut, Addr>(
  * protocol argument.
  *
  * Dialable targets return an {@link AddressedNode} (`kind: ProtocolKind`) so
- * `Resource.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag()("x")`
+ * `Hyperlink.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag()("x")`
  * stays address-less (`kind: undefined`) — still needs explicit connect / lookup.
  *
  * @category constructors
@@ -920,7 +920,7 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
 
 /**
  * Protocol Tag+impl (`unix` / `http` / `ws`(Tag, impl)) needs exactly one Node on the resource
- * handle (`{ node }` / {@link Resource.nodes}`([X])` / {@link Resource.andNode}).
+ * handle (`{ node }` / {@link Hyperlink.nodes}`([X])` / {@link Hyperlink.andNode}).
  * `missing` = none; `ambiguous` = two or more (pick with `unix/http/ws(node, [serve…])`).
  * Anonymous transport stays `unix/http/ws([serve…])` / `unix/http/ws(serve)` — never this overload.
  *
@@ -938,13 +938,13 @@ export class ListenTagNodeRequired extends Data.TaggedError(
     if (this.reason === "ambiguous") {
       return (
         `Tag+impl listen for "${this.tag}" saw ${String(this.count)} Nodes — ` +
-        `use Node.unix/http/ws(node, [Resource.serve(${this.tag}, impl)]) to pick one.`
+        `use Node.unix/http/ws(node, [Hyperlink.serve(${this.tag}, impl)]) to pick one.`
       );
     }
     return (
       `Tag+impl listen for "${this.tag}" needs a sole Node on the Tag ` +
-      `(Resource.andNode / nodes([X]) / { node }). ` +
-      `For anonymous transport use Node.unix/http/ws(Resource.serve(${this.tag}, impl)).`
+      `(Hyperlink.andNode / nodes([X]) / { node }). ` +
+      `For anonymous transport use Node.unix/http/ws(Hyperlink.serve(${this.tag}, impl)).`
     );
   }
 }
@@ -1089,7 +1089,7 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
 /**
  * Transport answered, but the Effect RPC protocol did not — typically something else is listening
  * on the address (wrong process / wrong protocol). Surfaced by
- * {@link Resource.verifyConnection}`(node, { deep: true })` after the cheap reachability probe
+ * {@link Hyperlink.verifyConnection}`(node, { deep: true })` after the cheap reachability probe
  * succeeds.
  *
  * @category errors
@@ -1111,7 +1111,7 @@ export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
 
 /**
  * The peer answered {@link NodeStatus}, but the target resource key is not in `status.resources`.
- * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource })`.
+ * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource })`.
  *
  * @category errors
  * @public
@@ -1133,7 +1133,7 @@ export class ServiceNotServed extends Data.TaggedError("ServiceNotServed")<{
 
 /**
  * The peer serves the target resource, but reports it not ready (`ready: false`).
- * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource })`.
+ * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource })`.
  *
  * @category errors
  * @public
@@ -1152,8 +1152,8 @@ export class ServiceNotReady extends Data.TaggedError("ServiceNotReady")<{
 
 /**
  * Client and server disagree on a resource's wire contract (`contractHash` mismatch).
- * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource, contractHash })`
- * and by default-on addressed {@link Resource.client} verify (F4).
+ * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource, contractHash })`
+ * and by default-on addressed {@link Hyperlink.client} verify (F4).
  *
  * @category errors
  * @public
@@ -1195,7 +1195,7 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
       k === "Http" ? "httpServer" : k === "WebSocket" ? "wsServer" : "ipcServer";
     const kinds = this.declared.join(" / ");
     const servers = this.declared.map((k) => `Node.${serverFor(k)}`).join(" / ");
-    return `Resource "${this.resource}" declares its node over ${kinds}, but is being served over ${this.servedOver} — a client dials one of [${kinds}] and would never reach it. Serve it over a declared transport (${servers}), or add ${this.servedOver} to the node.`;
+    return `Hyperlink "${this.resource}" declares its node over ${kinds}, but is being served over ${this.servedOver} — a client dials one of [${kinds}] and would never reach it. Serve it over a declared transport (${servers}), or add ${this.servedOver} to the node.`;
   }
 }
 

@@ -17,9 +17,9 @@ import {
 import type { StoreSpec, AsStoreSpec } from "./spec";
 import { isStoreSpec } from "./spec";
 
-export const storeRegSym = Symbol.for("@nikscripts/effect-pm/Store/registration");
+export const storeRegSym = Symbol.for("hyperlink-ts/Store/registration");
 
-/** Minimal tag shape for scope keys — avoids importing {@link Resource}. @internal */
+/** Minimal tag shape for scope keys — avoids importing {@link Hyperlink}. @internal */
 export interface StoreScopeTag {
   readonly key: string;
 }
@@ -44,7 +44,7 @@ export interface StoreRegistration<
   readonly contract?: StoreContractValue;
   readonly tag?: StoreScopeTag;
   readonly logLevel?: StoreLogLevel;
-  /** Live relay gate for {@link Resource.logs} stream (optional). */
+  /** Live relay gate for {@link Hyperlink.logs} stream (optional). */
   readonly streamLevel?: StoreLogLevel;
   readonly maxRows?: number;
   readonly journal?: StoreJournalKind;

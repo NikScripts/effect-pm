@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Queue durability is now presence-driven — the `persist` config field is removed (breaking).**

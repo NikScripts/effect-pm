@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Unit-test F4 `contractHash` stability / drift (same Spec, payload change, added method).

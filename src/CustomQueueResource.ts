@@ -3,7 +3,7 @@
  * {@link QueueResource} but with N-level lanes, `Record<string, number>` sizes, and
  * `add(item, level?)` where `level` is a numeric index or a configured name.
  *
- * This module is the public face: the `@nikscripts/effect-pm/CustomQueueResource` subpath and the
+ * This module is the public face: the `hyperlink-ts/CustomQueueResource` subpath and the
  * barrel `export * as CustomQueueResource` both resolve here. The light `Tag` / spec / schemas live
  * in this file (engine-free, tree-shakeable); the heavy engine lives in
  * `./internal/customQueueResource` and is pulled in only by the runtime verbs (`layer` / `serve` /
@@ -12,8 +12,8 @@
  * @module CustomQueueResource
  */
 import { Effect, Layer, Option, Schema, Scope, Stream } from "effect";
-import * as Resource from "./Resource";
-import { specSym } from "./Resource";
+import * as Hyperlink from "./Hyperlink";
+import { specSym } from "./Hyperlink";
 import { HistoryStore } from "./HistoryStore";
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
@@ -33,8 +33,8 @@ import type {
   Method,
   MethodAnnotations,
   NodeBoundTag,
-  ResourceTag,
-} from "./Resource";
+  HyperlinkTag,
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 import { makeCustomQueueEffect } from "./internal/customQueueResource";
 import type {
@@ -152,41 +152,41 @@ const sumLaneSizes = (sizes: Record<string, number>): number =>
 export const customQueueControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `size`/`isEmpty` are `Stream.map` derivations of it (SSOT). Plain
-  // reads (`p.size`) and subscribable (`Resource.changes(p, (s) => s.size)`).
-  status: Resource.ref(customQueueStatus).annotate({
+  // reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
+  status: Hyperlink.ref(customQueueStatus).annotate({
     description:
       "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
   }),
-  size: Resource.ref(Schema.Number).annotate({
+  size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),
-  isEmpty: Resource.ref(Schema.Boolean).annotate({
+  isEmpty: Hyperlink.ref(Schema.Boolean).annotate({
     description: "Whether all lanes are empty.",
   }),
   // stays `effect`: the raw per-index array isn't in the named-Record `status.sizes`, so it can't be a
   // reliable `Stream.map` of `status` — an on-demand pull is the honest shape.
-  levelSizes: Resource.effect(Schema.Array(Schema.Number)).annotate({
+  levelSizes: Hyperlink.effect(Schema.Array(Schema.Number)).annotate({
     description: "Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`).",
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effect(Schema.Void).annotate({
+  start: Hyperlink.effect(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
   }),
-  pause: Resource.effect(Schema.Void).annotate({
+  pause: Hyperlink.effect(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
   }),
-  resume: Resource.effect(Schema.Void).annotate({
+  resume: Hyperlink.effect(Schema.Void).annotate({
     description: "Resume processing after a pause.",
   }),
-  shutdown: Resource.effect(Schema.Void).annotate({
+  shutdown: Hyperlink.effect(Schema.Void).annotate({
     description:
       "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.effect(Schema.Number).annotate({
+  clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
@@ -194,11 +194,11 @@ export const customQueueControlSpec = {
 
   // ── observability — stream + query, paired by nesting ──
   metrics: {
-    stream: Resource.stream(queueMetrics).annotate({
+    stream: Hyperlink.stream(queueMetrics).annotate({
       description:
         "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
     }),
-    query: Resource.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
+    query: Hyperlink.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
       description:
         "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
     }),
@@ -230,15 +230,15 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
   );
   return {
     ...customQueueControlSpec,
-    add: Resource.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
+    add: Hyperlink.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
       description:
         "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
     }),
-    enqueue: Resource.effectFn(Schema.Array(entry)).annotate({
+    enqueue: Hyperlink.effectFn(Schema.Array(entry)).annotate({
       description:
         "Re-inject existing entries — each re-enters at its own level with attempts preserved.",
     }),
-    release: Resource.effectFn(
+    release: Hyperlink.effectFn(
       { options: Schema.optionalKey(queueReleaseOptions) },
       Schema.Array(entry),
     ).annotate({
@@ -246,7 +246,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
         "Export pending entries for handoff and remove them from this queue.",
       destructive: true,
     }),
-    releaseEncoded: Resource.effectFn(
+    releaseEncoded: Hyperlink.effectFn(
       { options: Schema.optionalKey(queueReleaseOptions) },
       Schema.Array(queueEncodedEntry),
       queueReleaseEncodingError,
@@ -254,7 +254,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description: "Export pending entries in encoded/wire form for remote handoff.",
       destructive: true,
     }),
-    deadLetter: Resource.effectFn(
+    deadLetter: Hyperlink.effectFn(
       {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
@@ -264,7 +264,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description: "Remove pending entries matching the selector and route to dead letter.",
       destructive: true,
     }),
-    drop: Resource.effectFn(
+    drop: Hyperlink.effectFn(
       {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
@@ -274,7 +274,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description: "Remove pending entries matching the selector without preserving them.",
       destructive: true,
     }),
-    events: Resource.stream(eventSchema).annotate({
+    events: Hyperlink.stream(eventSchema).annotate({
       description: "Discrete entry / worker / queue lifecycle events.",
     }),
   };
@@ -310,7 +310,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
 };
 
 /**
- * Define a custom-queue **instance** — same shape as {@link QueueContract.queueTag}, with
+ * Define a custom-queue **instance** — same shape as {@link QueueResource.Tag}, with
  * `levelCount` / `namedLevels` baked into the wire level union:
  *
  * ```ts
@@ -328,8 +328,8 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  * @public
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. */
-export const kind = "@nikscripts/effect-pm/CustomQueueResource";
+ *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. */
+export const kind = "hyperlink-ts/CustomQueueResource";
 
 /**
  * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
@@ -377,11 +377,11 @@ export const customQueueTag = <Self>() => {
   >(
     key: string,
     config: CustomQueueTagConfig<F, Success>,
-  ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
+  ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
     key: string,
     config: CustomQueueTagConfig<F, Success>,
-  ): ResourceTag<Self, CustomQueueInstanceSpec<F>> {
+  ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>> {
     const levelConfig: CustomQueueTagLevelConfig = {
       levelCount: config.levelCount,
       namedLevels: config.namedLevels ?? {},
@@ -394,13 +394,13 @@ export const customQueueTag = <Self>() => {
     );
     const base =
       config.node === undefined
-        ? Resource.Tag<Self>()(key, spec, { description: config.description, kind })
-        : Resource.Tag<Self>()(key, spec, {
+        ? Hyperlink.Tag<Self>()(key, spec, { description: config.description, kind })
+        : Hyperlink.Tag<Self>()(key, spec, {
             description: config.description,
             kind,
             node: config.node,
           });
-    const ready = Resource.withReadiness(base, (svc) =>
+    const ready = Hyperlink.withReadiness(base, (svc) =>
       Effect.map(svc.status.get, (status) => ({
         ready: status.phase === "running",
         ...(status.phase === "running"
@@ -452,10 +452,10 @@ const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
 };
 
 const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Effect.Effect<
-  Resource.BuiltResource<CustomQueueInstanceSpec<F>, R | RR>,
+  Hyperlink.BuiltHyperlink<CustomQueueInstanceSpec<F>, R | RR>,
   never,
   R | RR | Scope.Scope | Store.Storage
 > =>
@@ -501,13 +501,13 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as QueueResource.
-    const impl: Resource.WithRequirement<
+    const impl: Hyperlink.WithRequirement<
       ImplOf<CustomQueueInstanceSpec<F>>,
       R | RR
     > = {
       status: handle.status,
-      size: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
-      isEmpty: Resource.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
+      size: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
+      isEmpty: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
       start: handle.start,
       pause: handle.pause,
@@ -530,7 +530,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       add: ((
         itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
         level?: number | string,
-      ) => handle.add(itemOrItems, level).pipe(Effect.orDie)) as Resource.WithRequirement<
+      ) => handle.add(itemOrItems, level).pipe(Effect.orDie)) as Hyperlink.WithRequirement<
         ImplOf<CustomQueueInstanceSpec<F>>,
         R | RR
       >["add"],
@@ -542,7 +542,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return Resource.builtResource(tag, impl, context);
+    return Hyperlink.builtHyperlink(tag, impl, context);
   });
 
 /**
@@ -569,13 +569,13 @@ export const layer = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-        Resource.layer(tag, Resource.grantLocal(tag, built)),
+        Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
       ),
     ),
   );
@@ -593,15 +593,15 @@ export const layerMemory = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
   layer(tag, config);
 
 /**
  * Serve this custom queue **remotely (served-only)** — the engine-running counterpart to
- * {@link Resource.serveRemote}. Mounts the queue's RPC handlers and registers into
- * {@link Resource.servedResourcesLayer} **without** granting the local instance, preserving the worker
+ * {@link Hyperlink.serveRemote}. Mounts the queue's RPC handlers and registers into
+ * {@link Hyperlink.servedHyperlinksLayer} **without** granting the local instance, preserving the worker
  * requirement `R` for per-resource `Layer.provide`. For a pure gateway/edge; use {@link serve} when the
  * serving node also drives the queue.
  *
@@ -617,13 +617,13 @@ export const serveRemote = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-        Resource.serveRemote(tag, built as any) as any,
+        Hyperlink.serveRemote(tag, built as any) as any,
       ),
     ) as any,
   ) as any;
@@ -641,14 +641,14 @@ export const serveRemoteMemory = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) => serveRemote(tag, config) as any;
 
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the
- * engine-running counterpart to {@link Resource.serve}. Mounts the queue's RPC handlers, registers into
- * {@link Resource.servedResourcesLayer}, **and** grants `Self | Local<Self>` so co-located code
+ * engine-running counterpart to {@link Hyperlink.serve}. Mounts the queue's RPC handlers, registers into
+ * {@link Hyperlink.servedHyperlinksLayer}, **and** grants `Self | Local<Self>` so co-located code
  * can `yield* Tag`; the served cells *are* the in-process instance. A served-**only** gateway uses
  * {@link serveRemote}.
  *
@@ -664,7 +664,7 @@ export const serve = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
@@ -674,7 +674,7 @@ export const serve = <
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-        Resource.serve(tag, built as any),
+        Hyperlink.serve(tag, built as any),
       ),
     ),
   );
@@ -692,7 +692,7 @@ export const serveMemory = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
@@ -711,7 +711,7 @@ export const configure = <
   R = never,
   RR = never,
 >(
-  tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 

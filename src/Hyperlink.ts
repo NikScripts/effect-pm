@@ -1,5 +1,5 @@
 /**
- * **Resource toolkit** — schema-defined service tags with local + remote (RPC) layers.
+ * **Hyperlink toolkit** — schema-defined service tags with local + remote (RPC) layers.
  *
  * @remarks
  * Lightweight by construction: imports only `Schema` and `effect/unstable/rpc`, never a
@@ -12,36 +12,36 @@
  * `.annotate({...})`:
  *
  * ```ts
- * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
- *   current: Resource.effect(Schema.Number).annotate({ description: "Current value." }),
- *   add: Resource.effectFn({ by: Schema.Number }).annotate({ description: "Increment." }),
- *   reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
+ * class Counter extends Hyperlink.Tag<Counter>()("@app/Counter", {
+ *   current: Hyperlink.effect(Schema.Number).annotate({ description: "Current value." }),
+ *   add: Hyperlink.effectFn({ by: Schema.Number }).annotate({ description: "Increment." }),
+ *   reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
  * }) {}
  *
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
  * ```
  *
- * Define a tag with {@link Resource.Tag} (one resource) or {@link Resource.tagFor} (a
+ * Define a tag with {@link Hyperlink.Tag} (one resource) or {@link Hyperlink.tagFor} (a
  * factory: many instances sharing one contract). The same `yield* Tag` code runs
  * anywhere; only the layer changes:
- * - {@link Resource.layer} — run it locally with a real implementation;
- * - {@link Resource.client} — drive it remotely over RPC, as if local;
- * - {@link Resource.server} — expose one local impl over RPC (transport-agnostic handlers);
- * - {@link Resource.serveInstances} — serve many factory instances behind one group,
+ * - {@link Hyperlink.layer} — run it locally with a real implementation;
+ * - {@link Hyperlink.client} — drive it remotely over RPC, as if local;
+ * - {@link Hyperlink.server} — expose one local impl over RPC (transport-agnostic handlers);
+ * - {@link Hyperlink.serveInstances} — serve many factory instances behind one group,
  *   routed by the per-call instance-key header.
  *
- * Over **http**, pair {@link Resource.serve} with {@link Node.httpServer} (ndjson by default so
- * client/server can't disagree on the codec). Dial with {@link Resource.clientHttp} /
+ * Over **http**, pair {@link Hyperlink.serve} with {@link Node.httpServer} (ndjson by default so
+ * client/server can't disagree on the codec). Dial with {@link Hyperlink.clientHttp} /
  * {@link Node.connect} against a {@link Node.Tag}.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
- * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
+ * {@link Hyperlink.stream} (a live `Stream` source, e.g. `changes`).
  *
  * For a repeated dependency-monitor shape (`status` + `changes` + readiness from
  * status), {@link monitoredDependency} builds the spec and readiness together —
  * still a plain tag, not a new kind. Attach readiness with {@link withReadiness}.
  *
- * @module Resource
+ * @module Hyperlink
  */
 import {
   Context,
@@ -87,7 +87,7 @@ import {
   withRegistrationJournal,
   type StoreScopeTag,
 } from "./internal/store/registration";
-// Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
+// Type-only — avoids a runtime Hyperlink↔Lookup cycle; claim path dynamic-imports the module.
 import type {
   Advice as LookupAdvice,
   Directory as LookupDirectory,
@@ -134,8 +134,8 @@ import {
  * @category errors
  * @public
  */
-export class DuplicateResourceKey extends Data.TaggedError(
-  "DuplicateResourceKey",
+export class DuplicateHyperlinkKey extends Data.TaggedError(
+  "DuplicateHyperlinkKey",
 )<{ readonly key: string }> {}
 
 /**
@@ -150,7 +150,7 @@ export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
 }> {}
 
 /**
- * An instance was passed to {@link Resource.serveInstances} more than once.
+ * An instance was passed to {@link Hyperlink.serveInstances} more than once.
  *
  * @category errors
  * @public
@@ -186,7 +186,7 @@ export class MissingContractMethod extends Data.TaggedError(
 )<{ readonly method: string }> {}
 
 /**
- * A {@link Resource.local} (local-only) method was reached through a client. Unreachable by
+ * A {@link Hyperlink.local} (local-only) method was reached through a client. Unreachable by
  * construction — the {@link Local} it requires is never granted to a client.
  *
  * @category errors
@@ -209,7 +209,7 @@ export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPay
 /**
  * An RPC call failed with a signature that means the client transport doesn't match the
  * server (classic: http client → WebSocket server → Effect's "empty HTTP response" defect).
- * Remapped at the {@link Resource.client} boundary so the failure is catchable by `_tag`
+ * Remapped at the {@link Hyperlink.client} boundary so the failure is catchable by `_tag`
  * instead of looking like an opaque `RpcClientDefect`. Topology already designs this out on
  * the blessed path ({@link Node.connect} derives the transport); this is the legible backstop
  * when an escape-hatch protocol is still wrong.
@@ -224,7 +224,7 @@ export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
 }> {
   override get message() {
     return (
-      `Resource "${this.resource}" method "${this.method}" hit a transport/protocol mismatch ` +
+      `Hyperlink "${this.resource}" method "${this.method}" hit a transport/protocol mismatch ` +
       `(often an http client dialing a WebSocket server). Use Node.connect / the node's declared ` +
       `kind (protocolWebsocket / socketClient), not a guessed transport.`
     );
@@ -232,7 +232,7 @@ export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
 }
 
 /**
- * A nodeless {@link Resource.client}`(tag)` was built with no ambient {@link RpcClient.Protocol}.
+ * A nodeless {@link Hyperlink.client}`(tag)` was built with no ambient {@link RpcClient.Protocol}.
  * Replaces Effect's opaque "Service not found: …/Protocol" die with a remediation message naming
  * the three ways to connect. The Layer still *requires* `RpcClient.Protocol` in `R` (compile-time)
  * and keeps `E = never` (this replaces a defect, not a typed channel callers already matched);
@@ -246,9 +246,9 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
 }> {
   override get message() {
     return (
-      `Resource.client("${this.resource}") has no ambient RpcClient.Protocol. ` +
-      `Connect it with Node.connect(node) / Resource.client(tag, node), ` +
-      `Resource.clientHttp(tag, target), or Resource.socketClient(node) ` +
+      `Hyperlink.client("${this.resource}") has no ambient RpcClient.Protocol. ` +
+      `Connect it with Node.connect(node) / Hyperlink.client(tag, node), ` +
+      `Hyperlink.clientHttp(tag, target), or Hyperlink.socketClient(node) ` +
       `(or Layer.provide a protocolHttp / protocolWebsocket / protocolIpc layer).`
     );
   }
@@ -261,7 +261,7 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
  * - `"status"` — probe runs but failure is ignored (connect proceeds)
  * - `false` — skip verify
  *
- * Opt out: `Resource.client(Tag).pipe(Layer.provide(Resource.clientVerify(false)))`.
+ * Opt out: `Hyperlink.client(Tag).pipe(Layer.provide(Hyperlink.clientVerify(false)))`.
  *
  * @category models
  * @public
@@ -289,7 +289,7 @@ export type ClientVerifyError =
  * @public
  */
 export const ClientVerify = Context.Reference<ClientVerifyMode>(
-  "@nikscripts/effect-pm/Resource/ClientVerify",
+  "hyperlink-ts/Hyperlink/ClientVerify",
   { defaultValue: (): ClientVerifyMode => "reject" },
 );
 
@@ -393,7 +393,7 @@ export interface MethodAnnotations {
 
 /** Identity brand for a {@link Method} (Effect-style string `TypeId`) — distinguishes a spec leaf from a
  *  plain object; guarded with `Predicate.hasProperty`. */
-const MethodTypeId = "~nikscripts/effect-pm/Resource/Method" as const;
+const MethodTypeId = "~hyperlink-ts/Hyperlink/Method" as const;
 
 /** Sentinel for a {@link Method}'s `Client` type meaning "no explicit client type — **derive** the shape
  *  from the schema" (the default). Branded so nothing else structurally matches it. @public */
@@ -407,7 +407,7 @@ declare const clientSym: unique symbol;
 
 /**
  * One method of a resource contract — built by {@link effect} /
- * {@link effectFn} / {@link Resource.stream}. Carries its `kind`, schemas
+ * {@link effectFn} / {@link Hyperlink.stream}. Carries its `kind`, schemas
  * (`payload` / `success` / `error`), whether it's a `stream` (a push source vs a one-shot
  * read), and tool annotations. `.annotate({...})` returns a copy with merged annotations,
  * mirroring Effect's schema idiom.
@@ -473,8 +473,8 @@ export type FleetField<M extends AnyMethod> = Marked<M, { readonly fleet: true }
  * want). The one lightweight tag the plain-query model keeps, purely for this exclusion.
  *
  * ```ts
- * connections:      Resource.effect(Schema.Number),               // per-instance (leaf) — peers see it
- * totalConnections: Resource.fleet(Resource.effect(Schema.Number)), // fleet — peers don't
+ * connections:      Hyperlink.effect(Schema.Number),               // per-instance (leaf) — peers see it
+ * totalConnections: Hyperlink.fleet(Hyperlink.effect(Schema.Number)), // fleet — peers don't
  * ```
  *
  * @category spec fields
@@ -487,8 +487,8 @@ export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
 declare const localTypeId: unique symbol;
 
 /**
- * Granted *only* by a resource's local layer ({@link Resource.layer} / {@link serve}) — never by
- * {@link Resource.client}. Local to **this runtime's materialized impl** for the tag (not a remote
+ * Granted *only* by a resource's local layer ({@link Hyperlink.layer} / {@link serve}) — never by
+ * {@link Hyperlink.client}. Local to **this runtime's materialized impl** for the tag (not a remote
  * client, not a peer). A {@link LocalMethod} carries it in its requirement channel, so calling a
  * non-serializable method against a client is a **compile error** (unsatisfied requirement); the
  * same call resolves when the local layer is provided. Branded by `Self` so one resource's local
@@ -512,10 +512,10 @@ export type LocalEffect<A, E = never, Self = unknown> = Effect.Effect<A, E, Loca
 
 /** Identity brand for a {@link LocalMethod} (Effect-style string `TypeId`) — distinguishes an off-wire
  *  local member from a wire {@link Method}. */
-const LocalMethodTypeId = "~nikscripts/effect-pm/Resource/LocalMethod" as const;
+const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod" as const;
 
 /**
- * A **local-only** member of a resource contract — built by {@link Resource.local}. It is
+ * A **local-only** member of a resource contract — built by {@link Hyperlink.local}. It is
  * *not* part of the wire contract (no schema, no rpc): use it for things that can't cross
  * RPC simply (a returned function, a raw `Fiber`/`Scope`/`Ref`, a callback). Its declared
  * type `T` is given directly. In the service it surfaces as
@@ -621,7 +621,7 @@ const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
  *
  * @internal
  */
-export const flattenResourceSpec = flattenSpec;
+export const flattenHyperlinkSpec = flattenSpec;
 
 /** Flatten a nested impl to a flat path-keyed record, walking each path from the (flat) spec's keys —
  *  identity for a flat spec. @internal */
@@ -694,11 +694,11 @@ const localFn = <T>(defaultValue?: T): LocalMethod<T> => ({
  *  Distinct from a called `local<T>()` so the contract can reject a bare local that has no interface
  *  type to resolve from. @internal */
 const bareLocalSym: unique symbol = Symbol.for(
-  "~nikscripts/effect-pm/Resource/bareLocal",
+  "~hyperlink-ts/Hyperlink/bareLocal",
 );
 
 /**
- * The **bare** {@link local} marker — `Resource.local` used *without* `()`. Valid only inside a
+ * The **bare** {@link local} marker — `Hyperlink.local` used *without* `()`. Valid only inside a
  * {@link fromService} contract, where the service interface at that key supplies its type. Using it
  * where no type can be resolved is a compile error (see {@link fromService}).
  *
@@ -713,8 +713,8 @@ export interface BareLocal {
 /**
  * Declare a **local-only** member (see {@link LocalMethod}). Two forms:
  *
- * - `Resource.local<T>()` — the element type `T` given explicitly (for a plain {@link Tag} contract).
- * - `Resource.local` — **bare**, no `()`; its type is taken from the service interface in a
+ * - `Hyperlink.local<T>()` — the element type `T` given explicitly (for a plain {@link Tag} contract).
+ * - `Hyperlink.local` — **bare**, no `()`; its type is taken from the service interface in a
  *   {@link fromService} contract. Rejected where no interface type is available.
  *
  * @category spec fields
@@ -757,8 +757,8 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
 });
 
 /**
- * True when a spec member is an inputless void command (`Resource.effect(Schema.Void)`),
- * as opposed to an inputless value read (`Resource.effect` with a non-void success).
+ * True when a spec member is an inputless void command (`Hyperlink.effect(Schema.Void)`),
+ * as opposed to an inputless value read (`Hyperlink.effect` with a non-void success).
  *
  * @category guards
  * @public
@@ -914,10 +914,10 @@ const assertEffectFnPayload = (
  * The other shapes are {@link value} / {@link constant} / {@link effectFn} / {@link stream}.
  *
  * ```ts
- * size: Resource.effect(Schema.Number).annotate({ description: "Total pending." }),
- * run: Resource.effect(success, error).annotate({ description: "Tracked manual run." }),
- * run: Resource.effect({ success, error }).annotate({ description: "Tracked manual run." }),
- * get: Resource.effectFn({ id: Schema.String }, Schema.User),
+ * size: Hyperlink.effect(Schema.Number).annotate({ description: "Total pending." }),
+ * run: Hyperlink.effect(success, error).annotate({ description: "Tracked manual run." }),
+ * run: Hyperlink.effect({ success, error }).annotate({ description: "Tracked manual run." }),
+ * get: Hyperlink.effectFn({ id: Schema.String }, Schema.User),
  * ```
  *
  * @public
@@ -1078,7 +1078,7 @@ export {
  * @example
  * ```ts
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
- *   Resource.store(WnbaNode),
+ *   Hyperlink.store(WnbaNode),
  *   Process.store(Daily),
  * ) {}
  * ```
@@ -1226,10 +1226,10 @@ export type WithRequirement<T, Req> = T extends Subscribable<infer A>
             : T;
 
 /**
- * The generic impl-transform primitive — the Resource counterpart to `Store.mapEffects`. Walk `impl`
+ * The generic impl-transform primitive — the Hyperlink counterpart to `Store.mapEffects`. Walk `impl`
  * **per its `spec`** ({@link flattenSpec} keys aligned onto the impl via {@link flattenImpl}) and pass each
  * **Effect method**'s returned {@link Effect} through `transform`, then re-nest ({@link nestService}). A
- * `stream: true` leaf — a {@link Resource.stream} member (a {@link Stream} impl) **or** a {@link ref} field
+ * `stream: true` leaf — a {@link Hyperlink.stream} member (a {@link Stream} impl) **or** a {@link ref} field
  * (a {@link Subscribable} impl) — is left untouched, as is a {@link LocalMethod} leaf.
  *
  * `transform` is applied uniformly; whether it changes types is expressed through the result:
@@ -1240,7 +1240,7 @@ export type WithRequirement<T, Req> = T extends Subscribable<infer A>
  *
  * @example Type-preserving — trace every resource method
  * ```ts
- * const traced = Resource.mapEffects(impl, MyTag[Resource.specSym], (e) => Effect.withSpan(e, "resource"));
+ * const traced = Hyperlink.mapEffects(impl, MyTag[Hyperlink.specSym], (e) => Effect.withSpan(e, "resource"));
  * ```
  *
  * @category reactivity
@@ -1292,7 +1292,7 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
  *
  * ```ts
  * const context = yield* Effect.context<R | RR>();
- * return Resource.provideContext(impl, MyTag[Resource.specSym], context);
+ * return Hyperlink.provideContext(impl, MyTag[Hyperlink.specSym], context);
  * ```
  *
  * @category serving
@@ -1307,9 +1307,9 @@ export const provideContext = <Impl, const S extends Spec, Ctx>(
     Effect.provideContext(effect as any, context) as any,
   );
 
-/** Runtime marker for a {@link BuiltResource} bundle. @internal */
-export const builtResourceSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/BuiltResource",
+/** Runtime marker for a {@link BuiltHyperlink} bundle. @internal */
+export const builtHyperlinkSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/BuiltHyperlink",
 );
 
 /**
@@ -1323,48 +1323,48 @@ export const builtResourceSym: unique symbol = Symbol.for(
  * @category models
  * @public
  */
-export interface BuiltResource<S extends Spec, R> {
-  readonly [builtResourceSym]: true;
+export interface BuiltHyperlink<S extends Spec, R> {
+  readonly [builtHyperlinkSym]: true;
   readonly impl: WithRequirement<ImplOf<S>, R>;
   readonly workerContext: Context.Context<R>;
 }
 
 /**
- * True when `u` is a {@link BuiltResource} bundle.
+ * True when `u` is a {@link BuiltHyperlink} bundle.
  *
  * @category guards
  * @public
  */
-export const isBuiltResource = (u: unknown): u is BuiltResource<Spec, unknown> =>
-  Predicate.hasProperty(u, builtResourceSym);
+export const isBuiltHyperlink = (u: unknown): u is BuiltHyperlink<Spec, unknown> =>
+  Predicate.hasProperty(u, builtHyperlinkSym);
 
 /**
  * Pair a pre-provide impl with the worker context captured at build time. Pass `tag` so the concrete
- * {@link Spec} `S` is pinned for {@link BuiltResource} typing.
+ * {@link Spec} `S` is pinned for {@link BuiltHyperlink} typing.
  *
  * @category constructors
  * @public
  */
-export const builtResource = <Self, S extends Spec, R>(
-  _tag: ResourceTag<Self, S>,
+export const builtHyperlink = <Self, S extends Spec, R>(
+  _tag: HyperlinkTag<Self, S>,
   impl: WithRequirement<ImplOf<S>, R>,
   workerContext: Context.Context<R>,
-): BuiltResource<S, R> => ({
-  [builtResourceSym]: true as const,
+): BuiltHyperlink<S, R> => ({
+  [builtHyperlinkSym]: true as const,
   impl,
   workerContext,
 });
 
 /**
- * Discharge a {@link BuiltResource}'s captured worker context into every Effect method — yields the
+ * Discharge a {@link BuiltHyperlink}'s captured worker context into every Effect method — yields the
  * `R`-free {@link ImplOf} shape for {@link layer} / the local grant in {@link serve}.
  *
  * @category constructors
  * @public
  */
 export const grantLocal = <Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
-  built: BuiltResource<S, R>,
+  tag: HyperlinkTag<Self, S>,
+  built: BuiltHyperlink<S, R>,
 ): ImplOf<S> =>
   provideContext(built.impl, tag[specSym], built.workerContext) as ImplOf<S>;
 
@@ -1377,10 +1377,10 @@ export const grantLocal = <Self, S extends Spec, R>(
  * (a union, an item, `Schema.Struct({ … })`) is the input directly — e.g. `add(item | item[])`.
  *
  * ```ts
- * pause: Resource.effect(Schema.Void).annotate({ description: "Pause." }),
- * clear: Resource.effect(Schema.Number).annotate({ destructive: true }),
- * enqueue: Resource.effectFn({ item: Item }),
- * enqueue: Resource.effectFn({ payload: { item: Item }, success: Schema.Void, error: Full }),
+ * pause: Hyperlink.effect(Schema.Void).annotate({ description: "Pause." }),
+ * clear: Hyperlink.effect(Schema.Number).annotate({ destructive: true }),
+ * enqueue: Hyperlink.effectFn({ item: Item }),
+ * enqueue: Hyperlink.effectFn({ payload: { item: Item }, success: Schema.Void, error: Full }),
  * ```
  *
  * `payload` is **required** — inputless members belong on {@link effect}, not `effectFn`.
@@ -1479,9 +1479,9 @@ export function effectFn(
  * expressed (e.g. a generic library like the queue, whose correct overloads are unprovable under `<F>`).
  *
  * ```ts
- * add: Resource.unsafeEffectFn<{
- *   (item: Resource.Decoded<typeof itemSchema>): Effect.Effect<void>
- *   (items: readonly Resource.Decoded<typeof itemSchema>[]): Effect.Effect<void>
+ * add: Hyperlink.unsafeEffectFn<{
+ *   (item: Hyperlink.Decoded<typeof itemSchema>): Effect.Effect<void>
+ *   (items: readonly Hyperlink.Decoded<typeof itemSchema>[]): Effect.Effect<void>
  * }>()(itemOrItems)
  * ```
  *
@@ -1555,8 +1555,8 @@ export function mutatePair(
  * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`.
  *
  * ```ts
- * changes: Resource.stream(QueueSnapshot).annotate({ description: "Live queue state." }),
- * tail: Resource.stream(LogLine, { payload: Schema.Struct({ since: Schema.Number }) }),
+ * changes: Hyperlink.stream(QueueSnapshot).annotate({ description: "Live queue state." }),
+ * tail: Hyperlink.stream(LogLine, { payload: Schema.Struct({ since: Schema.Number }) }),
  * ```
  *
  * @category spec fields
@@ -1651,7 +1651,7 @@ type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
 
 /**
  * The inferred shape of one method. A non-streaming method is an **`Effect`**; a streaming
- * method ({@link Resource.stream}) is a **`Stream`**. Either is a **property** when there is
+ * method ({@link Hyperlink.stream}) is a **`Stream`**. Either is a **property** when there is
  * no payload, or a **function** `(payload) => …` when there is.
  *
  * @internal
@@ -1707,7 +1707,7 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
  * `Effect`/function members; off-wire {@link LocalMethod}s surface as
  * `Effect<T, never, Local<Self>>` — `yield*` to obtain the value, requiring the local layer
- * ({@link Local}) (so they're uncallable through {@link Resource.client}).
+ * ({@link Local}) (so they're uncallable through {@link Hyperlink.client}).
  *
  * @category models
  * @public
@@ -1769,7 +1769,7 @@ declare const localNeedsTypeSym: unique symbol;
  * @category models
  */
 export interface LocalNeedsType<K extends PropertyKey> {
-  readonly [localNeedsTypeSym]: `Resource.local at '${K & string}' has no type — add '${K &
+  readonly [localNeedsTypeSym]: `Hyperlink.local at '${K & string}' has no type — add '${K &
     string}' to the service interface, or use local<T>()`;
 }
 
@@ -1829,7 +1829,7 @@ declare const wireMismatchSym: unique symbol;
  * @category models
  */
 export interface WireMismatch<K extends PropertyKey> {
-  readonly [wireMismatchSym]: `Resource.fromService: wired member '${K &
+  readonly [wireMismatchSym]: `Hyperlink.fromService: wired member '${K &
     string}' — its success type disagrees with the service interface`;
 }
 
@@ -1909,7 +1909,7 @@ type PeerServiceOf<S extends Spec> = {
  * The **implementation** a {@link localLayer} / {@link serve} expects: wire members are their
  * `Effect`/`Stream`/function, and each {@link LocalMethod} is its **raw** value `T` (the toolkit wraps
  * it to require the {@link Local}). When an impl needs a capability (e.g. {@link peers}) to
- * build, provide it via the **`Effect` form** of {@link Resource.layer} / {@link Resource.serve}
+ * build, provide it via the **`Effect` form** of {@link Hyperlink.layer} / {@link Hyperlink.serve}
  * — resolve it once, and the members close over it.
  *
  * A `value` field's impl is the **`Stream`** that feeds it (typically a `SubscriptionRef`'s `.changes`),
@@ -1936,7 +1936,7 @@ export type ImplOf<S extends Spec> = {
 /**
  * Recover the (possibly nested) {@link Spec} a tag was built from — for annotating an extracted impl
  * without hand-threading it: `obj satisfies ImplOf<SpecOf<typeof MyTag>>`. Usually you don't need it —
- * {@link Resource.make} infers it. @public
+ * {@link Hyperlink.make} infers it. @public
  * @category models
  */
 export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spec }
@@ -1947,24 +1947,24 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * Anchor a **reusable** impl to its contract at the definition site. Inline impls are already typed by
  * `layer` / `serve`; but the moment you hoist one to a `const` (to share it across the
  * local layer and a served entry, or across several serves) it loses that typing — the mistake then
- * surfaces far away at the serve call, with no autocomplete as you write it. `Resource.make(tag, impl)`
+ * surfaces far away at the serve call, with no autocomplete as you write it. `Hyperlink.make(tag, impl)`
  * infers the tag's spec and constrains `impl` to its {@link ImplOf}, returning it typed. Runtime identity.
  *
  * ```ts
- * const scoresImpl = Resource.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
- * Resource.layer(ScoresDb, scoresImpl);                    // local
- * Node.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
+ * const scoresImpl = Hyperlink.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
+ * Hyperlink.layer(ScoresDb, scoresImpl);                    // local
+ * Node.httpServer([Hyperlink.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
  * ```
  *
  * @category constructors
  * @public
  */
 export function make<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S>,
 ): ImplOf<S>;
 export function make<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: Effect.Effect<ImplOf<S>, never, R>,
 ): Effect.Effect<ImplOf<S>, never, R>;
 export function make(_tag: unknown, impl: unknown): unknown {
@@ -2079,12 +2079,12 @@ export const buildRpcGroup = (
 
 /**
  * Where the contract spec is stowed on a Tag (hidden from the value surface). Exported so
- * the public {@link ResourceTag} type is nameable across modules.
+ * the public {@link HyperlinkTag} type is nameable across modules.
  *
  * @internal
  */
 export const specSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/spec",
+  "hyperlink-ts/Hyperlink/spec",
 );
 /**
  * Phantom carrier of a tag's (possibly nested) spec type `S`, so functions can **infer** `S` from a tag —
@@ -2094,38 +2094,38 @@ export const specSym: unique symbol = Symbol.for(
 declare const specTypeSym: unique symbol;
 /** Where the built RPC group is stowed on a Tag. @internal */
 export const groupSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/group",
+  "hyperlink-ts/Hyperlink/group",
 );
 /** Where the per-resource local-capability key is stowed on a Tag. @internal */
 export const localCapSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/localCap",
+  "hyperlink-ts/Hyperlink/localCap",
 );
 /** Marks a tag built by {@link fromService} — its local members are interface-shaped (the impl's own
  *  `Effect`/function, requiring {@link Local}), so {@link buildLocalContext} passes them through with
  *  the cap rather than wrapping a raw value. Absent on standard tags. @internal */
 export const fromServiceSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/fromService",
+  "hyperlink-ts/Hyperlink/fromService",
 );
-/** Where a contract's **kind** (its canonical id, e.g. `@nikscripts/effect-pm/QueueResource`) is
+/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/QueueResource`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
- *  classify a tag without sniffing its spec. Absent on a bare {@link Resource.Tag}. @internal */
+ *  classify a tag without sniffing its spec. Absent on a bare {@link Hyperlink.Tag}. @internal */
 export const kindSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/kind",
+  "hyperlink-ts/Hyperlink/kind",
 );
 /** Where a resource's **readiness derivation** (status → ready) is stowed on a Tag — a sibling of
  *  {@link kindSym}, applied by {@link withReadiness}. Absent ⇒ the resource is ready by default.
  *  @internal */
 export const readinessSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/readiness",
+  "hyperlink-ts/Hyperlink/readiness",
 );
 /** Where the resource's {@link Node} (if any) is stowed on a Tag. @internal */
 export const nodeSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/node",
+  "hyperlink-ts/Hyperlink/node",
 );
 
 /** Marks a Tag as identity-claiming ({@link identity} pipe) — layer/serve claim at Lookup first. @internal */
 export const identitySym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/identity",
+  "hyperlink-ts/Hyperlink/identity",
 );
 
 // ── readiness: a derived view of a resource's status, aggregated into node /health + NodeStatus ──
@@ -2156,13 +2156,13 @@ export interface Readiness {
 export type ReadinessOf<Service> = (
   service: Service,
   base: Effect.Effect<Readiness, never, any>,
-  // The derivation may depend on services (e.g. `Resource.readinessOf(Database)`); that requirement
+  // The derivation may depend on services (e.g. `Hyperlink.readinessOf(Database)`); that requirement
   // is satisfied by the serve context the node runs readiness in, and erased at this storage seam.
 ) => Effect.Effect<Readiness, never, any>;
 
 // ── node: the transport for a resource, carried in the Tag ──
 
-// [extracted to Node module — was Resource.ts:1764-1845]
+// [extracted to Node module — was Hyperlink.ts:1764-1845]
 
 /** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
  *  don't collide in one context. @internal */
@@ -2177,28 +2177,28 @@ export interface SelfNodeId<Self> {
 }
 
 /** Holds a tag's `distributed` set (the fleet). @internal */
-const nodesSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/distributed");
+const nodesSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/distributed");
 
 /** Holds a tag's per-resource {@link peers} capability key. @internal */
-const peersSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/peers");
+const peersSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/peers");
 
 /** Holds a tag's per-resource {@link selfNode} capability key. @internal */
-const selfNodeSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/selfNode");
+const selfNodeSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/selfNode");
 
 /**
- * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
- * {@link Resource.tagFor} factory produce (and what you extend). Lets a consumer write
- * `<S extends Spec>(tag: ResourceTag<Self, S>)` and read the spec through named types
+ * The type of a resource tag carrying spec `S` — what {@link Hyperlink.Tag} / a
+ * {@link Hyperlink.tagFor} factory produce (and what you extend). Lets a consumer write
+ * `<S extends Spec>(tag: HyperlinkTag<Self, S>)` and read the spec through named types
  * ({@link specOf} / {@link groupOf}) instead of a `Parameters<typeof specOf>` workaround.
  *
  * @category models
  * @public
  */
-export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
+export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   extends Context.ServiceClass<Self, string, Svc> {
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
   readonly groupId: string;
-  /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
+  /** Hyperlink-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
   readonly [specTypeSym]?: S;
@@ -2210,13 +2210,13 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   /**
    * The resource's {@link Node} (its transport), or `undefined` for a nodeless tag. Uniform
    * across all tags (always present) so a node-bearing tag stays assignable wherever a plain
-   * {@link ResourceTag} is expected; the node-bearing tag constructors **narrow** this to a
-   * concrete {@link NodeKey} in their return type, which is how {@link Resource.client}
+   * {@link HyperlinkTag} is expected; the node-bearing tag constructors **narrow** this to a
+   * concrete {@link NodeKey} in their return type, which is how {@link Hyperlink.client}
    * discriminates the node-aware path.
    */
   readonly [nodeSym]: NodeKey<unknown> | undefined;
   /** The contract's kind (canonical id) — set by a contract `.Tag` factory, `undefined` for a bare
-   *  {@link Resource.Tag}. Read it with {@link kindOf}. */
+   *  {@link Hyperlink.Tag}. Read it with {@link kindOf}. */
   readonly [kindSym]: string | undefined;
   /** The resource's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
@@ -2252,7 +2252,7 @@ export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired
   override get message() {
     return (
       `Identity "${this.tag}" needs Lookup.Identity and a dialable self ` +
-      `(Node.unix/http/ws listen or Resource.nodes([Node])). ` +
+      `(Node.unix/http/ws listen or Hyperlink.nodes([Node])). ` +
       `Pipe Layer.provide(Lookup.client) / Lookup.layer / Lookup.layerOptions.`
     );
   }
@@ -2270,7 +2270,7 @@ export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
   readonly nodeCount: number;
 }> {}
 
-// [extracted to Node module — was Resource.ts:1936-1951]
+// [extracted to Node module — was Hyperlink.ts:1936-1951]
 
 /**
  * {@link lookupClient} could not resolve **exactly one** dial target for the Tag
@@ -2310,7 +2310,7 @@ export type LookupClientOptions = {
   readonly pick?: LookupClientPick;
 };
 
-// [extracted to Node module — was Resource.ts:1985-1994]
+// [extracted to Node module — was Hyperlink.ts:1985-1994]
 
 /** Throw when an identity Tag would carry more than one fleet Node. @internal */
 const assertIdentityNodeCount = (
@@ -2326,7 +2326,7 @@ const assertIdentityNodeCount = (
 type TagIdentifier = { readonly Service: unknown };
 
 /** Spec carried by tag identifier `T`. @internal */
-type SpecOfTag<T> = T extends ResourceTag<any, infer S extends Spec> ? S : SpecOf<T>;
+type SpecOfTag<T> = T extends HyperlinkTag<any, infer S extends Spec> ? S : SpecOf<T>;
 
 /** Strip {@link Local} from an effect requirement. @internal */
 type ExcludeLocal<R> = [Extract<R, Local<any>>] extends [never]
@@ -2343,7 +2343,7 @@ type LocalizeMember<V> = V extends Effect.Effect<infer A, infer E, infer R>
     : V;
 
 /**
- * Materialized service shape for tag `T` — `Resource.Shape<Test>` ≡ `Test["Service"]`.
+ * Materialized service shape for tag `T` — `Hyperlink.Shape<Test>` ≡ `Test["Service"]`.
  *
  * @category models
  * @public
@@ -2351,7 +2351,7 @@ type LocalizeMember<V> = V extends Effect.Effect<infer A, infer E, infer R>
 export type Shape<T extends TagIdentifier> = T["Service"];
 
 /**
- * Materialized service shape from a {@link Spec} — `Resource.ShapeOf<typeof mySpec, MyTag>`.
+ * Materialized service shape from a {@link Spec} — `Hyperlink.ShapeOf<typeof mySpec, MyTag>`.
  *
  * @category models
  * @public
@@ -2393,24 +2393,24 @@ export type WireOf<T extends TagIdentifier> = Wire<SpecOfTag<T>>;
 
 /**
  * `yield* Tag` — mirrors {@link Effect.Effect | `Effect.Effect`}. Prefer the spec form for
- * readable hovers: `Resource.Resource<typeof mySpec>`. Tag form: {@link Of | `Resource.Of<Test>`}.
+ * readable hovers: `Hyperlink.Hyperlink<typeof mySpec>`. Tag form: {@link Of | `Hyperlink.Of<Test>`}.
  *
  * `Self` is the tag identifier (requirement channel); omit it when declaring against a spec only.
  * Extra requirements beyond the tag go in `R`.
  *
  * @example
  * ```ts
- * const spec = { current: Resource.effect(Schema.Number) } as const;
- * type Acquire = Resource.Resource<typeof spec>;
+ * const spec = { current: Hyperlink.effect(Schema.Number) } as const;
+ * type Acquire = Hyperlink.Hyperlink<typeof spec>;
  *
- * class Counter extends Resource.Tag<Counter>()("@app/Counter", spec) {}
- * type AcquireTag = Resource.Of<Counter>;
+ * class Counter extends Hyperlink.Tag<Counter>()("@app/Counter", spec) {}
+ * type AcquireTag = Hyperlink.Of<Counter>;
  * ```
  *
  * @category models
  * @public
  */
-export type Resource<
+export type Hyperlink<
   S extends Spec,
   E = never,
   R = never,
@@ -2418,7 +2418,7 @@ export type Resource<
 > = Effect.Effect<ServiceOf<S, Self>, E, Self | R>;
 
 /**
- * `yield* Tag` inferred from the tag identifier — `Resource.Of<Counter>`.
+ * `yield* Tag` inferred from the tag identifier — `Hyperlink.Of<Counter>`.
  *
  * @category models
  * @public
@@ -2426,11 +2426,11 @@ export type Resource<
 export type Of<T extends TagIdentifier, E = never, R = never> = Effect.Effect<T["Service"], E, T | R>;
 
 /**
- * Resource types — use {@link Resource.Resource} like {@link Effect.Effect | `Effect.Effect`}.
+ * Hyperlink types — use {@link Hyperlink.Hyperlink} like {@link Effect.Effect | `Effect.Effect`}.
  *
  * @public
  */
-export declare namespace Resource {
+export declare namespace Hyperlink {
   /** @inheritdoc */
   export type Shape<T extends TagIdentifier> = T["Service"];
 
@@ -2456,7 +2456,7 @@ export declare namespace Resource {
   export type WireShape<S extends Spec> = WireServiceOf<S>;
 
   /** @inheritdoc */
-  export type Resource<
+  export type Hyperlink<
     S extends Spec,
     E = never,
     R = never,
@@ -2480,8 +2480,8 @@ export declare namespace Resource {
 }
 
 /**
- * A {@link ResourceTag} bound to a concrete {@link Node} — its `[nodeSym]` narrowed to that node's
- * `NodeKey<HSelf>`, which is how {@link Resource.client} discriminates the node-aware path. Returned
+ * A {@link HyperlinkTag} bound to a concrete {@link Node} — its `[nodeSym]` narrowed to that node's
+ * `NodeKey<HSelf>`, which is how {@link Hyperlink.client} discriminates the node-aware path. Returned
  * by the node-bearing tag constructors. It's a **named** type (not an inline `& { [nodeSym] }`) so a
  * consumer can `export` a node-bearing tag without leaking the internal symbol (TS4020).
  *
@@ -2489,21 +2489,21 @@ export declare namespace Resource {
  * @public
  */
 export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Self>>
-  extends ResourceTag<Self, S, Svc> {
+  extends HyperlinkTag<Self, S, Svc> {
   readonly [nodeSym]: NodeKey<HSelf>;
 }
 
-/** The kind stamped on a bare {@link Resource.Tag} that declares none — every resource tag carries a
+/** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every resource tag carries a
  *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
- *  `@nikscripts/effect-pm/QueueResource`); a bare tag defaults to this so nothing is ever kind-less.
+ *  `hyperlink-ts/QueueResource`); a bare tag defaults to this so nothing is ever kind-less.
  *
  * @category nodes & fleet
  * @public
  */
-export const kind = "@nikscripts/effect-pm/Resource";
+export const kind = "hyperlink-ts/Hyperlink";
 
-/** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`, or {@link kind}
- *  for a bare {@link Resource.Tag}); `undefined` only for a non-tag. The robust replacement for
+/** The contract kind a tag was built for (e.g. `hyperlink-ts/QueueResource`, or {@link kind}
+ *  for a bare {@link Hyperlink.Tag}); `undefined` only for a non-tag. The robust replacement for
  *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
   // A resource tag is a class (so `typeof` is "function"), with the kind stamped as a static.
@@ -2523,7 +2523,7 @@ export const kindOf = (tag: unknown): string | undefined => {
  * @public
  */
 export const contractHash = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): string => hashContract(tag.groupId, kindOf(tag) ?? "resource", tag[specSym]);
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
@@ -2591,7 +2591,7 @@ export const nodeKindsOf = (tag: unknown): ReadonlyArray<ProtocolKind> => {
  *
  *  **Rule:** any new `Fn.dual` data-last combinator that accepts a resource tag in a class
  *  `extends … .pipe(…)` position must constrain `T` with this brand (or an equivalent non-`Svc`
- *  shape) — never `ResourceTag | NodeBoundTag`, which reopens TS2589 under stock tsc.
+ *  shape) — never `HyperlinkTag | NodeBoundTag`, which reopens TS2589 under stock tsc.
  *
  *  @internal */
 /** @internal */
@@ -2600,13 +2600,13 @@ export type PipeableTag = { readonly [specSym]: FlatSpec };
 /**
  * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and `NodeStatus`
  * aggregate over. Each contract applies it from its own status (so readiness can't drift from
- * status); a bare {@link Resource.Tag} can opt in the same way. Dual (data-first or `.pipe`):
+ * status); a bare {@link Hyperlink.Tag} can opt in the same way. Dual (data-first or `.pipe`):
  *
  * ```ts
- * class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
- *   warm: Resource.effect(Schema.Boolean),
+ * class EdgeCache extends Hyperlink.Tag<EdgeCache>()("edge/Cache", {
+ *   warm: Hyperlink.effect(Schema.Boolean),
  * }).pipe(
- *   Resource.withReadiness((svc) =>
+ *   Hyperlink.withReadiness((svc) =>
  *     Effect.map(svc.warm, (warm) => ({ ready: warm, ...(warm ? {} : { detail: "cold" }) })),
  *   ),
  * ) {}
@@ -2616,18 +2616,18 @@ export type PipeableTag = { readonly [specSym]: FlatSpec };
  * @public
  */
 export const withReadiness: {
-  // Data-last: `T extends PipeableTag` (shallow) — do not constrain against ResourceTag|NodeBoundTag
+  // Data-last: `T extends PipeableTag` (shallow) — do not constrain against HyperlinkTag|NodeBoundTag
   // or stock tsc TS2589s on node-bound `class extends Tag()(…).pipe(withReadiness(…))` (expands Svc).
   // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
   // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
   //
-  // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
+  // data-last (pipe): `tag.pipe(Hyperlink.withReadiness(fn))` — service type derived from the piped tag.
   <T extends PipeableTag>(
     readiness: ReadinessOf<
-      T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
+      T extends HyperlinkTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
   ): (tag: T) => T;
-  // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
+  // data-first: `Hyperlink.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
   // Two **inferred** overloads (not a fixed `<any,any>` union) so a fully-defined *class* — a
   // `typeof X` constructor — is accepted, the way `client`/`layer` accept one; node-bound first so a
   // node-bound tag keeps its node in the return.
@@ -2636,12 +2636,12 @@ export const withReadiness: {
     readiness: ReadinessOf<ServiceOf<S, Self>>,
   ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
-    tag: ResourceTag<Self, S>,
+    tag: HyperlinkTag<Self, S>,
     readiness: ReadinessOf<ServiceOf<S, Self>>,
-  ): ResourceTag<Self, S>;
+  ): HyperlinkTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any, any>>(tag: T, readiness: ReadinessOf<unknown>): T => {
+  <T extends HyperlinkTag<any, any, any>>(tag: T, readiness: ReadinessOf<unknown>): T => {
     // Stack onto any readiness already on the tag (e.g. a contract factory's own check): the new
     // derivation receives the prior one (applied to the same service) as `base`, so it can extend
     // it (`yield* base`) or replace it (ignore `base`). `base` flows down the chain from the root.
@@ -2706,19 +2706,19 @@ const readinessCheckServed = (
 /**
  * Pull a resource's readiness **by tag** — yields its service and runs its derivation. Use it inside
  * another resource's {@link withReadiness} to make readiness *depend on* a resource it depends on:
- * `yield* Resource.readinessOf(Database)`. The dependency lands in the readiness Effect's
+ * `yield* Hyperlink.readinessOf(Database)`. The dependency lands in the readiness Effect's
  * requirements, so it's **compile-time checked**, and it works local *or* remote (it re-derives from
  * the dependency's served status).
  */
 export const readinessOf = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): Effect.Effect<Readiness, never, Self> =>
   Effect.flatMap(tag, (service) => readinessCheck(tag, service));
 
 /**
  * Combine readiness checks with **AND**: ready iff all are ready, else the first not-ready one (with
  * its detail). Sugar for extending a base with dependency checks:
- * `withReadiness((svc, base) => Resource.allReady([base, Resource.readinessOf(Database)]))`.
+ * `withReadiness((svc, base) => Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]))`.
  */
 export const allReady = <R>(
   checks: ReadonlyArray<Effect.Effect<Readiness, never, R>>,
@@ -2776,7 +2776,7 @@ export interface MonitoredDependencyOptions<
 
 /**
  * Spec + readiness from {@link monitoredDependency}. Pass `spec` to
- * {@link Resource.Tag}; attach `readiness` with {@link withReadiness}.
+ * {@link Hyperlink.Tag}; attach `readiness` with {@link withReadiness}.
  *
  * @category models
  * @public
@@ -2792,7 +2792,7 @@ export interface MonitoredDependency<
 /**
  * Build the common **monitored dependency** contract: `status` (one-shot read),
  * `changes` (live snapshot stream), and readiness derived from `status`. Still a
- * plain {@link Resource.Tag} shape — **not** a new resource kind.
+ * plain {@link Hyperlink.Tag} shape — **not** a new resource kind.
  *
  * Compose behaviour the usual way: tag + {@link withReadiness} (see
  * *Resources → behaviour via piped combinators*).
@@ -2804,15 +2804,15 @@ export interface MonitoredDependency<
  *   latencyMs: Schema.Number,
  * })
  *
- * const { spec, readiness } = Resource.monitoredDependency({
+ * const { spec, readiness } = Hyperlink.monitoredDependency({
  *   status: DbStatus,
  *   changes: DbStatus,
  *   readyWhen: (s) => s.connected,
  *   detail: (s) => `${s.latencyMs}ms`,
  * })
  *
- * export class WnbaDatabase extends Resource.withReadiness(
- *   Resource.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
+ * export class WnbaDatabase extends Hyperlink.withReadiness(
+ *   Hyperlink.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
  *   readiness,
  * ) {}
  * ```
@@ -2876,7 +2876,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   fromServiceMarker = false,
 ) => {
   if (claimedKeys.has(key)) {
-    throw new DuplicateResourceKey({ key });
+    throw new DuplicateHyperlinkKey({ key });
   }
   claimedKeys.add(key);
   const base = Context.Service<Self, ServiceOf<S, Self>>()(key);
@@ -2918,9 +2918,9 @@ const buildInstanceTag = <Self, S extends Spec>(
  * `Context.Tag`, but the value type is **inferred from the spec**:
  *
  * ```ts
- * class Counter extends Resource.Tag<Counter>()("Counter", {
- *   increment: Resource.effectFn({ by: Schema.Number }),
- *   current: Resource.effect(Schema.Number),
+ * class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+ *   increment: Hyperlink.effectFn({ by: Schema.Number }),
+ *   current: Hyperlink.effect(Schema.Number),
  * }) {}
  *
  * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
@@ -2938,13 +2938,13 @@ const makeTag = <Self>() => {
   // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
   // inferring call; `options.node` rides the inferring call so its identity `HSelf` infers from the
   // argument, and the node-bearing overload narrows `[nodeSym]` to a concrete `NodeKey` — which is
-  // how `Resource.client` discriminates the node-aware path. An {@link AddressedNode} narrows
+  // how `Hyperlink.client` discriminates the node-aware path. An {@link AddressedNode} narrows
   // further so `client(Tag)` can auto-wire connect.
   function build<const S extends Spec>(
     key: string,
     spec: S,
     options?: { readonly description?: string; readonly kind?: string },
-  ): ResourceTag<Self, S>;
+  ): HyperlinkTag<Self, S>;
   function build<const S extends Spec, HSelf>(
     key: string,
     spec: S,
@@ -2973,7 +2973,7 @@ const makeTag = <Self>() => {
       readonly kind?: string;
       readonly node?: NodeKey<unknown>;
     },
-  ): ResourceTag<Self, S> {
+  ): HyperlinkTag<Self, S> {
     // single resource: key doubles as the group id (its wire prefix)
     claimGroupId(key);
     return buildInstanceTag<Self, S>(
@@ -2997,7 +2997,7 @@ const makeTag = <Self>() => {
  * the only difference is that a client can't call the locals (a compile error — unsatisfied
  * `Local`).
  *
- * Locals are written **bare** — `Resource.local`, no `()` — and take their type from `I`. A bare
+ * Locals are written **bare** — `Hyperlink.local`, no `()` — and take their type from `I`. A bare
  * local with no matching interface member is rejected at the call (see {@link Validate}).
  *
  * Two type parameters, like {@link Tag}: `Self` (the class — the tag's nominal identity, `Local`
@@ -3009,9 +3009,9 @@ const makeTag = <Self>() => {
  *   readonly current: Effect.Effect<number>;            // local (no schema)
  *   readonly add: (by: number) => Effect.Effect<number>; // wired
  * }
- * class Counter extends Resource.fromService<Counter, CounterShape>()("counter", {
- *   current: Resource.local,
- *   add: Resource.effectFn(Schema.Number, Schema.Number),
+ * class Counter extends Hyperlink.fromService<Counter, CounterShape>()("counter", {
+ *   current: Hyperlink.local,
+ *   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
  * }) {}
  * ```
  *
@@ -3023,7 +3023,7 @@ export const fromService = <Self, I>() => {
     key: string,
     contract: C & Validate<C, I>,
     options?: { readonly description?: string; readonly kind?: string },
-  ): ResourceTag<Self, ResolveLocals<C, I>> {
+  ): HyperlinkTag<Self, ResolveLocals<C, I>> {
     // single resource: key doubles as the group id (its wire prefix). The contract *value* is the
     // runtime spec (bare `local`s carry the LocalMethod brand); `S` is presented resolved at the type
     // level so `ImplOf`/`FromServiceOf` derive local types from the interface `I`.
@@ -3051,7 +3051,7 @@ export const fromService = <Self, I>() => {
  * @public
  */
 export interface TagFactory<S extends Spec> {
-  <Self>(key: string): ResourceTag<Self, S>;
+  <Self>(key: string): HyperlinkTag<Self, S>;
   readonly groupId: string;
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
@@ -3061,7 +3061,7 @@ export interface TagFactory<S extends Spec> {
 
 /**
  * A node-bearing {@link tagFor} factory: every instance it makes carries the family's
- * {@link Node}, so each is a node-bearing tag ({@link Resource.client} resolves the transport
+ * {@link Node}, so each is a node-bearing tag ({@link Hyperlink.client} resolves the transport
  * from it). Otherwise identical to {@link TagFactory}.
  *
  * @category models
@@ -3085,10 +3085,10 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  * instances are told apart by the per-call `key` header.
  *
  * Pass `options.node` to bind the whole family to a {@link Node}: every instance becomes a
- * node-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
+ * node-bearing tag and ships only-the-tag (see {@link Hyperlink.client} / {@link Hyperlink.connect}).
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Resource.effect(Schema.Void) });
+ * const Queue = Hyperlink.tagFor("queue", { pause: Hyperlink.effect(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
  * ```
@@ -3190,8 +3190,8 @@ const clientSubscribable = <A>(
 
 /**
  * The **local** layer for a resource: provide a real implementation of its service. Grants
- * the resource's {@link Local}, so any {@link Resource.local} (local-only) members
- * become callable here — they're a compile error under {@link Resource.client}.
+ * the resource's {@link Local}, so any {@link Hyperlink.local} (local-only) members
+ * become callable here — they're a compile error under {@link Hyperlink.client}.
  *
  * Two forms, mirroring {@link serve}: a **record** impl, or an **`Effect`** that builds the impl
  * — the latter for effectful construction (acquire a pool, resolve {@link peers}, …). The `Effect`'s
@@ -3270,7 +3270,7 @@ const isDialableSelf = (
  * @internal
  */
 const clientLayerForEndpoint = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   endpoint: {
     readonly nodeKey: string;
     readonly kind: ProtocolKind;
@@ -3298,7 +3298,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
  * @internal
  */
 const identityClaimLayer = <Self, S extends Spec, A, E, R>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   onWon: Layer.Layer<A, E, R>,
 ): Layer.Layer<A | Self, E | IdentitySelfRequired, R | LookupIdentity> =>
   Layer.unwrap(
@@ -3344,7 +3344,7 @@ const identityClaimLayer = <Self, S extends Spec, A, E, R>(
 
 /** Plain local layer — no identity claim. @internal */
 const localLayerPlain = <Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> => {
   // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
@@ -3360,11 +3360,11 @@ const localLayerPlain = <Self, S extends Spec, R>(
 };
 
 function localLayer<Self, S extends Spec>(
-  tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
+  tag: HyperlinkTag<Self, S> & { readonly [identitySym]: true },
   impl: ImplOf<S>,
 ): Layer.Layer<Self | Local<Self>, IdentitySelfRequired, LookupIdentity>;
 function localLayer<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S> & { readonly [identitySym]: true },
+  tag: HyperlinkTag<Self, S> & { readonly [identitySym]: true },
   impl: Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<
   Self | Local<Self>,
@@ -3372,15 +3372,15 @@ function localLayer<Self, S extends Spec, R>(
   Exclude<R, Scope.Scope> | LookupIdentity
 >;
 function localLayer<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S>,
 ): Layer.Layer<Self | Local<Self>>;
 function localLayer<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>>;
 function localLayer<Self, S extends Spec, R>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<
   Self | Local<Self>,
@@ -3442,7 +3442,7 @@ const invokeWireMethodWithContext = (
  * @category models
  * @public
  */
-export interface ServedResource {
+export interface ServedHyperlink {
   readonly groupId: string;
   readonly group: RpcGroup.RpcGroup<any>;
   readonly kind: string;
@@ -3460,22 +3460,22 @@ export interface ServedResource {
 /**
  * The served-resources registry — an accumulator {@link serve} appends to and {@link httpServer} reads.
  * A plain `Ref`-backed list (not type-level state), so many `serve` layers compose under `Layer.mergeAll`
- * and the server sees every one. Provided by {@link httpServer} (or {@link servedResourcesLayer}); `serve`
+ * and the server sees every one. Provided by {@link httpServer} (or {@link servedHyperlinksLayer}); `serve`
  * registers **only if it's present** (so `serve` also works standalone).
  *
  * @category models
  * @public
  */
-export class ServedResources extends Context.Service<
-  ServedResources,
+export class ServedHyperlinks extends Context.Service<
+  ServedHyperlinks,
   {
-    readonly register: (entry: ServedResource) => Effect.Effect<void>;
-    readonly all: Effect.Effect<ReadonlyArray<ServedResource>>;
+    readonly register: (entry: ServedHyperlink) => Effect.Effect<void>;
+    readonly all: Effect.Effect<ReadonlyArray<ServedHyperlink>>;
   }
->()("@nikscripts/effect-pm/Resource/ServedResources") {}
+>()("hyperlink-ts/Hyperlink/ServedHyperlinks") {}
 
 /**
- * A fresh {@link ServedResources} registry. {@link httpServer} / {@link ipcServer} /
+ * A fresh {@link ServedHyperlinks} registry. {@link httpServer} / {@link ipcServer} /
  * {@link wsServer} each provide {@link Layer.fresh} of this so two servers in one
  * process (e.g. Lookup + a Worker) do not share registrations via Layer memoization.
  * Provide this standalone only to collect `serve` registrations without a server.
@@ -3483,10 +3483,10 @@ export class ServedResources extends Context.Service<
  * @category serving
  * @public
  */
-export const servedResourcesLayer: Layer.Layer<ServedResources> = Layer.effect(
-  ServedResources,
+export const servedHyperlinksLayer: Layer.Layer<ServedHyperlinks> = Layer.effect(
+  ServedHyperlinks,
   Effect.gen(function* () {
-    const ref = yield* Ref.make<ReadonlyArray<ServedResource>>([]);
+    const ref = yield* Ref.make<ReadonlyArray<ServedHyperlink>>([]);
     return {
       register: (entry) => Ref.update(ref, (all) => [...all, entry]),
       all: Ref.get(ref),
@@ -3559,7 +3559,7 @@ export type ServeRequirements<Impl> = {
  * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
  *
  * ```ts
- * Resource.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
+ * Hyperlink.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
  * ```
  *
  * The point of `serveRemote` is the run-time-requirement case: N resources needing different
@@ -3576,12 +3576,12 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: Impl | BuiltResource<S, any>,
+  impl: Impl | BuiltHyperlink<S, any>,
 ): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
-  const wireImpl = isBuiltResource(impl) ? impl.impl : impl;
-  const workerContext = isBuiltResource(impl) ? impl.workerContext : undefined;
+  const wireImpl = isBuiltHyperlink(impl) ? impl.impl : impl;
+  const workerContext = isBuiltHyperlink(impl) ? impl.workerContext : undefined;
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
   const flatImpl = flattenImpl(wireImpl as Record<string, unknown>, tag[specSym]);
   for (const [key, member] of Object.entries(flatImpl)) {
@@ -3604,7 +3604,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   // shared server + `/health` discover this resource without the caller listing it twice. Merged (not
   // provided) so it isn't pruned as unused; a no-op when no registry is in context (standalone `serve`).
   const registration = Layer.effectDiscard(
-    Effect.serviceOption(ServedResources).pipe(
+    Effect.serviceOption(ServedHyperlinks).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,
@@ -3632,7 +3632,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
 /**
  * Serve a resource **and** grant its local instance from **one** materialization — the co-located "expose
  * it over RPC AND consume it in-process" case (a node that serves its resources and also `yield*`s them,
- * e.g. to read a {@link Resource.local} member). The impl runs **once**, so its cells / pollers / resolved
+ * e.g. to read a {@link Hyperlink.local} member). The impl runs **once**, so its cells / pollers / resolved
  * {@link peers} are shared: the served view and the in-process view are the **same instance** — no double
  * materialization, no second `peersLayer`. Register onto a node with {@link httpServer} like any
  * {@link serve} layer; a served-**only** gateway (never consumed locally) uses {@link serve} directly.
@@ -3647,16 +3647,16 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  * @public
  */
 const servePlain = <Self, S extends Spec, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl:
     | ImplOf<S>
-    | BuiltResource<S, R>
-    | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
+    | BuiltHyperlink<S, R>
+    | Effect.Effect<ImplOf<S> | BuiltHyperlink<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> =>
   Layer.unwrap(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
-      if (isBuiltResource(built)) {
-        const bundle = built as BuiltResource<S, R>;
+      if (isBuiltHyperlink(built)) {
+        const bundle = built as BuiltHyperlink<S, R>;
         // Plain local — identity claim (if any) already happened in {@link serve}.
         return Layer.merge(
           localLayerPlain(tag, grantLocal(tag, bundle)),
@@ -3677,7 +3677,7 @@ const servePlain = <Self, S extends Spec, R = never>(
 /** Stamped on a {@link serve} layer with the served tag's key — lets an anonymous `listen` derive a
  *  legible node name from the first resource it serves without building the layer. @public */
 export const servedKeySym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/servedKey",
+  "hyperlink-ts/Hyperlink/servedKey",
 );
 
 /** The served tag's key stamped on a {@link serve} layer, or `undefined`. @public */
@@ -3697,11 +3697,11 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
  * @public
  */
 export const serve = <Self, S extends Spec, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl:
     | ImplOf<S>
-    | BuiltResource<S, R>
-    | Effect.Effect<ImplOf<S> | BuiltResource<S, R>, never, R>,
+    | BuiltHyperlink<S, R>
+    | Effect.Effect<ImplOf<S> | BuiltHyperlink<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
   // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
   // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
@@ -3713,7 +3713,7 @@ export const serve = <Self, S extends Spec, R = never>(
     return plain;
   }
   // Identity path requires Lookup.Identity at runtime (fail-closed). Kept off the public
-  // `R` channel so plain `serve` stays TS2589-free (ResourceTag & identity brand blows up).
+  // `R` channel so plain `serve` stays TS2589-free (HyperlinkTag & identity brand blows up).
   const claimed = identityClaimLayer(tag, plain) as Layer.Layer<
     Self | Local<Self> | HandlerContextOf<S>,
     never,
@@ -3722,7 +3722,7 @@ export const serve = <Self, S extends Spec, R = never>(
   return Object.assign(claimed, { [servedKeySym]: tag.groupId });
 };
 
-// [extracted to Node module — was Resource.ts:3193-3978]
+// [extracted to Node module — was Hyperlink.ts:3193-3978]
 
 /**
  * Provide one dependency `Layer` to several {@link serve} layers at once — sugar for
@@ -3730,9 +3730,9 @@ export const serve = <Self, S extends Spec, R = never>(
  * dependency," so a group that shares an implementation states it once:
  *
  * ```ts
- * Resource.provide(ImportHandlers.layer, [
- *   Resource.serve(SeasonMatches,   seasonMatchesImpl),
- *   Resource.serve(LiveScorePoller, pollerImpl),
+ * Hyperlink.provide(ImportHandlers.layer, [
+ *   Hyperlink.serve(SeasonMatches,   seasonMatchesImpl),
+ *   Hyperlink.serve(LiveScorePoller, pollerImpl),
  * ])
  * ```
  *
@@ -3757,37 +3757,37 @@ const INSTANCE_KEY_HEADER = "key";
 
 /**
  * One instance of a factory paired with its implementation — the element of
- * {@link Resource.serveInstances}. Built by {@link Resource.instance}.
+ * {@link Hyperlink.serveInstances}. Built by {@link Hyperlink.instance}.
  *
  * @category models
  * @public
  */
-export interface ResourceInstance<S extends Spec> {
+export interface HyperlinkInstance<S extends Spec> {
   readonly key: string;
   readonly impl: WireServiceOf<S>;
 }
 
 /**
- * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
+ * Pair a factory instance tag with its implementation, for {@link Hyperlink.serveInstances}.
  *
  * **Not** how you serve a single custom resource on a shared node: this returns a
- * {@link ResourceInstance} for the {@link serveInstances} family. To serve a custom `Resource.Tag`
- * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Node.httpServer},
- * then reach it with {@link Resource.client}.
+ * {@link HyperlinkInstance} for the {@link serveInstances} family. To serve a custom `Hyperlink.Tag`
+ * alongside queues/processes, pass its {@link Hyperlink.serve} layer to {@link Node.httpServer},
+ * then reach it with {@link Hyperlink.client}.
  *
  * @category constructors
  * @public
  */
 const instance = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   impl: WireServiceOf<S>,
-): ResourceInstance<S> => ({ key: tag.key, impl });
+): HyperlinkInstance<S> => ({ key: tag.key, impl });
 
 /**
  * The **family server** layer: serve **many instances of one factory** behind a
  * single contract group, dispatching each request to the right instance by the
  * per-call `key` header. Instances share one {@link tagFor} factory (one spec, one
- * RPC group); each is passed once via {@link Resource.instance}.
+ * RPC group); each is passed once via {@link Hyperlink.instance}.
  *
  * Why one variadic call rather than one-layer-per-instance: composing instances as
  * sibling layers would silently keep only the last (Effect's `Context` is a map —
@@ -3795,14 +3795,14 @@ const instance = <Self, S extends Spec>(
  * every instance is wired, and a duplicate key **throws at assembly**.
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Resource.effect(Schema.Void) });
+ * const Queue = Hyperlink.tagFor("queue", { pause: Hyperlink.effect(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *
- * const serveAll = Resource.serveInstances(
+ * const serveAll = Hyperlink.serveInstances(
  *   Queue,
- *   Resource.instance(Jobs, jobsImpl),
- *   Resource.instance(Mail, mailImpl),
+ *   Hyperlink.instance(Jobs, jobsImpl),
+ *   Hyperlink.instance(Mail, mailImpl),
  * );
  * ```
  *
@@ -3816,7 +3816,7 @@ const serveInstances = <S extends Spec>(
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
-  ...instances: ReadonlyArray<ResourceInstance<S>>
+  ...instances: ReadonlyArray<HyperlinkInstance<S>>
 ): Layer.Layer<HandlerContextOf<S>> => {
   const group = factory[groupSym];
   const spec = factory[specSym];
@@ -3890,7 +3890,7 @@ export const specOf = <S extends Spec>(tag: {
 /**
  * Map an RPC client + a spec into the typed service, forwarding each method to its
  * group-prefixed wire tag and pinning the instance key as a header. Shared by
- * {@link Resource.client} (production, over a real `Protocol`) and the in-memory
+ * {@link Hyperlink.client} (production, over a real `Protocol`) and the in-memory
  * round-trip test (client from `RpcTest`).
  *
  * @internal
@@ -3933,7 +3933,7 @@ export const forwardClient = <S extends Spec>(
   return service as unknown as WireServiceOf<S>;
 };
 
-// [extracted to Node module — was Resource.ts:4183-4261]
+// [extracted to Node module — was Hyperlink.ts:4183-4261]
 
 /** The default RPC serialization: newline-delimited JSON — handles both one-shot and
  * **streaming** responses, and is shared by {@link http} + {@link httpServer} so a
@@ -3943,10 +3943,10 @@ export const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization
   RpcSerialization.layerNdjson;
 
 const httpClientInBrowserMessage =
-  "Resource.protocolHttp / http cannot run in a browser: a dashboard opens many concurrent " +
+  "Hyperlink.protocolHttp / http cannot run in a browser: a dashboard opens many concurrent " +
   "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
   "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
-  "Resource.ws / a socket-kind node for the browser. See docs/observe/dashboard.md.";
+  "Hyperlink.ws / a socket-kind node for the browser. See docs/observe/dashboard.md.";
 
 /** The http client transport was built in a browser — it starves at the ~6-connection HTTP/1.1 cap and
  *  ships a blank dashboard. `ws` is the browser transport. A hard failure, not a warning: the
@@ -3976,8 +3976,8 @@ const dieIfIpcInBrowser = Effect.suspend(() =>
     : Effect.die(
         new IpcInBrowser({
           message:
-            "Resource.protocolIpc / unix / nPipe cannot run in a browser: IpcSocket is a Node-only " +
-            "Unix-domain / named-pipe transport. Use Resource.ws (WebSocket) for the browser.",
+            "Hyperlink.protocolIpc / unix / nPipe cannot run in a browser: IpcSocket is a Node-only " +
+            "Unix-domain / named-pipe transport. Use Hyperlink.ws (WebSocket) for the browser.",
         }),
       ),
 );
@@ -3990,7 +3990,7 @@ const dieIfIpcInBrowser = Effect.suspend(() =>
  * ~6-connection cap; use {@link ws} there.
  *
  * ```ts
- * const EdgeLive = Resource.http(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
+ * const EdgeLive = Hyperlink.http(EdgeNode, { url: "http://10.0.0.2:3002/rpc" });
  * ```
  *
  * @category clients
@@ -4025,7 +4025,7 @@ const toWebSocketUrl = (raw: string): string => {
   if (raw.startsWith("https://")) return `wss://${raw.slice(8)}`;
   if (typeof location === "undefined") {
     throw new Error(
-      `Resource.ws: a relative url ("${raw}") resolves against the browser's location; ` +
+      `Hyperlink.ws: a relative url ("${raw}") resolves against the browser's location; ` +
         `pass an absolute ws:// / wss:// url when not in a browser`,
     );
   }
@@ -4035,14 +4035,14 @@ const toWebSocketUrl = (raw: string): string => {
 
 /**
  * The **standard way to set the RPC client transport**: hand it any `RpcClient.Protocol` layer and
- * it becomes the ambient transport that every nodeless {@link Resource.client} — and each node's
+ * it becomes the ambient transport that every nodeless {@link Hyperlink.client} — and each node's
  * {@link peers} fold — reads. This is the primitive; {@link protocolHttp} / {@link protocolWebsocket}
  * build the two common protocols, and {@link ws} / {@link http} are per-node
  * shortcuts layered on top. Provide it once and the whole app agrees on a wire:
  *
  * ```ts
- * Effect.provide(app, Resource.layerProtocol(Resource.protocolWebsocket())); // one knob
- * Effect.provide(app, Resource.layerProtocol(Resource.protocolHttp("http://edge/rpc")));
+ * Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolWebsocket())); // one knob
+ * Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolHttp("http://edge/rpc")));
  * ```
  *
  * @category transports
@@ -4143,8 +4143,8 @@ export const protocolWebsocket = (
  * {@link protocolIpc} layer, so a browser build pulls in only the one wire it passes.
  *
  * ```ts
- * program.pipe(Effect.provide(Resource.connect(Emails, Resource.protocolHttp(3009))));       // server
- * program.pipe(Effect.provide(Resource.connect(Emails, Resource.protocolWebsocket("/rpc")))); // browser (ws only)
+ * program.pipe(Effect.provide(Hyperlink.connect(Emails, Hyperlink.protocolHttp(3009))));       // server
+ * program.pipe(Effect.provide(Hyperlink.connect(Emails, Hyperlink.protocolWebsocket("/rpc")))); // browser (ws only)
  * ```
  *
  * The port shorthand (`3009`) resolves against {@link clientHost} (default `"localhost"`), so the same
@@ -4154,7 +4154,7 @@ export const protocolWebsocket = (
  * @public
  */
 export const connect = <Self, S extends Spec, E = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   protocol: Layer.Layer<RpcClient.Protocol, E>,
 ): Layer.Layer<Self, E> => clientLayer(tag).pipe(Layer.provide(protocol));
 
@@ -4187,7 +4187,7 @@ export const serverProtocolWebsocket = (
  * scope in a file a Node server also imports. Uses the browser's global `WebSocket`.
  *
  * ```ts
- * const EdgeLive = Resource.ws(EdgeNode, { url: "/rpc" }); // same origin as the page
+ * const EdgeLive = Hyperlink.ws(EdgeNode, { url: "/rpc" }); // same origin as the page
  * ```
  *
  * @category clients
@@ -4248,7 +4248,7 @@ bindNodeProtocolBuilders({
   protocolIpc,
 });
 
-// [extracted to Node module — was Resource.ts:4539-4649]
+// [extracted to Node module — was Hyperlink.ts:4539-4649]
 
 /**
  * Per-node ipc shortcut — {@link connect} + {@link protocolIpc} (same-machine Unix socket).
@@ -4275,7 +4275,7 @@ const unix = <Self>(
  *  Same ipc dial as {@link unix} (the `path` is a `\\.\pipe\…` name). @public @category clients */
 const nPipe = unix;
 
-// [extracted to Node module — was Resource.ts:4669-4685]
+// [extracted to Node module — was Hyperlink.ts:4669-4685]
 
 // Reachability probes (transport-native, one bounded connection). Socket: reachable if the ws stays
 // open past a short window (`run` errors fast if it can't connect). Http: reachable if the url answers
@@ -4396,7 +4396,7 @@ const probeEndpointReachable = (
  * classify as {@link ProtocolUnanswered}; optional `resource` checks served-key / readiness;
  * optional `contractHash` compares the F4 wire fingerprint.
  *
- * Dynamic-imports the status tag so Resource ⇄ nodeStatusResource stays acyclic.
+ * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatusResource stays acyclic.
  *
  * @internal
  */
@@ -4520,15 +4520,15 @@ export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
  * `contractHash` → {@link ContractMismatch} (F4).
  *
  * ```ts
- * yield* Resource.verifyConnection(Droplet);                          // tier 1
- * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
- * yield* Resource.verifyConnection(Droplet, { deep: true });          // + NodeStatus RPC
- * yield* Resource.verifyConnection(Droplet, {
+ * yield* Hyperlink.verifyConnection(Droplet);                          // tier 1
+ * yield* Hyperlink.verifyConnection(Droplet, { timeout: "1 second" });
+ * yield* Hyperlink.verifyConnection(Droplet, { deep: true });          // + NodeStatus RPC
+ * yield* Hyperlink.verifyConnection(Droplet, {
  *   deep: true,
  *   resource: Emails.groupId,
- *   contractHash: Resource.contractHash(Emails),
+ *   contractHash: Hyperlink.contractHash(Emails),
  * });
- * yield* Resource.verifyConnection(Droplet, { all: true });           // every endpoint
+ * yield* Hyperlink.verifyConnection(Droplet, { all: true });           // every endpoint
  * ```
  *
  * Complements {@link connect}: `connect` prevents mis-wiring the client transport;
@@ -4649,29 +4649,29 @@ const applyClientVerify = (
  * {@link InvalidHttpTarget} (not a sync throw):
  *
  * ```ts
- * Effect.provide(program, Resource.clientHttp(Emails, 3001));                       // same machine
- * Effect.provide(program, Resource.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
+ * Effect.provide(program, Hyperlink.clientHttp(Emails, 3001));                       // same machine
+ * Effect.provide(program, Hyperlink.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
  * ```
  *
  * @category clients
  * @public
  */
 export function clientHttp<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   target: number | `:${number}` | `http://${string}` | `https://${string}`,
   options?: {
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self>;
 export function clientHttp<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   target: number | string,
   options?: {
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self, InvalidHttpTarget>;
 export function clientHttp<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   target: number | string,
   options?: {
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -4739,11 +4739,11 @@ type AndNodeResult<T, N> = T extends {
  * `client(Tag)` is fully wired. {@link andNode}`(X)` from an empty set is the same bind.
  *
  * ```ts
- * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
- *   Resource.nodes([WorkerA]), // or Resource.andNode(WorkerA)
+ * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(
+ *   Hyperlink.nodes([WorkerA]), // or Hyperlink.andNode(WorkerA)
  * ) {}
- * class Pool extends Resource.Tag<Pool>()("app/Pool", spec).pipe(
- *   Resource.nodes([A, B, C]),
+ * class Pool extends Hyperlink.Tag<Pool>()("app/Pool", spec).pipe(
+ *   Hyperlink.nodes([A, B, C]),
  * ) {}
  * ```
  *
@@ -4763,14 +4763,14 @@ export const nodes: {
   ): (tag: T) => T;
   // data-first
   <Self, S extends Spec, HSelf>(
-    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    tag: HyperlinkTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
     nodeSet: readonly [AddressedNode<HSelf>],
   ): SoleNodeBind<
     NodeBoundTag<Self, S, HSelf>,
     AddressedNode<HSelf>
   >;
   <Self, S extends Spec, HSelf>(
-    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    tag: HyperlinkTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
     nodeSet: readonly [NodeKey<HSelf>],
   ): SoleNodeBind<NodeBoundTag<Self, S, HSelf>, NodeKey<HSelf>>;
   <Self, S extends Spec, HSelf>(
@@ -4778,12 +4778,12 @@ export const nodes: {
     nodeSet: ReadonlyArray<AnyNode>,
   ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
-    tag: ResourceTag<Self, S>,
+    tag: HyperlinkTag<Self, S>,
     nodeSet: ReadonlyArray<AnyNode>,
-  ): ResourceTag<Self, S>;
+  ): HyperlinkTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any, any>>(
+  <T extends HyperlinkTag<any, any, any>>(
     tag: T,
     nodeSet: ReadonlyArray<AnyNode>,
   ): T => {
@@ -4806,10 +4806,10 @@ export const nodes: {
  * Identity Tags refuse a second Node ({@link IdentityMultiNode}).
  *
  * ```ts
- * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(
- *   Resource.andNode(Worker), // ≡ nodes([Worker]) when starting empty
+ * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(
+ *   Hyperlink.andNode(Worker), // ≡ nodes([Worker]) when starting empty
  * ) {}
- * class PoolPlus extends PoolBase.pipe(Resource.andNode(StatsNode)) {}
+ * class PoolPlus extends PoolBase.pipe(Hyperlink.andNode(StatsNode)) {}
  * ```
  *
  * Type narrowing to a sole bind is **only** claimed when the input has no non-empty
@@ -4832,17 +4832,17 @@ export const andNode: {
   <T extends PipeableTag>(node: AnyNode): (tag: T) => T;
   // data-first
   <Self, S extends Spec, HSelf>(
-    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    tag: HyperlinkTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
     node: AddressedNode<HSelf>,
   ): AndNodeResult<
-    ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    HyperlinkTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
     AddressedNode<HSelf>
   >;
   <Self, S extends Spec, HSelf>(
-    tag: ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    tag: HyperlinkTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
     node: NodeKey<HSelf>,
   ): AndNodeResult<
-    ResourceTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
+    HyperlinkTag<Self, S> | NodeBoundTag<Self, S, HSelf>,
     NodeKey<HSelf>
   >;
   <Self, S extends Spec, HSelf>(
@@ -4850,12 +4850,12 @@ export const andNode: {
     node: AnyNode,
   ): NodeBoundTag<Self, S, HSelf>;
   <Self, S extends Spec>(
-    tag: ResourceTag<Self, S>,
+    tag: HyperlinkTag<Self, S>,
     node: AnyNode,
-  ): ResourceTag<Self, S>;
+  ): HyperlinkTag<Self, S>;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any, any>>(tag: T, node: AnyNode): T => {
+  <T extends HyperlinkTag<any, any, any>>(tag: T, node: AnyNode): T => {
     const current = tag[nodesSym] ?? [];
     return nodes(tag, [...current, node]) as T;
   },
@@ -4868,21 +4868,21 @@ export const andNode: {
  * @public
  */
 export const nodesOf = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): ReadonlyArray<AnyNode> => tag[nodesSym] ?? [];
 
 /**
- * Stamp a **discoverable** empty Node set (D3) — `.pipe(Resource.distributed)` ≡
+ * Stamp a **discoverable** empty Node set (D3) — `.pipe(Hyperlink.distributed)` ≡
  * {@link nodes}`([])`. {@link peersLayer} then reads Lookup `Directory.nodesServing`.
  *
  * For a **fixed** fleet list, use {@link nodes}`([A, B])` (not this pipe). Identity-shaped
- * like {@link identity} so `class extends Tag()(…).pipe(Resource.distributed)` type-checks.
+ * like {@link identity} so `class extends Tag()(…).pipe(Hyperlink.distributed)` type-checks.
  *
  * @category nodes & fleet
  * @public
  */
 export const distributed = <T extends PipeableTag>(tag: T): T =>
-  nodes(tag as unknown as ResourceTag<any, any, any>, []) as unknown as T;
+  nodes(tag as unknown as HyperlinkTag<any, any, any>, []) as unknown as T;
 
 /**
  * Alias of {@link nodesOf}.
@@ -4898,16 +4898,16 @@ export const distributedOf = nodesOf;
  * Lookup first — winner runs the local impl; loser becomes a client of the winner's endpoint.
  * Requires {@link LookupIdentity} in the layer graph (fail-closed if Lookup is down).
  *
- * Pipe onto any Resource / Process / Queue tag (same shape as {@link withReadiness}):
+ * Pipe onto any Hyperlink / Process / Queue tag (same shape as {@link withReadiness}):
  *
  * ```ts
- * class Mail extends Resource.Tag<Mail>()("app/Mail", spec).pipe(Resource.identity) {}
+ * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(Hyperlink.identity) {}
  *
  * // bind a Node on the Tag (or listen with ListenNode) — Lookup decides winner/loser:
- * class Mail extends Resource.Tag<Mail>()("app/Mail", spec, { node: ThisNode }).pipe(
- *   Resource.identity,
+ * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec, { node: ThisNode }).pipe(
+ *   Hyperlink.identity,
  * ) {}
- * Resource.serve(Mail, impl).pipe(Layer.provide(Lookup.client(lookupNode)))
+ * Hyperlink.serve(Mail, impl).pipe(Layer.provide(Lookup.client(lookupNode)))
  * ```
  *
  * @category nodes & fleet
@@ -4959,24 +4959,24 @@ export const isIdentity = (tag: unknown): boolean =>
  *
  * ```ts
  * // Sole endpoint (identity winner or one directory row):
- * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
+ * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * // Coordinator published advice — bare client honors prefer:
  * yield* Lookup.advise({ resourceKey: Mail.key, prefer: "fleet/Mail#w2" })
- * Resource.lookupClient(Mail)
+ * Hyperlink.lookupClient(Mail)
  *
  * // N>1 replicas — opt-in pick when no advice (still fail on 0):
- * Resource.lookupClient(Mail, { pick: "first" })
+ * Hyperlink.lookupClient(Mail, { pick: "first" })
  *
  * // You already know an addressed Node — client auto-connects:
- * Resource.client(Mail, East)
+ * Hyperlink.client(Mail, East)
  * ```
  *
  * @category clients
  * @public
  */
 export const lookupClient = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   options?: LookupClientOptions,
 ): Layer.Layer<
   Self,
@@ -5050,14 +5050,14 @@ export type DiscoverClientOptions = LookupClientOptions & {
  * Not Effect “local” vs remote; name is **discover**.
  *
  * ```ts
- * Resource.discoverClient(Jobs, { lookupPath })
+ * Hyperlink.discoverClient(Jobs, { lookupPath })
  * ```
  *
  * @category clients
  * @public
  */
 export const discoverClient = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   options?: DiscoverClientOptions,
 ): Layer.Layer<Self, LookupClientError> => {
   const { lookupPath, unlink, ...clientOptions } = options ?? {};
@@ -5104,8 +5104,8 @@ const isDiscoverTagList = (value: unknown): value is DiscoverTagList =>
  * Options (`lookupPath`, `pick`, …) ride the **array** form; rest uses Lookup defaults.
  *
  * ```ts
- * Resource.discoverClients([Jobs, Emails], { lookupPath })
- * Resource.discoverClients(Jobs, Emails)
+ * Hyperlink.discoverClients([Jobs, Emails], { lookupPath })
+ * Hyperlink.discoverClients(Jobs, Emails)
  * ```
  *
  * @category clients
@@ -5134,7 +5134,7 @@ export function discoverClients(
     : undefined;
   const { lookupPath, unlink, ...clientOptions } = options ?? {};
   const clients = tags.map((tag) =>
-    lookupClient(tag as ResourceTag<any, any>, clientOptions),
+    lookupClient(tag as HyperlinkTag<any, any>, clientOptions),
   );
   return Layer.unwrap(
     Effect.promise(() => import("./Lookup")).pipe(
@@ -5159,7 +5159,7 @@ export function discoverClients(
   ) as Layer.Layer<never, LookupClientError>;
 }
 
-// [extracted to Node module — was Resource.ts:5053-5132]
+// [extracted to Node module — was Hyperlink.ts:5053-5132]
 
 /**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
@@ -5170,7 +5170,7 @@ export function discoverClients(
  * unreachable peer instead of deadlocking at build. @internal
  */
 const buildPeerService = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   rpc: unknown,
 ): PeerServiceOf<S> => {
   const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
@@ -5210,7 +5210,7 @@ const buildPeerService = <Self, S extends Spec>(
  *  requirement; {@link layerPeerProtocol} overrides it per node (e.g. to {@link protocolWebsocket}). */
 type PeerProtocolBuilder = (url: string) => Layer.Layer<RpcClient.Protocol>;
 const peerProtocolRef = Context.Reference<PeerProtocolBuilder>(
-  "@nikscripts/effect-pm/Resource/peerProtocol",
+  "hyperlink-ts/Hyperlink/peerProtocol",
   { defaultValue: (): PeerProtocolBuilder => protocolHttp },
 );
 
@@ -5223,8 +5223,8 @@ const peerProtocolRef = Context.Reference<PeerProtocolBuilder>(
  *
  * ```ts
  * Node.pipe(
- *   Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
- *   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
+ *   Layer.provide(Hyperlink.peersLayer(WorkerPool, ThisNode)),
+ *   Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)),
  * );
  * ```
  *
@@ -5237,7 +5237,7 @@ export const layerPeerProtocol = (
 
 /** Build a lazy peer client from an already-chosen protocol layer. @internal */
 const buildPeerClientWithProtocol = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   protocol: Layer.Layer<RpcClient.Protocol>,
 ): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
   Effect.gen(function* () {
@@ -5256,7 +5256,7 @@ const buildPeerClientWithProtocol = <Self, S extends Spec>(
  *  builder (http by default). Fully lazy — see {@link buildPeerService} (nothing connects until a fold
  *  reads a field). */
 const buildPeerClient = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   url: string,
 ): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
   Effect.gen(function* () {
@@ -5271,7 +5271,7 @@ const buildPeerClient = <Self, S extends Spec>(
  * @internal
  */
 const buildPeerClientAt = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   target: {
     readonly key: string;
     readonly kind?: ProtocolKind;
@@ -5289,7 +5289,7 @@ const buildPeerClientAt = <Self, S extends Spec>(
     return buildPeerClientWithProtocol(tag, protocolIpc(target.path));
   }
   return Effect.die(
-    new Error(`Resource.peersLayer: peer "${target.key}" has no dial target`),
+    new Error(`Hyperlink.peersLayer: peer "${target.key}" has no dial target`),
   );
 };
 
@@ -5313,7 +5313,7 @@ const buildPeerClientAt = <Self, S extends Spec>(
  * @public
  */
 export const peers = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): Effect.Effect<Record<string, PeerServiceOf<S>>, never, PeersId<Self>> => tag[peersSym];
 
 /**
@@ -5323,8 +5323,8 @@ export const peers = <Self, S extends Spec>(
  *
  * ```ts
  * fleetStatus: Effect.gen(function* () {
- *   const self = yield* Resource.selfNode(FleetDatabase); // the node key I am
- *   const peers = yield* Resource.peers(FleetDatabase);
+ *   const self = yield* Hyperlink.selfNode(FleetDatabase); // the node key I am
+ *   const peers = yield* Hyperlink.peers(FleetDatabase);
  *   const byNode = yield* combineQuery(peers, (p) => p.status, combineByNode);
  *   return { ...byNode, [self]: yield* ownStatus }; // key my own row, consistently
  * })
@@ -5334,7 +5334,7 @@ export const peers = <Self, S extends Spec>(
  * @public
  */
 export const selfNode = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): Effect.Effect<string, never, SelfNodeId<Self>> => tag[selfNodeSym];
 
 /**
@@ -5347,7 +5347,7 @@ export const selfNode = <Self, S extends Spec>(
  * @public
  */
 export const selfNodeLayer = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   self: AnyNode,
 ): Layer.Layer<SelfNodeId<Self>> => Layer.succeed(tag[selfNodeSym], self.key);
 
@@ -5360,7 +5360,7 @@ export const selfNodeLayer = <Self, S extends Spec>(
  *
  * **Membership (D3):**
  * - **Fixed** — non-empty `options.nodes` or stamped `nodes([…])` / `distributed([…])`.
- * - **Directory** — stamped **empty** set (bare `.pipe(Resource.distributed)` / `nodes([])`): read
+ * - **Directory** — stamped **empty** set (bare `.pipe(Hyperlink.distributed)` / `nodes([])`): read
  *   Lookup `Directory.nodesServing(tag.key)` at layer build. Soft empty map when Directory is absent.
  * - **Undeclared** — no `nodesSym` and no `options.nodes` → empty static peers (not directory).
  *
@@ -5375,7 +5375,7 @@ export const selfNodeLayer = <Self, S extends Spec>(
  * @public
  */
 export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   self: AnyNode,
   options?: {
     /** The fleet (including `self`) — supply it **at the use site** so a shared resource can be defined
@@ -5492,19 +5492,19 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
  * @public
  */
 export const peersFrom = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   peers: Record<string, PeerServiceOf<S>>,
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**
  * A **fleet fold** of successful peer leaf picks keyed by node (plus {@link selfNode}). Soft on
  * down peers — failures are skipped (partial table). Prefer this for **optional** metric-style
- * aggregates. For **health**, use `@nikscripts/effect-pm/FleetHealth` (`Exit` → Reachable /
+ * aggregates. For **health**, use `hyperlink-ts/FleetHealth` (`Exit` → Reachable /
  * Unreachable) or `MultiNode.combineByNodeExit`.
  *
  * ```ts
  * // metric-style: missing peers omitted
- * inFlightByNode: Resource.fleetHealth(FleetMetrics, (peer) => peer.snapshot.pipe(...), own)
+ * inFlightByNode: Hyperlink.fleetHealth(FleetMetrics, (peer) => peer.snapshot.pipe(...), own)
  * ```
  *
  * Requires the {@link peersLayer} capability (which bundles {@link selfNode}). The only error /
@@ -5514,7 +5514,7 @@ export const peersFrom = <Self, S extends Spec>(
  * @public
  */
 export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   pick: (peer: PeerServiceOf<S>) => Effect.Effect<A, EPick>,
   own: Effect.Effect<A, EOwn, ROwn>,
 ): Effect.Effect<
@@ -5532,12 +5532,12 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
 
 /**
  * Build the client-side service for a tag from a wired RPC client: forward every wire method
- * (group-prefixed, id-pinned), and stub each {@link Resource.local} member with a value that
+ * (group-prefixed, id-pinned), and stub each {@link Hyperlink.local} member with a value that
  * requires the never-granted {@link Local} (so calling one through a client is a
  * compile error, and unreachable at runtime). Shared by both {@link clientLayer} paths.
  */
 const buildClientService = <Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   rpc: unknown,
 ): Effect.Effect<ServiceOf<S, Self>, never, Scope.Scope> =>
   Effect.gen(function* () {
@@ -5595,18 +5595,18 @@ function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec, HSelf>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   node: AddressedNode<HSelf>,
 ): Layer.Layer<Self, ClientVerifyError>;
 function clientLayer<Self, S extends Spec, HSelf>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   node: NodeKey<HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): Layer.Layer<Self, never, RpcClient.Protocol>;
 function clientLayer<Self, S extends Spec>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   node?: NodeKey<unknown>,
 ): Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol> {
   const group = tag[groupSym];
@@ -5690,13 +5690,13 @@ type InstanceIdentifiers<
 
 /**
  * The **client** layer for **many instances of one factory**, sharing a single RPC client —
- * the client mirror of {@link Resource.serveInstances}. Builds **one** `RpcClient` for the
+ * the client mirror of {@link Hyperlink.serveInstances}. Builds **one** `RpcClient` for the
  * family's group and provides every instance's handle from it, each pinned to its own instance-key
  * header. So 100 instances of one control shape cost **one** client (and one shared
  * connection), not one client each — the contract/group/schemas are already shared.
  *
- * Wire-only: instances declaring {@link Resource.local} members aren't accepted (their service
- * type is wider than the wire) — use {@link Resource.client} per instance for those.
+ * Wire-only: instances declaring {@link Hyperlink.local} members aren't accepted (their service
+ * type is wider than the wire) — use {@link Hyperlink.client} per instance for those.
  *
  * @category clients
  * @public
@@ -5750,7 +5750,7 @@ type TaggedEvent = { readonly _tag: string };
 
 /**
  * A partial set of per-`_tag` handlers over a tagged-event union — the handler-map form of
- * {@link Resource.runForEachTag}. Each handler receives the **narrowed** event for its tag.
+ * {@link Hyperlink.runForEachTag}. Each handler receives the **narrowed** event for its tag.
  *
  * @category models
  * @public
@@ -5786,11 +5786,11 @@ type HandlersContext<Cases> = {
  * Built on `Match`, so handlers are fully typed with no casts; unhandled tags are ignored.
  *
  * ```ts
- * yield* jobs.events.pipe(Resource.runForEachTag({
+ * yield* jobs.events.pipe(Hyperlink.runForEachTag({
  *   Failed:  ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
  *   Drained: ({ completed })    => Effect.log(`drained @ ${completed}`),
  * }))
- * yield* Resource.runForEachTag(jobs.events, "Failed", (e) =>
+ * yield* Hyperlink.runForEachTag(jobs.events, "Failed", (e) =>
  *   Effect.failCause(e.cause).pipe(Effect.catchTags({ Timeout: …, Rejected: … })),
  * )
  * ```
@@ -5862,7 +5862,7 @@ export const runForEachTag: {
  *
  * ```ts
  * // no manual `Effect.forkScoped` — observation runs in the background, bound to the scope
- * yield* queue.events.pipe(Resource.runForEachTagScoped({
+ * yield* queue.events.pipe(Hyperlink.runForEachTagScoped({
  *   Completed: ({ entry }) => Effect.log(`done ${entry.entryId}`),
  *   Failed:    ({ cause }) => Effect.logError("job failed", cause),
  * }))
@@ -5919,16 +5919,16 @@ export const runForEachTagScoped: {
 );
 
 /**
- * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
- * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
- * remotely, {@link Resource.serve} / {@link Resource.serveRemote} expose an impl over RPC.
+ * Hyperlink toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
+ * layer changes: {@link Hyperlink.layer} runs it locally, {@link Hyperlink.client} drives it
+ * remotely, {@link Hyperlink.serve} / {@link Hyperlink.serveRemote} expose an impl over RPC.
  *
  * @public
  */
 export {
   makeTag as Tag,
   tagFor,
-  // Node module: import * as Node from "@nikscripts/effect-pm/Node"
+  // Node module: import * as Node from "hyperlink-ts/Node"
   http,
   ws,
   unix,
@@ -5941,6 +5941,6 @@ export {
 };
 // `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
 // exported above under their public names. The whole surface is now a tree-shakeable module
-// namespace: **`import * as Resource from "@nikscripts/effect-pm/Resource"`** — `Resource.Tag`
-// pulls only what's used. Transport nodes: `import * as Node from "@nikscripts/effect-pm/Node"`.
+// namespace: **`import * as Hyperlink from "hyperlink-ts/Hyperlink"`** — `Hyperlink.Tag`
+// pulls only what's used. Transport nodes: `import * as Node from "hyperlink-ts/Node"`.
 

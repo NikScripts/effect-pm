@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Durable log store tails:** toolkit `Process.store` / `QueueResource.store` / `RunResource.store` / `CustomQueueResource.store` and `Resource.store(Node)` / `Node.logs` include an implicit `log` shape (`LogEntry`). `Store.Service` `layerMemory` / `layer` bake in `Logs.layer` (relay + capture) and fork per-registration Stream followers (match + store log level + `(scopeKey, lineId)` memo → `handle.log.append`).

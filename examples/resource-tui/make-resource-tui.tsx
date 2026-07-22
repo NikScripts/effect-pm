@@ -3,7 +3,7 @@
  *
  * `makeResourceTui(record, runtime)` — build a terminal dashboard from the **same**
  * `Record<string, tag>` that `makeResourceCli` turns into a CLI. It's the TUI
- * projection of a set of `Resource` specs: each entry becomes a **widget**, and
+ * projection of a set of `Hyperlink` specs: each entry becomes a **widget**, and
  * each widget falls out of the contract via `methodMeta` —
  *
  * - **query, no payload** → a live read field (name: value), refreshed on actions;
@@ -19,7 +19,7 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { methodMeta, specOf, isVoidCommand } from "../../src/Resource";
+import { methodMeta, specOf, isVoidCommand } from "../../src/Hyperlink";
 import {
   RegistryProvider,
   useAtomSet,

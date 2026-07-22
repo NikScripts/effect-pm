@@ -283,7 +283,7 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
 
       // the hover type with exact link ranges. PREFER the parsed type ANNOTATION when the hovered
       // symbol's declaration has one: parsed nodes ALWAYS resolve (the builder sometimes
-      // synthesizes references without symbols — `Resource.Subscribable<QueueStatus>` came out
+      // synthesizes references without symbols — `Hyperlink.Subscribable<QueueStatus>` came out
       // link-less), and the text is exactly what the author wrote. Inferred types fall back to
       // the checker print (with the TypePrinter's home retry).
       const type = checker.getTypeAtLocation(node);
@@ -376,7 +376,7 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
           member.getName() !== "prototype";
         const visible = type.getProperties().filter(isVisible);
 
-        // A SERVICE (Context.Service / Resource.Tag convention): the type carries `key` +
+        // A SERVICE (Context.Service / Hyperlink.Tag convention): the type carries `key` +
         // `Service`. Identify it and spell the service SHAPE out one member per line — the key
         // first, so the preview reads `class Random { key: 'app/Random'; Service: { … } }`.
         const serviceMember = visible.find((member) => member.getName() === "Service");

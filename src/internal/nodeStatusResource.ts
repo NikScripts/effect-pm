@@ -4,11 +4,11 @@
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
  * "are you up, how long, how many resources, and what are your logs?" without the node author
- * wiring anything. It's a nodeless {@link Resource.Tag} (one reserved group id); a client reaches
+ * wiring anything. It's a nodeless {@link Hyperlink.Tag} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url (see {@link NodeStatus}).
  *
- * Kept internal (not the public face) so {@link Resource} can dynamically import it from
- * `httpServer` without a static import cycle (`Resource` ⇄ this); `src/NodeStatus.ts` is the
+ * Kept internal (not the public face) so {@link Hyperlink} can dynamically import it from
+ * `httpServer` without a static import cycle (`Hyperlink` ⇄ this); `src/NodeStatus.ts` is the
  * public re-export.
  */
 import {
@@ -20,7 +20,7 @@ import {
   Schema,
   Stream,
 } from "effect";
-import * as Resource from "../Resource";
+import * as Hyperlink from "../Hyperlink";
 import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
@@ -33,7 +33,7 @@ const HOST_STATUS_KEY = "@pm/node-status";
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
- * One served resource's readiness, as the node reports it — its wire key, {@link Resource.kindOf}
+ * One served resource's readiness, as the node reports it — its wire key, {@link Hyperlink.kindOf}
  * kind, optional F4 {@link contractHash}, whether it's ready, and (when not) why. The element of
  * {@link nodeStatus}'s `resources`.
  *
@@ -76,34 +76,34 @@ export type NodeStatus = typeof nodeStatus.Type;
  *
  * @internal
  */
-export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
+export class NodeStatusResource extends Hyperlink.Tag<NodeStatusResource>()(
   HOST_STATUS_KEY,
   {
-  status: Resource.ref(nodeStatus).annotate({
+  status: Hyperlink.ref(nodeStatus).annotate({
     description:
       "Live node status (up / uptime / resource count / per-resource readiness) — " +
       "`status.get` for one-shot, `status.changes` re-emitted periodically.",
   }),
-  ping: Resource.effect(Schema.Number).annotate({
+  ping: Hyperlink.effect(Schema.Number).annotate({
     description: "Server epoch milliseconds — a round-trip liveness probe.",
   }),
   /**
    * Cooperative handoff ask (Lookup `askIncumbent`) — `true` = step aside so a
    * newcomer may take this `nodeKey`. Not Effect `yield*`; wire RPC only.
    */
-  yield: Resource.effect(Schema.Boolean).annotate({
+  yield: Hyperlink.effect(Schema.Boolean).annotate({
     description:
       "Cooperative handoff: true = accept yield (Lookup may replace the directory row). " +
       "Refuse with false. Distinct from Effect generator yield*.",
   }),
   logs: {
-    stream: Resource.stream(LogEntrySchema).annotate({
+    stream: Hyperlink.stream(LogEntrySchema).annotate({
       description:
         "Runtime-wide node log stream (recent tail, then live). Empty unless Logs.layer is provided.",
     }),
-    query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
+    query: Hyperlink.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
-        "Replay persisted node logs (newest `limit`) from `Resource.store(Node)` / `Node.logs` " +
+        "Replay persisted node logs (newest `limit`) from `Hyperlink.store(Node)` / `Node.logs` " +
         "registration Storage. Empty when the node journal is not registered (or `nodeLogKey` unknown).",
     }),
   },
@@ -143,7 +143,7 @@ export const buildNodeStatusImpl = (options: {
       resources,
     };
   });
-  const statusSub: Resource.Subscribable<NodeStatus> = {
+  const statusSub: Hyperlink.Subscribable<NodeStatus> = {
     get: computeStatus,
     changes: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => computeStatus)),
   };

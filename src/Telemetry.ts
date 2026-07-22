@@ -1,5 +1,5 @@
 /**
- * Telemetry — serve a node's whole Effect `Metric` registry as a Resource, for **custom** in-app use
+ * Telemetry — serve a node's whole Effect `Metric` registry as a Hyperlink, for **custom** in-app use
  * (dashboards, TUIs, fleet pages, a `pm metrics` command). The thin counterpart to OTEL export: same
  * source (the per-node `Metric` registry), different sink. OTEL is the professional path — wire
  * `@effect/opentelemetry` and point OTLP at Sentry / Grafana / anything; Telemetry is for building
@@ -8,9 +8,9 @@
  * ## Fleet glass
  *
  * Leaf fields (`snapshot` / `live`) read **this** node's registry. Fleet fields
- * (`inFlightByNode` / `fleetInFlight`) fold peers' leaf snapshots via {@link Resource.peers} —
+ * (`inFlightByNode` / `fleetInFlight`) fold peers' leaf snapshots via {@link Hyperlink.peers} —
  * so a meshed pack gets one glass for the stadium board. Discharge the mesh with
- * {@link Resource.peersLayer} (or {@link alone} for a single node with no peers).
+ * {@link Hyperlink.peersLayer} (or {@link alone} for a single node with no peers).
  *
  * See `docs/guides/telemetry.md`.
  *
@@ -28,7 +28,7 @@ import {
   Stream,
 } from "effect";
 import { combineByNode, combineQuery, combineSum } from "./MultiNode";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import {
   Tag as resourceTag,
   layer as resourceLayer,
@@ -39,9 +39,9 @@ import {
   stream,
   type NodeBoundTag,
   type PeersId,
-  type ResourceTag,
+  type HyperlinkTag,
   type SelfNodeId,
-} from "./Resource";
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 import * as Node from "./Node";
 
@@ -246,12 +246,12 @@ const telemetrySpec = {
 export type TelemetrySpec = typeof telemetrySpec;
 
 /**
- * This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`).
+ * This contract's canonical kind (stamped on every tag; read via `Hyperlink.kindOf`).
  *
  * @category utils
  * @public
  */
-export const kind = "@nikscripts/effect-pm/Telemetry";
+export const kind = "hyperlink-ts/Telemetry";
 
 /**
  * A Telemetry instance tag.
@@ -259,7 +259,7 @@ export const kind = "@nikscripts/effect-pm/Telemetry";
  * @category models
  * @public
  */
-export type TelemetryTag<Self> = ResourceTag<Self, TelemetrySpec>;
+export type TelemetryTag<Self> = HyperlinkTag<Self, TelemetrySpec>;
 
 /**
  * A node-bound {@link TelemetryTag} — served + reached on that node.
@@ -286,7 +286,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
 
 /**
  * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}` (nodeless
- * — the dashboard reaches each node via `Resource.client(FleetTelemetry, node)`), or
+ * — the dashboard reaches each node via `Hyperlink.client(FleetTelemetry, node)`), or
  * `…Tag<FleetTelemetry>()({ node: MiniNode })` to bind + serve it on a specific node.
  *
  * @category constructors
@@ -343,7 +343,7 @@ const liveBufferSize = 8;
  * @internal
  */
 class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>()(
-  "@nikscripts/effect-pm/Telemetry/alone",
+  "hyperlink-ts/Telemetry/alone",
 ) {}
 
 /**
@@ -354,7 +354,7 @@ class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>()(
  * Telemetry.layer(FleetTelemetry).pipe(Layer.provide(Telemetry.alone(FleetTelemetry)))
  * ```
  *
- * For a fleet, provide {@link Resource.peersLayer} instead (bundled selfNode + peers).
+ * For a fleet, provide {@link Hyperlink.peersLayer} instead (bundled selfNode + peers).
  *
  * @category layers & serving
  * @public
@@ -363,8 +363,8 @@ export const alone = <Self>(
   tag: TelemetryTag<Self>,
 ): Layer.Layer<PeersId<Self> | SelfNodeId<Self>> =>
   Layer.merge(
-    Resource.peersFrom(tag, {}),
-    Resource.selfNodeLayer(tag, TelemetryAloneNode),
+    Hyperlink.peersFrom(tag, {}),
+    Hyperlink.selfNodeLayer(tag, TelemetryAloneNode),
   );
 
 /** The sampling fiber body: publish {@link snapshotNow} every `interval`, forever. @internal */
@@ -381,7 +381,7 @@ const sampleLoop = (
 
 /**
  * The served impl: leaf `snapshot`/`live` plus fleet folds over peers' leaf snapshots.
- * Resolves {@link Resource.peers} / {@link Resource.selfNode} once; members close over them.
+ * Resolves {@link Hyperlink.peers} / {@link Hyperlink.selfNode} once; members close over them.
  *
  * @internal
  */
@@ -401,8 +401,8 @@ const buildImpl = <Self>(
   Effect.gen(function* () {
     const hub = yield* PubSub.sliding<MetricsSnapshot>(liveBufferSize);
     yield* Effect.forkScoped(sampleLoop(hub, options?.interval ?? defaultInterval));
-    const peers = yield* Resource.peers(tag);
-    const self = yield* Resource.selfNode(tag);
+    const peers = yield* Hyperlink.peers(tag);
+    const self = yield* Hyperlink.selfNode(tag);
     const ownInFlight = snapshotNow.pipe(Effect.map(inFlightOf));
     return {
       snapshot: snapshotNow,
@@ -429,7 +429,7 @@ const buildImpl = <Self>(
 
 /**
  * Local layer for a Telemetry tag — forks one sampling fiber and wires leaf + fleet fields.
- * Requires the mesh capability ({@link alone} or {@link Resource.peersLayer}).
+ * Requires the mesh capability ({@link alone} or {@link Hyperlink.peersLayer}).
  *
  * @category layers & serving
  * @public
@@ -438,7 +438,7 @@ export const layer = <Self>(
   tag: TelemetryTag<Self>,
   options?: TelemetryOptions,
 ): Layer.Layer<
-  Self | Resource.Local<Self>,
+  Self | Hyperlink.Local<Self>,
   never,
   PeersId<Self> | SelfNodeId<Self>
 > =>
@@ -449,8 +449,8 @@ export const layer = <Self>(
 
 /**
  * Serve this Telemetry resource **remotely (served-only)** — the counterpart to
- * {@link Resource.serveRemote}. Mounts leaf + fleet RPC handlers **without** granting the local
- * instance. Requires the mesh capability ({@link alone} or {@link Resource.peersLayer}).
+ * {@link Hyperlink.serveRemote}. Mounts leaf + fleet RPC handlers **without** granting the local
+ * instance. Requires the mesh capability ({@link alone} or {@link Hyperlink.peersLayer}).
  *
  * @category layers & serving
  * @public
@@ -466,13 +466,13 @@ export const serveRemote = <Self>(
 
 /**
  * Serve this Telemetry resource **and** grant its local instance from **one** materialization —
- * counterpart to {@link Resource.serve}. Forks one sampling fiber, mounts leaf + fleet handlers,
+ * counterpart to {@link Hyperlink.serve}. Forks one sampling fiber, mounts leaf + fleet handlers,
  * and grants `Self | Local<Self>`. Requires the mesh capability ({@link alone} or
- * {@link Resource.peersLayer}):
+ * {@link Hyperlink.peersLayer}):
  *
  * ```ts
  * Telemetry.serve(FleetMetrics).pipe(
- *   Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)),
+ *   Layer.provide(Hyperlink.peersLayer(FleetMetrics, DropletEast)),
  * )
  * ```
  *

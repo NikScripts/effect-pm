@@ -44,7 +44,7 @@ value against a type *without widening it*, so a mismatch is a compile error and
 survive. `satisfies` is therefore allowed — but only against a **named** type, never an inline shape:
 a `satisfies { … }` on an anonymous type means the contract has no home (*A config carries a named
 type in its namespace*). For a shape that is shared or reused, reach for its constructor —
-`Resource.contract` / `Store.contract` are `<const S extends Spec>(s: S) => S`, so the spec is
+`Hyperlink.contract` / `Store.contract` are `<const S extends Spec>(s: S) => S`, so the spec is
 checked, kept narrow, and shareable in one move.
 
 ``` ts
@@ -190,7 +190,7 @@ is.
 ## Canonical ids are slash-scoped
 
 A service or contract id is a slash-separated, package-scoped string with PascalCase segments:
-`@nikscripts/effect-pm/QueueResource`, `@nikscripts/effect-pm/ApiMetrics/clientId`. (CLI and remote
+`hyperlink-ts/QueueResource`, `hyperlink-ts/ApiMetrics/clientId`. (CLI and remote
 surfaces additionally accept normalized kebab suffix aliases; an ambiguous suffix errors with the
 candidate list.)
 
@@ -314,7 +314,7 @@ the class names itself as its own type.
 // core service — Context.Service<Self, Shape>, the Shape usually its own interface
 export interface DurableQueueStoreShape { /* … */ }
 class DurableQueueStore extends Context.Service<DurableQueueStore, DurableQueueStoreShape>()(
-  "@nikscripts/effect-pm/DurableQueueStore",
+  "hyperlink-ts/DurableQueueStore",
 ) {}
 
 // resource tag — X.Tag

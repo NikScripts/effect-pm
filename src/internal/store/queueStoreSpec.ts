@@ -13,8 +13,8 @@
  */
 
 import { DateTime, Duration, Effect, Option, pipe, Schema, Stream } from "effect";
-import type { ResourceTag, Spec, SpecOf } from "../../Resource";
-import { specSym } from "../../Resource";
+import type { HyperlinkTag, Spec, SpecOf } from "../../Hyperlink";
+import { specSym } from "../../Hyperlink";
 import { buildQueueEvent, queueEntry, queueSpec } from "../../QueueResource";
 import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../QueueResource";
 import { successOf, errorOf } from "../queueTagSchemas";
@@ -49,7 +49,7 @@ type QueueInstanceSpec<
 > = ReturnType<typeof queueSpec<F, Success, Error>>;
 
 /** Nested spec recovered from a queue tag class. @internal */
-type QueueSpecFromTag<Tag extends QueueStoreTag> = SpecOf<Tag & ResourceTag<unknown, Spec>>;
+type QueueSpecFromTag<Tag extends QueueStoreTag> = SpecOf<Tag & HyperlinkTag<unknown, Spec>>;
 
 /** Struct fields of the queue item from a tag — matched independently of the tag's `success`/`error`
  *  wire slots (a threaded `QueueInstanceSpec<F, Success, Error>` still yields `F`). @internal */

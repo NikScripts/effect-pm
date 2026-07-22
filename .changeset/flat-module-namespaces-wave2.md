@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Flat module namespaces for the remaining Tag/service modules (breaking).** Continues the object-literal →
@@ -22,5 +22,5 @@ to the namespace since beta.9).
 **Migration.** Direct subpath **value** imports of the converted namespace objects change form:
 `import { NodeLogs } from ".../NodeLogs"` → `import * as NodeLogs from ".../NodeLogs"` (and likewise
 `ProcessStorage`, `RunResource`, `HttpApiResource`, `HttpClientRunGate`, `ResourceConfigure`, `Logs`, `Query`,
-`LogContext`, `LogEntry`). The barrel forms (`import { NodeLogs } from "@nikscripts/effect-pm"`, …) are
+`LogContext`, `LogEntry`). The barrel forms (`import { NodeLogs } from "hyperlink-ts"`, …) are
 unchanged.

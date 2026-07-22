@@ -11,7 +11,7 @@
 
 import { Effect, Layer } from "effect";
 import * as FleetHealth from "../../../src/FleetHealth";
-import * as Resource from "../../../src/Resource";
+import * as Hyperlink from "../../../src/Hyperlink";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
 
@@ -20,14 +20,14 @@ class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.nodes([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 
 const peerOk = {
   local: Effect.succeed(
     FleetHealth.LocalHealth.make({
       status: "ok",
-      resources: [{ key: "app/Jobs", kind: "@nikscripts/effect-pm/QueueResource", ready: true }],
+      resources: [{ key: "app/Jobs", kind: "hyperlink-ts/QueueResource", ready: true }],
     }),
   ),
 };
@@ -39,16 +39,16 @@ const peerDown = {
 
 const eastLayer = FleetHealth.layer(MeshHealth, {
   readiness: Effect.succeed([
-    { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
+    { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
   ]),
 }).pipe(
   Layer.provide(
-    Resource.peersFrom(MeshHealth, {
+    Hyperlink.peersFrom(MeshHealth, {
       [DropletWest.key]: peerOk,
       [DropletCentral.key]: peerDown,
     }),
   ),
-  Layer.provide(Resource.selfNodeLayer(MeshHealth, DropletEast)),
+  Layer.provide(Hyperlink.selfNodeLayer(MeshHealth, DropletEast)),
 );
 
 /** Format one `byNode` row — exhausts `NodeReport` (`Reachable` | `Unreachable`). */

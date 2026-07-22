@@ -7,7 +7,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 class LiveQueue extends QueueResource.Tag<LiveQueue>()("qr-handle-ref/live", { payload: Item }) {}
 
 /** Mirrors `src/web/data.ts` — widgets subscribe via `q.status.changes`. */
-it("Resource.layer handle: status.changes emits live counts on enqueue", () =>
+it("Hyperlink.layer handle: status.changes emits live counts on enqueue", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const collected = yield* Effect.forkChild(

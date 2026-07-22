@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 `@nikscripts/effect-pm/web` reactive binding fixes so panels aren't blank until you interact:

@@ -3,7 +3,7 @@
  *
  * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over a
  * **WebSocket** (`wsServer(...)`) on one port, plus the `NodeStatus` that the
- * server auto-mounts. The browser dashboard reaches it via `Resource.ws(WnbaNode, …)`
+ * server auto-mounts. The browser dashboard reaches it via `Hyperlink.ws(WnbaNode, …)`
  * (vite proxies `/rpc` here with `ws: true`) — one multiplexed connection carries every resource's
  * status/metrics/logs streams, which HTTP/1.1's ~6-connection cap would otherwise starve. Run:
  * `pnpm run example:resource-web-server` (alongside `pnpm run example:resource-web`).
@@ -14,7 +14,7 @@ import { Clock, Console, DateTime, Duration, Effect, Layer, Random, Stream } fro
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import { serve as queueEntry } from "../../src/QueueResource";
 import * as CustomQueueResource from "../../src/CustomQueueResource";
 import * as FleetHealth from "../../src/FleetHealth";
@@ -42,8 +42,8 @@ const STATS_PORT = HOST_PORTS.stats;
 // is meaningful; the impl's `peers` requirement is discharged by `peersLayer` at each serve.
 const workerPoolImpl = (own: number) =>
   Effect.gen(function* () {
-    const peers = yield* Resource.peers(WorkerPool);
-    const self = yield* Resource.selfNode(WorkerPool); // which node am I — no hand-threaded key
+    const peers = yield* Hyperlink.peers(WorkerPool);
+    const self = yield* Hyperlink.selfNode(WorkerPool); // which node am I — no hand-threaded key
     return {
       active: Effect.succeed(own),
       fleetActive: combineQuery(peers, (p) => p.active, combineSum).pipe(
@@ -270,34 +270,34 @@ const wnbaNode = Node.wsServer([
     effect: importWorker,
     concurrency: 3,
   }),
-  // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Resource.serve`
+  // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Hyperlink.serve`
   // (spec-checked against the tag) — a real app would use `ApiMetrics.serve(ScoresApi)`, fed from
   // the instrumented client's registry.
-  Resource.serve(ScoresApi, scoresApiMock),
+  Hyperlink.serve(ScoresApi, scoresApiMock),
   // Serve the scores DB from its own provided service (below) — the same instance the box-score
   // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent. The
   // Effect-form `serve` spec-checks the impl and surfaces its `ScoresDb` requirement (provided
   // below) instead of a bare `{ tag, impl }` literal that would erase it.
-  Resource.serve(ScoresDb, ScoresDb),
+  Hyperlink.serve(ScoresDb, ScoresDb),
   // the multi-node WorkerPool, served here + on the other two nodes; `peersLayer` (below) lets this
   // instance reach the others so `fleetActive` gathers across the fleet.
-  Resource.serve(WorkerPool, workerPoolImpl(5)),
+  Hyperlink.serve(WorkerPool, workerPoolImpl(5)),
   FleetHealth.serve(MeshHealth),
   Telemetry.serve(FleetMetrics),
   // the sessions shard-map, served on all three nodes; `peersLayer` lets each instance reach the
   // others so `size` / `sizeByNode` fold across the fleet and routed `put` reaches the owning shard.
   ShardMap.serve(Sessions),
 ]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, WnbaNode)),
-  Layer.provide(Resource.peersLayer(MeshHealth, WnbaNode)),
-  Layer.provide(Resource.peersLayer(FleetMetrics, WnbaNode)),
-  Layer.provide(Resource.peersLayer(Sessions, WnbaNode)),
+  Layer.provide(Hyperlink.peersLayer(WorkerPool, WnbaNode)),
+  Layer.provide(Hyperlink.peersLayer(MeshHealth, WnbaNode)),
+  Layer.provide(Hyperlink.peersLayer(FleetMetrics, WnbaNode)),
+  Layer.provide(Hyperlink.peersLayer(Sessions, WnbaNode)),
   // peers dial websocket too — one knob, matching the server's own wire (default would be http → 404
   // against a ws-only /rpc). The peer urls stay on the Nodes; this only chooses how to reach them.
-  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
+  Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
-  Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
+  Layer.provide(Hyperlink.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(WnbaStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
@@ -308,7 +308,7 @@ const liveNode = Node.wsServer([
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
   }),
-  Resource.serve(WorkerPool, workerPoolImpl(3)),
+  Hyperlink.serve(WorkerPool, workerPoolImpl(3)),
   FleetHealth.serve(MeshHealth),
   Telemetry.serve(FleetMetrics),
   ShardMap.serve(Sessions),
@@ -327,11 +327,11 @@ const liveNode = Node.wsServer([
       }),
   }),
 ]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, LiveNode)),
-  Layer.provide(Resource.peersLayer(MeshHealth, LiveNode)),
-  Layer.provide(Resource.peersLayer(FleetMetrics, LiveNode)),
-  Layer.provide(Resource.peersLayer(Sessions, LiveNode)),
-  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
+  Layer.provide(Hyperlink.peersLayer(WorkerPool, LiveNode)),
+  Layer.provide(Hyperlink.peersLayer(MeshHealth, LiveNode)),
+  Layer.provide(Hyperlink.peersLayer(FleetMetrics, LiveNode)),
+  Layer.provide(Hyperlink.peersLayer(Sessions, LiveNode)),
+  Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(LiveStore.layerMemory),
   Layer.provideMerge(logStorageDemo),
@@ -352,16 +352,16 @@ const statsNode = Node.wsServer([
     effect: importWorker,
     autoStart: true,
   }),
-  Resource.serve(WorkerPool, workerPoolImpl(4)),
+  Hyperlink.serve(WorkerPool, workerPoolImpl(4)),
   FleetHealth.serve(MeshHealth),
   Telemetry.serve(FleetMetrics),
   ShardMap.serve(Sessions),
 ]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, StatsNode)),
-  Layer.provide(Resource.peersLayer(MeshHealth, StatsNode)),
-  Layer.provide(Resource.peersLayer(FleetMetrics, StatsNode)),
-  Layer.provide(Resource.peersLayer(Sessions, StatsNode)),
-  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)),
+  Layer.provide(Hyperlink.peersLayer(WorkerPool, StatsNode)),
+  Layer.provide(Hyperlink.peersLayer(MeshHealth, StatsNode)),
+  Layer.provide(Hyperlink.peersLayer(FleetMetrics, StatsNode)),
+  Layer.provide(Hyperlink.peersLayer(Sessions, StatsNode)),
+  Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(StatsStore.layerMemory),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),

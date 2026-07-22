@@ -5,7 +5,7 @@ import { QueueResource } from "../src";
 // A refill loader that needs its OWN service dependency (like wow's Prisma repo) — distinct from
 // the worker, which needs nothing. Probes whether the refill's R is surfaced + provided.
 class Source extends Context.Service<Source, { readonly load: () => Effect.Effect<ReadonlyArray<number>> }>()(
-  "@nikscripts/effect-pm/test/queue-refill-deps.test/Source",
+  "hyperlink-ts/test/queue-refill-deps.test/Source",
 ) {}
 const SourceLive = Layer.succeed(Source, Source.of({ load: () => Effect.succeed([1, 2, 3]) }));
 

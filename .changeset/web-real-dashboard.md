@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 `@nikscripts/effect-pm/web` now **ships the real dashboard** — the hand-crafted, per-type UI that was previously trapped in the example, not the old generic introspection view.

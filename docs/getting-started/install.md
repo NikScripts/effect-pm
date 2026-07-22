@@ -1,7 +1,7 @@
 {#install title="Installation" status="draft" done="api previews types" appliesTo=all}
 # Installation
 
-effect-pm is published as **`@nikscripts/effect-pm`**. It builds on Effect, so you bring your own
+hyperlink-ts is published as **`hyperlink-ts`**. It builds on Effect, so you bring your own
 `effect` version as a peer dependency — the toolkit pins a range, you pick the exact release.
 
 {.note}
@@ -16,7 +16,7 @@ can still change between betas — nothing is frozen until 1.0 (there's no `@sin
 ## Install
 
 ``` install
-@nikscripts/effect-pm effect
+hyperlink-ts effect
 ```
 
 That's the core — queues, processes, resources, and serving them over RPC.
@@ -48,17 +48,17 @@ react react-dom recharts @tanstack/react-table
 
 ## The package surface
 
-Each area is a tree-shakeable subpath under `@nikscripts/effect-pm/*` — import only what you use:
+Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only what you use:
 
-- **`/Resource`** — build your own resource
+- **`/Hyperlink`** — build your own resource
 - **`/QueueResource`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
 - **`/Store`** — durable storage
 - **`/web`**, **`/tui`**, **`/cli`** — dashboards
-- **`@nikscripts/effect-pm`** — the barrel: everything under short names
+- **`hyperlink-ts`** — the barrel: everything under short names
 
 ## TypeScript
 
-effect-pm ships ESM with bundled types. Your `tsconfig.json` needs modern module resolution and strict
+hyperlink-ts ships ESM with bundled types. Your `tsconfig.json` needs modern module resolution and strict
 mode — the same settings Effect itself wants:
 
 ``` json
@@ -100,7 +100,7 @@ and install the package:
 The language service is more than nicer hovers — it enforces a **ruleset**. It's worth knowing there
 are several, because the right rules for Effect-domain code are not the right rules for a browser UI.
 
-**What effect-pm's own source enforces.** We run every diagnostic at `error` (a few deliberate
+**What hyperlink-ts's own source enforces.** We run every diagnostic at `error` (a few deliberate
 exceptions: `anyUnknownInErrorContext`, `missingLayerContext`, `serviceNotAsClass` are off;
 `effectDoNotation` is a warning). So our source is held to Effect's idioms — no raw `Date` / `console` /
 `setTimeout` / `fetch` / `Math.random` / `process.env` reached for outside Effect, `Schema` over
@@ -137,9 +137,9 @@ have a **browser/React layer**, give it its own `tsconfig` that turns the browse
 the React ESLint plugins.
 
 **Prettify TS** — the editor extension `mylesmurphy.prettify-ts`, so type hovers expand into readable
-shapes instead of a collapsed `…`. Nearly every type in effect-pm reads better through it.
+shapes instead of a collapsed `…`. Nearly every type in hyperlink-ts reads better through it.
 
 ## Next
 
 Head to **[Core Concepts](/docs/core-concepts)** for the mental model, or jump straight into
-**[Creating a Resource](/docs/creating-a-resource)**.
+**[Creating a Hyperlink](/docs/creating-a-resource)**.

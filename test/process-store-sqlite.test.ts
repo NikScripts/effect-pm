@@ -45,7 +45,7 @@ describe("Process.layer — durable SQLite store", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-process-engine-sqlite-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-process-engine-sqlite-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -80,7 +80,7 @@ describe("Process.layer — durable SQLite store", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-process-store-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-process-store-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
@@ -121,7 +121,7 @@ describe("Process.layer — durable SQLite store", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = path.join(tmpdir(), `effect-pm-process-typed-fail-${randomUUID()}`);
+      const baseDir = path.join(tmpdir(), `hyperlink-ts-process-typed-fail-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
         fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),

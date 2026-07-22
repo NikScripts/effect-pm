@@ -32,7 +32,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
-| **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
+| **Hyperlink gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
 | **Node module** | (1) `node-tag-addressed` → (2) `node-tag-bound` → (3) `node-clients` → (4) addressless → (5) nameless unix → (6) `node-prototype` → (7) `node-lookup` → (8) nameless `http`/`ws` siblings → identity coordinator (`node-identity-coordinator`). Keep protocol listens in sync — [§ Protocol listen siblings](../docs/handoffs/node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync). |
 | **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → [`process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) |
@@ -48,7 +48,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) | `QueueResource.Service`, priority, dedup key, handler retry |
 | [`forms/queue/custom-queue-resource-n-level.ts`](./forms/queue/custom-queue-resource-n-level.ts) | `CustomQueueResource.Tag`, named lanes, `add(item, level?)`, weighted take |
 
-### Resource
+### Hyperlink
 
 | File | Teaches |
 |------|---------|
@@ -64,7 +64,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-http-nameless-serve.ts`](./forms/resource/node-http-nameless-serve.ts) | **(8a)** Nameless `Node.http(serve)` — Lookup **piped** |
 | [`forms/resource/node-ws-nameless-serve.ts`](./forms/resource/node-ws-nameless-serve.ts) | **(8b)** Nameless `Node.ws(serve)` — Lookup **piped** |
 | — | `Node.nPipe` — Windows named-pipe sibling of `unix` (same `IpcSocket` kind; see `test/node-npipe.test.ts`) |
-| [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Resource.client(Jobs)` |
+| [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Hyperlink.client(Jobs)` |
 | [`forms/resource/node-clients.ts`](./forms/resource/node-clients.ts) | Catalog `ROut` + `Node.clients(Worker, [Jobs, Emails])` |
 | [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve — Lookup **piped** (`Lookup.layerOptions({ path })`; default is bare `Lookup.layer`) — terminal A |
 | [`forms/resource/node-tag-addressless-call.ts`](./forms/resource/node-tag-addressless-call.ts) | Address-less call — `lookupClient` + Lookup **piped** — terminal B |
@@ -74,7 +74,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-prototype.ts`](./forms/resource/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
 | [`forms/resource/node-lookup.ts`](./forms/resource/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
 | [`forms/resource/node-identity-coordinator.ts`](./forms/resource/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
-| [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Resource.verifyConnection` tier-1 + `{ deep: true, resource }` |
+| [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
 ### Process store (EventJournal)
@@ -89,7 +89,7 @@ Start here for execution history. **`Process.make`** does not auto-append.
 Storage:
 
 - **`Store.Service` + `Process.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Process.layer`** only.
-- **Durable logs** — `Node.logs` / toolkit `*.store` on a `Store.Service`; `@nikscripts/effect-pm/Logs` handles capture/relay + `byNode` / `byResource`.
+- **Durable logs** — `Node.logs` / toolkit `*.store` on a `Store.Service`; `hyperlink-ts/Logs` handles capture/relay + `byNode` / `byResource`.
 
 ### Schedule
 

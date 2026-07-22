@@ -2,7 +2,7 @@
  * @module Group
  *
  * `Group.Tag` — an organization tool. A real Context tag (built on `Context.Service`,
- * like `Resource.Tag`) that holds named member tags. Pass a record; each member becomes
+ * like `Hyperlink.Tag`) that holds named member tags. Pass a record; each member becomes
  * an accessor on the class, full tag intact.
  *
  *   class MyGroup extends Group.Tag<MyGroup>("@pkg/MyGroup")({
@@ -25,7 +25,7 @@
  *   Ops.Jobs.Counter  // reach into the nested group
  *
  * Consume as a tree-shakeable module namespace: `import * as Group from
- * "@nikscripts/effect-pm/Group"` (or `{ Group }` from the barrel).
+ * "hyperlink-ts/Group"` (or `{ Group }` from the barrel).
  *
  * @public
  */

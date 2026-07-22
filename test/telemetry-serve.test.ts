@@ -3,12 +3,12 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Telemetry from "../src/Telemetry";
 import * as PmNode from "../src/Node";
 
 // Telemetry serves the whole per-process Metric registry. Emit a labeled counter, serve Telemetry over
-// http, read `snapshot` via Resource.client — the counter round-trips with its label + count.
+// http, read `snapshot` via Hyperlink.client — the counter round-trips with its label + count.
 
 class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
 
@@ -48,7 +48,7 @@ it("serves the Metric registry — a labeled counter round-trips via snapshot ov
         return yield* t.snapshot;
       }).pipe(
         Effect.provide(
-          Resource.client(FleetTelemetry).pipe(Layer.provide(protocol(`${base}/rpc`))),
+          Hyperlink.client(FleetTelemetry).pipe(Layer.provide(protocol(`${base}/rpc`))),
         ),
         Effect.scoped,
       );

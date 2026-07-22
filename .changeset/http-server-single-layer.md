@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add a single-`Layer` overload to `Resource.httpServer`. Serve one resource without wrapping it in an array:

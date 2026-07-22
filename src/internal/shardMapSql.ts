@@ -25,14 +25,14 @@ const ddl = `CREATE TABLE IF NOT EXISTS ${TABLE} (
 /**
  * SQLite / codec failure for shard-map persistence.
  *
- * Resource wire methods stay `never` in `E` (boolean / void success), so the engine turns this into
+ * Hyperlink wire methods stay `never` in `E` (boolean / void success), so the engine turns this into
  * a defect at the boundary — SSOT rows must not update the hot Map if SQL failed (`Effect.orDie` at
- * the Resource wire edge).
+ * the Hyperlink wire edge).
  *
  * @internal
  */
 export class ShardMapSqlError extends Data.TaggedError(
-  "@nikscripts/effect-pm/ShardMapSqlError",
+  "hyperlink-ts/ShardMapSqlError",
 )<{
   readonly operation: "install" | "load" | "upsert" | "delete";
   readonly scopeKey?: string;

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`RuntimeStorage.transaction`** — atomic read/write scopes on memory, SQLite, and Prisma adapters.

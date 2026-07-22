@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // Two REAL queue engines bound to ONE Node, served on ONE port via httpServer + QueueResource.serve —
@@ -23,7 +23,7 @@ it("two real queues on one node/port via httpServer", () =>
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
-      const transport = Resource.http(LeagueNode, { url: `http://127.0.0.1:${port}/rpc` });
+      const transport = Hyperlink.http(LeagueNode, { url: `http://127.0.0.1:${port}/rpc` });
       yield* Effect.gen(function* () {
         const a = yield* QA;
         const b = yield* QB;
@@ -43,8 +43,8 @@ it("two real queues on one node/port via httpServer", () =>
         expect(bDone._tag === "Some" && bDone.value.completed >= 2).toBe(true);
       }).pipe(
         Effect.provide(Layer.mergeAll(
-          Resource.client(QA).pipe(Layer.provide(transport)),
-          Resource.client(QB).pipe(Layer.provide(transport)),
+          Hyperlink.client(QA).pipe(Layer.provide(transport)),
+          Hyperlink.client(QB).pipe(Layer.provide(transport)),
         )),
         Effect.scoped,
       );

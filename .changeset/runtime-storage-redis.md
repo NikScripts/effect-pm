@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Redis `RuntimeStorage` adapter** (`@nikscripts/effect-pm/storage/redis`).

@@ -18,8 +18,8 @@ import {
 import * as Process from "../src/Process";
 import * as Store from "../src/Store";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
-import { flattenResourceSpec } from "../src/Resource";
-import type { AnyMethod } from "../src/Resource";
+import { flattenHyperlinkSpec } from "../src/Hyperlink";
+import type { AnyMethod } from "../src/Hyperlink";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
@@ -67,7 +67,7 @@ const asRpcMethod = (m: unknown): AnyMethod | undefined =>
 
 describe("Process.events — wire", () => {
   it("buildProcessSpec / processSpec expose events as a stream method", () => {
-    const flat = flattenResourceSpec(Process.processSpec);
+    const flat = flattenHyperlinkSpec(Process.processSpec);
     const events = asRpcMethod(flat.events);
     expect(events?.stream).toBe(true);
   });

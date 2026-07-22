@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // What this guards: protocol is now an injected dependency, so `peersLayer` no longer hardcodes an
@@ -21,14 +21,14 @@ const PORT_B = 7914;
 class NodeA extends Node.Tag<NodeA>()("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
 class NodeB extends Node.Tag<NodeB>()("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
 
-class Pool extends Resource.Tag<Pool>()("ws-peers/Pool", {
-  active: Resource.effect(Schema.Number),
-  fleetActive: Resource.effect(Schema.Number).pipe(Resource.fleet),
-}).pipe(Resource.nodes([NodeA, NodeB])) {}
+class Pool extends Hyperlink.Tag<Pool>()("ws-peers/Pool", {
+  active: Hyperlink.effect(Schema.Number),
+  fleetActive: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
+}).pipe(Hyperlink.nodes([NodeA, NodeB])) {}
 
 const impl = (own: number) =>
   Effect.gen(function* () {
-    const peers = yield* Resource.peers(Pool);
+    const peers = yield* Hyperlink.peers(Pool);
     return {
       active: Effect.succeed(own),
       fleetActive: combineQuery(peers, (p) => p.active, combineSum).pipe(
@@ -44,14 +44,14 @@ const meshNode = (
   port: number,
   peerProtocol: Layer.Layer<never>,
 ) =>
-  Node.httpServer([Resource.serve(Pool, impl(own))]).pipe(
-    Layer.provide(Resource.peersLayer(Pool, NodeA)),
+  Node.httpServer([Hyperlink.serve(Pool, impl(own))]).pipe(
+    Layer.provide(Hyperlink.peersLayer(Pool, NodeA)),
     Layer.provide(peerProtocol),
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   );
 const leafNode = (own: number, port: number) =>
-  Node.httpServer([Resource.serve(Pool, impl(own))]).pipe(
-    Layer.provide(Resource.peersFrom(Pool, {})),
+  Node.httpServer([Hyperlink.serve(Pool, impl(own))]).pipe(
+    Layer.provide(Hyperlink.peersFrom(Pool, {})),
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   );
 
@@ -65,14 +65,14 @@ const readFleet = (peerProtocol: Layer.Layer<never>) =>
       expect(yield* pool.active).toBe(2); // this instance
       return yield* pool.fleetActive; // own (2) + peer NodeB (5), folded across the wire
     }).pipe(
-      Effect.provide(Resource.client(Pool, NodeA).pipe(Layer.provide(Resource.http(NodeA)))),
+      Effect.provide(Hyperlink.client(Pool, NodeA).pipe(Layer.provide(Hyperlink.http(NodeA)))),
       Effect.scoped,
     );
   }).pipe(Effect.scoped);
 
 it("peersLayer folds across a peer over a real wire with the default (http) protocol", () =>
   Effect.runPromise(
-    readFleet(Resource.layerPeerProtocol(Resource.protocolHttp)).pipe(
+    readFleet(Hyperlink.layerPeerProtocol(Hyperlink.protocolHttp)).pipe(
       Effect.map((total) => expect(total).toBe(7)),
     ),
   ), 20_000);
@@ -85,9 +85,9 @@ it("layerPeerProtocol injects the peer-dial builder — invoked with each peer's
       // proving peersLayer resolves the peer's url through the injected builder (the ws seam).
       const recording = (url: string) => {
         dialed.push(url);
-        return Resource.protocolHttp(url);
+        return Hyperlink.protocolHttp(url);
       };
-      const total = yield* readFleet(Resource.layerPeerProtocol(recording));
+      const total = yield* readFleet(Hyperlink.layerPeerProtocol(recording));
       expect(total).toBe(7); // the injected builder actually carried the fold
       expect(dialed).toContain(`http://127.0.0.1:${PORT_B}/rpc`); // NodeB's url, not NodeA (self)
       expect(dialed).not.toContain(`http://127.0.0.1:${PORT_A}/rpc`);

@@ -21,7 +21,7 @@ One `QueueResource` handle exercising four operators together:
 3. **Retry budget** — `attempts: 2` means one automatic re-enqueue after failure, then
    `RetryExhausted`. No `onFailure` here → the default disposition (retry until budget, then
    dead-letter). Per-error routing belongs in `onFailure` on the [Queues](/docs/queues) guide.
-4. **Lifecycle** — one `events` subscriber with `Resource.runForEachTag` (pick the tags you
+4. **Lifecycle** — one `events` subscriber with `Hyperlink.runForEachTag` (pick the tags you
    care about; ignore the rest). Prefer this over old onExit-style hooks.
 
 Surface is the tip **`Tag` + `layer`** split (contract vs runtime). Bootstrap: start
@@ -51,7 +51,7 @@ sends only.” On the tip `Tag` handle there is no top-level `queue.completed`; 
 {.twoslash}
 ``` ts
 import { Cause, Duration, Effect, Schema } from "effect"
-import { QueueResource, Resource } from "@nikscripts/effect-pm"
+import { QueueResource, Hyperlink } from "hyperlink-ts"
 
 // ── Contract: payload + typed worker failure ──────────────────────────────────
 
@@ -122,7 +122,7 @@ const program = Effect.gen(function* () {
   // Fork one subscriber before resume so early Enqueued / Started events aren't missed.
   yield* Effect.forkScoped(
     queue.events.pipe(
-      Resource.runForEachTag({
+      Hyperlink.runForEachTag({
         Enqueued: (e) =>
           Effect.logInfo(`enqueued ${String(e.entries.length)} ${e.priority} job(s)`),
         Completed: (e) =>

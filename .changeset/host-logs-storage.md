@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Durable log storage, queryable by host or by resource.** `HostLogs.persistLayer(host)` installs a

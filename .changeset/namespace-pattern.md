@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Tag APIs are now uniform, tree-shakeable module namespaces** (Effect-style) — `import * as X`, no object literals.
@@ -15,4 +15,4 @@
 `queueTag<T>()(…)` → `QueueResource.Tag<T>()(…)`, `processTag<T>()(…)` → `ScheduledProcess.Tag<T>()(…)`.
 `ProcessStorage` also converts: `layer` / `layerRuntimeStorage` and the facet aliases (`ProcessStorage.Log` / `.QueueResource` / …) are flat exports, and `ProcessStorage.Services` is a flat `type` export.
 
-Direct subpath value imports `import { NodeLogs } from ".../NodeLogs"` (and likewise `ProcessStorage`, `RunResource`, `HttpApiResource`) → `import * as Name from ".../Name"`. The barrel forms (`import { NodeLogs } from "@nikscripts/effect-pm"`, etc.) are unchanged.
+Direct subpath value imports `import { NodeLogs } from ".../NodeLogs"` (and likewise `ProcessStorage`, `RunResource`, `HttpApiResource`) → `import * as Name from ".../Name"`. The barrel forms (`import { NodeLogs } from "hyperlink-ts"`, etc.) are unchanged.

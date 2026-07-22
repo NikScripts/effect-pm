@@ -3,17 +3,17 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as NodeStatus from "../src/NodeStatus";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
 import * as Node from "../src/Node";
 
-class Echo extends Resource.Tag<Echo>()("nodeStatus-ref/Echo", {
-  ping: Resource.effect(Schema.String),
+class Echo extends Hyperlink.Tag<Echo>()("nodeStatus-ref/Echo", {
+  ping: Hyperlink.effect(Schema.String),
 }) {}
 
 const Server = Node.httpServer([
-  Resource.serve(Echo, { ping: Effect.succeed("pong") }),
+  Hyperlink.serve(Echo, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 describe("NodeStatus Subscribable", () => {

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 F4 `contractHash` on NodeStatus readiness + deep verify / default-on client.

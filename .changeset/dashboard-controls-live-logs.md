@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add headless React dashboard primitives and a styled ops-ui shell for adaptive controls and live logs.

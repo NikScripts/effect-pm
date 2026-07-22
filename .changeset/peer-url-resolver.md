@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Resource.peersLayer(tag, self, { url })` — override peer urls without freezing them into the host

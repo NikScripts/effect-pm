@@ -4,8 +4,8 @@ import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import * as Resource from "../src/Resource";
-import { groupOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { groupOf } from "../src/Hyperlink";
 import type { QueueEntry } from "../src/QueueResource";
 
 // The handoff path: a full QueueEntry (item + priority + attempts + timestamps) handed to a
@@ -21,7 +21,7 @@ class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", { payload
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
 const received: Array<QueueEntry<NumberItem>> = [];
 
-// ref-field impls are Subscribables backed by a SubscriptionRef (matches Resource.subscribable).
+// ref-field impls are Subscribables backed by a SubscriptionRef (matches Hyperlink.subscribable).
 const initialStatus = {
   sizes: { high: 0, normal: 0, low: 0 },
   paused: false,
@@ -30,14 +30,14 @@ const initialStatus = {
   phase: "running" as const,
 };
 const statusRef = Effect.runSync(SubscriptionRef.make(initialStatus));
-const statusSub = Resource.subscribable(statusRef);
+const statusSub = Hyperlink.subscribable(statusRef);
 
 const stub = {
-  size: Resource.mapSubscribable(
+  size: Hyperlink.mapSubscribable(
     statusSub,
     (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
   ),
-  isEmpty: Resource.mapSubscribable(
+  isEmpty: Hyperlink.mapSubscribable(
     statusSub,
     (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
   ),
@@ -74,7 +74,7 @@ const HttpQueueServer = HttpRouter.serve(
     group: groupOf(HttpQueue),
     path: "/rpc",
     protocol: "http",
-  }).pipe(Layer.provide(Resource.serveRemote(HttpQueue, stub))),
+  }).pipe(Layer.provide(Hyperlink.serveRemote(HttpQueue, stub))),
 ).pipe(
   Layer.provideMerge(RpcSerialization.layerNdjson),
   Layer.provideMerge(NodeHttpServer.layerTest),
@@ -115,7 +115,7 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
       expect(DateTime.toEpochMillis(got!.timestamps.enqueuedAt)).toBe(0);
     }).pipe(
       Effect.provide(
-        Resource.client(HttpQueue).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(HttpQueue).pipe(Layer.provide(clientHttp(port))),
       ),
       Effect.scoped,
     );

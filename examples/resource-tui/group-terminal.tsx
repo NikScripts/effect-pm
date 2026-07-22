@@ -22,7 +22,7 @@ import {
 import { Terminal } from "./terminal";
 
 // a real tag; members are accessors — MyGroup.Counter, MyGroup.QueueManager
-class MyGroup extends Group.Tag<MyGroup>("@nikscripts/effect-pm/MyGroup")({
+class MyGroup extends Group.Tag<MyGroup>("hyperlink-ts/MyGroup")({
   Counter,
   QueueManager,
 }) {}

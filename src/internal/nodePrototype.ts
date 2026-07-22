@@ -48,7 +48,7 @@ export type PrototypeOptions = {
  * // Named clone with a fixed address (class ctor):
  * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
  * // Dynamic instances — same protocol siblings + Lookup pipe as unix/http/ws/nPipe:
- * const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+ * const mailWorker = MailWorker.listen([Hyperlink.serve(Mail, impl)])
  * mailWorker().pipe(Layer.provide(Lookup.layer))
  * mailWorker("w1").pipe(Layer.provide(Lookup.layer))
  * ```

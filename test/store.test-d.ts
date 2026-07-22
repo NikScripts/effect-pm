@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
 import * as RunResource from "../src/RunResource";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
 import {
@@ -28,12 +28,12 @@ void _readingOnlyHandle.readings.read();
 
 const readingOnlyContract = Store.contract({ readings: readingSchema });
 
-class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
-  temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.withStore(thermometerContract)) {}
+class LabThermometer extends Hyperlink.Tag<LabThermometer>()("@app/LabThermometer", {
+  temperature: Hyperlink.ref(Schema.Number),
+}).pipe(Hyperlink.withStore(thermometerContract)) {}
 
-class Mail extends Resource.Tag<Mail>()("@app/Mail", {
-  send: Resource.effect(Schema.Void),
+class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
+  send: Hyperlink.effect(Schema.Void),
 }) {}
 
 const jobSchema = Schema.Struct({ id: Schema.String });

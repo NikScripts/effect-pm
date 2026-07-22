@@ -17,7 +17,7 @@ import {
 /**
  * Resolved operator log filter from a single user-entered target string.
  *
- * Resource scopes carry the registration **key** (same as `Tag.key`). Kind is in `_tag`
+ * Hyperlink scopes carry the registration **key** (same as `Tag.key`). Kind is in `_tag`
  * (`process` | `queue`); RPC wire prefix stays `groupId`.
  *
  * @internal
@@ -41,7 +41,7 @@ export const logEntryMatchesScope = (
     return true;
   }
   // "group" is legacy CLI scoping (groups were removed) — no per-entry group annotation remains, so it
-  // matches every line. Resource scopes filter by lineage key.
+  // matches every line. Hyperlink scopes filter by lineage key.
   if (scope._tag === "group") {
     return true;
   }

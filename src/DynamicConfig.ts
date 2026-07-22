@@ -55,7 +55,7 @@ export class ConfigKeyNotSwappable extends Data.TaggedError(
 // ============================================================================
 
 const ConfigFieldTypeId: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/DynamicConfig/ConfigField",
+  "hyperlink-ts/DynamicConfig/ConfigField",
 );
 
 interface ConfigFieldMeta {
@@ -219,10 +219,10 @@ export class DynamicConfigStore extends Context.Service<
      *  {@link layer}. */
     readonly allowed: ReadonlyMap<string, Config.Config<unknown>>;
   }
->()("@nikscripts/effect-pm/DynamicConfig/DynamicConfigStore") {}
+>()("hyperlink-ts/DynamicConfig/DynamicConfigStore") {}
 
 const SwappableRegistryKey =
-  "@nikscripts/effect-pm/DynamicConfig/SwappableRegistry";
+  "hyperlink-ts/DynamicConfig/SwappableRegistry";
 
 /**
  * The process-wide allowlist of declared-swappable env keys → their `Config`, held the way
@@ -318,7 +318,7 @@ const makeField = (spec: Config.Config<unknown> | ConfigField<unknown>) =>
   isConfigField(spec) ? spec : makeFixedField(spec, recordKeys(spec));
 
 const AllTypeId: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/DynamicConfig/All",
+  "hyperlink-ts/DynamicConfig/All",
 );
 
 type FieldRecord = Record<string, ConfigField<unknown>>;

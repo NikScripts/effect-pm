@@ -19,12 +19,12 @@ import { queueControlSpec } from "../src/QueueResource";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
 import * as Logs from "../src/Logs";
-import * as Resource from "../src/Resource";
-import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // A queue family built from the control contract: many instances share the "queue" group.
-const Queue = Resource.tagFor("queue", queueControlSpec);
+const Queue = Hyperlink.tagFor("queue", queueControlSpec);
 class Jobs extends Queue<Jobs>("@app/Jobs") {}
 class Mail extends Queue<Mail>("@app/Mail") {}
 
@@ -43,15 +43,15 @@ const makeImpl = () => {
   const statusRef = Effect.runSync(SubscriptionRef.make(initial));
   const patch = (f: (s: typeof initial) => typeof initial) =>
     Effect.runSync(SubscriptionRef.update(statusRef, f));
-  const statusSub = Resource.subscribable(statusRef);
+  const statusSub = Hyperlink.subscribable(statusRef);
   return {
     // live current state — `status` is the SSOT Subscribable; the scalars are mapped views (`ref` impls).
     status: statusSub,
-    size: Resource.mapSubscribable(
+    size: Hyperlink.mapSubscribable(
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
     ),
-    isEmpty: Resource.mapSubscribable(
+    isEmpty: Hyperlink.mapSubscribable(
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
@@ -123,10 +123,10 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     expect(yield* head(mail.size)).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(
     Effect.provide(
-      Resource.serveInstances(
+      Hyperlink.serveInstances(
         Queue,
-        Resource.instance(Jobs, jobsImpl),
-        Resource.instance(Mail, mailImpl),
+        Hyperlink.instance(Jobs, jobsImpl),
+        Hyperlink.instance(Mail, mailImpl),
       ),
     ),
     Effect.scoped,
@@ -225,7 +225,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     expect(
       yield* Stream.runHead(svc.size).pipe(Effect.map(Option.getOrThrow)),
     ).toBe(3);
-  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Hyperlink.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -262,7 +262,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
       },
     ]);
     expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
-  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Hyperlink.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -302,7 +302,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
       ),
     );
     expect(caught).toBe("missing:test/Numbers");
-  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Hyperlink.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -350,7 +350,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     const q = yield* LocalQueue;
     // the same `yield* Tag` surface the contract declares — backed by the live engine
     yield* Effect.forkScoped(
-      Resource.runForEachTag(q.events, "Completed", (e) =>
+      Hyperlink.runForEachTag(q.events, "Completed", (e) =>
         Ref.update(seen, (a) => [...a, e.entry.item.n]),
       ),
     );
@@ -386,15 +386,15 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
   return Effect.runPromise(program);
 });
 
-// ── QueueResource.layer scopes worker logs readable via Resource.logs ──
+// ── QueueResource.layer scopes worker logs readable via Hyperlink.logs ──
 class LoggingQueue extends QueueResource.Tag<LoggingQueue>()("test/LoggingQueue", {
   payload: NumberItem,
 }) {}
 
-it("QueueResource.layer scopes worker logs via Resource.logs", () => {
+it("QueueResource.layer scopes worker logs via Hyperlink.logs", () => {
   const program = Effect.gen(function* () {
     const q = yield* LoggingQueue;
-    const { stream } = yield* Resource.logs(LoggingQueue);
+    const { stream } = yield* Hyperlink.logs(LoggingQueue);
     const collected = yield* Effect.forkChild(
       Stream.runCollect(
         Stream.take(
@@ -410,7 +410,7 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
     expect(entry?.level).toBe("Info");
   }).pipe(
     Effect.provide(
-      // Soft-default Memory for the engine; LogRelay alone for live Resource.logs
+      // Soft-default Memory for the engine; LogRelay alone for live Hyperlink.logs
       // (do not provideMerge a Node-only AppStore — Soft would capture that Storage).
       QueueResource.layer(LoggingQueue, {
         effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
@@ -431,9 +431,9 @@ class NodeNumbers extends QueueResource.Tag<NodeNumbers>()("test/NodeNumbers", {
   node: QueueNode,
 }) {}
 const _nodeedQueueClient: Layer.Layer<NodeNumbers, never, QueueNode> =
-  Resource.client(NodeNumbers);
+  Hyperlink.client(NodeNumbers);
 void _nodeedQueueClient;
 // a nodeless queue keeps the ambient-Protocol client.
 const _nodelessQueueClient: Layer.Layer<Numbers, never, RpcClient.Protocol> =
-  Resource.client(Numbers);
+  Hyperlink.client(Numbers);
 void _nodelessQueueClient;

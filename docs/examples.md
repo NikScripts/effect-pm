@@ -24,7 +24,7 @@ Run: `pnpm run example:custom-queue-resource`
 
 ---
 
-## Resource
+## Hyperlink
 
 Coming next (forms/resource — RunResource, HttpApi, Telemetry, FleetHealth, ShardMap).
 

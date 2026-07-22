@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Two polling additions: `Polling.adaptive({ active, idle, factor? })` — work-aware cadence, the

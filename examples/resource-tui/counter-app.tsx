@@ -14,7 +14,7 @@ import { Box, Text, useApp, useInput } from "ink";
 import * as React from "react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
@@ -22,14 +22,14 @@ import {
   useAtomValue,
 } from "../../src/ui/atom-react";
 
-class Counter extends Resource.Tag<Counter>()("Counter", {
-  current: Resource.effect(Schema.Number),
-  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
-  increment: Resource.effectFn({ by: Schema.Number }),
+class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+  current: Hyperlink.effect(Schema.Number),
+  reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
 }) {}
 
 let value = 0;
-const counterLayer = Resource.layer(Counter, {
+const counterLayer = Hyperlink.layer(Counter, {
   current: Effect.sync(() => value),
   reset: Effect.sync(() => {
       value = 0;

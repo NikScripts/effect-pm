@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Per-resource readiness, aggregated into `/health` and `HostStatus`.** Every resource can report whether it's actually working — derived from its own status (its single source of truth), not stored separately:

@@ -13,19 +13,19 @@ import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/nameless/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/nameless/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Resource.Tag<Emails>()("forms/nameless/Emails", {
-  emails: Resource.effect(Schema.String),
+class Emails extends Hyperlink.Tag<Emails>()("forms/nameless/Emails", {
+  emails: Hyperlink.effect(Schema.String),
 }) {}
 
 const live = Node.unix([
-  Resource.serve(Jobs, { jobs: Effect.succeed(7) }),
-  Resource.serve(Emails, { emails: Effect.succeed("ok") }),
+  Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
+  Hyperlink.serve(Emails, { emails: Effect.succeed("ok") }),
 ]).pipe(Layer.provide(Lookup.layer))
 
 NodeRuntime.runMain(

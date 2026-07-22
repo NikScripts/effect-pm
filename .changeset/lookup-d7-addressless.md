@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **D7 vertical** — address-less listen, Lookup bootstrap, nodeless `lookupClient`.

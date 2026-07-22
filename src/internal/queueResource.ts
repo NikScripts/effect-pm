@@ -11,7 +11,7 @@
  * {@link QueueHandleApi.events} (discrete {@link QueueEvent}s), {@link QueueHandleApi.status}
  * (a `Subscribable` ref: `.get` for one-shot, `.changes` for live), and
  * {@link QueueHandleApi.metrics} (windowed stream). Subscribe with `Stream.runForEach` /
- * `Resource.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
+ * `Hyperlink.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
  * events (`e.exit.pipe(Effect.catchTag(...))`). Retry is the `attempts` policy — for in-place
  * effect retry, put `Effect.retry` on your `effect`. For per-error disposition (retry vs
  * dead-letter vs drop), set the inline {@link QueueOnFailure | onFailure} control hook.
@@ -33,7 +33,7 @@
  *
  * ```ts
  * import { Effect, Stream } from "effect"
- * import { QueueResource, Resource } from "@nikscripts/effect-pm"
+ * import { QueueResource, Hyperlink } from "hyperlink-ts"
  *
  * // Declare service via class factory
  * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError>()(
@@ -49,7 +49,7 @@
  * const program = Effect.gen(function*() {
  *   const queue = yield* EmailQueue
  *   yield* queue.events.pipe(
- *     Resource.runForEachTag({
+ *     Hyperlink.runForEachTag({
  *       Failed: ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
  *     }),
  *     Effect.forkScoped,
@@ -120,7 +120,7 @@ import type {
   DurableEntry,
   OfferResult,
 } from "../DurableQueueStore";
-import * as Resource from "../Resource";
+import * as Hyperlink from "../Hyperlink";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -415,7 +415,7 @@ export interface QueueHandleApi<
   readonly enqueue: QueueEnqueueEntries<T, R>;
 
   /** Total pending items across all priority levels. */
-  readonly size: Resource.Subscribable<number>;
+  readonly size: Hyperlink.Subscribable<number>;
   /** Pending item count per priority level. */
   readonly sizes: Effect.Effect<{
     readonly high: number;
@@ -423,7 +423,7 @@ export interface QueueHandleApi<
     readonly low: number;
   }>;
   /** Whether all priority queues are empty. */
-  readonly isEmpty: Resource.Subscribable<boolean>;
+  readonly isEmpty: Hyperlink.Subscribable<boolean>;
   /** Total items that have finished processing (success or failure). */
   readonly completed: Effect.Effect<number>;
 
@@ -437,12 +437,12 @@ export interface QueueHandleApi<
 
   /**
    * Live **current-state snapshot** — a reactive `ref` backed by a `SubscriptionRef`. Read once via
-   * {@link Resource.Subscribable.get `.get`} (recomputed from authoritative sources) or subscribe via
-   * {@link Resource.Subscribable.changes `.changes`} (dashboards / `--watch` / TUI). Each change
+   * {@link Hyperlink.Subscribable.get `.get`} (recomputed from authoritative sources) or subscribe via
+   * {@link Hyperlink.Subscribable.changes `.changes`} (dashboards / `--watch` / TUI). Each change
    * snapshot is accurate truth (not an event accumulation); a new subscriber gets the current value
    * immediately.
    */
-  readonly status: Resource.Subscribable<QueueStatus>;
+  readonly status: Hyperlink.Subscribable<QueueStatus>;
 
   /**
    * Live **windowed metrics** stream — one {@link QueueMetrics} per window. Windows are
@@ -2248,7 +2248,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const refreshStatus = Effect.flatMap(computeStatus, (s) =>
       SubscriptionRef.set(statusRef, s),
     );
-    const statusSub: Resource.Subscribable<QueueStatus> = {
+    const statusSub: Hyperlink.Subscribable<QueueStatus> = {
       get: computeStatus,
       changes: SubscriptionRef.changes(statusRef),
     };
@@ -3273,7 +3273,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // Live lifecycle events — each consumer gets its own subscription
       events: Stream.fromPubSub(eventsHub),
 
-      // Current-state snapshot — ref shape matching `Resource.ref(queueStatus)` on the contract.
+      // Current-state snapshot — ref shape matching `Hyperlink.ref(queueStatus)` on the contract.
       status: statusSub,
 
       // Windowed metrics stream (dynamic windows)

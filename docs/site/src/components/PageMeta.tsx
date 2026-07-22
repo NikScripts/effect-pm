@@ -20,7 +20,7 @@ export const PageMeta = ({
       <meta property="og:title" content={title} />
       {desc !== "" ? <meta property="og:description" content={desc} /> : null}
       <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="effect-pm" />
+      <meta property="og:site_name" content="hyperlink-ts" />
       <meta name="twitter:card" content="summary" />
     </>
   );

@@ -1,5 +1,5 @@
 /**
- * {@link Resource.logStreamLevel} — stamp a live-relay floor on a tag for {@link Resource.logs}.
+ * {@link Hyperlink.logStreamLevel} — stamp a live-relay floor on a tag for {@link Hyperlink.logs}.
  *
  * @module internal/logs/resourceStreamLevel
  * @internal
@@ -9,7 +9,7 @@ import type { StoreLogLevel } from "../store/types";
 import { logStreamLevelSym, type StreamLevelCarrier } from "./streamLevel";
 
 /**
- * Stamp `level` onto a tag for {@link Resource.logs} stream filtering.
+ * Stamp `level` onto a tag for {@link Hyperlink.logs} stream filtering.
  *
  * @category spec fields
  * @public

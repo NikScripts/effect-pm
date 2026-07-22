@@ -8,11 +8,11 @@
 import type { Schema } from "effect";
 
 export const successSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Process/success",
+  "hyperlink-ts/Process/success",
 );
 
 export const errorSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Process/error",
+  "hyperlink-ts/Process/error",
 );
 
 /** Read a wire schema stamped on a process tag. @internal */

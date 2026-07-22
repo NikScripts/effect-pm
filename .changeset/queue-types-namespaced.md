@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 No more top-level exports — effect has no top-level; neither do we (breaking):

@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Layer, Metric, Option, Path, Schema, Stream } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as ShardMap from "../src/ShardMap";
 import * as Telemetry from "../src/Telemetry";
 import * as Node from "../src/Node";
@@ -11,7 +11,7 @@ class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 describe("Telemetry fleet elevation", () => {
   class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-    Resource.nodes([DropletEast, DropletWest]),
+    Hyperlink.nodes([DropletEast, DropletWest]),
   ) {}
 
   const stamp = (value: number) =>
@@ -32,7 +32,7 @@ describe("Telemetry fleet elevation", () => {
       expect(Telemetry.inFlightOf(yield* glass.snapshot)).toBe(2);
       expect(yield* glass.fleetInFlight).toBe(2);
       const byNode = yield* glass.inFlightByNode;
-      expect(byNode["@nikscripts/effect-pm/Telemetry/alone"]).toBe(2);
+      expect(byNode["hyperlink-ts/Telemetry/alone"]).toBe(2);
     }).pipe(Effect.provide(live));
   });
 
@@ -54,11 +54,11 @@ describe("Telemetry fleet elevation", () => {
 
     const live = Telemetry.layer(FleetMetrics).pipe(
       Layer.provide(
-        Resource.peersFrom(FleetMetrics, {
+        Hyperlink.peersFrom(FleetMetrics, {
           [DropletWest.key]: peerSnap(7),
         }),
       ),
-      Layer.provide(Resource.selfNodeLayer(FleetMetrics, DropletEast)),
+      Layer.provide(Hyperlink.selfNodeLayer(FleetMetrics, DropletEast)),
     );
 
     return Effect.gen(function* () {
@@ -84,7 +84,7 @@ describe("ShardMap", () => {
     key: SessionId,
     value: Session,
     keyOf: (s) => s.id,
-  }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
+  }).pipe(Hyperlink.nodes([DropletEast, DropletWest])) {}
 
   const sticky: ShardMap.PartitionFn = (key) =>
     key.startsWith("w-") ? DropletWest.key : DropletEast.key;
@@ -92,7 +92,7 @@ describe("ShardMap", () => {
   it.effect("routes get/put to owner; folds size across peers", () => {
     const live = ShardMap.layer(Sessions, { partition: sticky }).pipe(
       Layer.provide(
-        Resource.peersFrom(Sessions, {
+        Hyperlink.peersFrom(Sessions, {
           [DropletWest.key]: {
             get: () => Effect.succeed(Option.none()),
             put: () => Effect.succeed(false),
@@ -109,7 +109,7 @@ describe("ShardMap", () => {
           },
         }),
       ),
-      Layer.provide(Resource.selfNodeLayer(Sessions, DropletEast)),
+      Layer.provide(Hyperlink.selfNodeLayer(Sessions, DropletEast)),
     );
 
     return Effect.gen(function* () {
@@ -145,10 +145,10 @@ describe("ShardMap", () => {
         value: Session,
         keyOf: (s) => s.id,
       },
-    ).pipe(Resource.nodes([DropletEast])) {}
+    ).pipe(Hyperlink.nodes([DropletEast])) {}
 
     const live = ShardMap.layer(MemorySessions).pipe(
-      Layer.provide(Resource.peersLayer(MemorySessions, DropletEast)),
+      Layer.provide(Hyperlink.peersLayer(MemorySessions, DropletEast)),
     );
 
     return Effect.gen(function* () {
@@ -168,7 +168,7 @@ describe("ShardMap", () => {
       key: SessionId,
       value: Session,
       keyOf: (s) => s.id,
-    }).pipe(Resource.nodes([DropletEast])) {}
+    }).pipe(Hyperlink.nodes([DropletEast])) {}
 
     return Effect.gen(function* () {
       const path = yield* Path.Path;
@@ -178,7 +178,7 @@ describe("ShardMap", () => {
         (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
       );
       const filename = path.join(dir, "shard.sqlite");
-      const mesh = Resource.peersLayer(FileSessions, DropletEast);
+      const mesh = Hyperlink.peersLayer(FileSessions, DropletEast);
       const live = ShardMap.layer(FileSessions, { filename }).pipe(
         Layer.provide(mesh),
       );

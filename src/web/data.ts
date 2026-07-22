@@ -5,13 +5,13 @@
  * `queueBundle` / `processBundle` build the atom bundle the widgets read (status /
  * metrics+history / trend / logs + controls) straight from the tag's live service over the
  * consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides the tags — local
- * engine or `Resource.client` over http; the widgets don't care which).
+ * engine or `Hyperlink.client` over http; the widgets don't care which).
  *
  */
 import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as resourceKindOf, type Subscribable } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, type Subscribable } from "../Hyperlink";
 import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
@@ -346,7 +346,7 @@ export const leafByKey = (group: unknown, key: string): unknown => {
 };
 
 /** Which kind of leaf a tag is — purely by its **stamped** kind (every tag carries one; a bare
- *  `Resource.Tag` is `"resource"`). No spec-sniffing: the kind key is the single source of truth. */
+ *  `Hyperlink.Tag` is `"resource"`). No spec-sniffing: the kind key is the single source of truth. */
 export const kindOf = (member: unknown): "queue" | "process" | "api" | "resource" => {
   const stamped = resourceKindOf(member);
   if (stamped === queueKind) return "queue";
@@ -802,10 +802,10 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
 // A NodeStatus client over a specific node's transport: a NodeKey's *value* is the RPC `Protocol`,
 // so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
-// requirement — the same contained boundary assertion `Resource.client` makes for node-bearing tags.
+// requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
 // The 2-arg `client(tag, node)` form reads the node's value and unwraps its transport — the sanctioned
 // way to point a nodeless tag (NodeStatus) at a specific node. (The node is exposed at runtime via
-// `connect`, so we erase its identity to `never` — the same contained boundary assertion Resource.client
+// `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
 // makes for node-bearing tags.)
 const nodeStatusClient = (node: NodeKey<unknown>) =>
   client(NodeStatus.Tag, node as NodeKey<never>);

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as QueueResource from "../src/QueueResource";
 import * as Process from "../src/Process";
 import * as CustomQueueResource from "../src/CustomQueueResource";
@@ -8,9 +8,9 @@ import * as ApiMetrics from "../src/ApiMetrics";
 import * as FleetHealth from "../src/FleetHealth";
 import * as Telemetry from "../src/Telemetry";
 
-// Each contract stamps its canonical kind on the tag, so `Resource.kindOf` classifies a tag
-// without sniffing its spec. Every tag carries a kind: a bare `Resource.Tag` defaults to
-// `Resource.kind` (`…/Resource`), so nothing is ever kind-less.
+// Each contract stamps its canonical kind on the tag, so `Hyperlink.kindOf` classifies a tag
+// without sniffing its spec. Every tag carries a kind: a bare `Hyperlink.Tag` defaults to
+// `Hyperlink.kind` (`…/Hyperlink`), so nothing is ever kind-less.
 const Item = Schema.Struct({ n: Schema.Number });
 
 class Q extends QueueResource.Tag<Q>()("kindtest/Q", { payload: Item }) {}
@@ -19,23 +19,23 @@ class C extends CustomQueueResource.Tag<C>()("kindtest/C", { payload: Item, leve
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}
 class T extends Telemetry.Tag<T>()() {}
 class F extends FleetHealth.Tag<F>()() {}
-class Bare extends Resource.Tag<Bare>()("kindtest/Bare", {
-  ping: Resource.effect(Schema.String),
+class Bare extends Hyperlink.Tag<Bare>()("kindtest/Bare", {
+  ping: Hyperlink.effect(Schema.String),
 }) {}
 
-it("each contract stamps its kind; a bare Resource.Tag defaults to Resource.kind", () => {
-  expect(Resource.kindOf(Q)).toBe(QueueResource.kind);
-  expect(Resource.kindOf(P)).toBe(Process.kind);
-  expect(Resource.kindOf(C)).toBe(CustomQueueResource.kind);
-  expect(Resource.kindOf(M)).toBe(ApiMetrics.kind);
-  expect(Resource.kindOf(T)).toBe(Telemetry.kind);
-  expect(Resource.kindOf(F)).toBe(FleetHealth.kind);
-  expect(Resource.kindOf(Bare)).toBe(Resource.kind);
-  expect(Resource.kind).toBe("@nikscripts/effect-pm/Resource");
+it("each contract stamps its kind; a bare Hyperlink.Tag defaults to Hyperlink.kind", () => {
+  expect(Hyperlink.kindOf(Q)).toBe(QueueResource.kind);
+  expect(Hyperlink.kindOf(P)).toBe(Process.kind);
+  expect(Hyperlink.kindOf(C)).toBe(CustomQueueResource.kind);
+  expect(Hyperlink.kindOf(M)).toBe(ApiMetrics.kind);
+  expect(Hyperlink.kindOf(T)).toBe(Telemetry.kind);
+  expect(Hyperlink.kindOf(F)).toBe(FleetHealth.kind);
+  expect(Hyperlink.kindOf(Bare)).toBe(Hyperlink.kind);
+  expect(Hyperlink.kind).toBe("hyperlink-ts/Hyperlink");
 });
 
 it("kindOf is safe on non-tags", () => {
-  expect(Resource.kindOf(undefined)).toBeUndefined();
-  expect(Resource.kindOf({})).toBeUndefined();
-  expect(Resource.kindOf("nope")).toBeUndefined();
+  expect(Hyperlink.kindOf(undefined)).toBeUndefined();
+  expect(Hyperlink.kindOf({})).toBeUndefined();
+  expect(Hyperlink.kindOf("nope")).toBeUndefined();
 });

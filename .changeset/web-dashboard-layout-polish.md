@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 `@nikscripts/effect-pm/web` dashboard polish: process controls stay a horizontal row at every width (only the queue controls go vertical, to flank the metric chart); card content stays top-aligned when the grid stretches a card to the row height (instead of a bare `<button>` centring its content in the slack); tighter log columns (time and level); and the metric chart gains a second dropdown to pick the latency series' time unit (ms/s/min/hr).

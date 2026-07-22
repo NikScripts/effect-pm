@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Multi-host via `Resource.peers`.** Combined/fleet values are written as **plain queries in the resource layer**, not a special contract field kind: implement e.g. `totalConnections` with `Resource.peers` (the other hosts' clients) + your own value. New surface:

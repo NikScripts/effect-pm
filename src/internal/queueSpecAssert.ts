@@ -12,8 +12,8 @@
  */
 
 import { Data, DateTime, Duration, Schema } from "effect";
-import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Resource";
-import { flattenResourceSpec } from "../Resource";
+import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
+import { flattenHyperlinkSpec } from "../Hyperlink";
 import { buildQueueEvent } from "../QueueResource";
 import type { CustomQueueInstanceSpec } from "../CustomQueueResource";
 
@@ -160,8 +160,8 @@ export const assertQueueInstanceSpec = <Spec extends Record<string, unknown>>(
   wire?: QueueWire,
 ): Spec => {
   assertStructuralMatch(
-    flattenResourceSpec(wired as Parameters<typeof flattenResourceSpec>[0]),
-    flattenResourceSpec(baseline as Parameters<typeof flattenResourceSpec>[0]),
+    flattenHyperlinkSpec(wired as Parameters<typeof flattenHyperlinkSpec>[0]),
+    flattenHyperlinkSpec(baseline as Parameters<typeof flattenHyperlinkSpec>[0]),
   );
   smokeWireSlots(
     recoverItemSchema(wired as unknown as { readonly add: AnyMethod }),
@@ -185,8 +185,8 @@ export const assertCustomQueueInstanceSpec = <F extends Schema.Struct.Fields>(
   wire?: QueueWire,
 ): CustomQueueInstanceSpec<F> => {
   assertStructuralMatch(
-    flattenResourceSpec(wired as Parameters<typeof flattenResourceSpec>[0]),
-    flattenResourceSpec(baseline as Parameters<typeof flattenResourceSpec>[0]),
+    flattenHyperlinkSpec(wired as Parameters<typeof flattenHyperlinkSpec>[0]),
+    flattenHyperlinkSpec(baseline as Parameters<typeof flattenHyperlinkSpec>[0]),
   );
   smokeWireSlots(
     recoverItemSchema(wired as unknown as { readonly add: AnyMethod }),

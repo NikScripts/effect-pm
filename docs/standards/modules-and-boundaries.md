@@ -11,7 +11,7 @@ Members are flat top-level `export const` / `function` / `type` — never groupe
 
 ``` ts
 // consumer
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as QueueResource from "hyperlink-ts/QueueResource"
 QueueResource.Tag        // pulls zero engine code
 QueueResource.serve      // pulls the engine only when used
 ```
@@ -58,9 +58,9 @@ namespace and the primary type under one name, so a module is a value, a type, a
 types at once.
 
 ``` ts
-// src/Resource.ts
+// src/Hyperlink.ts
 export const client = /* … */
-export declare namespace Resource {
+export declare namespace Hyperlink {
   export type ServiceOf<S> = /* … */
 }
 ```
@@ -88,23 +88,23 @@ import { makeQueueEffect } from "./internal/queueResource"   // engine implement
 {#subpaths-never-internal .must appliesTo=src}
 ## Subpaths never resolve into internal/
 
-`@nikscripts/effect-pm/Name` resolves to the public `src/Name.ts`, surfaced via the barrel
+`hyperlink-ts/Name` resolves to the public `src/Name.ts`, surfaced via the barrel
 `export * as Name from "./Name"` — one line per module. It must **not** resolve to `src/internal/*`.
 
 
 {#public-is-app-imported .must appliesTo=src}
 ## Public is what apps import; internal is package-only
 
-**Public** = a symbol an app imports, via `@nikscripts/effect-pm`, a documented subpath, or a bin
+**Public** = a symbol an app imports, via `hyperlink-ts`, a documented subpath, or a bin
 entry. **Internal** (`src/internal/`) = package-only wiring: never exported from the barrel, no
 subpath, never imported by an app.
 
 ``` ts
 // ✅ public
-import * as Process from "@nikscripts/effect-pm/Process"
+import * as Process from "hyperlink-ts/Process"
 
 // ❌ internal — apps must never reach here
-import { makeQueueEffect } from "@nikscripts/effect-pm/internal/queueResource"
+import { makeQueueEffect } from "hyperlink-ts/internal/queueResource"
 ```
 
 {#never-split-namespace .must appliesTo=src}
@@ -194,7 +194,7 @@ the HTTP server layers. Those pull `node:*` and native deps that have no place i
 
 ``` ts
 // ❌ bad — a browser-reachable module importing a node backend
-import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite"
+import { layerProcessStore } from "hyperlink-ts/storage/sqlite"
 
 // ✅ good — that import lives in the server entry, which the browser bundle never touches
 ```
@@ -222,7 +222,7 @@ one tag subpath you need — a smaller graph and a clearer boundary.
 
 ``` ts
 // ✅ better in a widget — just the tag
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
+import * as QueueResource from "hyperlink-ts/QueueResource"
 ```
 
 {#separate-contract-and-impl .should appliesTo=src}

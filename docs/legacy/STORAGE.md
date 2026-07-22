@@ -32,8 +32,8 @@ guides: [`guides/store.md`](./guides/store.md), [`guides/store-backing.md`](./gu
 Apps declare an aggregate store and register toolkit scopes:
 
 ```ts
-import * as Store from "@nikscripts/effect-pm/Store";
-import * as Process from "@nikscripts/effect-pm/Process";
+import * as Store from "hyperlink-ts/Store";
+import * as Process from "hyperlink-ts/Process";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
@@ -41,7 +41,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 ```
 
-Each toolkit exposes `Resource.store(tag)` (and optional analytics extensions). Registration attaches
+Each toolkit exposes `Hyperlink.store(tag)` (and optional analytics extensions). Registration attaches
 a **built-in contract** (`builtInProcessStoreContract`, `builtInQueueStoreContract`, …) derived from
 the tag's wire slots (`payload` / `success` / `error` where applicable).
 
@@ -66,7 +66,7 @@ const store = yield* materializeEngineQueueStoreForTag(tag);
 Apps override the default at the root:
 
 ```ts
-Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/data.sqlite" }), resourceLayers)
+Layer.provideMerge(AppStore.layer({ filename: ".hyperlink-ts/data.sqlite" }), resourceLayers)
 ```
 
 Later `Storage` layer wins on merge. Do not hard-provide inside a toolkit layer in a way that blocks
@@ -87,7 +87,7 @@ Tag wire is SSOT — layer config must not override `payload` / `success` / `err
 
 `layer` / `serve` / `serveRemote` on Process, QueueResource, CustomQueueResource, and RunResource all
 merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
-`Resource.builtResource` + `grantLocal` where applicable.
+`Hyperlink.builtHyperlink` + `grantLocal` where applicable.
 
 **ShardMap** does **not** use the Store bridge for shard state. Local keys are SQLite SSOT
 (`effect_pm_shard_map`) opened by the toolkit layer (`:memory:` by default, or `{ filename }`).
@@ -115,7 +115,7 @@ Aliases: `ProcessStorage.Log`, `ProcessStorage.ProcessLifecycle`.
 - `ProcessExecutionStore` — deleted; process engine uses `Process.store(tag)`
 - `RunResourceStore` facet — deleted; run engine uses `RunResource.store(tag)`
 
-The `@nikscripts/effect-pm/store/QueueResource` subpath was **removed** — there is no
+The `hyperlink-ts/store/QueueResource` subpath was **removed** — there is no
 `src/store/queueResource.ts`. Import queue history via `QueueResource.store(tag)` on the Store bridge,
 not a RuntimeStorage facet class.
 
@@ -199,8 +199,8 @@ ShardMap section above).
 From `examples/forms/process-store/process-layer-store-auto-write.ts`:
 
 ```ts
-import * as Store from "@nikscripts/effect-pm/Store";
-import * as Process from "@nikscripts/effect-pm/Process";
+import * as Store from "hyperlink-ts/Store";
+import * as Process from "hyperlink-ts/Process";
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
   Process.store(PricesProcess),
@@ -221,8 +221,8 @@ override with `Layer.provideMerge(AppStore.layer(...), ...)`.
 ### Queue persist + read back
 
 ```ts
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
-import * as Store from "@nikscripts/effect-pm/Store";
+import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as Store from "hyperlink-ts/Store";
 
 class Mail extends QueueResource.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
 
@@ -244,8 +244,8 @@ Or register on an app aggregate: `class AppStore extends Store.Service(...)(
 ### Legacy facets (log + lifecycle only)
 
 ```ts
-import { ProcessStorage } from "@nikscripts/effect-pm";
-import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
+import { ProcessStorage } from "hyperlink-ts";
+import { layerProcessStore } from "hyperlink-ts/storage/sqlite";
 
 // In-memory (tests)
 Effect.provide(program, ProcessStorage.layer);
@@ -253,7 +253,7 @@ Effect.provide(program, ProcessStorage.layer);
 // Durable RuntimeStorage + facets
 Effect.provide(
   program,
-  Layer.provide(ProcessStorage.layerRuntimeStorage, layerProcessStore({ filename: ".effect-pm/data.sqlite" })),
+  Layer.provide(ProcessStorage.layerRuntimeStorage, layerProcessStore({ filename: ".hyperlink-ts/data.sqlite" })),
 );
 ```
 
@@ -269,7 +269,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 
 const live = Layer.provideMerge(
-  AppStore.layer({ filename: ".effect-pm/process.db" }),
+  AppStore.layer({ filename: ".hyperlink-ts/process.db" }),
   Process.layer(MyProcess, { effect }),
   QueueResource.layer(MyQueue, { effect }),
 );

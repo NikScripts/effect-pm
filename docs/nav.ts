@@ -63,7 +63,7 @@ export const nav: ReadonlyArray<NavGroup> = [
     // A collapsible group over the API routes: our own package first, then the all-packages index.
     label: "API Reference",
     links: [
-      { label: "Effect PM", href: "/api/effect-pm" },
+      { label: "Effect PM", href: "/api/hyperlink-ts" },
       { label: "All Packages", href: "/api" },
     ],
   },

@@ -46,8 +46,8 @@ const effectPathsMap = (): Effect.Effect<
     const readDir = (d: string) => fs.readDirectory(d).pipe(Effect.orElseSucceed(() => []));
     const exists = (p: string) => fs.exists(p).pipe(Effect.orElseSucceed(() => false));
     const out: Record<string, Array<string>> = {
-      "@nikscripts/effect-pm": [nodePath.join(repoRoot, "src/index.ts")],
-      "@nikscripts/effect-pm/*": [nodePath.join(repoRoot, "src/*")],
+      "hyperlink-ts": [nodePath.join(repoRoot, "src/index.ts")],
+      "hyperlink-ts/*": [nodePath.join(repoRoot, "src/*")],
     };
     const addPkg = (dir: string) =>
       Effect.gen(function* () {
@@ -96,7 +96,7 @@ export const symbolIndexEntries = (): ReadonlyArray<SymbolIndex.Entry> => locati
  */
 export const packageSourcePaths = (): Readonly<Record<string, Array<string>>> => pathsMap;
 
-// The package a repo-relative source file belongs to (its dir, repo-relative; "." = effect-pm).
+// The package a repo-relative source file belongs to (its dir, repo-relative; "." = hyperlink-ts).
 // Undefined for files outside the documented trees — no links rather than a wrong program.
 const packageDirOf = (relFile: string): string | undefined => {
   const effect = /^(repos\/effect\/packages\/[^/]+(?:\/[^/]+)?)\/src\//.exec(relFile);

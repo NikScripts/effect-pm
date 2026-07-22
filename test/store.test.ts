@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Schema } from "effect";
 import * as QueueResource from "../src/QueueResource";
 import * as RunResource from "../src/RunResource";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
 const readingSchema = Schema.Struct({
@@ -25,12 +25,12 @@ type ThermometerHandle = Store.HandleOf<typeof thermometerContract>;
 const readingOnlyContract = Store.contract({ readings: readingSchema });
 type ReadingOnlyHandle = Store.HandleOf<typeof readingOnlyContract>;
 
-class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
-  temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.withStore(thermometerContract)) {}
+class LabThermometer extends Hyperlink.Tag<LabThermometer>()("@app/LabThermometer", {
+  temperature: Hyperlink.ref(Schema.Number),
+}).pipe(Hyperlink.withStore(thermometerContract)) {}
 
-class Mail extends Resource.Tag<Mail>()("@app/Mail", {
-  send: Resource.effect(Schema.Void),
+class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
+  send: Hyperlink.effect(Schema.Void),
 }) {}
 
 const jobSchema = Schema.Struct({ id: Schema.String });
@@ -285,7 +285,7 @@ describe("Store.Service", () => {
     expect(extended.pipe).toBeTypeOf("function");
   });
 
-  it.effect("standalone Resource.store is yieldable with a single layer", () =>
+  it.effect("standalone Hyperlink.store is yieldable with a single layer", () =>
     Effect.gen(function* () {
       const store = (yield* mailStore) as unknown as ThermometerHandle;
       yield* store.readings.append({ value: 42 });

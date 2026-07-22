@@ -2,11 +2,11 @@ import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
 // A process started disarmed (empty inline schedule) so it only runs on `run`; with the logs
-// stack provided, worker lines are scoped by tag key and read back via Resource.logs.
+// stack provided, worker lines are scoped by tag key and read back via Hyperlink.logs.
 class LogProc extends Process.Tag<LogProc>()(
   "test/process-log-history/Proc",
 ).pipe(Process.schedule([])) {}
@@ -17,11 +17,11 @@ class AppStore extends Store.Service<AppStore>("@test/process-log-history/Store"
   logProcRegistration,
 ) {}
 
-it("Resource.logs reads back process worker logs", () =>
+it("Hyperlink.logs reads back process worker logs", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      const { query } = yield* Resource.logs(LogProc);
+      const { query } = yield* Hyperlink.logs(LogProc);
       yield* proc.run;
       yield* Effect.gen(function* () {
         while ((yield* query({})).length === 0) {
@@ -42,11 +42,11 @@ it("Resource.logs reads back process worker logs", () =>
     ),
   ));
 
-it("Resource.logs query is empty without store registration (live relay only)", () =>
+it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
-      const { query } = yield* Resource.logs(LogProc);
+      const { query } = yield* Hyperlink.logs(LogProc);
       expect(yield* query({})).toEqual([]);
       yield* proc.run;
       yield* Effect.sleep(Duration.millis(50));

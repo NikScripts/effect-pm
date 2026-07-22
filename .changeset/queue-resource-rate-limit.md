@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Queue `rateLimit`** — Effect `RateLimiter` on workers (before concurrency semaphore).

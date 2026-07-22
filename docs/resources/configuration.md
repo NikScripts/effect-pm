@@ -9,7 +9,7 @@ How an application declares configuration, and how the parts that change while i
 
 ``` ts
 import { Config, Effect } from "effect"
-import * as DynamicConfig from "@nikscripts/effect-pm/DynamicConfig"
+import * as DynamicConfig from "hyperlink-ts/DynamicConfig"
 
 const cfg = DynamicConfig.make({
   baseUrl: Config.string("BASE_URL").pipe(Config.withDefault("https://api.example.com")),

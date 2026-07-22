@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Store` transform layer + categorized `StoreWriteError` (breaking).** The store now separates a

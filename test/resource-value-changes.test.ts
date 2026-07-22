@@ -1,13 +1,13 @@
 import { Duration, Effect, Schema, Stream, SubscriptionRef } from "effect";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 // A `ref` field surfaces as a `Subscribable`: `.changes` replays the current value then streams every
 // update; `.get` reads the current. Works flat and nested (the spec tree).
-class Live extends Resource.Tag<Live>()("ref-test/Changes", {
-  count: Resource.ref(Schema.Number),
+class Live extends Hyperlink.Tag<Live>()("ref-test/Changes", {
+  count: Hyperlink.ref(Schema.Number),
   stats: {
-    online: Resource.ref(Schema.Number),
+    online: Hyperlink.ref(Schema.Number),
   },
 }) {}
 
@@ -40,9 +40,9 @@ it("ref.changes streams current + deltas; ref.get is always current — flat + n
         expect(Array.from(online)).toEqual([10]);
       }).pipe(
         Effect.provide(
-          Resource.layer(Live, {
-            count: Resource.subscribable(countRef),
-            stats: { online: Resource.subscribable(onlineRef) },
+          Hyperlink.layer(Live, {
+            count: Hyperlink.subscribable(countRef),
+            stats: { online: Hyperlink.subscribable(onlineRef) },
           }),
         ),
         Effect.scoped,

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Lookup node directory (D5/D6)** — advertise / list / unregister on the same Lookup server as identity claims.

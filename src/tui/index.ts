@@ -2,13 +2,13 @@
  * @module tui
  *
  * Building blocks for **terminal (Ink) resource dashboards** — the TUI counterpart to
- * `@nikscripts/effect-pm/web`. Re-exports the shared reactive binding (Ink is React, so the
+ * `hyperlink-ts/web`. Re-exports the shared reactive binding (Ink is React, so the
  * same `useAtomValue` / `useAtomSet` / `RegistryProvider` drive an Ink tree) plus terminal
  * render primitives — bars, sparklines, compact numbers, a status theme — that you compose
  * into your own widgets. Composable pieces, **not** a generic auto-renderer.
  *
  * ```tsx
- * import { useAtomValue, bar, compact, statusColor } from "@nikscripts/effect-pm/tui";
+ * import { useAtomValue, bar, compact, statusColor } from "hyperlink-ts/tui";
  * import { Box, Text } from "ink";
  * // a queue cell, your styling: <Text color={statusColor[status]}>{bar(pending, max, 20)}</Text>
  * ```

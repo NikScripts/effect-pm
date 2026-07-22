@@ -1,33 +1,33 @@
 import { Context, Effect, Stream, Schema } from "effect";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
-// `Resource.provideContext` (over `Resource.mapEffects`) discharges a captured context into every Effect
+// `Hyperlink.provideContext` (over `Hyperlink.mapEffects`) discharges a captured context into every Effect
 // method of an impl — the transform that replaces per-method `Effect.provideContext(...)` wrapping in the
 // queue builder. Streams and Subscribables (ref fields) pass through by reference; a nested group recurses.
 
 class Dep extends Context.Service<Dep, number>()(
-  "@nikscripts/effect-pm/test/resource-provide-context.test/Dep",
+  "hyperlink-ts/test/resource-provide-context.test/Dep",
 ) {}
 
-class T extends Resource.Tag<T>()("provide-context/T", {
+class T extends Hyperlink.Tag<T>()("provide-context/T", {
   // ref → Subscribable impl (stream: true) — must be left untouched
-  value: Resource.ref(Schema.Number),
+  value: Hyperlink.ref(Schema.Number),
   // stream field → Stream impl (stream: true) — must be left untouched
-  feed: Resource.stream(Schema.Number),
+  feed: Hyperlink.stream(Schema.Number),
   // Effect method requiring `Dep` — provideContext discharges it (R-free after)
-  scaled: Resource.effect(Schema.Number),
+  scaled: Hyperlink.effect(Schema.Number),
   // Effect method requiring nothing — providing a context is a harmless no-op
-  plain: Resource.effect(Schema.Number),
+  plain: Hyperlink.effect(Schema.Number),
   // nested group: a Stream `stream` (untouched) + an Effect `query` (mapped)
   group: {
-    stream: Resource.stream(Schema.Number),
-    query: Resource.effect(Schema.Array(Schema.Number)),
+    stream: Hyperlink.stream(Schema.Number),
+    query: Hyperlink.effect(Schema.Array(Schema.Number)),
   },
 }) {}
 
 it("provideContext maps Effect methods and leaves Stream / Subscribable members untouched", () => {
-  const valueSub: Resource.Subscribable<number> = {
+  const valueSub: Hyperlink.Subscribable<number> = {
     get: Effect.succeed(1),
     changes: Stream.make(1),
   };
@@ -45,7 +45,7 @@ it("provideContext maps Effect methods and leaves Stream / Subscribable members 
     },
   };
 
-  const provided = Resource.provideContext(impl, T[Resource.specSym], Context.make(Dep, 5));
+  const provided = Hyperlink.provideContext(impl, T[Hyperlink.specSym], Context.make(Dep, 5));
 
   // The `Dep`-requiring method now resolves with NO ambient service — the context discharged it.
   expect(Effect.runSync(provided.scaled)).toBe(50);
@@ -75,7 +75,7 @@ it("mapEffects with a type-preserving transform maps every Effect method (stream
     },
   };
 
-  const traced = Resource.mapEffects(impl, T[Resource.specSym], (effect) =>
+  const traced = Hyperlink.mapEffects(impl, T[Hyperlink.specSym], (effect) =>
     Effect.tap(effect, () => Effect.sync(() => seen.push("mapped"))),
   );
 

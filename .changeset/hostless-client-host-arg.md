@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Resource.client(tag, host)` — read a hostless multi-host tag as a client.** A hostless `multiHost`

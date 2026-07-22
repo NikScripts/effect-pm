@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Dependency-aware readiness.** A resource's readiness can now compose other resources' readiness, so a queue/process that depends on a database (or any resource) reports degraded when its dependency is.

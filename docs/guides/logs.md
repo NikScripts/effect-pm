@@ -1,10 +1,10 @@
 {#logs title="Logs" status="draft" appliesTo=all}
 # Logs
 
-Logs in effect-pm are one pipeline: every `Effect.log` on a [Node](/docs/glossary#node) lands on a
+Logs in hyperlink-ts are one pipeline: every `Effect.log` on a [Node](/docs/glossary#node) lands on a
 single live bus, and — when you register journals on your [Store](/docs/stores) — durable followers
 persist those lines into scoped history. You consume the same lines live (`Logs.stream`,
-`Resource.logs`) or from Storage (`Logs.byNode`, `Logs.byResource`).
+`Hyperlink.logs`) or from Storage (`Logs.byNode`, `Logs.byResource`).
 
 There is no separate “process log API” and “queue log API.” Capture is central. Scopes are how you
 carve the bus into journals and Handle-facing exports.
@@ -33,8 +33,8 @@ Your Node (key: billing/scores)
 - **Durable tails** — one Stream follower per store registration: level gate → match → append to that
   registration’s private `_logs` journal (Effect-style underscore field — not on public handle types).
 - **Lineage** — a JSON array of segment keys on each line (`Logs.withScope`), so filters can select by
-  Resource or by ancestry.
-- **Export** — `Resource.logs(tag)` for `{ stream, query }` on a Resource Handle surface. Prefer this
+  Hyperlink or by ancestry.
+- **Export** — `Hyperlink.logs(tag)` for `{ stream, query }` on a Hyperlink Handle surface. Prefer this
   for app reads; apps may freely declare their own Store shape named `log`.
 
 {.note}
@@ -48,7 +48,7 @@ Provide `Logs.layer` and every log on that fiber context reaches the bus:
 
 {.twoslash}
 ``` ts
-import { Logs } from "@nikscripts/effect-pm"
+import { Logs } from "hyperlink-ts"
 import { Effect, Fiber, Stream } from "effect"
 
 const program = Effect.gen(function* () {
@@ -73,15 +73,15 @@ opening a Stream. `Logs.replay` re-emits a captured `LogEntry` through the ambie
 Live-only is enough for ephemeral UIs. History needs Storage.
 
 Register journals on a `Store.Service`. Node-wide history uses `Node.logs` (or
-`Resource.store(Node)`). Per-Resource history uses the toolkit store registration —
+`Hyperlink.store(Node)`). Per-Hyperlink history uses the toolkit store registration —
 `Process.store(tag)`, `QueueResource.store(tag)`, and friends — which carry a private `_logs`
-journal. Read durable history with `Logs.byNode` / `Logs.byResource` / `Resource.logs(tag).query`
+journal. Read durable history with `Logs.byNode` / `Logs.byResource` / `Hyperlink.logs(tag).query`
 (not a public `handle.log` surface).
 
 {.twoslash}
 ``` ts
-import { Logs, Process, Resource, Store } from "@nikscripts/effect-pm"
-import * as Node from "@nikscripts/effect-pm/Node"
+import { Logs, Process, Hyperlink, Store } from "hyperlink-ts"
+import * as Node from "hyperlink-ts/Node"
 import { Effect } from "effect"
 
 class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
@@ -96,11 +96,11 @@ const program = Effect.gen(function* () {
   // Node journal — every line the match-all follower persisted for this Node.
   const nodeRows = yield* Logs.byNode(BillingNode, { limit: 200 })
 
-  // Resource journal — that registration's scope (same key as Daily.key).
+  // Hyperlink journal — that registration's scope (same key as Daily.key).
   const resourceRows = yield* Logs.byResource(Daily, { limit: 100 })
 
   // Preferred: live + durable product export for the tag.
-  const { query } = yield* Resource.logs(Daily)
+  const { query } = yield* Hyperlink.logs(Daily)
   const fromExport = yield* query({ limit: 100 })
 
   return { nodeRows, resourceRows, fromExport }
@@ -132,7 +132,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 | Kind | Identifies | Declared as | Used for |
 |------|------------|-------------|----------|
 | **Node log key** | One OS process / runtime host | `Node.Tag(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
-| **Resource key** | One Queue, Process, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byResource` |
+| **Hyperlink key** | One Queue, Process, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byResource` |
 | **Lineage segment** | One hop in ancestry | element of the lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **Annotation key** | Field name on `LogEntry.annotations` | `LogAnnotationKeys.*` | metadata keys, not buckets |
 
@@ -157,10 +157,10 @@ Logs.byNode("wnba")          // WnbaNode.key is "wnba/scores"
 Logs.byNode("my-node")
 ```
 
-### Resource keys
+### Hyperlink keys
 
-Resource identity is `tag.key` (may contain `/`; some metrics Tags use an `@` prefix). Resource
-journals, lineage filters, and `Resource.logs` all key off that string.
+Hyperlink identity is `tag.key` (may contain `/`; some metrics Tags use an `@` prefix). Hyperlink
+journals, lineage filters, and `Hyperlink.logs` all key off that string.
 
 ## Lineage
 
@@ -183,7 +183,7 @@ auto-injected into lineage; the node journal uses `annotations.node` instead.
 ### Predicates
 
 ``` ts
-import { LogEntry } from "@nikscripts/effect-pm"
+import { LogEntry } from "hyperlink-ts"
 
 LogEntry.lineage(entry)                 // ReadonlyArray<string>
 LogEntry.hasKey(resourceKey)(entry)     // key anywhere in the path
@@ -192,21 +192,21 @@ LogEntry.atLeaf(resourceKey)(entry)     // last segment === resourceKey
 ```
 
 Legacy `processId` / `queueId` annotations are gone — writers stamp lineage only via `Logs.withScope`.
-Resource kind is `Resource.kindOf(tag)`, not an annotation field.
+Hyperlink kind is `Hyperlink.kindOf(tag)`, not an annotation field.
 
 ## Per-resource export
 
-Prefer `Resource.logs(tag)` for Handle-shaped access — live Stream plus durable query:
+Prefer `Hyperlink.logs(tag)` for Handle-shaped access — live Stream plus durable query:
 
 {.twoslash}
 ``` ts
-import { LogEntry, Process, Resource } from "@nikscripts/effect-pm"
+import { LogEntry, Process, Hyperlink } from "hyperlink-ts"
 import { Effect } from "effect"
 
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
 const program = Effect.gen(function* () {
-  const { stream, query } = yield* Resource.logs(Daily)
+  const { stream, query } = yield* Hyperlink.logs(Daily)
 
   // Live: already filtered to lineage containing Daily.key (plus optional stream level).
   // Durable: registration Storage when local; NodeStatus fallback when remote.
@@ -217,11 +217,11 @@ const program = Effect.gen(function* () {
 })
 ```
 
-Pipe `Resource.withLogExport` onto a Tag when you want `yield* Tag.logs` as a member:
+Pipe `Hyperlink.withLogExport` onto a Tag when you want `yield* Tag.logs` as a member:
 
 ``` ts
 class MailQueue extends QueueResource.Tag<MailQueue>()("app/Mail", MailJob).pipe(
-  Resource.withLogExport,
+  Hyperlink.withLogExport,
 ) {}
 
 const { stream, query } = yield* MailQueue.logs
@@ -240,7 +240,7 @@ Two knobs, two jobs:
 | API | Affects |
 |-----|---------|
 | `Store.logLevel*` / registration log level | What the **durable tail** persists for that scope |
-| `Store.streamLevel*` on a registration (or `Resource.logStreamLevel*` on a Tag) | What `Resource.logs(tag).stream` emits live |
+| `Store.streamLevel*` on a registration (or `Hyperlink.logStreamLevel*` on a Tag) | What `Hyperlink.logs(tag).stream` emits live |
 
 ``` ts
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -248,9 +248,9 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,
 ) {}
 
-// Tag-side live floor (Resource.logs stream)
+// Tag-side live floor (Hyperlink.logs stream)
 class QuietProc extends Process.Tag<QuietProc>()("app/Quiet").pipe(
-  Resource.logStreamLevelWarn,
+  Hyperlink.logStreamLevelWarn,
 ) {}
 ```
 
@@ -260,11 +260,11 @@ class QuietProc extends Process.Tag<QuietProc>()("app/Quiet").pipe(
 
 When the dashboard (or any client) reaches a Node over RPC, durable per-resource rows come from that
 Node’s journal — typically `NodeStatus.logs.query` — filtered by **resource key**. Locally,
-`Resource.logs(tag).query` prefers registration Storage and falls back to NodeStatus when Storage
+`Hyperlink.logs(tag).query` prefers registration Storage and falls back to NodeStatus when Storage
 isn’t there.
 
 ``` ts
-import { LogEntry, NodeStatus } from "@nikscripts/effect-pm"
+import { LogEntry, NodeStatus } from "hyperlink-ts"
 import { Stream } from "effect"
 
 const resourceKey = LiveScorePoller.key
@@ -283,11 +283,11 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 
 | Concern | Package | Role |
 |---------|---------|------|
-| Platform | `@nikscripts/effect-pm/Logs` | Layer, bus, `withScope`, `byNode` / `byResource` |
-| Entry + predicates | `@nikscripts/effect-pm/LogEntry` | Wire shape, `hasKey` / `atRoot` / `atLeaf` |
-| Annotation keys | `@nikscripts/effect-pm/LogContext` | `LogAnnotationKeys` |
-| Export | `@nikscripts/effect-pm/Resource` | `logs`, `withLogExport`, `logStreamLevel*` |
-| Journals | `@nikscripts/effect-pm/Store` | `Store.Service`, `Node.logs`, toolkit `.store` |
+| Platform | `hyperlink-ts/Logs` | Layer, bus, `withScope`, `byNode` / `byResource` |
+| Entry + predicates | `hyperlink-ts/LogEntry` | Wire shape, `hasKey` / `atRoot` / `atLeaf` |
+| Annotation keys | `hyperlink-ts/LogContext` | `LogAnnotationKeys` |
+| Export | `hyperlink-ts/Hyperlink` | `logs`, `withLogExport`, `logStreamLevel*` |
+| Journals | `hyperlink-ts/Store` | `Store.Service`, `Node.logs`, toolkit `.store` |
 
 ## Migration (removed surfaces)
 
@@ -296,8 +296,8 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 | `Logs.persistLayer` + `store/Log` | `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` | `Logs.*` |
 | `LogRelay` / `replayLogEntry` / `*RelayLayer` flat aliases | `Logs.Relay` / `Logs.replay` / `Logs.layer` |
-| Engine `captureLogs` / handle `.logs` | `Logs.layer` + `Logs.withScope` + `Resource.logs` |
-| `HistoryStore` `` `${tag.key}/logs` `` | Registration `_logs` + `Resource.logs` / `Logs.by*` |
+| Engine `captureLogs` / handle `.logs` | `Logs.layer` + `Logs.withScope` + `Hyperlink.logs` |
+| `HistoryStore` `` `${tag.key}/logs` `` | Registration `_logs` + `Hyperlink.logs` / `Logs.by*` |
 
 ## See also
 

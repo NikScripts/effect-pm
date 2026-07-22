@@ -1,4 +1,4 @@
-# effect-pm — package guide (humans & tooling)
+# hyperlink-ts — package guide (humans & tooling)
 
 This document is the **narrative companion** to the API tables in [PROCESS-API.md](./PROCESS-API.md) and the **future backlog** in [plans/README.md](../plans/README.md). Read it when you need *why* things exist and *how* pieces connect, not just signature-level *what*.
 
@@ -6,11 +6,11 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 ## What you are looking at
 
-**effect-pm** (`@nikscripts/effect-pm`) is an [Effect](https://effect.website/)-first library for:
+**hyperlink-ts** (`hyperlink-ts`) is an [Effect](https://effect.website/)-first library for:
 
 1. **Managed processes** — `Process`: a driver watches the schedule's run windows, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes. Define one with `Process.Tag`, gate it with `Process.schedule` / `Process.window` / `Process.at` (or a reusable `Process.Schedule` resource).
 2. **Queue resources** — `QueueResource`: priority queues with concurrency, throttling, retry, self-refill, and optional durability.
-3. **Location transparency** — every resource is a `Resource` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Resource.httpServer`), `Resource.client` reaches it remotely — the **same `yield* Tag` code either way**. `Resource.serveInstances` runs many instances behind one transport; `Group` organizes tags (nestable, multi-host).
+3. **Location transparency** — every resource is a `Hyperlink` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Hyperlink.httpServer`), `Hyperlink.client` reaches it remotely — the **same `yield* Tag` code either way**. `Hyperlink.serveInstances` runs many instances behind one transport; `Group` organizes tags (nestable, multi-host).
 4. **Persistence** — opt-in durability (`DurableQueueStore`) and observability history (`HistoryStore`), in-memory or SQLite; process/run analytics via `ProcessStore` / `RuntimeStorage`.
 
 ---
@@ -19,14 +19,14 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│ Resource tag  (QueueResource / Process / …)                       │
+│ Hyperlink tag  (QueueResource / Process / …)                       │
 │  • identity + contract (spec)                                     │
 │  • `yield* Tag` — the SAME code local or remote                   │
 └───────────────────────────────────────────────────────────────────┘
          │ provided by a layer
          ├─ .layer               → local engine in this runtime
          ├─ .serve / .serveRemote → host over RPC (serveInstances = many)
-         └─ Resource.client      → remote handle (dashboard)
+         └─ Hyperlink.client      → remote handle (dashboard)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
 │ engine  (queue worker pool  /  Process schedule driver)           │
@@ -58,20 +58,20 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 ## Package subpaths
 
-Root imports from `@nikscripts/effect-pm` remain backwards compatible. Prefer
+Root imports from `hyperlink-ts` remain backwards compatible. Prefer
 dedicated subpaths for focused imports:
 
-- `@nikscripts/effect-pm/Resource`
-- `@nikscripts/effect-pm/Process` — `Process.Tag` / `Process.Schedule` + `make` / `layer` / `serve`
-- `@nikscripts/effect-pm/QueueResource`
-- `@nikscripts/effect-pm/Group`
-- `@nikscripts/effect-pm/Logs` — runtime capture, relay, `persistLayer`, `byNode` / `byResource`
-- `@nikscripts/effect-pm/HistoryStore`, `@nikscripts/effect-pm/DurableQueueStore`
-- `@nikscripts/effect-pm/store/Log` — durable log journal (`LogStore`)
-- `@nikscripts/effect-pm/storage/sqlite` — HistoryStore / DurableQueue backends
+- `hyperlink-ts/Hyperlink`
+- `hyperlink-ts/Process` — `Process.Tag` / `Process.Schedule` + `make` / `layer` / `serve`
+- `hyperlink-ts/QueueResource`
+- `hyperlink-ts/Group`
+- `hyperlink-ts/Logs` — runtime capture, relay, `persistLayer`, `byNode` / `byResource`
+- `hyperlink-ts/HistoryStore`, `hyperlink-ts/DurableQueueStore`
+- `hyperlink-ts/store/Log` — durable log journal (`LogStore`)
+- `hyperlink-ts/storage/sqlite` — HistoryStore / DurableQueue backends
 
-Structured logs use `LogStore` + `@nikscripts/effect-pm/Logs` (`layer`, `persistLayer`, `stream`,
-`Resource.logs`) — see [`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` and the
+Structured logs use `LogStore` + `hyperlink-ts/Logs` (`layer`, `persistLayer`, `stream`,
+`Hyperlink.logs`) — see [`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` and the
 `ProcessStorage` / `RuntimeStorage` facet substrate are removed.)
 
 For durable adapter work, start with
@@ -83,12 +83,12 @@ For durable adapter work, start with
 
 | Export area | Role |
 |-------------|------|
-| `Resource` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `httpServer` / `client` / `Host` / `serveInstances` + `specOf` / `methodMeta`. |
+| `Hyperlink` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `httpServer` / `client` / `Host` / `serveInstances` + `specOf` / `methodMeta`. |
 | `QueueResource`, `Process` | Batteries-included resource kinds (queue / managed process). `Process.Schedule` is a standalone run-windows resource. |
 | `Group` | Organize member tags (nestable; same or different hosts). |
 | `Process`, `Polling` | The managed-process toolkit + engine (`Process.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
 | `Logs`, `HistoryStore`, `DurableQueueStore` | Runtime-wide logs ([`docs/LOGS.md`](../LOGS.md)); metrics history; durable queue (in-memory or SQLite). |
-| `Store` / `store/*` | Shape-first store contracts and public facets (e.g. `LogStore`). Resource execution history uses `*.store(tag)` / `Store.effects`. |
+| `Store` / `store/*` | Shape-first store contracts and public facets (e.g. `LogStore`). Hyperlink execution history uses `*.store(tag)` / `Store.effects`. |
 | `RunResource`, `HttpClientRunGate`, `HttpApiResource` | Concurrency/throttle gates and typed HttpApi client building blocks. |
 | `disarmedIdleSleep` exports | Helpers for custom schedule logic. |
 
@@ -106,8 +106,8 @@ example).
 1. **A resource `layer` acquires its engine in scope** — provide it once (`Effect.provide` at the app root) so the queue/process is acquired exactly once.
 2. **Forking** a process driver needs **`R` plus any storage facets you compose**, where `R` is whatever remains after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root for many independent layers (clearer dependency graph; matches Effect lint guidance).
-4. **Hosting (`httpServer`) is over RPC.** Auth/transport security is the deployment's responsibility (e.g. a private network or an edge gateway); a first-class auth story for `Resource` RPC is a future feature. Don't expose a host on the public internet without it.
-5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `@nikscripts/effect-pm/QueueResource`) — keep it **separate** from `Layer` / `serve` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
+4. **Hosting (`httpServer`) is over RPC.** Auth/transport security is the deployment's responsibility (e.g. a private network or an edge gateway); a first-class auth story for `Hyperlink` RPC is a future feature. Don't expose a host on the public internet without it.
+5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `hyperlink-ts/QueueResource`) — keep it **separate** from `Layer` / `serve` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
 
 ---
 

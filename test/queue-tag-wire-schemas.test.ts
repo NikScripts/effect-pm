@@ -55,7 +55,7 @@ describe("QueueResource.Tag wire schemas (payload / success / error)", () => {
     expect(QueueResource.successOf(null)).toBeUndefined();
     expect(QueueResource.successOf(undefined)).toBeUndefined();
     expect(QueueResource.errorOf(42)).toBeUndefined();
-    expect(QueueResource.successOf({ [Symbol.for("@nikscripts/effect-pm/Queue/success")]: "nope" })).toBeUndefined();
+    expect(QueueResource.successOf({ [Symbol.for("hyperlink-ts/Queue/success")]: "nope" })).toBeUndefined();
   });
 });
 

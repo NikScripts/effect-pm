@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Remove the public `Xor` runtime-record predicate from the `Query` DSL.

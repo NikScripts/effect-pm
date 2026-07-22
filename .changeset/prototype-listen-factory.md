@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Node.Prototype.listen(serves)`** — curried dynamic-instance spawn.

@@ -7,7 +7,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
 import type { QueueLayerConfig } from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -23,7 +23,7 @@ interface Item {
 }
 class WsQueue extends QueueResource.Tag<WsQueue>()("queue-remote-ws/Q", { payload: Item }) {}
 
-// ws client transport (matches `Resource.ws` / a `{protocol:"websocket"}` server).
+// ws client transport (matches `Hyperlink.ws` / a `{protocol:"websocket"}` server).
 const clientWs = (port: number) =>
   RpcClient.layerProtocolSocket().pipe(
     Layer.provide(RpcSerialization.layerNdjson),
@@ -53,7 +53,7 @@ const withServer = <A, E>(
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
-      Effect.provide(Resource.client(WsQueue).pipe(Layer.provide(clientLayer(port)))),
+      Effect.provide(Hyperlink.client(WsQueue).pipe(Layer.provide(clientLayer(port)))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(serveWs(config)), Effect.scoped);
