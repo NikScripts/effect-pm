@@ -19,14 +19,22 @@ export default function LandingPage() {
               <code>yield*</code> everywhere
             </span>
           </div>
-          <p className="landing-pitch">The boundary between runtimes disappears.</p>
-          <p className="landing-body">
-            Place a Service anywhere: a parallel process, a second machine, the other side of the
-            world. Calling it never changes.
+          <p className="landing-pitch">
+            JavaScript has been multi-core for a decade. Hyperlink makes it feel single-threaded
+            again.
           </p>
           <p className="landing-body">
-            No server to stand up. No client to write. No wiring to keep alive. Move a Service by
-            reassigning its node. Scale it by giving it more.
+            A parallel process. A second machine. <code>yield*</code> a Service from any runtime
+            and it answers: local or remote, typed end to end, schema-validated at the boundary.
+          </p>
+          <p className="landing-body">
+            Heavy work moves off the event loop and onto your other cores. The app spreads across
+            machines and no call site changes. Monolith in dev, fleet in prod, the same code
+            either way.
+          </p>
+          <p className="landing-body">
+            Change a contract and the compiler flags every caller, in every process, on every
+            machine. All your cores. All your machines. One typed surface.
           </p>
           <p className="landing-credit">Inspired by and built on Effect RPC.</p>
           <p className="landing-soon">Coming soon</p>
