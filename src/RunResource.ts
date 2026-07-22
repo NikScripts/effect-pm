@@ -826,10 +826,10 @@ export function serveRemote(
     Layer.unwrap(
       Effect.map(
         buildRunImpl(baseTag, config),
-        (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
+        (built) => Resource.serveRemote(baseTag, built) as any,
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 }
 
 /**
@@ -852,7 +852,7 @@ export function serveRemoteMemory(
   tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return serveRemote(tag as any, config as any);
+  return serveRemote(tag as any, config as any) as any;
 }
 
 /**
@@ -886,10 +886,10 @@ export function serve(
     Layer.unwrap(
       Effect.map(
         buildRunImpl(baseTag, config),
-        (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
+        (built) => Resource.serve(baseTag, built) as any,
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 }
 
 /**
@@ -916,7 +916,7 @@ export function serveMemory(
   tag: ResourceTag<any, any, any>,
   config: RunResourceLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return serve(tag as any, config as any);
+  return serve(tag as any, config as any) as any;
 }
 
 /**

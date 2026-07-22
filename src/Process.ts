@@ -2559,8 +2559,8 @@ export function layer(
       Effect.map(buildProcessImpl(tag, config), (built) =>
         Resource.layer(baseTag, Resource.grantLocal(baseTag, built)),
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 }
 
 /**
@@ -2577,7 +2577,7 @@ export function layerMemory(
   tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return layer(tag, config);
+  return layer(tag, config) as any;
 }
 
 /**
@@ -2605,10 +2605,10 @@ export function serve(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (built): Layer.Layer<any, any, any> => Resource.serve(baseTag, built),
+        (built) => Resource.serve(baseTag, built) as any,
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 }
 
 /**
@@ -2629,7 +2629,7 @@ export function serveMemory(
   tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return serve(tag, config);
+  return serve(tag, config) as any;
 }
 
 /**
@@ -2654,10 +2654,10 @@ export function serveRemote(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (built): Layer.Layer<any, any, any> => Resource.serveRemote(baseTag, built),
+        (built) => Resource.serveRemote(baseTag, built) as any,
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 }
 
 /**
@@ -2674,7 +2674,7 @@ export function serveRemoteMemory(
   tag: ResourceTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  return serveRemote(tag, config);
+  return serveRemote(tag, config) as any;
 }
 
 /**

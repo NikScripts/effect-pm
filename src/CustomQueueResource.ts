@@ -623,10 +623,10 @@ export const serveRemote = <
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildCustomQueueImpl(tag, config), (built) =>
-        Resource.serveRemote(tag, built as any),
+        Resource.serveRemote(tag, built as any) as any,
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 
 /**
  * Alias of {@link serveRemote}.
@@ -643,7 +643,7 @@ export const serveRemoteMemory = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-) => serveRemote(tag, config);
+) => serveRemote(tag, config) as any;
 
 /**
  * Serve this custom queue **and** grant its local instance from **one** materialization — the

@@ -984,8 +984,8 @@ export const retention =
 const decodeChangeRow = (
   row: Schema.Schema<unknown>,
   payload: unknown,
-): Effect.Effect<unknown, StoreJournalDecodeError, unknown> =>
-  Schema.decodeUnknownEffect(Schema.toCodecJson(row))(payload).pipe(
+): Effect.Effect<unknown, StoreJournalDecodeError, never> =>
+  (Schema.decodeUnknownEffect(Schema.toCodecJson(row))(payload) as any).pipe(
     Effect.mapError(
       (cause) =>
         new StoreJournalDecodeError({
@@ -1066,7 +1066,7 @@ export function changes(
             Stream.mapEffect((event) => decodeChangeRow(ref.row, event.payload)),
           ),
         ),
-      );
+      ) as any;
     }
     const rowByKey = shapeRowsByKey(store.contract.shapes);
     return storeChangesStream(store).pipe(
@@ -1085,7 +1085,7 @@ export function changes(
           }),
         ),
       ),
-    );
+    ) as any;
   }
   const key = typeof storeOrScope === "string" ? storeOrScope : storeOrScope.key;
   return Effect.flatMap(Storage, (bridge) => bridge.changes(key));
@@ -1207,13 +1207,13 @@ const flattenEffects = (
 const mapMethod =
   (
     method: unknown,
-    transform: (effect: Effect.Effect<unknown, unknown, unknown>) => Effect.Effect<unknown, unknown, unknown>,
+    transform: (effect: Effect.Effect<unknown, never, never>) => Effect.Effect<unknown, never, never>,
   ) =>
-  (...args: ReadonlyArray<unknown>): Effect.Effect<unknown, unknown, unknown> => {
+  (...args: ReadonlyArray<unknown>): Effect.Effect<unknown, never, never> => {
     if (typeof method !== "function") {
       return Effect.die("Store.mapEffects: effects leaf is not a method");
     }
-    return transform(method(...args));
+    return transform((method as any)(...args));
   };
 
 /**
@@ -1296,8 +1296,8 @@ export const mapEffects = <
 >(
   effects: Effects,
   transform: (
-    effect: Effect.Effect<unknown, unknown, unknown>,
-  ) => Effect.Effect<unknown, unknown, unknown>,
+    effect: Effect.Effect<unknown, never, never>,
+  ) => Effect.Effect<unknown, never, never>,
 ): Out => {
   const flat: Record<string, unknown> = {};
   flattenEffects(effects, "", flat);
@@ -1325,13 +1325,16 @@ const isStoreWriteError = (u: unknown): u is StoreWriteError =>
  * defect and propagates). A no-op on reads (they never fail with `StoreWriteError`). @internal
  */
 const swallowWrite = (
-  effect: Effect.Effect<unknown, unknown, unknown>,
-): Effect.Effect<unknown, unknown, unknown> =>
-  Effect.catch(effect, (error) =>
-    isStoreWriteError(error)
-      ? Effect.logWarning("store write failed", error)
-      : Effect.fail(error),
-  );
+  effect: Effect.Effect<unknown, never, never>,
+): Effect.Effect<unknown, never, never> => {
+  const caught: any = (Effect.catch as any)(effect, (error: any) => {
+    if (isStoreWriteError(error)) {
+      return (Effect.logWarning as any)("store write failed", error);
+    }
+    return Effect.fail(error as never);
+  });
+  return caught;
+};
 
 /**
  * Narrow {@link StoreWriteError} out of the error channel of a {@link effects} object's **write**
@@ -1381,7 +1384,7 @@ export const provideContext = <
   context: Context.Context<Ctx>,
 ): StoreProvidedContext<Effects, Ctx> =>
   mapEffects<Effects, StoreProvidedContext<Effects, Ctx>>(effects, (effect) =>
-    Effect.provideContext(effect, context),
+    Effect.provideContext(effect as any, context) as any,
   );
 
 

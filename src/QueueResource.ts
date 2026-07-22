@@ -1427,10 +1427,10 @@ export const serveRemote = <
   withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildQueueImpl(tag, config), (built) =>
-        Resource.serveRemote(tag, built),
+        Resource.serveRemote(tag, built) as any,
       ),
-    ),
-  );
+    ) as any,
+  ) as any;
 
 /**
  * Alias of {@link serveRemote}.
@@ -1448,7 +1448,7 @@ export const serveRemoteMemory = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-) => serveRemote(tag, config);
+) => serveRemote(tag, config) as any;
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
