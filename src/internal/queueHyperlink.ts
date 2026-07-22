@@ -1127,6 +1127,11 @@ export type QueueHyperlinkConfigWithoutItemSchema<T, E, R> = QueueHyperlinkConfi
  */
 export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
 
+/**
+ * Queue layer config when an `itemSchema` is supplied (validated enqueue path).
+ *
+ * @public
+ */
 export type QueueHyperlinkConfigWithItemSchema<T, E, R, A = void> = QueueHyperlinkConfigBase<T> & {
   readonly itemSchema: Schema.Codec<T, unknown, never, never>;
   /**

@@ -26,11 +26,17 @@ export const typecheck = () =>
 /** `vitest run` */
 export const test = () => run("vitest", ["run"]);
 
+/** `vitest` (watch mode). */
+export const testWatch = () => run("vitest");
+
 /** eslint over the package (repos/ ignored). */
 export const lint = () => run("eslint", [".", "--ignore-pattern", "repos/**"]);
 
 /** `tsup` */
 export const build = () => run("tsup");
+
+/** Remove build output (`dist/`). */
+export const clean = () => run("rm", ["-rf", "dist"]);
 
 /** Visibility marker check (baseline mode). */
 export const markers = () =>
