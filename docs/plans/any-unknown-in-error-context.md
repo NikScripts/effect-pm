@@ -24,7 +24,7 @@ pnpm exec effect-language-service diagnostics --project tsconfig.json \
 | Batch | Scope | Status |
 |------|--------|--------|
 | **1** | Node transports (`src/internal/node*`, `Node.ts`) | **Mostly Eng’d** — listen/connect **0 hits**. Residual ~19 on `httpServer`/`wsServer`/`ipcServer` open-`R` `any` variance (Effect `mergeAll` shape). |
-| **2** | `Resource.ts` + Process/Store/Run/Queue serveRemote | Next |
+| **2** | `Resource.ts` + Process/Store/Run/Queue serveRemote | **Eng'd** — public targets **0 hits**. Residual `ReadinessOf`/`any` on {@link withReadiness} public type; `clientLayer` node path uses contained `(Layer.effect as any)` gen (mirrors protocol branch). `missingLayerContext` on `localLayer` unchanged. |
 | **3** | Tests | After 2 |
 | **4** | Examples + consider stage-enable | Last |
 
