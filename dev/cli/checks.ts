@@ -1,0 +1,58 @@
+/**
+ * Concrete repo checks owned by `hl`.
+ *
+ * Keep the argv lists here — `package.json` scripts are thin aliases that
+ * call into this tree, not the other way around.
+ */
+import { Effect } from "effect";
+import { run } from "./run";
+
+/** `pnpm install --frozen-lockfile` */
+export const deps = () => run("pnpm", ["install", "--frozen-lockfile"]);
+
+/**
+ * Full typecheck gate: tsgo (root + strict-provide + web) then tsc.
+ * Mirrors the previous `pnpm typecheck` script body.
+ */
+export const typecheck = () =>
+  Effect.gen(function* () {
+    yield* run("tsgo", ["--noEmit", "-p", "tsconfig.json"]);
+    yield* run("tsgo", ["--noEmit", "-p", "tsconfig.src.strict-effect-provide.json"]);
+    yield* run("tsgo", ["--noEmit", "-p", "src/web/tsconfig.json"]);
+    yield* run("tsc", ["--noEmit", "-p", "tsconfig.json"]);
+  });
+
+/** `vitest run` */
+export const test = () => run("vitest", ["run"]);
+
+/** eslint over the package (repos/ ignored). */
+export const lint = () => run("eslint", [".", "--ignore-pattern", "repos/**"]);
+
+/** `tsup` */
+export const build = () => run("tsup");
+
+/** Visibility marker check (baseline mode). */
+export const markers = () =>
+  run("tsx", ["scripts/mark-the-surface-check.ts", "--baseline"]);
+
+/** Tag-only tree-shake smoke. */
+export const treeshake = () => run("node", ["scripts/treeshake-check.mjs"]);
+
+/** Standards manifest freshness (`docs/site`). */
+export const manifest = () =>
+  run("pnpm", ["-C", "docs/site", "docs:manifest:check"]);
+
+/**
+ * Default green gate for agents and CI.
+ *
+ * deps → typecheck → lint → test → markers.
+ * `build`, `treeshake`, and `manifest` stay opt-in under `hl check …` for now.
+ */
+export const verify = () =>
+  Effect.gen(function* () {
+    yield* deps();
+    yield* typecheck();
+    yield* lint();
+    yield* test();
+    yield* markers();
+  });

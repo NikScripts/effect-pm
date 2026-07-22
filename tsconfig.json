@@ -120,7 +120,8 @@
     "test/**/*.ts",
     "examples/**/*.ts",
     "examples/shared/**/*.ts",
-    "scratchpad/**/*.ts"
+    "scratchpad/**/*.ts",
+    "dev/**/*.ts"
   ],
   "exclude": [
     "node_modules",
