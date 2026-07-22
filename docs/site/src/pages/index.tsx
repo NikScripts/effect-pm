@@ -20,21 +20,22 @@ export default function LandingPage() {
             </span>
           </div>
           <p className="landing-pitch">
-            JavaScript has been multi-core for a decade. Hyperlink makes it feel single-threaded
-            again.
+            JavaScript has been multi-core for a decade. Hyperlink makes writing it feel
+            single-threaded again.
           </p>
           <p className="landing-body">
-            A parallel process. A second machine. <code>yield*</code> a Service from any runtime
-            and it answers: local or remote, typed end to end, schema-validated at the boundary.
+            <code>yield*</code> a Service and it answers, from a parallel process, a second
+            machine, the far side of the network. Typed end to end, schema-validated at the wire.
+            You never write the difference.
           </p>
           <p className="landing-body">
-            Heavy work moves off the event loop and onto your other cores. The app spreads across
-            machines and no call site changes. Monolith in dev, fleet in prod, the same code
-            either way.
+            Heavy work moves off the event loop and onto your other cores, the app spreads across
+            machines, and not one call site changes: monolith in dev, fleet in prod, the same
+            code either way.
           </p>
           <p className="landing-body">
             Change a contract and the compiler flags every caller, in every process, on every
-            machine. All your cores. All your machines. One typed surface.
+            machine. One typed surface.
           </p>
           <p className="landing-credit">Inspired by and built on Effect RPC.</p>
           <p className="landing-soon">Coming soon</p>
