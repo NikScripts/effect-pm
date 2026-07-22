@@ -4,11 +4,11 @@
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > and live type previews — is at <https://hyperlink.cool/docs/index>.
 <!-- docs-site-link:end -->
-# Effect Hyperlink
+# Hyperlink for Effect
 
 **Build cross-runtime Services on Effect.**
 
-An Effect Service lives inside one runtime. A *cross-runtime Service* doesn't: define it once, run it
+An Effect Service lives inside one runtime. A *Hyperlink Service* doesn't: define it once, run it
 on one runtime, and call it from another over RPC — with the same typed Handle.
 
 A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
