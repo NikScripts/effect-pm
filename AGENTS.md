@@ -2,6 +2,10 @@
 
 Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) for the supervisor bus, [`docs/standards/`](./docs/standards/) for invariants, and the live book under [`docs/index.md`](./docs/index.md).
 
+**Repo CLI:** **`pnpm hyp`** (Effect CLI under `dev/cli/`) owns developer gates. Prefer
+`pnpm verify` / `pnpm hyp …` over adding new root scripts. Green gate:
+`deps → typecheck → lint → test → build → markers`. See `.cursor/rules/hyp-verify.mdc`.
+
 **Persistence:** Live recipe SSOT — [`docs/guides/stores.md`](./docs/guides/stores.md). Cutover history — [`docs/handoffs/store-cutover-00-store-core.md`](./docs/handoffs/store-cutover-00-store-core.md) (prefer the guide when they disagree).
 
 **Integration branch:** **`integration`**. Active handoffs index: [`docs/handoffs/reports/README.md`](./docs/handoffs/reports/README.md).

@@ -65,7 +65,7 @@ const check = Command.make("check").pipe(
 
 const verify = Command.make("verify").pipe(
   Command.withDescription(
-    "Default green gate: deps → typecheck → lint → test → markers.",
+    "Default green gate: deps → typecheck → lint → test → build → markers.",
   ),
   Command.withHandler(() => checks.verify()),
 );

@@ -52,8 +52,12 @@ export const manifest = () =>
 /**
  * Default green gate for agents and CI.
  *
- * deps → typecheck → lint → test → markers.
- * `build`, `treeshake`, and `manifest` stay opt-in under `hyp check …` for now.
+ * deps → typecheck → lint → test → build → markers.
+ *
+ * Matches working-agreement green-before-commit, plus deps + markers.
+ * `treeshake` stays opt-in (`hyp check treeshake`).
+ * `manifest` stays opt-in — it needs a separate `docs/site` install
+ * (`hyp docs install` then `hyp check manifest` / `hyp docs manifest check`).
  */
 export const verify = () =>
   Effect.gen(function* () {
@@ -61,5 +65,6 @@ export const verify = () =>
     yield* typecheck();
     yield* lint();
     yield* test();
+    yield* build();
     yield* markers();
   });

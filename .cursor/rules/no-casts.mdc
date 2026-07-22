@@ -1,0 +1,25 @@
+---
+description: No casts — fix the root cause structurally; boundary casts only when provably safe
+globs: "{src,test,examples,dev}/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# No casts
+
+Full rule: [`docs/standards/types-and-naming.md`](../../docs/standards/types-and-naming.md).
+
+- No `as`, `as any`, `as unknown as`, or `!` non-null assertions.
+- When a type doesn't fit, restructure the value, signature, or generic until it does.
+- Narrow `unknown` with `Schema` decode or a type predicate — never assert.
+- `satisfies` against a **named** type is allowed; inline `satisfies { … }` is not.
+- `as const` is fine (literal narrowing, not an assertion).
+
+## Only sanctioned cast
+
+A cast is allowed **only** at a pure type-level boundary with no runtime value to validate,
+and only when **provably safe by construction**, with a one-line `// SAFE: …` comment stating why.
+
+```ts
+// SAFE: `acc` is assembled field-by-field to satisfy Built<Self>; TS can't track the builder.
+return acc as Built<Self>;
+```
