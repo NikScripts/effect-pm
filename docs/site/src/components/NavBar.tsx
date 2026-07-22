@@ -139,7 +139,7 @@ export function NavBar({
           ) : null}
           <a
             className="icon-btn gh-btn"
-            href="https://github.com/NikScripts/effect-pm"
+            href="https://github.com/nikolasstow/Hyperlink"
             aria-label="GitHub repository"
             target="_blank"
             rel="noreferrer"

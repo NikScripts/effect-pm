@@ -2,7 +2,7 @@
 // still offers branch+PR, and non-collaborators get fork+PR automatically). In DEV it deep-links
 // the LOCAL file into the editor instead — docs-while-building. Editor scheme is one string.
 
-const REPO_EDIT = "https://github.com/NikScripts/effect-pm/edit/main";
+const REPO_EDIT = "https://github.com/nikolasstow/Hyperlink/edit/main";
 
 export const EditThisPage = ({
   sourcePath,

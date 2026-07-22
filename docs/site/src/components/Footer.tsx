@@ -3,7 +3,7 @@
 
 import * as React from "react";
 
-const GITHUB = "https://github.com/NikScripts/effect-pm";
+const GITHUB = "https://github.com/nikolasstow/Hyperlink";
 const NPM = "https://www.npmjs.com/package/hyperlink-ts";
 const LICENSE = `${GITHUB}/blob/main/LICENSE`;
 
