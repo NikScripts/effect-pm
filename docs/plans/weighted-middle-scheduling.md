@@ -29,19 +29,19 @@ Keep the two **strict** tiers, diversify the middle into many **weighted** group
 
 ## Packaging — a separate resource type, not a change to every queue
 
-Ship this as its own resource type (`CustomQueueResource`, name TBD), **not** as a feature added to
-the standard `QueueResource`. This is the key decision that de-risks the whole thing:
+Ship this as its own resource type (`CustomQueueHyperlink`, name TBD), **not** as a feature added to
+the standard `QueueHyperlink`. This is the key decision that de-risks the whole thing:
 
-- The existing `QueueResource` and everything on it (wow, the dashboard) are **untouched** — no wire-
+- The existing `QueueHyperlink` and everything on it (wow, the dashboard) are **untouched** — no wire-
   schema churn under live consumers. The new type carries its own (per-group) schema from day one.
 - The default queue stays lean + tree-shakeable: queues that don't weight never pull the STM
-  scheduler code (mirrors how the `QueueResource` namespace already splits the light `Tag` from the
+  scheduler code (mirrors how the `QueueHyperlink` namespace already splits the light `Tag` from the
   engine).
 - No back-compat gymnastics (no "additive sizes" hack, no preserving `{high,normal,low}` alongside
   groups).
 
 **Share the engine, swap only the lane store.** Factor a small internal `LaneStore` interface
-(`offer` / `take` / `sizes` / `drain`); the default wires the 3-FIFO impl, `CustomQueueResource`
+(`offer` / `take` / `sizes` / `drain`); the default wires the 3-FIFO impl, `CustomQueueHyperlink`
 wires the weighted-STM impl. Worker pool, retries, metrics/logs/history, persistence plumbing, and
 lifecycle are shared (written once); only the data structure + scheduler differ — and only the new
 type imports the STM impl.
@@ -58,11 +58,11 @@ Today: `highQueue` / `normalQueue` / `lowQueue` are bounded Effect `Queue`s, pul
   the current `workerWakeSignal` / feeder-coordination machinery rather than adding to it.
 - Bounded backpressure preserved via bounded `TQueue` (retry-on-full).
 
-Scope: a self-contained STM scheduler module + rewiring the worker take path in `QueueResource.ts`.
+Scope: a self-contained STM scheduler module + rewiring the worker take path in `QueueHyperlink.ts`.
 
 ## Ripple effects (the real cost is downstream)
 
-1. **Wire schema + dashboard:** because it's a **separate type**, the existing `QueueResource` and
+1. **Wire schema + dashboard:** because it's a **separate type**, the existing `QueueHyperlink` and
    dashboard are untouched — there's no migration of the current schema. The new type defines its own
    per-group `sizes` / `status` / `metrics` and `add(item, number | name)`; the UI agent adds a
    widget for it **when ready**, on its own timeline (additive, not a forced change).

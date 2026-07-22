@@ -26,7 +26,7 @@ yield* queue.status.get;
 - **`Hyperlink`** — the foundation: `Tag` + `layer` (local), `serve` / `serveRemote` (host, composed
   with `httpServer`), `client` / `connect` (remote), `Host` / `serveInstances` (many instances behind
   one transport). Contracts are introspectable via `specOf` / `methodMeta` (build generic UIs).
-- **`QueueResource`** — three-level **priority** queues with concurrency, optional `rateLimit`,
+- **`QueueHyperlink`** — three-level **priority** queues with concurrency, optional `rateLimit`,
   `attempts` retry, **`refill`** (self-feeding from a source), and **`persist`** (durable, at-least-once).
   Per-resource logs use the **`Logs`** platform + **`Hyperlink.logs`** (not built-in handle `logs`).
 - **`Process`** — a managed process: lifecycle (`start`/`stop`/`run`), reactive `status`, inline or
@@ -39,12 +39,12 @@ yield* queue.status.get;
 
 ```ts
 import { Effect, Layer, Schema, Stream } from "effect";
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 
 const Job = Schema.Struct({ id: Schema.String });
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
+class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
 
-const layer = QueueResource.layer(RosterQueue, {
+const layer = QueueHyperlink.layer(RosterQueue, {
   effect: (job) => importRoster(job),
   concurrency: 4,
   attempts: 3,
@@ -60,7 +60,7 @@ const program = Effect.gen(function* () {
 A **self-feeding** queue (the toolkit equivalent of `onStart` / `onDrained` refill):
 
 ```ts
-QueueResource.layer(RosterQueue, {
+QueueHyperlink.layer(RosterQueue, {
   effect,
   refill: { onStart: true, onDrained: true, load: (queue) => loadFromDb(queue) },
 });
@@ -85,16 +85,16 @@ const layer = Process.layer(LiveScores, {
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 import * as Store from "hyperlink-ts/Store";
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 
 class Droplet extends Hyperlink.Node<Droplet>("hub/droplet") {}
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Droplet.logs,
-  QueueResource.store(RosterQueue),
+  QueueHyperlink.store(RosterQueue),
 ) {}
 
 // host — engines soft-default Memory; AppStore overrides Soft capture (bakes Logs + journals)
-Hyperlink.httpServer([QueueResource.serve(RosterQueue, { effect })])
+Hyperlink.httpServer([QueueHyperlink.serve(RosterQueue, { effect })])
   .pipe(
     Layer.provide(AppStore.layerMemory),
     Layer.provide(HistoryStore.layerMemory()),
@@ -113,7 +113,7 @@ Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
   `persist` on the queue; a restart recovers in-flight work.
 - **Observability history** — `HistoryStore` backs `metrics.query` window backfill; runtime-wide logs
   use `Node.logs` / toolkit `*.store` on a `Store.Service` and read back with `Logs.byNode` /
-  `Logs.byResource` / `Hyperlink.logs(tag)`. Persist the store with `AppStore.layer({ filename })`.
+  `Logs.byHyperlink` / `Hyperlink.logs(tag)`. Persist the store with `AppStore.layer({ filename })`.
   `SQLiteHistoryStore.layer` / `SQLiteDurableQueueStore.layer` from
   `hyperlink-ts/storage/sqlite` cover queue/history separately.
 

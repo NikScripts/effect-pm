@@ -1,6 +1,6 @@
 # Hyperlink configure (layer patches)
 
-Override **defaults** on `Process.Service`, `QueueResource.Service`, and `RunResource.Service` with **`Layer` patches** — not hot reload. Patches fold **once** when the resource `.layer` is built.
+Override **defaults** on `Process.Service`, `QueueHyperlink.Service`, and `RunHyperlink.Service` with **`Layer` patches** — not hot reload. Patches fold **once** when the resource `.layer` is built.
 
 **API:** `configureLayer`, `foldConfig`, `ConfigPatch` from `hyperlink-ts`. Per-service: `.configure`, `.wrapWorker` / `.wrapEffect` / `.wrapGate`, `.defaultSpec`.
 
@@ -45,9 +45,9 @@ const effective = foldConfig(
 
 ```typescript
 import { Duration, Effect, Layer } from "effect";
-import { QueueResource } from "hyperlink-ts";
+import { QueueHyperlink } from "hyperlink-ts";
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
+class EmailQueue extends QueueHyperlink.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   (email) => send(email).pipe(Effect.asVoid),
   { concurrency: 10 },
@@ -102,7 +102,7 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 ```typescript
 import * as Store from "hyperlink-ts/Store";
 
-const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
+const SendSms = RunHyperlink.Service<SendSms>()("@app/Sms", {
   payload: PhoneSchema,
   success: Schema.Void,
   error: SmsErrorSchema,
@@ -115,20 +115,20 @@ const SendSmsLive = SendSms.layer.pipe(
 );
 ```
 
-`RunResource.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
+`RunHyperlink.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
 `Layer.provideMerge(AppStore.layerMemory)` (or SQLite `AppStore.layer({ filename })`) at the app root.
-{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect. See
+{@link RunHyperlink.make} still requires {@link Store.layerDefaultMemory} on the effect. See
 [store.md](./store.md#default-store-layerdefaultmemory).
 
 ---
 
 ## Tag key
 
-`resourceConfigureTagKey(id)` → `hyperlink-ts/ResourceConfigure/${id}`. Matches the service **name** / process **id** string.
+`resourceConfigureTagKey(id)` → `hyperlink-ts/HyperlinkConfigure/${id}`. Matches the service **name** / process **id** string.
 
 ---
 
 ## Related
 
-- [queue-resource.md](./queue-resource.md) — queue definition forms
+- [queue-hyperlink.md](./queue-hyperlink.md) — queue definition forms
 - [process.md](./process.md) — process definition forms

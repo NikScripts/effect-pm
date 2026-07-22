@@ -44,13 +44,13 @@ Derivations **stack**. A later `withReadiness` receives the previous check as `b
 
 ``` ts
 import { Effect, Schema } from "effect"
-import * as QueueResource from "hyperlink-ts/QueueResource"
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
 const Job = Schema.Struct({ id: Schema.String })
 // Database — some other resource on this node that already has withReadiness
 
-class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Job).pipe(
+class Jobs extends QueueHyperlink.Tag<Jobs>()("app/Jobs", Job).pipe(
   Hyperlink.withReadiness((_svc, base) =>
     Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
   ),

@@ -5,7 +5,7 @@ A Hyperlink is defined **once** — a Tag with a Contract, and an Implementation
 runs and how you reach it is decided entirely by the **Layer** you provide. The code that uses it
 never changes: `yield* Tag` reads the same whether the Hyperlink runs in this process, is served over
 RPC, or is a client to one running on another machine. [Creating a
-Hyperlink](/docs/creating-a-resource) ran one in-process; this page tours the layers that place it
+Hyperlink](/docs/creating-a-hyperlink) ran one in-process; this page tours the layers that place it
 anywhere else — served, remote, or across a fleet.
 
 {.note}

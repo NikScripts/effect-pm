@@ -1,4 +1,4 @@
-{#creating-a-resource title="Creating a Hyperlink" status="draft" appliesTo=all}
+{#creating-a-hyperlink title="Creating a Hyperlink" status="draft" appliesTo=all}
 # Creating a Hyperlink
 
 {.draft}

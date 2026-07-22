@@ -1,7 +1,7 @@
 /**
- * RunResource wire schemas and RPC spec factory.
+ * RunHyperlink wire schemas and RPC spec factory.
  *
- * @module internal/runResourceSchema
+ * @module internal/runHyperlinkSchema
  * @internal
  */
 

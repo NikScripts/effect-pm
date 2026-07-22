@@ -5,7 +5,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Process from "../src/Process";
 import * as Polling from "../src/Polling";
 import * as PmNode from "../src/Node";
-// The engine-serve gap: Hyperlink.serve is query-only (no worker/tick engine). QueueResource.serve /
+// The engine-serve gap: Hyperlink.serve is query-only (no worker/tick engine). QueueHyperlink.serve /
 // Process.serve must RUN the engine AND preserve R so a per-resource Layer.provide isolates the
 // dependency. Proof: two processes whose TICK reads the same Dep tag with different values; each engine
 // must actually fire, and each must see its own value.

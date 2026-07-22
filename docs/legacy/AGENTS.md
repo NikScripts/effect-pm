@@ -1,6 +1,6 @@
 # Agent guide — hyperlink-ts (`hyperlink-ts`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — facet rules, the persistence SSOT), [`docs/LOGS.md`](../LOGS.md) (logs platform SSOT), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [guides/toolkit-by-example.md](./guides/toolkit-by-example.md), [guides/history-and-persistence.md](./guides/history-and-persistence.md), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — facet rules, the persistence SSOT), [`docs/LOGS.md`](../LOGS.md) (logs platform SSOT), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [HYPERLINK-API.md](./HYPERLINK-API.md), [guides/toolkit-by-example.md](./guides/toolkit-by-example.md), [guides/history-and-persistence.md](./guides/history-and-persistence.md), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -11,12 +11,12 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/index.ts` | Public exports + package-level TSDoc. **Start here for imports.** |
 | `src/Process.ts` | **Process** toolkit **and** engine in one module — `Process.Tag` / `Process.Schedule`, the `schedule` / `result` combinators, `window` / `at` builders, `make` / `layer` / `serve` / `serveRemote`, and the supervisor loop → `hyperlink-ts/Process`. |
 | `src/Polling.ts` | Poll-cadence gate service + preset `Layer`s. (The run-window schedule primitive is internal: `src/internal/processSchedule.ts`, surfaced via the `Process` namespace.) |
-| `src/QueueResource.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`serve`/`serveRemote`; `persist`/`refill`). |
-| `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
+| `src/QueueHyperlink.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`serve`/`serveRemote`; `persist`/`refill`). |
+| `src/HyperlinkConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
 | `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
 | **Toolkit (location-transparent)** | |
 | `src/Hyperlink.ts` | Foundation — tags (`Tag`/`client`/`serve`/`serveRemote`/`httpServer`/`Host`/`connect`), `specOf`/`methodMeta` introspection. `httpServer([...serve-layers])` = many resources on one port (group behind one `Host`). |
-| `src/CustomQueueResource.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueResource` runtime via `buildQueueEngine`. |
+| `src/CustomQueueHyperlink.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueHyperlink` runtime via `buildQueueEngine`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
 | `src/Logs.ts` | Logs platform (`layer`, `stream`, `byNode`, `Hyperlink.logs`) — [`docs/LOGS.md`](../LOGS.md). Durable journals via `Node.logs` / toolkit `.store` on `Store.Service`. |
 | `src/Store.ts` | Shape-first store contracts; `EventJournal`-backed `layerMemory` / `SqlEventJournal` `layer` — see `docs/guides/store-backing.md`. |
@@ -28,7 +28,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
-| `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
+| `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-hyperlink.md`, `process.md`, `store.md`, `store-backing.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
 | `docs/handoffs/*.md` | **Active migration designs** — tag wire slots (`payload` / `success` / `error`), store/RPC policy. Index: [`handoffs/reports/README.md`](../handoffs/reports/README.md); archive: [`handoffs/archive/`](../handoffs/archive/); integration branch **`integration`**. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
@@ -172,7 +172,7 @@ breaking notes into one coherent changeset when possible (see
 ## Documentation conventions
 
 - Use **`@public`** / **`@internal`** on exported symbols as appropriate.
-- Prefer **module-level** `@module` / overview blocks for large files (`Process.ts`, `QueueResource.ts`).
+- Prefer **module-level** `@module` / overview blocks for large files (`Process.ts`, `QueueHyperlink.ts`).
 - Link cross-doc with **relative** paths from `docs/` or repo root as in README.
 
 ---

@@ -1,13 +1,13 @@
 import { Effect, Schema } from "effect";
-import * as QueueResource from "../src/QueueResource";
-import * as RunResource from "../src/RunResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as RunHyperlink from "../src/RunHyperlink";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
 import {
-  builtInRunResourceStoreContract,
+  builtInRunHyperlinkStoreContract,
   runFactSchemaForTag,
-} from "../src/internal/store/runResourceStoreSpec";
+} from "../src/internal/store/runHyperlinkStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 
@@ -38,9 +38,9 @@ class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
+class MailQueue extends QueueHyperlink.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
+class FetchGate extends RunHyperlink.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
 const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
   Store.extend({ campaignAudit: Schema.Struct({ campaignId: Schema.String }) }),
@@ -64,7 +64,7 @@ type QueueEventsResult = ReturnType<MailQueueHandle["events"]> extends Effect.Ef
 
 void ({} as QueueEventsResult satisfies ReadonlyArray<QueueEvent>);
 
-const runGateContract = builtInRunResourceStoreContract(FetchGate);
+const runGateContract = builtInRunHyperlinkStoreContract(FetchGate);
 type RunGateHandle = Store.HandleOf<typeof runGateContract>;
 
 declare const _runGateHandle: RunGateHandle;
@@ -132,7 +132,7 @@ const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 type FacetQueueRegs = RegsOfStoreInput<
   [
     ReturnType<
-      typeof QueueResource.store<
+      typeof QueueHyperlink.store<
         typeof MailQueue,
         { readonly campaignAudit: typeof campaignAuditSchema }
       >

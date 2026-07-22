@@ -69,7 +69,7 @@ export, so a reader lands with context.
 ``` ts
 /**
  * The queue worker namespace — Tag, make, layer, serve.
- * @module QueueResource
+ * @module QueueHyperlink
  */
 
 /** @public */
@@ -239,7 +239,7 @@ powerful the thing is. Lead with the code doing the job and let it carry the cla
 
 ``` ts
 // ✅ good — the feature, shown
-const worker = QueueResource.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
+const worker = QueueHyperlink.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
 
 // ❌ bad — telling, not showing
 // "hyperlink-ts makes serving a queue across runtimes effortless and elegant."

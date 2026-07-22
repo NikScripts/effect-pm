@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
-import { Process, QueueResource, RunResource } from "../src";
+import { Process, QueueHyperlink, RunHyperlink } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -42,13 +42,13 @@ const remote = <A, E, R>(
   );
 };
 
-// ── QueueResource ────────────────────────────────────────────────────────────────────────────────
+// ── QueueHyperlink ────────────────────────────────────────────────────────────────────────────────
 const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class ConfQueue extends QueueResource.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
-const queueServe = QueueResource.serveMemory(ConfQueue, { effect: () => Effect.void });
+class ConfQueue extends QueueHyperlink.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
+const queueServe = QueueHyperlink.serveMemory(ConfQueue, { effect: () => Effect.void });
 const queueOp = Effect.gen(function* () {
   const q = yield* ConfQueue;
   const completed: number[] = [];
@@ -76,12 +76,12 @@ const procOp = Effect.gen(function* () {
   return typeof snap.supervising === "boolean";
 });
 
-// ── RunResource ──────────────────────────────────────────────────────────────────────────────────
-class ConfGate extends RunResource.Tag<ConfGate>()("conf/G", {
+// ── RunHyperlink ──────────────────────────────────────────────────────────────────────────────────
+class ConfGate extends RunHyperlink.Tag<ConfGate>()("conf/G", {
   payload: Schema.Number,
   success: Schema.Number,
 }) {}
-const gateServe = RunResource.serveMemory(ConfGate, {
+const gateServe = RunHyperlink.serveMemory(ConfGate, {
   effect: (n: number) => Effect.succeed(n * 2),
 });
 const gateOp = Effect.gen(function* () {

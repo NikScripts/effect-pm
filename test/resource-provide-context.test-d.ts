@@ -93,7 +93,7 @@ true satisfies ResidualIsExactlyDep2;
 
 // `mapEffects` with a type-preserving transform returns the same shape (Out defaults to Impl).
 const traced = Hyperlink.mapEffects(provided, T[Hyperlink.specSym], (e) =>
-  Effect.withSpan(e, "resource"),
+  Effect.withSpan(e, "hyperlink"),
 );
 type Provided = typeof provided;
 type Traced = typeof traced;

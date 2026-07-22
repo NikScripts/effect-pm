@@ -1,8 +1,8 @@
 import { Effect, Schema, Stream } from "effect";
-import type { QueueHandle } from "../src/internal/queueResource";
-import type { queueStatus } from "../src/QueueResource";
-import type { CustomQueueHandle } from "../src/internal/customQueueResource";
-import type { customQueueStatus } from "../src/CustomQueueResource";
+import type { QueueHandle } from "../src/internal/queueHyperlink";
+import type { queueStatus } from "../src/QueueHyperlink";
+import type { CustomQueueHandle } from "../src/internal/customQueueHyperlink";
+import type { customQueueStatus } from "../src/CustomQueueHyperlink";
 import * as Hyperlink from "../src/Hyperlink";
 
 type QueueStatus = Schema.Schema.Type<typeof queueStatus>;

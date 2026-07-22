@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/run-resource-runtime-observer
  *
- * Live observation on {@link RunResource.Service} handles via {@link Subscribable}
+ * Live observation on {@link RunHyperlink.Service} handles via {@link Subscribable}
  * views (`status`, `waiting`, `completed`, …). `Service.layer` already merges the
  * default store bridge — no extra `Store.layerDefaultMemory` is required here.
  *
@@ -9,9 +9,9 @@
  */
 
 import { Effect, Ref, Schema, Stream } from "effect";
-import { RunResource, Store } from "../../../src";
+import { RunHyperlink, Store } from "../../../src";
 
-const ObservedRunGate = RunResource.Service<{ readonly _tag: "ObservedRunGate" }>()(
+const ObservedRunGate = RunHyperlink.Service<{ readonly _tag: "ObservedRunGate" }>()(
   "examples/ObservedRunGate",
   {
     payload: Schema.Number,
@@ -52,9 +52,9 @@ const program = Effect.gen(function* () {
 
   yield* Effect.log("");
   yield* Effect.log("=== make: run-only handle (no observation) ===");
-  yield* Effect.log("(RunResource.make still needs Store.layerDefaultMemory on the effect — see below)");
+  yield* Effect.log("(RunHyperlink.make still needs Store.layerDefaultMemory on the effect — see below)");
 
-  const unobserved = yield* RunResource.make({
+  const unobserved = yield* RunHyperlink.make({
     name: "examples/UnobservedRunGate",
     effect: (n: number) => Effect.succeed(n * 2),
   });

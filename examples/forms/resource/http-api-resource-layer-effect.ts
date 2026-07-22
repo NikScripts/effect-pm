@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/http-api-resource-layer-effect
  *
- * HttpApiResource.layerEffect on an existing client Layer. Run: `pnpm run example:http-api-resource-layer-effect`
+ * HttpApiHyperlink.layerEffect on an existing client Layer. Run: `pnpm run example:http-api-resource-layer-effect`
  */
 
 import { Context, Effect, Layer, Ref, Schema } from "effect";
@@ -13,7 +13,7 @@ import {
   HttpApiEndpoint,
   HttpApiGroup,
 } from "effect/unstable/httpapi";
-import { acceptJson, HttpApiResource } from "../../../src";
+import { acceptJson, HttpApiHyperlink } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const Post = Schema.Struct({
@@ -81,7 +81,7 @@ export class DemoApiClient extends Context.Service<DemoApiClient>()(
   );
 
   // Brown-field path: wrap existing _make with hyperlink-ts transport limits.
-  static readonly resourceLayerCapture = HttpApiResource.layerEffect(
+  static readonly resourceLayerCapture = HttpApiHyperlink.layerEffect(
     DemoApiClient,
     _make,
     { concurrency: 2 },

@@ -3,7 +3,7 @@ import { Context, Effect, Layer, Ref, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import type { HttpClientError } from "effect/unstable/http"
 import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
-import { acceptJson, HttpApiResource } from "../src"
+import { acceptJson, HttpApiHyperlink } from "../src"
 
 const json200 = JSON.stringify({ pong: true })
 
@@ -65,12 +65,12 @@ describe("acceptJson", () => {
   )
 })
 
-describe("HttpApiResource.Service", () => {
+describe("HttpApiHyperlink.Service", () => {
   it.live("builds a class tag whose layer yields a client", () => {
     const api = HttpApi.make("vitest-service-api").add(
       HttpApiGroup.make("g").add(pingEndpoint),
     );
-    class Client extends HttpApiResource.Service<Client>()("test/http-api-service", api, {
+    class Client extends HttpApiHyperlink.Service<Client>()("test/http-api-service", api, {
       concurrency: 1,
     }) {}
     return Effect.gen(function* () {
@@ -81,10 +81,10 @@ describe("HttpApiResource.Service", () => {
   });
 });
 
-describe("HttpApiResource.make", () => {
+describe("HttpApiHyperlink.make", () => {
   it.live("builds a tag whose layer yields a client", () => {
     const api = HttpApi.make("vitest-empty-api")
-    const Tag = HttpApiResource.make(api, {
+    const Tag = HttpApiHyperlink.make(api, {
       name: "test/vitest-empty-api",
       concurrency: 1,
     })
@@ -99,7 +99,7 @@ describe("HttpApiResource.make", () => {
 
   it("tag id uses the provided name", () => {
     const api = HttpApi.make("my-cool-api")
-    const Tag = HttpApiResource.make(api, {
+    const Tag = HttpApiHyperlink.make(api, {
       name: "api/my-cool-api",
     })
     expect(Tag.key).toBe("api/my-cool-api")
@@ -107,7 +107,7 @@ describe("HttpApiResource.make", () => {
 
   it("tag id can be any custom string", () => {
     const api = HttpApi.make("some-api")
-    const Tag = HttpApiResource.make(api, {
+    const Tag = HttpApiHyperlink.make(api, {
       name: "custom/tag-id",
     })
     expect(Tag.key).toBe("custom/tag-id")
@@ -118,7 +118,7 @@ describe("HttpApiResource.make", () => {
       const active = yield* Ref.make(0)
       const peak = yield* Ref.make(0)
       const api = HttpApi.make("vitest-c1").add(HttpApiGroup.make("g").add(pingEndpoint))
-      const Tag = HttpApiResource.make(api, {
+      const Tag = HttpApiHyperlink.make(api, {
         name: "test/http-api-c1",
         concurrency: 1,
       })
@@ -143,7 +143,7 @@ describe("HttpApiResource.make", () => {
       const active = yield* Ref.make(0)
       const peak = yield* Ref.make(0)
       const api = HttpApi.make("vitest-c3").add(HttpApiGroup.make("g").add(pingEndpoint))
-      const Tag = HttpApiResource.make(api, {
+      const Tag = HttpApiHyperlink.make(api, {
         name: "test/http-api-c3",
         concurrency: 3,
       })
@@ -169,7 +169,7 @@ describe("HttpApiResource.make", () => {
       const active = yield* Ref.make(0)
       const peak = yield* Ref.make(0)
       const api = HttpApi.make("vitest-nogate").add(HttpApiGroup.make("g").add(pingEndpoint))
-      const Tag = HttpApiResource.make(api, {
+      const Tag = HttpApiHyperlink.make(api, {
         name: "test/http-api-no-limits",
       })
       const httpLayer = Layer.succeed(
@@ -191,7 +191,7 @@ describe("HttpApiResource.make", () => {
   it.live("applies transformClient before the run gate", () =>
     Effect.gen(function* () {
       const api = HttpApi.make("vitest-tc").add(HttpApiGroup.make("g").add(pingEndpoint))
-      const Tag = HttpApiResource.make(api, {
+      const Tag = HttpApiHyperlink.make(api, {
         name: "test/http-api-transform-order",
         concurrency: 1,
         transformClient: (c) =>
@@ -224,7 +224,7 @@ describe("HttpApiResource.make", () => {
   )
 })
 
-describe("HttpApiResource.layerEffect", () => {
+describe("HttpApiHyperlink.layerEffect", () => {
   it.live("wraps an existing client effect with one shared gated instance", () =>
     Effect.gen(function* () {
       const active = yield* Ref.make(0)
@@ -241,7 +241,7 @@ describe("HttpApiResource.layerEffect", () => {
       class Tag extends Context.Service<Tag, ClientShape>()(
         "hyperlink-ts/test/http-api-resource.test/Tag",
       ) {}
-      const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
+      const layerCapture = HttpApiHyperlink.layerEffect(Tag, makeClient, {
         concurrency: 1,
       })
       const httpLayer = Layer.succeed(

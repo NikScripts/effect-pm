@@ -24,9 +24,9 @@ query.
 ```ts
 import { Layer } from "effect";
 import { HistoryStore } from "hyperlink-ts";
-import { QueueResource } from "hyperlink-ts/QueueResource";
+import { QueueHyperlink } from "hyperlink-ts/QueueHyperlink";
 
-const rosterQueueLayer = QueueResource.layer(RosterQueue, {
+const rosterQueueLayer = QueueHyperlink.layer(RosterQueue, {
   effect,
 }).pipe(Layer.provide(HistoryStore.layerMemory()));
 ```
@@ -65,7 +65,7 @@ const logStack = Logs.persistLayer(Droplet).pipe(
   // or: LogStore.layerMemory / LogStore.layer({ filename })
 );
 
-// provide logStack alongside QueueResource.layer / Process.layer / httpServer
+// provide logStack alongside QueueHyperlink.layer / Process.layer / httpServer
 ```
 
 Engines stamp **lineage** via `Logs.withScope(tag)` at materialize. Read per-resource:
@@ -83,7 +83,7 @@ Also:
 
 ```ts
 yield* Logs.byNode(Droplet, { limit: 200 });
-yield* Logs.byResource({ queueId: RosterQueue.key });
+yield* Logs.byHyperlink({ queueId: RosterQueue.key });
 ```
 
 Authoritative key catalog and wiring: [`docs/LOGS.md`](../../LOGS.md).
@@ -131,14 +131,14 @@ const events = yield* store.events({ limit: 50 });
 History is the *observability* plane. The *durability* plane is `DurableQueueStore` — a
 priority-native store so no enqueued work is lost across a restart (**at-least-once** + dedup key).
 Turn it on with `persist` on the layer config + a `DurableQueueStore` backend. The tag's **`payload`**
-schema must be set (config object on `QueueResource.Tag`) so items serialize:
+schema must be set (config object on `QueueHyperlink.Tag`) so items serialize:
 
 ```ts
 import { SQLiteDurableQueueStore } from "hyperlink-ts/storage/sqlite";
 
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("app/Roster", { payload: RosterItem }) {}
+class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("app/Roster", { payload: RosterItem }) {}
 
-const queueLayer = QueueResource.layer(RosterQueue, {
+const queueLayer = QueueHyperlink.layer(RosterQueue, {
   effect,
   persist: { maxAttempts: 3 },      // or `true` for defaults
 }).pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
@@ -164,7 +164,7 @@ import * as NodeStatus from "hyperlink-ts/NodeStatus";
 import * as LogEntry from "hyperlink-ts/LogEntry";
 
 // Host — logs stack + metrics HistoryStore
-Hyperlink.httpServer([QueueResource.serve(RosterQueue, { effect })]).pipe(
+Hyperlink.httpServer([QueueHyperlink.serve(RosterQueue, { effect })]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(Logs.layer),
   Layer.provide(Logs.persistLayer(Droplet)),
@@ -193,9 +193,9 @@ Example wiring: `src/web/data.ts`, `examples/web-dashboard/queue-server.ts`.
 | Surface | Live | Durable / backfill | Notes |
 |---|---|---|---|
 | Queue metrics | `metrics.stream` | `metrics.query` (`HistoryStore`) | Opt-in HistoryStore |
-| Queue / process logs | `Hyperlink.logs(tag).stream` (local) | `Hyperlink.logs(tag).query` / `Logs.byResource` | Needs `Logs.layer` + `persistLayer` for durable |
+| Queue / process logs | `Hyperlink.logs(tag).stream` (local) | `Hyperlink.logs(tag).query` / `Logs.byHyperlink` | Needs `Logs.layer` + `persistLayer` for durable |
 | Remote resource logs | `NodeStatus.logs.stream` + `LogEntry.hasKey` | `NodeStatus.logs.query` + filter | Same node store |
-| Runtime-wide | `Logs.stream` | `Logs.byNode` / `Logs.byResource` | [`docs/LOGS.md`](../../LOGS.md) |
+| Runtime-wide | `Logs.stream` | `Logs.byNode` / `Logs.byHyperlink` | [`docs/LOGS.md`](../../LOGS.md) |
 
 Backends: `HistoryStore.layerMemory` / `SQLiteHistoryStore.layer` for metrics; `LogStore` (memory /
 SQLite via `ProcessStorage` / `layerProcessStore`) for logs.

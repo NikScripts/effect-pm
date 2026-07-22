@@ -3,7 +3,7 @@
  *
  * A **bring-your-own widget**, registered by *key* — the extension path the widget registry exists
  * for. `WorkerPool` (see `hub.ts`) is a consumer-defined, multi-node resource: nothing in the
- * shipped `base` set knows how to render it (it'd fall through to the plain `ResourceCard`). So the
+ * shipped `base` set knows how to render it (it'd fall through to the plain `HyperlinkCard`). So the
  * consumer writes this card and binds it to the resource's exact key with
  * `forKey(WorkerPool.key, WorkerPoolCard)` (see `app.tsx`) — a per-key widget beats the generic
  * kind card, and building **onto** `base` keeps every other widget.

@@ -11,7 +11,7 @@ import type { HttpClientError } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../src/ApiMetrics";
-import * as HttpApiResource from "../src/HttpApiResource";
+import * as HttpApiHyperlink from "../src/HttpApiHyperlink";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
@@ -28,7 +28,7 @@ const demoApi = HttpApi.make("api-metrics-demo").add(
   HttpApiGroup.make("g").add(pingEndpoint),
 );
 
-class DemoClient extends HttpApiResource.Service<DemoClient>()(ClientId, demoApi, {
+class DemoClient extends HttpApiHyperlink.Service<DemoClient>()(ClientId, demoApi, {
   concurrency: 2,
 }) {}
 
@@ -66,7 +66,7 @@ describe("ApiMetrics.Tag", () => {
 });
 
 describe("ApiMetrics.layer", () => {
-  it.effect("usage.get reflects HttpApiResource endpoint calls", () =>
+  it.effect("usage.get reflects HttpApiHyperlink endpoint calls", () =>
     Effect.gen(function* () {
       const client = yield* DemoClient;
       const metrics = yield* DemoMetrics;
@@ -191,7 +191,7 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
 });
 
 describe("ApiMetrics.layerFor", () => {
-  it("links metrics tag to HttpApiResource.Service key", () => {
+  it("links metrics tag to HttpApiHyperlink.Service key", () => {
     const layer = ApiMetrics.layerFor(DemoMetrics, DemoClient);
     expect(layer).toBeDefined();
   });

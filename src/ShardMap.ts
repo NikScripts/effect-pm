@@ -330,7 +330,7 @@ export const Tag =
             node: schemas.node,
           });
     // SAFE: HyperlinkTag + schema stamps = ShardMapTag; Spec/Symbol identity is opaque under Top
-    // (same boundary as QueueResource's `nameQueueService`).
+    // (same boundary as QueueHyperlink's `nameQueueService`).
     return Object.assign(tag, {
       [internal.keySchemaSym]: schemas.key,
       [internal.valueSchemaSym]: schemas.value,

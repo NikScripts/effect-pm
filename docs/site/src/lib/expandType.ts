@@ -1,6 +1,6 @@
 // Compiler-API type expansion for the docs "dual preview".
 //
-// Twoslash gives us each hover's COMPACT type (e.g. `QueueResource<{ to: string }>`). To show the
+// Twoslash gives us each hover's COMPACT type (e.g. `QueueHyperlink<{ to: string }>`). To show the
 // full member shape in the SAME popover — the split prettify-ts gives in the editor — we run our own
 // language service over the block's full code (imports + `---cut---` preamble included) and, at each
 // hover position, expand the value's type to its members via the checker.

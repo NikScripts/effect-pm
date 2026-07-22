@@ -5,7 +5,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as NodeStatus from "../src/NodeStatus";
-import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
+import { buildNodeStatusImpl } from "../src/internal/nodeStatusHyperlink";
 import * as Node from "../src/Node";
 
 class Echo extends Hyperlink.Tag<Echo>()("nodeStatus-ref/Echo", {

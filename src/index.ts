@@ -14,7 +14,7 @@
  *   fork-time requirements stay accurate in TypeScript. Run windows are built with
  *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
  *   `Process.window` / `Process.at`).
- * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
+ * - **`QueueHyperlink`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
  * - **`Store`** — EventJournal-backed execution / queue / run / log history; process stores via
@@ -24,11 +24,11 @@
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
  *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
  *   `hyperlink-ts/Process`) and the toolkit queue (from
- *   `hyperlink-ts/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
+ *   `hyperlink-ts/QueueHyperlink`) — each with `Tag` / `layer` / `configure` / `serve` /
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See the live book under `docs/resources/` and `docs/guides/`.
- * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
+ * - **`RunHyperlink`**, **`HttpClientRunGate`**, **`HttpApiHyperlink`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
@@ -44,17 +44,17 @@
  * ## Import style
  *
  * Every public API lives under a **namespace** in its source module
- * (`ResourceConfigure`, `Store`, …). The root barrel re-exports the same bindings under
+ * (`HyperlinkConfigure`, `Store`, …). The root barrel re-exports the same bindings under
  * short names where useful.
  *
  * ## Dedicated subpaths
  *
  * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Process`**,
- * **`hyperlink-ts/QueueResource`**, **`hyperlink-ts/ResourceConfigure`**,
+ * **`hyperlink-ts/QueueHyperlink`**, **`hyperlink-ts/HyperlinkConfigure`**,
  * **`hyperlink-ts/Store`**, and **`hyperlink-ts/Logs`**.
  *
  * Toolkit subpaths: **`hyperlink-ts/Hyperlink`** (foundation + `specOf` / `methodMeta`),
- * **`hyperlink-ts/QueueResource`** (toolkit queue),
+ * **`hyperlink-ts/QueueHyperlink`** (toolkit queue),
  * **`hyperlink-ts/MultiNode`** (multi-instance gather/fold),
  * **`hyperlink-ts/Group`**,
  * **`hyperlink-ts/HistoryStore`**,
@@ -94,19 +94,19 @@ export * as Process from "./Process";
 export { ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
 export * as Polling from "./Polling";
-// The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
+// The single unified QueueHyperlink namespace. `export * as` (module namespace, Effect-style) so
+// member access tree-shakes: `QueueHyperlink.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
-export * as QueueResource from "./QueueResource";
-export * as RunResource from "./RunResource";
+export * as QueueHyperlink from "./QueueHyperlink";
+export * as RunHyperlink from "./RunHyperlink";
 export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
   acceptJson,
   instrumentEndpoints,
-  type HttpApiResourceConfig,
-  type HttpApiResourceLayerEffectConfig,
-} from "./HttpApiResource";
-export * as HttpApiResource from "./HttpApiResource";
+  type HttpApiHyperlinkConfig,
+  type HttpApiHyperlinkLayerEffectConfig,
+} from "./HttpApiHyperlink";
+export * as HttpApiHyperlink from "./HttpApiHyperlink";
 export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
@@ -194,16 +194,16 @@ export type {
 } from "./Node";
 
 /**
- * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},
- * and {@link RunResource.Service}.
+ * Layer-composed configure patches for {@link Process.Service}, {@link QueueHyperlink.Service},
+ * and {@link RunHyperlink.Service}.
  */
 export {
   configureLayer,
   foldConfig,
   resourceConfigureTagKey,
-} from "./ResourceConfigure";
-export * as ResourceConfigure from "./ResourceConfigure";
-export type { ConfigPatch } from "./ResourceConfigure";
+} from "./HyperlinkConfigure";
+export * as HyperlinkConfigure from "./HyperlinkConfigure";
+export type { ConfigPatch } from "./HyperlinkConfigure";
 
 // CLI
 
@@ -259,12 +259,12 @@ export type {
 
 // Types - Polling
 
-// Types - QueueResource
-export * as CustomQueueResource from "./CustomQueueResource";
+// Types - QueueHyperlink
+export * as CustomQueueHyperlink from "./CustomQueueHyperlink";
 
 export type {
   CustomQueueTagConfig,
-} from "./CustomQueueResource";
+} from "./CustomQueueHyperlink";
 
 export {
   customQueueControlSpec,
@@ -273,7 +273,7 @@ export {
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,
-} from "./CustomQueueResource";
+} from "./CustomQueueHyperlink";
 
 export {
   QueueItemCodecDescriptorSchema,
@@ -286,34 +286,34 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./QueueResource";
+} from "./QueueHyperlink";
 
-// Types - RunResource
+// Types - RunHyperlink
 export type {
   RunGateHandle,
   RunGateStatus,
-  RunResourceConfig,
-  RunResourceHandle,
-  RunResourceLayerConfig,
-  RunResourceLayerEffect,
-  RunResourceRunner,
-  RunResourceRunnerConfig,
-  RunResourceServiceConfig,
-  RunResourceServiceDefinition,
-  RunResourceServiceEffect,
-  RunResourceStaticRun,
-  RunResourceTagDefinition,
-  RunResourceTagSchemas,
-  RunResourceWireSchemas,
+  RunHyperlinkConfig,
+  RunHyperlinkHandle,
+  RunHyperlinkLayerConfig,
+  RunHyperlinkLayerEffect,
+  RunHyperlinkRunner,
+  RunHyperlinkRunnerConfig,
+  RunHyperlinkServiceConfig,
+  RunHyperlinkServiceDefinition,
+  RunHyperlinkServiceEffect,
+  RunHyperlinkStaticRun,
+  RunHyperlinkTagDefinition,
+  RunHyperlinkTagSchemas,
+  RunHyperlinkWireSchemas,
   RunInstanceSpec,
-} from "./RunResource";
+} from "./RunHyperlink";
 export {
   runGateStatus,
   runSpec,
-  kind as runResourceKind,
-  layer as runResourceLayer,
-  serve as runResourceServe,
-  serveRemote as runResourceServeRemote,
-} from "./RunResource";
+  kind as runHyperlinkKind,
+  layer as runHyperlinkLayer,
+  serve as runHyperlinkServe,
+  serveRemote as runHyperlinkServeRemote,
+} from "./RunHyperlink";
 
 // Types - Control Service

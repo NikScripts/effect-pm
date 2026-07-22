@@ -15,12 +15,12 @@ and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engi
 
 ```ts
 // tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 import * as Process from "hyperlink-ts/Process";
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 
 export class Droplet extends Hyperlink.Node<Droplet>("hub/droplet") {}
-export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
+export class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", {
   payload: Job,
   node: Droplet,
 }) {}
@@ -31,14 +31,14 @@ export class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 // runtime.ts — Node OS edge only. Layers, serve / httpServer, storage, persistence.
 import { Layer } from "effect";
 import { Hyperlink } from "hyperlink-ts/Hyperlink";
-import { QueueResource } from "hyperlink-ts/QueueResource";
+import { QueueHyperlink } from "hyperlink-ts/QueueHyperlink";
 import * as Logs from "hyperlink-ts/Logs";
 import * as ProcessStorage from "hyperlink-ts/ProcessStorage";
 import { SQLiteHistoryStore } from "hyperlink-ts/storage/sqlite";
 import { Droplet, RosterQueue } from "./tags";
 
 export const RosterQueueLive = Hyperlink.httpServer([
-  QueueResource.serve(RosterQueue, { effect }),
+  QueueHyperlink.serve(RosterQueue, { effect }),
 ]).pipe(
   Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })), // metrics.query
   Layer.provide(Logs.layer),
@@ -65,7 +65,7 @@ const scoped = rows.filter(LogEntry.hasKey(RosterQueue.key));
 
 If a file calls `Layer.provide` / `serve` / `httpServer` / `SQLiteRuntimeStorage` / a storage adapter,
 it belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
-**subpaths** (`hyperlink-ts/QueueResource`, `/Process`, `/Group`, …) so member
+**subpaths** (`hyperlink-ts/QueueHyperlink`, `/Process`, `/Group`, …) so member
 access tree-shakes.
 
 See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer

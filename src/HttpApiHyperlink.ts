@@ -1,5 +1,5 @@
 /**
- * HttpApiResource — typed HTTP API client with transport-level concurrency gating.
+ * HttpApiHyperlink — typed HTTP API client with transport-level concurrency gating.
  *
  * Wraps Effect's `HttpApiClient.make` with a `Semaphore`-based concurrency gate
  * on the `HttpClient` transport layer (via `HttpClientRunGate.withRunner` applied to
@@ -26,13 +26,13 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `HttpApiResource.Service` | Class factory: tag + baked-in `.layer` |
- * | `HttpApiResource.make` | Functional tag + `.layer` from an HttpApi schema |
- * | `HttpApiResource.layerEffect` | Gate an existing client-building effect |
- * | `HttpApiResource.instrumentEndpoints` | Wrap client after custom build |
- * | `HttpApiResource.acceptJson` | `Accept: application/json` header helper |
+ * | `HttpApiHyperlink.Service` | Class factory: tag + baked-in `.layer` |
+ * | `HttpApiHyperlink.make` | Functional tag + `.layer` from an HttpApi schema |
+ * | `HttpApiHyperlink.layerEffect` | Gate an existing client-building effect |
+ * | `HttpApiHyperlink.instrumentEndpoints` | Wrap client after custom build |
+ * | `HttpApiHyperlink.acceptJson` | `Accept: application/json` header helper |
  *
- * @module HttpApiResource
+ * @module HttpApiHyperlink
  */
 
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -46,20 +46,20 @@ import {
   usageEnter,
   usageExit,
 } from "./internal/apiUsageRegistry";
-import type { RunResourceRunner } from "./RunResource";
-import { makeRunnerFromConcurrency } from "./internal/runResource";
+import type { RunHyperlinkRunner } from "./RunHyperlink";
+import { makeRunnerFromConcurrency } from "./internal/runHyperlink";
 
 // ============================================================================
 // Public Types
 // ============================================================================
 
 /**
- * Configuration for {@link HttpApiResource.make} / {@link HttpApiResource.Service}.
+ * Configuration for {@link HttpApiHyperlink.make} / {@link HttpApiHyperlink.Service}.
  *
  * @category models
  * @public
  */
-export interface HttpApiResourceConfig<
+export interface HttpApiHyperlinkConfig<
   _ApiId extends string,
   _Groups extends HttpApiGroup.Constraint,
   Name extends string = string,
@@ -76,12 +76,12 @@ export interface HttpApiResourceConfig<
 }
 
 /**
- * Configuration for {@link HttpApiResource.layerEffect}.
+ * Configuration for {@link HttpApiHyperlink.layerEffect}.
  *
  * @category models
  * @public
  */
-export interface HttpApiResourceLayerEffectConfig<
+export interface HttpApiHyperlinkLayerEffectConfig<
   ApiId extends string = string,
   Groups extends HttpApiGroup.Constraint = HttpApiGroup.Top,
 > {
@@ -273,9 +273,9 @@ const makeInFlightTransform = (
 const applyTransportMiddleware = (
   client: HttpClient.HttpClient,
   options: {
-    readonly runner: RunResourceRunner;
+    readonly runner: RunHyperlinkRunner;
     readonly withInFlight: InFlightTransform;
-    readonly transformClient?: HttpApiResourceConfig<string, HttpApiGroup.Top, string>["transformClient"];
+    readonly transformClient?: HttpApiHyperlinkConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },
 ): HttpClient.HttpClient => {
   const userTransformed =
@@ -307,7 +307,7 @@ const buildLayer = <
 >(
   tag: Context.Key<Self, HttpApiClient.Client<Groups>>,
   api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiResourceConfig<ApiId, Groups, Name>,
+  config: HttpApiHyperlinkConfig<ApiId, Groups, Name>,
 ) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -332,13 +332,13 @@ const buildLayer = <
     }),
   );
 
-function makeHttpApiResource<
+function makeHttpApiHyperlink<
   ApiId extends string,
   Groups extends HttpApiGroup.Constraint,
   Name extends string,
 >(
   api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiResourceConfig<ApiId, Groups, Name>,
+  config: HttpApiHyperlinkConfig<ApiId, Groups, Name>,
 ) {
   type ClientShape = HttpApiClient.Client<Groups>;
 
@@ -356,12 +356,12 @@ const httpApiResourceService = <Self>() =>
   >(
     name: Name,
     api: HttpApiType.HttpApi<ApiId, Groups>,
-    config?: Omit<HttpApiResourceConfig<ApiId, Groups, Name>, "name">,
+    config?: Omit<HttpApiHyperlinkConfig<ApiId, Groups, Name>, "name">,
   ): Context.ServiceClass<Self, Name, HttpApiClient.Client<Groups>> & {
     readonly layer: Layer.Layer<Self, never, HttpClient.HttpClient | Scope.Scope>;
   } => {
     type ClientShape = HttpApiClient.Client<Groups>;
-    const fullConfig = { ...config, name } as HttpApiResourceConfig<ApiId, Groups, Name>;
+    const fullConfig = { ...config, name } as HttpApiHyperlinkConfig<ApiId, Groups, Name>;
     const Base = Context.Service<Self, ClientShape>()(name);
     const layer = buildLayer(Base, api, fullConfig);
     return class extends Base {
@@ -381,7 +381,7 @@ function layerEffect<
 >(
   tag: Context.Key<Identifier, Service>,
   effect: Effect.Effect<Service, Error, Requirements>,
-  config: HttpApiResourceLayerEffectConfig<ApiId, Groups> = {},
+  config: HttpApiHyperlinkLayerEffectConfig<ApiId, Groups> = {},
 ) {
   const clientId = String(tag.key);
   return Layer.unwrap(
@@ -406,8 +406,8 @@ function layerEffect<
 // Public API
 // ============================================================================
 
-// HttpApiResource namespace — typed HTTP API client with transport gating. The module
-// is the namespace (`import * as HttpApiResource`): each entry point is a flat top-level
+// HttpApiHyperlink namespace — typed HTTP API client with transport gating. The module
+// is the namespace (`import * as HttpApiHyperlink`): each entry point is a flat top-level
 // export (`acceptJson` / `instrumentEndpoints` are declared above), so a partial import
 // tree-shakes the unused builders out.
 
@@ -416,7 +416,7 @@ function layerEffect<
  *
  * @example
  * ```ts
- * class MyClient extends HttpApiResource.Service<MyClient>()("@app/MyClient", MyApi, {
+ * class MyClient extends HttpApiHyperlink.Service<MyClient>()("@app/MyClient", MyApi, {
  *   baseUrl: "https://api.example.com",
  *   concurrency: 5,
  * }) {}
@@ -434,6 +434,6 @@ export const Service = httpApiResourceService;
  * @category constructors
  * @public
  */
-export const make = makeHttpApiResource;
+export const make = makeHttpApiHyperlink;
 
 export { layerEffect };

@@ -9,7 +9,7 @@ The web made documents location-transparent; Effect Hyperlink does it for servic
 ### Package identity
 
 - npm name: `@nikscripts/effect-pm` → **`hyperlink-ts`** (unscoped)
-- Import subpaths: `hyperlink-ts/Hyperlink`, `hyperlink-ts/QueueResource`, …
+- Import subpaths: `hyperlink-ts/Hyperlink`, `hyperlink-ts/QueueHyperlink`, …
 - Wire / `Symbol.for` / Context ids that used `@nikscripts/effect-pm/…` now use `hyperlink-ts/…`
 
 ### Primitive
@@ -26,15 +26,26 @@ class Emails extends Hyperlink.Tag<Emails>()("app/Emails", {
 }) {}
 ```
 
-### Unchanged product names
+### Product modules (also renamed)
 
-`QueueResource`, `CustomQueueResource`, `RunResource`, `HttpApiResource`, and `ResourceConfigure` keep their names.
+| Old | New |
+| --- | --- |
+| `QueueResource` | `QueueHyperlink` |
+| `CustomQueueResource` | `CustomQueueHyperlink` |
+| `RunResource` | `RunHyperlink` |
+| `HttpApiResource` | `HttpApiHyperlink` |
+| `ResourceConfigure` | `HyperlinkConfigure` |
+| `NodeStatusResource` | `NodeStatusHyperlink` |
+| `Logs.byResource` | `Logs.byHyperlink` |
+
+Related types, internals, UI helpers (`ResourceCard`, `makeResourceTui`, …), and docs paths follow the same `Resource` → `Hyperlink` stem.
 
 ### Migrate
 
 1. `pnpm add hyperlink-ts` (remove `@nikscripts/effect-pm`)
-2. Replace imports: `@nikscripts/effect-pm` → `hyperlink-ts`, `/Resource` → `/Hyperlink`
-3. Replace `import * as Resource` / `Resource.` with `Hyperlink`
-4. Re-deploy clients and servers together — wire id prefixes changed
+2. Replace imports: `@nikscripts/effect-pm` → `hyperlink-ts`
+3. Replace `/Resource` → `/Hyperlink`, `/QueueResource` → `/QueueHyperlink`, etc.
+4. Replace `import * as Resource` / `Resource.` / `QueueResource.` with the Hyperlink names
+5. Re-deploy clients and servers together — wire id prefixes and default kind strings changed
 
 GitHub repository URL strings are unchanged until the repo is renamed.

@@ -1,7 +1,7 @@
 /**
- * Wire schemas for RunResource store facts.
+ * Wire schemas for RunHyperlink store facts.
  *
- * @module internal/runResourceEvent
+ * @module internal/runHyperlinkEvent
  * @internal
  */
 
@@ -23,11 +23,11 @@ const runFinishedBase = {
 
 /**
  * Build the run fact union for a store contract — same terminal `_tag` names as
- * {@link QueueResource} worker events (`Started`, `Completed`, `Failed`).
+ * {@link QueueHyperlink} worker events (`Started`, `Completed`, `Failed`).
  *
  * @internal
  */
-export const makeRunResourceFactEvent = <
+export const makeRunHyperlinkFactEvent = <
   Success extends Schema.Top | void = void,
   Error extends Schema.Top | void = void,
 >(
@@ -58,17 +58,17 @@ export const makeRunResourceFactEvent = <
 };
 
 /** Void run facts (no `success`; string `error` fallback). @internal */
-export const runResourceFactEventVoid = makeRunResourceFactEvent();
+export const runHyperlinkFactEventVoid = makeRunHyperlinkFactEvent();
 
 /** Run fact type for the default void contract. @internal */
-export type RunResourceFactEventVoid = typeof runResourceFactEventVoid.Type;
+export type RunHyperlinkFactEventVoid = typeof runHyperlinkFactEventVoid.Type;
 
 /** Run fact type parameterized by optional success / error schemas. @internal */
-export type RunResourceFactEvent<
+export type RunHyperlinkFactEvent<
   Success extends Schema.Top | void = void,
   Error extends Schema.Top | void = void,
 > = ReturnType<
-  typeof makeRunResourceFactEvent<
+  typeof makeRunHyperlinkFactEvent<
     Success extends Schema.Top ? Success : void,
     Error extends Schema.Top ? Error : void
   >

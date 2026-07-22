@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as QueueResource from "../src/QueueResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -48,7 +48,7 @@ interface Item {
   readonly n: number;
 }
 class HubNode extends Node.Tag<HubNode>()("cd/hub") {}
-class HubQueue extends QueueResource.Tag<HubQueue>()("cd/HubQueue", {
+class HubQueue extends QueueHyperlink.Tag<HubQueue>()("cd/HubQueue", {
   payload: Item,
   node: HubNode,
 }) {}
@@ -86,7 +86,7 @@ describe("node-derived clients stream live", () => {
       HubNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`)),
     ).pipe(
       Effect.provide(
-        Node.wsServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+        Node.wsServer([QueueHyperlink.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       ),
@@ -100,7 +100,7 @@ describe("node-derived clients stream live", () => {
       HubNode.pipe(Node.connectHttp(`http://127.0.0.1:${port}/rpc`)),
     ).pipe(
       Effect.provide(
-        Node.httpServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+        Node.httpServer([QueueHyperlink.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       ),

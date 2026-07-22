@@ -1,10 +1,10 @@
 import { Duration, Effect, Fiber, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src";
+import { QueueHyperlink } from "../src";
 
 const Item = Schema.Struct({ n: Schema.Number });
 
-class LiveQueue extends QueueResource.Tag<LiveQueue>()("qr-handle-ref/live", { payload: Item }) {}
+class LiveQueue extends QueueHyperlink.Tag<LiveQueue>()("qr-handle-ref/live", { payload: Item }) {}
 
 /** Mirrors `src/web/data.ts` — widgets subscribe via `q.status.changes`. */
 it("Hyperlink.layer handle: status.changes emits live counts on enqueue", () =>
@@ -28,7 +28,7 @@ it("Hyperlink.layer handle: status.changes emits live counts on enqueue", () =>
       expect(q.metrics.stream).toBeDefined();
     }).pipe(
       Effect.provide(
-        QueueResource.layerMemory(LiveQueue, {
+        QueueHyperlink.layerMemory(LiveQueue, {
           effect: (_item) => Effect.void,
           paused: true,
           concurrency: 1,

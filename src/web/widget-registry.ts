@@ -54,7 +54,7 @@ export type WidgetEntry =
   | { readonly _tag: "kind"; readonly kind: string; readonly widget: Widget }
   | { readonly _tag: "key"; readonly key: string; readonly widget: Widget };
 
-/** Bind a widget to every resource of a kind — e.g. `forKind(QueueResource.kind, MyQueueCard)`. @public */
+/** Bind a widget to every resource of a kind — e.g. `forKind(QueueHyperlink.kind, MyQueueCard)`. @public */
 export const forKind = (kind: string, widget: Widget): WidgetEntry => ({ _tag: "kind", kind, widget });
 
 /** Bind a widget to one exact resource key — overrides that resource's kind widget. @public */

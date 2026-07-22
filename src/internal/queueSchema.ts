@@ -1,7 +1,7 @@
 /**
  * @module internal/queueSchema
  *
- * The queue's **wire/error schemas** that both the engine (`QueueResource`) and the contract
+ * The queue's **wire/error schemas** that both the engine (`QueueHyperlink`) and the contract
  * (`QueueContract`) need — kept in their own light module (imports only `effect`) so the contract's
  * `Tag` / spec is **engine-free** and tree-shakes cleanly. The engine re-exports these for
  * back-compat; the contract imports them directly from here.

@@ -1,6 +1,6 @@
 # Hyperlink API Reference
 
-Complete guide to `QueueResource`, `CustomQueueResource`, `RunResource`, and `HttpApiResource` — the managed resource modules in `hyperlink-ts`.
+Complete guide to `QueueHyperlink`, `CustomQueueHyperlink`, `RunHyperlink`, and `HttpApiHyperlink` — the managed resource modules in `hyperlink-ts`.
 
 ---
 
@@ -10,10 +10,10 @@ Every contract's `.Tag` factory stamps a canonical **kind** id on the tag it bui
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 
-Hyperlink.kindOf(MyQueue);        // "hyperlink-ts/QueueResource"
-Hyperlink.kindOf(MyQueue) === QueueResource.kind; // true
+Hyperlink.kindOf(MyQueue);        // "hyperlink-ts/QueueHyperlink"
+Hyperlink.kindOf(MyQueue) === QueueHyperlink.kind; // true
 Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no kind)
 ```
 
@@ -21,17 +21,17 @@ Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no
 
 | Contract | `kind` |
 | --- | --- |
-| `QueueResource` (`…/QueueContract`) | `hyperlink-ts/QueueResource` |
+| `QueueHyperlink` (`…/QueueContract`) | `hyperlink-ts/QueueHyperlink` |
 | `Process` (`Process.Tag`) | `hyperlink-ts/Process` |
 | `Process.Schedule` (standalone schedule) | `hyperlink-ts/Process/Schedule` |
-| `CustomQueueResource` (`…/CustomQueueContract`) | `hyperlink-ts/CustomQueueResource` |
+| `CustomQueueHyperlink` (`…/CustomQueueContract`) | `hyperlink-ts/CustomQueueHyperlink` |
 | `ApiMetrics` | `hyperlink-ts/ApiMetrics` |
 
 This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` / `Hyperlink.tagFor(groupId, spec, { kind })` to give a custom contract its own.
 
 ---
 
-## QueueResource
+## QueueHyperlink
 
 Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 
@@ -41,9 +41,9 @@ Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 
 ```typescript
 import { Effect, Exit } from "effect"
-import { QueueResource } from "hyperlink-ts"
+import { QueueHyperlink } from "hyperlink-ts"
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
+class EmailQueue extends QueueHyperlink.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   {
     effect: (email, ctx) => smtpClient.send(email).pipe(Effect.asVoid),
@@ -69,17 +69,17 @@ Effect.provide(EmailQueue.layer)
 #### Tag (pure identity — implementation provided separately)
 
 ```typescript
-class NotificationQueue extends QueueResource.Tag<NotificationQueue, Notification, never, never>()(
+class NotificationQueue extends QueueHyperlink.Tag<NotificationQueue, Notification, never, never>()(
   "@app/NotificationQueue",
 ) {}
 
 // Provide implementation in different environments:
-const NotificationQueueDev = QueueResource.layer(NotificationQueue, {
+const NotificationQueueDev = QueueHyperlink.layer(NotificationQueue, {
   effect: (n) => Effect.logInfo(`[DEV] Would send: ${n.message}`),
   concurrency: 1,
 })
 
-const NotificationQueueProd = QueueResource.layer(NotificationQueue, {
+const NotificationQueueProd = QueueHyperlink.layer(NotificationQueue, {
   effect: (n) => pushService.send(n).pipe(Effect.asVoid),
   concurrency: 20,
 })
@@ -90,7 +90,7 @@ const NotificationQueueProd = QueueResource.layer(NotificationQueue, {
 ```typescript
 const program = Effect.scoped(
   Effect.gen(function*() {
-    const queue = yield* QueueResource.make({
+    const queue = yield* QueueHyperlink.make({
       name: "temp-work-queue",
       effect: (item: string) => Effect.logInfo(String(item.length)),
       concurrency: 5,
@@ -132,7 +132,7 @@ yield* queue.deadLetter({ key: "poison" }, { reason: "max retries" })
 ### Configuration reference
 
 ```typescript
-QueueResource.Service<Self, T, E>()("name", {
+QueueHyperlink.Service<Self, T, E>()("name", {
   // ─── Required ───
   effect: (item: T, ctx: EffectContext<T>) => Effect<R, E>,
 
@@ -201,7 +201,7 @@ onExit: ({ entry, exit, elapsed, retry }, queue) => Effect.gen(function*() {
 #### Error handling with retry + dead letter
 
 ```typescript
-class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError>()(
+class OrderQueue extends QueueHyperlink.Service<OrderQueue, Order, OrderError>()(
   "@app/OrderQueue",
   {
     effect: (order) => processOrder(order),
@@ -223,7 +223,7 @@ class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError>()(
 #### Deduplication (by item key)
 
 ```typescript
-class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, never>()(
+class WebhookQueue extends QueueHyperlink.Service<WebhookQueue, WebhookEvent, never>()(
   "@app/WebhookQueue",
   {
     effect: (event) => deliverWebhook(event),
@@ -236,7 +236,7 @@ class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, nev
 #### Spawning derived work from effect
 
 ```typescript
-class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, CrawlError>()(
+class CrawlQueue extends QueueHyperlink.Service<CrawlQueue, URL, CrawlError>()(
   "@app/CrawlQueue",
   {
     effect: (url, ctx) => Effect.gen(function*() {
@@ -253,7 +253,7 @@ class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, CrawlError>()(
 #### Start paused, load items, then resume
 
 ```typescript
-class BatchQueue extends QueueResource.Service<BatchQueue, Job, never>()(
+class BatchQueue extends QueueHyperlink.Service<BatchQueue, Job, never>()(
   "@app/BatchQueue",
   {
     effect: (job) => processJob(job),
@@ -270,13 +270,13 @@ yield* queue.resume  // now workers start in priority order
 
 ---
 
-## CustomQueueResource
+## CustomQueueHyperlink
 
-N-level priority queues sharing the same worker engine as `QueueResource`, with a numeric lane store and
+N-level priority queues sharing the same worker engine as `QueueHyperlink`, with a numeric lane store and
 pluggable take algorithm (`priority`, `strict-descending`, `weighted`, or custom pick). Use when the
 fixed high/normal/low trio is not enough.
 
-**Default `QueueResource` is unchanged** — custom lanes live in a separate type and subpath so the
+**Default `QueueHyperlink` is unchanged** — custom lanes live in a separate type and subpath so the
 default import graph stays lightweight (scheduled lane code is dynamically imported only when
 `takeAlgorithm: "weighted"` or similar is selected).
 
@@ -284,21 +284,21 @@ default import graph stays lightweight (scheduled lane code is dynamically impor
 
 | Need | Use |
 |------|-----|
-| Three priorities (`add` / `prioritize` / `defer`) | `QueueResource` |
-| Many lanes, named levels, WFQ / strict ordering | `CustomQueueResource` |
+| Three priorities (`add` / `prioritize` / `defer`) | `QueueHyperlink` |
+| Many lanes, named levels, WFQ / strict ordering | `CustomQueueHyperlink` |
 
 ### Toolkit tag (recommended)
 
 Tag factory arity mirrors positional lane config:
 
 ```typescript
-import { CustomQueueResource } from "hyperlink-ts"
+import { CustomQueueHyperlink } from "hyperlink-ts"
 import { Schema } from "effect"
 
 const Job = Schema.Struct({ id: Schema.String })
 
 // (id, schema, levelCount, namedLevels?)
-class Jobs extends CustomQueueResource.Tag<Jobs>()(
+class Jobs extends CustomQueueHyperlink.Tag<Jobs>()(
   "@app/Jobs",
   Job,
   8,
@@ -306,7 +306,7 @@ class Jobs extends CustomQueueResource.Tag<Jobs>()(
 ) {}
 
 // or: (id, schema, levelNames[]) — indices assigned 0…n−1
-class Lanes extends CustomQueueResource.Tag<Lanes>()(
+class Lanes extends CustomQueueHyperlink.Tag<Lanes>()(
   "@app/Lanes",
   Job,
   ["urgent", "normal", "batch"],
@@ -323,13 +323,13 @@ const numeric = yield* queue.levelSizes // number[] indexed by lane
 Tree-shake the contract only (no engine on the tag import path):
 
 ```typescript
-import * as CustomQueueResource from "hyperlink-ts/CustomQueueResource"
+import * as CustomQueueHyperlink from "hyperlink-ts/CustomQueueHyperlink"
 ```
 
 ### Layer / engine
 
 ```typescript
-CustomQueueResource.layer(Jobs, {
+CustomQueueHyperlink.layer(Jobs, {
   levelCount: 8,
   namedLevels: { urgent: 0, batch: 7 },
   takeAlgorithm: "weighted", // or "priority" | "strict-descending" | CustomTakeAlgorithm
@@ -338,7 +338,7 @@ CustomQueueResource.layer(Jobs, {
 })
 
 // Local engine without toolkit tag:
-import { CustomQueueResource as CustomQueueEngine } from "hyperlink-ts/CustomQueueResource"
+import { CustomQueueHyperlink as CustomQueueEngine } from "hyperlink-ts/CustomQueueHyperlink"
 
 const queue = yield* CustomQueueEngine.make({
   levelCount: 4,
@@ -347,20 +347,20 @@ const queue = yield* CustomQueueEngine.make({
 })
 ```
 
-### Service shape differences from `QueueResource`
+### Service shape differences from `QueueHyperlink`
 
 - **`add(item, level?)`** — optional lane as numeric index or configured name (not `{ item, level }`).
 - **`sizes`** — `Record<string, number>` keyed by name (unnamed lanes appear as `"0"`, `"1"`, …).
 - **`levelSizes`** — `number[]` parallel to lane indices.
 - No `prioritize` / `defer` — pick the lane explicitly on `add`.
 
-Subpaths: `hyperlink-ts/CustomQueueResource` (namespace + engine), `hyperlink-ts/CustomQueueResource` (tag/layer/server only).
+Subpaths: `hyperlink-ts/CustomQueueHyperlink` (namespace + engine), `hyperlink-ts/CustomQueueHyperlink` (tag/layer/server only).
 
-Example: [`examples/forms/queue/custom-queue-resource-n-level.ts`](../examples/forms/queue/custom-queue-resource-n-level.ts) (`pnpm run example:custom-queue-resource`).
+Example: [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](../examples/forms/queue/custom-queue-hyperlink-n-level.ts) (`pnpm run example:custom-queue-hyperlink`).
 
 ---
 
-## RunResource
+## RunHyperlink
 
 Concurrency gate (semaphore) around any effect. No queues, no workers — just bounded parallelism.
 
@@ -369,7 +369,7 @@ Concurrency gate (semaphore) around any effect. No queues, no workers — just b
 #### Class declaration (parameterized gate)
 
 ```typescript
-class SendSms extends RunResource.Service<SendSms>()("@app/SendSms", {
+class SendSms extends RunHyperlink.Service<SendSms>()("@app/SendSms", {
   payload: PhoneNumberSchema,
   success: SmsResultSchema,
   error: SmsErrorSchema,
@@ -385,7 +385,7 @@ const result = yield* send.run("+1234567890")
 #### Class declaration (unit gate — no input)
 
 ```typescript
-class RefreshPrices extends RunResource.Service<RefreshPrices>()("@app/RefreshPrices", {
+class RefreshPrices extends RunHyperlink.Service<RefreshPrices>()("@app/RefreshPrices", {
   payload: Schema.Void,
   success: PriceDataSchema,
   error: FetchErrorSchema,
@@ -400,7 +400,7 @@ const prices = yield* refresh.run()
 #### Generic runner (wraps any effect)
 
 ```typescript
-const DbPool = RunResource.makeRunner({
+const DbPool = RunHyperlink.makeRunner({
   name: "@app/DbPool",
   concurrency: 20,  // max 20 concurrent DB queries
 })
@@ -413,7 +413,7 @@ const orders = yield* runner(db.query("SELECT * FROM orders"))
 #### Tag + layer (dependency inversion)
 
 ```typescript
-const ApiGate = RunResource.Tag<ApiGate>()(
+const ApiGate = RunHyperlink.Tag<ApiGate>()(
   "@app/ApiGate",
   RequestSchema,
   ResponseSchema,
@@ -421,13 +421,13 @@ const ApiGate = RunResource.Tag<ApiGate>()(
 )
 
 // Dev: no limit
-const ApiGateDev = RunResource.layer(ApiGate, {
+const ApiGateDev = RunHyperlink.layer(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 100,
 })
 
 // Prod: strict limit
-const ApiGateProd = RunResource.layer(ApiGate, {
+const ApiGateProd = RunHyperlink.layer(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 10,
 })
@@ -436,17 +436,17 @@ const gate = yield* ApiGate
 yield* gate.run(request)
 ```
 
-When `RunResource.store(tag)` or the default store bridge is composed, the engine automatically
+When `RunHyperlink.store(tag)` or the default store bridge is composed, the engine automatically
 persists run facts and state transitions to **Store**.
 
-**Store provision:** `RunResource.layer`, `RunResource.serve`, and `RunResource.Service.layer` merge
+**Store provision:** `RunHyperlink.layer`, `RunHyperlink.serve`, and `RunHyperlink.Service.layer` merge
 {@link Store.layerDefaultMemory} automatically. Override with `Layer.provideMerge(AppStore.layerMemory)`.
-{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect (see tests).
+{@link RunHyperlink.make} still requires {@link Store.layerDefaultMemory} on the effect (see tests).
 
 #### Raw make (no tag)
 
 ```typescript
-const gate = yield* RunResource.make({
+const gate = yield* RunHyperlink.make({
   name: "@app/Multiplier",
   effect: (n: number) => Effect.succeed(n * 2),
   concurrency: 3,
@@ -475,23 +475,23 @@ Static shortcuts: `yield* ApiGate.run(request)` (requires the tag in `R`).
 Same tag + config as {@link layer}; serve over HTTP like Queue/Process:
 
 ```typescript
-const remoteHandlers = RunResource.serveRemote(ApiGate, {
+const remoteHandlers = RunHyperlink.serveRemote(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 10,
 })
 
-const localAndRemote = RunResource.serve(ApiGate, { effect: (req) => httpFetch(req) })
+const localAndRemote = RunHyperlink.serve(ApiGate, { effect: (req) => httpFetch(req) })
 ```
 
 Wire schemas on the tag: `runGateStatus`, `runSpec(payload, success, error?)`.
 
-### Store registration (`RunResource.store`)
+### Store registration (`RunHyperlink.store`)
 
 Register built-in run facts + state history on an app {@link Store.Service}:
 
 ```typescript
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  RunResource.store(ApiGate),
+  RunHyperlink.store(ApiGate),
 ) {}
 
 // Engine auto-writes when AppStore.layerMemory (or .layer) is composed with ApiGate.layer
@@ -503,7 +503,7 @@ Legacy **`ProcessStorage.layer`** still composes other facets (execution, queue,
 
 ---
 
-## HttpApiResource
+## HttpApiHyperlink
 
 Typed HTTP API client with transport-level concurrency gating.
 
@@ -514,7 +514,7 @@ Typed HTTP API client with transport-level concurrency gating.
 ```typescript
 import { HttpApi, HttpApiGroup, HttpApiEndpoint } from "effect/unstable/httpapi"
 import { Schema } from "effect"
-import { HttpApiResource } from "hyperlink-ts"
+import { HttpApiHyperlink } from "hyperlink-ts"
 
 // Define your API schema
 const getUser = HttpApiEndpoint.get("getUser", "/users/:id", {
@@ -524,7 +524,7 @@ const UsersApi = HttpApi.make("users-api")
   .add(HttpApiGroup.make("users").add(getUser))
 
 // Create gated client
-const UsersClient = HttpApiResource.make(UsersApi, {
+const UsersClient = HttpApiHyperlink.make(UsersApi, {
   name: "@app/UsersClient",
   baseUrl: "https://api.example.com",
   concurrency: 5,
@@ -538,7 +538,7 @@ const user = yield* client.users.getUser({ path: { id: "123" } })
 #### With auth header (transformClient)
 
 ```typescript
-const AuthClient = HttpApiResource.make(MyApi, {
+const AuthClient = HttpApiHyperlink.make(MyApi, {
   name: "@app/AuthClient",
   baseUrl: "https://api.example.com",
   concurrency: 10,
@@ -554,7 +554,7 @@ const AuthClient = HttpApiResource.make(MyApi, {
 ```typescript
 import { acceptJson } from "hyperlink-ts"
 
-const JsonClient = HttpApiResource.make(MyApi, {
+const JsonClient = HttpApiHyperlink.make(MyApi, {
   name: "@app/JsonClient",
   baseUrl: "https://api.example.com",
   transformClient: acceptJson,  // adds Accept: application/json to all requests
@@ -564,7 +564,7 @@ const JsonClient = HttpApiResource.make(MyApi, {
 #### No concurrency limit (pass-through)
 
 ```typescript
-const UnlimitedClient = HttpApiResource.make(MyApi, {
+const UnlimitedClient = HttpApiHyperlink.make(MyApi, {
   name: "@app/UnlimitedClient",
   baseUrl: "https://api.example.com",
   // no concurrency field — requests are not gated
@@ -585,7 +585,7 @@ type ClientShape = Effect.Success<typeof myCustomMake>
 class MyClient extends Context.Service<MyClient, ClientShape>()("@app/MyClient") {}
 
 // Wrap with concurrency gate
-const MyClientLive = HttpApiResource.layerEffect(MyClient, myCustomMake, {
+const MyClientLive = HttpApiHyperlink.layerEffect(MyClient, myCustomMake, {
   concurrency: 10,
 })
 ```
@@ -613,7 +613,7 @@ Derivations **stack**: a later `withReadiness` receives the previous one as a se
 **Depend on another resource.** `Hyperlink.readinessOf(tag)` yields a resource's service and runs *its* derivation; `Hyperlink.allReady([...])` combines checks with AND (first not-ready wins). So a queue can report degraded when a dependency (e.g. a `Database` resource) is down — compile-time-checked (the dependency lands in the readiness Effect's requirements), and it works whether the dependency is local or reached over RPC:
 
 ```ts
-class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }).pipe(
+class Jobs extends QueueHyperlink.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }).pipe(
   Hyperlink.withReadiness((_svc, base) =>
     Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
   ),
@@ -622,7 +622,7 @@ class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }
 
 `Hyperlink.readinessCheck(tag, service)` runs a tag's derivation (a tag with none is **ready by default**); `httpServer` calls it to build the host aggregate.
 
-On the dashboard, the host **health board** (tap the host die) lists degraded resources across every host with their root cause, and each resource's own detail page shows a `degraded — <root cause>` banner (`ResourceReadinessBanner`).
+On the dashboard, the host **health board** (tap the host die) lists degraded resources across every host with their root cause, and each resource's own detail page shows a `degraded — <root cause>` banner (`HyperlinkReadinessBanner`).
 
 > Acquisition vs. readiness: get hard dependencies ready by acquiring them eagerly with `Layer.scoped` (failures surface at boot); readiness covers the *runtime* health `Layer` can't see (a connection that drops after boot).
 
@@ -635,11 +635,11 @@ On the dashboard, the host **health board** (tap the host die) lists degraded re
 Build each layer with **`serve`** (local **and** served — the default) or **`serveRemote`** (served-only, a pure gateway):
 
 - **`Hyperlink.serve(tag, impl)`** / **`Hyperlink.serveRemote(tag, impl)`** — for a **raw** `Hyperlink.Tag`. Both **spec-check** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). `serve` additionally grants `Self | LocalCapability<Self>` from the **same** materialization, so the serving node also `yield*`s the resource in-process; `serveRemote` mounts wire handlers only. Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
-- **`QueueResource.serve(tag, config)`** / **`Process.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
+- **`QueueHyperlink.serve(tag, config)`** / **`Process.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
 
 ```ts
 Hyperlink.httpServer([
-  QueueResource.serve(RosterQueue, { effect }),        // worker R
+  QueueHyperlink.serve(RosterQueue, { effect }),        // worker R
   ApiMetrics.serve(SdpApi),                            // Scope
   Hyperlink.serve(Database, { status: pingStatus }),    // raw, spec-checked
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
@@ -739,15 +739,15 @@ program.pipe(
 ```
 
 **Queue execution history** (Store bridge) — persisted `QueueEvent<T>` rows via the engine store tap.
-Register `QueueResource.store(EmailQueue)` on an app `Store.Service` for durable analytics, or read
+Register `QueueHyperlink.store(EmailQueue)` on an app `Store.Service` for durable analytics, or read
 the baked-in default:
 
 ```typescript
 import * as Store from "hyperlink-ts/Store";
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  QueueResource.store(EmailQueue),
+  QueueHyperlink.store(EmailQueue),
 ) {}
 
 const store = yield* AppStore.at(EmailQueue);

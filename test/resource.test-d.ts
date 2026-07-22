@@ -43,7 +43,7 @@ const _notEffect: Effect.Effect<number> = ss.changes;
 void _notEffect;
 
 // ── Hyperlink.Hyperlink — `yield* Tag` like Effect.Effect ──
-class CounterForResourceType extends Hyperlink.Tag<CounterForResourceType>()("Counter", {
+class CounterForHyperlinkType extends Hyperlink.Tag<CounterForHyperlinkType>()("Counter", {
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
   current: Hyperlink.effect(Schema.Number),
@@ -55,9 +55,9 @@ const counterSpec = {
   current: Hyperlink.effect(Schema.Number),
 } as const;
 
-type CounterShape = Hyperlink.Shape<CounterForResourceType>;
-type CounterResource = Hyperlink.Hyperlink<typeof counterSpec, never, never, CounterForResourceType>;
-type CounterInferred = Hyperlink.Of<CounterForResourceType>;
+type CounterShape = Hyperlink.Shape<CounterForHyperlinkType>;
+type CounterResource = Hyperlink.Hyperlink<typeof counterSpec, never, never, CounterForHyperlinkType>;
+type CounterInferred = Hyperlink.Of<CounterForHyperlinkType>;
 
 declare const counterShape: CounterShape;
 declare const _counterResource: CounterResource;
@@ -67,14 +67,14 @@ void _counterResource;
 void _counterInferred;
 
 const _counterResourceUse = Effect.gen(function* () {
-  const c: Hyperlink.Shape<CounterForResourceType> = yield* CounterForResourceType;
+  const c: Hyperlink.Shape<CounterForHyperlinkType> = yield* CounterForHyperlinkType;
   yield* c.increment({ by: 1 });
   return yield* c.current;
 });
 void _counterResourceUse;
 
 // Tag is assignable to Hyperlink.Of<typeof Tag> (Context.Service is an Effect).
-const _tagIsResource: CounterInferred = CounterForResourceType;
+const _tagIsResource: CounterInferred = CounterForHyperlinkType;
 void _tagIsResource;
 
 // ── Slice 2: Tag + `yield*` + local layer ──

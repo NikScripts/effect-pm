@@ -1,17 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Ref } from "effect";
-import * as QueueResource from "../src/QueueResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
 
 const waitUntil = (predicate: Effect.Effect<boolean>) =>
   Effect.gen(function* () {
     while (!(yield* predicate)) yield* Effect.sleep(Duration.millis(10));
   }).pipe(Effect.timeout(Duration.seconds(2)));
 
-describe("QueueResource refill", () => {
+describe("QueueHyperlink refill", () => {
   it.live("refill.onStart bootstraps the queue from a source", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
-      yield* QueueResource.make({
+      yield* QueueHyperlink.make({
         name: "refill-start",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
         refill: { onStart: true, load: (q) => q.add([1, 2, 3]) },
@@ -26,7 +26,7 @@ describe("QueueResource refill", () => {
     Effect.gen(function* () {
       const source = yield* Ref.make<Array<number>>([2, 3]); // refilled one-per-drain
       const processed = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueResource.make({
+      const queue = yield* QueueHyperlink.make({
         name: "refill-drain",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
         refill: {

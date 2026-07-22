@@ -156,7 +156,7 @@ const ipcServerBase = (
       const inferredNodeKey =
         optionNodeKey ?? (boundKeys.length === 1 ? boundKeys[0] : undefined);
       const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./nodeStatusResource"),
+        () => import("./nodeStatusHyperlink"),
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,

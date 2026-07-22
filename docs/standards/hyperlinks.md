@@ -14,15 +14,15 @@ never moves onto the tag (that drags the engine into the light contract).
 
 ``` ts
 // contract — the wire schema, passed positionally
-class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", Job) {}
+class Mail extends QueueHyperlink.Tag<Mail>()("@acme/Mail", Job) {}
 
 // runtime — in the layer
-QueueResource.layer(Mail, { effect: handleJob, autoStart: true })
+QueueHyperlink.layer(Mail, { effect: handleJob, autoStart: true })
 ```
 
 ``` ts
 // ❌ bad — wire schema in the layer (no longer SSOT; client and server can disagree)
-QueueResource.layer(Mail, { payload: Job, effect: handleJob })
+QueueHyperlink.layer(Mail, { payload: Job, effect: handleJob })
 ```
 
 {#positional-schema-args .must appliesTo="src examples"}
@@ -30,18 +30,18 @@ QueueResource.layer(Mail, { payload: Job, effect: handleJob })
 
 When a tag needs only its wire schema, pass it **positionally** — it's the clearest form. Reach for
 the `{ payload, success, error }` config object only when the tag carries more than one wire slot, or
-extra configuration. `CustomQueueResource` always takes the object, because its lane structure
+extra configuration. `CustomQueueHyperlink` always takes the object, because its lane structure
 (`levelCount`, `namedLevels`) lives on the tag alongside the payload.
 
 ``` ts
 // ✅ single schema → positional
-class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", Job) {}
+class Mail extends QueueHyperlink.Tag<Mail>()("@acme/Mail", Job) {}
 
 // config object — more than one wire slot
 class Ingest extends Process.Tag<Ingest>()("app/Ingest", { success: Report, error: PullFailed }) {}
 
 // CQR — always the object; lane config rides on the tag
-class Jobs extends CustomQueueResource.Tag<Jobs>()("@acme/Jobs", {
+class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@acme/Jobs", {
   payload: Job,
   levelCount: 4,
   namedLevels: { interactive: 0, standard: 2, batch: 3 },
@@ -104,18 +104,18 @@ Process.layer(Ingest, {
 {#default-queue-lean .must appliesTo="src examples"}
 ## The default queue stays lean; custom lanes are a separate type
 
-The default `QueueResource` is exactly three lanes — high / normal / low — and stays that way. When
-you need a different lane count or a weighted take, that is `CustomQueueResource`, a **separate
+The default `QueueHyperlink` is exactly three lanes — high / normal / low — and stays that way. When
+you need a different lane count or a weighted take, that is `CustomQueueHyperlink`, a **separate
 type**, not a wider-shaped default queue. Its scheduling code is loaded only when selected (see
 *Build & browser safety*), so the default queue never carries the weight of lane machinery it doesn't
 use.
 
 ``` ts
 // default — three fixed lanes; schema positional
-class Mail extends QueueResource.Tag<Mail>()("@acme/Mail", Job) {}
+class Mail extends QueueHyperlink.Tag<Mail>()("@acme/Mail", Job) {}
 
 // custom — N named lanes, a distinct type; lane config forces the object form
-class Jobs extends CustomQueueResource.Tag<Jobs>()("@acme/Jobs", {
+class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@acme/Jobs", {
   payload: Job,
   levelCount: 4,
   namedLevels: { interactive: 0, standard: 2, batch: 3 },
@@ -151,7 +151,7 @@ there — the core verbs stay transport-agnostic, so the same resource can be se
 {#serve-through-spec-checked-forms .must appliesTo="src examples"}
 ## Serve through the engine's spec-checked form, never a bare literal
 
-Serve a resource through its engine form (`QueueResource.serve`, `Process.serve`) — these mount the
+Serve a resource through its engine form (`QueueHyperlink.serve`, `Process.serve`) — these mount the
 handlers **and** keep the worker or tick alive. `Hyperlink.serve` only mounts handlers; using it for a
 queue leaves the worker dead. Never hand-write a `{ tag, impl }` literal: it types as
 `Record<string, unknown>` and silently swallows typos — the engine form spec-checks the impl against
@@ -200,7 +200,7 @@ One class. Each node runs its own instance; `peers` gives you the per-node handl
 
 ``` ts
 // one tag — not one-per-node
-class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job) {}
+class Prices extends QueueHyperlink.Tag<Prices>()("app/Prices", Job) {}
 
 const perNode = yield* Hyperlink.peers(Prices)
 // { "node-a": handle, "node-b": handle, … } — keyed by node
@@ -214,7 +214,7 @@ into a peer to decide your own readiness cascades one node's failure into its ne
 
 ``` ts
 // ✅ derived from this instance's own status
-class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job)
+class Prices extends QueueHyperlink.Tag<Prices>()("app/Prices", Job)
   .pipe(Hyperlink.withReadiness((svc) =>
     Effect.map(svc.status.get, (s) => s.phase === "running"),
   )) {}
@@ -236,7 +236,7 @@ your own node explicitly.
 
 ``` ts
 // a combined field is marked fleet → not re-fanned-out by peers
-class Prices extends QueueResource.Tag<Prices>()("app/Prices", Job) {
+class Prices extends QueueHyperlink.Tag<Prices>()("app/Prices", Job) {
   static readonly totalDepth = Hyperlink.fleet(Hyperlink.effect(Schema.Number))
 }
 

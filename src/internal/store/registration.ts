@@ -31,7 +31,7 @@ export interface StoreScopeTag {
  *
  * @internal
  */
-export type StoreJournalKind = "resource" | "node";
+export type StoreJournalKind = "hyperlink" | "node";
 
 /** @internal */
 export interface StoreRegistration<

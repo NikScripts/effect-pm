@@ -1,5 +1,5 @@
 /**
- * @module internal/nodeStatusResource
+ * @module internal/nodeStatusHyperlink
  *
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
@@ -29,7 +29,7 @@ import { queryDurableNode } from "./logs/durableRead";
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
 
-/** How often the live {@link NodeStatusResource} `status` stream re-emits a snapshot. */
+/** How often the live {@link NodeStatusHyperlink} `status` stream re-emits a snapshot. */
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
@@ -39,7 +39,7 @@ const STATUS_INTERVAL = Duration.seconds(2);
  *
  * @internal
  */
-export const nodeResourceReadiness = Schema.Struct({
+export const nodeHyperlinkReadiness = Schema.Struct({
   key: Schema.String,
   kind: Schema.String,
   ready: Schema.Boolean,
@@ -49,7 +49,7 @@ export const nodeResourceReadiness = Schema.Struct({
 });
 
 /** A served resource's readiness as reported by its node. @internal */
-export type NodeResourceReadiness = typeof nodeResourceReadiness.Type;
+export type NodeHyperlinkReadiness = typeof nodeHyperlinkReadiness.Type;
 
 /**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
@@ -64,7 +64,7 @@ export const nodeStatus = Schema.Struct({
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
   resourceCount: Schema.Number,
-  resources: Schema.Array(nodeResourceReadiness),
+  resources: Schema.Array(nodeHyperlinkReadiness),
 });
 
 /** Live node status. @internal */
@@ -76,7 +76,7 @@ export type NodeStatus = typeof nodeStatus.Type;
  *
  * @internal
  */
-export class NodeStatusResource extends Hyperlink.Tag<NodeStatusResource>()(
+export class NodeStatusHyperlink extends Hyperlink.Tag<NodeStatusHyperlink>()(
   HOST_STATUS_KEY,
   {
   status: Hyperlink.ref(nodeStatus).annotate({
@@ -116,14 +116,14 @@ export const buildNodeStatusImpl = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
   /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<NodeHyperlinkReadiness>>;
   /**
    * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
    * When omitted, query returns `[]`.
    */
   readonly nodeLogKey?: string;
   /**
-   * Cooperative handoff handler for {@link NodeStatusResource}.`yield`.
+   * Cooperative handoff handler for {@link NodeStatusHyperlink}.`yield`.
    * Default: accept (`true`) — Lookup then replaces the directory row.
    */
   readonly onYield?: Effect.Effect<boolean>;
@@ -181,12 +181,12 @@ export const buildNodeStatusImpl = (options: {
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<NodeHyperlinkReadiness>>;
   readonly nodeLogKey?: string;
 }): {
-  readonly tag: typeof NodeStatusResource;
+  readonly tag: typeof NodeStatusHyperlink;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;
 } => ({
-  tag: NodeStatusResource,
+  tag: NodeStatusHyperlink,
   impl: buildNodeStatusImpl(options),
 });

@@ -1,7 +1,7 @@
 /**
  * {@link Hyperlink.logs} — per-resource log export surface.
  *
- * @module internal/logs/resourceLogs
+ * @module internal/logs/hyperlinkLogs
  * @internal
  */
 
@@ -57,10 +57,10 @@ const queryResourceLogs = (
     } else if (local.length > 0) {
       return local;
     }
-    const { NodeStatusResource } = yield* Effect.promise(
-      () => import("../nodeStatusResource"),
+    const { NodeStatusHyperlink } = yield* Effect.promise(
+      () => import("../nodeStatusHyperlink"),
     );
-    const status = yield* Effect.serviceOption(NodeStatusResource);
+    const status = yield* Effect.serviceOption(NodeStatusHyperlink);
     if (Option.isNone(status)) {
       return local;
     }
@@ -91,10 +91,10 @@ export const logs = <Tag extends StoreScopeTag>(
           floor,
         );
       }
-      const { NodeStatusResource } = yield* Effect.promise(
-        () => import("../nodeStatusResource"),
+      const { NodeStatusHyperlink } = yield* Effect.promise(
+        () => import("../nodeStatusHyperlink"),
       );
-      const status = yield* Effect.serviceOption(NodeStatusResource);
+      const status = yield* Effect.serviceOption(NodeStatusHyperlink);
       if (Option.isNone(status)) {
         return Stream.empty;
       }

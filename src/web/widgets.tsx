@@ -54,13 +54,13 @@ import {
   resourceNodeRef,
   tagWireKey,
 } from "./data";
-import { kindOf as resourceKindOf, kind as resourceKind } from "../Hyperlink";
-import { kind as queueKind } from "../QueueResource";
-import { kind as customQueueKind } from "../CustomQueueResource";
+import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
+import { kind as queueKind } from "../QueueHyperlink";
+import { kind as customQueueKind } from "../CustomQueueHyperlink";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind } from "../RunResource";
+import { kind as runKind } from "../RunHyperlink";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -232,7 +232,7 @@ const LaneRow = (props: {
 const CQ_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
 
 /**
- * A **custom queue** as a grid card — the {@link QueueCard} sibling for `CustomQueueResource`: same
+ * A **custom queue** as a grid card — the {@link QueueCard} sibling for `CustomQueueHyperlink`: same
  * pending / done / phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar
  * each instead of the fixed high/normal/low priorities. @public
  */
@@ -397,7 +397,7 @@ export const Cell = (props: {
   // A non-group member is a resource tag; resolve its widget by key → kind → fallback.
   if (!isLeafTag(props.member)) return <></>;
   const tag = props.member;
-  const Widget = widgetFor(registry, tag.key, resourceKindOf(tag) ?? resourceKind);
+  const Widget = widgetFor(registry, tag.key, hyperlinkKindOf(tag) ?? hyperlinkKind);
   return <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />;
 };
 
@@ -1489,7 +1489,7 @@ export const DetailScreen = (props: {
   readonly vtKey: string;
   readonly icon?: React.ReactNode;
   readonly badge?: React.ReactNode;
-  /** Renders a {@link ResourceReadinessBanner} for this tag (no-op when the tag has no node). */
+  /** Renders a {@link HyperlinkReadinessBanner} for this tag (no-op when the tag has no node). */
   readonly readinessTag?: unknown;
   /** Auto-paginated content — the common case. */
   readonly sections?: ReadonlyArray<DeckSection>;
@@ -1506,7 +1506,7 @@ export const DetailScreen = (props: {
         </strong>
         {props.badge}
       </div>
-      {props.readinessTag !== undefined ? <ResourceReadinessBanner tag={props.readinessTag} /> : null}
+      {props.readinessTag !== undefined ? <HyperlinkReadinessBanner tag={props.readinessTag} /> : null}
       <Deck fill sections={props.sections} pages={props.pages} />
     </div>
   );
@@ -1971,7 +1971,7 @@ const NodeHealthCard = (props: {
   readonly s: NodeStatusValue | undefined;
   readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const s = props.s;
   const ready = s !== undefined ? s.resources.filter((x) => x.ready).length : 0;
@@ -2012,7 +2012,7 @@ const NodeHealthCard = (props: {
               key={res.key}
               res={res}
               node={props.node}
-              onOpen={() => props.onOpenResource(res.key)}
+              onOpen={() => props.onOpenHyperlink(res.key)}
             />
           ))}
         </ul>
@@ -2065,7 +2065,7 @@ export const HealthBoard = (props: {
   readonly group: GroupNode;
   readonly onBack: () => void;
   readonly onOpenNode: (node: NodeRef) => void;
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const nodes = nodesOf(props.group);
   // Each node's live status is read by its own `NodeHealthRow` child (hooks at the child's top level —
@@ -2126,7 +2126,7 @@ export const HealthBoard = (props: {
                 res={res}
                 node={node}
                 showNode
-                onOpen={() => props.onOpenResource(res.key)}
+                onOpen={() => props.onOpenHyperlink(res.key)}
               />
             ))}
           </ul>
@@ -2143,7 +2143,7 @@ export const HealthBoard = (props: {
               node={node}
               onStatus={reportStatus}
               onOpen={() => props.onOpenNode(node)}
-              onOpenResource={props.onOpenResource}
+              onOpenHyperlink={props.onOpenHyperlink}
             />
           ))}
         </div>
@@ -2158,7 +2158,7 @@ const NodeHealthRow = (props: {
   readonly node: NodeRef;
   readonly onStatus: (id: string, s: NodeStatusValue | undefined) => void;
   readonly onOpen: () => void;
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
@@ -2175,7 +2175,7 @@ const NodeHealthRow = (props: {
       s={s}
       history={history}
       onOpen={props.onOpen}
-      onOpenResource={props.onOpenResource}
+      onOpenHyperlink={props.onOpenHyperlink}
     />
   );
 };
@@ -2212,7 +2212,7 @@ const ReadinessBannerInner = (props: {
 /** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
  *  read from its node's `NodeStatus` (the same SSOT the health board uses). Renders nothing while the
  *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem. */
-export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
+export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = resourceNodeRef(props.tag);
   if (node === undefined) return null;
   return <ReadinessBannerInner tag={props.tag} node={node} />;
@@ -2224,7 +2224,7 @@ export const NodeDetail = (props: {
   readonly node: NodeRef;
   readonly onBack: () => void;
   /** Open a served resource's detail page, by its wire key (`NodeStatus.resources[].key`). */
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
@@ -2254,7 +2254,7 @@ export const NodeDetail = (props: {
                 <li key={res.key}>
                   <button
                     type="button"
-                    onClick={() => props.onOpenResource(res.key)}
+                    onClick={() => props.onOpenHyperlink(res.key)}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
                   >
                     <span
@@ -2328,10 +2328,10 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
     <CardContent className="p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-medium text-foreground">{props.name}</span>
-        {/* no operational status ref → the readiness dot fills the status slot (same as ResourceCard) */}
+        {/* no operational status ref → the readiness dot fills the status slot (same as HyperlinkCard) */}
         <ReadinessDot tag={props.tag} />
       </div>
-      <ResourceReadinessBanner tag={props.tag} />
+      <HyperlinkReadinessBanner tag={props.tag} />
     </CardContent>
   </Card>
 );
@@ -2341,7 +2341,7 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
  * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
  * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */
-export const ResourceCard = (props: WidgetProps): React.ReactElement => {
+export const HyperlinkCard = (props: WidgetProps): React.ReactElement => {
   const node = resourceNodeRef(props.tag);
   return (
     <Card className="relative">
@@ -2535,11 +2535,11 @@ const RunCounter = (props: {
 );
 
 /**
- * The card for a **RunResource** (concurrency gate) — surfaces its live counters: `inFlight` /
+ * The card for a **RunHyperlink** (concurrency gate) — surfaces its live counters: `inFlight` /
  * `concurrency` as a utilization gauge headline (plus `waiting` backlog), the completed / failed /
  * interrupted outcome tallies, and the mean run duration. Read-only. @public
  */
-export const RunResourceCard = (props: {
+export const RunHyperlinkCard = (props: {
   readonly tag: RunTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
@@ -2845,11 +2845,11 @@ export const FleetHealthDetail = (props: {
 };
 
 /**
- * Fullscreen detail for a **RunResource** gate — the in-flight gauge + outcome tallies of the card,
+ * Fullscreen detail for a **RunHyperlink** gate — the in-flight gauge + outcome tallies of the card,
  * plus the raw status fields the card omits (concurrency, mean + total duration, config version).
  * @public
  */
-export const RunResourceDetail = (props: {
+export const RunHyperlinkDetail = (props: {
   readonly tag: RunTag;
   readonly name?: string;
   readonly onBack: () => void;
@@ -2951,7 +2951,7 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
   );
 const runWidget: Widget = ({ tag, name, onOpen }) =>
   isRunTag(tag) ? (
-    <RunResourceCard tag={tag} name={name} onOpen={onOpen} />
+    <RunHyperlinkCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
@@ -2976,6 +2976,6 @@ export const base: WidgetRegistry = withEntries(
     forKind(telemetryKind, telemetryWidget),
     forKind(shardMapKind, shardMapWidget),
     forKind(runKind, runWidget),
-    forKind(resourceKind, ResourceCard),
+    forKind(hyperlinkKind, HyperlinkCard),
   ],
 );

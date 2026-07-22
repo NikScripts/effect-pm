@@ -1,11 +1,11 @@
 import { Effect, Schema, Stream } from "effect";
-import { NodeStatusResource, nodeStatus } from "../src/internal/nodeStatusResource";
+import { NodeStatusHyperlink, nodeStatus } from "../src/internal/nodeStatusHyperlink";
 import * as Hyperlink from "../src/Hyperlink";
 
 type NodeStatusValue = Schema.Schema.Type<typeof nodeStatus>;
 type Service = Hyperlink.ShapeOf<
-  Hyperlink.SpecOf<typeof NodeStatusResource>,
-  typeof NodeStatusResource
+  Hyperlink.SpecOf<typeof NodeStatusHyperlink>,
+  typeof NodeStatusHyperlink
 >;
 
 type StatusIsSubscribable = Service["status"] extends Hyperlink.Subscribable<NodeStatusValue>

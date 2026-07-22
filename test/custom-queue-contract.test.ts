@@ -1,12 +1,12 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { expect, it } from "@effect/vitest";
-import { CustomQueueResource } from "../src";
+import { CustomQueueHyperlink } from "../src";
 import { methodMeta, specOf } from "../src/Hyperlink";
 
 const JobSchema = Schema.Struct({ id: Schema.String });
 
 it("customQueueTag bakes named levels and pair-style add", () => {
-  class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/Jobs-spec", {
+  class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/Jobs-spec", {
     payload: JobSchema,
     levelCount: 4,
     namedLevels: { urgent: 0, batch: 3 },
@@ -19,7 +19,7 @@ it("customQueueTag bakes named levels and pair-style add", () => {
 });
 
 it("customQueueTag bakes named levels from the config object", () => {
-  class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/Jobs-names", {
+  class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/Jobs-names", {
     payload: JobSchema,
     levelCount: 3,
     namedLevels: { urgent: 0, normal: 1, batch: 2 },
@@ -29,9 +29,9 @@ it("customQueueTag bakes named levels from the config object", () => {
   expect(spec.add.annotations.callStyle).toBe("pair");
 });
 
-it.live("customQueueResource.layer drives add(item, level)", () =>
+it.live("customQueueHyperlink.layer drives add(item, level)", () =>
   Effect.gen(function* () {
-    class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/Jobs-layer", {
+    class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/Jobs-layer", {
       payload: JobSchema,
       levelCount: 3,
       namedLevels: { fast: 2 },
@@ -52,7 +52,7 @@ it.live("customQueueResource.layer drives add(item, level)", () =>
 
     yield* program.pipe(
       Effect.provide(
-        CustomQueueResource.layerMemory(Jobs, {
+        CustomQueueHyperlink.layerMemory(Jobs, {
           levelCount: 3,
           namedLevels: { fast: 2 },
           effect: () => Effect.void,

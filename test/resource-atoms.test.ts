@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import { makeResourceAtoms } from "../examples/resource-atoms/resource-atoms";
+import { makeHyperlinkAtoms } from "../examples/resource-atoms/resource-atoms";
 
 // A resource with one query (read atom), one void command, one payload mutate.
 class Counter extends Hyperlink.Tag<Counter>()("ratoms/Counter", {
@@ -26,7 +26,7 @@ it("derives read + command atoms from a Hyperlink spec, and they react", () => {
 
   const runtime = Atom.runtime(layer);
   // Everything derives from the tag: types from its service, spec + key from it.
-  const atoms = makeResourceAtoms(runtime, Counter);
+  const atoms = makeHyperlinkAtoms(runtime, Counter);
 
   // ── type-level: the spec classified each method correctly ──
   const _current: Atom.Atom<AsyncResult.AsyncResult<number, never>> = atoms.current;

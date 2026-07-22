@@ -11,16 +11,16 @@
 import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as resourceKindOf, type Subscribable } from "../Hyperlink";
+import { client, nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperlink";
 import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
-import { kind as queueKind, queueMetrics, queueStatus } from "../QueueResource";
-import { kind as customQueueKind, customQueueStatus } from "../CustomQueueResource";
+import { kind as queueKind, queueMetrics, queueStatus } from "../QueueHyperlink";
+import { kind as customQueueKind, customQueueStatus } from "../CustomQueueHyperlink";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind, type RunGateStatus } from "../RunResource";
+import { kind as runKind, type RunGateStatus } from "../RunHyperlink";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -347,12 +347,12 @@ export const leafByKey = (group: unknown, key: string): unknown => {
 
 /** Which kind of leaf a tag is — purely by its **stamped** kind (every tag carries one; a bare
  *  `Hyperlink.Tag` is `"resource"`). No spec-sniffing: the kind key is the single source of truth. */
-export const kindOf = (member: unknown): "queue" | "process" | "api" | "resource" => {
-  const stamped = resourceKindOf(member);
+export const kindOf = (member: unknown): "queue" | "process" | "api" | "hyperlink" => {
+  const stamped = hyperlinkKindOf(member);
   if (stamped === queueKind) return "queue";
   if (stamped === processKind) return "process";
   if (stamped === apiKind) return "api";
-  return "resource";
+  return "hyperlink";
 };
 
 /** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */
@@ -364,19 +364,19 @@ export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
 /** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
  *  primary kinds; a custom queue dispatches by its exact kind key). @public */
 export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
-  resourceKindOf(m) === customQueueKind;
+  hyperlinkKindOf(m) === customQueueKind;
 /** Fleet-health guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isFleetHealthTag = (m: unknown): m is FleetHealthTag =>
-  resourceKindOf(m) === fleetHealthKind;
+  hyperlinkKindOf(m) === fleetHealthKind;
 /** Telemetry guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
-  resourceKindOf(m) === telemetryKind;
+  hyperlinkKindOf(m) === telemetryKind;
 /** Shard-map guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isShardMapTag = (m: unknown): m is ShardMapTag =>
-  resourceKindOf(m) === shardMapKind;
+  hyperlinkKindOf(m) === shardMapKind;
 /** Run-gate guard — its own stamped kind (dispatched by exact kind key). @public */
 export const isRunTag = (m: unknown): m is RunTag =>
-  resourceKindOf(m) === runKind;
+  hyperlinkKindOf(m) === runKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -437,7 +437,7 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
   return m;
 };
 
-const resourceLogsAtom = <R, ER>(
+const hyperlinkLogsAtom = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   resourceKey: string,
   node: NodeKey<unknown>,
@@ -527,7 +527,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: resourceLogsAtom(runtime, tag.key, node),
+    logs: hyperlinkLogsAtom(runtime, tag.key, node),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
@@ -608,7 +608,7 @@ export const customQueueBundle = <R, ER>(
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: resourceLogsAtom(runtime, tag.key, node),
+    logs: hyperlinkLogsAtom(runtime, tag.key, node),
     start: runtime.fn(() => Effect.flatMap(tag, (q) => q.start)),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
@@ -745,7 +745,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
   );
   const bundle: ProcessBundle = {
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status.changes))),
-    logs: resourceLogsAtom(runtime, tag.key, node),
+    logs: hyperlinkLogsAtom(runtime, tag.key, node),
     // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
     // any external changes) — the contract exposes `schedule.entries` as a reactive ref, read here.
     schedule: runtime.atom(

@@ -4,10 +4,10 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import * as RunResource from "../src/RunResource";
+import * as RunHyperlink from "../src/RunHyperlink";
 import * as Node from "../src/Node";
 
-class RemoteGate extends RunResource.Tag<RemoteGate>()("run-remote/G", {
+class RemoteGate extends RunHyperlink.Tag<RemoteGate>()("run-remote/G", {
   payload: Schema.Number,
   success: Schema.Number,
   error: Schema.String,
@@ -23,7 +23,7 @@ const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
 ): Effect.Effect<A, E, never> => {
   const server = Node.httpServer([
-    RunResource.serveMemory(RemoteGate, {
+    RunHyperlink.serveMemory(RemoteGate, {
       effect: (n: number) =>
         n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
       concurrency: 2,

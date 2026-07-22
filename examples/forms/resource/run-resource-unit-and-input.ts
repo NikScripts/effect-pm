@@ -1,14 +1,14 @@
 /**
  * @module examples/forms/resource/run-resource-unit-and-input
  *
- * RunResource unit + input forms. Run: `pnpm run example:run-resource`
+ * RunHyperlink unit + input forms. Run: `pnpm run example:run-resource`
  */
 
 import { Clock, Duration, Effect, Layer, Schema } from "effect";
-import { RunResource } from "../../../src";
+import { RunHyperlink } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/TimedWorkGate", {
+class TimedWorkGate extends RunHyperlink.Service<TimedWorkGate>()("examples/TimedWorkGate", {
   payload: Schema.Void,
   success: Schema.Number,
   effect: () =>
@@ -20,7 +20,7 @@ class TimedWorkGate extends RunResource.Service<TimedWorkGate>()("examples/Timed
   concurrency: 3,
 }) {}
 
-class DoubleGate extends RunResource.Service<DoubleGate>()("examples/DoubleGate", {
+class DoubleGate extends RunHyperlink.Service<DoubleGate>()("examples/DoubleGate", {
   payload: Schema.Number,
   success: Schema.Number,
   effect: (n: number) =>

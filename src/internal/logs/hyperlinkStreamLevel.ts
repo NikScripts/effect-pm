@@ -1,7 +1,7 @@
 /**
  * {@link Hyperlink.logStreamLevel} — stamp a live-relay floor on a tag for {@link Hyperlink.logs}.
  *
- * @module internal/logs/resourceStreamLevel
+ * @module internal/logs/hyperlinkStreamLevel
  * @internal
  */
 

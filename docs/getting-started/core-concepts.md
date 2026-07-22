@@ -109,4 +109,4 @@ a client. The **Handle** you get from the Tag is the same in every case.
 
 ## Next
 
-Put it together in **[Creating a Hyperlink](/docs/creating-a-resource)**.
+Put it together in **[Creating a Hyperlink](/docs/creating-a-hyperlink)**.

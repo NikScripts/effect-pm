@@ -12,10 +12,10 @@
  * tree is identical.
  *
  * ```ts
- * import { makeResourceCli, resourcesByName } from "hyperlink-ts/cli";
+ * import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
  * import { Command } from "effect/unstable/cli";
  *
- * const cli = makeResourceCli(resourcesByName([Mail, Jobs, KeyRotation]), "pm");
+ * const cli = makeHyperlinkCli(resourcesByName([Mail, Jobs, KeyRotation]), "pm");
  * // pm Mail status.get · pm Mail pause · pm KeyRotation start · pm ls
  * Command.runWith(cli, { version })(process.argv.slice(2)).pipe(Effect.provide(appLayer));
  * ```
@@ -28,7 +28,7 @@ import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
- * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `QueueResource.Tag`
+ * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `QueueHyperlink.Tag`
  * / `Process.Tag` class satisfies this — pass the classes directly.
  *
  */
@@ -136,7 +136,7 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
  * `Command` — drive it with `Command.runWith` and provide the resources' layer.
  *
  */
-export const makeResourceCli = (resources: Record<string, CliHyperlinkTag>, rootName = "cli") => {
+export const makeHyperlinkCli = (resources: Record<string, CliHyperlinkTag>, rootName = "cli") => {
   const namespaces = Object.entries(resources).map(([name, tag]) =>
     Command.make(name).pipe(
       Command.withDescription(tag.description ?? `commands for ${name}`),
@@ -164,7 +164,7 @@ export const makeResourceCli = (resources: Record<string, CliHyperlinkTag>, root
 /**
  * Name a list of tags by the **shortest unique slash-suffix** of each key — `@acme/Mail` →
  * `Mail`; only on a collision are the clashing keys lengthened (`Regional/RegionUS`). Returns
- * the `{ commandName: tag }` record {@link makeResourceCli} takes. Adding a resource never
+ * the `{ commandName: tag }` record {@link makeHyperlinkCli} takes. Adding a resource never
  * renames an existing command unless it actually collides.
  *
  */

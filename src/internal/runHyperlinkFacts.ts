@@ -1,20 +1,20 @@
 /**
- * Pure builders for RunResource store rows.
+ * Pure builders for RunHyperlink store rows.
  *
- * @module internal/runResourceFacts
+ * @module internal/runHyperlinkFacts
  * @internal
  */
 
 import { Cause, Option } from "effect";
-import type { RunFact, RunStateChange } from "./store/runResourceStoreSpec";
-import type { RunGateStatus } from "./runResource";
+import type { RunFact, RunStateChange } from "./store/runHyperlinkStoreSpec";
+import type { RunGateStatus } from "./runHyperlink";
 
 /** Extract the failure value for store rows (store-core §5). @internal */
 export const extractRunFailure = (cause: Cause.Cause<unknown>): unknown =>
   Option.getOrElse(Cause.findErrorOption(cause), () => Cause.squash(cause));
 
 /** Map live counters to the persisted state shape. @internal */
-export const toResourceState = (status: RunGateStatus): RunStateChange["current"] => ({
+export const toHyperlinkState = (status: RunGateStatus): RunStateChange["current"] => ({
   resourceId: status.resourceId,
   observedAt: status.observedAt,
   configVersion: status.configVersion,
@@ -102,6 +102,6 @@ export const makeRunStateChange = (input: {
   resourceId: input.resourceId,
   changedAt: input.changedAt,
   reason: input.reason,
-  previous: input.previous === null ? null : toResourceState(input.previous),
-  current: toResourceState(input.current),
+  previous: input.previous === null ? null : toHyperlinkState(input.previous),
+  current: toHyperlinkState(input.current),
 });

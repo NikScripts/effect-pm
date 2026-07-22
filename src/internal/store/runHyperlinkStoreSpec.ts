@@ -1,31 +1,31 @@
 /**
- * Built-in {@link RunResource} store contract.
+ * Built-in {@link RunHyperlink} store contract.
  *
- * Three tiers (mirrors {@link QueueResource}):
- * - **Tier 1** — lean base (`builtInRunResourceStoreContract`)
- * - **Tier 2** — analytics read-extension (`makeRunResourceStoreAnalyticsContract`)
+ * Three tiers (mirrors {@link QueueHyperlink}):
+ * - **Tier 1** — lean base (`builtInRunHyperlinkStoreContract`)
+ * - **Tier 2** — analytics read-extension (`makeRunHyperlinkStoreAnalyticsContract`)
  *
  * Tier 2 composes tier 1 via {@link Store.extend} — shapes stay on tier 1;
  * the extension only adds analytics read methods. The engine writes via shape
  * `append` handles (`fact.append` / `state.append`) directly.
  *
- * @module internal/store/runResourceStoreSpec
+ * @module internal/store/runHyperlinkStoreSpec
  * @internal
  */
 
 import { Effect, Option, Schema, Stream } from "effect";
 import * as Store from "../../Store";
 import { failureRate, recent } from "./analytics";
-import { makeRunResourceFactEvent } from "../runResourceEvent";
+import { makeRunHyperlinkFactEvent } from "../runHyperlinkEvent";
 import { errorOf, successOf } from "../runTagSchemas";
-import { runGateStatus } from "../runResourceSchema";
+import { runGateStatus } from "../runHyperlinkSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
 import { withImplicitLogShape } from "./logShapes";
 import type { StoreScopeTag } from "./registration";
 
 /** Reasons attached to run gate state transitions. @internal */
-export type RunResourceStateChangeReason =
+export type RunHyperlinkStateChangeReason =
   | "run-resource.run.waiting"
   | "run-resource.run.started"
   | "run-resource.run.completed"
@@ -37,9 +37,9 @@ export type RunResourceStateChangeReason =
 export const runStateSchema = runGateStatus;
 
 /** Default void run facts. @internal */
-export const runFactSchema = makeRunResourceFactEvent();
+export const runFactSchema = makeRunHyperlinkFactEvent();
 
-/** State transition row — mirrors legacy `RunResourceStateChange`. @internal */
+/** State transition row — mirrors legacy `RunHyperlinkStateChange`. @internal */
 export const runStateChangeSchema = Schema.Struct({
   id: Schema.String,
   resourceId: Schema.String,
@@ -60,7 +60,7 @@ export type RunStoreFact<_Tag extends StoreScopeTag = StoreScopeTag> = RunFact;
 
 /** Fact row schema for a tag scope. @internal */
 export const runFactSchemaForTag = (tag: StoreScopeTag) =>
-  makeRunResourceFactEvent(successOf(tag), errorOf(tag));
+  makeRunHyperlinkFactEvent(successOf(tag), errorOf(tag));
 
 /** Type guard — `Started` fact row. @internal */
 export const isRunStoreStarted = (
@@ -106,7 +106,7 @@ export interface RunStoreStats {
 export type RunFactReadPayload = Store.StoreReadPayload<RunFact>;
 
 /** Shared write surface for tier-1 contracts. @internal */
-type RunResourceStoreWrites = {
+type RunHyperlinkStoreWrites = {
   readonly record: (fact: RunFact) => Effect.Effect<void, StoreWriteError>;
   readonly facts: (
     payload?: Store.StoreReadPayload<RunFact>,
@@ -118,16 +118,16 @@ type RunResourceStoreWrites = {
 };
 
 /** Built-in run-resource store contract (tier 1). @internal */
-export type BuiltInRunResourceContract = StoreContractValue<
+export type BuiltInRunHyperlinkContract = StoreContractValue<
   {
     readonly fact: StoreShapeDef<typeof runFactSchema>;
     readonly state: StoreShapeDef<typeof runStateChangeSchema>;
   },
-  RunResourceStoreWrites
+  RunHyperlinkStoreWrites
 >;
 
 /** Tier-1 custom methods over `fact` + `state` shape handles. @internal */
-const runResourceTier1Methods = <FactRow extends { readonly runId: string }>({
+const runHyperlinkTier1Methods = <FactRow extends { readonly runId: string }>({
   fact,
   state,
 }: {
@@ -152,32 +152,32 @@ const runResourceTier1Methods = <FactRow extends { readonly runId: string }>({
 });
 
 /** Build the run store contract (optional success / error schemas). @internal */
-export const makeRunResourceStoreContract = (
+export const makeRunHyperlinkStoreContract = (
   success?: Schema.Top,
   error?: Schema.Top,
 ) => {
-  const factSchema = makeRunResourceFactEvent(success, error);
+  const factSchema = makeRunHyperlinkFactEvent(success, error);
   type FactRow = Schema.Schema.Type<typeof factSchema>;
   return Store.contract(
     {
       fact: Store.shape(factSchema),
       state: Store.shape(runStateChangeSchema),
     },
-    (handles) => runResourceTier1Methods<FactRow>(handles),
+    (handles) => runHyperlinkTier1Methods<FactRow>(handles),
   );
 };
 
 /** Built-in run-resource store contract for a tag (reads `success` / `error` from tag). @internal */
-export const builtInRunResourceStoreContract = <const Tag extends StoreScopeTag>(
+export const builtInRunHyperlinkStoreContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
-) => makeRunResourceStoreContract(successOf(tag), errorOf(tag));
+) => makeRunHyperlinkStoreContract(successOf(tag), errorOf(tag));
 
 // ============================================================================
 // Tier 2 — analytics read-extension (pure derivations over facts + state)
 // ============================================================================
 
 /**
- * Advanced analytics reads on `RunResource.store(tag)` — pure derivations over persisted facts and
+ * Advanced analytics reads on `RunHyperlink.store(tag)` — pure derivations over persisted facts and
  * state history, plus live {@link Store.changes} streams.
  * @internal
  */
@@ -203,7 +203,7 @@ export type RunStoreReads<Tag extends StoreScopeTag> = {
 };
 
 /** Analytics derivations over a tag's fact rows. @internal */
-const runResourceAnalyticsMethods = <
+const runHyperlinkAnalyticsMethods = <
   TagFactRow extends { readonly _tag: string; readonly runId: string },
   TagCompleted extends TagFactRow,
   TagFailed extends TagFactRow,
@@ -274,12 +274,12 @@ const runResourceAnalyticsMethods = <
 };
 
 /** Analytics read-extension contract type for a tag. @internal */
-export type RunResourceStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
-  typeof makeRunResourceStoreAnalyticsContract<Tag>
+export type RunHyperlinkStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
+  typeof makeRunHyperlinkStoreAnalyticsContract<Tag>
 >;
 
 /** Build the analytics read-extension contract for a tag. @internal */
-export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
+export const makeRunHyperlinkStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ) => {
   const _tagFactSchema = runFactSchemaForTag(tag);
@@ -292,13 +292,13 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
   const isCompleted = (row: TagFactRow): row is TagCompleted => row._tag === "Completed";
   const isFailed = (row: TagFactRow): row is TagFailed => row._tag === "Failed";
 
-  const base = builtInRunResourceStoreContract(tag);
+  const base = builtInRunHyperlinkStoreContract(tag);
   const storeClass = { scopeKey: tag.key, contract: base };
 
   return withImplicitLogShape(
     Store.extend(
       (handles) =>
-        runResourceAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
+        runHyperlinkAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
           fact: handles.fact,
           storeClass,
           isStarted,
@@ -310,9 +310,9 @@ export const makeRunResourceStoreAnalyticsContract = <const Tag extends StoreSco
   );
 };
 
-/** @deprecated Internal flat spec — use {@link builtInRunResourceStoreContract}. @internal */
-export const builtInRunResourceStoreSpec = (tag: StoreScopeTag) =>
-  builtInRunResourceStoreContract(tag).spec;
+/** @deprecated Internal flat spec — use {@link builtInRunHyperlinkStoreContract}. @internal */
+export const builtInRunHyperlinkStoreSpec = (tag: StoreScopeTag) =>
+  builtInRunHyperlinkStoreContract(tag).spec;
 
 /** @deprecated Use {@link Store.StoreReadPayload}. @internal */
-export { runFactReadPayload } from "../runResourceEvent";
+export { runFactReadPayload } from "../runHyperlinkEvent";

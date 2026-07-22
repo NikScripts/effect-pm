@@ -4,7 +4,7 @@
  * Tag-driven data layer. Each queue **tag** is the source of truth; this builds the
  * atom bundle the widgets need (status / metrics+history / trend / logs + controls)
  * straight from the tag's live service. The service comes from `Hyperlink.client` over
- * http — so this is the **remote** layer (swap `clientLayer` for `QueueResource.layer`
+ * http — so this is the **remote** layer (swap `clientLayer` for `QueueHyperlink.layer`
  * to run the engine locally; the widgets don't change). No `REGISTRY`, no `TREE`.
  */
 import { Effect, Layer, Stream } from "effect";
@@ -187,7 +187,7 @@ const cachedAccumulator = <A, R>(opts: {
 
 const cache = new Map<string, QueueBundle>();
 
-const resourceLogsAccumulator = (resourceKey: string) =>
+const hyperlinkLogsAccumulator = (resourceKey: string) =>
   runtime.atom(
     cachedAccumulator({
       key: `${resourceKey}/logs`,
@@ -264,7 +264,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: resourceLogsAccumulator(tag.key),
+    logs: hyperlinkLogsAccumulator(tag.key),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
@@ -295,7 +295,7 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),
     // cached + query-then-tail, same generic mechanism as the queue.
-    logs: resourceLogsAccumulator(tag.key),
+    logs: hyperlinkLogsAccumulator(tag.key),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),

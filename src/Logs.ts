@@ -18,9 +18,9 @@
  * - **`stream`** / **`snapshot`** — unfiltered live bus (+ bounded tail).
  * - **Durable tails** — each store registration with an implicit `_logs` shape forks a Stream
  *   follower (`Node.logs`, `Process.store`, …). The shape is Effect-style private (omitted from
- *   public handle types); read via {@link Hyperlink.logs} / {@link byNode} / {@link byResource}.
+ *   public handle types); read via {@link Hyperlink.logs} / {@link byNode} / {@link byHyperlink}.
  * - **`withScope`** — lineage annotation at resource materialize.
- * - **`byNode`** / **`byResource`** — durable reads from registration Storage.
+ * - **`byNode`** / **`byHyperlink`** — durable reads from registration Storage.
  *
  * Per-resource live + durable export: {@link Hyperlink.logs} / {@link Hyperlink.withLogExport}.
  *
@@ -66,14 +66,14 @@ export type NodeLogKey = string;
 
 /**
  * **Hyperlink key** — identity of a queue, process, or tag (`Hyperlink.Tag.key`). Used in lineage,
- * `byResource`, and {@link LogEntry.hasKey}.
+ * `byHyperlink`, and {@link LogEntry.hasKey}.
  *
  * @see `docs/LOGS.md` — Key catalog → Hyperlink keys
  *
  * @category models
  * @public
  */
-export type ResourceLogKey = string;
+export type HyperlinkLogKey = string;
 
 /**
  * Source carrying a **node log key** (`Node.Tag.key`).
@@ -157,7 +157,7 @@ export const withScope = withLogScope;
 const queryLimitDefault = 200;
 
 /**
- * Options shared by {@link byNode} / {@link byResource}.
+ * Options shared by {@link byNode} / {@link byHyperlink}.
  *
  * @category models
  * @public
@@ -193,20 +193,20 @@ export const byNode = (
  * @category models
  * @public
  */
-export type ResourceLogKeySource = { readonly key: ResourceLogKey };
+export type HyperlinkLogKeySource = { readonly key: HyperlinkLogKey };
 
-const resolveResourceLogKey = (
-  resource: ResourceLogKey | ResourceLogKeySource,
-): ResourceLogKey => (typeof resource === "string" ? resource : resource.key);
+const resolveHyperlinkLogKey = (
+  resource: HyperlinkLogKey | HyperlinkLogKeySource,
+): HyperlinkLogKey => (typeof resource === "string" ? resource : resource.key);
 
 /**
  * Read durable logs for a **specific resource** by **full key** (same string as
  * {@link Hyperlink.logs}`(tag)` / store registration / lineage segment).
  *
- * Pass a scope tag (`Process.Tag` / `QueueResource.Tag` / …) or its `.key` string.
+ * Pass a scope tag (`Process.Tag` / `QueueHyperlink.Tag` / …) or its `.key` string.
  * Hyperlink kind is {@link Hyperlink.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …) on the
+ * Requires that resource's store registration (`Process.store` / `QueueHyperlink.store`, …) on the
  * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
  * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *
@@ -216,10 +216,10 @@ const resolveResourceLogKey = (
  * @category reads
  * @public
  */
-export const byResource = (
-  resource: ResourceLogKey | ResourceLogKeySource,
+export const byHyperlink = (
+  resource: HyperlinkLogKey | HyperlinkLogKeySource,
   options?: LogReadOptions,
 ): Effect.Effect<ReadonlyArray<LogEntry>> =>
-  queryDurableScope(resolveResourceLogKey(resource), {
+  queryDurableScope(resolveHyperlinkLogKey(resource), {
     limit: options?.limit ?? queryLimitDefault,
   });

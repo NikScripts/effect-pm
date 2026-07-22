@@ -25,7 +25,7 @@ import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
 import { KeyRotation, LEAVES } from "../web-dashboard/fleet";
 import { appLayer } from "../web-dashboard/queue-data";
-import { makeResourceCli, resourcesByName } from "../../src/cli";
+import { makeHyperlinkCli, resourcesByName } from "../../src/cli";
 import { runDashboard } from "./dashboard-app";
 
 const argv = process.argv.slice(2);
@@ -35,7 +35,7 @@ if (argv.length === 0) {
   runDashboard();
 } else {
   // command names = shortest unique slash-suffix of each tag key (Mail, KeyRotation, …).
-  const cli = makeResourceCli(resourcesByName([...LEAVES, KeyRotation]), "pm");
+  const cli = makeHyperlinkCli(resourcesByName([...LEAVES, KeyRotation]), "pm");
   const program = Command.runWith(cli, { version: "0.8.0-beta.6" })(argv).pipe(
     Effect.provide(Layer.mergeAll(appLayer, NodeServices.layer)),
   );

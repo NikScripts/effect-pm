@@ -1,11 +1,11 @@
 import { Schema } from "effect";
-import * as QueueResource from "../src/QueueResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
 import type {
   QueueEntry,
   QueueEvent,
   QueueMetrics,
   QueueReleaseOptions,
-} from "../src/internal/queueResource";
+} from "../src/internal/queueHyperlink";
 import * as Hyperlink from "../src/Hyperlink";
 
 // SSOT drift guard (Stage-2 M6): each hand-authored PUBLIC type must stay structurally equal to its
@@ -17,23 +17,23 @@ import * as Hyperlink from "../src/Hyperlink";
 // fix is retain-narrower: tighten the schema to the type, never widen the type to a looser schema.
 
 const EmailJob = Schema.Struct({ to: Schema.String });
-const entrySchema = QueueResource.queueEntry(EmailJob);
+const entrySchema = QueueHyperlink.queueEntry(EmailJob);
 // concrete Success/Error slots so the event union reduces
-const eventSchema = QueueResource.queueEvent(EmailJob, {
+const eventSchema = QueueHyperlink.queueEvent(EmailJob, {
   success: Schema.Number,
   error: Schema.String,
 });
 
 // ── QueueMetrics ⇄ queueMetrics.Type ─────────────────────────────────────────────
 declare const hMetrics: QueueMetrics;
-declare const sMetrics: Hyperlink.Decoded<typeof QueueResource.queueMetrics>;
-const _metricsToSchema: Hyperlink.Decoded<typeof QueueResource.queueMetrics> = hMetrics;
+declare const sMetrics: Hyperlink.Decoded<typeof QueueHyperlink.queueMetrics>;
+const _metricsToSchema: Hyperlink.Decoded<typeof QueueHyperlink.queueMetrics> = hMetrics;
 const _metricsToType: QueueMetrics = sMetrics;
 
 // ── QueueReleaseOptions ⇄ queueReleaseOptions.Type ───────────────────────────────
 declare const hRelease: QueueReleaseOptions;
-declare const sRelease: Hyperlink.Decoded<typeof QueueResource.queueReleaseOptions>;
-const _releaseToSchema: Hyperlink.Decoded<typeof QueueResource.queueReleaseOptions> = hRelease;
+declare const sRelease: Hyperlink.Decoded<typeof QueueHyperlink.queueReleaseOptions>;
+const _releaseToSchema: Hyperlink.Decoded<typeof QueueHyperlink.queueReleaseOptions> = hRelease;
 const _releaseToType: QueueReleaseOptions = sRelease;
 
 // ── QueueEntry<T> ⇄ queueEntry(itemSchema).Type ──────────────────────────────────

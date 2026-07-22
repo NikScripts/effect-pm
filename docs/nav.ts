@@ -28,7 +28,7 @@ export const nav: ReadonlyArray<NavGroup> = [
   {
     label: "Resources",
     slugs: [
-      "creating-a-resource",
+      "creating-a-hyperlink",
       "contracts",
       "fleets-and-peers",
       "readiness",
@@ -39,7 +39,7 @@ export const nav: ReadonlyArray<NavGroup> = [
     label: "Guides",
     slugs: [
       "queues",
-      "run-resources",
+      "run-hyperlinks",
       "processes",
       "stores",
       "logs",

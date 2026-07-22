@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
-import { QueueResource } from "../src";
+import { QueueHyperlink } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -16,7 +16,7 @@ interface Item {
   readonly n: number;
 }
 class VNode extends Node.Tag<VNode>()("verify/node") {} // bare — url supplied per-check at runtime
-class VQueue extends QueueResource.Tag<VQueue>()("verify/Q", { payload: Item, node: VNode }) {}
+class VQueue extends QueueHyperlink.Tag<VQueue>()("verify/Q", { payload: Item, node: VNode }) {}
 
 class Warming extends Hyperlink.Tag<Warming>()("verify/Warming", {
   ping: Hyperlink.effect(Schema.String),
@@ -49,10 +49,10 @@ const onWarmingServer = (
 };
 
 const wsSrv = Node.wsServer([
-  QueueResource.serveMemory(VQueue, { effect: () => Effect.void }),
+  QueueHyperlink.serveMemory(VQueue, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 const httpSrv = Node.httpServer([
-  QueueResource.serveMemory(VQueue, { effect: () => Effect.void }),
+  QueueHyperlink.serveMemory(VQueue, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 describe("Hyperlink.verifyConnection", () => {

@@ -1,5 +1,5 @@
 /**
- * Built-in {@link QueueResource} store contract.
+ * Built-in {@link QueueHyperlink} store contract.
  *
  * The store persists the **same** `QueueEvent<T>` union the engine already publishes on the live
  * `.events` stream (one event model for wire + persistence — `queue-persistence-design.md`), using
@@ -15,10 +15,10 @@
 import { DateTime, Duration, Effect, Option, pipe, Schema, Stream } from "effect";
 import type { HyperlinkTag, Spec, SpecOf } from "../../Hyperlink";
 import { specSym } from "../../Hyperlink";
-import { buildQueueEvent, queueEntry, queueSpec } from "../../QueueResource";
-import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../QueueResource";
+import { buildQueueEvent, queueEntry, queueSpec } from "../../QueueHyperlink";
+import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../QueueHyperlink";
 import { successOf, errorOf } from "../queueTagSchemas";
-import type { Priority, QueueEvent } from "../queueResource";
+import type { Priority, QueueEvent } from "../queueHyperlink";
 import * as Store from "../../Store";
 import type {
   CatchWriteError,
@@ -69,7 +69,7 @@ type QueueItemFields<Tag extends QueueStoreTag> =
  */
 export type QueueSuccessSchemaFromTag<Tag extends QueueStoreTag> = QueueSuccessSchemaOf<Tag>;
 
-/** Item row schema carried on a {@link QueueResource} tag (from `QueueInstanceSpec<F>`). @internal */
+/** Item row schema carried on a {@link QueueHyperlink} tag (from `QueueInstanceSpec<F>`). @internal */
 export type QueueItemSchemaFromTag<Tag extends QueueStoreTag> = Schema.Struct<QueueItemFields<Tag>>;
 
 /** Item value type carried on a queue tag. @internal */
@@ -157,7 +157,7 @@ export const queueItemSchemaFromTag = <Tag extends QueueStoreTag>(
 
 /**
  * Build the queue store contract from an item schema directly (no tag) — used by the engine, which
- * has the item schema but not always a tag (`QueueResource.make`). @internal
+ * has the item schema but not always a tag (`QueueHyperlink.make`). @internal
  */
 export const makeQueueStoreContract = <Item extends Schema.Top>(
   itemSchema: Item,
@@ -306,8 +306,8 @@ export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
 
 /**
  * Storage-free engine store handle — SSOT derived from {@link makeEngineQueueStoreContract} after
- * {@link Store.catchWriteErrors} + {@link Store.provideContext}. Shared by {@link QueueResource} and
- * {@link CustomQueueResource} engines. @internal
+ * {@link Store.catchWriteErrors} + {@link Store.provideContext}. Shared by {@link QueueHyperlink} and
+ * {@link CustomQueueHyperlink} engines. @internal
  */
 export type MaterializedEngineQueueStore<Item extends Schema.Top> = StoreProvidedContext<
   CatchWriteError<StoreEffectsOf<ReturnType<typeof makeEngineQueueStoreContract<Item>>>>,
@@ -376,7 +376,7 @@ export interface QueueStoreLatency {
 }
 
 /**
- * The advanced analytics **read-extension** surfaced on `QueueResource.store(queue)` — all pure
+ * The advanced analytics **read-extension** surfaced on `QueueHyperlink.store(queue)` — all pure
  * derivations over the persisted event log (`event.read`), with the live `changes()` stream over
  * {@link Store.changes}. @internal
  */

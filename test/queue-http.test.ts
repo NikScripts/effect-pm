@@ -3,10 +3,10 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src";
+import { QueueHyperlink } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import { groupOf } from "../src/Hyperlink";
-import type { QueueEntry } from "../src/QueueResource";
+import type { QueueEntry } from "../src/QueueHyperlink";
 
 // The handoff path: a full QueueEntry (item + priority + attempts + timestamps) handed to a
 // remote queue's `enqueue` over a REAL http transport. This exercises the actual serialization
@@ -16,7 +16,7 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", { payload: NumberItem }) {}
+class HttpQueue extends QueueHyperlink.Tag<HttpQueue>()("queue-http/Q", { payload: NumberItem }) {}
 
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
 const received: Array<QueueEntry<NumberItem>> = [];

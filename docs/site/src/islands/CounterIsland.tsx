@@ -1,7 +1,7 @@
 "use client";
 
 // The base building block: a custom resource via `Hyperlink.Tag`, driven from buttons.
-// The resource itself (contract + layer + atoms) lives in ./counter-resource — declared
+// The resource itself (contract + layer + atoms) lives in ./counter-hyperlink — declared
 // once, so a content hot-edit that re-imports this entry can't re-register it. This file
 // is just the UI. Tailwind scoped to .pm-dashboard.
 
@@ -9,7 +9,7 @@ import * as React from "react";
 import "../styles/widgets.css";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
-import { countAtom, increment, reset } from "./counter-resource.js";
+import { countAtom, increment, reset } from "./counter-hyperlink.js";
 
 function Panel(): React.ReactElement {
   const r = useAtomValue(countAtom);

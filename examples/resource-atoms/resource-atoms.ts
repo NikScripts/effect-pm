@@ -1,7 +1,7 @@
 /**
  * @module examples/resource-atoms/resource-atoms
  *
- * `makeResourceAtoms(runtime, tag)` — derive a reactive atom set from a `Hyperlink`
+ * `makeHyperlinkAtoms(runtime, tag)` — derive a reactive atom set from a `Hyperlink`
  * tag. It's a projection of the `Spec` (alongside `ServiceOf` / RPC group / client
  * / server): one atom per method, classified from the contract metadata —
  *
@@ -37,7 +37,7 @@ export type ResourceAtoms<S extends Spec> = {
     : never;
 };
 
-export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
+export const makeHyperlinkAtoms = <Self extends R, S extends Spec, R, ER>(
   runtime: Atom.AtomRuntime<R, ER>,
   tag: HyperlinkTag<Self, S>,
 ): ResourceAtoms<S> => {

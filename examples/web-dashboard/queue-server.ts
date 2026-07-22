@@ -11,8 +11,8 @@ import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serve as queueEntry } from "../../src/QueueResource";
-import * as QueueResource from "../../src/QueueResource";
+import { serve as queueEntry } from "../../src/QueueHyperlink";
+import * as QueueHyperlink from "../../src/QueueHyperlink";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
@@ -38,17 +38,17 @@ const PORT = 7777;
 /** Node journal + per-queue log shapes — `layerMemory` bakes in Logs.layer + durable tails. */
 class DropletStore extends Store.Service<DropletStore>("@examples/web-dashboard/DropletStore")(
   Droplet.logs,
-  QueueResource.store(Mail),
-  QueueResource.store(Jobs),
-  QueueResource.store(Billing),
-  QueueResource.store(Notify),
-  QueueResource.store(Worker1),
-  QueueResource.store(Worker2),
-  QueueResource.store(Worker3),
-  QueueResource.store(RegionUS),
-  QueueResource.store(RegionEU),
-  QueueResource.store(Daily),
-  QueueResource.store(Weekly),
+  QueueHyperlink.store(Mail),
+  QueueHyperlink.store(Jobs),
+  QueueHyperlink.store(Billing),
+  QueueHyperlink.store(Notify),
+  QueueHyperlink.store(Worker1),
+  QueueHyperlink.store(Worker2),
+  QueueHyperlink.store(Worker3),
+  QueueHyperlink.store(RegionUS),
+  QueueHyperlink.store(RegionEU),
+  QueueHyperlink.store(Daily),
+  QueueHyperlink.store(Weekly),
 ) {}
 
 // ── request-rate monitor ─────────────────────────────────────────────────────

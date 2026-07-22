@@ -13,7 +13,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { groupOf } from "../src/Hyperlink";
-import { queueStatus } from "../src/QueueResource";
+import { queueStatus } from "../src/QueueHyperlink";
 import * as Node from "../src/Node";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker

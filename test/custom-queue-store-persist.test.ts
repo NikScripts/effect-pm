@@ -1,23 +1,23 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Schema } from "effect";
-import * as CustomQueueResource from "../src/CustomQueueResource";
+import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 import { Storage } from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/CustomJobs", {
+class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/CustomJobs", {
   payload: jobSchema,
   levelCount: 3,
   namedLevels: { urgent: 0 },
 }) {}
 
-class FailingJobs extends CustomQueueResource.Tag<FailingJobs>()("@app/FailingCustomJobs", {
+class FailingJobs extends CustomQueueHyperlink.Tag<FailingJobs>()("@app/FailingCustomJobs", {
   payload: jobSchema,
   levelCount: 2,
 }) {}
 
-describe("CustomQueueResource → baked store persistence", () => {
+describe("CustomQueueHyperlink → baked store persistence", () => {
   it.live("persists lifecycle events to the baked-in store, readable back", () =>
     Effect.gen(function* () {
       const queue = yield* Jobs;
@@ -44,7 +44,7 @@ describe("CustomQueueResource → baked store persistence", () => {
       expect(tags).toContain("Completed");
     }).pipe(
       Effect.provide(
-        CustomQueueResource.layerMemory(Jobs, {
+        CustomQueueHyperlink.layerMemory(Jobs, {
           levelCount: 3,
           namedLevels: { urgent: 0 },
           effect: () => Effect.void,
@@ -80,7 +80,7 @@ describe("CustomQueueResource → baked store persistence", () => {
       expect(tags).toContain("RetryExhausted");
     }).pipe(
       Effect.provide(
-        CustomQueueResource.layerMemory(FailingJobs, {
+        CustomQueueHyperlink.layerMemory(FailingJobs, {
           levelCount: 2,
           effect: () => Effect.fail("boom" as const),
           attempts: 1,

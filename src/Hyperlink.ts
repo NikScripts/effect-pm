@@ -1060,7 +1060,7 @@ export const ref = <Su extends Schema.Top>(
 export const contract = <const S extends Spec>(spec: S): S => spec;
 
 export { withStore } from "./Store";
-export { logs, withLogExport, type LogsExportHandle } from "./internal/logs/resourceLogs";
+export { logs, withLogExport, type LogsExportHandle } from "./internal/logs/hyperlinkLogs";
 export {
   logStreamLevel,
   logStreamLevelAll,
@@ -1069,7 +1069,7 @@ export {
   logStreamLevelWarn,
   logStreamLevelError,
   logStreamLevelNone,
-} from "./internal/logs/resourceStreamLevel";
+} from "./internal/logs/hyperlinkStreamLevel";
 
 /**
  * Register a {@link Node} on an app {@link Store.Service} — node-wide durable log journal
@@ -1240,7 +1240,7 @@ export type WithRequirement<T, Req> = T extends Subscribable<infer A>
  *
  * @example Type-preserving — trace every resource method
  * ```ts
- * const traced = Hyperlink.mapEffects(impl, MyTag[Hyperlink.specSym], (e) => Effect.withSpan(e, "resource"));
+ * const traced = Hyperlink.mapEffects(impl, MyTag[Hyperlink.specSym], (e) => Effect.withSpan(e, "hyperlink"));
  * ```
  *
  * @category reactivity
@@ -1315,7 +1315,7 @@ export const builtHyperlinkSym: unique symbol = Symbol.for(
 /**
  * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
  * Effect methods, paired with the {@link Context.Context} captured at build time. Used by
- * {@link QueueResource}, {@link RunResource}, and {@link Process} (any toolkit resource that builds
+ * {@link QueueHyperlink}, {@link RunHyperlink}, and {@link Process} (any toolkit resource that builds
  * its driver under ambient `R`). {@link layer} / {@link serve} grant locally via {@link grantLocal};
  * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
  * one materialization backs both paths.
@@ -2106,7 +2106,7 @@ export const localCapSym: unique symbol = Symbol.for(
 export const fromServiceSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/fromService",
 );
-/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/QueueResource`) is
+/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/QueueHyperlink`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
  *  classify a tag without sniffing its spec. Absent on a bare {@link Hyperlink.Tag}. @internal */
 export const kindSym: unique symbol = Symbol.for(
@@ -2495,14 +2495,14 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
 
 /** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every resource tag carries a
  *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
- *  `hyperlink-ts/QueueResource`); a bare tag defaults to this so nothing is ever kind-less.
+ *  `hyperlink-ts/QueueHyperlink`); a bare tag defaults to this so nothing is ever kind-less.
  *
  * @category nodes & fleet
  * @public
  */
 export const kind = "hyperlink-ts/Hyperlink";
 
-/** The contract kind a tag was built for (e.g. `hyperlink-ts/QueueResource`, or {@link kind}
+/** The contract kind a tag was built for (e.g. `hyperlink-ts/QueueHyperlink`, or {@link kind}
  *  for a bare {@link Hyperlink.Tag}); `undefined` only for a non-tag. The robust replacement for
  *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
@@ -2524,7 +2524,7 @@ export const kindOf = (tag: unknown): string | undefined => {
  */
 export const contractHash = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
-): string => hashContract(tag.groupId, kindOf(tag) ?? "resource", tag[specSym]);
+): string => hashContract(tag.groupId, kindOf(tag) ?? "hyperlink", tag[specSym]);
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
@@ -3611,7 +3611,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
           onSome: (registry) => {
             const bound = nodeOf(tag);
             const boundKinds = nodeKindsOf(tag);
-            const kind = kindOf(tag) ?? "resource";
+            const kind = kindOf(tag) ?? "hyperlink";
             return registry.register({
               groupId: tag.groupId,
               group,
@@ -4396,7 +4396,7 @@ const probeEndpointReachable = (
  * classify as {@link ProtocolUnanswered}; optional `resource` checks served-key / readiness;
  * optional `contractHash` compares the F4 wire fingerprint.
  *
- * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatusResource stays acyclic.
+ * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatusHyperlink stays acyclic.
  *
  * @internal
  */
@@ -4423,17 +4423,17 @@ const probeEndpointDeep = (
       ? makeNode()(`@pm/verify/${nodeKey}`, { path: address })
       : makeNode()(`@pm/verify/${nodeKey}`, { url: address, kind: ep.kind });
   return Effect.gen(function* () {
-    const { NodeStatusResource } = yield* Effect.promise(
-      () => import("./internal/nodeStatusResource"),
+    const { NodeStatusHyperlink } = yield* Effect.promise(
+      () => import("./internal/nodeStatusHyperlink"),
     );
     // Skip default-on verify on this nested NodeStatus client (we *are* the verify probe).
     const ctx = yield* Layer.build(
-      clientLayer(NodeStatusResource, dialTarget).pipe(
+      clientLayer(NodeStatusHyperlink, dialTarget).pipe(
         Layer.provide(clientVerify(false)),
       ),
     );
     const snap = yield* Effect.gen(function* () {
-      const status = yield* NodeStatusResource;
+      const status = yield* NodeStatusHyperlink;
       return yield* status.status.get;
     }).pipe(Effect.provide(ctx));
     if (resource === undefined) {

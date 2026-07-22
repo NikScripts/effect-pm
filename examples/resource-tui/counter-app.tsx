@@ -2,7 +2,7 @@
  * @module examples/resource-tui/counter-app
  *
  * A resource rendered in the **terminal** — the third skin. It reuses the *exact*
- * `atom-react` hooks and `makeResourceAtoms` the web widget uses; only the
+ * `atom-react` hooks and `makeHyperlinkAtoms` the web widget uses; only the
  * renderer differs (Ink's `<Box>`/`<Text>` instead of the DOM). Hooks live in
  * React core, not the renderer, so "one contract → N renderers" just works.
  *
@@ -15,7 +15,7 @@ import * as React from "react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
-import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
+import { makeHyperlinkAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
   useAtomSet,
@@ -41,7 +41,7 @@ const counterLayer = Hyperlink.layer(Counter, {
 });
 
 const runtime = Atom.runtime(counterLayer);
-const atoms = makeResourceAtoms(runtime, Counter);
+const atoms = makeHyperlinkAtoms(runtime, Counter);
 
 const CounterPanel = (): React.ReactElement => {
   const { exit } = useApp();

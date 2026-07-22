@@ -1,7 +1,7 @@
 /**
  * @module examples/queue-widget/demo
  *
- * A **real `QueueResource` running client-side** (no server, no RPC, no mock),
+ * A **real `QueueHyperlink` running client-side** (no server, no RPC, no mock),
  * wired to the widget through Effect 4's native Atom layer. Everything the queue
  * service exposes — enqueue by priority, pause/resume, clear, live sizes — is
  * driven straight from the browser.
@@ -15,7 +15,7 @@ import { Effect } from "effect";
 import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
 // Import the module directly (not the package barrel) so the browser bundle
 // doesn't drag in Node-only manager code.
-import * as QueueResource from "../../src/QueueResource";
+import * as QueueHyperlink from "../../src/QueueHyperlink";
 import { QueueWidget, type QueueStatus } from "./QueueWidget";
 import {
   RegistryProvider,
@@ -32,7 +32,7 @@ const QueueKey = ["queue-widget-demo"] as const;
 // A real priority queue. concurrency 1 + a visible delay so you can watch items
 // queue and drain. The worker invalidates QueueKey on each completion — a demo
 // shim for live stats until the handle exposes `changes` (event-driven, no poll).
-class DemoQueue extends QueueResource.Service<DemoQueue, string, never>()(
+class DemoQueue extends QueueHyperlink.Service<DemoQueue, string, never>()(
   "queue-widget-demo",
   {
     effect: (item: string) =>

@@ -49,13 +49,13 @@ checked, kept narrow, and shareable in one move.
 
 ``` ts
 // ❌ as — forces the shape; a wrong value compiles and breaks at runtime
-const lanes = value as CustomQueueResource.Config
+const lanes = value as CustomQueueHyperlink.Config
 
 // ✅ satisfies a named type — verified, and the narrow literals survive
 const lanes = {
   levelCount: 4,
   namedLevels: { interactive: 0, batch: 3 },
-} satisfies CustomQueueResource.Config
+} satisfies CustomQueueHyperlink.Config
 ```
 
 `as const` is unaffected — it is literal narrowing, not an assertion, and is always fine.
@@ -190,7 +190,7 @@ is.
 ## Canonical ids are slash-scoped
 
 A service or contract id is a slash-separated, package-scoped string with PascalCase segments:
-`hyperlink-ts/QueueResource`, `hyperlink-ts/ApiMetrics/clientId`. (CLI and remote
+`hyperlink-ts/QueueHyperlink`, `hyperlink-ts/ApiMetrics/clientId`. (CLI and remote
 surfaces additionally accept normalized kebab suffix aliases; an ambiguous suffix errors with the
 candidate list.)
 
@@ -198,7 +198,7 @@ candidate list.)
 ## Name for what a thing is, not who uses it
 
 A name describes the thing's own role, never a consumer's vocabulary. The package surface names
-*serving* — it never borrows a downstream app's domain word (a queue is a `QueueResource`, not a
+*serving* — it never borrows a downstream app's domain word (a queue is a `QueueHyperlink`, not a
 `SourceQueue` because one caller calls it a "source").
 
 
@@ -251,7 +251,7 @@ types.
 ## A config carries a named type in its namespace
 
 Every config, options, or input shape a consumer authors has a named type **exported from the
-namespace it belongs to** — `CustomQueueResource.Config`, `Process.Options` — a hand-written
+namespace it belongs to** — `CustomQueueHyperlink.Config`, `Process.Options` — a hand-written
 `interface` (*Public API shapes are hand-written `export interface`*) attached in the same file with
 `export declare namespace` (*Associated types attach in the same file*). The consumer builds the
 value against it with `satisfies`: the named type is the contract, the shape is checked, and the
@@ -259,8 +259,8 @@ narrow types survive — and the type hovers as named fields, not `Schema.Struct
 names its configs the same way — `Pool.Config`, `Effect.Retry.Options`, `Logger.Options`.
 
 ``` ts
-// src/CustomQueueResource.ts — the type lives beside the namespace it configures
-export declare namespace CustomQueueResource {
+// src/CustomQueueHyperlink.ts — the type lives beside the namespace it configures
+export declare namespace CustomQueueHyperlink {
   export interface Config {
     readonly levelCount: number
     readonly namedLevels: Record<string, number>
@@ -271,7 +271,7 @@ export declare namespace CustomQueueResource {
 const lanes = {
   levelCount: 4,
   namedLevels: { interactive: 0, batch: 3 },
-} satisfies CustomQueueResource.Config
+} satisfies CustomQueueHyperlink.Config
 ```
 
 {#schema-data-derives .must appliesTo="src examples"}

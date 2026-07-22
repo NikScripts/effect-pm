@@ -30,16 +30,16 @@ of React/Ink/recharts.
 | `…/Hyperlink` | `Hyperlink.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
 | `…/QueueContract` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
 | `…/Process` | `Process.Tag` (light tag), `schedule` / `window` / `at`, `serve`, `serveRemote`, `layer` for a managed/polling process — plus `Process.Schedule`, a run-windows manager as its own resource |
-| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiResource` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiResource.Service` client |
+| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiHyperlink` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiHyperlink.Service` client |
 | `…/HostStatus` | the reserved host status resource (auto-served by `httpServer`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/MultiHost` | combine a field across N instances of one resource (`combineQuery` / `combineStream` / `Combine`) — isomorphic |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
 | `…/storage/sqlite` · `/redis` | durable storage backends |
-| **`…/cli`** | `makeResourceCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
+| **`…/cli`** | `makeHyperlinkCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
-| **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `ResourceReadinessBanner` |
+| **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `HyperlinkReadinessBanner` |
 
 > **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/Process`
 > (not the engine layers) so the worker engine + node deps stay out of the browser build.
@@ -61,7 +61,7 @@ it imports.
 
 **The rule that actually bites:** keep the **contract** (light tags) in a different module from
 the **implementation** (engine layers, storage, worker `effect`s, the server). A module that
-defines a tag *and* imports its `QueueResource.layer` / `Hyperlink.httpServer` / a storage layer is
+defines a tag *and* imports its `QueueHyperlink.layer` / `Hyperlink.httpServer` / a storage layer is
 node-coupled — importing it in the browser just to get the tag drags the whole server in.
 
 ```ts
@@ -127,7 +127,7 @@ A `Host` lets a group of resources be served on one port (§4) and reached over 
 ```ts
 import { Schema } from "effect";
 import { Hyperlink } from "hyperlink-ts/Hyperlink";
-import { queueTag } from "hyperlink-ts/QueueResource";
+import { queueTag } from "hyperlink-ts/QueueHyperlink";
 import * as Process from "hyperlink-ts/Process";
 import { Group } from "hyperlink-ts/Group";
 
@@ -151,7 +151,7 @@ import { Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { Hyperlink } from "hyperlink-ts/Hyperlink";
-import { serve as queueServe } from "hyperlink-ts/QueueResource";
+import { serve as queueServe } from "hyperlink-ts/QueueHyperlink";
 import { serve as processServe } from "hyperlink-ts/Process";
 import { HistoryStore } from "hyperlink-ts/HistoryStore";
 import * as Logs from "hyperlink-ts/Logs";
@@ -205,9 +205,9 @@ To run a resource **in-process** instead, provide its `.layer` (from `…/QueueC
 import { Effect } from "effect";
 import { Command } from "effect/unstable/cli";
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { makeResourceCli, resourcesByName } from "hyperlink-ts/cli";
+import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
 
-const cli = makeResourceCli(resourcesByName([RosterQueue, SeasonMatches]), "hub");
+const cli = makeHyperlinkCli(resourcesByName([RosterQueue, SeasonMatches]), "hub");
 // hub RosterQueue status.get · hub RosterQueue pause · hub SeasonMatches start · hub ls
 NodeRuntime.runMain(
   Command.runWith(cli, { version: "0.0.0" })(process.argv.slice(2)).pipe(
@@ -237,7 +237,7 @@ responsive drill-down directly from a `Group.Tag` tree: a **hand-crafted widget 
 type** — queue (cards + chart + controls + logs), scheduled process (controls + a schedule editor
 with a fullscreen weekly view), and API-metrics (a paged card + usage chart + sortable endpoint
 table). It classifies each leaf by the contract's **stamped kind** (`Hyperlink.kindOf` — see the
-[Hyperlink API](../RESOURCE-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
+[Hyperlink API](../HYPERLINK-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
 the tree renders as itself rather than a mis-typed cell. The `examples/resource-web` tree (one of
 each unique thing) is the working reference.
 
@@ -254,4 +254,4 @@ See [history-and-persistence.md](./history-and-persistence.md).
 ---
 
 Reference: [toolkit-by-example.md](./toolkit-by-example.md) (every pattern by example),
-[docs/RESOURCE-API.md](../RESOURCE-API.md), [docs/handoffs/archive/2026-07/features/ui-serve-all-http.md](../../handoffs/archive/2026-07/features/ui-serve-all-http.md).
+[docs/HYPERLINK-API.md](../HYPERLINK-API.md), [docs/handoffs/archive/2026-07/features/ui-serve-all-http.md](../../handoffs/archive/2026-07/features/ui-serve-all-http.md).

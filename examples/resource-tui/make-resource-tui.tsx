@@ -1,8 +1,8 @@
 /**
  * @module examples/resource-tui/make-resource-tui
  *
- * `makeResourceTui(record, runtime)` — build a terminal dashboard from the **same**
- * `Record<string, tag>` that `makeResourceCli` turns into a CLI. It's the TUI
+ * `makeHyperlinkTui(record, runtime)` — build a terminal dashboard from the **same**
+ * `Record<string, tag>` that `makeHyperlinkCli` turns into a CLI. It's the TUI
  * projection of a set of `Hyperlink` specs: each entry becomes a **widget**, and
  * each widget falls out of the contract via `methodMeta` —
  *
@@ -12,7 +12,7 @@
  *   open the command bar prefilled (`name field=…`), coerced from the field schema.
  *
  * Nothing here is resource-specific — point it at any record of tags. Pair it with
- * `makeResourceCli(record)` and you've configured the CLI and the TUI once.
+ * `makeHyperlinkCli(record)` and you've configured the CLI and the TUI once.
  */
 
 import { Box, Text, useApp, useInput, useStdout } from "ink";
@@ -56,7 +56,7 @@ const fieldKind = (tag: string): "number" | "boolean" | "string" =>
   tag === "Number" ? "number" : tag === "Boolean" ? "boolean" : "string";
 
 // Build the UI model for one tag — a heterogeneous-record sibling of
-// makeResourceAtoms (which needs the precise per-tag type). Atom values are
+// makeHyperlinkAtoms (which needs the precise per-tag type). Atom values are
 // `unknown`; a dashboard renders them as text and dispatches actions by name.
 const buildWidget = (
   runtime: Atom.AtomRuntime<unknown, unknown>,
@@ -190,20 +190,20 @@ const Widget = (props: {
   );
 };
 
-export const makeResourceTui = <R, ER>(
+export const makeHyperlinkTui = <R, ER>(
   record: Record<string, AnyTag>,
   runtime: Atom.AtomRuntime<R, ER>,
 ) => {
   // Boundary: a heterogeneous record builds atoms structurally (R = unknown);
   // the runtime's layer provides every tag's service at run time. (Same edge as
-  // makeResourceAtoms / makeResourceCli.)
+  // makeHyperlinkAtoms / makeHyperlinkCli.)
   const rt = runtime as Atom.AtomRuntime<unknown, unknown>;
   const widgets = Object.entries(record).map(([key, tag]) =>
     buildWidget(rt, key, tag),
   );
   const first = widgets[0];
   if (first === undefined) {
-    throw new Error("makeResourceTui: empty record");
+    throw new Error("makeHyperlinkTui: empty record");
   }
 
   const Dashboard = (): React.ReactElement => {

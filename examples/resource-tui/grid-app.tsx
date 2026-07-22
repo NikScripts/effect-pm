@@ -3,7 +3,7 @@
  *
  * A full-screen terminal dashboard: a scrollable grid of resource "widgets", a
  * command bar, and a status/shortcuts bar. Each widget is an instance of one
- * `Hyperlink.tagFor` family, rendered via the same `makeResourceAtoms` +
+ * `Hyperlink.tagFor` family, rendered via the same `makeHyperlinkAtoms` +
  * `atom-react` the web widget uses.
  *
  * - Keys: arrows / hjkl move selection (auto-scrolls to keep it visible); i / d / r
@@ -20,7 +20,7 @@ import * as React from "react";
 import { Effect, Layer, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
-import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
+import { makeHyperlinkAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
   useAtomSet,
@@ -82,7 +82,7 @@ const runtime = Atom.runtime(
 const WIDGETS = SPECS.map((s) => ({
   name: s.name,
   color: s.color,
-  atoms: makeResourceAtoms(runtime, s.tag),
+  atoms: makeHyperlinkAtoms(runtime, s.tag),
 }));
 
 const FIRST = WIDGETS[0];

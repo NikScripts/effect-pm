@@ -15,7 +15,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import * as Hyperlink from "../../src/Hyperlink";
-import { makeResourceCli } from "../../src/cli";
+import { makeHyperlinkCli } from "../../src/cli";
 
 class Counter extends Hyperlink.Tag<Counter>()("Counter", {
   current: Hyperlink.effect(Schema.Number),
@@ -35,7 +35,7 @@ const counterLayer = Hyperlink.layer(Counter, {
     }),
 });
 
-const cli = makeResourceCli({ counter: Counter }, "counter-cli");
+const cli = makeHyperlinkCli({ counter: Counter }, "counter-cli");
 
 const program = Command.runWith(cli, { version: "0.0.0" })(
   process.argv.slice(2),

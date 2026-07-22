@@ -14,7 +14,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Hyperlink foundation | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` |
 | Store (registrations) | `hyperlink-ts/Store` | `src/Store.ts` |
 | Process tags | `hyperlink-ts/Process` | `src/Process.ts` |
-| Queue tags | `hyperlink-ts/QueueResource` | `src/QueueResource.ts` |
+| Queue tags | `hyperlink-ts/QueueHyperlink` | `src/QueueHyperlink.ts` |
 
 | Example | Short path | Role |
 |---------|------------|------|
@@ -29,7 +29,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
 | **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
-| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | registration scope; lineage JSON |
+| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Process.Tag` / `QueueHyperlink.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
@@ -56,14 +56,14 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
-| `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `hyperlink-ts/QueueResource` | `src/QueueResource.ts` | `resource-web/hub.ts` |
+| `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `hyperlink-ts/QueueHyperlink` | `src/QueueHyperlink.ts` | `resource-web/hub.ts` |
 | `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Process` | `src/Process.ts` | `resource-web/hub.ts` |
-| `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-ts/QueueResource` | `src/QueueResource.ts` | `resource-web/hub.ts` |
+| `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-ts/QueueHyperlink` | `src/QueueHyperlink.ts` | `resource-web/hub.ts` |
 | `ScoresDb.key` | resource key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
 | `ScoresApi.key` | resource key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `resource-web/hub.ts` |
 | `WorkerPool.key` | resource key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
 | `testSyncProcessKey` | resource key (test) | `billing/SyncWorker` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/log-pipeline.test.ts` |
-| `Logs.ResourceLogKey` | resource key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
+| `Logs.HyperlinkLogKey` | resource key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 
 ### Annotation keys (`LogAnnotationKeys`)
 
@@ -78,8 +78,8 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 |-----------|----------|---------|-----|--------|
 | `Node.logs` / `Hyperlink.store(Node)` | node log key | `Node.key` | store registration | `src/Hyperlink.ts` |
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
-| `byResource(tag \| key)` | resource key / scope tag | `Tag.key` | `Logs.byResource` | `src/Logs.ts` |
-| `Logs.byResource` / `Hyperlink.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
+| `byHyperlink(tag \| key)` | resource key / scope tag | `Tag.key` | `Logs.byHyperlink` | `src/Logs.ts` |
+| `Logs.byHyperlink` / `Hyperlink.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
 | `LogEntry.atLeaf(key)` | lineage segment key | usually **resource key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
@@ -89,7 +89,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 1. **Must equal** the `Node.Tag` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
 2. **Register** `Node.logs` (or `Hyperlink.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
 3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
-4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
+4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueHyperlink.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
 5. Use **slash-separated** paths (`domain/role`), not placeholders (`my-node`, `node-a`, bare `wnba`).
 
 ```ts
@@ -134,7 +134,7 @@ const resourceKey = LiveScorePoller.key;
 
 Logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 
-yield* Logs.byResource(resourceKey);
+yield* Logs.byHyperlink(resourceKey);
 
 const { stream, query } = yield* Hyperlink.logs(LiveScorePoller);
 ```
@@ -198,7 +198,7 @@ import * as Logs from "hyperlink-ts/Logs";
 yield* Logs.byNode(WnbaNode, { limit: 500 });
 
 // resource scope — durable journal for that registration (same as Hyperlink.logs().query locally)
-yield* Logs.byResource(LiveScorePoller, { limit: 100 });
+yield* Logs.byHyperlink(LiveScorePoller, { limit: 100 });
 
 const { query } = yield* Hyperlink.logs(LiveScorePoller);
 yield* query({ limit: 100 });
@@ -208,10 +208,10 @@ yield* query({ limit: 100 });
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 import * as LogEntry from "hyperlink-ts/LogEntry";
 
-class MailQueue extends QueueResource.Tag<MailQueue>()("app/Mail", spec).pipe(
+class MailQueue extends QueueHyperlink.Tag<MailQueue>()("app/Mail", spec).pipe(
   Hyperlink.withLogExport,
 ) {}
 
@@ -274,7 +274,7 @@ const rows = yield* NodeStatus.logs.query({ limit: 300 });
 const scoped = rows.filter(LogEntry.hasKey(resourceKey));
 ```
 
-Example: `src/web/data.ts` (`resourceLogsAtom`), `examples/web-dashboard/queue-data.ts` (`resourceLogsAccumulator`).
+Example: `src/web/data.ts` (`hyperlinkLogsAtom`), `examples/web-dashboard/queue-data.ts` (`hyperlinkLogsAccumulator`).
 
 Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for `NodeStatus.logs.query`.
 

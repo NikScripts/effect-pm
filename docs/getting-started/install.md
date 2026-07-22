@@ -51,7 +51,7 @@ react react-dom recharts @tanstack/react-table
 Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only what you use:
 
 - **`/Hyperlink`** — build your own resource
-- **`/QueueResource`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
+- **`/QueueHyperlink`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
 - **`/Store`** — durable storage
 - **`/web`**, **`/tui`**, **`/cli`** — dashboards
 - **`hyperlink-ts`** — the barrel: everything under short names
@@ -142,4 +142,4 @@ shapes instead of a collapsed `…`. Nearly every type in hyperlink-ts reads bet
 ## Next
 
 Head to **[Core Concepts](/docs/core-concepts)** for the mental model, or jump straight into
-**[Creating a Hyperlink](/docs/creating-a-resource)**.
+**[Creating a Hyperlink](/docs/creating-a-hyperlink)**.

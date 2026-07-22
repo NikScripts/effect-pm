@@ -1,14 +1,14 @@
 /**
- * @module examples/forms/queue/queue-resource-priority-retry
+ * @module examples/forms/queue/queue-hyperlink-priority-retry
  *
- * QueueResource priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
+ * QueueHyperlink priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
  * observation via `events` + `Hyperlink.runForEachTag`.
  *
- * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:queue-resource`
+ * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:queue-hyperlink`
  */
 
 import { Cause, Duration, Effect, Schema } from "effect";
-import { QueueResource, Hyperlink } from "../../../src";
+import { QueueHyperlink, Hyperlink } from "../../../src";
 
 // ── Contract: payload + typed worker failure ──────────────────────────────────
 
@@ -29,7 +29,7 @@ class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
   reason: Schema.String,
 }) {}
 
-class EmailQueue extends QueueResource.Tag<EmailQueue>()("examples/EmailQueue", {
+class EmailQueue extends QueueHyperlink.Tag<EmailQueue>()("examples/EmailQueue", {
   payload: EmailJob,
   error: SendError,
 }) {}
@@ -47,7 +47,7 @@ const waitUntilCompleted = (expected: number) =>
 
 // ── Layer: worker + policy (Tag stays free of runtime config) ─────────────────
 
-const EmailQueueLive = QueueResource.layer(EmailQueue, {
+const EmailQueueLive = QueueHyperlink.layer(EmailQueue, {
   paused: true, // enqueue / subscribe first; drain only after `resume`
   concurrency: 1, // sequential — log order stays readable for the demo
   capacity: 100,
@@ -122,6 +122,6 @@ void Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueueLive),
     Effect.scoped,
-    Effect.tap(() => Effect.logInfo("form:queue-resource-priority-retry finished OK")),
+    Effect.tap(() => Effect.logInfo("form:queue-hyperlink-priority-retry finished OK")),
   ),
 );

@@ -13,15 +13,15 @@
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
-import * as QueueResource from "../../src/QueueResource";
-import * as CustomQueueResource from "../../src/CustomQueueResource";
+import * as QueueHyperlink from "../../src/QueueHyperlink";
+import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
-import * as RunResource from "../../src/RunResource";
+import * as RunHyperlink from "../../src/RunHyperlink";
 import * as Node from "../../src/Node";
 
 const importJob = Schema.Struct({ id: Schema.String });
@@ -76,8 +76,8 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
 
 // A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
-// driven concurrently so the RunResourceCard shows live in-flight / waiting / done counters.
-export class FetchGate extends RunResource.Tag<FetchGate>()("wnba/FetchGate", {
+// driven concurrently so the RunHyperlinkCard shows live in-flight / waiting / done counters.
+export class FetchGate extends RunHyperlink.Tag<FetchGate>()("wnba/FetchGate", {
   payload: Schema.String,
   success: Schema.Number,
   error: Schema.String,
@@ -98,7 +98,7 @@ export class ScoresDb extends Hyperlink.Tag<ScoresDb>()(
   ),
 ) {}
 
-export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
+export class BoxScoreQueue extends QueueHyperlink.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   { payload: importJob, node: WnbaNode },
 ).pipe(
@@ -122,13 +122,13 @@ export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
 ).pipe(Process.schedule([])) {}
-export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
+export class PlayByPlayQueue extends QueueHyperlink.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}
 // A **custom queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
-// the CustomQueueResource widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
-export class ImportJobs extends CustomQueueResource.Tag<ImportJobs>()("wnba/ImportJobs", {
+// the CustomQueueHyperlink widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
+export class ImportJobs extends CustomQueueHyperlink.Tag<ImportJobs>()("wnba/ImportJobs", {
   payload: importJob,
   levelCount: 3,
   namedLevels: { hot: 0, warm: 1, cold: 2 },

@@ -204,15 +204,15 @@ payload. Per-invocation input on manual run is a future separate `effectFn` memb
 **not** replace **`Process.store`**. Use `ProcessStorage.layer` or `layerProcessStore({ filename })`
 when you need facet analytics; use **`Process.store`** + **`Store.Service`** for execution events.
 
-### `RunResource.store` (run facts / state history)
+### `RunHyperlink.store` (run facts / state history)
 
-> The legacy **`RunResourceStore`** ProcessStorage facet and `hyperlink-ts/store/RunResource`
+> The legacy **`RunHyperlinkStore`** ProcessStorage facet and `hyperlink-ts/store/RunHyperlink`
 > subpath are removed. Run persistence goes through the app **Store bridge** only.
 
 | Member | Role |
 |--------|------|
-| `RunResource.store(tag)` | Registers built-in `fact` + `state` shapes on an app **`Store.Service`**. |
-| `Store.layerDefaultMemory` | In-memory store bridge — merged by **`RunResource.layer` / `serve` / `Service.layer`**; override via `Layer.provideMerge(AppStore.layerMemory)`. |
+| `RunHyperlink.store(tag)` | Registers built-in `fact` + `state` shapes on an app **`Store.Service`**. |
+| `Store.layerDefaultMemory` | In-memory store bridge — merged by **`RunHyperlink.layer` / `serve` / `Service.layer`**; override via `Layer.provideMerge(AppStore.layerMemory)`. |
 | `(yield* store).record(fact)` | Append a run lifecycle fact (`run-resource.run.started` / `.completed` / `.failed`). |
 | `(yield* store).facts(payload?)` | Read persisted facts (optional `limit`, `runId`). |
 | `(yield* store).recordStateChange(change)` | Append a gate state transition row. |
@@ -237,7 +237,7 @@ Examples are split into **forms** (one API shape) and **scenarios** (composition
 | [examples/forms/schedule/](../examples/forms/schedule/) | Schedule entries (`at`, `window`, `define`) and control surfaces. |
 | [examples/forms/polling/](../examples/forms/polling/) | **`TestClock`**: accelerating polling, `resetCadence`, `peekCadence`, delayed start. |
 | [examples/scenarios/schedule-sync-from-external-db.ts](../examples/scenarios/schedule-sync-from-external-db.ts) | Simulated DB-sync pattern. |
-| [examples/forms/resource/](../examples/forms/resource/) | `RunResource`, `HttpClientRunGate`, `HttpApiResource`. |
+| [examples/forms/resource/](../examples/forms/resource/) | `RunHyperlink`, `HttpClientRunGate`, `HttpApiHyperlink`. |
 
 See [examples/README.md](../examples/README.md) for **`pnpm run example:*`** commands and a guided reading order.
 

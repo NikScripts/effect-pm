@@ -1,11 +1,11 @@
 import { Context, Effect } from "effect";
-import * as CustomQueueResource from "../src/CustomQueueResource";
+import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 import * as Hyperlink from "../src/Hyperlink";
-import type { CustomQueueInstanceSpec } from "../src/CustomQueueResource";
+import type { CustomQueueInstanceSpec } from "../src/CustomQueueHyperlink";
 import { Schema } from "effect";
 
 // Type-level proof: CustomQueue toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
-// until `grantLocal` discharges it (same bundle pattern as QueueResource / Process / RunResource).
+// until `grantLocal` discharges it (same bundle pattern as QueueHyperlink / Process / RunHyperlink).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
   "hyperlink-ts/test/custom-queue-built-resource.test-d/WorkerDep",
@@ -13,7 +13,7 @@ class WorkerDep extends Context.Service<WorkerDep, string>()(
 
 const JobSchema = Schema.Struct({ id: Schema.String });
 
-class TypedCqr extends CustomQueueResource.Tag<TypedCqr>()("test/built-resource/Cqr", {
+class TypedCqr extends CustomQueueHyperlink.Tag<TypedCqr>()("test/built-resource/Cqr", {
   payload: JobSchema,
   levelCount: 2,
 }) {}

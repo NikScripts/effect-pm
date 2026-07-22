@@ -11,16 +11,16 @@ Members are flat top-level `export const` / `function` / `type` — never groupe
 
 ``` ts
 // consumer
-import * as QueueResource from "hyperlink-ts/QueueResource"
-QueueResource.Tag        // pulls zero engine code
-QueueResource.serve      // pulls the engine only when used
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
+QueueHyperlink.Tag        // pulls zero engine code
+QueueHyperlink.serve      // pulls the engine only when used
 ```
 
 {#filename-matches-export .must appliesTo=src}
 ## The filename matches what it exports
 
 The filename **is** the name of its primary export. Usually that's a PascalCase namespace
-(`QueueResource.ts`), but it's camelCase when the module's export is a value — a layer, an effect, a
+(`QueueHyperlink.ts`), but it's camelCase when the module's export is a value — a layer, an effect, a
 helper (Effect's `internal/cache.ts`). No orphan files that export nothing of that name.
 
 **Banned:** `*Contract`, `*Namespace`, and object-engine files — a monorepo-wide search of Effect
@@ -32,7 +32,7 @@ finds zero `*Contract` files. Name by role/noun, like Effect's `RpcServer` / `Rp
 // src/QueueContract.ts
 
 // ✅ good — named for its export
-// src/QueueResource.ts   (exports the QueueResource namespace)
+// src/QueueHyperlink.ts   (exports the QueueHyperlink namespace)
 ```
 
 {#no-object-namespace .must appliesTo=src}
@@ -43,10 +43,10 @@ it — an object engine defeats member-level tree-shaking.
 
 ``` ts
 // ❌ bad — object-as-namespace
-export const QueueResource = { Tag, make, layer, serve }
+export const QueueHyperlink = { Tag, make, layer, serve }
 
 // ✅ good — flat exports, re-exported once from the barrel (src/index.ts)
-export * as QueueResource from "./QueueResource"
+export * as QueueHyperlink from "./QueueHyperlink"
 ```
 
 {#types-same-file .must appliesTo=src}
@@ -81,8 +81,8 @@ it (Effect: `Cache.ts` ↔ `internal/cache.ts`). Internal modules are camelCase,
 and are **never imported by apps**.
 
 ``` ts
-// src/QueueResource.ts (public shell)
-import { makeQueueEffect } from "./internal/queueResource"   // engine implementation
+// src/QueueHyperlink.ts (public shell)
+import { makeQueueEffect } from "./internal/queueHyperlink"   // engine implementation
 ```
 
 {#subpaths-never-internal .must appliesTo=src}
@@ -104,7 +104,7 @@ subpath, never imported by an app.
 import * as Process from "hyperlink-ts/Process"
 
 // ❌ internal — apps must never reach here
-import { makeQueueEffect } from "hyperlink-ts/internal/queueResource"
+import { makeQueueEffect } from "hyperlink-ts/internal/queueHyperlink"
 ```
 
 {#never-split-namespace .must appliesTo=src}
@@ -222,7 +222,7 @@ one tag subpath you need — a smaller graph and a clearer boundary.
 
 ``` ts
 // ✅ better in a widget — just the tag
-import * as QueueResource from "hyperlink-ts/QueueResource"
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
 ```
 
 {#separate-contract-and-impl .should appliesTo=src}

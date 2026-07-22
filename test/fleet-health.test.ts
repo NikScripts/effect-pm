@@ -55,7 +55,7 @@ describe("FleetHealth", () => {
     local: Effect.succeed(
       FleetHealth.LocalHealth.make({
         status,
-        resources: [{ key: "app/Jobs", kind: "hyperlink-ts/QueueResource", ready }],
+        resources: [{ key: "app/Jobs", kind: "hyperlink-ts/QueueHyperlink", ready }],
       }),
     ),
   });
@@ -95,7 +95,7 @@ describe("FleetHealth", () => {
   it.effect("leaf degraded when any readiness row is not ready", () => {
     const readiness = Effect.succeed([
       { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
-      { key: "app/Jobs", kind: "hyperlink-ts/QueueResource", ready: false },
+      { key: "app/Jobs", kind: "hyperlink-ts/QueueHyperlink", ready: false },
     ]);
     const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
       Layer.provide(FleetHealth.alone(MeshHealth)),

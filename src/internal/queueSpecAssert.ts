@@ -1,6 +1,6 @@
 /**
- * Queue instance spec validation — single boundary cast site for {@link QueueResource.Tag}
- * and {@link CustomQueueResource.Tag}.
+ * Queue instance spec validation — single boundary cast site for {@link QueueHyperlink.Tag}
+ * and {@link CustomQueueHyperlink.Tag}.
  *
  * @remarks
  * **Invariant:** every method key and RPC kind on a wired spec must match the erased baseline
@@ -14,8 +14,8 @@
 import { Data, DateTime, Duration, Schema } from "effect";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 import { flattenHyperlinkSpec } from "../Hyperlink";
-import { buildQueueEvent } from "../QueueResource";
-import type { CustomQueueInstanceSpec } from "../CustomQueueResource";
+import { buildQueueEvent } from "../QueueHyperlink";
+import type { CustomQueueInstanceSpec } from "../CustomQueueHyperlink";
 
 /** Structural mismatch between wired and baseline queue specs. @internal */
 export class QueueSpecShapeError extends Data.TaggedError("QueueSpecShapeError")<{
@@ -150,7 +150,7 @@ const smokeWireSlots = (
 
 /**
  * Validate a wired queue spec against its erased baseline.
- * **The only** `QueueInstanceSpec` boundary assertion in QueueResource tag build.
+ * **The only** `QueueInstanceSpec` boundary assertion in QueueHyperlink tag build.
  *
  * @internal
  */

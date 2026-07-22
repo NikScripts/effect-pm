@@ -1,15 +1,15 @@
 /**
- * **CustomQueueResource** — the public N-level managed-queue namespace, mirroring
- * {@link QueueResource} but with N-level lanes, `Record<string, number>` sizes, and
+ * **CustomQueueHyperlink** — the public N-level managed-queue namespace, mirroring
+ * {@link QueueHyperlink} but with N-level lanes, `Record<string, number>` sizes, and
  * `add(item, level?)` where `level` is a numeric index or a configured name.
  *
- * This module is the public face: the `hyperlink-ts/CustomQueueResource` subpath and the
- * barrel `export * as CustomQueueResource` both resolve here. The light `Tag` / spec / schemas live
+ * This module is the public face: the `hyperlink-ts/CustomQueueHyperlink` subpath and the
+ * barrel `export * as CustomQueueHyperlink` both resolve here. The light `Tag` / spec / schemas live
  * in this file (engine-free, tree-shakeable); the heavy engine lives in
- * `./internal/customQueueResource` and is pulled in only by the runtime verbs (`layer` / `serve` /
+ * `./internal/customQueueHyperlink` and is pulled in only by the runtime verbs (`layer` / `serve` /
  * `serveRemote` / `make`).
  *
- * @module CustomQueueResource
+ * @module CustomQueueHyperlink
  */
 import { Effect, Layer, Option, Schema, Scope, Stream } from "effect";
 import * as Hyperlink from "./Hyperlink";
@@ -36,13 +36,13 @@ import type {
   HyperlinkTag,
 } from "./Hyperlink";
 import type { NodeKey } from "./Node";
-import { makeCustomQueueEffect } from "./internal/customQueueResource";
+import { makeCustomQueueEffect } from "./internal/customQueueHyperlink";
 import type {
   CustomQueueHandle,
   CustomQueueLevelConfig,
-  CustomQueueResourceConfigWithItemSchema,
-} from "./internal/customQueueResource";
-import type { QueueEnqueueErrors } from "./internal/queueResource";
+  CustomQueueHyperlinkConfigWithItemSchema,
+} from "./internal/customQueueHyperlink";
+import type { QueueEnqueueErrors } from "./internal/queueHyperlink";
 import {
   historyQuery,
   queueEncodedEntry,
@@ -54,12 +54,12 @@ import {
   queueReleaseEncodingError,
   queueReleaseOptions,
   queueRouteOptions,
-} from "./QueueResource";
-import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
-import type { ConfigPatch } from "./ResourceConfigure";
+} from "./QueueHyperlink";
+import { configureLayer, foldConfiguredSpec } from "./HyperlinkConfigure";
+import type { ConfigPatch } from "./HyperlinkConfigure";
 
 /** @public Re-export for custom-queue wire schemas. */
-export { queueLogEntry as customQueueLogEntry } from "./QueueResource";
+export { queueLogEntry as customQueueLogEntry } from "./QueueHyperlink";
 
 /**
  * Per-lane pending counts keyed by configured name (or `"0"`, `"1"`, …).
@@ -122,7 +122,7 @@ export const customQueueEntry = <Sch extends Schema.Top>(
     timestamps: queueEntryTimestamps,
     batchId: Schema.optional(Schema.String),
     releaseId: Schema.optional(Schema.String),
-    sourceResourceId: Schema.optional(Schema.String),
+    sourceHyperlinkId: Schema.optional(Schema.String),
     attributes: Schema.optional(queueEntryAttributes),
   });
 
@@ -310,11 +310,11 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
 };
 
 /**
- * Define a custom-queue **instance** — same shape as {@link QueueResource.Tag}, with
+ * Define a custom-queue **instance** — same shape as {@link QueueHyperlink.Tag}, with
  * `levelCount` / `namedLevels` baked into the wire level union:
  *
  * ```ts
- * class Jobs extends CustomQueueResource.Tag<Jobs>()(
+ * class Jobs extends CustomQueueHyperlink.Tag<Jobs>()(
  *   "@app/Jobs",
  *   JobSchema,
  *   8,
@@ -329,12 +329,12 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
  *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. */
-export const kind = "hyperlink-ts/CustomQueueResource";
+export const kind = "hyperlink-ts/CustomQueueHyperlink";
 
 /**
  * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
  * schema; `levelCount` is the number of priority lanes; `namedLevels` maps names → lane indices.
- * Optional `success` / `error` wire slots match {@link QueueResource.Tag} (stamped for engine + store).
+ * Optional `success` / `error` wire slots match {@link QueueHyperlink.Tag} (stamped for engine + store).
  *
  * @category models
  * @public
@@ -354,7 +354,7 @@ export interface CustomQueueTagConfig<
 
 /**
  * Define an N-level managed queue as a named service {@link Tag} (also exported as
- * {@link customQueueTag}): `class Jobs extends CustomQueueResource.Tag<Jobs>()("@app/Jobs", { … }) {}`.
+ * {@link customQueueTag}): `class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/Jobs", { … }) {}`.
  * The class *is* the Tag — `yield* Jobs` resolves the queue handle, {@link layer} provides it and
  * {@link serve} exposes it over RPC. `payload` is the item schema; `levelCount` / `namedLevels`
  * declare the priority levels; optional `success` / `error` add the worker wire schemas.
@@ -423,7 +423,7 @@ export const customQueueTag = <Self>() => {
  * @public
  */
 export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
-  CustomQueueResourceConfigWithItemSchema<A, E, R>,
+  CustomQueueHyperlinkConfigWithItemSchema<A, E, R>,
   "itemSchema" | "refill" | "name"
 > & {
   readonly refill?: {
@@ -480,7 +480,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       ...effectiveConfig,
       itemSchema,
       store,
-    } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+    } as CustomQueueHyperlinkConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
@@ -500,7 +500,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
 
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
-    // discharge `context` into every Effect method uniformly — same bundle pattern as QueueResource.
+    // discharge `context` into every Effect method uniformly — same bundle pattern as QueueHyperlink.
     const impl: Hyperlink.WithRequirement<
       ImplOf<CustomQueueInstanceSpec<F>>,
       R | RR
@@ -555,7 +555,7 @@ const withDefaultMemory = <A, E, R>(
 
 /**
  * Local custom-queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
- * `CustomQueueResource.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
+ * `CustomQueueHyperlink.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
  *
  * {@link layerMemory} is an alias for the same soft-default.
  *
@@ -720,8 +720,8 @@ export const configure = <
  * `itemSchema` injected. Pass a bare spec object to add app-specific methods (merged with built-in):
  *
  * ```ts
- * CustomQueueResource.store(Jobs)
- * CustomQueueResource.store(Jobs, {
+ * CustomQueueHyperlink.store(Jobs)
+ * CustomQueueHyperlink.store(Jobs, {
  *   laneAudit: laneAuditSchema,
  * }, ({ laneAudit, event }) => ({
  *   appendLaneAudit: laneAudit.append,
@@ -747,30 +747,30 @@ export function store(tag: QueueStoreTag, extended?: StoreShapes) {
     : facetStoreRegistration(tag, contract, extended);
 }
 
-// The light `Tag` lives here (no engine) so `CustomQueueResource.Tag` member access tree-shakes.
+// The light `Tag` lives here (no engine) so `CustomQueueHyperlink.Tag` member access tree-shakes.
 export { customQueueTag as Tag };
 
 // ============================================================================
 // Engine surface
 //
-// The engine helpers below pull in `./internal/customQueueResource` only when referenced, so a
+// The engine helpers below pull in `./internal/customQueueHyperlink` only when referenced, so a
 // `Tag`-only consumer tree-shakes the engine away entirely.
 // ============================================================================
 
 export {
   makeCustomQueueEffect as make,
   queueRateLimiterLayer as rateLimiterLayer,
-} from "./internal/customQueueResource";
+} from "./internal/customQueueHyperlink";
 
-// The custom-queue type surface lives HERE, namespace-style (`CustomQueueResource.CustomQueueStatus`)
+// The custom-queue type surface lives HERE, namespace-style (`CustomQueueHyperlink.CustomQueueStatus`)
 // — the barrel no longer re-exports these bare (effect has no top-level; neither do we).
 export type {
   CustomQueueEnqueue,
   CustomQueueHandle,
   CustomQueueLevelConfig,
   CustomQueueRefill,
-  CustomQueueResourceConfig,
-  CustomQueueResourceConfigWithItemSchema,
-  CustomQueueResourceConfigWithoutItemSchema,
+  CustomQueueHyperlinkConfig,
+  CustomQueueHyperlinkConfigWithItemSchema,
+  CustomQueueHyperlinkConfigWithoutItemSchema,
   CustomQueueStatus,
-} from "./internal/customQueueResource";
+} from "./internal/customQueueHyperlink";

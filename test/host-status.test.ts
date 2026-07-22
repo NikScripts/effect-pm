@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as NodeStatus from "../src/NodeStatus";
 import * as Logs from "../src/Logs";
-import { buildNodeStatusImpl } from "../src/internal/nodeStatusResource";
+import { buildNodeStatusImpl } from "../src/internal/nodeStatusHyperlink";
 import * as Node from "../src/Node";
 
 // A node serving one ordinary resource over `httpServer` must ALSO auto-serve its node status

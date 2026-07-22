@@ -13,11 +13,11 @@ Verify: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm build`
 
 | Plane | API | Backing | Who writes |
 |-------|-----|---------|------------|
-| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Process, Queue, CustomQueue, RunResource |
+| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Process, Queue, CustomQueue, RunHyperlink |
 | **RuntimeStorage facets (legacy observability)** | `ProcessStorage`, `LogStore`, `ProcessLifecycleStore` | `RuntimeStorage` rows (`layerProcessStore`, in-memory adapter) | Log relay, lifecycle hooks — **not** toolkit execution history |
 
 Execution history for processes, queues, and run gates lives on the **Store bridge only**. The old
-`ProcessExecutionStore`, `QueueResourceStore`, and `RunResourceStore` **facet classes are deleted**
+`ProcessExecutionStore`, `QueueHyperlinkStore`, and `RunHyperlinkStore` **facet classes are deleted**
 from `src/` — engines no longer dual-write to facet emitters.
 
 Deep design: [`handoffs/store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) ·
@@ -37,7 +37,7 @@ import * as Process from "hyperlink-ts/Process";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
-  QueueResource.store(MyQueue),
+  QueueHyperlink.store(MyQueue),
 ) {}
 ```
 
@@ -58,7 +58,7 @@ Resolve handles:
 materialize handles — **no** `Effect.serviceOption(Storage)`, **no** forked-fiber store sniffing.
 
 ```ts
-// Engine pattern (QueueResource.buildQueueImpl — representative)
+// Engine pattern (QueueHyperlink.buildQueueImpl — representative)
 const store = yield* materializeEngineQueueStoreForTag(tag);
 // publishEvent → store.record / narrow writes (enqueued, completed, …)
 ```
@@ -78,14 +78,14 @@ override.
 |------|------|---------|
 | **1 — lean base** | One `event` shape → `record` + `events` | `builtInQueueStoreContract(tag)` |
 | **2 — engine writes** | Narrow semantic methods (`completed`, `failed`, …) funnel to `event.append` | `makeEngineQueueStoreContract` / materialized writer |
-| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueResource.store`, `Process.store` |
+| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueHyperlink.store`, `Process.store` |
 
 Tag wire is SSOT — layer config must not override `payload` / `success` / `error`
 ([`result-schema-and-rpc-validation.md`](../handoffs/result-schema-and-rpc-validation.md)).
 
 ### Toolkit layers
 
-`layer` / `serve` / `serveRemote` on Process, QueueResource, CustomQueueResource, and RunResource all
+`layer` / `serve` / `serveRemote` on Process, QueueHyperlink, CustomQueueHyperlink, and RunHyperlink all
 merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
 `Hyperlink.builtHyperlink` + `grantLocal` where applicable.
 
@@ -111,12 +111,12 @@ Aliases: `ProcessStorage.Log`, `ProcessStorage.ProcessLifecycle`.
 
 **Removed from engine paths** (do not document as writers):
 
-- `QueueResourceStore` — deleted; queue engine uses Store bridge
+- `QueueHyperlinkStore` — deleted; queue engine uses Store bridge
 - `ProcessExecutionStore` — deleted; process engine uses `Process.store(tag)`
-- `RunResourceStore` facet — deleted; run engine uses `RunResource.store(tag)`
+- `RunHyperlinkStore` facet — deleted; run engine uses `RunHyperlink.store(tag)`
 
-The `hyperlink-ts/store/QueueResource` subpath was **removed** — there is no
-`src/store/queueResource.ts`. Import queue history via `QueueResource.store(tag)` on the Store bridge,
+The `hyperlink-ts/store/QueueHyperlink` subpath was **removed** — there is no
+`src/store/queueHyperlink.ts`. Import queue history via `QueueHyperlink.store(tag)` on the Store bridge,
 not a RuntimeStorage facet class.
 
 Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeBridge,memoryScope}.ts`.
@@ -125,14 +125,14 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 
 ## Per-toolkit store
 
-### QueueResource + CustomQueueResource
+### QueueHyperlink + CustomQueueHyperlink
 
 - **Contract:** `builtInQueueStoreContract(tag)` — cast-free; full `QueueEvent<T>` lifecycle union
   (persisted == streamed). See [`handoffs/store-cutover-queue.md`](../handoffs/store-cutover-queue.md).
 - **Engine:** `materializeEngineQueueStoreForTag` / `materializeEngineQueueStoreForItem` in
   `buildQueueImpl` / `buildCustomQueueImpl`; `publishEvent` → `recordToStore` at source
-  (`src/internal/queueResource.ts`).
-- **Registration:** `QueueResource.store(tag)` / `CustomQueueResource.store(tag)` for Tier 3 analytics.
+  (`src/internal/queueHyperlink.ts`).
+- **Registration:** `QueueHyperlink.store(tag)` / `CustomQueueHyperlink.store(tag)` for Tier 3 analytics.
 - **Tag:** config object `{ payload, success?, error? }` (+ lane fields on CQR).
 
 ### Process
@@ -146,11 +146,11 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
   without failing the supervisor loop.
 - **Handoff:** [`handoffs/store-cutover-process.md`](../handoffs/store-cutover-process.md).
 
-### RunResource
+### RunHyperlink
 
-- **Contract:** `builtInRunResourceStoreContract(tag)` — fact/state union.
-- **Engine:** declared `Storage` + contract in `src/internal/runResource.ts`.
-- **Registration:** `RunResource.store(tag)`.
+- **Contract:** `builtInRunHyperlinkStoreContract(tag)` — fact/state union.
+- **Engine:** declared `Storage` + contract in `src/internal/runHyperlink.ts`.
+- **Registration:** `RunHyperlink.store(tag)`.
 - **Handoff:** [`handoffs/store-cutover-runresource.md`](../handoffs/store-cutover-runresource.md).
 
 ### ShardMap
@@ -183,9 +183,9 @@ Optional `success` / `error` on persisted terminal rows follow tag presence
 `Started` / `Completed` / `Failed` / `Interrupted` rows on `Process.store(tag)`; auto-append from
 `Process.layer` / `serve` / `serveRemote` via baked-in default memory store.
 
-### RunResource
+### RunHyperlink
 
-Gate run facts appended to `RunResource.store(tag)` when a gate executes.
+Gate run facts appended to `RunHyperlink.store(tag)` when a gate executes.
 
 **Not on the Store bridge:** ShardMap local keys — SQLite table `effect_pm_shard_map` (see
 ShardMap section above).
@@ -221,24 +221,24 @@ override with `Layer.provideMerge(AppStore.layer(...), ...)`.
 ### Queue persist + read back
 
 ```ts
-import * as QueueResource from "hyperlink-ts/QueueResource";
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
 import * as Store from "hyperlink-ts/Store";
 
-class Mail extends QueueResource.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
+class Mail extends QueueHyperlink.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  QueueResource.store(Mail),
+  QueueHyperlink.store(Mail),
 ) {}
 
 // Layer includes materialized engine store + layerDefaultMemory
-Effect.provide(program, QueueResource.layer(Mail, { effect, autoStart: true }));
+Effect.provide(program, QueueHyperlink.layer(Mail, { effect, autoStart: true }));
 
 const store = yield* AppStore.at(Mail);
 const events = yield* store.events();
 ```
 
 Or register on an app aggregate: `class AppStore extends Store.Service(...)(
-  QueueResource.store(Mail),
+  QueueHyperlink.store(Mail),
 ) {}` then `yield* AppStore.at(Mail)`.
 
 ### Legacy facets (log + lifecycle only)
@@ -265,13 +265,13 @@ facet is optional observability — **distinct** from `Storage` on the Store bri
 ```ts
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(MyProcess),
-  QueueResource.store(MyQueue),
+  QueueHyperlink.store(MyQueue),
 ) {}
 
 const live = Layer.provideMerge(
   AppStore.layer({ filename: ".hyperlink-ts/process.db" }),
   Process.layer(MyProcess, { effect }),
-  QueueResource.layer(MyQueue, { effect }),
+  QueueHyperlink.layer(MyQueue, { effect }),
 );
 ```
 

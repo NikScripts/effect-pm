@@ -4,7 +4,7 @@
 Logs in hyperlink-ts are one pipeline: every `Effect.log` on a [Node](/docs/glossary#node) lands on a
 single live bus, and — when you register journals on your [Store](/docs/stores) — durable followers
 persist those lines into scoped history. You consume the same lines live (`Logs.stream`,
-`Hyperlink.logs`) or from Storage (`Logs.byNode`, `Logs.byResource`).
+`Hyperlink.logs`) or from Storage (`Logs.byNode`, `Logs.byHyperlink`).
 
 There is no separate “process log API” and “queue log API.” Capture is central. Scopes are how you
 carve the bus into journals and Handle-facing exports.
@@ -74,8 +74,8 @@ Live-only is enough for ephemeral UIs. History needs Storage.
 
 Register journals on a `Store.Service`. Node-wide history uses `Node.logs` (or
 `Hyperlink.store(Node)`). Per-Hyperlink history uses the toolkit store registration —
-`Process.store(tag)`, `QueueResource.store(tag)`, and friends — which carry a private `_logs`
-journal. Read durable history with `Logs.byNode` / `Logs.byResource` / `Hyperlink.logs(tag).query`
+`Process.store(tag)`, `QueueHyperlink.store(tag)`, and friends — which carry a private `_logs`
+journal. Read durable history with `Logs.byNode` / `Logs.byHyperlink` / `Hyperlink.logs(tag).query`
 (not a public `handle.log` surface).
 
 {.twoslash}
@@ -97,7 +97,7 @@ const program = Effect.gen(function* () {
   const nodeRows = yield* Logs.byNode(BillingNode, { limit: 200 })
 
   // Hyperlink journal — that registration's scope (same key as Daily.key).
-  const resourceRows = yield* Logs.byResource(Daily, { limit: 100 })
+  const resourceRows = yield* Logs.byHyperlink(Daily, { limit: 100 })
 
   // Preferred: live + durable product export for the tag.
   const { query } = yield* Hyperlink.logs(Daily)
@@ -116,13 +116,13 @@ before queue workers fork at Layer build:
 ``` ts
 Effect.provide(
   program,
-  QueueResource.layer(MyQueue, { effect: worker }).pipe(
+  QueueHyperlink.layer(MyQueue, { effect: worker }).pipe(
     Layer.provideMerge(AppStore.layerMemory),
   ),
 )
 ```
 
-Bare `QueueResource.layer` / `Process.layer` (or `*Memory` aliases) work without an AppStore;
+Bare `QueueHyperlink.layer` / `Process.layer` (or `*Memory` aliases) work without an AppStore;
 durable logs still need `Store.Service.layer*`. Recipe SSOT: [`docs/guides/stores.md`](./stores.md).
 
 ## Keys
@@ -132,7 +132,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 | Kind | Identifies | Declared as | Used for |
 |------|------------|-------------|----------|
 | **Node log key** | One OS process / runtime host | `Node.Tag(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
-| **Hyperlink key** | One Queue, Process, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byResource` |
+| **Hyperlink key** | One Queue, Process, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byHyperlink` |
 | **Lineage segment** | One hop in ancestry | element of the lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **Annotation key** | Field name on `LogEntry.annotations` | `LogAnnotationKeys.*` | metadata keys, not buckets |
 
@@ -220,7 +220,7 @@ const program = Effect.gen(function* () {
 Pipe `Hyperlink.withLogExport` onto a Tag when you want `yield* Tag.logs` as a member:
 
 ``` ts
-class MailQueue extends QueueResource.Tag<MailQueue>()("app/Mail", MailJob).pipe(
+class MailQueue extends QueueHyperlink.Tag<MailQueue>()("app/Mail", MailJob).pipe(
   Hyperlink.withLogExport,
 ) {}
 
@@ -283,7 +283,7 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 
 | Concern | Package | Role |
 |---------|---------|------|
-| Platform | `hyperlink-ts/Logs` | Layer, bus, `withScope`, `byNode` / `byResource` |
+| Platform | `hyperlink-ts/Logs` | Layer, bus, `withScope`, `byNode` / `byHyperlink` |
 | Entry + predicates | `hyperlink-ts/LogEntry` | Wire shape, `hasKey` / `atRoot` / `atLeaf` |
 | Annotation keys | `hyperlink-ts/LogContext` | `LogAnnotationKeys` |
 | Export | `hyperlink-ts/Hyperlink` | `logs`, `withLogExport`, `logStreamLevel*` |

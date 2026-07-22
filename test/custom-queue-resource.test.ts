@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Ref, Stream } from "effect";
-import * as CustomQueueResource from "../src/CustomQueueResource";
+import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 
 const waitUntilCompleted = (
   queue: { readonly completed: Effect.Effect<number> },
@@ -13,11 +13,11 @@ const waitUntilCompleted = (
     }
   });
 
-describe("CustomQueueResource.make", () => {
+describe("CustomQueueHyperlink.make", () => {
   it.live("strict-descending takes highest level first", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<number[]>([]);
-      const queue = yield* CustomQueueResource.make({
+      const queue = yield* CustomQueueHyperlink.make({
         name: "custom-levels",
         levelCount: 5,
         takeAlgorithm: "strict-descending",
@@ -36,7 +36,7 @@ describe("CustomQueueResource.make", () => {
 
   it.live("resolves named levels and reports Record sizes", () =>
     Effect.gen(function* () {
-      const queue = yield* CustomQueueResource.make({
+      const queue = yield* CustomQueueHyperlink.make({
         name: "custom-named",
         levelCount: 4,
         namedLevels: { urgent: 0, batch: 3 },
@@ -60,7 +60,7 @@ describe("CustomQueueResource.make", () => {
   it.live("weighted take algorithm favors higher level indices", () =>
     Effect.gen(function* () {
       const samples = yield* Ref.make({ g1: 0, g3: 0, n: 0 });
-      const queue = yield* CustomQueueResource.make({
+      const queue = yield* CustomQueueHyperlink.make({
         name: "custom-weighted",
         levelCount: 4,
         takeAlgorithm: "weighted",
@@ -91,7 +91,7 @@ describe("CustomQueueResource.make", () => {
 
   it.live("status stream emits CustomQueueStatus snapshots", () =>
     Effect.gen(function* () {
-      const queue = yield* CustomQueueResource.make({
+      const queue = yield* CustomQueueHyperlink.make({
         name: "custom-status",
         levelCount: 3,
         effect: (_n: number) => Effect.void,

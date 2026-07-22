@@ -19,14 +19,14 @@ describe("contractHash / hashContract", () => {
   });
 
   it("matches hashContract on the tag Spec", () => {
-    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    const kind = Hyperlink.kindOf(Probe) ?? "hyperlink";
     expect(Hyperlink.contractHash(Probe)).toBe(
       hashContract(Probe.groupId, kind, Probe[Hyperlink.specSym]),
     );
   });
 
   it("changes when a method payload schema drifts", () => {
-    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    const kind = Hyperlink.kindOf(Probe) ?? "hyperlink";
     const base = Probe[Hyperlink.specSym];
     const drifted = {
       ...base,
@@ -38,7 +38,7 @@ describe("contractHash / hashContract", () => {
   });
 
   it("changes when a wire method is added", () => {
-    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    const kind = Hyperlink.kindOf(Probe) ?? "hyperlink";
     const base = Probe[Hyperlink.specSym];
     const extra = {
       ...base,
@@ -50,7 +50,7 @@ describe("contractHash / hashContract", () => {
   });
 
   it("contractDescriptor is JSON-stable (sorted keys)", () => {
-    const kind = Hyperlink.kindOf(Probe) ?? "resource";
+    const kind = Hyperlink.kindOf(Probe) ?? "hyperlink";
     const d1 = JSON.stringify(
       contractDescriptor(Probe.groupId, kind, Probe[Hyperlink.specSym]),
     );

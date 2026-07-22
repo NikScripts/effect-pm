@@ -1,10 +1,10 @@
-{#run-resources title="Run resources" status="draft" appliesTo=all}
+{#run-hyperlinks title="Run resources" status="draft" appliesTo=all}
 # Run resources
 
 {.note}
 **⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
 
-A `RunResource` wraps an effect behind a **concurrency gate** with typed input
+A `RunHyperlink` wraps an effect behind a **concurrency gate** with typed input
 and output. Where a queue drains items in the background, a run resource is
 called on demand — every caller waits for its result, but only so many run at
 once.
@@ -15,10 +15,10 @@ once.
 caps how many bodies run in parallel; extra callers queue.
 
 ``` ts
-import { RunResource } from "hyperlink-ts"
+import { RunHyperlink } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 
-class Double extends RunResource.Service<Double>()("app/Double", {
+class Double extends RunHyperlink.Service<Double>()("app/Double", {
   payload: Schema.Number,
   success: Schema.Number,
   concurrency: 2,
@@ -47,7 +47,7 @@ A gate with no meaningful input takes `Schema.Void` and is called as `run()` —
 useful for rate-limiting a side-effecting call.
 
 ``` ts
-class Ping extends RunResource.Service<Ping>()("app/Ping", {
+class Ping extends RunHyperlink.Service<Ping>()("app/Ping", {
   payload: Schema.Void,
   success: Schema.Number,
   concurrency: 3,
@@ -64,7 +64,7 @@ throttling.
 
 ## Run it live
 
-A real `RunResource` running in your browser — a slow `Double` (900ms,
+A real `RunHyperlink` running in your browser — a slow `Double` (900ms,
 concurrency 2). Hit **Run** to invoke it and watch `in-flight`; hit **Run ×5** and
 you'll see only two run at once while the rest wait behind the gate. The live
 values read straight off the service's `inFlight` subscribable — no dashboard widget.

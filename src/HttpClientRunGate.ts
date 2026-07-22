@@ -1,18 +1,18 @@
 /**
  * **HttpClientRunGate** — pipe-friendly {@link HttpClient.transform} that runs every
- * request effect through a {@link RunResourceRunner}.
+ * request effect through a {@link RunHyperlinkRunner}.
  *
  * @remarks
  * `transform` sees the **entire** `execute` pipeline (DNS/TLS/body included), whereas
  * `HttpApiClient`’s `transformResponse` only wraps decode stages after the fetch completes.
- * Pair with {@link RunResource.makeRunner} or the runner produced inside
- * {@link HttpApiResource.make}.
+ * Pair with {@link RunHyperlink.makeRunner} or the runner produced inside
+ * {@link HttpApiHyperlink.make}.
  *
  * @module HttpClientRunGate
  */
 
 import { HttpClient } from "effect/unstable/http";
-import type { RunResourceRunner } from "./RunResource";
+import type { RunHyperlinkRunner } from "./RunHyperlink";
 
 /**
  * Pipe-friendly: `client.pipe(HttpClientRunGate.withRunner(runner))`.
@@ -21,7 +21,7 @@ import type { RunResourceRunner } from "./RunResource";
  * @public
  */
 export const withRunner =
-  (runner: RunResourceRunner) =>
+  (runner: RunHyperlinkRunner) =>
   <E, R>(client: HttpClient.HttpClient.With<E, R>): HttpClient.HttpClient.With<E, R> =>
     HttpClient.transform(client, (effect, _request) => runner(effect));
 
@@ -33,7 +33,7 @@ export const withRunner =
  */
 export const transformClient = <E, R>(
   client: HttpClient.HttpClient.With<E, R>,
-  runner: RunResourceRunner
+  runner: RunHyperlinkRunner
 ): HttpClient.HttpClient.With<E, R> => withRunner(runner)(client);
 
 // The module is the namespace: `withRunner` / `transformClient` are the flat
