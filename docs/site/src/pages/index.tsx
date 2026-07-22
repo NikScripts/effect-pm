@@ -19,21 +19,14 @@ export default function LandingPage() {
               <code>yield*</code> everywhere
             </span>
           </div>
-          <p className="landing-pitch">
-            Hyperlink removes the layer you would otherwise write between runtimes: the server in
-            front of a Service, the client for each caller, and the wiring for both.
+          <p className="landing-pitch">The boundary between runtimes disappears.</p>
+          <p className="landing-body">
+            Place a Service anywhere: a parallel process, a second machine, the other side of the
+            world. Calling it never changes.
           </p>
           <p className="landing-body">
-            What that buys is freedom of placement. Services stop needing a topology designed up
-            front, where one server runs these specific programs and every change is a refactor.
-            Move a Service to another machine, or spread one across several: reassign its node,
-            and every call site stays as it was.
-          </p>
-          <p className="landing-body">
-            The API stays small. A Tag declares the contract, with a schema for every value that
-            crosses. Serve the Service in one runtime, connect from another, and{" "}
-            <code>yield*</code> the same typed Handle in both, whether the two runtimes are
-            parallel processes on one machine or opposite sides of a network.
+            No server to stand up. No client to write. No wiring to keep alive. Move a Service by
+            reassigning its node. Scale it by giving it more.
           </p>
           <p className="landing-credit">Inspired by and built on Effect RPC.</p>
           <p className="landing-soon">Coming soon</p>

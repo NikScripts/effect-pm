@@ -2155,3 +2155,10 @@ body:has(.landing) .sidebar {
   line-height: 1.7;
   color: var(--muted-fg);
 }
+.landing-pitch {
+  font-size: clamp(1.35rem, 3.4vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+  max-width: 46rem;
+}
