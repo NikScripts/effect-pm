@@ -1079,7 +1079,7 @@ export {
  * ```ts
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
  *   Hyperlink.store(WnbaNode),
- *   Process.store(Daily),
+ *   Daemon.store(Daily),
  * ) {}
  * ```
  *
@@ -1315,7 +1315,7 @@ export const builtHyperlinkSym: unique symbol = Symbol.for(
 /**
  * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
  * Effect methods, paired with the {@link Context.Context} captured at build time. Used by
- * {@link WorkPool}, {@link Gate}, and {@link Process} (any toolkit resource that builds
+ * {@link WorkPool}, {@link Gate}, and {@link Daemon} (any toolkit resource that builds
  * its driver under ambient `R`). {@link layer} / {@link serve} grant locally via {@link grantLocal};
  * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
  * one materialization backs both paths.
@@ -4898,7 +4898,7 @@ export const distributedOf = nodesOf;
  * Lookup first — winner runs the local impl; loser becomes a client of the winner's endpoint.
  * Requires {@link LookupIdentity} in the layer graph (fail-closed if Lookup is down).
  *
- * Pipe onto any Hyperlink / Process / Queue tag (same shape as {@link withReadiness}):
+ * Pipe onto any Hyperlink / Daemon / Queue tag (same shape as {@link withReadiness}):
  *
  * ```ts
  * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(Hyperlink.identity) {}

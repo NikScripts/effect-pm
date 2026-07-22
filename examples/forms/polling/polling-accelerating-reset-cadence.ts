@@ -6,7 +6,7 @@
 
 import { DateTime, Duration, Effect, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling } from "../../../src";
+import { Daemon, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -23,8 +23,8 @@ const pollLayer = Polling.accelerating({
   slowest: "500 millis",
   decay: 0.55,
 });
-const scheduleLayer = Process.scheduleInMemory([
-  Process.at("sports-accel-simple", scheduleStartAtUnixEpoch),
+const scheduleLayer = Daemon.scheduleInMemory([
+  Daemon.at("sports-accel-simple", scheduleStartAtUnixEpoch),
 ]);
 
 const env = Layer.mergeAll(
@@ -37,7 +37,7 @@ const program = Effect.gen(function* () {
   const feed = yield* makeSportsScoreFeedTestDouble();
   const lastScoreKey = yield* Ref.make<string>(scoreKey({ home: 0, away: 0 }));
 
-  const proc = Process.make("examples/forms/polling-accelerating-reset-cadence", {
+  const proc = Daemon.make("examples/forms/polling-accelerating-reset-cadence", {
     // pollLayer at fork site — required so resetCadence in the tick hits the supervisor's Polling.
     effect: Effect.gen(function* () {
       const snapshot = yield* feed.readScore;

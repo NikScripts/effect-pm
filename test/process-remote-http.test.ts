@@ -3,17 +3,17 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
-// The full remote path: a REAL toolkit Process driver served over http via
-// `httpServer([Process.serveMemory(...)])`, driven by `Hyperlink.client` over the wire — the same
+// The full remote path: a REAL toolkit Daemon driver served over http via
+// `httpServer([Daemon.serveMemory(...)])`, driven by `Hyperlink.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
 // (start/stop), observation (`status`), the out-of-band run (run), and the schedule
 // CRUD all cross real RPC. An empty inline schedule keeps the process disarmed (so `armed` is
 // observably false) and grants the `schedule` verb group.
-class RemoteProc extends Process.Tag<RemoteProc>()("proc-remote/P").pipe(
-  Process.schedule([]),
+class RemoteProc extends Daemon.Tag<RemoteProc>()("proc-remote/P").pipe(
+  Daemon.schedule([]),
 ) {}
 
 // client transport: http + ndjson (matches the server's default serialization).
@@ -24,11 +24,11 @@ const clientHttp = (port: number) =>
   );
 
 const withServer = <A, E>(
-  config: Process.ProcessLayerConfig<void, never, never>,
+  config: Daemon.DaemonLayerConfig<void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteProc>,
 ) => {
   const server = Node.httpServer([
-    Process.serveMemory(RemoteProc, config),
+    Daemon.serveMemory(RemoteProc, config),
   ]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );

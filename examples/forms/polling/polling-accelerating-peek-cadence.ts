@@ -6,7 +6,7 @@
 
 import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling } from "../../../src";
+import { Daemon, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -16,7 +16,7 @@ import {
   scoreKey,
 } from "../../shared/sports-score-feed";
 
-// Process.at expects Date — build from DateTime, not `new Date()` inside Effect.
+// Daemon.at expects Date — build from DateTime, not `new Date()` inside Effect.
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 
 const pollLayer = Polling.accelerating({
@@ -25,8 +25,8 @@ const pollLayer = Polling.accelerating({
   decay: 0.55,
 });
 
-const scheduleLayer = Process.scheduleInMemory([
-  Process.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
+const scheduleLayer = Daemon.scheduleInMemory([
+  Daemon.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
 ]);
 
 const env = Layer.mergeAll(
@@ -47,7 +47,7 @@ const program = Effect.gen(function* () {
   const logEvent = (line: string): Effect.Effect<void, never, never> =>
     Ref.update(events, (lines) => [...lines, line]).pipe(Effect.asVoid);
 
-  const proc = Process.make("examples/forms/polling-accelerating-peek-cadence", {
+  const proc = Daemon.make("examples/forms/polling-accelerating-peek-cadence", {
     effect: Effect.gen(function* () {
       const snapshot = yield* feed.readScore;
       const prev = yield* Ref.get(lastScoreKey);

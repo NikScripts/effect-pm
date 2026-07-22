@@ -21,7 +21,7 @@ import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../F
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind, type RunGateStatus } from "../Gate";
-import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
+import { kind as processKind, processScheduleEntry, processStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
@@ -35,7 +35,7 @@ export type CustomQueueStatus = Schema.Schema.Type<typeof customQueueStatus>;
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
 /** Live process status (from the contract schema). */
-export type ProcessStatus = Schema.Schema.Type<typeof processStatus>;
+export type DaemonStatus = Schema.Schema.Type<typeof processStatus>;
 /** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
 export type ScheduleEntry = Schema.Schema.Type<typeof processScheduleEntry>;
 
@@ -86,11 +86,11 @@ interface RefLike<A> {
   readonly get: Effect.Effect<A>;
   readonly changes: Stream.Stream<A>;
 }
-/** The structural shape of a process's live service (the base `Process.Tag` contract). The inline
+/** The structural shape of a process's live service (the base `Daemon.Tag` contract). The inline
  *  `schedule` verb group is present only on a process that owns an inline schedule
- *  (`Process.schedule([...])`), so it is optional here. */
-interface ProcessService {
-  readonly status: RefLike<ProcessStatus>;
+ *  (`Daemon.schedule([...])`), so it is optional here. */
+interface DaemonService {
+  readonly status: RefLike<DaemonStatus>;
   readonly logs: {
     readonly stream: Stream.Stream<{ readonly level: string; readonly message: string }>;
     readonly query: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
@@ -177,7 +177,7 @@ interface RunService {
 /** A run-gate tag — yieldable for its live service. @public */
 export type RunTag<R = never> = Effect.Effect<RunService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. */
-export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
+export type DaemonTag<R = never> = Effect.Effect<DaemonService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
 
@@ -248,8 +248,8 @@ export interface RunBundle {
   readonly status: ValueAtom<RunGateStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
-export interface ProcessBundle {
-  readonly status: ValueAtom<ProcessStatus>;
+export interface DaemonBundle {
+  readonly status: ValueAtom<DaemonStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** The current schedule entries (run windows), read once on open. */
   readonly schedule: ValueAtom<ReadonlyArray<ScheduleEntry>>;
@@ -358,7 +358,7 @@ export const kindOf = (member: unknown): "queue" | "process" | "api" | "hyperlin
 /** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */
 export const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
 /** @public */
-export const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+export const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
 /** @public */
 export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
 /** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
@@ -425,7 +425,7 @@ const cachedAccumulator = <A, R>(opts: {
 
 // bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+tag
 const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
-const processBundleCache = new WeakMap<object, Map<string, ProcessBundle>>();
+const processBundleCache = new WeakMap<object, Map<string, DaemonBundle>>();
 const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
 const nodeBundleCache = new WeakMap<object, Map<string, NodeBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
@@ -727,7 +727,7 @@ export const runBundle = <R, ER>(
 };
 
 /** Build (once per runtime+tag) the atom bundle for a process tag. */
-export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ProcessTag<R>): ProcessBundle => {
+export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
   const cache = cacheFor(processBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
@@ -743,7 +743,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
       ? Effect.succeed<ReadonlyArray<ScheduleEntry>>([])
       : p.schedule.entries.get,
   );
-  const bundle: ProcessBundle = {
+  const bundle: DaemonBundle = {
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status.changes))),
     logs: hyperlinkLogsAtom(runtime, tag.key, node),
     // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
@@ -868,5 +868,5 @@ export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
   leafTags(node).filter(isQueueTag);
 
 /** Only the process leaves of a tree. */
-export const processLeaves = (node: GroupNode): ReadonlyArray<ProcessTag> =>
-  leafTags(node).filter(isProcessTag);
+export const processLeaves = (node: GroupNode): ReadonlyArray<DaemonTag> =>
+  leafTags(node).filter(isDaemonTag);

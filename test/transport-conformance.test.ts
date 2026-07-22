@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
-import { Process, WorkPool, Gate } from "../src";
+import { Daemon, WorkPool, Gate } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -62,9 +62,9 @@ const queueOp = Effect.gen(function* () {
   return completed.at(-1) ?? 0;
 });
 
-// ── Process ──────────────────────────────────────────────────────────────────────────────────────
-class ConfProc extends Process.Tag<ConfProc>()("conf/P").pipe(Process.schedule([])) {}
-const procServe = Process.serveMemory(ConfProc, { effect: Effect.void });
+// ── Daemon ──────────────────────────────────────────────────────────────────────────────────────
+class ConfProc extends Daemon.Tag<ConfProc>()("conf/P").pipe(Daemon.schedule([])) {}
+const procServe = Daemon.serveMemory(ConfProc, { effect: Effect.void });
 const procOp = Effect.gen(function* () {
   const proc = yield* ConfProc;
   // read the current snapshot off the changes stream (the ref's replayed head), proving control-plane

@@ -7,7 +7,7 @@
  */
 import { Duration, Effect, Schema } from "effect";
 import * as WorkPool from "../../src/WorkPool";
-import * as Process from "../../src/Process";
+import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as Node from "../../src/Node";
 
@@ -35,7 +35,7 @@ export class Daily extends WorkPool.Tag<Daily>()("@acme/queues/Daily", { payload
 export class Weekly extends WorkPool.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
 
 // a process bound to the Mini node — it runs there, not on the Droplet.
-export class KeyRotation extends Process.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
+export class KeyRotation extends Daemon.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
   node: MiniNode,
 }) {}
 

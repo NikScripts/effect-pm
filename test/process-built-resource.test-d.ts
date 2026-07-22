@@ -1,22 +1,22 @@
 import { Context, Effect } from "effect";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
-import type { ProcessSpec } from "../src/Process";
+import type { DaemonSpec } from "../src/Daemon";
 
-// Type-level proof: Process toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
+// Type-level proof: Daemon toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
 // until `grantLocal` discharges it (same bundle pattern as WorkPool / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
   "hyperlink-ts/test/process-built-resource.test-d/WorkerDep",
 ) {}
 
-class TypedProc extends Process.Tag<TypedProc>()("test/built-resource/Typed") {}
+class TypedProc extends Daemon.Tag<TypedProc>()("test/built-resource/Typed") {}
 
-type Built = Hyperlink.BuiltHyperlink<ProcessSpec, WorkerDep>;
+type Built = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep>;
 
 // `BuiltHyperlink` pairs a requirement-carrying impl with captured worker context.
 type ImplCarriesWorkerDep = Built["impl"] extends Hyperlink.WithRequirement<
-  Hyperlink.ImplOf<ProcessSpec>,
+  Hyperlink.ImplOf<DaemonSpec>,
   WorkerDep
 >
   ? true
@@ -29,17 +29,17 @@ type ContextHasWorkerDep = Built["workerContext"] extends Context.Context<Worker
 true satisfies ContextHasWorkerDep;
 
 // `grantLocal` signature: `BuiltHyperlink<S, R>` in → `ImplOf<S>` out (R stripped from Effect methods).
-type GrantLocalOut = Hyperlink.BuiltHyperlink<ProcessSpec, WorkerDep> extends Parameters<
-  typeof Hyperlink.grantLocal<typeof TypedProc, ProcessSpec, WorkerDep>
+type GrantLocalOut = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep> extends Parameters<
+  typeof Hyperlink.grantLocal<typeof TypedProc, DaemonSpec, WorkerDep>
 >[1]
-  ? ReturnType<typeof Hyperlink.grantLocal<typeof TypedProc, ProcessSpec, WorkerDep>> extends Hyperlink.ImplOf<ProcessSpec>
+  ? ReturnType<typeof Hyperlink.grantLocal<typeof TypedProc, DaemonSpec, WorkerDep>> extends Hyperlink.ImplOf<DaemonSpec>
     ? true
     : false
   : false;
 true satisfies GrantLocalOut;
 
 // Soundness: a plain `ImplOf` is not assignable to `BuiltHyperlink` without the marker.
-type PlainImplIsNotBuilt = Hyperlink.BuiltHyperlink<ProcessSpec, WorkerDep> extends Hyperlink.ImplOf<ProcessSpec>
+type PlainImplIsNotBuilt = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep> extends Hyperlink.ImplOf<DaemonSpec>
   ? false
   : true;
 true satisfies PlainImplIsNotBuilt;

@@ -3,7 +3,7 @@
  *
  * Hand-crafted, per-type dashboard widgets — the building blocks the `<Dashboard>` and its
  * mobile/desktop views compose. Each is driven by a **tag** (its bundle comes from
- * `useQueueBundle` / `useProcessBundle` over the context runtime); the tree is a `Group.Tag`
+ * `useQueueBundle` / `useDaemonBundle` over the context runtime); the tree is a `Group.Tag`
  * walked with `Group.members` / `Group.isGroup`.
  *
  */
@@ -34,8 +34,8 @@ import {
   type GroupNode,
   type LogLine,
   type MetricPoint,
-  type ProcessBundle,
-  type ProcessTag,
+  type DaemonBundle,
+  type DaemonTag,
   type QueueBundle,
   type QueueTag,
   type ScheduleEntry,
@@ -46,7 +46,7 @@ import {
   isTelemetryTag,
   isShardMapTag,
   isRunTag,
-  isProcessTag,
+  isDaemonTag,
   isQueueTag,
   nodesOf,
   leafTags,
@@ -61,7 +61,7 @@ import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind } from "../Gate";
-import { kind as processKind } from "../Process";
+import { kind as processKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import {
   type LeafTag,
@@ -76,7 +76,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../NodeStatus";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useProcessBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -137,7 +137,7 @@ export const StatusBadge = (props: { readonly phase: string; readonly paused: bo
 
 /** Running / stopped pill for a process — from its live `supervising` flag. Shared by the process
  *  card and its detail header. @public */
-export const ProcessStatusBadge = (props: { readonly supervising: boolean | undefined }): React.ReactElement => (
+export const DaemonStatusBadge = (props: { readonly supervising: boolean | undefined }): React.ReactElement => (
   <Badge color={props.supervising === true ? "#22c55e" : "#94a3b8"}>
     {props.supervising === true ? "running" : "stopped"}
   </Badge>
@@ -859,14 +859,14 @@ export const LogStream = (props: {
 // ── process widgets ──────────────────────────────────────────────────────────
 
 /** A process as a grid card — supervision state + active instances. */
-export const ProcessCard = (props: {
-  readonly tag: ProcessTag;
+export const DaemonCard = (props: {
+  readonly tag: DaemonTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: ProcessTag) => void;
+  readonly onOpen: (t: DaemonTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useProcessBundle(props.tag).status);
+  const r = useAtomValue(useDaemonBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
     <button
@@ -878,7 +878,7 @@ export const ProcessCard = (props: {
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
         <strong className="flex-1 truncate">{props.name}</strong>
-        <ProcessStatusBadge supervising={s?.supervising} />
+        <DaemonStatusBadge supervising={s?.supervising} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>{s?.armed === true ? "armed" : "disarmed"}</span>
@@ -890,7 +890,7 @@ export const ProcessCard = (props: {
 };
 
 /** Stat cards from a process's live status. */
-export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+export const DaemonStats = (props: { readonly bundle: DaemonBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
@@ -902,11 +902,11 @@ export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.R
   );
 };
 
-/** Process controls: icon buttons, start/stop folded into one toggle on the live `supervising`
+/** Daemon controls: icon buttons, start/stop folded into one toggle on the live `supervising`
  *  state, a lock, and confirm on stop. The lock is hoisted (one lock guards both these controls
  *  and the {@link ScheduleEditor}), so the caller owns `locked` / `onToggleLock`. */
-export const ProcessControls = (props: {
-  readonly bundle: ProcessBundle;
+export const DaemonControls = (props: {
+  readonly bundle: DaemonBundle;
   readonly locked: boolean;
   readonly onToggleLock: () => void;
 }): React.ReactElement => {
@@ -1048,7 +1048,7 @@ export const WindowDialog = (props: {
  *  optimistically (the schedule reads once on open). Used by both the inline {@link ScheduleEditor}
  *  and the fullscreen week view. */
 export const useScheduleEdit = (
-  bundle: ProcessBundle,
+  bundle: DaemonBundle,
 ): {
   readonly list: ReadonlyArray<ScheduleEntry>;
   readonly addEntry: (entry: ScheduleEntry) => void;
@@ -1164,7 +1164,7 @@ export const WeekSchedule = (props: {
  *  and an expand button to the fullscreen week view, which is where editing (add / remove / clear)
  *  happens. */
 export const ScheduleEditor = (props: {
-  readonly bundle: ProcessBundle;
+  readonly bundle: DaemonBundle;
   readonly onOpenFull?: () => void;
 }): React.ReactElement => {
   const r = useAtomValue(props.bundle.schedule);
@@ -2914,8 +2914,8 @@ const queueWidget: Widget = ({ tag, name, onOpen }) =>
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 const processWidget: Widget = ({ tag, name, onOpen }) =>
-  isProcessTag(tag) ? (
-    <ProcessCard tag={tag} name={name} onOpen={onOpen} />
+  isDaemonTag(tag) ? (
+    <DaemonCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );

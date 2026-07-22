@@ -6,7 +6,7 @@
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process } from "../../../src";
+import { Polling, Daemon } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -16,8 +16,8 @@ const runtime = Layer.mergeAll(
     slowest: "400 millis",
     decay: 0.4,
   }),
-  Process.scheduleInMemory([
-    Process.at("polling-accelerating", utcDateFromMillis(0)),
+  Daemon.scheduleInMemory([
+    Daemon.at("polling-accelerating", utcDateFromMillis(0)),
   ]),
 );
 
@@ -26,10 +26,10 @@ const env = Layer.mergeAll(TestClock.layer(), runtime);
 const program = Effect.gen(function* () {
   const tickCount = yield* Ref.make(0);
 
-  const proc = Process.make("examples/forms/polling/polling-accelerating", {
+  const proc = Daemon.make("examples/forms/polling/polling-accelerating", {
     effect: Ref.update(tickCount, (n) => n + 1),
-    schedule: Process.scheduleInMemory([
-      Process.at("polling-accelerating", utcDateFromMillis(0)),
+    schedule: Daemon.scheduleInMemory([
+      Daemon.at("polling-accelerating", utcDateFromMillis(0)),
     ]),
   });
 

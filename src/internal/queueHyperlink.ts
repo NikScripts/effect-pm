@@ -1102,7 +1102,7 @@ export interface QueueRefill<T, E, EEnqueue, R, A = void> {
 export type WorkPoolConfigWithoutItemSchema<T, E, R> = WorkPoolConfigBase<T> & {
   readonly itemSchema?: undefined;
   /**
-   * Process each item. Receives a guarded {@link EffectContext} for spawning
+   * Daemon each item. Receives a guarded {@link EffectContext} for spawning
    * derived work. The exit of this effect determines success/failure for the item;
    * the success channel is always **`void`**.
    */
@@ -1135,7 +1135,7 @@ export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidation
 export type WorkPoolConfigWithItemSchema<T, E, R, A = void> = WorkPoolConfigBase<T> & {
   readonly itemSchema: Schema.Codec<T, unknown, never, never>;
   /**
-   * Process each item. The **success channel `A`** is driven by the tag's `success` wire schema
+   * Daemon each item. The **success channel `A`** is driven by the tag's `success` wire schema
    * (default `void`): with a `success` schema the worker must return `Effect<A, E, R>` and that
    * value rides `Completed.success` / `store.completed`; without one it stays `Effect<void, E, R>`.
    */
@@ -2645,7 +2645,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // ─── Internal: item processing ───
 
     /**
-     * Process a single item within the semaphore gate.
+     * Daemon a single item within the semaphore gate.
      * 1. Run user's `effect` and capture Exit
      * 2. Increment completed counter
      * 3. Release dedup key
@@ -2811,7 +2811,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
      * 2. Await latch (blocks when paused)
      * 3. Take next item (blocks when all queues empty)
      * 4. Await latch again (in case pause happened during take)
-     * 5. Process item (within semaphore gate)
+     * 5. Daemon item (within semaphore gate)
      *
      * The double latch-await ensures that items taken during a race with
      * `pause` are held until resume, preserving priority ordering.
@@ -2930,7 +2930,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     ): Effect.Effect<void, never, R> =>
       refillConfig === undefined ? Effect.void : refillConfig.load(handle);
 
-    const forkProcessingFibers = Effect.gen(function* () {
+    const forkDaemoningFibers = Effect.gen(function* () {
       if (yield* Ref.get(isShutdownRef)) {
         yield* Effect.logWarning(
           `Queue "${queueName}" start ignored: queue already shut down`,
@@ -3284,7 +3284,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
 
-      start: tapLogs(forkProcessingFibers).pipe(Effect.asVoid),
+      start: tapLogs(forkDaemoningFibers).pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
@@ -3377,7 +3377,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     queueHandleSlot.current = queueHandle;
 
     if (autoStart) {
-      yield* tapLogs(forkProcessingFibers);
+      yield* tapLogs(forkDaemoningFibers);
     }
 
     return queueHandle;

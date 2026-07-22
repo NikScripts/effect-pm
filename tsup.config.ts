@@ -16,7 +16,7 @@ export default defineConfig([
     ...shared,
     entry: {
       index: "src/index.ts",
-      Process: "src/Process.ts",
+      Daemon: "src/Daemon.ts",
       Polling: "src/Polling.ts",
       WorkPool: "src/WorkPool.ts",
       CustomQueueHyperlink: "src/CustomQueueHyperlink.ts",

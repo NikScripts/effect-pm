@@ -4,30 +4,30 @@ import { Duration, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class SqliteExec extends Process.Tag<SqliteExec>()("test/sqlite/Exec") {}
+class SqliteExec extends Daemon.Tag<SqliteExec>()("test/sqlite/Exec") {}
 
-class SqliteTypedFailExec extends Process.Tag<SqliteTypedFailExec>()("test/sqlite/TypedFail", {
+class SqliteTypedFailExec extends Daemon.Tag<SqliteTypedFailExec>()("test/sqlite/TypedFail", {
   error: FetchErr,
 }) {}
 
-class SqliteStore extends Store.Service<SqliteStore>("@test/SqliteProcessStore")(
-  Store.register(SqliteExec, builtInProcessStoreContract(SqliteExec)),
-  Store.register(SqliteTypedFailExec, builtInProcessStoreContract(SqliteTypedFailExec)),
+class SqliteStore extends Store.Service<SqliteStore>("@test/SqliteDaemonStore")(
+  Store.register(SqliteExec, builtInDaemonStoreContract(SqliteExec)),
+  Store.register(SqliteTypedFailExec, builtInDaemonStoreContract(SqliteTypedFailExec)),
 ) {}
 
 const clock = TestClock.layer();
 
-describe("Process.layer — durable SQLite store", () => {
+describe("Daemon.layer — durable SQLite store", () => {
   it.effect("AppStore via Layer.provide — engine writes land on app memory store", () =>
     Effect.gen(function* () {
-      const live = Process.layer(SqliteExec, {
+      const live = Daemon.layer(SqliteExec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       }).pipe(Layer.provideMerge(SqliteStore.layerMemory));
@@ -41,7 +41,7 @@ describe("Process.layer — durable SQLite store", () => {
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
 
-  it.effect("AppStore SQLite via Layer.provide — Process writes survive reconnect", () =>
+  it.effect("AppStore SQLite via Layer.provide — Daemon writes survive reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -54,7 +54,7 @@ describe("Process.layer — durable SQLite store", () => {
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = Process.layer(SqliteExec, {
+          const live = Daemon.layer(SqliteExec, {
             effect: Effect.void,
             polling: Polling.spaced(Duration.millis(50)),
           }).pipe(Layer.provideMerge(SqliteStore.layer({ filename })));

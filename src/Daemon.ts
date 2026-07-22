@@ -1,9 +1,9 @@
 /**
- * **Process** — trigger-driven supervised instances.
+ * **Daemon** — trigger-driven supervised instances.
  *
  * @remarks
  * A started process has a long-lived **driver** fiber that follows
- * {@link ProcessSchedule} entries. Each eligible `startAt` spawns a run instance.
+ * {@link DaemonSchedule} entries. Each eligible `startAt` spawns a run instance.
  * Inside an instance,
  * we repeatedly:
  * 1. check the active entry `stopAt`
@@ -21,33 +21,33 @@
  * Logs, or SQLite):
  *
  * ```ts
- * Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
- * Node.httpServer([Process.serve(Tag, config)]).pipe(Layer.provide(AppStore.layerMemory))
+ * Daemon.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * Node.httpServer([Daemon.serve(Tag, config)]).pipe(Layer.provide(AppStore.layerMemory))
  * ```
  *
  * ## Live `events` (persist == stream)
  *
  * Every engine lifecycle write (`Started` / `Completed` / `Failed` / `Interrupted`) is published to a
  * sliding PubSub **and** appended to the store when one is wired — the same union as
- * {@link processExecutionEvent} / {@link Process.store}. Consume with `yield* proc.events` (Queue-shaped).
+ * {@link processExecutionEvent} / {@link Daemon.store}. Consume with `yield* proc.events` (Queue-shaped).
  * Fan-out may drop under load; the store remains the durable source of truth. Tick / run-body failures
  * emit `Failed` on the stream; manual {@link run} stays the typed RPC failure path.
  *
  * ## Two surfaces, one namespace
  *
- * This module is consumed as an Effect **module namespace** (`export * as Process`), so member
+ * This module is consumed as an Effect **module namespace** (`export * as Daemon`), so member
  * access tree-shakes. It carries two cooperating surfaces:
  * - **Engine** — {@link make} (+ {@link Service}, {@link currentScheduleId}, {@link scheduleControls},
  *   {@link Errors}): construct and run a supervised process directly.
  * - **Hyperlink toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a process as a
- *   {@link Hyperlink}; declare optional {@link ProcessTagOptions.success} and
- *   {@link ProcessTagOptions.error} on {@link Tag} (positional or config object). Use
+ *   {@link Hyperlink}; declare optional {@link DaemonTagOptions.success} and
+ *   {@link DaemonTagOptions.error} on {@link Tag} (positional or config object). Use
  *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over
  *   toolkit's location-transparent layers (the same `yield* Tag` runs local or remote; only the layer
- *   changes). This mirrors `WorkPool`: the light `Process.Tag` path pulls no engine code, and the
+ *   changes). This mirrors `WorkPool`: the light `Daemon.Tag` path pulls no engine code, and the
  *   engine loads only when a runtime verb (`make` / `layer` / `serve`) is referenced.
  *
- * @module Process
+ * @module Daemon
  */
 
 import {
@@ -79,7 +79,7 @@ import {
 } from "./HyperlinkConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import {
-  makeProcessExecutionEvent,
+  makeDaemonExecutionEvent,
   processExecutionEventVoid,
 } from "./internal/processEvent";
 import {
@@ -90,14 +90,14 @@ import {
 } from "./internal/processTagSchemas";
 import { withLogScope } from "./internal/logs/scope";
 import { PollingTag, type PollingService } from "./internal/pollingTag";
-import { ProcessSchedule, ProcessScheduleTag } from "./internal/processSchedule";
+import { DaemonSchedule, DaemonScheduleTag } from "./internal/processSchedule";
 import type {
-  ProcessScheduleEntry,
-  ProcessScheduleService,
+  DaemonScheduleEntry,
+  DaemonScheduleService,
   ReconcileResult,
   ScheduleDefineApi,
 } from "./internal/processSchedule";
-// ── toolkit (Hyperlink) surface — the light contract + heavy layers assembled into `Process` ──
+// ── toolkit (Hyperlink) surface — the light contract + heavy layers assembled into `Daemon` ──
 import * as Hyperlink from "./Hyperlink";
 import { buildRpcGroup, groupSym, specSym } from "./Hyperlink";
 import type {
@@ -117,13 +117,13 @@ import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";
 import {
-  builtInProcessStoreContract,
-  makeProcessStoreAnalyticsContract,
+  builtInDaemonStoreContract,
+  makeDaemonStoreAnalyticsContract,
   processStoreEventSchema,
-  type ProcessStoreAnalyticsContract,
-  type ProcessStoreEvent,
-  type ProcessStoreStartedInput,
-  type ProcessStoreTerminalInput,
+  type DaemonStoreAnalyticsContract,
+  type DaemonStoreEvent,
+  type DaemonStoreStartedInput,
+  type DaemonStoreTerminalInput,
 } from "./internal/store/processStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
 import type { StoreShapes } from "./internal/store/contractDef";
@@ -139,7 +139,7 @@ import type { StoreShapes } from "./internal/store/contractDef";
  * @category models
  * @public
  */
-export interface ProcessSnapshot {
+export interface DaemonSnapshot {
   /** Whether the schedule currently places the process in a run window (derived from entries). */
   readonly armed: boolean;
   /** How many run instances are executing right now. */
@@ -165,17 +165,17 @@ export interface ProcessSnapshot {
 /**
  * Managed process handle for the process manager.
  *
- * @typeParam R — Environment required to run {@link Process.effect} (after optional inline layers).
+ * @typeParam R — Environment required to run {@link Daemon.effect} (after optional inline layers).
  *
  * @category models
  * @public
  */
-export interface Process<out R> {
+export interface Daemon<out R> {
   readonly name: string;
   readonly type: "managed";
   /**
    * Long-running trigger driver that spawns run instances.
-   * Execution history is recorded on the **`Process.layer`** path via the baked-in default store
+   * Execution history is recorded on the **`Daemon.layer`** path via the baked-in default store
    * (override with an app {@link Store.Service} at the root). The direct **`make`** path does not
    * persist runs.
    */
@@ -189,15 +189,15 @@ export interface Process<out R> {
    * One-shot read of the runtime mirror (armed / active instances / next trigger / next schedule
    * transition / poll cadence). Drives the toolkit contract's `status` ref (`status.get` /
    * `status.changes`). Reads the supervisor's live mirror, so it reflects state regardless of who
-   * forked {@link Process.effect}.
+   * forked {@link Daemon.effect}.
    */
-  readonly snapshot: Effect.Effect<ProcessSnapshot>;
+  readonly snapshot: Effect.Effect<DaemonSnapshot>;
   /**
    * Live fan-out of execution lifecycle facts (`Started` / `Completed` / `Failed` / `Interrupted`).
-   * Same union as the durable {@link Process.store} journal — every publish also records when a
+   * Same union as the durable {@link Daemon.store} journal — every publish also records when a
    * store is wired. Sliding buffer: subscribe before runs you care about; the store is durable SSOT.
    */
-  readonly events: Stream.Stream<ProcessLiveEvent>;
+  readonly events: Stream.Stream<DaemonLiveEvent>;
   /**
    * Cadence controls over the RUNNING supervisor's polling service. `wake` ends the current
    * polling wait immediately (the next tick runs now; cadence unchanged); `resetCadence`
@@ -223,11 +223,11 @@ export interface Process<out R> {
  * @category models
  * @public
  */
-export interface ProcessDefinition<out Id extends string, out R>
+export interface DaemonDefinition<out Id extends string, out R>
 {
   readonly id: Id;
   readonly kind: "process";
-  readonly process: Process<R>;
+  readonly process: Daemon<R>;
 }
 
 /**
@@ -240,43 +240,43 @@ export interface ProcessDefinition<out Id extends string, out R>
  * @category models
  * @public
  */
-export interface ProcessServiceDefinition<Self, Id extends string, E, R>
-  extends Context.ServiceClass<Self, Id, Process<R>>,
-    ProcessDefinition<Id, R> {
-  readonly tag: Context.Key<Self, Process<R>>;
+export interface DaemonServiceDefinition<Self, Id extends string, E, R>
+  extends Context.ServiceClass<Self, Id, Daemon<R>>,
+    DaemonDefinition<Id, R> {
+  readonly tag: Context.Key<Self, Daemon<R>>;
   readonly layer: Layer.Layer<Self>;
   /**
    * Factory defaults before {@link configure} layers (see `HyperlinkConfigure` module).
    */
-  readonly defaultSpec: ProcessMakeOptions<E, R>;
+  readonly defaultSpec: DaemonMakeOptions<E, R>;
   /**
    * Append a configure patch; merge with {@link layer} via `Layer.provideMerge`.
    */
   readonly configure: (
-    patch: ConfigPatch<ProcessMakeOptions<E, R>>,
+    patch: ConfigPatch<DaemonMakeOptions<E, R>>,
   ) => Layer.Layer<never>;
   /**
    * Patch only the supervised repeat `effect`: `fn(previous) => next`.
    */
   readonly wrapEffect: (
     fn: (
-      previous: ProcessMakeOptions<E, R>["effect"],
-    ) => ProcessMakeOptions<E, R>["effect"],
+      previous: DaemonMakeOptions<E, R>["effect"],
+    ) => DaemonMakeOptions<E, R>["effect"],
   ) => Layer.Layer<never>;
   /**
-   * {@link Process} built from {@link defaultSpec} after folding configure patches.
+   * {@link Daemon} built from {@link defaultSpec} after folding configure patches.
    * the process manager uses this when assembling the group runtime.
    */
-  readonly buildConfiguredProcess: Effect.Effect<Process<R>>;
+  readonly buildConfiguredDaemon: Effect.Effect<Daemon<R>>;
 }
 
 /**
- * Extract service requirements from a {@link Process} handle.
+ * Extract service requirements from a {@link Daemon} handle.
  *
  * @category models
  * @public
  */
-export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : never;
+export type DaemonEffectRequirements<P> = P extends Daemon<infer R> ? R : never;
 
 /**
  * Context for the currently running scheduled window.
@@ -284,32 +284,32 @@ export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : neve
  * @category models
  * @public
  */
-export interface ProcessScheduleContext {
+export interface DaemonScheduleContext {
   readonly id: Option.Option<string>;
 }
 
-class ProcessScheduleContextTag extends Context.Service<
-  ProcessScheduleContextTag,
-  ProcessScheduleContext
->()("hyperlink-ts/Process/ProcessScheduleContextTag") {}
+class DaemonScheduleContextTag extends Context.Service<
+  DaemonScheduleContextTag,
+  DaemonScheduleContext
+>()("hyperlink-ts/Daemon/DaemonScheduleContextTag") {}
 
-class ProcessScheduleControlsTag extends Context.Service<
-  ProcessScheduleControlsTag,
-  ProcessScheduleControls
->()("hyperlink-ts/Process/ProcessScheduleControlsTag") {}
+class DaemonScheduleControlsTag extends Context.Service<
+  DaemonScheduleControlsTag,
+  DaemonScheduleControls
+>()("hyperlink-ts/Daemon/DaemonScheduleControlsTag") {}
 
 /**
  * Identifier attached to the schedule entry that started the current run.
  *
  * @remarks
- * - For scheduled runs: value from `ProcessScheduleEntry.id`
+ * - For scheduled runs: value from `DaemonScheduleEntry.id`
  * - For manual toolkit {@link run}: `Option.none()`
  *
  * @category schedule
  * @public
  */
 export const currentScheduleId: Effect.Effect<Option.Option<string>, never, never> =
-  Effect.serviceOption(ProcessScheduleContextTag).pipe(
+  Effect.serviceOption(DaemonScheduleContextTag).pipe(
     Effect.map(
       Option.match({
         onNone: () => Option.none(),
@@ -323,14 +323,14 @@ export const currentScheduleId: Effect.Effect<Option.Option<string>, never, neve
  *
  * @remarks
  * Available from both:
- * - `Process.make(id, { schedule: (controls) => ... })`
+ * - `Daemon.make(id, { schedule: (controls) => ... })`
  * - inside the process `effect` via this accessor.
  *
  * @category schedule
  * @public
  */
-export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, never> =
-  Effect.serviceOption(ProcessScheduleControlsTag).pipe(
+export const scheduleControls: Effect.Effect<DaemonScheduleControls, never, never> =
+  Effect.serviceOption(DaemonScheduleControlsTag).pipe(
     Effect.map(
       Option.match({
         onNone: () => ({
@@ -349,52 +349,52 @@ export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, nev
 // ============================================================================
 
 /**
- * @public Thrown when a positional {@link Process.make} argument is not a recognized preset layer or schedule initializer.
+ * @public Thrown when a positional {@link Daemon.make} argument is not a recognized preset layer or schedule initializer.
  *
  * @category errors
  * @public
  */
-export class ProcessMakeInvalidLayerArgument extends Data.TaggedError("ProcessMakeInvalidLayerArgument")<{
+export class DaemonMakeInvalidLayerArgument extends Data.TaggedError("DaemonMakeInvalidLayerArgument")<{
   /** 1-based index of the invalid argument (`3` or `4`). */
   readonly argumentIndex: 3 | 4;
   readonly reason: string;
 }> {}
 
 /**
- * @public Optional polling layer argument to {@link Process.make}.
+ * @public Optional polling layer argument to {@link Daemon.make}.
  *
  * @category models
  * @public
  */
-export type ProcessPollingInput = Layer.Layer<PollingTag, never, never>;
+export type DaemonPollingInput = Layer.Layer<PollingTag, never, never>;
 
 /**
- * @public Optional schedule layer argument to {@link Process.make}.
+ * @public Optional schedule layer argument to {@link Daemon.make}.
  *
  * @category models
  * @public
  */
-export type ProcessScheduleLayerInput = Layer.Layer<ProcessScheduleTag, never, never>;
+export type DaemonScheduleLayerInput = Layer.Layer<DaemonScheduleTag, never, never>;
 
 /**
- * @public Optional schedule layer or initializer argument to {@link Process.make}.
+ * @public Optional schedule layer or initializer argument to {@link Daemon.make}.
  *
  * @category models
  * @public
  */
-export type ProcessScheduleInput<R = never> =
-  | ProcessScheduleLayerInput
-  | ProcessScheduleInitializer<R>;
+export type DaemonScheduleInput<R = never> =
+  | DaemonScheduleLayerInput
+  | DaemonScheduleInitializer<R>;
 
-type AnyPollingLayer = ProcessPollingInput;
-type AnyScheduleLayer = ProcessScheduleLayerInput;
+type AnyPollingLayer = DaemonPollingInput;
+type AnyScheduleLayer = DaemonScheduleLayerInput;
 
-type ProcessMakeLayerArg<RUser> =
+type DaemonMakeLayerArg<RUser> =
   | AnyPollingLayer
   | AnyScheduleLayer
-  | ProcessScheduleInitializer<RUser>;
+  | DaemonScheduleInitializer<RUser>;
 
-interface ProcessMirror {
+interface DaemonMirror {
   readonly armed: MutableRef.MutableRef<boolean>;
   readonly nextScheduleTransition: MutableRef.MutableRef<Option.Option<Date>>;
   readonly nextPollCadence: MutableRef.MutableRef<Option.Option<Duration.Duration>>;
@@ -411,31 +411,31 @@ interface ProcessMirror {
 
 /**
  * Engine-facing process store recorder — Storage-free writes at run boundaries.
- * Built in {@link buildProcessImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
+ * Built in {@link buildDaemonImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
  * `Storage` discharged once via {@link Store.provideContext} (queue / run-resource golden pattern).
  * @internal
  */
-interface ProcessStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
-  readonly record: (event: ProcessStoreEvent<Tag>) => Effect.Effect<void>;
+interface DaemonStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
+  readonly record: (event: DaemonStoreEvent<Tag>) => Effect.Effect<void>;
   readonly hasPriorExecutions: () => Effect.Effect<boolean>;
 }
 
 /**
- * One process execution lifecycle fact — shared by live {@link Process.events} and durable store
+ * One process execution lifecycle fact — shared by live {@link Daemon.events} and durable store
  * rows (`Started` | `Completed` | `Failed` | `Interrupted`). Tag-stamped `success` / `error`
  * ride `Completed.success?` / `Failed.error` the same way on both surfaces.
  *
  * @category models
  * @public
  */
-export type ProcessLiveEvent = ProcessStoreEvent;
+export type DaemonLiveEvent = DaemonStoreEvent;
 
-interface ProcessBuildStateBase<E, RUser> {
+interface DaemonBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
-  readonly scheduleInitializer?: ProcessScheduleInitializer<RUser>;
+  readonly scheduleInitializer?: DaemonScheduleInitializer<RUser>;
   /** @internal Store recorder when built via {@link layer}. */
-  readonly store?: ProcessStoreWriter;
+  readonly store?: DaemonStoreWriter;
   /** @internal Tag SSOT for store wire schemas when {@link store} is wired. */
   readonly storeScopeTag?: StoreScopeTag;
   /** @internal Latest success value for store capture when the tag stamps `success`. */
@@ -448,63 +448,63 @@ interface ProcessBuildStateBase<E, RUser> {
  * @category models
  * @public
  */
-export interface ProcessScheduleControls {
-  readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
+export interface DaemonScheduleControls {
+  readonly entries: Effect.Effect<ReadonlyArray<DaemonScheduleEntry>, never, never>;
   readonly set: (
-    entries: ReadonlyArray<ProcessScheduleEntry>,
+    entries: ReadonlyArray<DaemonScheduleEntry>,
   ) => Effect.Effect<void, never, never>;
   readonly add: (
-    entry: ProcessScheduleEntry,
+    entry: DaemonScheduleEntry,
   ) => Effect.Effect<void, never, never>;
   readonly clear: Effect.Effect<void, never, never>;
 }
 
 /**
- * A function that seeds a process's schedule via its {@link ProcessScheduleControls}.
+ * A function that seeds a process's schedule via its {@link DaemonScheduleControls}.
  *
  * @category models
  * @public
  */
-export type ProcessScheduleInitializer<R = never> = (
-  controls: ProcessScheduleControls,
+export type DaemonScheduleInitializer<R = never> = (
+  controls: DaemonScheduleControls,
 ) => Effect.Effect<void, never, R>;
 
-type ProcessBuildStateWithPollingAndSchedule<E, RUser> =
-  & ProcessBuildStateBase<E, RUser>
+type DaemonBuildStateWithPollingAndSchedule<E, RUser> =
+  & DaemonBuildStateBase<E, RUser>
   & {
     readonly pollingLayer: AnyPollingLayer;
     readonly scheduleLayer: AnyScheduleLayer;
   };
 
-type ProcessBuildStateWithPolling<E, RUser> =
-  & ProcessBuildStateBase<E, RUser>
+type DaemonBuildStateWithPolling<E, RUser> =
+  & DaemonBuildStateBase<E, RUser>
   & {
     readonly pollingLayer: AnyPollingLayer;
     readonly scheduleLayer?: undefined;
   };
 
-type ProcessBuildStateWithSchedule<E, RUser> =
-  & ProcessBuildStateBase<E, RUser>
+type DaemonBuildStateWithSchedule<E, RUser> =
+  & DaemonBuildStateBase<E, RUser>
   & {
     readonly pollingLayer?: undefined;
     readonly scheduleLayer: AnyScheduleLayer;
   };
 
-type ProcessBuildStateWithoutStepLayers<E, RUser> =
-  & ProcessBuildStateBase<E, RUser>
+type DaemonBuildStateWithoutStepLayers<E, RUser> =
+  & DaemonBuildStateBase<E, RUser>
   & {
     readonly pollingLayer?: undefined;
     readonly scheduleLayer?: undefined;
   };
 
-type AnyProcessBuildState<E, RUser> =
-  | ProcessBuildStateWithPollingAndSchedule<E, RUser>
-  | ProcessBuildStateWithPolling<E, RUser>
-  | ProcessBuildStateWithSchedule<E, RUser>
-  | ProcessBuildStateWithoutStepLayers<E, RUser>;
+type AnyDaemonBuildState<E, RUser> =
+  | DaemonBuildStateWithPollingAndSchedule<E, RUser>
+  | DaemonBuildStateWithPolling<E, RUser>
+  | DaemonBuildStateWithSchedule<E, RUser>
+  | DaemonBuildStateWithoutStepLayers<E, RUser>;
 
 const writeScheduleMirror = (
-  mirror: ProcessMirror,
+  mirror: DaemonMirror,
   st: { readonly armed: boolean; readonly nextScheduleTransition: Option.Option<Date> },
   nextPollCadence: Option.Option<Duration.Duration>,
 ): void => {
@@ -513,29 +513,29 @@ const writeScheduleMirror = (
   MutableRef.set(mirror.nextPollCadence, nextPollCadence);
 };
 
-function createProcess<E, RUser>(
-  state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,
-): Process<RUser>;
-function createProcess<E, RUser>(
-  state: ProcessBuildStateWithPolling<E, RUser>,
-): Process<RUser>;
-function createProcess<E, RUser>(
-  state: ProcessBuildStateWithSchedule<E, RUser>,
-): Process<RUser>;
-function createProcess<E, RUser>(
-  state: ProcessBuildStateWithoutStepLayers<E, RUser>,
-): Process<RUser>;
-function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
+function createDaemon<E, RUser>(
+  state: DaemonBuildStateWithPollingAndSchedule<E, RUser>,
+): Daemon<RUser>;
+function createDaemon<E, RUser>(
+  state: DaemonBuildStateWithPolling<E, RUser>,
+): Daemon<RUser>;
+function createDaemon<E, RUser>(
+  state: DaemonBuildStateWithSchedule<E, RUser>,
+): Daemon<RUser>;
+function createDaemon<E, RUser>(
+  state: DaemonBuildStateWithoutStepLayers<E, RUser>,
+): Daemon<RUser>;
+function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   const toScheduleControls = (
-    schedule: ProcessScheduleService,
-  ): ProcessScheduleControls => ({
+    schedule: DaemonScheduleService,
+  ): DaemonScheduleControls => ({
     entries: schedule.entries,
     set: (entries) => schedule.set(entries),
     add: (entry) => schedule.add(entry),
     clear: schedule.clear,
   });
 
-  const noScheduleControls: ProcessScheduleControls = {
+  const noScheduleControls: DaemonScheduleControls = {
     entries: Effect.succeed([]),
     set: () => Effect.void,
     add: () => Effect.void,
@@ -549,7 +549,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   // regardless of who forked the driver (same contract as the status mirror).
   const pollingRef = MutableRef.make<Option.Option<PollingService>>(Option.none());
 
-  const mirror: ProcessMirror = {
+  const mirror: DaemonMirror = {
     armed: MutableRef.make(false),
     nextScheduleTransition: MutableRef.make<Option.Option<Date>>(Option.none()),
     nextPollCadence: MutableRef.make<Option.Option<Duration.Duration>>(Option.none()),
@@ -563,7 +563,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   };
 
   const whenStore = (
-    write: (recorder: ProcessStoreWriter) => Effect.Effect<void>,
+    write: (recorder: DaemonStoreWriter) => Effect.Effect<void>,
   ): Effect.Effect<void> =>
     store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
@@ -572,13 +572,13 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   // Sliding PubSub: publishing never blocks the driver (drops oldest when a subscriber lags).
   // Guaranteed delivery stays on the durable store — persist == stream at the source (Queue pattern).
   //
-  // `Process.make` is sync (unlike Queue's Effect-scoped `make`), so we allocate the hub with
+  // `Daemon.make` is sync (unlike Queue's Effect-scoped `make`), so we allocate the hub with
   // `Effect.runSync`. In Effect v4, `PubSub.sliding` is an `Effect.sync` constructor with **no**
-  // Scope requirement — this is not a scoped leak. Prefer this over making `Process.make`
+  // Scope requirement — this is not a scoped leak. Prefer this over making `Daemon.make`
   // Effect-returning solely for hub allocation.
-  const eventsHub = Effect.runSync(PubSub.sliding<ProcessLiveEvent>(1024));
+  const eventsHub = Effect.runSync(PubSub.sliding<DaemonLiveEvent>(1024));
 
-  const terminalRow = (input: ProcessStoreTerminalInput) => ({
+  const terminalRow = (input: DaemonStoreTerminalInput) => ({
     key: resourceKey,
     scheduleKey: input.scheduleKey,
     startedAt: input.startedAt,
@@ -588,13 +588,13 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   });
 
   /** Publish to live `events` and append to the store when wired — one path, one union. */
-  const publishExecutionEvent = (event: ProcessLiveEvent): Effect.Effect<void> =>
+  const publishExecutionEvent = (event: DaemonLiveEvent): Effect.Effect<void> =>
     Effect.gen(function* () {
       yield* PubSub.publish(eventsHub, event);
       yield* whenStore((recorder) => recorder.record(event));
     });
 
-  const recordStoreStarted = (args: ProcessStoreStartedInput): Effect.Effect<void> =>
+  const recordStoreStarted = (args: DaemonStoreStartedInput): Effect.Effect<void> =>
     publishExecutionEvent({
       _tag: "Started",
       key: resourceKey,
@@ -604,7 +604,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     });
 
   const recordStoreCompleted = (
-    args: ProcessStoreTerminalInput & { readonly success?: unknown },
+    args: DaemonStoreTerminalInput & { readonly success?: unknown },
   ): Effect.Effect<void> =>
     publishExecutionEvent({
       _tag: "Completed",
@@ -628,7 +628,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           : String(args.error),
     });
 
-  const recordStoreInterrupted = (args: ProcessStoreTerminalInput): Effect.Effect<void> =>
+  const recordStoreInterrupted = (args: DaemonStoreTerminalInput): Effect.Effect<void> =>
     publishExecutionEvent({
       _tag: "Interrupted",
       ...terminalRow(args),
@@ -641,7 +641,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
-    controls: ProcessScheduleControls,
+    controls: DaemonScheduleControls,
   ): Effect.Effect<unknown, E, RUser> =>
     Effect.gen(function* () {
       const executedAt = yield* Clock.currentTimeMillis;
@@ -660,10 +660,10 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       });
 
       const runUserEffect = userEffect.pipe(
-        Effect.provideService(ProcessScheduleContextTag, {
+        Effect.provideService(DaemonScheduleContextTag, {
           id: scheduleIdentifier,
         }),
-        Effect.provideService(ProcessScheduleControlsTag, controls),
+        Effect.provideService(DaemonScheduleControlsTag, controls),
         Effect.onInterrupt(() =>
           Effect.uninterruptible(
             Effect.gen(function* () {
@@ -679,7 +679,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
                 isStartupRun,
               });
               yield* Effect.logDebug(
-                `⏹ Process '${name}' run interrupted at ${String(executedAt)}`,
+                `⏹ Daemon '${name}' run interrupted at ${String(executedAt)}`,
               );
             }),
           ),
@@ -712,7 +712,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
               isStartupRun,
             });
             yield* Effect.logError(
-              `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
+              `❌ Daemon '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
             );
             return yield* Effect.fail(error as E);
           }
@@ -740,7 +740,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
               : {}),
           });
           yield* Effect.logDebug(
-            `✅ Process '${name}' run completed at ${String(executedAt)}`,
+            `✅ Daemon '${name}' run completed at ${String(executedAt)}`,
           );
           return successValue;
         }),
@@ -756,7 +756,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   };
 
   const summarizeScheduleState = (
-    entries: ReadonlyArray<ProcessScheduleEntry>,
+    entries: ReadonlyArray<DaemonScheduleEntry>,
     now: Date,
   ): {
     readonly armed: boolean;
@@ -795,7 +795,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   };
 
   const refreshScheduleMirror = (
-    entries: ReadonlyArray<ProcessScheduleEntry>,
+    entries: ReadonlyArray<DaemonScheduleEntry>,
   ): Effect.Effect<void, never, Clock.Clock> =>
     Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis;
@@ -812,7 +812,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   }
 
   const entryKeyFrom = (
-    entry: ProcessScheduleEntry,
+    entry: DaemonScheduleEntry,
     index: number,
   ): string => {
     const stopPart = Option.match(entry.stopAt, {
@@ -824,11 +824,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   interface MaterializedEntry {
     readonly key: string;
-    readonly entry: ProcessScheduleEntry;
+    readonly entry: DaemonScheduleEntry;
   }
 
   const materializeEntries = (
-    entries: ReadonlyArray<ProcessScheduleEntry>,
+    entries: ReadonlyArray<DaemonScheduleEntry>,
   ): ReadonlyArray<MaterializedEntry> =>
     entries.map((entry, index) => ({
       key: entryKeyFrom(entry, index),
@@ -841,9 +841,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const spawnEntryInstance = (
     key: string,
-    entry: ProcessScheduleEntry,
-    controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
+    entry: DaemonScheduleEntry,
+    controls: DaemonScheduleControls,
+  ): Effect.Effect<void, never, RUser | PollingTag | DaemonScheduleTag | Clock.Clock> =>
     Effect.gen(function* () {
       if (MutableRef.get(runningByEntry).has(key)) {
         return;
@@ -874,7 +874,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             return;
           }
 
-          const schedule = yield* ProcessSchedule;
+          const schedule = yield* DaemonSchedule;
           const entries = yield* schedule.entries;
           yield* refreshScheduleMirror(entries);
           const cadencePeek = yield* polling.peekCadence;
@@ -926,9 +926,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const scheduleFutureEntry = (
     key: string,
-    entry: ProcessScheduleEntry,
-    controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
+    entry: DaemonScheduleEntry,
+    controls: DaemonScheduleControls,
+  ): Effect.Effect<void, never, RUser | PollingTag | DaemonScheduleTag | Clock.Clock> =>
     Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis;
       const delayMs = entry.startAt.getTime() - nowMillis;
@@ -962,9 +962,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const reconcileSchedules: Effect.Effect<
     void,
     never,
-    RUser | PollingTag | ProcessScheduleTag | Clock.Clock
+    RUser | PollingTag | DaemonScheduleTag | Clock.Clock
   > = Effect.gen(function* () {
-    const schedule = yield* ProcessSchedule;
+    const schedule = yield* DaemonSchedule;
     const controls = toScheduleControls(schedule);
     const entries = yield* schedule.entries;
     yield* refreshScheduleMirror(entries);
@@ -1028,9 +1028,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const supervisedCore: Effect.Effect<
     void,
     never,
-    RUser | PollingTag | ProcessScheduleTag | Clock.Clock
+    RUser | PollingTag | DaemonScheduleTag | Clock.Clock
   > = Effect.gen(function* () {
-    const schedule = yield* ProcessSchedule;
+    const schedule = yield* DaemonSchedule;
     const controls = toScheduleControls(schedule);
     if (state.scheduleInitializer !== undefined) {
       yield* state.scheduleInitializer(controls);
@@ -1051,7 +1051,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       return result;
     });
 
-  const snapshot: Effect.Effect<ProcessSnapshot> = Effect.sync(() => ({
+  const snapshot: Effect.Effect<DaemonSnapshot> = Effect.sync(() => ({
     armed: MutableRef.get(mirror.armed),
     activeInstances: MutableRef.get(mirror.activeInstances),
     nextTriggerRun: MutableRef.get(mirror.nextTriggerRun),
@@ -1064,7 +1064,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     lastRunDurationMillis: MutableRef.get(mirror.lastRunDurationMillis),
   }));
 
-  const events: Stream.Stream<ProcessLiveEvent> = Stream.fromPubSub(eventsHub);
+  const events: Stream.Stream<DaemonLiveEvent> = Stream.fromPubSub(eventsHub);
 
   const withPolling = (use: (svc: PollingService) => Effect.Effect<void>): Effect.Effect<void> =>
     Effect.suspend(() =>
@@ -1085,9 +1085,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     },
   };
 
-  const annotateProcessLogs = (
-    effect: Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock>,
-  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
+  const annotateDaemonLogs = (
+    effect: Effect.Effect<void, never, RUser | PollingTag | DaemonScheduleTag | Clock.Clock>,
+  ): Effect.Effect<void, never, RUser | PollingTag | DaemonScheduleTag | Clock.Clock> =>
     withLogScope({ key: name })(effect);
 
   // Provide whichever step layers are present (polling / schedule), forwarding the residual `RUser`.
@@ -1095,7 +1095,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   // `strictEffectProvide` reserves the layer form for entry points). Inlined rather than routed through
   // a generic helper on purpose — with `supervisedCore`/`stepLayer` concrete here the residual
   // `Exclude<…, ROut>` computes to a real union, so `missingEffectContext` sees it's forwarded, not
-  // leaked; on the generic helper it couldn't tell the two apart and false-flagged. `annotateProcessLogs`
+  // leaked; on the generic helper it couldn't tell the two apart and false-flagged. `annotateDaemonLogs`
   // then widens back to the full union, so that residual precision is never observed downstream anyway.
   const stepLayer =
     state.pollingLayer !== undefined && state.scheduleLayer !== undefined
@@ -1103,7 +1103,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       : state.pollingLayer ?? state.scheduleLayer ?? Layer.empty;
   return {
     ...base,
-    effect: annotateProcessLogs(
+    effect: annotateDaemonLogs(
       Effect.scoped(
         Effect.flatMap(Layer.build(stepLayer), (context) => {
           MutableRef.set(pollingRef, Context.getOption(context, PollingTag));
@@ -1121,8 +1121,8 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 // ============================================================================
 
 /**
- * Services still required at the fork site for {@link Process.effect} for a given
- * {@link ProcessMakeConfig}.
+ * Services still required at the fork site for {@link Daemon.effect} for a given
+ * {@link DaemonMakeConfig}.
  *
  * @category models
  * @public
@@ -1130,24 +1130,24 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 // `E` is covariant in `Effect.Effect<void, E, RUser>` (top = `unknown`),
 // `RUser` is contravariant (top = `never`); using these as the upper bound
 // makes the constraint variance-correct without resorting to `any`.
-export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<unknown, never>> =
-  C extends ProcessMakeOptions<infer _E, infer RUser>
+export type DaemonSupervisorRequirements<C extends DaemonMakeOptions<unknown, never>> =
+  C extends DaemonMakeOptions<infer _E, infer RUser>
     ? RUser
     : never;
 
 /**
- * Configuration for {@link Process.make} when using the config-object form (id is separate).
+ * Configuration for {@link Daemon.make} when using the config-object form (id is separate).
  *
  * @category models
  * @public
  */
-export interface ProcessMakeOptions<E, RUser> {
+export interface DaemonMakeOptions<E, RUser> {
   readonly effect: Effect.Effect<void, E, RUser>;
   /**
    * @internal Wired by {@link layer} for store-backed execution history.
    * Not part of the public {@link make} API.
    */
-  readonly _store?: ProcessStoreWriter;
+  readonly _store?: DaemonStoreWriter;
   /** @internal Tag SSOT paired with {@link _store}. */
   readonly _storeScopeTag?: StoreScopeTag;
   /** @internal Success ref paired with value-returning layer builds. */
@@ -1157,50 +1157,50 @@ export interface ProcessMakeOptions<E, RUser> {
   /**
    * Optional schedule layer or initializer.
    *
-   * When omitted, defaults to {@link ProcessSchedule.alwaysArmed}. Use
-   * {@link ProcessSchedule.empty} or {@link ProcessSchedule.inMemory} for an
+   * When omitted, defaults to {@link DaemonSchedule.alwaysArmed}. Use
+   * {@link DaemonSchedule.empty} or {@link DaemonSchedule.inMemory} for an
    * empty store (disarmed until entries are added).
    */
-  readonly schedule?: ProcessScheduleInitializer<RUser> | AnyScheduleLayer;
+  readonly schedule?: DaemonScheduleInitializer<RUser> | AnyScheduleLayer;
   /**
    * Explicit schedule service layer. When set, takes precedence over `schedule`.
    *
    * When both `schedule` and `scheduleLayer` are omitted,
-   * {@link ProcessSchedule.alwaysArmed} is used.
+   * {@link DaemonSchedule.alwaysArmed} is used.
    */
   readonly scheduleLayer?: AnyScheduleLayer;
 }
 
-/** @internal Resolved id + {@link ProcessMakeOptions} for supervisor wiring. */
-export type ProcessMakeConfig<E, RUser> = ProcessMakeOptions<E, RUser> & {
+/** @internal Resolved id + {@link DaemonMakeOptions} for supervisor wiring. */
+export type DaemonMakeConfig<E, RUser> = DaemonMakeOptions<E, RUser> & {
   readonly name: string;
 };
 
 const resolveScheduleLayer = <E, RUser>(
-  config: Pick<ProcessMakeOptions<E, RUser>, "schedule" | "scheduleLayer">,
+  config: Pick<DaemonMakeOptions<E, RUser>, "schedule" | "scheduleLayer">,
 ): AnyScheduleLayer => {
   if (config.scheduleLayer !== undefined) {
     return config.scheduleLayer;
   }
   if (typeof config.schedule === "function") {
-    return ProcessSchedule.inMemory();
+    return DaemonSchedule.inMemory();
   }
   if (config.schedule !== undefined) {
     return config.schedule;
   }
-  return ProcessSchedule.alwaysArmed;
+  return DaemonSchedule.alwaysArmed;
 };
 
-const buildProcess = <E, RUser>(
+const buildDaemon = <E, RUser>(
   name: string,
-  config: ProcessMakeOptions<E, RUser>,
-): Process<RUser> => {
+  config: DaemonMakeOptions<E, RUser>,
+): Daemon<RUser> => {
   const scheduleInitializer = typeof config.schedule === "function"
     ? config.schedule
     : undefined;
   const scheduleLayer = resolveScheduleLayer(config);
   if (config.polling !== undefined) {
-    return createProcess({
+    return createDaemon({
       name,
       userEffect: config.effect,
       pollingLayer: config.polling,
@@ -1211,7 +1211,7 @@ const buildProcess = <E, RUser>(
       resultRef: config._resultRef,
     });
   }
-  return createProcess({
+  return createDaemon({
     name,
     userEffect: config.effect,
     scheduleLayer,
@@ -1223,15 +1223,15 @@ const buildProcess = <E, RUser>(
 };
 
 const collectPollingAndSchedule = <RUser>(
-  third?: ProcessMakeLayerArg<RUser>,
-  fourth?: ProcessMakeLayerArg<RUser>,
-): Pick<ProcessMakeOptions<never, RUser>, "polling" | "schedule" | "scheduleLayer"> => {
+  third?: DaemonMakeLayerArg<RUser>,
+  fourth?: DaemonMakeLayerArg<RUser>,
+): Pick<DaemonMakeOptions<never, RUser>, "polling" | "schedule" | "scheduleLayer"> => {
   let polling: AnyPollingLayer | undefined;
-  let schedule: ProcessScheduleInitializer<RUser> | undefined;
+  let schedule: DaemonScheduleInitializer<RUser> | undefined;
   let scheduleLayer: AnyScheduleLayer | undefined;
 
   const fail = (argumentIndex: 3 | 4, reason: string): never => {
-    throw new ProcessMakeInvalidLayerArgument({ argumentIndex, reason });
+    throw new DaemonMakeInvalidLayerArgument({ argumentIndex, reason });
   };
 
   for (const [index, arg] of [[3, third], [4, fourth]] as const) {
@@ -1267,7 +1267,7 @@ const collectPollingAndSchedule = <RUser>(
     }
     fail(
       index,
-      "expected a Polling preset layer, ProcessSchedule preset layer, or schedule initializer function",
+      "expected a Polling preset layer, DaemonSchedule preset layer, or schedule initializer function",
     );
   }
 
@@ -1278,11 +1278,11 @@ const collectPollingAndSchedule = <RUser>(
   };
 };
 
-const resolveProcessMakeConfig = <E, RUser>(
-  effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
-  third?: ProcessMakeLayerArg<RUser>,
-  fourth?: ProcessMakeLayerArg<RUser>,
-): ProcessMakeOptions<E, RUser> => {
+const resolveDaemonMakeConfig = <E, RUser>(
+  effectOrConfig: Effect.Effect<void, E, RUser> | DaemonMakeOptions<E, RUser>,
+  third?: DaemonMakeLayerArg<RUser>,
+  fourth?: DaemonMakeLayerArg<RUser>,
+): DaemonMakeOptions<E, RUser> => {
   if (Effect.isEffect(effectOrConfig)) {
     return {
       effect: effectOrConfig,
@@ -1293,7 +1293,7 @@ const resolveProcessMakeConfig = <E, RUser>(
 };
 
 /**
- * Create a managed {@link Process}.
+ * Create a managed {@link Daemon}.
  *
  * @category constructors
  * @public
@@ -1301,57 +1301,57 @@ const resolveProcessMakeConfig = <E, RUser>(
 function make<const Id extends string, E, RUser>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
-): Process<RUser>;
+): Daemon<RUser>;
 function make<const Id extends string, E, RUser>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
   polling: AnyPollingLayer,
-): Process<RUser>;
+): Daemon<RUser>;
 function make<const Id extends string, E, RUser>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
   schedule: AnyScheduleLayer,
-): Process<RUser>;
+): Daemon<RUser>;
 function make<const Id extends string, E, RUser, RSchedule>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
-  schedule: ProcessScheduleInitializer<RSchedule>,
-): Process<RUser | RSchedule>;
+  schedule: DaemonScheduleInitializer<RSchedule>,
+): Daemon<RUser | RSchedule>;
 function make<const Id extends string, E, RUser>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
   polling: AnyPollingLayer,
   schedule: AnyScheduleLayer,
-): Process<RUser>;
+): Daemon<RUser>;
 function make<const Id extends string, E, RUser, RSchedule>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
   polling: AnyPollingLayer,
-  schedule: ProcessScheduleInitializer<RSchedule>,
-): Process<RUser | RSchedule>;
+  schedule: DaemonScheduleInitializer<RSchedule>,
+): Daemon<RUser | RSchedule>;
 function make<const Id extends string, E, RUser>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
   schedule: AnyScheduleLayer,
   polling: AnyPollingLayer,
-): Process<RUser>;
+): Daemon<RUser>;
 function make<const Id extends string, E, RUser, RSchedule>(
   id: Id,
   effect: Effect.Effect<void, E, RUser>,
-  schedule: ProcessScheduleInitializer<RSchedule>,
+  schedule: DaemonScheduleInitializer<RSchedule>,
   polling: AnyPollingLayer,
-): Process<RUser | RSchedule>;
+): Daemon<RUser | RSchedule>;
 function make<const Id extends string, E, RUser>(
   id: Id,
-  config: ProcessMakeOptions<E, RUser>,
-): Process<RUser>;
+  config: DaemonMakeOptions<E, RUser>,
+): Daemon<RUser>;
 function make<const Id extends string, E, RUser>(
   id: Id,
-  effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
-  third?: ProcessMakeLayerArg<RUser>,
-  fourth?: ProcessMakeLayerArg<RUser>,
-): Process<RUser> {
-  return buildProcess(id, resolveProcessMakeConfig(effectOrConfig, third, fourth));
+  effectOrConfig: Effect.Effect<void, E, RUser> | DaemonMakeOptions<E, RUser>,
+  third?: DaemonMakeLayerArg<RUser>,
+  fourth?: DaemonMakeLayerArg<RUser>,
+): Daemon<RUser> {
+  return buildDaemon(id, resolveDaemonMakeConfig(effectOrConfig, third, fourth));
 }
 
 /**
@@ -1359,14 +1359,14 @@ function make<const Id extends string, E, RUser>(
  * @category models
  * @public
  */
-export type ProcessMake = typeof make;
+export type DaemonMake = typeof make;
 
 const processDefinitionKind = "process" as const;
 
-const makeProcessDefinition = <const Id extends string, E, RUser>(
+const makeDaemonDefinition = <const Id extends string, E, RUser>(
   id: Id,
-  config: ProcessMakeOptions<E, RUser>,
-): ProcessDefinition<Id, RUser> => {
+  config: DaemonMakeOptions<E, RUser>,
+): DaemonDefinition<Id, RUser> => {
   const process = make(id, config);
   return {
     id,
@@ -1375,79 +1375,79 @@ const makeProcessDefinition = <const Id extends string, E, RUser>(
   };
 };
 
-const defineProcessService = <Self>() => {
+const defineDaemonService = <Self>() => {
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
-  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  ): DaemonServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     polling: AnyPollingLayer,
-  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  ): DaemonServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     schedule: AnyScheduleLayer,
-  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  ): DaemonServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser, RSchedule>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
-    schedule: ProcessScheduleInitializer<RSchedule>,
-  ): ProcessServiceDefinition<Self, Id, E, RUser | RSchedule>;
+    schedule: DaemonScheduleInitializer<RSchedule>,
+  ): DaemonServiceDefinition<Self, Id, E, RUser | RSchedule>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     polling: AnyPollingLayer,
     schedule: AnyScheduleLayer,
-  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  ): DaemonServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser, RSchedule>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     polling: AnyPollingLayer,
-    schedule: ProcessScheduleInitializer<RSchedule>,
-  ): ProcessServiceDefinition<Self, Id, E, RUser | RSchedule>;
+    schedule: DaemonScheduleInitializer<RSchedule>,
+  ): DaemonServiceDefinition<Self, Id, E, RUser | RSchedule>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     schedule: AnyScheduleLayer,
     polling: AnyPollingLayer,
-  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  ): DaemonServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser, RSchedule>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
-    schedule: ProcessScheduleInitializer<RSchedule>,
+    schedule: DaemonScheduleInitializer<RSchedule>,
     polling: AnyPollingLayer,
-  ): ProcessServiceDefinition<Self, Id, E, RUser | RSchedule>;
+  ): DaemonServiceDefinition<Self, Id, E, RUser | RSchedule>;
   function service<const Id extends string, E, RUser>(
     id: Id,
-    config: ProcessMakeOptions<E, RUser>,
-  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+    config: DaemonMakeOptions<E, RUser>,
+  ): DaemonServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser>(
     id: Id,
-    effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
-    third?: ProcessMakeLayerArg<RUser>,
-    fourth?: ProcessMakeLayerArg<RUser>,
-  ): ProcessServiceDefinition<Self, Id, E, RUser> {
-    const defaultSpec = resolveProcessMakeConfig(effectOrConfig, third, fourth);
-    const process = makeProcessDefinition(id, defaultSpec);
-    const buildConfiguredProcess = foldConfiguredSpec(id, defaultSpec).pipe(
+    effectOrConfig: Effect.Effect<void, E, RUser> | DaemonMakeOptions<E, RUser>,
+    third?: DaemonMakeLayerArg<RUser>,
+    fourth?: DaemonMakeLayerArg<RUser>,
+  ): DaemonServiceDefinition<Self, Id, E, RUser> {
+    const defaultSpec = resolveDaemonMakeConfig(effectOrConfig, third, fourth);
+    const process = makeDaemonDefinition(id, defaultSpec);
+    const buildConfiguredDaemon = foldConfiguredSpec(id, defaultSpec).pipe(
       Effect.map((effective) => make(id, effective)),
     );
-    const base = Context.Service<Self, Process<RUser>>()(id);
+    const base = Context.Service<Self, Daemon<RUser>>()(id);
     return Object.assign(base, {
       ...process,
       tag: base,
       defaultSpec,
-      configure: (patch: ConfigPatch<ProcessMakeOptions<E, RUser>>) =>
+      configure: (patch: ConfigPatch<DaemonMakeOptions<E, RUser>>) =>
         configureLayer(id, patch),
       wrapEffect: (
         fn: (
-          previous: ProcessMakeOptions<E, RUser>["effect"],
-        ) => ProcessMakeOptions<E, RUser>["effect"],
+          previous: DaemonMakeOptions<E, RUser>["effect"],
+        ) => DaemonMakeOptions<E, RUser>["effect"],
       ) => configureWrapEffectField(id, fn),
-      buildConfiguredProcess,
-      layer: Layer.effect(base)(buildConfiguredProcess),
+      buildConfiguredDaemon,
+      layer: Layer.effect(base)(buildConfiguredDaemon),
     });
   }
   return service;
@@ -1458,27 +1458,27 @@ const defineProcessService = <Self>() => {
  * @category models
  * @public
  */
-export type ProcessServiceBuilder<Self> = ReturnType<typeof defineProcessService<Self>>;
+export type DaemonServiceBuilder<Self> = ReturnType<typeof defineDaemonService<Self>>;
 
 /**
  *
  * @category models
  * @public
  */
-export type ProcessServiceFactory = typeof defineProcessService;
+export type DaemonServiceFactory = typeof defineDaemonService;
 
 // ============================================================================
 // Engine surface (top-level exports)
 //
-// `Process` is a module namespace (Effect-style — the barrel does `export * as Process`), so the
-// engine helpers here and the Hyperlink toolkit below are all its members: `Process.make`,
-// `Process.Service`, `Process.currentScheduleId`, `Process.scheduleControls`, `Process.Tag`,
-// `Process.schedule`, `Process.layer`, … Member access tree-shakes — a `Process.Tag`-only consumer
+// `Daemon` is a module namespace (Effect-style — the barrel does `export * as Daemon`), so the
+// engine helpers here and the Hyperlink toolkit below are all its members: `Daemon.make`,
+// `Daemon.Service`, `Daemon.currentScheduleId`, `Daemon.scheduleControls`, `Daemon.Tag`,
+// `Daemon.schedule`, `Daemon.layer`, … Member access tree-shakes — a `Daemon.Tag`-only consumer
 // pulls no engine code, mirroring `WorkPool`.
 // ============================================================================
 
 export { make };
-export { defineProcessService as Service };
+export { defineDaemonService as Service };
 
 /**
  * Engine errors thrown by {@link make}.
@@ -1487,7 +1487,7 @@ export { defineProcessService as Service };
  * @public
  */
 export const Errors = {
-  ProcessMakeInvalidLayerArgument,
+  DaemonMakeInvalidLayerArgument,
 } as const;
 
 // ############################################################################
@@ -1504,7 +1504,7 @@ export const Errors = {
 // ============================================================================
 
 /**
- * One scheduled run window on the wire — the wire form of the engine's {@link ProcessScheduleEntry}.
+ * One scheduled run window on the wire — the wire form of the engine's {@link DaemonScheduleEntry}.
  * The engine models `id` / `stopAt` as `Option` and the times as `Date`; the toolkit standard is
  * `DateTime.Utc` and `optionalKey`, so the runtime maps between them. `startAt` is when the run
  * instance triggers; `stopAt` (absent = open-ended) is when it stops.
@@ -1520,7 +1520,7 @@ export const processScheduleEntry = Schema.Struct({
 
 /**
  * The current-state snapshot of a managed process — the wire form of the engine's
- * {@link ProcessSnapshot} (plus `supervising`). The element of the reactive `status` field:
+ * {@link DaemonSnapshot} (plus `supervising`). The element of the reactive `status` field:
  * `status.get` reads it once, `status.changes` streams it.
  *
  * @category wire schemas
@@ -1561,15 +1561,15 @@ export const processExecutionEvent = processExecutionEventVoid;
  * @category models
  * @public
  */
-export type ProcessExecutionEvent = typeof processExecutionEventVoid.Type;
+export type DaemonExecutionEvent = typeof processExecutionEventVoid.Type;
 
 /**
- * Build an execution event union when the process tag carries a {@link ProcessTagOptions.success}.
+ * Build an execution event union when the process tag carries a {@link DaemonTagOptions.success}.
  *
  * @category wire schemas
  * @public
  */
-export const processExecutionEventFor = makeProcessExecutionEvent;
+export const processExecutionEventFor = makeDaemonExecutionEvent;
 
 /**
  * This contract's canonical **kind** — stamped on every process tag so consumers (e.g. the
@@ -1578,7 +1578,7 @@ export const processExecutionEventFor = makeProcessExecutionEvent;
  * @category wire schemas
  * @public
  */
-export const kind = "hyperlink-ts/Process";
+export const kind = "hyperlink-ts/Daemon";
 
 /**
  * This contract's canonical **kind** for a standalone {@link Schedule} resource.
@@ -1586,7 +1586,7 @@ export const kind = "hyperlink-ts/Process";
  * @category schedule
  * @public
  */
-export const scheduleKind = "hyperlink-ts/Process/Schedule";
+export const scheduleKind = "hyperlink-ts/Daemon/Schedule";
 
 // ============================================================================
 // Base process spec (observation + lifecycle — no schedule verbs)
@@ -1594,7 +1594,7 @@ export const scheduleKind = "hyperlink-ts/Process/Schedule";
 
 /**
  * The **base** process control + observation contract — shared by every process. Mirrors the
- * observable/controllable seams the engine supervisor exposes ({@link ProcessSnapshot} + lifecycle).
+ * observable/controllable seams the engine supervisor exposes ({@link DaemonSnapshot} + lifecycle).
  * A base process has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
  * those verbs appear only when a process {@link schedule | owns an inline schedule}.
  *
@@ -1639,7 +1639,7 @@ export const processControlSpec = {
  * @category wire schemas
  * @public
  */
-export const buildProcessSpec = <
+export const buildDaemonSpec = <
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 >(wire?: {
@@ -1653,7 +1653,7 @@ export const buildProcessSpec = <
     events: Hyperlink.stream(eventSchema).annotate({
       description:
         "Live execution lifecycle (Started / Completed / Failed / Interrupted). Same union as the " +
-        "durable Process.store journal — persist == stream.",
+        "durable Daemon.store journal — persist == stream.",
     }),
     run: (wire?.error !== undefined
       ? Hyperlink.effect(wire?.success ?? Schema.Void, wire.error)
@@ -1671,7 +1671,7 @@ export const buildProcessSpec = <
  * @category wire schemas
  * @public
  */
-export const processSpec = buildProcessSpec();
+export const processSpec = buildDaemonSpec();
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
 // The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
@@ -1681,7 +1681,7 @@ export const processSpec = buildProcessSpec();
  * @category models
  * @public
  */
-export type ProcessSpec = typeof processSpec;
+export type DaemonSpec = typeof processSpec;
 
 // ============================================================================
 // Tag options + schema stamps
@@ -1694,7 +1694,7 @@ export type ProcessSpec = typeof processSpec;
  * @category models
  * @public
  */
-export type ProcessTagOptions = {
+export type DaemonTagOptions = {
   readonly description?: string;
   readonly success?: Schema.Top;
   readonly error?: Schema.Top;
@@ -1743,7 +1743,7 @@ type ScheduleGroupSpec = { readonly schedule: typeof scheduleGroupSpec };
 
 /**
  * The full CRUD contract of a standalone {@link Schedule} resource — the reusable window manager
- * one or more processes can be gated by. Mirrors the engine's {@link ProcessScheduleService}.
+ * one or more processes can be gated by. Mirrors the engine's {@link DaemonScheduleService}.
  *
  * @category schedule
  * @public
@@ -1809,11 +1809,11 @@ type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> }
  * @category models
  * @public
  */
-export type ProcessInstanceSpec<
+export type DaemonInstanceSpec<
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
 > = typeof processControlSpec & {
-  readonly events: ReturnType<typeof buildProcessSpec<A, E>>["events"];
+  readonly events: ReturnType<typeof buildDaemonSpec<A, E>>["events"];
   readonly run: Hyperlink.Method<undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
@@ -1825,7 +1825,7 @@ export type ProcessInstanceSpec<
  * A schedule **window** template produced by {@link at} / {@link window} — the declarative form of
  * a schedule entry. `id` is **optional** (a nameless window is `add`/`set`/`clear`'d and matched by
  * reference, but is invisible to id-keyed ops). The runtime maps these to the engine's native
- * {@link ProcessScheduleEntry}.
+ * {@link DaemonScheduleEntry}.
  *
  * @category models
  * @public
@@ -1843,8 +1843,8 @@ const toWindowId = (id: string | undefined): Option.Option<string> =>
  * A **point** window (open-ended — no stop). The leading `id` is optional.
  *
  * ```ts
- * Process.at(startDate)            // nameless
- * Process.at("daily-2am", startDate)
+ * Daemon.at(startDate)            // nameless
+ * Daemon.at("daily-2am", startDate)
  * ```
  *
  * @category schedule
@@ -1857,7 +1857,7 @@ export function at(idOrStartAt: string | Date, maybeStartAt?: Date): ScheduleWin
     return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.none() };
   }
   if (maybeStartAt === undefined) {
-    throw new Error("Process.at(id, startAt): startAt is required");
+    throw new Error("Daemon.at(id, startAt): startAt is required");
   }
   return { id: toWindowId(idOrStartAt), startAt: maybeStartAt, stopAt: Option.none() };
 }
@@ -1866,8 +1866,8 @@ export function at(idOrStartAt: string | Date, maybeStartAt?: Date): ScheduleWin
  * A **bounded** window (`start` + `stop`). The leading `id` is optional.
  *
  * ```ts
- * Process.window(gameStart, gameEnd)            // nameless
- * Process.window("game-123", gameStart, gameEnd)
+ * Daemon.window(gameStart, gameEnd)            // nameless
+ * Daemon.window("game-123", gameStart, gameEnd)
  * ```
  *
  * @category schedule
@@ -1888,7 +1888,7 @@ export function window(
     };
   }
   if (maybeStopAt === undefined) {
-    throw new Error("Process.window(id, startAt, stopAt): stopAt is required");
+    throw new Error("Daemon.window(id, startAt, stopAt): stopAt is required");
   }
   return {
     id: toWindowId(idOrStartAt),
@@ -1909,27 +1909,27 @@ export function window(
  * @category models
  * @public
  */
-export type ScheduleEntry = ProcessScheduleEntry;
+export type ScheduleEntry = DaemonScheduleEntry;
 
 /**
  * The engine schedule **service** — run-window storage + controls (`entries` / `changed` / CRUD /
  * `reconcile`) that a {@link make} supervisor watches for arming decisions. Materialized by the
- * schedule-layer constructors below and injected via {@link ProcessMakeOptions.scheduleLayer}.
+ * schedule-layer constructors below and injected via {@link DaemonMakeOptions.scheduleLayer}.
  *
  * @category models
  * @public
  */
-export type ScheduleService = ProcessScheduleService;
+export type ScheduleService = DaemonScheduleService;
 
 /**
- * The subset of schedule controls handed to a {@link ProcessScheduleInitializer}
+ * The subset of schedule controls handed to a {@link DaemonScheduleInitializer}
  * (`entries` / `set` / `add` / `clear`) and available inside the process effect via
  * {@link scheduleControls}.
  *
  * @category models
  * @public
  */
-export type ScheduleControls = ProcessScheduleControls;
+export type ScheduleControls = DaemonScheduleControls;
 
 /**
  * The diff produced by {@link ScheduleService.reconcile} — the entry ids that were
@@ -1941,33 +1941,33 @@ export type ScheduleControls = ProcessScheduleControls;
 export type ScheduleReconcileResult = ReconcileResult;
 
 // These re-expose the internal engine schedule constructors for `make`'s `scheduleLayer`. They are
-// deliberately **lazy wrappers** (not `= ProcessSchedule.x`): a direct re-export would reference the
-// engine at module load, defeating tree-shaking so a `Process.Tag`-only import would drag the engine
+// deliberately **lazy wrappers** (not `= DaemonSchedule.x`): a direct re-export would reference the
+// engine at module load, defeating tree-shaking so a `Daemon.Tag`-only import would drag the engine
 // schedule primitive into the bundle. Wrapping keeps the reference inside an eliminable function body.
 
 /**
  * An **in-memory** schedule layer seeded with `entries` — the `Layer` you hand to {@link make}'s
  * `scheduleLayer`. Call with no argument for an **empty** schedule (disarmed until an entry is added
  * via `set` / `add` / `reconcile` or a schedule initializer). Mutable at runtime through the schedule
- * controls (`Process.scheduleControls`, the inline `schedule` verbs, or a {@link Schedule} resource).
+ * controls (`Daemon.scheduleControls`, the inline `schedule` verbs, or a {@link Schedule} resource).
  *
  * @category schedule
  * @public
  */
 export const scheduleInMemory = (
   entries?: ReadonlyArray<ScheduleEntry>,
-): ProcessScheduleLayerInput => ProcessSchedule.inMemory(entries);
+): DaemonScheduleLayerInput => DaemonSchedule.inMemory(entries);
 
 /**
  * A **declarative** schedule layer from a builder DSL:
- * `Process.scheduleDefine(({ at, window }) => [at("daily", d), window("game", start, end)])`.
+ * `Daemon.scheduleDefine(({ at, window }) => [at("daily", d), window("game", start, end)])`.
  *
  * @category schedule
  * @public
  */
 export const scheduleDefine = (
   build: (api: ScheduleDefineApi) => ReadonlyArray<ScheduleEntry>,
-): ProcessScheduleLayerInput => ProcessSchedule.define(build);
+): DaemonScheduleLayerInput => DaemonSchedule.define(build);
 
 // ============================================================================
 // Combinator plumbing: augment a tag's spec (rebuild the flat spec + RPC group)
@@ -1975,11 +1975,11 @@ export const scheduleDefine = (
 
 /** Where a process tag's schedule mode (inline windows vs external reference) is stowed. @internal */
 const scheduleModeSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Process/scheduleMode",
+  "hyperlink-ts/Daemon/scheduleMode",
 );
 
 /** @internal */
-const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
+const isDaemonTagOptions = (value: unknown): value is DaemonTagOptions =>
   typeof value === "object" &&
   value !== null &&
   !Schema.isSchema(value) &&
@@ -1989,7 +1989,7 @@ const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
     "error" in value);
 
 /** Graft `result` ref + stamp wire schemas on a process tag. @internal */
-const applyProcessTagSchemas = (
+const applyDaemonTagSchemas = (
   tag: HyperlinkTag<any, any, any>,
   schemas: {
     readonly success?: Schema.Top;
@@ -2021,10 +2021,10 @@ const applyProcessTagSchemas = (
 };
 
 /** @internal */
-const withProcessReadiness = (
-  tag: HyperlinkTag<any, ProcessSpec>,
-): HyperlinkTag<any, ProcessSpec> =>
-  Hyperlink.withReadiness(tag, (svc: ImplOf<ProcessSpec>) =>
+const withDaemonReadiness = (
+  tag: HyperlinkTag<any, DaemonSpec>,
+): HyperlinkTag<any, DaemonSpec> =>
+  Hyperlink.withReadiness(tag, (svc: ImplOf<DaemonSpec>) =>
     Effect.map(svc.status.get, (s) => ({
       ready: s.supervising,
       ...(s.supervising ? {} : { detail: "not supervising" }),
@@ -2032,9 +2032,9 @@ const withProcessReadiness = (
   );
 
 /** @internal */
-const buildProcessTag = <Self>(
+const buildDaemonTag = <Self>(
   key: string,
-  options: ProcessTagOptions | undefined,
+  options: DaemonTagOptions | undefined,
   positional: {
     readonly success?: Schema.Top;
     readonly error?: Schema.Top;
@@ -2044,7 +2044,7 @@ const buildProcessTag = <Self>(
   const tagOptions = { description: options?.description, kind };
   const success = positional.success ?? options?.success;
   const error = positional.error ?? options?.error;
-  const spec = buildProcessSpec({ success, error });
+  const spec = buildDaemonSpec({ success, error });
   const base: HyperlinkTag<any, any, any> =
     node === undefined
       ? Hyperlink.Tag<Self>()(key, spec, tagOptions)
@@ -2052,8 +2052,8 @@ const buildProcessTag = <Self>(
   const stamped: HyperlinkTag<any, any, any> =
     success === undefined && error === undefined
       ? base
-      : applyProcessTagSchemas(base, { success, error });
-  return withProcessReadiness(stamped);
+      : applyDaemonTagSchemas(base, { success, error });
+  return withDaemonReadiness(stamped);
 };
 
 /** How a process is scheduled — read by the runtime to build the right impl. @internal */
@@ -2111,8 +2111,8 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  *   contract gains the `schedule` verb group (`entries` / `set` / `add` / `clear`):
  *
  * ```ts
- * class Matches extends Process.Tag<Matches>()("app/Matches").pipe(
- *   Process.schedule([Process.window(kickoff, final)]),
+ * class Matches extends Daemon.Tag<Matches>()("app/Matches").pipe(
+ *   Daemon.schedule([Daemon.window(kickoff, final)]),
  * ) {}
  * ```
  *
@@ -2120,8 +2120,8 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  *   gains **no** schedule verbs (they live on the resource, which can arm many processes at once):
  *
  * ```ts
- * class IngestScores extends Process.Tag<IngestScores>()("app/IngestScores").pipe(
- *   Process.schedule(SeasonSchedule),
+ * class IngestScores extends Daemon.Tag<IngestScores>()("app/IngestScores").pipe(
+ *   Daemon.schedule(SeasonSchedule),
  * ) {}
  * ```
  *
@@ -2161,38 +2161,38 @@ export function schedule(
  * @category models
  * @public
  */
-export type ProcessTagBuild<Self> = {
-  (key: string): HyperlinkTag<Self, ProcessInstanceSpec>;
+export type DaemonTagBuild<Self> = {
+  (key: string): HyperlinkTag<Self, DaemonInstanceSpec>;
   <A extends Schema.Top>(
     key: string,
     success: A,
-  ): HyperlinkTag<Self, ProcessInstanceSpec<A>>;
+  ): HyperlinkTag<Self, DaemonInstanceSpec<A>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
     success: A,
     error: E,
-  ): HyperlinkTag<Self, ProcessInstanceSpec<A, E>>;
+  ): HyperlinkTag<Self, DaemonInstanceSpec<A, E>>;
   <A extends Schema.Top>(
     key: string,
-    options: ProcessTagOptions & { readonly success: A },
-  ): HyperlinkTag<Self, ProcessInstanceSpec<A>>;
+    options: DaemonTagOptions & { readonly success: A },
+  ): HyperlinkTag<Self, DaemonInstanceSpec<A>>;
   <E extends Schema.Top>(
     key: string,
-    options: ProcessTagOptions & { readonly error: E },
-  ): HyperlinkTag<Self, ProcessInstanceSpec<typeof Schema.Void, E>>;
+    options: DaemonTagOptions & { readonly error: E },
+  ): HyperlinkTag<Self, DaemonInstanceSpec<typeof Schema.Void, E>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
-    options: ProcessTagOptions & { readonly success: A; readonly error: E },
-  ): HyperlinkTag<Self, ProcessInstanceSpec<A, E>>;
+    options: DaemonTagOptions & { readonly success: A; readonly error: E },
+  ): HyperlinkTag<Self, DaemonInstanceSpec<A, E>>;
   <HSelf>(
     key: string,
-    options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, ProcessInstanceSpec, HSelf>;
+    options: DaemonTagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, DaemonInstanceSpec, HSelf>;
   <A extends Schema.Top, HSelf>(
     key: string,
-    options: ProcessTagOptions & { readonly success: A; readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, ProcessInstanceSpec<A>, HSelf>;
-  (key: string, options?: ProcessTagOptions): HyperlinkTag<Self, ProcessInstanceSpec>;
+    options: DaemonTagOptions & { readonly success: A; readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, DaemonInstanceSpec<A>, HSelf>;
+  (key: string, options?: DaemonTagOptions): HyperlinkTag<Self, DaemonInstanceSpec>;
 };
 
 /**
@@ -2201,13 +2201,13 @@ export type ProcessTagBuild<Self> = {
  * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
  * ```ts
- * class Health extends Process.Tag<Health>()("app/Health") {}
+ * class Health extends Daemon.Tag<Health>()("app/Health") {}
  *
- * class Prices extends Process.Tag<Prices>()("app/Prices", PriceSchema) {}
+ * class Prices extends Daemon.Tag<Prices>()("app/Prices", PriceSchema) {}
  *
- * class PricesE extends Process.Tag<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
+ * class PricesE extends Daemon.Tag<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
  *
- * class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
+ * class PricesCfg extends Daemon.Tag<PricesCfg>()("app/Prices", {
  *   success: PriceSchema,
  *   error: FetchErr,
  * }) {}
@@ -2221,29 +2221,29 @@ export type ProcessTagBuild<Self> = {
 export const Tag = <Self>() => {
   function build(
     key: string,
-    second?: Schema.Top | ProcessTagOptions,
+    second?: Schema.Top | DaemonTagOptions,
     third?: Schema.Top,
-  ): HyperlinkTag<Self, ProcessSpec> | NodeBoundTag<Self, ProcessSpec, unknown> {
+  ): HyperlinkTag<Self, DaemonSpec> | NodeBoundTag<Self, DaemonSpec, unknown> {
     if (second === undefined) {
-      return buildProcessTag<Self>(key, undefined);
+      return buildDaemonTag<Self>(key, undefined);
     }
     if (Schema.isSchema(second)) {
-      return buildProcessTag<Self>(key, undefined, {
+      return buildDaemonTag<Self>(key, undefined, {
         success: second,
         error: third,
       });
     }
-    if (isProcessTagOptions(second)) {
-      return buildProcessTag<Self>(key, second);
+    if (isDaemonTagOptions(second)) {
+      return buildDaemonTag<Self>(key, second);
     }
-    return buildProcessTag<Self>(key, undefined);
+    return buildDaemonTag<Self>(key, undefined);
   }
   // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
-  // call-signature *object* type (`ProcessTagBuild<Self>`) even when it implements exactly those
+  // call-signature *object* type (`DaemonTagBuild<Self>`) even when it implements exactly those
   // overloads — a known TS limitation (the same class as WorkPool's `nameQueueService` cast).
   // It's soundness-guarded: `process-built-resource` / `process-contract-shape` .test-d.ts exercise
-  // `Process.Tag()` in every form, so a drift between `build` and `ProcessTagBuild` fails the build.
-  return build as ProcessTagBuild<Self>;
+  // `Daemon.Tag()` in every form, so a drift between `build` and `DaemonTagBuild` fails the build.
+  return build as DaemonTagBuild<Self>;
 };
 
 /**
@@ -2252,7 +2252,7 @@ export const Tag = <Self>() => {
  * `options.node` to bind it to a {@link Node.Tag}, like {@link Tag}.
  *
  * ```ts
- * class SeasonSchedule extends Process.Schedule<SeasonSchedule>()("app/SeasonSchedule") {}
+ * class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("app/SeasonSchedule") {}
  * const s = yield* SeasonSchedule;
  * yield* s.add({ id: "wk2", startAt: wk2Start, stopAt: wk2End }); // arms every gated process
  * ```
@@ -2289,12 +2289,12 @@ export const Schedule = <Self>() => {
 /**
  * Config for {@link layer} / {@link serve} / {@link serveRemote}. The `effect` is the work each run
  * performs; its success is captured into `result` when the tag is value-returning. Scheduling comes
- * from the **tag** now (`Process.schedule(...)`), not the config.
+ * from the **tag** now (`Daemon.schedule(...)`), not the config.
  *
  * @category models
  * @public
  */
-export interface ProcessLayerConfig<A, E, R> {
+export interface DaemonLayerConfig<A, E, R> {
   readonly effect: Effect.Effect<A, E, R>;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: Layer.Layer<PollingTag, never, never>;
@@ -2306,7 +2306,7 @@ export interface ProcessLayerConfig<A, E, R> {
 
 type WireEntry = typeof processScheduleEntry.Type;
 
-const toWireEntry = (entry: ProcessScheduleEntry): WireEntry => ({
+const toWireEntry = (entry: DaemonScheduleEntry): WireEntry => ({
   ...(Option.isSome(entry.id) ? { id: entry.id.value } : {}),
   startAt: DateTime.makeUnsafe(entry.startAt.getTime()),
   ...(Option.isSome(entry.stopAt)
@@ -2314,7 +2314,7 @@ const toWireEntry = (entry: ProcessScheduleEntry): WireEntry => ({
     : {}),
 });
 
-const fromWireEntry = (wire: WireEntry): ProcessScheduleEntry => ({
+const fromWireEntry = (wire: WireEntry): DaemonScheduleEntry => ({
   id: wire.id !== undefined ? Option.some(wire.id) : Option.none(),
   startAt: DateTime.toDateUtc(wire.startAt),
   stopAt:
@@ -2324,7 +2324,7 @@ const fromWireEntry = (wire: WireEntry): ProcessScheduleEntry => ({
 });
 
 const toWireStatus = (
-  snap: ProcessSnapshot,
+  snap: DaemonSnapshot,
   supervising: boolean,
 ): typeof processStatus.Type => ({
   supervising,
@@ -2356,7 +2356,7 @@ const toWireStatus = (
 
 /** A reactive view of a schedule's entries (wire form), driven by its `changed` signal. */
 const entriesSubscribable = (
-  svc: ProcessScheduleService,
+  svc: DaemonScheduleService,
 ): Subscribable<ReadonlyArray<WireEntry>> => ({
   get: Effect.map(svc.entries, (entries) => entries.map(toWireEntry)),
   changes: Stream.concat(
@@ -2372,14 +2372,14 @@ class ReferenceScheduleNotWired extends Data.TaggedError(
 
 const statusPollInterval = Duration.millis(500);
 
-const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
+const fromWindow = (w: ScheduleWindow): DaemonScheduleEntry => ({
   id: w.id,
   startAt: w.startAt,
   stopAt: w.stopAt,
 });
 
 // ============================================================================
-// Process impl builder
+// Daemon impl builder
 // ============================================================================
 
 /**
@@ -2388,15 +2388,15 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
  * tag's composed spec (base, `+ schedule`, `+ result`); `Hyperlink.layer` flattens it against the
  * tag's flat spec, so extra members are simply present when the spec declares them.
  */
-const buildProcessImpl = <A, E, R>(
+const buildDaemonImpl = <A, E, R>(
   tag: HyperlinkTag<any, any, any>,
-  baseConfig: ProcessLayerConfig<A, E, R>,
-): Effect.Effect<Hyperlink.BuiltHyperlink<ProcessSpec, R>, never, R | Scope.Scope | Store.Storage> =>
+  baseConfig: DaemonLayerConfig<A, E, R>,
+): Effect.Effect<Hyperlink.BuiltHyperlink<DaemonSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
 
-    const config = yield* foldConfiguredSpec<ProcessLayerConfig<A, E, R>>(tag.key, baseConfig);
+    const config = yield* foldConfiguredSpec<DaemonLayerConfig<A, E, R>>(tag.key, baseConfig);
 
     const mode = scheduleModeOf(tag);
     if (mode?._tag === "reference") {
@@ -2423,20 +2423,20 @@ const buildProcessImpl = <A, E, R>(
     // ── schedule: inline windows own an in-memory store; otherwise always-armed ──
     const baseScheduleLayer =
       mode?._tag === "inline"
-        ? ProcessSchedule.inMemory(mode.windows.map(fromWindow))
-        : ProcessSchedule.alwaysArmed;
+        ? DaemonSchedule.inMemory(mode.windows.map(fromWindow))
+        : DaemonSchedule.alwaysArmed;
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
-    const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
+    const scheduleSvc = Context.get(scheduleCtx, DaemonScheduleTag);
 
     // Fail-loud Soft: AppStore missing this engine registration dies at layer build
     // (not silent empty journals on first write). Soft-default Memory always materializes.
-    yield* Store.resolveOrDie(tag.key, builtInProcessStoreContract(tag));
+    yield* Store.resolveOrDie(tag.key, builtInDaemonStoreContract(tag));
     const storeEffects = pipe(
-      Store.effects(tag.key, builtInProcessStoreContract(tag)),
+      Store.effects(tag.key, builtInDaemonStoreContract(tag)),
       Store.catchWriteErrors,
     );
     const storageContext = yield* Effect.context<Store.Storage>();
-    const store: ProcessStoreWriter = Store.provideContext(storeEffects, storageContext);
+    const store: DaemonStoreWriter = Store.provideContext(storeEffects, storageContext);
 
     const handle = make(tag.key, {
       effect: captured,
@@ -2487,7 +2487,7 @@ const buildProcessImpl = <A, E, R>(
       resultRef !== undefined ? { result: Hyperlink.subscribable(resultRef) } : {};
 
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
-    // Erased to the base `ProcessSpec` here (same as `run`) — stamped event schemas live on the tag wire.
+    // Erased to the base `DaemonSpec` here (same as `run`) — stamped event schemas live on the tag wire.
     const impl = {
       status: { get: readStatus, changes: statusChanges },
       start,
@@ -2513,15 +2513,15 @@ const buildProcessImpl = <A, E, R>(
 // The public layers are **overloaded**: the visible signature is generic over the tag's composed spec
 // `S` (so a `+ schedule` / `+ result` tag is accepted and `Self` — the composed service — is granted),
 // while the implementation signature is loose (`HyperlinkTag<any, any, any>` + a loose impl) so the
-// dynamically-shaped `buildProcessImpl` record fits. Two deliberate choices keep the types shallow:
-//   1. the visible **return** names `HandlerContextOf<ProcessSpec>` (the concrete base), not
+// dynamically-shaped `buildDaemonImpl` record fits. Two deliberate choices keep the types shallow:
+//   1. the visible **return** names `HandlerContextOf<DaemonSpec>` (the concrete base), not
 //      `HandlerContextOf<S>` — walking that over an open `S` blows the instantiation depth, and the
 //      served handler set is a run-time concern anyway (see 2);
 //   2. internally the tag is narrowed to the concrete base spec (`baseTag`) before `Hyperlink.serve`,
 //      so its `HandlerContextOf`/`ImplOf` walks stay shallow.
 // At run time `Hyperlink.serve` reads the tag's own `groupSym` / `specSym`, so the **full** handler set
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
-// names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
+// names the base. `buildDaemonImpl` receives the original tag, so it still reads the composed metadata.
 
 /**
  * Soft-default {@link Store.Storage} ({@link Store.withDefaultStorage}) — R fulfilled; override by
@@ -2537,7 +2537,7 @@ const withDefaultMemory = <A, E, R>(
  * Soft-defaults an in-memory {@link Store.Storage} (R fulfilled). Override with your app store:
  *
  * ```ts
- * Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+ * Daemon.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
  * ```
  *
  * {@link layerMemory} is an alias for the same soft-default.
@@ -2547,16 +2547,16 @@ const withDefaultMemory = <A, E, R>(
  */
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
   tag: HyperlinkTag<Self, S>,
-  config: ProcessLayerConfig<A, E, R>,
+  config: DaemonLayerConfig<A, E, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 export function layer(
   tag: HyperlinkTag<any, any, any>,
-  config: ProcessLayerConfig<any, any, any>,
+  config: DaemonLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, ProcessSpec> = tag;
+  const baseTag: HyperlinkTag<any, DaemonSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
-      Effect.map(buildProcessImpl(tag, config), (built) =>
+      Effect.map(buildDaemonImpl(tag, config), (built) =>
         Hyperlink.layer(baseTag, Hyperlink.grantLocal(baseTag, built)),
       ),
     ) as any,
@@ -2571,11 +2571,11 @@ export function layer(
  */
 export function layerMemory<Self, S extends Spec, A = void, E = never, R = never>(
   tag: HyperlinkTag<Self, S>,
-  config: ProcessLayerConfig<A, E, R>,
+  config: DaemonLayerConfig<A, E, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 export function layerMemory(
   tag: HyperlinkTag<any, any, any>,
-  config: ProcessLayerConfig<any, any, any>,
+  config: DaemonLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   return layer(tag, config) as any;
 }
@@ -2590,21 +2590,21 @@ export function layerMemory(
  */
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   tag: HyperlinkTag<Self, S>,
-  config: ProcessLayerConfig<A, E, R>,
+  config: DaemonLayerConfig<A, E, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<ProcessSpec> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<DaemonSpec> | Store.Storage,
   never,
   R
 >;
 export function serve(
   tag: HyperlinkTag<any, any, any>,
-  config: ProcessLayerConfig<any, any, any>,
+  config: DaemonLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, ProcessSpec> = tag;
+  const baseTag: HyperlinkTag<any, DaemonSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(
-        buildProcessImpl(tag, config),
+        buildDaemonImpl(tag, config),
         (built) => Hyperlink.serve(baseTag, built) as any,
       ),
     ) as any,
@@ -2619,15 +2619,15 @@ export function serve(
  */
 export function serveMemory<Self, S extends Spec, A = void, E = never, R = never>(
   tag: HyperlinkTag<Self, S>,
-  config: ProcessLayerConfig<A, E, R>,
+  config: DaemonLayerConfig<A, E, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<ProcessSpec> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<DaemonSpec> | Store.Storage,
   never,
   R
 >;
 export function serveMemory(
   tag: HyperlinkTag<any, any, any>,
-  config: ProcessLayerConfig<any, any, any>,
+  config: DaemonLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   return serve(tag, config) as any;
 }
@@ -2643,17 +2643,17 @@ export function serveMemory(
  */
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
   tag: HyperlinkTag<Self, S>,
-  config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
+  config: DaemonLayerConfig<A, E, R>,
+): Layer.Layer<HandlerContextOf<DaemonSpec> | Store.Storage, never, R>;
 export function serveRemote(
   tag: HyperlinkTag<any, any, any>,
-  config: ProcessLayerConfig<any, any, any>,
+  config: DaemonLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, ProcessSpec> = tag;
+  const baseTag: HyperlinkTag<any, DaemonSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(
-        buildProcessImpl(tag, config),
+        buildDaemonImpl(tag, config),
         (built) => Hyperlink.serveRemote(baseTag, built) as any,
       ),
     ) as any,
@@ -2668,11 +2668,11 @@ export function serveRemote(
  */
 export function serveRemoteMemory<Self, S extends Spec, A = void, E = never, R = never>(
   tag: HyperlinkTag<Self, S>,
-  config: ProcessLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
+  config: DaemonLayerConfig<A, E, R>,
+): Layer.Layer<HandlerContextOf<DaemonSpec> | Store.Storage, never, R>;
 export function serveRemoteMemory(
   tag: HyperlinkTag<any, any, any>,
-  config: ProcessLayerConfig<any, any, any>,
+  config: DaemonLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   return serveRemote(tag, config) as any;
 }
@@ -2686,7 +2686,7 @@ export function serveRemoteMemory(
  */
 export const configure = <A = void, E = never, R = never>(
   tag: HyperlinkTag<any, any, any>,
-  patch: ConfigPatch<ProcessLayerConfig<A, E, R>>,
+  patch: ConfigPatch<DaemonLayerConfig<A, E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 /**
@@ -2694,8 +2694,8 @@ export const configure = <A = void, E = never, R = never>(
  * optional bare spec object merged in:
  *
  * ```ts
- * Process.store(Daily)
- * Process.store(Daily, {
+ * Daemon.store(Daily)
+ * Daemon.store(Daily, {
  *   audit: auditSchema,
  * }, ({ audit, event }) => ({
  *   appendAudit: audit.append,
@@ -2706,7 +2706,7 @@ export const configure = <A = void, E = never, R = never>(
  * @public
  */
 export function store<const Tag extends StoreScopeTag>(tag: Tag): ReturnType<
-  typeof facetStoreRegistration<Tag, ProcessStoreAnalyticsContract<Tag>>
+  typeof facetStoreRegistration<Tag, DaemonStoreAnalyticsContract<Tag>>
 >;
 export function store<
   const Tag extends StoreScopeTag,
@@ -2714,12 +2714,12 @@ export function store<
 >(tag: Tag, extended: Shapes): ReturnType<
   typeof facetStoreRegistration<
     Tag,
-    ProcessStoreAnalyticsContract<Tag>,
+    DaemonStoreAnalyticsContract<Tag>,
     Shapes
   >
 >;
 export function store(tag: StoreScopeTag, extended?: StoreShapes) {
-  const builtIn = makeProcessStoreAnalyticsContract(tag);
+  const builtIn = makeDaemonStoreAnalyticsContract(tag);
   return extended === undefined
     ? facetStoreRegistration(tag, builtIn)
     : facetStoreRegistration(tag, builtIn, extended);
@@ -2734,9 +2734,9 @@ const buildScheduleImpl = (
 ): Effect.Effect<ImplOf<ScheduleHyperlinkSpec>, never, Scope.Scope> =>
   Effect.gen(function* () {
     const ctx = yield* Layer.build(
-      ProcessSchedule.inMemory((options?.initial ?? []).map(fromWindow)),
+      DaemonSchedule.inMemory((options?.initial ?? []).map(fromWindow)),
     );
-    const scheduleSvc = Context.get(ctx, ProcessScheduleTag);
+    const scheduleSvc = Context.get(ctx, DaemonScheduleTag);
     const impl: ImplOf<ScheduleHyperlinkSpec> = {
       entries: entriesSubscribable(scheduleSvc),
       get: ({ id }: { readonly id: string }) =>

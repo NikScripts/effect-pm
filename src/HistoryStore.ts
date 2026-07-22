@@ -4,7 +4,7 @@
  * The toolkit's resource Tags expose **live** streams (`logs`, `metrics`, …). To read back what
  * *was* in those streams, a resource appends each element here (keyed by `${tag.key}/<stream>`), and
  * the matching `*History` query reads it back. Deliberately simpler than the Store bridge
- * (`Process.store` / `WorkPool.store` / …): one keyed append-log with `append` + `read`,
+ * (`Daemon.store` / `WorkPool.store` / …): one keyed append-log with `append` + `read`,
  * holding already-encoded JSON values so a backend just persists/returns them.
  *
  * - **`layerMemory`** — in-memory ring per stream (bounded by `capacity`). The default today.

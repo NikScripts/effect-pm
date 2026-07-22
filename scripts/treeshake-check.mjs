@@ -47,8 +47,8 @@ const cases = [
     // `Process` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
     // / `window`) and the engine (`make` / `layer` / `serve`). A `Process.Tag`-only import must not
     // retain the engine's separate source files.
-    name: "Process",
-    entry: "src/Process.ts",
+    name: "Daemon",
+    entry: "src/Daemon.ts",
     engine: [
       "src/internal/processSchedule.ts",
       "src/store/processExecution.ts",

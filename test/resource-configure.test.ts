@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Clock, Duration, Effect, Layer, Ref } from "effect";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import { foldConfig } from "../src/HyperlinkConfigure";
 import * as WorkPool from "../src/WorkPool";
 import type { EffectContext } from "../src/WorkPool";
@@ -106,14 +106,14 @@ describe("HyperlinkConfigure", () => {
     }),
   );
 
-  it.effect("Process.Service buildConfiguredProcess applies configure patches", () =>
+  it.effect("Daemon.Service buildConfiguredDaemon applies configure patches", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        class Worker extends Process.Service<Worker>()("@test/ConfigureProcess", {
+        class Worker extends Daemon.Service<Worker>()("@test/ConfigureDaemon", {
           effect: Effect.succeed("default"),
         }) {}
 
-        const process = yield* Worker.buildConfiguredProcess.pipe(
+        const process = yield* Worker.buildConfiguredDaemon.pipe(
           Effect.provide(
             Worker.configure((spec) => ({
               ...spec,
@@ -122,7 +122,7 @@ describe("HyperlinkConfigure", () => {
           ),
         );
 
-        expect(process.name).toBe("@test/ConfigureProcess");
+        expect(process.name).toBe("@test/ConfigureDaemon");
         expect(Worker.defaultSpec.effect).not.toBe(process.effect);
       }),
     ),

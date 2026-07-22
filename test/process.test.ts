@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessMakeInvalidLayerArgument } from "../src";
+import { Polling, Daemon, DaemonMakeInvalidLayerArgument } from "../src";
 import { PollingTag } from "../src/internal/pollingTag";
-// Engine schedule constructors live on the `Process` namespace now (the standalone `ProcessSchedule`
-// module was retired): `Process.scheduleInMemory` (call with no args for an empty schedule) +
-// `Process.at` / `Process.window`.
+// Engine schedule constructors live on the `Daemon` namespace now (the standalone `DaemonSchedule`
+// module was retired): `Daemon.scheduleInMemory` (call with no args for an empty schedule) +
+// `Daemon.at` / `Daemon.window`.
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const alwaysOnEntry = {
@@ -14,20 +14,20 @@ const alwaysOnEntry = {
   stopAt: Option.none<Date>(),
 };
 
-describe("Process.make", () => {
+describe("Daemon.make", () => {
   it("sets process.name to the id passed as the first argument", () => {
     const id = "test/make-id-first" as const;
-    const proc = Process.make(id, { effect: Effect.void });
+    const proc = Daemon.make(id, { effect: Effect.void });
     expect(proc.name).toBe(id);
   });
 
   it("sets process.name for positional effect overload", () => {
     const id = "test/make-positional" as const;
-    const proc = Process.make(id, Effect.void);
+    const proc = Daemon.make(id, Effect.void);
     expect(proc.name).toBe(id);
   });
 
-  it("throws ProcessMakeInvalidLayerArgument for unregistered positional layers", () => {
+  it("throws DaemonMakeInvalidLayerArgument for unregistered positional layers", () => {
     const customPolling = Layer.succeed(PollingTag, {
       awaitNextTick: Effect.void,
       requestWake: Effect.void,
@@ -37,22 +37,22 @@ describe("Process.make", () => {
     });
 
     expect(() =>
-      Process.make("test/invalid-positional", Effect.void, customPolling),
-    ).toThrowError(ProcessMakeInvalidLayerArgument);
+      Daemon.make("test/invalid-positional", Effect.void, customPolling),
+    ).toThrowError(DaemonMakeInvalidLayerArgument);
   });
 
 });
 
-describe("Process runtime with schedule windows", () => {
+describe("Daemon runtime with schedule windows", () => {
   const clock = TestClock.layer();
 
   it.effect("positional make runs driver with polling before schedule in args", () =>
     Effect.gen(function* () {
-      const proc = Process.make(
+      const proc = Daemon.make(
         "test/positional-order",
         Effect.void,
         Polling.spaced(Duration.millis(100)),
-        Process.scheduleInMemory([alwaysOnEntry]),
+        Daemon.scheduleInMemory([alwaysOnEntry]),
       );
 
       const fib = yield* Effect.forkChild(proc.effect);
@@ -64,7 +64,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("omitted schedule defaults to always armed so polling ticks without manual set", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/default-schedule-armed", {
+        const proc = Daemon.make("test/default-schedule-armed", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
         });
@@ -80,13 +80,13 @@ describe("Process runtime with schedule windows", () => {
     ),
 );
 
-  it.effect("Process.scheduleInMemory() stays disarmed with no ticks", () =>
+  it.effect("Daemon.scheduleInMemory() stays disarmed with no ticks", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/schedule-empty", {
+        const proc = Daemon.make("test/schedule-empty", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
-          schedule: Process.scheduleInMemory(),
+          schedule: Daemon.scheduleInMemory(),
         });
 
         const fib = yield* Effect.forkChild(proc.effect);
@@ -103,7 +103,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("schedule initializer arms empty in-memory backing store", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/schedule-initializer-empty-backing", {
+        const proc = Daemon.make("test/schedule-initializer-empty-backing", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) => set([alwaysOnEntry]),
@@ -123,12 +123,12 @@ describe("Process runtime with schedule windows", () => {
   it.effect("exposes current schedule id inside the running effect", () =>
     Effect.gen(function* () {
         const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
-        const proc = Process.make("test/schedule-id", {
-          schedule: Process.scheduleInMemory([
-            Process.at("match-101", utcDateFromMillis(0)),
+        const proc = Daemon.make("test/schedule-id", {
+          schedule: Daemon.scheduleInMemory([
+            Daemon.at("match-101", utcDateFromMillis(0)),
           ]),
           effect: Effect.gen(function* () {
-            const currentId = yield* Process.currentScheduleId;
+            const currentId = yield* Daemon.currentScheduleId;
             yield* Option.match(currentId, {
               onNone: () => Effect.void,
               onSome: (id) => Ref.update(seenIds, (ids) => [...ids, id]),
@@ -150,16 +150,16 @@ describe("Process runtime with schedule windows", () => {
   it.effect("exposes schedule controls inside process effect", () =>
     Effect.gen(function* () {
         const tickIds = yield* Ref.make<ReadonlyArray<string>>([]);
-        const proc = Process.make("test/schedule-controls-inside-effect", {
+        const proc = Daemon.make("test/schedule-controls-inside-effect", {
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) =>
             set([
-              Process.window("first-window", utcDateFromMillis(0), utcDateFromMillis(500)),
-              Process.window("second-window", utcDateFromMillis(2_000), utcDateFromMillis(2_500)),
+              Daemon.window("first-window", utcDateFromMillis(0), utcDateFromMillis(500)),
+              Daemon.window("second-window", utcDateFromMillis(2_000), utcDateFromMillis(2_500)),
             ]),
           effect: Effect.gen(function* () {
-            const currentId = yield* Process.currentScheduleId;
-            const controls = yield* Process.scheduleControls;
+            const currentId = yield* Daemon.currentScheduleId;
+            const controls = yield* Daemon.scheduleControls;
             const existing = yield* controls.entries;
             if (existing.length > 1) {
               yield* controls.set(existing.slice(0, 1));
@@ -188,7 +188,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("starts from schedule startAt and repeats while stopAt is open", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/repeats-while-open", {
+        const proc = Daemon.make("test/repeats-while-open", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) => set([alwaysOnEntry]),
@@ -208,7 +208,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("stops naturally after stopAt", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/stop-window", {
+        const proc = Daemon.make("test/stop-window", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) =>
@@ -237,7 +237,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("process without polling runs once for scheduled one-shot windows", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/one-shot", {
+        const proc = Daemon.make("test/one-shot", {
           effect: Ref.update(ticks, (n) => n + 1),
           schedule: ({ set }) =>
             set([
@@ -261,13 +261,13 @@ describe("Process runtime with schedule windows", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const seen = yield* Ref.make<ReadonlyArray<Option.Option<string>>>([]);
-        const proc = Process.make("test/run-immediately-no-schedule-id", {
+        const proc = Daemon.make("test/run-immediately-no-schedule-id", {
           polling: Polling.spaced(Duration.millis(100)),
-          schedule: Process.scheduleInMemory([
-            Process.at("scheduled-id", utcDateFromMillis(0)),
+          schedule: Daemon.scheduleInMemory([
+            Daemon.at("scheduled-id", utcDateFromMillis(0)),
           ]),
           effect: Effect.gen(function* () {
-            const currentId = yield* Process.currentScheduleId;
+            const currentId = yield* Daemon.currentScheduleId;
             yield* Ref.update(seen, (items) => [...items, currentId]);
           }),
         });
@@ -284,15 +284,15 @@ describe("Process runtime with schedule windows", () => {
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
         const mutated = yield* Ref.make(false);
-        const proc = Process.make("test/mutation-cancels-stale-pending", {
+        const proc = Daemon.make("test/mutation-cancels-stale-pending", {
           schedule: ({ set }) =>
             set([
-              Process.at("mutator", utcDateFromMillis(0)),
-              Process.at("kickoff", utcDateFromMillis(10_000)),
+              Daemon.at("mutator", utcDateFromMillis(0)),
+              Daemon.at("kickoff", utcDateFromMillis(10_000)),
             ]),
           effect: Effect.gen(function* () {
-            const currentId = yield* Process.currentScheduleId;
-            const controls = yield* Process.scheduleControls;
+            const currentId = yield* Daemon.currentScheduleId;
+            const controls = yield* Daemon.scheduleControls;
             yield* Option.match(currentId, {
               onNone: () => Effect.void,
               onSome: (id) =>
@@ -300,7 +300,7 @@ describe("Process runtime with schedule windows", () => {
                   ? Effect.gen(function* () {
                       if (!(yield* Ref.get(mutated))) {
                         yield* Ref.set(mutated, true);
-                        yield* controls.set([Process.at("kickoff", utcDateFromMillis(30_000))]);
+                        yield* controls.set([Daemon.at("kickoff", utcDateFromMillis(30_000))]);
                       }
                     })
                   : Ref.update(ticks, (n) => n + 1),

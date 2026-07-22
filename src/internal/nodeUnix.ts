@@ -333,7 +333,7 @@ const dynamicInstanceSuffixOf = (node: AnyNode): string | undefined => {
   return typeof suffix === "string" && suffix.length > 0 ? suffix : undefined;
 };
 
-/** Process-local seq so same-ms dynamic instances get distinct wire keys. @internal */
+/** Daemon-local seq so same-ms dynamic instances get distinct wire keys. @internal */
 let dynamicInstanceSeq = 0;
 
 /** Mint `prototypeKey#<millis>-<seq>` suffix for {@link Node}.Prototype.instance(). @internal */

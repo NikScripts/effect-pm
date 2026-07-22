@@ -34,7 +34,7 @@
  *
  * ## Remote usage
  *
- * Declare wire schemas on the tag, then serve or connect like {@link WorkPool} / {@link Process}:
+ * Declare wire schemas on the tag, then serve or connect like {@link WorkPool} / {@link Daemon}:
  *
  * ```ts
  * class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", {
@@ -820,7 +820,7 @@ export function serveRemote(
 ): Layer.Layer<any, any, any> {
   // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `BuiltHyperlink` and
   // `Hyperlink.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
-  // overload above). Mirrors `Process.serveRemote`.
+  // overload above). Mirrors `Daemon.serveRemote`.
   const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(

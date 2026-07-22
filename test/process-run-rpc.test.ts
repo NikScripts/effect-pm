@@ -1,26 +1,26 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Option, Schema, SubscriptionRef } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import { forwardClient, groupOf, specOf } from "../src/Hyperlink";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class FailingProc extends Process.Tag<FailingProc>()("@test/process-run-rpc/Failing", {
+class FailingProc extends Daemon.Tag<FailingProc>()("@test/process-run-rpc/Failing", {
   error: FetchErr,
 }) {}
 
-class OkProc extends Process.Tag<OkProc>()("@test/process-run-rpc/Ok", {
+class OkProc extends Daemon.Tag<OkProc>()("@test/process-run-rpc/Ok", {
   success: Schema.Number,
 }) {}
 
-class VoidProc extends Process.Tag<VoidProc>()("@test/process-run-rpc/Void") {}
+class VoidProc extends Daemon.Tag<VoidProc>()("@test/process-run-rpc/Void") {}
 
-describe("Process manual run RPC", () => {
-  it.effect("Process.make run returns captured success via resultRef", () =>
+describe("Daemon manual run RPC", () => {
+  it.effect("Daemon.make run returns captured success via resultRef", () =>
     Effect.gen(function* () {
       const resultRef = yield* SubscriptionRef.make<Option.Option<unknown>>(Option.none());
-      const handle = Process.make("@test/process-run-rpc/direct", {
+      const handle = Daemon.make("@test/process-run-rpc/direct", {
         effect: Effect.succeed(42).pipe(
           Effect.tap((value) => SubscriptionRef.set(resultRef, Option.some(value))),
           Effect.asVoid,
@@ -39,7 +39,7 @@ describe("Process manual run RPC", () => {
         return yield* proc.run.pipe(Effect.exit);
       }).pipe(
         Effect.provide(
-          Process.layerMemory(FailingProc, {
+          Daemon.layerMemory(FailingProc, {
             effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
           }),
         ),
@@ -64,7 +64,7 @@ describe("Process manual run RPC", () => {
         expect(Exit.isFailure(exit)).toBe(true);
       }).pipe(
         Effect.provide(
-          Process.serveRemoteMemory(FailingProc, {
+          Daemon.serveRemoteMemory(FailingProc, {
             effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
           }),
         ),
@@ -79,7 +79,7 @@ describe("Process manual run RPC", () => {
       const result = yield* proc.run;
       expect(result).toBe(42);
     }).pipe(
-      Effect.provide(Process.layerMemory(OkProc, { effect: Effect.succeed(42) })),
+      Effect.provide(Daemon.layerMemory(OkProc, { effect: Effect.succeed(42) })),
       Effect.scoped,
     ),
   );
@@ -93,7 +93,7 @@ describe("Process manual run RPC", () => {
         };
         yield* svc.run;
       }).pipe(
-        Effect.provide(Process.serveRemoteMemory(VoidProc, { effect: Effect.void })),
+        Effect.provide(Daemon.serveRemoteMemory(VoidProc, { effect: Effect.void })),
         Effect.scoped,
       ) as Effect.Effect<void, never, never>,
     ),

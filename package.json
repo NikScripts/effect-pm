@@ -32,9 +32,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./Process": {
-      "types": "./dist/Process.d.ts",
-      "default": "./dist/Process.js"
+    "./Daemon": {
+      "types": "./dist/Daemon.d.ts",
+      "default": "./dist/Daemon.js"
     },
     "./Polling": {
       "types": "./dist/Polling.d.ts",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Duration, Schema } from "effect";
 import {
-  makeProcessExecutionEvent,
+  makeDaemonExecutionEvent,
   processExecutionEventVoid,
 } from "../src/internal/processEvent";
 import { makeGateFactEvent } from "../src/internal/runHyperlinkEvent";
@@ -60,7 +60,7 @@ describe("store event _tag alignment", () => {
     expect(failed._tag).toBe("Failed");
 
     expect(
-      makeProcessExecutionEvent().members.length,
+      makeDaemonExecutionEvent().members.length,
     ).toBeGreaterThanOrEqual(terminalTags.length + 1);
   });
 

@@ -15,7 +15,7 @@ import { Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as WorkPool from "../../src/WorkPool";
 import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
-import * as Process from "../../src/Process";
+import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
@@ -118,10 +118,10 @@ export class BoxScoreQueue extends WorkPool.Tag<BoxScoreQueue>()(
 ) {}
 // Owns an inline schedule (seeded empty; `server.ts` seeds the live game windows at startup) so the
 // dashboard can read + edit its run windows through the `schedule` verb group.
-export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
+export class LiveScorePoller extends Daemon.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },

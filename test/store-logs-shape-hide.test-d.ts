@@ -1,18 +1,18 @@
 /**
  * Private `_logs` shape is omitted from public store handles (Effect-style `_` fields).
  */
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import type { StoreHandleFromContract } from "../src/internal/store/spec";
-import { makeProcessStoreAnalyticsContract } from "../src/internal/store/processStoreSpec";
+import { makeDaemonStoreAnalyticsContract } from "../src/internal/store/processStoreSpec";
 
-class HideLogsProc extends Process.Tag<HideLogsProc>()("test/store-logs-hide/Proc") {}
+class HideLogsProc extends Daemon.Tag<HideLogsProc>()("test/store-logs-hide/Proc") {}
 
-type ProcessStoreHandle = StoreHandleFromContract<
-  ReturnType<typeof makeProcessStoreAnalyticsContract<typeof HideLogsProc>>
+type DaemonStoreHandle = StoreHandleFromContract<
+  ReturnType<typeof makeDaemonStoreAnalyticsContract<typeof HideLogsProc>>
 >;
 
-declare const handle: ProcessStoreHandle;
+declare const handle: DaemonStoreHandle;
 
 // Apps own the noun `log` — platform journal is `_logs` and not on the public type.
 void handle.event;
@@ -24,7 +24,7 @@ void handle.log;
 
 // Domain shape named `log` is allowed on a custom contract.
 const domainLogContract = Store.contract({
-  log: Store.shape(Process.processExecutionEvent),
+  log: Store.shape(Daemon.processExecutionEvent),
 });
 type DomainHandle = Store.HandleOf<typeof domainLogContract>;
 declare const domain: DomainHandle;

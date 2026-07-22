@@ -1,5 +1,5 @@
 /**
- * Polling — cadence between repeats of a running Process instance.
+ * Polling — cadence between repeats of a running Daemon instance.
  *
  * Controls how often the user's effect is executed while the schedule gate
  * remains armed. Presets provide common patterns; custom implementations
@@ -22,11 +22,11 @@
  *
  * ```ts
  * import { Duration } from "effect"
- * import { Process, Polling, ProcessSchedule } from "hyperlink-ts"
+ * import { Daemon, Polling, DaemonSchedule } from "hyperlink-ts"
  *
- * const myProcess = Process.make("heartbeat", {
+ * const myDaemon = Daemon.make("heartbeat", {
  *   polling: Polling.spaced("10 seconds"),
- *   schedule: ProcessSchedule.alwaysArmed,
+ *   schedule: DaemonSchedule.alwaysArmed,
  *   effect: Effect.logInfo("tick"),
  * })
  * ```
@@ -77,7 +77,7 @@ export const current: Effect.Effect<PollingService, never, PollingTag> =
   PollingTag;
 
 /**
- * A custom cadence policy as a polling layer for `Process.make({ polling })`.
+ * A custom cadence policy as a polling layer for `Daemon.make({ polling })`.
  * Replaces the old `Layer.succeed(Polling, impl)` form; the tag stays internal.
  *
  * @category constructors
@@ -513,7 +513,7 @@ export const acceleratingWithRefs = (options: {
 
 /**
  * Cadence read from a DynamicConfig field on EVERY tick — swap the field's value (locally or
- * over a ProcessManager control verb) and the new interval applies from the next wait. When the
+ * over a DaemonManager control verb) and the new interval applies from the next wait. When the
  * field is swappable AND a `DynamicConfigStore` is in context, the current wait also WAKES on
  * swap, so a shorter interval takes effect immediately instead of after the old one elapses
  * (presence-driven, like durability: no store → no subscription, and R stays `never`).
@@ -524,7 +524,7 @@ export const acceleratingWithRefs = (options: {
  * @example
  * ```ts
  * const pollInterval = DynamicConfig.swappable(Config.duration("POLL_INTERVAL"))
- * Process.make("sync", { polling: Polling.dynamic(pollInterval), effect })
+ * Daemon.make("sync", { polling: Polling.dynamic(pollInterval), effect })
  * ```
  * @category presets
  * @public
@@ -689,7 +689,7 @@ export const wakeOn = <A, R>(
  * `resetCadence` end the current wait early (the tick runs now; the next wait re-aims at the
  * following occurrence). An invalid expression fails AT CONSTRUCTION, not at the first tick.
  *
- * For arming/disarming by calendar windows use a schedule ({@link ProcessSchedule}); `cron` is
+ * For arming/disarming by calendar windows use a schedule ({@link DaemonSchedule}); `cron` is
  * cadence WITHIN the armed window.
  *
  * @example

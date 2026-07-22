@@ -1,7 +1,7 @@
 import { Duration, Effect, Fiber, Layer, Stream } from "effect";
 import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
@@ -18,13 +18,13 @@ class LogQueue extends WorkPool.Tag<LogQueue>()("test/logs-resource/Q", {
   payload: NumberItem,
 }) {}
 
-class LogProc extends Process.Tag<LogProc>()("test/logs-resource/Proc").pipe(Process.schedule([])) {}
+class LogProc extends Daemon.Tag<LogProc>()("test/logs-resource/Proc").pipe(Daemon.schedule([])) {}
 
 class EnvNode extends Node.Tag<EnvNode>()(testBillingNodeKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   EnvNode.logs,
-  Process.store(LogProc),
+  Daemon.store(LogProc),
   WorkPool.store(LogQueue),
 ) {}
 
@@ -80,7 +80,7 @@ it("Hyperlink.logs surfaces process worker lines on query", () =>
       expect(rows.some((r) => r.message.includes("process tick"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Process.layer(LogProc, {
+        Daemon.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
@@ -99,7 +99,7 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Process.layerMemory(LogProc, {
+        Daemon.layerMemory(LogProc, {
           effect: Effect.logInfo("process tick"),
         }).pipe(Layer.provide(Logs.layer)),
       ),

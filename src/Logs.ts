@@ -17,7 +17,7 @@
  *   (also baked into {@link Store.Service} `layerMemory` / `layer`).
  * - **`stream`** / **`snapshot`** — unfiltered live bus (+ bounded tail).
  * - **Durable tails** — each store registration with an implicit `_logs` shape forks a Stream
- *   follower (`Node.logs`, `Process.store`, …). The shape is Effect-style private (omitted from
+ *   follower (`Node.logs`, `Daemon.store`, …). The shape is Effect-style private (omitted from
  *   public handle types); read via {@link Hyperlink.logs} / {@link byNode} / {@link byHyperlink}.
  * - **`withScope`** — lineage annotation at resource materialize.
  * - **`byNode`** / **`byHyperlink`** — durable reads from registration Storage.
@@ -28,15 +28,15 @@
  * ```ts
  * import * as Hyperlink from "hyperlink-ts/Hyperlink";
  * import * as Logs from "hyperlink-ts/Logs";
- * import * as Process from "hyperlink-ts/Process";
+ * import * as Daemon from "hyperlink-ts/Daemon";
  * import * as Store from "hyperlink-ts/Store";
  *
  * class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
- * class Daily extends Process.Tag<Daily>()("app/Daily") {}
+ * class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
  *
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
  *   BillingNode.logs,
- *   Process.store(Daily),
+ *   Daemon.store(Daily),
  * ) {}
  *
  * Effect.provide(program, AppStore.layerMemory)
@@ -203,10 +203,10 @@ const resolveHyperlinkLogKey = (
  * Read durable logs for a **specific resource** by **full key** (same string as
  * {@link Hyperlink.logs}`(tag)` / store registration / lineage segment).
  *
- * Pass a scope tag (`Process.Tag` / `WorkPool.Tag` / …) or its `.key` string.
+ * Pass a scope tag (`Daemon.Tag` / `WorkPool.Tag` / …) or its `.key` string.
  * Hyperlink kind is {@link Hyperlink.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Process.store` / `WorkPool.store`, …) on the
+ * Requires that resource's store registration (`Daemon.store` / `WorkPool.store`, …) on the
  * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
  * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *

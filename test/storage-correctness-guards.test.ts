@@ -5,17 +5,17 @@ import { TestClock } from "effect/testing";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as WorkPool from "../src/WorkPool";
 import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
 import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Exec extends Process.Tag<Exec>()("test/storage-correctness/Exec") {}
+class Exec extends Daemon.Tag<Exec>()("test/storage-correctness/Exec") {}
 
 class Jobs extends WorkPool.Tag<Jobs>()("test/storage-correctness/Jobs", {
   payload: jobSchema,
@@ -36,7 +36,7 @@ class TestGate extends Gate.Tag<{ readonly _tag: "Gate" }>()(
 ) {}
 
 class AppStore extends Store.Service<AppStore>("@test/storage-correctness/FileStore")(
-  Store.register(Exec, builtInProcessStoreContract(Exec)),
+  Store.register(Exec, builtInDaemonStoreContract(Exec)),
 ) {}
 
 const jobsRegistration = WorkPool.store(Jobs);
@@ -72,24 +72,24 @@ const waitFor = (
     }
   }).pipe(Effect.timeout(Duration.seconds(3)));
 
-describe("storage correctness — Process soft-default + AppStore override", () => {
-  it.effect("Process.layer alone soft-defaults Memory (R fulfilled, no AppStore)", () =>
+describe("storage correctness — Daemon soft-default + AppStore override", () => {
+  it.effect("Daemon.layer alone soft-defaults Memory (R fulfilled, no AppStore)", () =>
     Effect.gen(function* () {
-      const live = Process.layer(Exec, {
+      const live = Daemon.layer(Exec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       });
       yield* Effect.gen(function* () {
         yield* Exec;
         yield* TestClock.adjust(Duration.millis(200));
-        const store = yield* Store.resolveOrDie(Exec.key, builtInProcessStoreContract(Exec));
+        const store = yield* Store.resolveOrDie(Exec.key, builtInDaemonStoreContract(Exec));
         const events = yield* store.events();
         expect(events.some((row) => row._tag === "Completed")).toBe(true);
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
 
-  it.effect("Process.layer + Layer.provideMerge(AppStore.sqlite) persists across reconnect", () =>
+  it.effect("Daemon.layer + Layer.provideMerge(AppStore.sqlite) persists across reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -102,7 +102,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = Process.layer(Exec, {
+          const live = Daemon.layer(Exec, {
             effect: Effect.void,
             polling: Polling.spaced(Duration.millis(50)),
           }).pipe(Layer.provideMerge(AppStore.layer({ filename })));
@@ -124,7 +124,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, clock)), Effect.scoped),
   );
 
-  it.effect("sibling Layer.merge(Process.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
+  it.effect("sibling Layer.merge(Daemon.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -138,7 +138,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
       yield* Effect.scoped(
         Effect.gen(function* () {
           const live = Layer.merge(
-            Process.layer(Exec, {
+            Daemon.layer(Exec, {
               effect: Effect.void,
               polling: Polling.spaced(Duration.millis(50)),
             }),
@@ -162,8 +162,8 @@ describe("storage correctness — Process soft-default + AppStore override", () 
 
   it.effect("Node-logs-only Soft override — layer build dies (fail-loud)", () =>
     Effect.gen(function* () {
-      // Soft captures NodeOnly Storage. Exec is not registered → die at Process.layer build.
-      const live = Process.layer(Exec, {
+      // Soft captures NodeOnly Storage. Exec is not registered → die at Daemon.layer build.
+      const live = Daemon.layer(Exec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       }).pipe(Layer.provideMerge(NodeOnlyStore.layerMemory));

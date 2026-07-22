@@ -7,23 +7,23 @@
  * @remarks
  * ## What this package provides
  *
- * - **`Process`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
+ * - **`Daemon`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
  *   long-lived driver follows a schedule and spawns process instances; each instance checks its
  *   schedule and exits naturally when disarmed while `Polling` controls in-instance repeat cadence.
- *   Optional `polling` / `schedule` layers on `Process.make` are merged into `process.effect` so
+ *   Optional `polling` / `schedule` layers on `Daemon.make` are merged into `process.effect` so
  *   fork-time requirements stay accurate in TypeScript. Run windows are built with
- *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
- *   `Process.window` / `Process.at`).
+ *   `Daemon.scheduleInMemory` / `scheduleDefine` (and the toolkit `Daemon.Schedule` resource /
+ *   `Daemon.window` / `Daemon.at`).
  * - **`WorkPool`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
  * - **`Store`** — EventJournal-backed execution / queue / run / log history; process stores via
- *   `Process.store(tag)` and `Store.Service`.
+ *   `Daemon.store(tag)` and `Store.Service`.
  * - **Toolkit (location-transparent resources)** — **`Hyperlink`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Hyperlink.client` /
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
- *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
- *   `hyperlink-ts/Process`) and the toolkit queue (from
+ *   on it — the toolkit process (`Daemon.Tag` / `Daemon.Schedule`, from
+ *   `hyperlink-ts/Daemon`) and the toolkit queue (from
  *   `hyperlink-ts/WorkPool`) — each with `Tag` / `layer` / `configure` / `serve` /
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
@@ -49,7 +49,7 @@
  *
  * ## Dedicated subpaths
  *
- * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Process`**,
+ * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Daemon`**,
  * **`hyperlink-ts/WorkPool`**, **`hyperlink-ts/HyperlinkConfigure`**,
  * **`hyperlink-ts/Store`**, and **`hyperlink-ts/Logs`**.
  *
@@ -87,12 +87,12 @@
 // hyperlink-ts - Main exports (see @packageDocumentation above)
 // ============================================================================
 
-// The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
-// access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
-// engine only when used. Engine + Hyperlink toolkit are both members (`Process.make`, `Process.Tag`, …).
-export * as Process from "./Process";
-export { ProcessMakeInvalidLayerArgument } from "./Process";
-export type { ProcessSnapshot } from "./Process";
+// The single unified `Daemon` namespace. `export * as` (module namespace, Effect-style) so member
+// access tree-shakes: `Daemon.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
+// engine only when used. Engine + Hyperlink toolkit are both members (`Daemon.make`, `Daemon.Tag`, …).
+export * as Daemon from "./Daemon";
+export { DaemonMakeInvalidLayerArgument } from "./Daemon";
+export type { DaemonSnapshot } from "./Daemon";
 export * as Polling from "./Polling";
 // The single unified WorkPool namespace. `export * as` (module namespace, Effect-style) so
 // member access tree-shakes: `WorkPool.Tag` pulls zero engine code; `make`/`layer`/`serve`
@@ -194,7 +194,7 @@ export type {
 } from "./Node";
 
 /**
- * Layer-composed configure patches for {@link Process.Service}, {@link WorkPool.Service},
+ * Layer-composed configure patches for {@link Daemon.Service}, {@link WorkPool.Service},
  * and {@link Gate.Service}.
  */
 export {
@@ -207,7 +207,7 @@ export type { ConfigPatch } from "./HyperlinkConfigure";
 
 // CLI
 
-// Process Manager
+// Daemon Manager
 export {
   encodeLogEntryNdjson,
   decodeLogEntryNdjson,
@@ -241,21 +241,21 @@ export {
   withNodeLogAnnotations,
 } from "./LogContext";
 export * as LogContext from "./LogContext";
-// Types - Process
+// Types - Daemon
 export type {
-  Process as ProcessInterface,
-  ProcessDefinition,
-  ProcessServiceDefinition,
-  ProcessMakeConfig,
-  ProcessMakeOptions,
-  ProcessSupervisorRequirements,
-  ProcessPollingInput,
-  ProcessScheduleInput,
-  ProcessScheduleLayerInput,
-  ProcessMake,
-  ProcessServiceBuilder,
-  ProcessServiceFactory,
-} from "./Process";
+  Daemon as DaemonInterface,
+  DaemonDefinition,
+  DaemonServiceDefinition,
+  DaemonMakeConfig,
+  DaemonMakeOptions,
+  DaemonSupervisorRequirements,
+  DaemonPollingInput,
+  DaemonScheduleInput,
+  DaemonScheduleLayerInput,
+  DaemonMake,
+  DaemonServiceBuilder,
+  DaemonServiceFactory,
+} from "./Daemon";
 
 // Types - Polling
 

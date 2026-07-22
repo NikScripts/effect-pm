@@ -16,7 +16,7 @@
  * - {@link Service.layer} / {@link store.layer} with **required** `{ filename }` — SQLite via `SqlEventJournal`
  *   (`effect/unstable/eventlog`) on `@effect/sql-sqlite-node`.
  *
- * Toolkit engines (`Process.layer`, …) soft-default {@link layerDefaultMemory} via
+ * Toolkit engines (`Daemon.layer`, …) soft-default {@link layerDefaultMemory} via
  * {@link withDefaultStorage} (**R fulfilled**). Override by providing your {@link Service} into
  * the toolkit layer (`Layer.provide` / `provideMerge` — see `docs/guides/stores.md`). `*Memory`
  * toolkit variants are aliases of the same soft-default (`layerDefaultMemory` — no Logs).
@@ -500,7 +500,7 @@ export const layerDefaultMemory: Layer.Layer<Storage> = Layer.unwrap(
  *   `provideMerge` into this layer) → build the engine against that store (override, including SQLite).
  *
  * Prefer composing override **into** the toolkit layer so Soft unwrap sees it:
- * `Process.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` or
+ * `Daemon.layer(…).pipe(Layer.provideMerge(AppStore.layer…))` or
  * `httpServer([…]).pipe(Layer.provide(AppStore.layer…))`.
  *
  * @category layers & serving
@@ -1142,7 +1142,7 @@ export const resolveOrDie = <const C extends StoreContractValue>(
       Effect.die(
         `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store. ` +
           `If Soft override captured an AppStore, register this engine on that Store.Service ` +
-          `(Process.store / WorkPool.store / CustomQueueHyperlink.store / Gate.store) ` +
+          `(Daemon.store / WorkPool.store / CustomQueueHyperlink.store / Gate.store) ` +
           `alongside Node.logs — or omit Soft override so Memory soft-default materializes the scope.`,
       ),
     ),

@@ -21,13 +21,13 @@ import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
 import * as Gate from "../../src/Gate";
-import { serve as processEntry } from "../../src/Process";
+import { serve as processEntry } from "../../src/Daemon";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
 import { Polling } from "../../src/Polling";
 import * as Store from "../../src/Store";
 import * as WorkPool from "../../src/WorkPool";
-import * as Process from "../../src/Process";
+import * as Daemon from "../../src/Daemon";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, FetchGate, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
@@ -234,7 +234,7 @@ class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaSto
 
 class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
   LiveNode.logs,
-  Process.store(LiveScorePoller),
+  Daemon.store(LiveScorePoller),
   Gate.store(FetchGate),
 ) {}
 

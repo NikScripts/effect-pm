@@ -1461,7 +1461,7 @@ export const serveRemoteMemory = <
  * ```ts
  * Node.httpServer([
  *   WorkPool.serve(RosterQueue, { effect, itemSchema }),
- *   Process.serve(SeasonMatches, { effect }),
+ *   Daemon.serve(SeasonMatches, { effect }),
  * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
  * ```
  *

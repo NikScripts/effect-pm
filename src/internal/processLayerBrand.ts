@@ -1,6 +1,6 @@
 import { Layer } from "effect";
 import type { PollingTag } from "./pollingTag";
-import type { ProcessScheduleTag } from "./processSchedule";
+import type { DaemonScheduleTag } from "./processSchedule";
 
 /** @internal */
 const pollingLayerRegistry = new WeakMap<object, true>();
@@ -29,5 +29,5 @@ export const isPollingLayer = (u: unknown): u is Layer.Layer<PollingTag, never, 
   Layer.isLayer(u) && pollingLayerRegistry.has(u);
 
 /** @internal */
-export const isScheduleLayer = (u: unknown): u is Layer.Layer<ProcessScheduleTag, never, never> =>
+export const isScheduleLayer = (u: unknown): u is Layer.Layer<DaemonScheduleTag, never, never> =>
   Layer.isLayer(u) && scheduleLayerRegistry.has(u);

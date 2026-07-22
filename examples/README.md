@@ -30,7 +30,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
 | **Queues** | [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) → [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
-| **Process runtime** | `pnpm run example:process-supervisor-patterns` |
+| **Daemon runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Hyperlink gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
@@ -77,30 +77,30 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
-### Process store (EventJournal)
+### Daemon store (EventJournal)
 
 | File | Teaches |
 |------|---------|
-| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Process.layer`** + **`Process.store(tag)`** — auto-append on terminal runs, app store override |
+| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Daemon.layer`** + **`Daemon.store(tag)`** — auto-append on terminal runs, app store override |
 | [`forms/process-store/process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) | Tag `{ error }` → typed `Failed.error` in execution history |
 
-Start here for execution history. **`Process.make`** does not auto-append.
+Start here for execution history. **`Daemon.make`** does not auto-append.
 
 Storage:
 
-- **`Store.Service` + `Process.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Process.layer`** only.
+- **`Store.Service` + `Daemon.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Daemon.layer`** only.
 - **Durable logs** — `Node.logs` / toolkit `*.store` on a `Store.Service`; `hyperlink-ts/Logs` handles capture/relay + `byNode` / `byHyperlink`.
 
 ### Schedule
 
 | File | Teaches |
 |------|---------|
-| [`forms/schedule/schedule-at.ts`](./forms/schedule/schedule-at.ts) | `ProcessSchedule.at` (one-shot) |
-| [`forms/schedule/schedule-window.ts`](./forms/schedule/schedule-window.ts) | `ProcessSchedule.window` (bounded) |
-| [`forms/schedule/schedule-define.ts`](./forms/schedule/schedule-define.ts) | `ProcessSchedule.define` composition |
+| [`forms/schedule/schedule-at.ts`](./forms/schedule/schedule-at.ts) | `DaemonSchedule.at` (one-shot) |
+| [`forms/schedule/schedule-window.ts`](./forms/schedule/schedule-window.ts) | `DaemonSchedule.window` (bounded) |
+| [`forms/schedule/schedule-define.ts`](./forms/schedule/schedule-define.ts) | `DaemonSchedule.define` composition |
 | [`forms/schedule/schedule-controls-initializer.ts`](./forms/schedule/schedule-controls-initializer.ts) | Controls from `schedule` initializer |
-| [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Process.scheduleControls` in tick body |
-| [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `ProcessSchedule` service |
+| [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Daemon.scheduleControls` in tick body |
+| [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `DaemonSchedule` service |
 
 ### Polling
 

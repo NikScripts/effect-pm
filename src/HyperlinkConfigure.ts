@@ -1,5 +1,5 @@
 /**
- * Layer-composed configuration for {@link Process.Service}, {@link WorkPool.Service},
+ * Layer-composed configuration for {@link Daemon.Service}, {@link WorkPool.Service},
  * and {@link Gate.Service}.
  *
  * @remarks

@@ -1,12 +1,12 @@
 /**
  * @module examples/forms/schedule/schedule-controls-in-effect
  *
- * Process.scheduleControls inside the tick body. Run: `pnpm run example:form:schedule-controls-in-effect`
+ * Daemon.scheduleControls inside the tick body. Run: `pnpm run example:form:schedule-controls-in-effect`
  */
 
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process } from "../../../src";
+import { Polling, Daemon } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -15,16 +15,16 @@ const env = TestClock.layer();
 const program = Effect.gen(function* () {
   const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const proc = Process.make("examples/forms/schedule-controls-in-effect", {
+  const proc = Daemon.make("examples/forms/schedule-controls-in-effect", {
     polling: Polling.spaced(Duration.millis(100)),
     schedule: ({ set }) =>
       set([
-        Process.window("first-window", utcDateFromMillis(0), utcDateFromMillis(700)),
-        Process.window("second-window", utcDateFromMillis(1_500), utcDateFromMillis(2_200)),
+        Daemon.window("first-window", utcDateFromMillis(0), utcDateFromMillis(700)),
+        Daemon.window("second-window", utcDateFromMillis(1_500), utcDateFromMillis(2_200)),
       ]),
     effect: Effect.gen(function* () {
-      const controls = yield* Process.scheduleControls;
-      const currentId = yield* Process.currentScheduleId;
+      const controls = yield* Daemon.scheduleControls;
+      const currentId = yield* Daemon.currentScheduleId;
       const all = yield* controls.entries;
 
       // Prune to first entry only while more than one remains.

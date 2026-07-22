@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Option, Ref, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import * as Polling from "../src/Polling";
-import { Process } from "../src";
+import { Daemon } from "../src";
 
 describe("Polling.adaptive", () => {
   it.effect("decays from active toward idle, capped", () =>
@@ -61,7 +61,7 @@ describe("Polling.adaptive", () => {
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
       const arrivals = yield* Ref.make(0);
-      const proc = Process.make("test/adaptive-wake", {
+      const proc = Daemon.make("test/adaptive-wake", {
         effect: Ref.update(ticks, (n) => n + 1),
         polling: Polling.adaptive({
           active: Duration.seconds(1),

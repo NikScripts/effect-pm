@@ -6,7 +6,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Group from "../src/Group";
 import * as Node from "../src/Node";
 
-// The payoff of killing ProcessManager: a `Group.Tag` is pure organization, and each member tag
+// The payoff of killing DaemonManager: a `Group.Tag` is pure organization, and each member tag
 // independently resolves its OWN node. Here one group holds two members bound to two DIFFERENT
 // nodes (two real http servers); driving them through the group accessors connects each to its
 // own node — no central registry, no middleman.

@@ -54,9 +54,9 @@ type AllQueues =
 type QueueSvc = [typeof Mail] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf queue tag (yieldable for the fleet's queue service). */
 export type LeafTag = Effect.Effect<QueueSvc, never, AllQueues> & { readonly key: string };
-type ProcessSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
+type DaemonSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf process tag (yieldable for a process service). */
-export type ProcessTag = Effect.Effect<ProcessSvc, never, KeyRotation> & { readonly key: string };
+export type DaemonTag = Effect.Effect<DaemonSvc, never, KeyRotation> & { readonly key: string };
 
 /** A node in the `Group.Tag` tree (a group). */
 export interface GroupNode {
@@ -274,25 +274,25 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   return bundle;
 };
 
-type ProcessStatus = ProcessSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
+type DaemonStatus = DaemonSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
 
 /** The atoms + controls one process card needs — derived from the tag. */
-export interface ProcessBundle {
-  readonly status: ValueAtom<ProcessStatus>;
+export interface DaemonBundle {
+  readonly status: ValueAtom<DaemonStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
   readonly run: CommandAtom;
 }
-const processCache = new Map<string, ProcessBundle>();
+const processCache = new Map<string, DaemonBundle>();
 
 /** Build (once per tag) the atom bundle for a process tag. */
-export const processBundle = (tag: ProcessTag): ProcessBundle => {
+export const processBundle = (tag: DaemonTag): DaemonBundle => {
   const existing = processCache.get(tag.key);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status.changes));
   bumpLogIdFrom(`${tag.key}/logs`);
-  const bundle: ProcessBundle = {
+  const bundle: DaemonBundle = {
     status: runtime.atom(statusStream),
     // cached + query-then-tail, same generic mechanism as the queue.
     logs: hyperlinkLogsAccumulator(tag.key),
@@ -313,8 +313,8 @@ export const queueLeaves = (node: { readonly members: Record<string, unknown> })
   leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<LeafTag>;
 
 /** Only the process leaves of a tree. */
-export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<ProcessTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<ProcessTag>;
+export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
+  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<DaemonTag>;
 
 /** One row of the fleet table — headline status + metrics, carrying its tag. */
 export interface FleetRow {
