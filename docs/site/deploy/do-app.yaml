@@ -8,6 +8,11 @@
 # static pages; the origin then mostly serves the SSR'd dep API pages.
 name: hyperlink-docs
 region: nyc
+domains:
+  - domain: hyperlink.cool
+    type: PRIMARY
+  - domain: www.hyperlink.cool
+    type: ALIAS
 services:
   - name: web
     image:
