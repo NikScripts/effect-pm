@@ -22,7 +22,7 @@ echo "==> building site @ ${SHA} (origin: ${DOCS_SITE_ORIGIN})"
 pnpm build
 
 echo "==> docker build"
-BASE="registry.digitalocean.com/${REGISTRY}/effect-pm-docs"
+BASE="registry.digitalocean.com/${REGISTRY}/hyperlink-docs"
 (cd .. && docker build -f site/Dockerfile -t "${BASE}:${SHA}" -t "${BASE}:latest" .)
 
 echo "==> push (sha-tagged for rollback + latest for the app spec)"

@@ -6,13 +6,13 @@
 #
 # Put Cloudflare in front (DNS proxy): edge brotli + caching for /search/*, /assets/*, and the
 # static pages; the origin then mostly serves the SSR'd dep API pages.
-name: effect-pm-docs
+name: hyperlink-docs
 region: nyc
 services:
   - name: web
     image:
       registry_type: DOCR
-      repository: effect-pm-docs
+      repository: hyperlink-docs
       tag: latest
     http_port: 8080
     instance_size_slug: basic-xs
