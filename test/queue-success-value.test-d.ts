@@ -26,15 +26,15 @@ const _numberLayer = WorkPool.layerMemory(NumberQueue, {
 });
 void _numberLayer;
 
-// returning the wrong success type is a type error
+// returning the wrong success type is a type error (overloaded verb → error at the call)
+// @ts-expect-error worker must return `Effect<number, …>`, not `Effect<string, …>`
 WorkPool.layerMemory(NumberQueue, {
-  // @ts-expect-error worker must return `Effect<number, …>`, not `Effect<string, …>`
   effect: (_job) => Effect.succeed("nope"),
 });
 
 // a `void`-returning worker is rejected when a success schema is declared
+// @ts-expect-error worker must return `Effect<number, …>`, not `Effect<void, …>`
 WorkPool.layerMemory(NumberQueue, {
-  // @ts-expect-error worker must return `Effect<number, …>`, not `Effect<void, …>`
   effect: (_job) => Effect.void,
 });
 
