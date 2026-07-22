@@ -36,6 +36,10 @@ export {
   NPipeRequiresWindows,
   UnaddressedNode,
   NodeUnreachable,
+  ProtocolUnanswered,
+  ServiceNotServed,
+  ServiceNotReady,
+  ContractMismatch,
   ProtocolKindMismatch,
   MalformedNode,
   InvalidHttpTarget,
@@ -86,8 +90,8 @@ import type { NamelessListenOptions } from "./internal/nodeCore"
 
 /** Non-empty serve list — same constraint as {@link listen}. */
 type ServeLayerList = readonly [
-  Layer.Layer<never, any, never>,
-  ...ReadonlyArray<Layer.Layer<never, any, never>>,
+  Layer.Layer<never, never, never>,
+  ...ReadonlyArray<Layer.Layer<never, never, never>>,
 ]
 
 /** C3 catalog proof — every `ROut` member appears in merged serve success. */
@@ -124,21 +128,17 @@ export function listenLocal<
 >
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<never, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, never, never> | ServeLayerList,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   never,
-  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc,
-  unknown
->
+  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any>
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<never, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, never, never> | ServeLayerList,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   never,
-  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc,
-  unknown
-> {
+  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any> {
   return unix(node, serves as ServeLayerList, options)
 }

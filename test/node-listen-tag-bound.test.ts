@@ -18,7 +18,7 @@ const unixTagErased = Node.unix as unknown as (
 ) => Layer.Layer<never, Node.ListenTagNodeRequired | Node.UnixListenRequiresIpc>;
 
 describe("Node.unix(Tag, impl) sole-bound node", () => {
-  it.effect("listens on the Tag's node; client(Tag) dials", () =>
+  it.live("listens on the Tag's node; client(Tag) dials", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
       class Worker extends Node.Tag<Worker>()("listen-tag/Worker", { path }) {}

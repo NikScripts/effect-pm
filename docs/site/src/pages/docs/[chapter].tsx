@@ -4,6 +4,8 @@ import { PrevNext } from "../../components/PrevNext.js";
 import { DraftBanner, PageAside } from "../../components/PageAside.js";
 import { PageMeta } from "../../components/PageMeta.js";
 import { firstParagraphs } from "../../lib/page-desc.js";
+import { EditThisPage } from "../../components/EditThisPage.js";
+import * as nodePath from "node:path";
 
 // One route for every standards chapter. Server component: parse + render through
 // the Effect pipeline, SSG'd at build.
@@ -17,6 +19,14 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
       <DraftBanner meta={meta} />
       <article className="prose">
         {element}
+        <EditThisPage
+          sourcePath={`docs/${c.group !== "" ? `${c.group}/` : ""}${c.slug}.md`}
+          absPath={nodePath.resolve(
+            process.cwd(),
+            "../..",
+            `docs/${c.group !== "" ? `${c.group}/` : ""}${c.slug}.md`
+          )}
+        />
         <PrevNext slug={chapter} />
       </article>
       <PageAside meta={meta} toc={toc} />

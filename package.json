@@ -36,6 +36,10 @@
       "types": "./dist/Process.d.ts",
       "default": "./dist/Process.js"
     },
+    "./Polling": {
+      "types": "./dist/Polling.d.ts",
+      "default": "./dist/Polling.js"
+    },
     "./QueueResource": {
       "types": "./dist/QueueResource.d.ts",
       "default": "./dist/QueueResource.js"
@@ -63,6 +67,14 @@
     "./Logs": {
       "types": "./dist/Logs.d.ts",
       "default": "./dist/Logs.js"
+    },
+    "./LogEntry": {
+      "types": "./dist/LogEntry.d.ts",
+      "default": "./dist/LogEntry.js"
+    },
+    "./LogContext": {
+      "types": "./dist/LogContext.d.ts",
+      "default": "./dist/LogContext.js"
     },
     "./NodeStatus": {
       "types": "./dist/NodeStatus.d.ts",
@@ -115,6 +127,14 @@
     "./HttpApiResource": {
       "types": "./dist/HttpApiResource.d.ts",
       "default": "./dist/HttpApiResource.js"
+    },
+    "./RunResource": {
+      "types": "./dist/RunResource.d.ts",
+      "default": "./dist/RunResource.js"
+    },
+    "./HttpClientRunGate": {
+      "types": "./dist/HttpClientRunGate.d.ts",
+      "default": "./dist/HttpClientRunGate.js"
     },
     "./web": {
       "types": "./dist/web.d.ts",

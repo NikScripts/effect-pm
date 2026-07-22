@@ -3,7 +3,7 @@
  *
  * @internal
  */
-import { Clock, Effect, Layer } from "effect"
+import { Clock, Effect, Layer, Option } from "effect"
 import { HttpServer } from "effect/unstable/http"
 import * as Resource from "../Resource"
 import {
@@ -61,7 +61,7 @@ export function ws<
       >,
   options?: NamelessListenOptions,
 ): Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
-export function ws<Serve extends Layer.Layer<never, any, never>>(
+export function ws<Serve extends Layer.Layer<never, never, never>>(
   serve: Serve,
   options?: NamelessListenOptions,
 ): Layer.Layer<
@@ -92,11 +92,11 @@ export function ws<
 export function ws(
   nodeOrServesOrTag:
     | AnyNode
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList
     | Resource.PipeableTag,
   servesOrOptionsOrImpl?:
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList
     | NamelessListenOptions
     | object,
@@ -106,9 +106,7 @@ export function ws(
   | UnaddressedNode
   | AddressLessClaimLost
   | ListenTagNodeRequired
-  | WsListenRequiresWs,
-  unknown
-> {
+  | WsListenRequiresWs, any> {
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
@@ -126,9 +124,7 @@ export function ws(
       | UnaddressedNode
       | AddressLessClaimLost
       | ListenTagNodeRequired
-      | WsListenRequiresWs,
-      unknown
-    >;
+      | WsListenRequiresWs, never>;
   }
 
   if (isResourceTagArg(nodeOrServesOrTag)) {
@@ -151,9 +147,7 @@ export function ws(
         | UnaddressedNode
         | AddressLessClaimLost
         | ListenTagNodeRequired
-        | WsListenRequiresWs,
-        unknown
-      >;
+        | WsListenRequiresWs, never>;
     }
     if (isNonWsNode(bound as AnyNode)) {
       const n = bound as AnyNode;
@@ -170,9 +164,7 @@ export function ws(
         | UnaddressedNode
         | AddressLessClaimLost
         | ListenTagNodeRequired
-        | WsListenRequiresWs,
-        unknown
-      >;
+        | WsListenRequiresWs, never>;
     }
     const serveErased = Resource.serve as unknown as (
       tag: Resource.PipeableTag,
@@ -187,9 +179,7 @@ export function ws(
       | UnaddressedNode
       | AddressLessClaimLost
       | ListenTagNodeRequired
-      | WsListenRequiresWs,
-      unknown
-    >;
+      | WsListenRequiresWs, never>;
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -207,13 +197,11 @@ export function ws(
       | UnaddressedNode
       | AddressLessClaimLost
       | ListenTagNodeRequired
-      | WsListenRequiresWs,
-      unknown
-    >;
+      | WsListenRequiresWs, never>;
   }
 
   const serves = servesOrOptionsOrImpl as
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
   return wsListenOn(node, list, listenOptions) as Layer.Layer<
@@ -221,22 +209,20 @@ export function ws(
     | UnaddressedNode
     | AddressLessClaimLost
     | ListenTagNodeRequired
-    | WsListenRequiresWs,
-    unknown
-  >;
+    | WsListenRequiresWs, never>;
 }
 
 /** Nameless anonymous WebSocket Node + bind (pipe Lookup when needed). @internal */
 const wsNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const key = yield* anonymousNodeKey(list);
       return wsListenOn(Tag()(key, { kind: "WebSocket" }), list, options);
     }),
-  ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  ) as any;
 
 /**
  * Bind WebSocket for a Node — mint/claim when address-less or dynamic; else {@link wsServer}
@@ -248,7 +234,7 @@ const wsListenOn = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost | WsListenRequiresWs, unknown> => {
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost | WsListenRequiresWs, never> => {
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
@@ -263,9 +249,7 @@ const wsListenOn = (
       }),
     ) as Layer.Layer<
       never,
-      UnaddressedNode | AddressLessClaimLost | WsListenRequiresWs,
-      unknown
-    >;
+      UnaddressedNode | AddressLessClaimLost | WsListenRequiresWs, never>;
   }
   if (
     node.path === undefined &&
@@ -302,7 +286,7 @@ const ephemeralWsListen = (
   options: ListenOptions | undefined,
   catalogSource: AnyNode,
   claim?: { readonly claimIdentity: true },
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const platform = yield* localhostWsPlatformEffect(0);
@@ -322,8 +306,11 @@ const ephemeralWsListen = (
           ) as AnyNode & { readonly key: string };
           if (claim?.claimIdentity === true) {
             const Lookup = yield* Effect.promise(() => import("../Lookup"));
-            const identity = yield* Lookup.Identity;
-            const outcome = yield* identity
+            const identity = yield* Effect.serviceOption(Lookup.Identity);
+            if (Option.isNone(identity)) {
+              return yield* new Resource.IdentitySelfRequired({ tag: wireKey });
+            }
+            const outcome = yield* identity.value
               .claim(
                 new Lookup.ClaimRequest({
                   key: wireKey,
@@ -358,14 +345,14 @@ const ephemeralWsListen = (
         }),
       ).pipe(Layer.provide(platform));
     }),
-  ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  ) as any;
 
 /** {@link wsServer} for an addressed WebSocket node (platform provided by caller). @internal */
 const wsBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode, unknown> => {
+): Layer.Layer<never, UnaddressedNode, never> => {
   if (node.url === undefined) {
     return unaddressedLayer(node.key);
   }
@@ -381,7 +368,7 @@ const wsBind = (
       ? { onConflict: options.onConflict }
       : {}),
     advertiseNode,
-  });
+  }) as unknown as Layer.Layer<never, UnaddressedNode, never>;
 };
 
 /** Loopback port from a `ws://127.0.0.1:N/…` or `ws://localhost:N/…` url. @internal */

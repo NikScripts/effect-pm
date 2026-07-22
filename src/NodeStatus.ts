@@ -28,7 +28,6 @@ import {
   type NodeStatus as NodeStatusType,
   type NodeResourceReadiness as NodeResourceReadinessType,
 } from "./internal/nodeStatusResource";
-import * as Node from "./Node";
 
 /** Live node status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
  *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.

@@ -28,7 +28,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
-| **Node log key** | One OS process / runtime host (durable bucket) | `Resource.Node` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
+| **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
 | **Resource key** | One queue, process, or custom tag | `Resource.Tag` / `Process.Tag` / `QueueResource.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Resource.logs` / `Logs.by*` |
@@ -86,19 +86,20 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 ## Node log key rules
 
-1. **Must equal** the `Resource.Node` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
+1. **Must equal** the `Node.Tag` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
 2. **Register** `Node.logs` (or `Resource.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
 3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
-4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same live line can land in both scopes (one append per active registration). Store-layer `(scopeKey, lineId)` memo is deferred; live followers keep an in-memory tail claim.
+4. **Two copies OK** — when both `Node.logs` and `Process.store` / `QueueResource.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
 5. Use **slash-separated** paths (`domain/role`), not placeholders (`my-node`, `node-a`, bare `wnba`).
 
 ```ts
 import * as Resource from "@nikscripts/effect-pm/Resource";
+import * as Node from "@nikscripts/effect-pm/Node"
 import * as Logs from "@nikscripts/effect-pm/Logs";
 import * as Process from "@nikscripts/effect-pm/Process";
 import * as Store from "@nikscripts/effect-pm/Store";
 
-class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -111,7 +112,7 @@ const rows = yield* Logs.byNode(BillingNode, { limit: 200 })
 ```
 
 ```ts
-// ❌ wrong — invented node log key, drifts from Resource.Node
+// ❌ wrong — invented node log key, drifts from Node.Tag
 Logs.byNode("my-node")
 Logs.byNode("wnba") // WnbaNode.key is "wnba/scores", not "wnba"
 ```
@@ -150,8 +151,8 @@ BillingNode process (node log key: billing/scores)
 ```
 
 - **Capture:** exactly one merged capture logger per node (`Logs.layer`, baked into `Store.Service`).
-- **Bus:** one `LogRelay` (PubSub + bounded tail).
-- **Durable tails:** Stream pipeline per registration — level ∧ match → batch append (in-memory tail claim today; durable `(scopeKey, lineId)` memo deferred).
+- **Bus:** one `Logs.Relay` (PubSub + bounded tail; internal Context tag remains `LogRelay`).
+- **Durable tails:** Stream pipeline per registration — level ∧ match → claim → batch append; claim seeded from durable `_logs` at layer acquire.
 - **Stream:** unfiltered on `Logs.stream`; `Resource.logs` applies lineage + optional `logStreamLevel`.
 
 ## Node runtime

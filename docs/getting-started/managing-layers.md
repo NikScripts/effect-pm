@@ -25,11 +25,11 @@ program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locall
 ## Serving over the network
 
 To expose a Resource over RPC, mount it on an HTTP server. `Resource.serve(Tag, impl)` is one served
-entry; `Resource.httpServer([...])` (or `Resource.wsServer([...])`) hosts a list of them on one
+entry; `Node.httpServer([...])` (or `Node.wsServer([...])`) hosts a list of them on one
 `/rpc`, alongside an auto-mounted `NodeStatus` and a `/health` route:
 
 ``` ts
-const Node = Resource.httpServer([
+const Node = Node.httpServer([
   Resource.serve(Jobs, jobsImpl),
   Resource.serve(Emails, emailsImpl),
 ]).pipe(
@@ -39,9 +39,9 @@ const Node = Resource.httpServer([
 
 Two entry points, differing only in the RPC transport they speak:
 
-- **`Resource.httpServer([...])`** — RPC over HTTP POST. The default; correct for servers, CLIs, and
+- **`Node.httpServer([...])`** — RPC over HTTP POST. The default; correct for servers, CLIs, and
   a handful of concurrent streams.
-- **`Resource.wsServer([...])`** — RPC over **one multiplexed WebSocket per client**. Use this when a
+- **`Node.wsServer([...])`** — RPC over **one multiplexed WebSocket per client**. Use this when a
   **browser** connects: a dashboard opens many live streams (each resource's status + metrics + logs)
   and the browser caps at **~6 connections per origin on HTTP/1.1**, starving the rest. A WebSocket
   sidesteps the cap entirely. Everything else — the serve list, the options, `/health` — is identical.
@@ -50,7 +50,7 @@ Two entry points, differing only in the RPC transport they speak:
 
 The client mirror of serving. A remote Resource needs two things: the client handle for the Tag, and
 a **transport** to reach the node it runs on. A **Node** is a named endpoint — declared with
-`Resource.Node<Self>("key", { url })` — that carries the address its Resources answer at, so a
+`Node.Tag<Self>()("key", { url })` — that carries the address its Resources answer at, so a
 served tag is self-describing and a client knows where to dial.
 
 ``` ts
@@ -99,7 +99,7 @@ HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh onto WebSoc
 knob per node:
 
 ``` ts
-Resource.wsServer([Resource.serve(WorkerPool, poolImpl)]).pipe(
+Node.wsServer([Resource.serve(WorkerPool, poolImpl)]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)), // peers speak ws too
 )

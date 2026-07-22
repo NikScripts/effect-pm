@@ -14,6 +14,7 @@ import { Console, Data, Effect, Exit, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
 import { slugify } from "../src/lib/slug-text.js";
+import { stripDocBanner } from "../src/lib/doc-banner.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
@@ -141,9 +142,9 @@ const program = Effect.gen(function* () {
     for (const file of files) {
       const slug = file.replace(/\.md$/, "");
       if (slug === "glossary" || slug === "README") continue;
-      const text = yield* fs
-        .readFileString(nodePath.join(abs, file))
-        .pipe(Effect.orElseSucceed(() => ""));
+      const text = stripDocBanner(
+        yield* fs.readFileString(nodePath.join(abs, file)).pipe(Effect.orElseSucceed(() => ""))
+      );
       if (text === "") continue;
       const lines = text.split("\n");
       const pageTitle = plainText(lines.find((l) => l.startsWith("# ")) ?? slug).trim() || slug;

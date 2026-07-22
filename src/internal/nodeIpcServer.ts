@@ -41,8 +41,10 @@ export interface IpcServerOptions {
    */
   readonly node?: string | { readonly key: string };
   /**
-   * Best-effort `unlink` of `path` before bind and when the server scope closes (default `true`).
-   * Clears stale `.sock` files from a previous crash so listen does not fail with EADDRINUSE.
+   * Best-effort `unlink` of `path` before bind and when the server scope closes
+   * (default `false` — same as {@link Lookup.layerOptions} / named-pipe listen).
+   * Opt in with `unlink: true` to clear a stale `.sock` from a previous crash; leaving the
+   * default avoids unlink-steal of a live peer's socket.
    */
   readonly unlink?: boolean;
   /**
@@ -100,7 +102,7 @@ export function ipcServer<Serves extends ServerServeList>(
 export function ipcServer(
   serves: Layer.Layer<never, any, any> | ServerServeList | ReadonlyArray<Layer.Layer<never, any, any>>,
   options: IpcServerOptions,
-): Layer.Layer<never, any, unknown> {
+): Layer.Layer<never, any, any> {
   const list = (
     Array.isArray(serves) ? serves : [serves]
   ) as unknown as ServerServeList;
@@ -108,7 +110,7 @@ export function ipcServer(
     Layer.provideMerge(mergeServeList(list)),
     // Fresh registry per server — Lookup + Worker in one process must not share.
     Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
-  );
+  ) as Layer.Layer<never, any, any>;
 }
 
 
@@ -134,6 +136,7 @@ const ipcServerBase = (
           key: entry.groupId,
           kind: entry.kind,
           ready: result.ready,
+          contractHash: entry.contractHash,
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );
@@ -177,7 +180,7 @@ const ipcServerBase = (
       const { NodeFileSystem, NodeSocketServer } = yield* Effect.promise(
         () => import("@effect/platform-node"),
       );
-      const doUnlink = options.unlink !== false;
+      const doUnlink = options.unlink === true;
       // Build FileSystem once for path hygiene (Context provide — not Layer provide mid-graph).
       const fsCtx = doUnlink
         ? yield* Layer.build(NodeFileSystem.layer)
@@ -185,7 +188,9 @@ const ipcServerBase = (
       if (fsCtx !== undefined) {
         yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
       }
-      const rpc = RpcServer.layer(merged).pipe(
+      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
+      const rpcRaw: any = RpcServer.layer(merged);
+      const rpc = (rpcRaw as Layer.Layer<never, never, never>).pipe(
         Layer.provide(
           nodeTag[Resource.groupSym].toLayer(
             nodeHandlers as unknown as Parameters<
@@ -227,4 +232,4 @@ const ipcServerBase = (
       );
       return withUnlink.pipe(Layer.provideMerge(advertise));
     }),
-  ) as unknown as Layer.Layer<never, never, Resource.ServedResources>;
+  ) as Layer.Layer<never, never, Resource.ServedResources>;

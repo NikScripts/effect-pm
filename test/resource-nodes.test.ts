@@ -76,7 +76,7 @@ describe("Resource.nodes / andNode (C1)", () => {
     );
   });
 
-  it.effect("client dials the sole node after nodes([X])", () =>
+  it.live("client dials the sole node after nodes([X])", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-client-${process.pid}.sock`;
       class Worker extends Node.Tag<Worker>()("nodes/Worker", { path }) {}
@@ -99,7 +99,7 @@ describe("Resource.nodes / andNode (C1)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("client dials the sole node after andNode(X) from empty", () =>
+  it.live("client dials the sole node after andNode(X) from empty", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-andnode-${process.pid}.sock`;
       class Worker extends Node.Tag<Worker>()("nodes/AndWorker", { path }) {}
@@ -121,7 +121,7 @@ describe("Resource.nodes / andNode (C1)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("Resource.client(Tag, Worker) auto-connects without Node.connect", () =>
+  it.live("Resource.client(Tag, Worker) auto-connects without Node.connect", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-autoconnect-${process.pid}.sock`;
       class Worker extends Node.Tag<Worker>()("nodes/AutoWorker", { path }) {}
@@ -144,7 +144,7 @@ describe("Resource.nodes / andNode (C1)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("node-bearing client(Tag) auto-connects when { node } is addressed", () =>
+  it.live("node-bearing client(Tag) auto-connects when { node } is addressed", () =>
     Effect.gen(function* () {
       const path = `/tmp/effect-pm-nodes-hosted-${process.pid}.sock`;
       class Worker extends Node.Tag<Worker>()("nodes/HostedWorker", { path }) {}

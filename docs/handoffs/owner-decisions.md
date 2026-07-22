@@ -6,6 +6,47 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-21 — Identity coordinator (managers collapse) LOCKED
+
+- **Owner said:** Sell the dream; “Oooh yes. Let’s build it.” Handoff first as the major goal.
+- **Chose (LOCKED — M1–M6):** No `Resource.Manager`. Exclusive brain = `Resource.identity` (S1). Pattern = one brain + many hands (directory / nameless / Prototype). v1 Eng = **identity liveness** (dead winner → claim replaceable) + **coordinator+workers example**. Placement advice streams into Lookup = later slice (still no Manager type). Sugar last.
+- **Rejected / deferred:** Second first-wins product surface; required `manages[]` value list; advice wire before liveness.
+- **Supervisor impact:** SSOT [`identity-coordinator.md`](./identity-coordinator.md). Work branch `cursor/logs-store-followers-plan-906e` synced with `integration`.
+
+## 2026-07-21 — Placement advice (M5) LOCKED + Eng’d
+
+- **Owner said:** “Let’s do it” (after M4 tip).
+- **Chose (LOCKED + Eng):**
+  - `Lookup.Advice` — `advise` / `clear` / `preferred`; helpers `Lookup.advise` / `clearAdvice` / `preferred`.
+  - Key = `resourceKey` → preferred directory `nodeKey`; in-memory **last-write-wins**; no advisor ACL.
+  - Stale prefer (not in `nodesServing`) ignored; `lookupClient` honors live prefer **before** D4 `{ pick }`.
+  - Algorithms stay app-owned (identity Router decides prefer).
+- **Supervisor impact:** Eng on tip. SSOT [`identity-coordinator.md`](./identity-coordinator.md).
+
+## 2026-07-21 — Identity coordinator sugar (M6) Eng’d
+
+- **Owner said:** “Keep it up” (after M5 tip).
+- **Chose (Eng):** Recipe guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md); lean helpers `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired` message; **no** magic baked into protocol listens (Lookup stays pipe-only).
+- **Supervisor impact:** Identity coordinator v1 (M1–M6) complete on tip.
+
+## 2026-07-21 — Unlock Soft fail-loud + default-on verify + contractHash + memo
+
+- **Owner said:** “All of them in whatever order” (after unlock menu).
+- **Chose:** Eng in order Soft fail-loud → default-on verify → F4 contractHash → store-layer lineId memo.
+- **Supervisor impact:** Soft + default-on verify + F4 `contractHash` Eng’d; store-layer lineId memo next.
+
+## 2026-07-21 — F4 contractHash Eng’d
+
+- **Owner said:** “All of them” (unlock wave).
+- **Chose (LOCKED + Eng’d):** `contractHash` on `NodeStatus.resources[]`; `Resource.contractHash(tag)`; deep verify + tag-aware default-on client compare → `ContractMismatch`. Nested verify opted out for Lookup.client / identity ping / `clientLayerForEndpoint` (Layer.unwrap deadlock).
+- **Supervisor impact:** loud-failures F4 closed; memo remains.
+
+## 2026-07-21 — Store-layer `(scopeKey, lineId)` memo Eng’d
+
+- **Owner said:** “All of them” (unlock wave).
+- **Chose (LOCKED + Eng’d):** Durable tails seed the in-memory lineId claim from `_logs.read` at layer acquire; rematerialize/restart does not double-append. Unrelated to `memoizedAt` handle cache.
+- **Supervisor impact:** Soft / verify / F4 / memo unlock wave complete.
+
 ## 2026-07-21 — Protocol listen siblings stay in sync
 
 - **Owner said:** Document the pattern and link it so `Prototype.listen` and `unix` / `http` / `ws` / `nPipe` stay aligned.
@@ -73,7 +114,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - Wire key `prototypeKey#suffix`; omitted suffix minted at listen; always ephemeral ipc path.
   - **No** `Identity.claim` (many winners); directory advertise + `livenessReplace` on dupe `nodeKey`.
   - Multi-instance client picker stays **D4 OPEN** (`lookupClient` fail-closed on ambiguous).
-- **Still LEAN / later:** `askIncumbent`; D4 picker/LB; X1 multi-protocol.
+- **Still LEAN / later:** ~~`askIncumbent`~~ → Eng’d; D4 picker/LB; ~~X1 multi-protocol~~ → Eng’d.
 - **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — D3 LOCKED (bare `distributed` / directory-backed peers)
@@ -145,10 +186,17 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected / deferred:** Layer-only identity flag as main API; always-lookup on every non-identity serve; Manager Eng before identity pipe; orphan-serve default.
 - **Supervisor impact:** Identity Eng shipped on tip (`Resource.identity` + layer/serve claim-or-client + `IdentityMultiNode` one-Node rule). Next bake: **C1**.
 
+## 2026-07-21 — X1 multi-protocol Eng’d + verifyConnection deep classification
+
+- **Owner said:** “Do it” (docs truth for X1 + `verifyConnection` RPC ping over `selectEndpoint`).
+- **Chose (X1 LOCKED + Eng’d; verify D1–D5 LOCKED + Eng’d):** Multi-protocol endpoint set already on tip; catalog/handoff flipped OPEN → Eng’d. `verifyConnection({ deep: true })` dials `NodeStatus` after tier-1 reachability; errors `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`; default endpoint = `selectEndpoint`; `{ all: true }` optional; `deep` defaults off; no `contractHash`.
+- **Rejected / deferred:** Changing tier-1 default behaviour; contract-shape digest.
+- **Supervisor impact:** SSOT [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) + [`verify-connection-classification.md`](./verify-connection-classification.md).
+
 ## 2026-07-18 — ProtocolKind tag rename (X5)
 
 - **Owner said:** Fix the kind strings; multi-protocol Nodes whenever it best fits later.
-- **Chose (X5 LOCKED):** `ProtocolKind = "Http" | "WebSocket" | "IpcSocket"`. Eng rename on tip. Multi-protocol (X1) deferred.
+- **Chose (X5 LOCKED):** `ProtocolKind = "Http" | "WebSocket" | "IpcSocket"`. Eng rename on tip. Multi-protocol (X1) was deferred then — **now Eng’d** (see 2026-07-21).
 - **Rejected / deferred:** Keeping lowercase `"http"|"socket"|"ipc"`; Effect’s `Websocket` spelling (owner: `WebSocket`); multi-protocol in this change.
 - **Supervisor impact:** Breaking kind-string rename; apps that wrote explicit `kind: "socket"` etc. must update.
 

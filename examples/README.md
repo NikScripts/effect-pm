@@ -34,7 +34,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
-| **Node module** | (1) `node-tag-addressed` → (2) `node-tag-bound` → (3) `node-clients` → (4) addressless → (5) nameless unix → (6) `node-prototype` → (7) `node-lookup` → (8) nameless `http`/`ws` siblings. Keep protocol listens in sync — [§ Protocol listen siblings](../docs/handoffs/node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync). |
+| **Node module** | (1) `node-tag-addressed` → (2) `node-tag-bound` → (3) `node-clients` → (4) addressless → (5) nameless unix → (6) `node-prototype` → (7) `node-lookup` → (8) nameless `http`/`ws` siblings → identity coordinator (`node-identity-coordinator`). Keep protocol listens in sync — [§ Protocol listen siblings](../docs/handoffs/node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync). |
 | **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → [`process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) |
 
 ---
@@ -73,6 +73,8 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-nameless-listen-demo.ts`](./forms/resource/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
 | [`forms/resource/node-prototype.ts`](./forms/resource/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
 | [`forms/resource/node-lookup.ts`](./forms/resource/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
+| [`forms/resource/node-identity-coordinator.ts`](./forms/resource/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
+| [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Resource.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
 ### Process store (EventJournal)

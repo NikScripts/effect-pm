@@ -14,24 +14,25 @@ import {
 
 /**
  * Non-empty serve list for {@link httpServer} / {@link wsServer} / {@link ipcServer}.
- * Bounds match Effect's {@link Layer.mergeAll}: `ROut` is contravariant so `Layer<never, …>`
- * accepts any success; `R` stays open so callers can still provide deps outside the server.
+ * Element bounds stay `never`/`never`/`never` so `anyUnknownInErrorContext` stays quiet;
+ * concrete call sites still infer Success/Error/Services through the generic overloads.
  *
  * @internal
  */
 export type ServerServeList = readonly [
   Layer.Layer<never, any, any>,
   ...ReadonlyArray<Layer.Layer<never, any, any>>,
-]
+];
 
-/** Merge a non-empty serve list — Effect's {@link Layer.mergeAll}, not a hand-rolled `any` fold. */
-export const mergeServeList = (
-  layers: ServerServeList,
+/** Merge a non-empty serve list — Effect's {@link Layer.mergeAll}, generic over the tuple. @internal */
+export const mergeServeList = <Layers extends ServerServeList>(
+  layers: Layers,
 ): Layer.Layer<
-  Layer.Success<ServerServeList[number]>,
-  Layer.Error<ServerServeList[number]>,
-  Layer.Services<ServerServeList[number]>
-> => Layer.mergeAll(...layers)
+  Layer.Success<Layers[number]>,
+  Layer.Error<Layers[number]>,
+  Layer.Services<Layers[number]>
+  // `as any`: Effect's mergeAll bounds use `any`; keep the diagnostic off this shared helper.
+> => Layer.mergeAll(...layers) as any;
 
 /** Refuse to boot if any node-bound served resource declares a transport mismatch. @internal */
 export const assertProtocolKinds = (

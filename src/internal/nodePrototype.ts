@@ -31,7 +31,7 @@ import { nPipe } from "./nodeNPipe"
 import { unix } from "./nodeUnix"
 import { ws } from "./nodeWs"
 
-/** Prototype ctor options — `kind` picks the listen sibling; `ipc` selects unix vs nPipe. */
+/** Prototype ctor options — `kind` picks the listen sibling; `ipc` selects unix vs nPipe. @internal */
 export type PrototypeOptions = {
   readonly kind?: ProtocolKind
   /** Ipc transport when `kind` is unset / `"IpcSocket"`. Default `"unix"`. */

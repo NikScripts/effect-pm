@@ -72,7 +72,13 @@ const Icon = {
   ),
 };
 
-export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.ReactElement {
+export function NavBar({
+  groups,
+  version,
+}: {
+  groups: ReadonlyArray<NavGroup>;
+  version?: string;
+}): React.ReactElement {
   const [query, setQuery] = React.useState("");
   const cbRef = React.useRef<HTMLInputElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -126,6 +132,11 @@ export function NavBar({ groups }: { groups: ReadonlyArray<NavGroup> }): React.R
           <a className="brand" href="/">
             effect-pm
           </a>
+          {version !== undefined && version !== "" ? (
+            <a className="version-badge" href="/releases">
+              v{version}
+            </a>
+          ) : null}
           <a
             className="icon-btn gh-btn"
             href="https://github.com/NikScripts/effect-pm"

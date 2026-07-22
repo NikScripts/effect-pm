@@ -21,11 +21,10 @@ import {
   Stream,
 } from "effect";
 import * as Resource from "../Resource";
-import { LogRelay } from "../Logs";
+import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
 import { queryDurableNode } from "./logs/durableRead";
-import * as Node from "../Node";
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
@@ -35,7 +34,8 @@ const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
  * One served resource's readiness, as the node reports it — its wire key, {@link Resource.kindOf}
- * kind, whether it's ready, and (when not) why. The element of {@link nodeStatus}'s `resources`.
+ * kind, optional F4 {@link contractHash}, whether it's ready, and (when not) why. The element of
+ * {@link nodeStatus}'s `resources`.
  *
  * @internal
  */
@@ -44,6 +44,8 @@ export const nodeResourceReadiness = Schema.Struct({
   kind: Schema.String,
   ready: Schema.Boolean,
   detail: Schema.optionalKey(Schema.String),
+  /** Wire-contract fingerprint (F4) — stamped at serve from the tag Spec. */
+  contractHash: Schema.optionalKey(Schema.String),
 });
 
 /** A served resource's readiness as reported by its node. @internal */

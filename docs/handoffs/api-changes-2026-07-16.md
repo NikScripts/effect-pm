@@ -25,13 +25,16 @@ Resource.connect(Droplet) / connect(node, protocol)   // data-first
 ```
 A node with **no** declared address throws `UnaddressedNode` at connect (was silent). The names follow Effect exactly (`connectHttp`/`connectSocket`, matching `layerProtocolHttp`/`layerProtocolSocket`).
 
-## New: eager reachability check
+## New: eager reachability check (+ deep classification)
 
 ```ts
 yield* Resource.verifyConnection(Droplet)                       // NodeUnreachable if the peer is down
 yield* Resource.verifyConnection(Droplet, { url: "/rpc", timeout: "1 second" })
+yield* Resource.verifyConnection(Droplet, { deep: true })       // + NodeStatus RPC
+yield* Resource.verifyConnection(Droplet, { deep: true, resource: "app/Emails" })
+// → ProtocolUnanswered | ServiceNotServed | ServiceNotReady
 ```
-A fail-fast startup check — a client refuses to start against a down/misaddressed backend instead of hanging. (Reachability only; it does not classify a protocol mismatch.)
+Tier-1 is a cheap transport probe (`selectEndpoint`, or `{ all: true }`). `{ deep: true }` dials auto-served `NodeStatus`. Escape-hatch http→ws calls also remap to tagged `ProtocolMismatch` (not an opaque `RpcClientDefect`). Nodeless `client(tag)` without ambient Protocol fails as tagged `MissingClientProtocol`.
 
 ## ★ A node is no longer a bare protocol — the wiring bug is now a compile error
 

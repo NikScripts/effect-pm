@@ -20,7 +20,7 @@ A finished Node stack looks like this:
 ```
 Your Node (key: billing/scores)
   Store.Service
-    └── Logs.layer          — one capture Logger + LogRelay bus
+    └── Logs.layer          — one capture Logger + Logs.Relay bus
     └── BillingNode.logs    — match-all durable tail → node journal
     └── Process.store(Daily)— lineage durable tail → resource journal
   Process / Queue layers
@@ -29,7 +29,7 @@ Your Node (key: billing/scores)
 
 - **Capture** — exactly one merged capture Logger per Node (`Logs.layer`, baked into
   `Store.Service`).
-- **Bus** — one `LogRelay`: PubSub plus a bounded in-memory snapshot for late subscribers.
+- **Bus** — one `Logs.Relay`: PubSub plus a bounded in-memory snapshot for late subscribers.
 - **Durable tails** — one Stream follower per store registration: level gate → match → append to that
   registration’s private `_logs` journal (Effect-style underscore field — not on public handle types).
 - **Lineage** — a JSON array of segment keys on each line (`Logs.withScope`), so filters can select by
@@ -81,9 +81,10 @@ journal. Read durable history with `Logs.byNode` / `Logs.byResource` / `Resource
 {.twoslash}
 ``` ts
 import { Logs, Process, Resource, Store } from "@nikscripts/effect-pm"
+import * as Node from "@nikscripts/effect-pm/Node"
 import { Effect } from "effect"
 
-class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -130,7 +131,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 
 | Kind | Identifies | Declared as | Used for |
 |------|------------|-------------|----------|
-| **Node log key** | One OS process / runtime host | `Resource.Node(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
+| **Node log key** | One OS process / runtime host | `Node.Tag(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
 | **Resource key** | One Queue, Process, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byResource` |
 | **Lineage segment** | One hop in ancestry | element of the lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **Annotation key** | Field name on `LogEntry.annotations` | `LogAnnotationKeys.*` | metadata keys, not buckets |
@@ -144,14 +145,14 @@ LogAnnotationKeys.lineage // annotation key — JSON array of lineage segment ke
 
 ### Node log key rules
 
-1. It **must equal** that process’s `Resource.Node` key — `BillingNode.key`, not an invented
+1. It **must equal** that process’s `Node.Tag` key — `BillingNode.key`, not an invented
    `"my-node"`.
 2. Prefer slash-separated paths (`domain/role`): `"billing/scores"`, `"wnba/live"`.
 3. Every node-journal line is stamped with `annotations.node` = that key.
 4. Query with `Logs.byNode(BillingNode)` (or the string key, if unknown statically).
 
 ``` ts
-// ❌ drifts from Resource.Node
+// ❌ drifts from Node.Tag
 Logs.byNode("wnba")          // WnbaNode.key is "wnba/scores"
 Logs.byNode("my-node")
 ```
@@ -294,6 +295,7 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 |-----|-------------|
 | `Logs.persistLayer` + `store/Log` | `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` | `Logs.*` |
+| `LogRelay` / `replayLogEntry` / `*RelayLayer` flat aliases | `Logs.Relay` / `Logs.replay` / `Logs.layer` |
 | Engine `captureLogs` / handle `.logs` | `Logs.layer` + `Logs.withScope` + `Resource.logs` |
 | `HistoryStore` `` `${tag.key}/logs` `` | Registration `_logs` + `Resource.logs` / `Logs.by*` |
 

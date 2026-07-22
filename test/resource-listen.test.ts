@@ -24,7 +24,7 @@ const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
 describe("Node.unix + clients (C2)", () => {
-  it.effect("unix serves catalog; clients(node, …tags) dials without repeating connect", () =>
+  it.live("unix serves catalog; clients(node, …tags) dials without repeating connect", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-rest");
       class Worker extends Node.Tag<Worker, Jobs | Emails>()(
@@ -50,7 +50,7 @@ describe("Node.unix + clients (C2)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("clients(node, [tags]) array form", () =>
+  it.live("clients(node, [tags]) array form", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-arr");
       class Worker extends Node.Tag<Worker, Jobs | Emails>()(
@@ -78,7 +78,7 @@ describe("Node.unix + clients (C2)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("clients(…tags) when each tag carries the node", () =>
+  it.live("clients(…tags) when each tag carries the node", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-bound");
       class Worker extends Node.Tag<Worker, Jobs | Emails>()(
@@ -117,7 +117,7 @@ describe("Node.unix + clients (C2)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("clients([tags]) bound array form", () =>
+  it.live("clients([tags]) bound array form", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-bound-arr");
       class Worker extends Node.Tag<Worker, Jobs | Emails>()(

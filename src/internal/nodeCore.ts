@@ -1087,6 +1087,94 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
 }
 
 /**
+ * Transport answered, but the Effect RPC protocol did not — typically something else is listening
+ * on the address (wrong process / wrong protocol). Surfaced by
+ * {@link Resource.verifyConnection}`(node, { deep: true })` after the cheap reachability probe
+ * succeeds.
+ *
+ * @category errors
+ * @public
+ */
+export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
+  readonly node: string;
+  readonly url: string;
+  readonly kind: ProtocolKind;
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return (
+      `Node "${this.node}" is reachable at ${this.url} but did not answer the RPC protocol ` +
+      `(${this.kind}) — is something else listening there?`
+    );
+  }
+}
+
+/**
+ * The peer answered {@link NodeStatus}, but the target resource key is not in `status.resources`.
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource })`.
+ *
+ * @category errors
+ * @public
+ */
+export class ServiceNotServed extends Data.TaggedError("ServiceNotServed")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly served: ReadonlyArray<string>;
+}> {
+  override get message() {
+    const list = this.served.length === 0 ? "none" : this.served.join(", ");
+    return (
+      `Node "${this.node}" at ${this.url} does not serve "${this.resource}" ` +
+      `(serves: ${list}).`
+    );
+  }
+}
+
+/**
+ * The peer serves the target resource, but reports it not ready (`ready: false`).
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource })`.
+ *
+ * @category errors
+ * @public
+ */
+export class ServiceNotReady extends Data.TaggedError("ServiceNotReady")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly detail?: string;
+}> {
+  override get message() {
+    const why = this.detail !== undefined ? ` (${this.detail})` : "";
+    return `Node "${this.node}" serves "${this.resource}" but it is not ready${why}.`;
+  }
+}
+
+/**
+ * Client and server disagree on a resource's wire contract (`contractHash` mismatch).
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource, contractHash })`
+ * and by default-on addressed {@link Resource.client} verify (F4).
+ *
+ * @category errors
+ * @public
+ */
+export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly expected: string;
+  readonly actual: string | undefined;
+}> {
+  override get message() {
+    const got = this.actual === undefined ? "(missing)" : this.actual;
+    return (
+      `Node "${this.node}" at ${this.url} serves "${this.resource}" with contract ` +
+      `${got}, but this client expects ${this.expected} — redeploy the stale side.`
+    );
+  }
+}
+
+/**
  * A node-bound resource is being served over a transport that isn't in its node's declared
  * {@link ProtocolKind} set. Because a client derives its transport *from* the node's declared
  * transports, serving it over one the node doesn't advertise (e.g. a `WebSocket`-only node served on

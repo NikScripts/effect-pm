@@ -29,7 +29,7 @@ export interface PollingService {
   readonly peekCadence: Effect.Effect<Option.Option<Duration.Duration>>;
 }
 
-/** Context tag for the Polling service — provided by the Process supervisor. */
+/** Context tag for the Polling service — provided by the Process supervisor. @internal */
 export class PollingTag extends Context.Service<PollingTag, PollingService>()(
   "@nikscripts/effect-pm/internal/pollingTag",
 ) {}

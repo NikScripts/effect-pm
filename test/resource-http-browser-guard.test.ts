@@ -39,7 +39,11 @@ it("the browser guard covers http (built on protocolHttp)", () => {
 it("ws is NOT guarded — it's the correct browser transport", () => {
   setBrowser();
   class Hub extends Node.Tag<Hub>()("guard/Hub", { url: "wss://x/rpc" }) {}
-  return buildLayer(Resource.ws(Hub, { url: "wss://x/rpc" })).then((exit) =>
-    expect(Exit.isSuccess(exit)).toBe(true),
-  );
+  // This asserts the browser *guard* (no HttpClientInBrowser death), not connectivity — so opt out of
+  // default-on client verify, which would otherwise eagerly probe the bogus `wss://x/rpc` and fail.
+  return buildLayer(
+    Resource.ws(Hub, { url: "wss://x/rpc" }).pipe(
+      Layer.provide(Resource.clientVerify(false)),
+    ),
+  ).then((exit) => expect(Exit.isSuccess(exit)).toBe(true));
 });

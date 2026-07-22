@@ -48,11 +48,11 @@ across all of them, so prefer it for the browser unconditionally.
 
 Three matching pieces — the server must serve the same protocol the client speaks:
 
-**1. Server** — serve WebSocket with `Resource.wsServer` (the `Resource.httpServer` sibling; same
+**1. Server** — serve WebSocket with `Node.wsServer` (the `Node.httpServer` sibling; same
 serve list and options, it just speaks WebSocket):
 
 ``` ts
-Resource.wsServer(
+Node.wsServer(
   [Resource.serve(Jobs, jobsImpl) /* … */],
 )
 ```
@@ -94,7 +94,7 @@ default to HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh 
 or the fold 404s against the ws-only `/rpc`. One knob per node, alongside `peersLayer`:
 
 ``` ts
-Resource.wsServer([Resource.serve(WorkerPool, poolImpl) /* … */]).pipe(
+Node.wsServer([Resource.serve(WorkerPool, poolImpl) /* … */]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
   Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)), // peers speak ws too
 )

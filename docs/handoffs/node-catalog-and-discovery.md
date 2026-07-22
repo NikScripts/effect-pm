@@ -257,7 +257,7 @@ Managing Layers + Fleets & Peers; optional serve-family neutral names if locked.
 | **I1** | Kind name | **`"ipc"`** — `"socket"` stays WebSocket only |
 | **I2** | Address shape on Node | **`{ path }`** → infers `kind: "ipc"`; `url` left undefined |
 | **I3** | Server helper | **`Resource.ipcServer(serves, { path })`** |
-| **I4** | Path lifecycle | **unlink before bind + on scope close** (`unlink: false` to opt out) |
+| **I4** | Path lifecycle | **no unlink by default** (anti unlink-steal; matches Lookup / nPipe). Opt in with `unlink: true` for stale-sock recovery before bind + on scope close |
 | **I5** | Windows named pipes | **Unix-only v1**; same `ipc` kind later |
 
 Shipped API:
@@ -360,7 +360,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
 > **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`** + **`askIncumbent`**.  
-> Managers / X1 still OPEN.  
+> **Managers → identity coordinator LOCKED** — see [`identity-coordinator.md`](./identity-coordinator.md). **X1 multi-protocol Eng’d**.  
 > App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 #### D3 — directory-backed peers (**LOCKED** 2026-07-19)
@@ -528,7 +528,7 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
 | Address | Always ephemeral ipc path at `listen` (no address arg — fixed addresses stay on `make`). |
 | Claim | **None** — many instances may run; directory `livenessReplace` still applies on duplicate `nodeKey`. |
 | Catalog | Same `ROut` brand as the Prototype. |
-| Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node (D4 OPEN). |
+| Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node; soft pick via D4 `{ pick }` (**LOCKED**). |
 | Spawn ergonomics | **`Proto.listen(serves) → (suffix?) => Layer`** — curry serve list; sugar over `Resource.listen(instance(suffix), serves)`. Returns **Layer only** (`ListenNode` in built context). Keep **`instance()`** public. Named clones stay `Resource.listen(East, serves)` — no `East.listen`. |
 
 #### `Prototype.listen` factory (**LOCKED** 2026-07-19)
@@ -610,11 +610,11 @@ Resource.lookupClient(Mail, {
 
 | # | Decision | Status |
 |---|----------|--------|
-| **X1** | Multi-protocol Node (endpoint set) | **OPEN** — later; one kind per Node until discovery exists |
+| **X1** | Multi-protocol Node (endpoint set) | **LOCKED + Eng’d** — `{ http, ws, ipc }` shorthand, `Node.withProtocol`, `selectEndpoint` connect, P3 set-membership; see [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) |
 | **X2** | Product rename away from “Resource” | **Parked** |
 | **X3** | Docs: handoff-only vs draft guide now | Handoff SSOT now |
 | **X4** | `Protocol` as Node **type param** | **Rejected as idea** (owner): value-level `kind` + address is SSOT — typing protocol twice drifts. Not a formal bake-row lock; do not re-propose. |
-| **X5** | Protocol kind strings → `_tag`-style names | **LOCKED** — `"Http" \| "WebSocket" \| "IpcSocket"` (multi-protocol Node still later / X1) |
+| **X5** | Protocol kind strings → `_tag`-style names | **LOCKED** — `"Http" \| "WebSocket" \| "IpcSocket"` (X1 multi-protocol Eng’d) |
 | **S1** | Identity-claiming Resources (was “Singleton”) | **LOCKED** (owner: “good enough for now”) — see below |
 
 #### S1 — Identity pipe (**LOCKED** 2026-07-18)
@@ -640,7 +640,7 @@ export type ProtocolKind = "Http" | "WebSocket" | "IpcSocket";
 ```
 
 Inference unchanged: `{ path }` → `IpcSocket`, `ws(s)://` → `WebSocket`, other url/port → `Http`.  
-Multi-protocol Node (endpoint set / `_tag` ADT) remains **X1 later** — not this rename.
+Multi-protocol Node (endpoint set) is **X1 LOCKED + Eng’d** — see [`multi-protocol-nodes.md`](./multi-protocol-nodes.md).
 
 ---
 
@@ -787,7 +787,7 @@ Owner rethink: maybe **singletons and managers are the same thing** — identity
 
 Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); managed `R`s = **type params** (+ optional enforce at impl). Drop required value-level manages list unless a later Eng need appears.
 
-**Do not Eng managers/singletons/lookup yet** — bake until the collapse (or split) is locked.
+**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng via [`identity-coordinator.md`](./identity-coordinator.md). **M4–M6 Eng’d** (v1 complete); guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md).
 
 ### `serve` naming (C5 — **LOCKED**)
 
@@ -851,3 +851,9 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — Owner: rename **`clientsFor` → `Node.clients`**; array + rest; bound-tag overloads (`clients([Jobs, Emails])` / `clients(Jobs, Emails)`). No shim.
 - **2026-07-21** — Owner: rename **`clientLocal` → `Resource.discoverClient`** (avoid Effect “local”); no shim.
 - **2026-07-21** — Owner: **`Resource.discoverClients`** (array/rest) — mergeAll of discover clients, one Lookup bootstrap.
+- **2026-07-21** — **X1 multi-protocol Eng’d** on `integration`: `{ http, ws, ipc }` Tag shorthand, `Node.withProtocol`, `connect`/`selectEndpoint`, P3 set-membership, dual-serve proof. Catalog row flipped OPEN → LOCKED + Eng’d.
+- **2026-07-21** — Owner “Do it” → **`verifyConnection` deep classification Eng’d:** `{ deep: true }` dials `NodeStatus` over `selectEndpoint` (or `{ all: true }`); `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged.
+- **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Resource.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
+- **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/resource/node-identity-coordinator.ts`.
+- **2026-07-21** — **M5 Eng’d:** `Lookup.Advice` (`advise` / `clear` / `preferred`); `lookupClient` honors live prefer before D4 `pick`.
+- **2026-07-21** — **M6 Eng’d:** recipe guide + `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired`.

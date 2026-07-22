@@ -37,7 +37,7 @@ The code that fulfils a Contract — the concrete behaviour behind each of its m
 ## Layer
 
 How a Resource is provided, and therefore where it runs: `Resource.layer` runs it in process,
-`Resource.httpServer` / `Resource.wsServer` serve it over RPC (HTTP or WebSocket), and
+`Node.httpServer` / `Node.wsServer` serve it over RPC (HTTP or WebSocket), and
 `Resource.connect` / `Resource.ws` connect to one running elsewhere — a browser dashboard
 uses the WebSocket pair. See [Managing Layers](/docs/managing-layers).
 

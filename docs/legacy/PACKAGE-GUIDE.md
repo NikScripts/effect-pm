@@ -44,6 +44,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 | Goal | Start here |
 |------|------------|
 | Every resource / group / host / UI pattern | [guides/toolkit-by-example.md](./guides/toolkit-by-example.md) |
+| One brain, many hands (identity + directory + advice) | [guides/identity-coordinator.md](../guides/identity-coordinator.md) |
 | History, durable queue, the dashboard data layer | [guides/history-and-persistence.md](./guides/history-and-persistence.md) |
 | Queue / run / HTTP resource APIs | [RESOURCE-API.md](./RESOURCE-API.md) |
 | Schedule composition + runtime updates | [examples/forms/schedule/](../examples/forms/schedule/) |

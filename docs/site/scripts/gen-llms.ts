@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { Console, Data, Effect, Exit, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
+import { stripDocBanner } from "../src/lib/doc-banner.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const docsDir = nodePath.join(repoRoot, "docs");
@@ -50,9 +51,9 @@ const program = Effect.gen(function* () {
     for (const file of files.sort()) {
       const slug = file.replace(/\.md$/, "");
       if (slug === "README") continue;
-      const raw = yield* fs
-        .readFileString(nodePath.join(abs, file))
-        .pipe(Effect.orElseSucceed(() => ""));
+      const raw = stripDocBanner(
+        yield* fs.readFileString(nodePath.join(abs, file)).pipe(Effect.orElseSucceed(() => ""))
+      );
       if (raw === "") continue;
       const lines = raw.split("\n");
       const title =

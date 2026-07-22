@@ -17,7 +17,7 @@ class JobsAnon extends Resource.Tag<JobsAnon>()("unix/JobsAnon", {
 }) {}
 
 describe("Node.unix", () => {
-  it.effect("Tag+impl — ipc listen + Lookup; client(Tag) dials", () =>
+  it.live("Tag+impl — ipc listen + Lookup; client(Tag) dials", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
       const lookupPath = yield* tmpSock("bound-lookup");

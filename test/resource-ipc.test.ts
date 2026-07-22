@@ -56,7 +56,7 @@ describe("Node ProtocolKind — ipc", () => {
 });
 
 describe("Node.ipcServer + connectIpc", () => {
-  it.effect("round-trips an RPC call over a Unix-domain socket", () =>
+  it.live("round-trips an RPC call over a Unix-domain socket", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("roundtrip");
       class Worker extends Node.Tag<Worker>()("ipc/worker", { path }) {}
@@ -76,7 +76,7 @@ describe("Node.ipcServer + connectIpc", () => {
     }).pipe(Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("Node.connect derives ipc from the node's kind + path", () =>
+  it.live("Node.connect derives ipc from the node's kind + path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("derive");
       class Worker extends Node.Tag<Worker>()("ipc/derive", { path }) {}
@@ -95,13 +95,16 @@ describe("Node.ipcServer + connectIpc", () => {
     }).pipe(Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("unlinks so a second listen can bind the same path", () =>
+  it.live("with unlink:true, a second listen can bind the same path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("stale");
       class Worker extends Node.Tag<Worker>()("ipc/stale", { path }) {}
 
       const serve = () =>
-        Node.ipcServer([Resource.serve(Echo, echoImpl)], { path });
+        Node.ipcServer([Resource.serve(Echo, echoImpl)], {
+          path,
+          unlink: true,
+        });
 
       yield* Effect.void.pipe(Effect.provide(serve()), Effect.scoped);
 

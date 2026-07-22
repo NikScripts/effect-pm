@@ -1,0 +1,71 @@
+{#client-verify title="Client verify" status="stable" done="api" appliesTo=all}
+# Client verify — fail fast when the peer is wrong
+
+Addressed clients should not hang on a dead peer or silently talk past a stale contract.
+`Resource.verifyConnection` is the probe; addressed `Resource.client` / `clientHttp` /
+`socketClient` run it **by default**.
+
+Handoff SSOT: [`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
+[`docs/handoffs/verify-connection-classification.md`](../handoffs/verify-connection-classification.md).
+
+## Default-on (addressed clients)
+
+Building an addressed client Layer probes the peer before the handle is usable:
+
+| Mode | Behavior |
+|------|----------|
+| `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
+| `"status"` | Probe runs; failure is ignored (connect proceeds) |
+| `false` | Skip verify |
+
+```ts
+import * as Resource from "@nikscripts/effect-pm/Resource"
+import { Layer } from "effect"
+
+// Opt out for a nested/bootstrap client (Lookup.client / identity ping do this internally):
+Resource.client(Emails, WorkerNode).pipe(
+  Layer.provide(Resource.clientVerify(false)),
+)
+
+// Soft: probe but don't fail the Layer
+Resource.clientHttp(Emails, 3001).pipe(
+  Layer.provide(Resource.clientVerify("status")),
+)
+```
+
+Tag-aware addressed clients escalate to **deep** verify (NodeStatus RPC + resource readiness +
+F4 `contractHash`). Nodeless / bootstrap paths that would deadlock keep verify off.
+
+## Explicit probe
+
+```ts
+import * as Resource from "@nikscripts/effect-pm/Resource"
+
+yield* Resource.verifyConnection(WorkerNode) // tier 1 — transport reachability
+yield* Resource.verifyConnection(WorkerNode, { timeout: "1 second" })
+yield* Resource.verifyConnection(WorkerNode, { deep: true }) // + NodeStatus RPC
+yield* Resource.verifyConnection(WorkerNode, {
+  deep: true,
+  resource: Emails.groupId,
+  contractHash: Resource.contractHash(Emails),
+})
+yield* Resource.verifyConnection(WorkerNode, { all: true }) // every declared endpoint
+```
+
+## Failure ladder
+
+| Failure | When |
+|---------|------|
+| `NodeUnreachable` | Transport probe fails (tier 1) |
+| `ProtocolUnanswered` | Transport up, NodeStatus RPC silent |
+| `ServiceNotServed` / `ServiceNotReady` | Deep + `resource` key missing / not ready |
+| `ContractMismatch` | Deep + `contractHash` disagrees with the peer (F4) |
+| `ProtocolMismatch` | Wrong transport (e.g. http client → ws server) on a call |
+| `MissingClientProtocol` | Nodeless `client(tag)` with no ambient protocol |
+
+Catch via `Exit` / `_tag` — remediation messages name the fix.
+
+## See also
+
+- [Identity coordinator](/docs/identity-coordinator) — Lookup dial paths that nest clients
+- [Readiness](/docs/readiness) — runtime health after the Layer is up

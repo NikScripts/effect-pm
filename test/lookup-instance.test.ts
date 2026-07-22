@@ -156,7 +156,7 @@ describe("Node.Prototype.instance / .listen", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(25))),
   );
 
-  it.effect("named instance suffix is stable; peersLayer folds both via directory", () =>
+  it.live("named instance suffix is stable; peersLayer folds both via directory", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("peers-lookup");
       const lookupNode = Node.Tag()("inst/peers-lookup", {

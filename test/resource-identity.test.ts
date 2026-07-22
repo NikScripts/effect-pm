@@ -28,6 +28,13 @@ describe("Resource.identity", () => {
     expect(Resource.isIdentity(Mail)).toBe(true);
   });
 
+  it("IdentitySelfRequired message points at Lookup + dialable self", () => {
+    const err = new Resource.IdentitySelfRequired({ tag: "app/Mail" });
+    expect(err.message).toContain("Lookup.Identity");
+    expect(err.message).toContain("dialable self");
+    expect(err.message).toContain("Lookup.layer");
+  });
+
   it("rejects multi-node distributed on an identity Tag (S1)", () => {
     class A extends Node.Tag<A>()("identity/multi-a", {
       path: "/tmp/identity-multi-a.sock",
@@ -122,5 +129,58 @@ describe("Resource.identity", () => {
 
       expect(n).toBe(17);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  // Winner scope close leaves a stale claim; NodeStatus.ping must free the key.
+  it.live("dead winner's identity key is reclaimable by the next claimant", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("reclaim-lookup");
+      const winnerPath = yield* tmpSock("reclaim-winner");
+      const nextPath = yield* tmpSock("reclaim-next");
+
+      const lookupNode = Node.Tag()("identity/reclaim-lookup", {
+        path: lookupPath,
+      }).pipe(Node.asLookup);
+      class WinnerNode extends Node.Tag<WinnerNode>()("identity/reclaim-w", {
+        path: winnerPath,
+      }) {}
+      class NextNode extends Node.Tag<NextNode>()("identity/reclaim-n", {
+        path: nextPath,
+      }) {}
+
+      const lookupClient = Lookup.client(lookupNode);
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
+      const lookupClientCtx = yield* Layer.build(lookupClient);
+      const lookupCtx = Context.merge(lookupServer, lookupClientCtx);
+
+      yield* Layer.build(
+        Node.unix(WinnerNode, [Resource.serve(Mail, mailImpl)]).pipe(
+          Layer.provide(lookupClient),
+        ),
+      ).pipe(Effect.scoped);
+
+      // Stale claim still at Lookup; next listen should replace and serve.
+      const nextCtx = yield* Layer.build(
+        Node.unix(NextNode, [Resource.serve(Mail, mailImpl)]).pipe(
+          Layer.provide(lookupClient),
+        ),
+      );
+
+      const n = yield* Effect.gen(function* () {
+        const mail = yield* Mail;
+        return yield* mail.ping({ n: 3 });
+      }).pipe(Effect.provide(Context.merge(lookupCtx, nextCtx)));
+
+      expect(n).toBe(13);
+
+      const id = Context.get(lookupCtx, Lookup.Identity);
+      const resolved = yield* id
+        .resolve(new Lookup.ResolveRequest({ key: Mail.key }))
+        .pipe(Effect.provide(lookupCtx));
+      expect(resolved._tag).toBe("Some");
+      if (resolved._tag === "Some") {
+        expect(resolved.value.path).toBe(nextPath);
+      }
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
   );
 });

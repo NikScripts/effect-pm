@@ -17,7 +17,7 @@ class JobsAnon extends Resource.Tag<JobsAnon>()("ws/JobsAnon", {
 }) {}
 
 describe("Node.ws", () => {
-  it.effect("node+serves — fixed localhost port + Lookup; client dials", () =>
+  it.live("node+serves — fixed localhost port + Lookup; client dials", () =>
     Effect.gen(function* () {
       const port = 20000 + (process.pid % 1000);
       const lookupPath = yield* tmpSock("bound-lookup");

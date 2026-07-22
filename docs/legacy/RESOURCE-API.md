@@ -54,7 +54,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
       }),
     concurrency: 10,
     capacity: 100_000,
-    retries: 3,
+    attempts: 4,
     onRetryExhausted: ({ entry }) => deadLetterQueue.add([entry.item]),
   },
 ) {}
@@ -146,7 +146,7 @@ QueueResource.Service<Self, T, E>()("name", {
   key: (item) => item.id, // extract dedup key; duplicates silently dropped
 
   // ─── Retry (hook-driven) ───
-  retries: 3,             // max re-enqueues via event.retry
+  attempts: 4,            // 1 try + 3 auto re-enqueues
   onRetryExhausted: ({ entry, cause }, queue) => ...,  // called when limit reached
 
   // ─── Hooks (fire-and-forget) ───
@@ -213,7 +213,7 @@ class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError>()(
             : queue.defer([entry.item]),  // demote to low priority after 3 fails
         onSuccess: () => Effect.void,
       }),
-    retries: 5,
+    attempts: 6,
     onRetryExhausted: ({ entry }) => Effect.logError(`Order ${entry.item.id} permanently failed`),
     concurrency: 10,
   },

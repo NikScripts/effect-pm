@@ -58,7 +58,7 @@ describe("Resource.distributed bare / D3 peersLayer", () => {
     ]);
   });
 
-  it.effect("peersLayer discovers peer via Directory.nodesServing and folds over ipc", () =>
+  it.live("peersLayer discovers peer via Directory.nodesServing and folds over ipc", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const eastPath = yield* tmpSock("east");

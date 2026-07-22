@@ -11,8 +11,9 @@ import * as Node from "../src/Node";
 class Droplet extends Node.Tag<Droplet>()("np/Droplet", { url: "wss://x/rpc" }) {}
 const transport = Resource.ws(Droplet, { url: "ws://x/rpc" });
 
-// A sink that only accepts a FULLY-WIRED layer (requires `never`).
-declare const runFullyWired: <A>(layer: Layer.Layer<A, never, never>) => void;
+// A sink that only accepts a FULLY-WIRED layer (R = never). E may include
+// NodeUnreachable from default-on client verify.
+declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
 // CORRECT: addressed `client(tag, node)` auto-wires connect — fully provided.
 runFullyWired(Resource.client(NodeStatus.Tag, Droplet));

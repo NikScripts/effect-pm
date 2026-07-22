@@ -21,7 +21,7 @@ import {
   UnaddressedNode,
 } from "./nodeCore"
 
-/** Protocol builders injected from Resource (avoids Resource↔Node import cycles). */
+/** Protocol builders injected from Resource (avoids Resource↔Node import cycles). @internal */
 export type NodeProtocolBuilders = {
   // `protocolHttp` takes a port too — a bare-port node resolves its host via Config at the dial.
   readonly protocolHttp: (target: number | string) => Layer.Layer<RpcClient.Protocol>
@@ -178,6 +178,7 @@ export const protocolForDialable = (
  */
 const addressedConnectMemo = new WeakMap<object, Layer.Layer<never>>()
 
+/** Derive (and memoize) the connect Layer for an {@link AddressedNode}. @internal */
 export const connectAddressed = <Self>(
   node: AddressedNode<Self>,
 ): Layer.Layer<Self> => {

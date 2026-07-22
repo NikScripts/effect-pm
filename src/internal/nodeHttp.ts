@@ -3,7 +3,7 @@
  *
  * @internal
  */
-import { Clock, Effect, Layer } from "effect"
+import { Clock, Effect, Layer, Option } from "effect"
 import { HttpServer } from "effect/unstable/http"
 import * as Resource from "../Resource"
 import {
@@ -61,7 +61,7 @@ export function http<
       >,
   options?: NamelessListenOptions,
 ): Layer.Layer<Self | Resource.Local<Self> | ListenNode, never, R>;
-export function http<Serve extends Layer.Layer<never, any, never>>(
+export function http<Serve extends Layer.Layer<never, never, never>>(
   serve: Serve,
   options?: NamelessListenOptions,
 ): Layer.Layer<
@@ -92,11 +92,11 @@ export function http<
 export function http(
   nodeOrServesOrTag:
     | AnyNode
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList
     | Resource.PipeableTag,
   servesOrOptionsOrImpl?:
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList
     | NamelessListenOptions
     | object,
@@ -106,9 +106,7 @@ export function http(
   | UnaddressedNode
   | AddressLessClaimLost
   | ListenTagNodeRequired
-  | HttpListenRequiresHttp,
-  unknown
-> {
+  | HttpListenRequiresHttp, any> {
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
@@ -126,9 +124,7 @@ export function http(
       | UnaddressedNode
       | AddressLessClaimLost
       | ListenTagNodeRequired
-      | HttpListenRequiresHttp,
-      unknown
-    >;
+      | HttpListenRequiresHttp, never>;
   }
 
   if (isResourceTagArg(nodeOrServesOrTag)) {
@@ -151,9 +147,7 @@ export function http(
         | UnaddressedNode
         | AddressLessClaimLost
         | ListenTagNodeRequired
-        | HttpListenRequiresHttp,
-        unknown
-      >;
+        | HttpListenRequiresHttp, never>;
     }
     if (isNonHttpNode(bound as AnyNode)) {
       const n = bound as AnyNode;
@@ -170,9 +164,7 @@ export function http(
         | UnaddressedNode
         | AddressLessClaimLost
         | ListenTagNodeRequired
-        | HttpListenRequiresHttp,
-        unknown
-      >;
+        | HttpListenRequiresHttp, never>;
     }
     const serveErased = Resource.serve as unknown as (
       tag: Resource.PipeableTag,
@@ -187,9 +179,7 @@ export function http(
       | UnaddressedNode
       | AddressLessClaimLost
       | ListenTagNodeRequired
-      | HttpListenRequiresHttp,
-      unknown
-    >;
+      | HttpListenRequiresHttp, never>;
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -207,13 +197,11 @@ export function http(
       | UnaddressedNode
       | AddressLessClaimLost
       | ListenTagNodeRequired
-      | HttpListenRequiresHttp,
-      unknown
-    >;
+      | HttpListenRequiresHttp, never>;
   }
 
   const serves = servesOrOptionsOrImpl as
-    | Layer.Layer<never, any, never>
+    | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
   return httpListenOn(node, list, listenOptions) as Layer.Layer<
@@ -221,22 +209,20 @@ export function http(
     | UnaddressedNode
     | AddressLessClaimLost
     | ListenTagNodeRequired
-    | HttpListenRequiresHttp,
-    unknown
-  >;
+    | HttpListenRequiresHttp, never>;
 }
 
 /** Nameless anonymous Http Node + bind (pipe Lookup when needed). @internal */
 const httpNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const key = yield* anonymousNodeKey(list);
       return httpListenOn(Tag()(key, { kind: "Http" }), list, options);
     }),
-  ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  ) as any;
 
 /**
  * Bind Http for a Node — mint/claim when address-less or dynamic; else {@link httpServer}
@@ -248,7 +234,7 @@ const httpListenOn = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost | HttpListenRequiresHttp, unknown> => {
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost | HttpListenRequiresHttp, never> => {
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
@@ -263,9 +249,7 @@ const httpListenOn = (
       }),
     ) as Layer.Layer<
       never,
-      UnaddressedNode | AddressLessClaimLost | HttpListenRequiresHttp,
-      unknown
-    >;
+      UnaddressedNode | AddressLessClaimLost | HttpListenRequiresHttp, never>;
   }
   if (
     node.path === undefined &&
@@ -302,7 +286,7 @@ const ephemeralHttpListen = (
   options: ListenOptions | undefined,
   catalogSource: AnyNode,
   claim?: { readonly claimIdentity: true },
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown> =>
+): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const platform = yield* localhostHttpPlatformEffect(0);
@@ -322,8 +306,11 @@ const ephemeralHttpListen = (
           ) as AnyNode & { readonly key: string };
           if (claim?.claimIdentity === true) {
             const Lookup = yield* Effect.promise(() => import("../Lookup"));
-            const identity = yield* Lookup.Identity;
-            const outcome = yield* identity
+            const identity = yield* Effect.serviceOption(Lookup.Identity);
+            if (Option.isNone(identity)) {
+              return yield* new Resource.IdentitySelfRequired({ tag: wireKey });
+            }
+            const outcome = yield* identity.value
               .claim(
                 new Lookup.ClaimRequest({
                   key: wireKey,
@@ -358,18 +345,19 @@ const ephemeralHttpListen = (
         }),
       ).pipe(Layer.provide(platform));
     }),
-  ) as Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, unknown>;
+  ) as any;
 
 /** {@link httpServer} for an addressed Http node (platform provided by caller). @internal */
 const httpBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode, unknown> => {
+): Layer.Layer<never, UnaddressedNode, never> => {
   if (node.url === undefined) {
     return unaddressedLayer(node.key);
   }
   const advertiseNode = node as AnyNode & { readonly key: string };
+  // Platform HttpServer is provided by the listen caller (localhost bind / NodeHttpServer).
   return httpServer(list, {
     ...(options?.path !== undefined ? { path: options.path } : {}),
     ...(options?.serialization !== undefined
@@ -381,7 +369,7 @@ const httpBind = (
       ? { onConflict: options.onConflict }
       : {}),
     advertiseNode,
-  });
+  }) as any;
 };
 
 /** Loopback port from an `http://127.0.0.1:N/…` or `http://localhost:N/…` url. @internal */

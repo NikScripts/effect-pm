@@ -23,8 +23,8 @@ import {
  * @internal
  */
 export type ServeLayerList = readonly [
-  Layer.Layer<never, any, never>,
-  ...ReadonlyArray<Layer.Layer<never, any, never>>,
+  Layer.Layer<never, never, never>,
+  ...ReadonlyArray<Layer.Layer<never, never, never>>,
 ];
 
 /**
@@ -54,7 +54,7 @@ export const isResourceTagArg = (u: unknown): u is Resource.PipeableTag =>
 /** True when the first arg is a serve layer or non-empty serve list. @internal */
 export const isServeArg = (
   u: unknown,
-): u is Layer.Layer<never, any, never> | ServeLayerList => {
+): u is Layer.Layer<never, never, never> | ServeLayerList => {
   if (Layer.isLayer(u)) return true;
   return (
     Array.isArray(u) &&
@@ -78,6 +78,7 @@ export const isIpcListenNode = (node: AnyNode): boolean => {
   return node.path === undefined && node.url === undefined;
 };
 
+/** A Layer that fails immediately with `error` (eager transport-wiring failure). @internal */
 export const failLayer = <E>(error: E): Layer.Layer<never, E> =>
   Layer.unwrap(
     Effect.map(
@@ -86,12 +87,14 @@ export const failLayer = <E>(error: E): Layer.Layer<never, E> =>
     ),
   );
 
+/** A Layer that fails with {@link ListenUseProtocol} — listen used where connect was meant. @internal */
 export const failUseProtocol = (
   protocol: "unix" | "http" | "ws",
   detail: string,
 ): Layer.Layer<never, ListenUseProtocol> =>
   failLayer(new ListenUseProtocol({ protocol, detail }));
 
+/** A Layer that fails with a tag-node resolution error (missing / ambiguous bound node). @internal */
 export const failListenTagNode = (fields: {
   readonly tag: string;
   readonly reason: "missing" | "ambiguous";
