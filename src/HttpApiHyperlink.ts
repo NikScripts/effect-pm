@@ -46,7 +46,7 @@ import {
   usageEnter,
   usageExit,
 } from "./internal/apiUsageRegistry";
-import type { RunHyperlinkRunner } from "./RunHyperlink";
+import type { GateRunner } from "./Gate";
 import { makeRunnerFromConcurrency } from "./internal/runHyperlink";
 
 // ============================================================================
@@ -273,7 +273,7 @@ const makeInFlightTransform = (
 const applyTransportMiddleware = (
   client: HttpClient.HttpClient,
   options: {
-    readonly runner: RunHyperlinkRunner;
+    readonly runner: GateRunner;
     readonly withInFlight: InFlightTransform;
     readonly transformClient?: HttpApiHyperlinkConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },

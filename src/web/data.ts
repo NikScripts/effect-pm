@@ -20,7 +20,7 @@ import { kind as customQueueKind, customQueueStatus } from "../CustomQueueHyperl
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind, type RunGateStatus } from "../RunHyperlink";
+import { kind as runKind, type RunGateStatus } from "../Gate";
 import { kind as processKind, processScheduleEntry, processStatus } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";

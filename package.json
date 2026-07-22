@@ -128,9 +128,9 @@
       "types": "./dist/HttpApiHyperlink.d.ts",
       "default": "./dist/HttpApiHyperlink.js"
     },
-    "./RunHyperlink": {
-      "types": "./dist/RunHyperlink.d.ts",
-      "default": "./dist/RunHyperlink.js"
+    "./Gate": {
+      "types": "./dist/Gate.d.ts",
+      "default": "./dist/Gate.js"
     },
     "./HttpClientRunGate": {
       "types": "./dist/HttpClientRunGate.d.ts",

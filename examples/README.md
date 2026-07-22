@@ -52,8 +52,8 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | File | Teaches |
 |------|---------|
-| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunHyperlink.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
-| [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `RunHyperlink.store` + `Store.Service.at` readback |
+| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
+| [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiHyperlink.Service` + `ApiMetrics.Tag` |
@@ -134,8 +134,8 @@ Storage:
 | `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
 | `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
 | `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:run-resource` | RunHyperlink concurrency form |
-| `pnpm run example:run-resource-store-readback` | RunHyperlink store auto-write + readback |
+| `pnpm run example:run-resource` | Gate concurrency form |
+| `pnpm run example:run-resource-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-run-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiHyperlink form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |

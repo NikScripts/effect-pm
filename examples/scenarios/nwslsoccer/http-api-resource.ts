@@ -3,7 +3,7 @@
  *
  * Compare `client.ts`: that uses `Context.Tag` + `HttpApiClient.make`. Here the factory returns a
  * **tag + `layer`** from this package — concurrency / throttle apply on the transport like
- * `RunHyperlink` + `HttpClientRunGate`.
+ * `Gate` + `HttpClientRunGate`.
  *
  * Run (from repo root):
  *   `npm run example:nwsl-http-api-resource`

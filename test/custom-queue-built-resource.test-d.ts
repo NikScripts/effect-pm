@@ -5,7 +5,7 @@ import type { CustomQueueInstanceSpec } from "../src/CustomQueueHyperlink";
 import { Schema } from "effect";
 
 // Type-level proof: CustomQueue toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
-// until `grantLocal` discharges it (same bundle pattern as WorkPool / Process / RunHyperlink).
+// until `grantLocal` discharges it (same bundle pattern as WorkPool / Process / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
   "hyperlink-ts/test/custom-queue-built-resource.test-d/WorkerDep",

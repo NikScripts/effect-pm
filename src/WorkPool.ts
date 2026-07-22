@@ -20,7 +20,7 @@
  * items natively on both sides (no codec descriptor, no manual encode/decode). This is the
  * "model B / fully per-instance" approach; the shared-spec + `key`-header path
  * ({@link Hyperlink.serveInstances}) remains for resources whose contract is identical
- * across instances (e.g. RunHyperlink).
+ * across instances (e.g. Gate).
  *
  * This module is the **public `WorkPool` namespace** — the `hyperlink-ts/WorkPool`
  * subpath and the barrel `export * as WorkPool` both resolve here. The light `Tag` / spec /

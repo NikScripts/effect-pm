@@ -20,7 +20,7 @@ import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
-import * as RunHyperlink from "../../src/RunHyperlink";
+import * as Gate from "../../src/Gate";
 import { serve as processEntry } from "../../src/Process";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
@@ -235,7 +235,7 @@ class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaSto
 class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
   LiveNode.logs,
   Process.store(LiveScorePoller),
-  RunHyperlink.store(FetchGate),
+  Gate.store(FetchGate),
 ) {}
 
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
@@ -313,9 +313,9 @@ const liveNode = Node.wsServer([
   Telemetry.serve(FleetMetrics),
   ShardMap.serve(Sessions),
   // a bounded-concurrency run gate (4 permits) over a simulated box-score fetch — a slow effect that
-  // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the RunHyperlinkCard shows
+  // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the GateCard shows
   // live in-flight / done / failed counters.
-  RunHyperlink.serve(FetchGate, {
+  Gate.serve(FetchGate, {
     concurrency: 4,
     effect: (url: string) =>
       Effect.gen(function* () {
@@ -375,7 +375,7 @@ const liveNodeProgram = Effect.gen(function* () {
   const poller = yield* LiveScorePoller;
   yield* poller.schedule.set(pollerWindows);
   // Drive the run gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
-  // and the RunHyperlinkCard's in-flight gauge sits near its limit. Each run's failure is swallowed
+  // and the GateCard's in-flight gauge sits near its limit. Each run's failure is swallowed
   // here (the gate already tallies it) so the producer fiber keeps going.
   const gate = yield* FetchGate;
   let g = 0;

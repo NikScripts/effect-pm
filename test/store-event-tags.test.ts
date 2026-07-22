@@ -4,13 +4,13 @@ import {
   makeProcessExecutionEvent,
   processExecutionEventVoid,
 } from "../src/internal/processEvent";
-import { makeRunHyperlinkFactEvent } from "../src/internal/runHyperlinkEvent";
+import { makeGateFactEvent } from "../src/internal/runHyperlinkEvent";
 import { buildQueueEvent } from "../src/WorkPool";
 
 const terminalTags = ["Started", "Completed", "Failed"] as const;
 
 const processDecode = Schema.decodeUnknownSync(processExecutionEventVoid);
-const runFactDecode = Schema.decodeUnknownSync(makeRunHyperlinkFactEvent());
+const runFactDecode = Schema.decodeUnknownSync(makeGateFactEvent());
 
 const itemSchema = Schema.Struct({ id: Schema.String });
 const queueDecode = Schema.decodeUnknownSync(

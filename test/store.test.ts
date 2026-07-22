@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Schema } from "effect";
 import * as WorkPool from "../src/WorkPool";
-import * as RunHyperlink from "../src/RunHyperlink";
+import * as Gate from "../src/Gate";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
@@ -37,9 +37,9 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class MailQueue extends WorkPool.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends RunHyperlink.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
+class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
-const fetchGateRegistration = RunHyperlink.store(FetchGate);
+const fetchGateRegistration = Gate.store(FetchGate);
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 
@@ -213,7 +213,7 @@ describe("Store.Service", () => {
     }).pipe(Effect.provide(QueueStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("RunHyperlink.store exposes typed fact + stateHistory methods", () =>
+  it.effect("Gate.store exposes typed fact + stateHistory methods", () =>
     Effect.gen(function* () {
       const store = yield* RunGateStore;
       const keys = Object.keys(store);

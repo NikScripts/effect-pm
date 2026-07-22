@@ -1,7 +1,7 @@
 /**
  * Built-in {@link Process} store contract.
  *
- * Two tiers (mirrors {@link RunHyperlink} / {@link WorkPool}):
+ * Two tiers (mirrors {@link Gate} / {@link WorkPool}):
  * - **Tier 1** — lean base (`builtInProcessStoreContract`)
  * - **Tier 2** — analytics read-extension (`makeProcessStoreAnalyticsContract`)
  *

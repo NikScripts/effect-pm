@@ -40,7 +40,7 @@ export default defineConfig([
       DynamicConfig: "src/DynamicConfig.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       HttpApiHyperlink: "src/HttpApiHyperlink.ts",
-      RunHyperlink: "src/RunHyperlink.ts",
+      Gate: "src/Gate.ts",
       HttpClientRunGate: "src/HttpClientRunGate.ts",
       cli: "src/cli/index.ts",
       tui: "src/tui/index.ts",

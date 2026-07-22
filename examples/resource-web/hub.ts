@@ -21,7 +21,7 @@ import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
-import * as RunHyperlink from "../../src/RunHyperlink";
+import * as Gate from "../../src/Gate";
 import * as Node from "../../src/Node";
 
 const importJob = Schema.Struct({ id: Schema.String });
@@ -76,8 +76,8 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
 
 // A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
-// driven concurrently so the RunHyperlinkCard shows live in-flight / waiting / done counters.
-export class FetchGate extends RunHyperlink.Tag<FetchGate>()("wnba/FetchGate", {
+// driven concurrently so the GateCard shows live in-flight / waiting / done counters.
+export class FetchGate extends Gate.Tag<FetchGate>()("wnba/FetchGate", {
   payload: Schema.String,
   success: Schema.Number,
   error: Schema.String,

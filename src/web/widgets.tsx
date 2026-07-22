@@ -60,7 +60,7 @@ import { kind as customQueueKind } from "../CustomQueueHyperlink";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind } from "../RunHyperlink";
+import { kind as runKind } from "../Gate";
 import { kind as processKind } from "../Process";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -2535,11 +2535,11 @@ const RunCounter = (props: {
 );
 
 /**
- * The card for a **RunHyperlink** (concurrency gate) — surfaces its live counters: `inFlight` /
+ * The card for a **Gate** (concurrency gate) — surfaces its live counters: `inFlight` /
  * `concurrency` as a utilization gauge headline (plus `waiting` backlog), the completed / failed /
  * interrupted outcome tallies, and the mean run duration. Read-only. @public
  */
-export const RunHyperlinkCard = (props: {
+export const GateCard = (props: {
   readonly tag: RunTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
@@ -2845,11 +2845,11 @@ export const FleetHealthDetail = (props: {
 };
 
 /**
- * Fullscreen detail for a **RunHyperlink** gate — the in-flight gauge + outcome tallies of the card,
+ * Fullscreen detail for a **Gate** gate — the in-flight gauge + outcome tallies of the card,
  * plus the raw status fields the card omits (concurrency, mean + total duration, config version).
  * @public
  */
-export const RunHyperlinkDetail = (props: {
+export const GateDetail = (props: {
   readonly tag: RunTag;
   readonly name?: string;
   readonly onBack: () => void;
@@ -2951,7 +2951,7 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
   );
 const runWidget: Widget = ({ tag, name, onOpen }) =>
   isRunTag(tag) ? (
-    <RunHyperlinkCard tag={tag} name={name} onOpen={onOpen} />
+    <GateCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );

@@ -10,10 +10,10 @@ import {
   HttpClientRequest,
 } from "effect/unstable/http";
 import { Clock, Effect, Layer } from "effect";
-import { HttpClientRunGate, RunHyperlink } from "../../../src";
+import { HttpClientRunGate, Gate } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-const DemoHttpRunner = RunHyperlink.makeRunner({
+const DemoHttpRunner = Gate.makeRunner({
   name: "examples/DemoHttpRunner",
   concurrency: 2,
 });

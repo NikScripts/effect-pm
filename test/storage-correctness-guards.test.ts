@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 import * as Process from "../src/Process";
 import * as WorkPool from "../src/WorkPool";
-import * as RunHyperlink from "../src/RunHyperlink";
+import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
 import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
@@ -30,7 +30,7 @@ class CustomJobs extends CustomQueueHyperlink.Tag<CustomJobs>()(
   },
 ) {}
 
-class Gate extends RunHyperlink.Tag<{ readonly _tag: "Gate" }>()(
+class TestGate extends Gate.Tag<{ readonly _tag: "Gate" }>()(
   "test/storage-correctness/Gate",
   { payload: Schema.Number, success: Schema.Number },
 ) {}
@@ -41,7 +41,7 @@ class AppStore extends Store.Service<AppStore>("@test/storage-correctness/FileSt
 
 const jobsRegistration = WorkPool.store(Jobs);
 const customJobsRegistration = CustomQueueHyperlink.store(CustomJobs);
-const gateRegistration = RunHyperlink.store(Gate);
+const gateRegistration = Gate.store(TestGate);
 
 class QueueStore extends Store.Service<QueueStore>("@test/storage-correctness/QueueStore")(
   jobsRegistration,
@@ -258,8 +258,8 @@ describe("storage correctness — WorkPool Soft override parity", () => {
   );
 });
 
-describe("storage correctness — RunHyperlink Soft override parity", () => {
-  it.effect("RunHyperlink.layer + provideMerge(AppStore.sqlite) persists across reconnect", () =>
+describe("storage correctness — Gate Soft override parity", () => {
+  it.effect("Gate.layer + provideMerge(AppStore.sqlite) persists across reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -272,11 +272,11 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = RunHyperlink.layer(Gate, {
+          const live = Gate.layer(TestGate, {
             effect: (n: number) => Effect.succeed(n * 2),
           }).pipe(Layer.provideMerge(RunStore.layer({ filename })));
           yield* Effect.gen(function* () {
-            const gate = yield* Gate;
+            const gate = yield* TestGate;
             yield* gate.run(21);
             const facts = yield* (yield* RunStore).facts();
             expect(facts.some((row) => row._tag === "Completed")).toBe(true);
@@ -293,7 +293,7 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
-  it.effect("sibling Layer.merge(RunHyperlink.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
+  it.effect("sibling Layer.merge(Gate.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -307,13 +307,13 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
       yield* Effect.scoped(
         Effect.gen(function* () {
           const live = Layer.merge(
-            RunHyperlink.layer(Gate, {
+            Gate.layer(TestGate, {
               effect: (n: number) => Effect.succeed(n * 2),
             }),
             RunStore.layer({ filename }),
           );
           yield* Effect.gen(function* () {
-            const gate = yield* Gate;
+            const gate = yield* TestGate;
             yield* gate.run(21);
           }).pipe(Effect.provide(live));
         }),

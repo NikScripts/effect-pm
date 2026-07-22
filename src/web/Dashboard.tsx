@@ -43,7 +43,7 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useProcessBundle, useQueu
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, RunHyperlinkDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
@@ -319,7 +319,7 @@ const DashboardInner = (props: {
     if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isRunTag(selected)) return <RunHyperlinkDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isRunTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     return <></>;
   }
 
@@ -454,7 +454,7 @@ const NodeResourceView = (props: {
   if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
   if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
   if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isRunTag(tag)) return <RunHyperlinkDetail tag={tag} onBack={props.onBack} />;
+  if (isRunTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
   return <></>;
 };
 

@@ -28,7 +28,7 @@
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See the live book under `docs/resources/` and `docs/guides/`.
- * - **`RunHyperlink`**, **`HttpClientRunGate`**, **`HttpApiHyperlink`** —
+ * - **`Gate`**, **`HttpClientRunGate`**, **`HttpApiHyperlink`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
@@ -98,7 +98,7 @@ export * as Polling from "./Polling";
 // member access tree-shakes: `WorkPool.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
 export * as WorkPool from "./WorkPool";
-export * as RunHyperlink from "./RunHyperlink";
+export * as Gate from "./Gate";
 export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
   acceptJson,
@@ -195,7 +195,7 @@ export type {
 
 /**
  * Layer-composed configure patches for {@link Process.Service}, {@link WorkPool.Service},
- * and {@link RunHyperlink.Service}.
+ * and {@link Gate.Service}.
  */
 export {
   configureLayer,
@@ -288,25 +288,25 @@ export {
   queueRateLimiterLayer,
 } from "./WorkPool";
 
-// Types - RunHyperlink
+// Types - Gate
 export type {
   RunGateHandle,
   RunGateStatus,
-  RunHyperlinkConfig,
-  RunHyperlinkHandle,
-  RunHyperlinkLayerConfig,
-  RunHyperlinkLayerEffect,
-  RunHyperlinkRunner,
-  RunHyperlinkRunnerConfig,
-  RunHyperlinkServiceConfig,
-  RunHyperlinkServiceDefinition,
-  RunHyperlinkServiceEffect,
-  RunHyperlinkStaticRun,
-  RunHyperlinkTagDefinition,
-  RunHyperlinkTagSchemas,
-  RunHyperlinkWireSchemas,
+  GateConfig,
+  GateHandle,
+  GateLayerConfig,
+  GateLayerEffect,
+  GateRunner,
+  GateRunnerConfig,
+  GateServiceConfig,
+  GateServiceDefinition,
+  GateServiceEffect,
+  GateStaticRun,
+  GateTagDefinition,
+  GateTagSchemas,
+  GateWireSchemas,
   RunInstanceSpec,
-} from "./RunHyperlink";
+} from "./Gate";
 export {
   runGateStatus,
   runSpec,
@@ -314,6 +314,6 @@ export {
   layer as runHyperlinkLayer,
   serve as runHyperlinkServe,
   serveRemote as runHyperlinkServeRemote,
-} from "./RunHyperlink";
+} from "./Gate";
 
 // Types - Control Service

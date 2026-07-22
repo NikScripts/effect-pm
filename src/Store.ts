@@ -1142,7 +1142,7 @@ export const resolveOrDie = <const C extends StoreContractValue>(
       Effect.die(
         `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store. ` +
           `If Soft override captured an AppStore, register this engine on that Store.Service ` +
-          `(Process.store / WorkPool.store / CustomQueueHyperlink.store / RunHyperlink.store) ` +
+          `(Process.store / WorkPool.store / CustomQueueHyperlink.store / Gate.store) ` +
           `alongside Node.logs — or omit Soft override so Memory soft-default materializes the scope.`,
       ),
     ),

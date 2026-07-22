@@ -1,5 +1,5 @@
 /**
- * Wire schemas for RunHyperlink store facts.
+ * Wire schemas for Gate store facts.
  *
  * @module internal/runHyperlinkEvent
  * @internal
@@ -27,7 +27,7 @@ const runFinishedBase = {
  *
  * @internal
  */
-export const makeRunHyperlinkFactEvent = <
+export const makeGateFactEvent = <
   Success extends Schema.Top | void = void,
   Error extends Schema.Top | void = void,
 >(
@@ -58,17 +58,17 @@ export const makeRunHyperlinkFactEvent = <
 };
 
 /** Void run facts (no `success`; string `error` fallback). @internal */
-export const runHyperlinkFactEventVoid = makeRunHyperlinkFactEvent();
+export const runHyperlinkFactEventVoid = makeGateFactEvent();
 
 /** Run fact type for the default void contract. @internal */
-export type RunHyperlinkFactEventVoid = typeof runHyperlinkFactEventVoid.Type;
+export type GateFactEventVoid = typeof runHyperlinkFactEventVoid.Type;
 
 /** Run fact type parameterized by optional success / error schemas. @internal */
-export type RunHyperlinkFactEvent<
+export type GateFactEvent<
   Success extends Schema.Top | void = void,
   Error extends Schema.Top | void = void,
 > = ReturnType<
-  typeof makeRunHyperlinkFactEvent<
+  typeof makeGateFactEvent<
     Success extends Schema.Top ? Success : void,
     Error extends Schema.Top ? Error : void
   >

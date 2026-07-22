@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
-import { Process, WorkPool, RunHyperlink } from "../src";
+import { Process, WorkPool, Gate } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -76,12 +76,12 @@ const procOp = Effect.gen(function* () {
   return typeof snap.supervising === "boolean";
 });
 
-// ── RunHyperlink ──────────────────────────────────────────────────────────────────────────────────
-class ConfGate extends RunHyperlink.Tag<ConfGate>()("conf/G", {
+// ── Gate ──────────────────────────────────────────────────────────────────────────────────
+class ConfGate extends Gate.Tag<ConfGate>()("conf/G", {
   payload: Schema.Number,
   success: Schema.Number,
 }) {}
-const gateServe = RunHyperlink.serveMemory(ConfGate, {
+const gateServe = Gate.serveMemory(ConfGate, {
   effect: (n: number) => Effect.succeed(n * 2),
 });
 const gateOp = Effect.gen(function* () {

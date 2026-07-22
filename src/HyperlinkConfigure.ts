@@ -1,6 +1,6 @@
 /**
  * Layer-composed configuration for {@link Process.Service}, {@link WorkPool.Service},
- * and {@link RunHyperlink.Service}.
+ * and {@link Gate.Service}.
  *
  * @remarks
  * - **Defaults** live on the service factory (`defaultSpec` / factory config).

@@ -60,8 +60,8 @@ const cases = [
     // `RunHyperlink` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
     // engine. A `RunHyperlink.Tag`-only import must not retain the engine (`makeRunHyperlinkHandleEffect`
     // / `make` / `layer` / `serve`).
-    name: "RunHyperlink",
-    entry: "src/RunHyperlink.ts",
+    name: "Gate",
+    entry: "src/Gate.ts",
     engine: ["src/internal/runHyperlink.ts"],
     member: "Tag",
   },
