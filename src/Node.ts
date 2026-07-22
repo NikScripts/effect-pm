@@ -142,3 +142,13 @@ export function listenLocal(
   UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any> {
   return unix(node, serves as ServeLayerList, options)
 }
+
+/**
+ * The reserved node-status surface, folded into the Node namespace: `Node.status.Tag` is the
+ * status Hyperlink every node serves automatically, `Node.status.clientHttp` the
+ * batteries-included client. See the {@link status} namespace for the full surface.
+ *
+ * @category services
+ * @public
+ */
+export * as status from "./NodeStatus"

@@ -373,6 +373,27 @@ const walkPackage = (
     }
   }
 
+  // Nested namespaces: a group module re-exporting a whole module (`export * as status from
+  // "./NodeStatus"` inside Node.ts) surfaces as a dotted child group ("Node.status") — unless the
+  // target already has a page of its own (a subpath or another group), which keeps one page per
+  // module. One level deep: the snapshot iterates only the groups found above.
+  const groupModules = new Set(groups.map((g) => g.module));
+  for (const group of [...groups]) {
+    for (const member of checker.getExportsOfModule(group.module)) {
+      const resolved = resolveAlias(checker, member);
+      const decl = resolved.getDeclarations()?.[0];
+      if (
+        decl !== undefined &&
+        ts.isSourceFile(decl) &&
+        !subpathFiles.has(decl.fileName) &&
+        !groupModules.has(resolved)
+      ) {
+        groups.push({ ns: `${group.ns}.${member.getName()}`, module: resolved });
+        groupModules.add(resolved);
+      }
+    }
+  }
+
   // Every symbol reachable through a namespace — the barrel's bare re-exports of those are dropped
   // (shown once, under their namespace); only genuinely top-level bare exports remain.
   const namespaced = new Set<ts.Symbol>();

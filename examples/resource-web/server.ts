@@ -2,7 +2,7 @@
  * @module examples/resource-web/server
  *
  * The **WNBA node** — a node process serving the hub's box-score queue and live-score poller over a
- * **WebSocket** (`wsServer(...)`) on one port, plus the `NodeStatus` that the
+ * **WebSocket** (`wsServer(...)`) on one port, plus the `Node.status` that the
  * server auto-mounts. The browser dashboard reaches it via `Hyperlink.ws(WnbaNode, …)`
  * (vite proxies `/rpc` here with `ws: true`) — one multiplexed connection carries every resource's
  * status/metrics/logs streams, which HTTP/1.1's ~6-connection cap would otherwise starve. Run:

@@ -76,10 +76,6 @@
       "types": "./dist/LogContext.d.ts",
       "default": "./dist/LogContext.js"
     },
-    "./NodeStatus": {
-      "types": "./dist/NodeStatus.d.ts",
-      "default": "./dist/NodeStatus.js"
-    },
     "./HistoryStore": {
       "types": "./dist/HistoryStore.d.ts",
       "default": "./dist/HistoryStore.js"

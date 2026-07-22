@@ -35,7 +35,7 @@ class Router extends Hyperlink.Tag<Router>()("fleet/Router", {
 ```
 
 `Hyperlink.identity` makes `layer` / `serve` claim `fleet/Router` at Lookup. First live
-claimant serves; later claimants dial the winner. Dead winners are replaceable (NodeStatus
+claimant serves; later claimants dial the winner. Dead winners are replaceable (Node.status
 ping).
 
 ### 2. Hold Lookup; pipe it on listens
