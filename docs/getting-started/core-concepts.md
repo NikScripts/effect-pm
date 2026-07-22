@@ -1,4 +1,9 @@
 {#core-concepts title="Core Concepts" status="draft" done="api previews types verified" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/core-concepts>.
+<!-- docs-site-link:end -->
 # Core Concepts
 
 Every program depends on capabilities it does not build itself — a clock, a database, somewhere to send

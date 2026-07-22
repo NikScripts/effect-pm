@@ -1,4 +1,9 @@
 {#fleet-health title="Fleet Health" status="draft" done="api" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/fleet-health>.
+<!-- docs-site-link:end -->
 # Fleet Health
 
 Stadium-board health across a **meshed** pack of nodes — without letting a down neighbour take

@@ -1,3 +1,8 @@
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/LOGS>.
+<!-- docs-site-link:end -->
 # Logs platform — key catalog & reference
 
 **Narrative guide (start here):** [`docs/guides/logs.md`](./guides/logs.md) — architecture, live bus, durable journals, lineage, remote clients, migration.

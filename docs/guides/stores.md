@@ -1,4 +1,9 @@
 {#stores title="Stores" status="draft" done="api" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/stores>.
+<!-- docs-site-link:end -->
 # Stores
 
 Durable storage for resources — one composition recipe so Soft unwrap captures your

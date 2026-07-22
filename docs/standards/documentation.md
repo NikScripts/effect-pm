@@ -1,4 +1,9 @@
 {#documentation title="Documentation" order=50 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/documentation>.
+<!-- docs-site-link:end -->
 # Documentation
 
 Three kinds of documentation, three different jobs — and each has a shape worth holding to:

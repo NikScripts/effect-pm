@@ -1,4 +1,9 @@
 {#client-verify title="Client verify" status="stable" done="api" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/client-verify>.
+<!-- docs-site-link:end -->
 # Client verify — fail fast when the peer is wrong
 
 Addressed clients should not hang on a dead peer or silently talk past a stale contract.

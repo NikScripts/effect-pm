@@ -1,4 +1,9 @@
 {#metrics title="Metrics" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/metrics>.
+<!-- docs-site-link:end -->
 # Metrics
 
 Resources already emit into Effect's per-process `Metric` registry (queues, processes, HTTP

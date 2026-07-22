@@ -1,4 +1,9 @@
 {#managing-layers title="Managing Layers" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/managing-layers>.
+<!-- docs-site-link:end -->
 # Managing Layers
 
 A Hyperlink is defined **once** — a Tag with a Contract, and an Implementation behind it. Where it

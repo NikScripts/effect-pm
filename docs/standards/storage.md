@@ -1,4 +1,9 @@
 {#storage title="Storage & Persistence" order=80 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/storage>.
+<!-- docs-site-link:end -->
 # Storage & Persistence
 
 Persistence comes in exactly three approved shapes. Pick one; anything that fits none is legacy and

@@ -1,4 +1,9 @@
 {#no-backward-compat title="Breaking Changes & Stability" order=135 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/no-backward-compat>.
+<!-- docs-site-link:end -->
 # Breaking Changes & Stability
 
 The package's only consumers are the owner's own — this repo and a private organization sister repo,

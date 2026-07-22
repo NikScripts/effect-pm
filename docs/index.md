@@ -1,4 +1,9 @@
 {#index title="Introduction" done="api previews types" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/index>.
+<!-- docs-site-link:end -->
 # hyperlink-ts
 
 **Build cross-runtime Services on Effect.**
