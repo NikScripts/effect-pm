@@ -20,11 +20,13 @@ Override by providing your app store **into** the toolkit layer so Soft unwrap s
 
 ```ts
 import { Layer } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
 import * as Process from "@nikscripts/effect-pm/Process"
 import * as Store from "@nikscripts/effect-pm/Store"
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 
-class BillingNode extends Resource.Node<BillingNode>("billing/scores") {}
+class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
@@ -38,7 +40,7 @@ const live = Process.layer(Daily, { effect: poll }).pipe(
 )
 
 // httpServer form — Layer.provide is fine when you do not `yield* AppStore` in-process:
-Resource.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
+Node.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
   Layer.provide(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 )
@@ -64,7 +66,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 
 **Do not** sibling-`Layer.merge` the toolkit layer with AppStore and expect override — Soft never sees `Storage`, engines stay on the default journal, and the AppStore file stays empty.
 
-**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge; unregistered engine scopes fail resolve and journals stay empty (engine writes fail-soft). Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueResource.store` / ….
+**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge and toolkit layers **die at build** (`Store.resolveOrDie`) when the engine scope is missing. Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueResource.store` / ….
 
 ## One store per Node (intentional multi-node = N stores)
 
@@ -76,7 +78,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 ## Logs vs `layerDefaultMemory`
 
 `Store.layerDefaultMemory` (what soft-default / `*Memory` toolkit layers use) is **engine observability only**.
-It does **not** install `LogRelay` / durable `_logs` tails. Durable logs need
+It does **not** install `Logs.Relay` / durable `_logs` tails. Durable logs need
 `Store.Service.layer*` (bakes `Logs.layer`) or an explicit `Logs.layer`.
 
 Node journal + resource `_logs` copies of the same live line are intentional — see the logs guide.

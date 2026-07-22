@@ -24,7 +24,7 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Postgres backends** for `HistoryStore` and `DurableQueueStore` (same interfaces; today: in-memory + SQLite).
 - **Storage-adapter integration testing** — real-DB integration suites beyond the in-memory conformance tests.
 - **Richer history vocabulary + listener/stream hooks** — for domains that need more than append-only facts, layered *beside* the store (never a process-store monolith).
-- **Store-layer `(scopeKey, lineId)` durable memo** — deferred; in-memory tail claim is enough for live followers.
+- **Store-layer `(scopeKey, lineId)` durable memo** — **Eng’d** (seed claim from `_logs` at durable-tail acquire).
 
 ## Durable queue refinements
 
@@ -36,3 +36,4 @@ Pre-1.0: breaking changes land as minor bumps.
 ## Hygiene
 
 - **Re-enable `anyUnknownInErrorContext`** — tighten the strict-unknown TypeScript/lint gate.
+  Inventory (counts + heaviest files, rule still off): [any-unknown-in-error-context.md](./any-unknown-in-error-context.md).

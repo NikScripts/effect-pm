@@ -4,7 +4,6 @@
  * @internal
  */
 import { Effect, FileSystem } from "effect";
-import * as Node from "../Node";
 
 /**
  * Best-effort remove of a listen path — missing path is fine so bind/listen can

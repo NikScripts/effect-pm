@@ -8,7 +8,8 @@ import * as NodeStatus from "../src/NodeStatus";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
 
-declare const runFullyWired: <A>(layer: Layer.Layer<A, never, never>) => void;
+// Default-on verify may put NodeUnreachable on E — R must still be never when addressed.
+declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
 class Droplet extends Node.Tag<Droplet>()("ca/Droplet", { url: "wss://x/rpc" }) {}
 class PortNode extends Node.Tag<PortNode>()("ca/Port", 3001) {}

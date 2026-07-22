@@ -13,7 +13,6 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serve as processEntry } from "../../src/Process";
 import * as Process from "../../src/Process";
-import * as Resource from "../../src/Resource";
 import * as Store from "../../src/Store";
 import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";

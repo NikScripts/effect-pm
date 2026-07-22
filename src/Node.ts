@@ -7,10 +7,9 @@
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link asLookup} — brand a Tag node as the Lookup-server (`isLookupNode: true`)
  * - {@link listen} — neutral spine (**no transport bind** — use {@link unix} / {@link http} / {@link ws})
- * - {@link unix} — IpcSocket listen + Lookup batteries (nameless / Tag+impl / node+serves)
- * - {@link http} — local Http listen + Lookup batteries (localhost bind / nameless / Tag+impl)
- * - {@link ws} — local WebSocket listen + Lookup batteries (localhost bind / nameless / Tag+impl)
- * - {@link nPipe} — Windows named-pipe IpcSocket listen + Lookup (sibling of {@link unix})
+ * - {@link unix} / {@link http} / {@link ws} / {@link nPipe} — protocol listen **siblings** (keep in sync;
+ *   Lookup via pipe — see handoff § Protocol listen siblings)
+ * - {@link Prototype}`.listen` — curried dynamic spawn; dispatches to those siblings
  * - {@link listenLocal} — alias of `unix(node, serves)`
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
@@ -37,6 +36,10 @@ export {
   NPipeRequiresWindows,
   UnaddressedNode,
   NodeUnreachable,
+  ProtocolUnanswered,
+  ServiceNotServed,
+  ServiceNotReady,
+  ContractMismatch,
   ProtocolKindMismatch,
   MalformedNode,
   InvalidHttpTarget,
@@ -63,6 +66,7 @@ export type { HttpServerOptions } from "./internal/nodeHttpServer"
 export { ipcServer } from "./internal/nodeIpcServer"
 export type { IpcServerOptions } from "./internal/nodeIpcServer"
 export { Prototype } from "./internal/nodePrototype"
+export type { PrototypeOptions } from "./internal/nodePrototype"
 export {
   clients,
   ClientsNodeMismatch,
@@ -86,8 +90,8 @@ import type { NamelessListenOptions } from "./internal/nodeCore"
 
 /** Non-empty serve list — same constraint as {@link listen}. */
 type ServeLayerList = readonly [
-  Layer.Layer<never, any, never>,
-  ...ReadonlyArray<Layer.Layer<never, any, never>>,
+  Layer.Layer<never, never, never>,
+  ...ReadonlyArray<Layer.Layer<never, never, never>>,
 ]
 
 /** C3 catalog proof — every `ROut` member appears in merged serve success. */
@@ -104,7 +108,7 @@ type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
   : never
 
 /**
- * Sugar: {@link unix}`(node, serves)` — IPC listen + Lookup bootstrap.
+ * Sugar: {@link unix}`(node, serves)` — IPC listen (pipe Lookup when needed).
  * Prefer {@link unix} (also covers Tag+impl and nameless forms).
  *
  * @category listen
@@ -124,21 +128,17 @@ export function listenLocal<
 >
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<never, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, never, never> | ServeLayerList,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   never,
-  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc,
-  unknown
->
+  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any>
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<never, any, never> | ServeLayerList,
+  serves: Layer.Layer<never, never, never> | ServeLayerList,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   never,
-  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc,
-  unknown
-> {
+  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any> {
   return unix(node, serves as ServeLayerList, options)
 }

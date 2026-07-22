@@ -21,7 +21,7 @@ import { hasImplicitLogShape, IMPLICIT_LOGS_SHAPE_KEY } from "../store/logShapes
 import type { StoreLogLevel } from "../store/types";
 import { LogRelay, type LogRelayService } from "./relay";
 import { durableTailPolicy } from "./durableTailPolicy";
-import { lineIdFromEntry, makeLineIdClaim } from "./lineId";
+import { lineIdFromEntry, makeLineIdClaim, type LineId } from "./lineId";
 import { logStreamLevelSym } from "./streamLevel";
 
 const stampNodeKey = (entry: LogEntryT, nodeKey: string): LogEntryT =>
@@ -41,16 +41,24 @@ export interface DurableTail {
   readonly storeLevel: StoreLogLevel;
   readonly match: Predicate.Predicate<LogEntryT>;
   readonly append: (entry: LogEntryT) => Effect.Effect<void>;
+  /**
+   * Existing durable line ids for this scope (from `_logs.read` at layer acquire).
+   * Seeds the in-memory claim so rematerialize does not double-append.
+   */
+  readonly seed?: ReadonlyArray<LineId>;
   readonly batchSize?: number;
   readonly batchWindow?: Duration.Input;
 }
 
-/** Handle fragment needed to append durable log rows (`_logs` — not on public handle types). @internal */
+/** Handle fragment for the private `_logs` journal (append + read for claim seed). @internal */
 export interface LogShapeHandle {
   readonly [IMPLICIT_LOGS_SHAPE_KEY]: {
     readonly append: (
       row: LogEntryT | ReadonlyArray<LogEntryT>,
     ) => Effect.Effect<void, unknown>;
+    readonly read: (payload?: {
+      readonly limit?: number;
+    }) => Effect.Effect<ReadonlyArray<LogEntryT>, unknown>;
   };
 }
 
@@ -64,16 +72,23 @@ export const isLogShapeHandle = (handle: unknown): handle is LogShapeHandle => {
     typeof logs === "object" &&
     logs !== null &&
     "append" in logs &&
-    typeof logs.append === "function"
+    typeof logs.append === "function" &&
+    "read" in logs &&
+    typeof logs.read === "function"
   );
 };
+
+/** Cap when seeding claim from `_logs` — retention is already applied by the shape read. */
+const SEED_READ_LIMIT = 100_000;
 
 const runDurableTail = (
   relay: LogRelayService,
   options: DurableTail,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const claim = yield* makeLineIdClaim(options.scopeKey);
+    const claim = yield* makeLineIdClaim(options.scopeKey, {
+      seed: options.seed ?? [],
+    });
     const policy = durableTailPolicy(options);
     const batchSize = options.batchSize ?? 64;
     const batchWindow = options.batchWindow ?? "250 millis";
@@ -148,6 +163,9 @@ export const layerOptional = (options: DurableTail): Layer.Layer<never> =>
  * bakes Logs; silent skip is not allowed on the public path. Prefer {@link layerOptional} only
  * for deliberate internal escapes.
  *
+ * Seeds each scope's lineId claim from durable `_logs` during layer acquire (so rematerialize
+ * / restart does not double-append). Not related to store-handle `memoizedAt`.
+ *
  * @internal
  */
 export const layersForRegistrations = (
@@ -169,37 +187,52 @@ export const layersForRegistrations = (
     return Layer.empty;
   }
   const service = relay.value;
-  let merged: Layer.Layer<never> = Layer.empty;
-  for (const registration of registrations) {
-    if (!hasImplicitLogShape(registration.contract)) {
-      continue;
-    }
-    const handle = handlesByAccessor[registration.accessor];
-    if (!isLogShapeHandle(handle)) {
-      continue;
-    }
-    const logs = handle[IMPLICIT_LOGS_SHAPE_KEY];
-    const isNode = registration.journal === "node";
-    const match = isNode ? (): boolean => true : LogEntry.hasKey(registration.scopeKey);
-    const scopeKey = registration.scopeKey;
-    // Registration `Store.streamLevel*` stamps the tag so {@link Resource.logs} can read it.
-    if (registration.streamLevel !== undefined && registration.tag !== undefined) {
-      Object.assign(registration.tag, {
-        [logStreamLevelSym]: registration.streamLevel,
-      });
-    }
-    merged = Layer.mergeAll(
-      merged,
-      layerFromRelay(service, {
-        scopeKey,
-        storeLevel: registration.logLevel ?? "All",
-        match,
-        append: (entry) =>
-          logs
-            .append(isNode ? stampNodeKey(entry, scopeKey) : entry)
-            .pipe(Effect.asVoid, Effect.orDie),
-      }),
-    );
-  }
-  return merged;
+  // Resolve durable seeds during layer acquire (SqlClient / journal in context), then fork drains.
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      let merged: Layer.Layer<never> = Layer.empty;
+      for (const registration of registrations) {
+        if (!hasImplicitLogShape(registration.contract)) {
+          continue;
+        }
+        const handle = handlesByAccessor[registration.accessor];
+        if (!isLogShapeHandle(handle)) {
+          continue;
+        }
+        const logs = handle[IMPLICIT_LOGS_SHAPE_KEY];
+        const isNode = registration.journal === "node";
+        const match = isNode
+          ? (): boolean => true
+          : LogEntry.hasKey(registration.scopeKey);
+        const scopeKey = registration.scopeKey;
+        if (
+          registration.streamLevel !== undefined &&
+          registration.tag !== undefined
+        ) {
+          Object.assign(registration.tag, {
+            [logStreamLevelSym]: registration.streamLevel,
+          });
+        }
+        const seed = yield* logs.read({ limit: SEED_READ_LIMIT }).pipe(
+          Effect.map((rows) => rows.map(lineIdFromEntry)),
+          Effect.timeout(Duration.seconds(2)),
+          Effect.orElseSucceed((): ReadonlyArray<LineId> => []),
+        );
+        merged = Layer.mergeAll(
+          merged,
+          layerFromRelay(service, {
+            scopeKey,
+            storeLevel: registration.logLevel ?? "All",
+            match,
+            seed,
+            append: (entry) =>
+              logs
+                .append(isNode ? stampNodeKey(entry, scopeKey) : entry)
+                .pipe(Effect.asVoid, Effect.orDie),
+          }),
+        );
+      }
+      return merged;
+    }),
+  );
 };

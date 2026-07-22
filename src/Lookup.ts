@@ -1,14 +1,19 @@
 /**
- * Lookup — identity claims (first wins) + node directory (advertise / list).
+ * Lookup — identity claims + node directory + placement advice.
  *
- * Same-machine default: bind a well-known {@link Resource} `ipc` path (OS exclusivity).
- * Cross-network: pass an explicit {@link Node.asLookup}-branded node with an address — no self-elect (L1).
+ * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
+ * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
+ * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
+ *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
+ *   (NodeStatus `ping`) → replace; alive → {@link DuplicateIdentity}.
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
  *   `nodeKey` conflict policy via {@link OnConflict} (default **livenessReplace**): ping
  *   incumbent {@link NodeStatus} `ping`; alive → {@link IncumbentAlive} (or ask
  *   {@link NodeStatus}.`yield` when `askIncumbent`); dead/unreachable → replace row.
+ * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
+ *   resource key). {@link Resource.lookupClient} honors a live preferred row before D4 `pick`.
  *
  * @module Lookup
  * @since 0.8.0
@@ -172,12 +177,46 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
 ) {}
 
 /**
- * {@link LookupNode} has no dialable address (need `{ path }` / url, or use {@link layerDefaultLocal}).
+ * Placement advice — prefer this directory `nodeKey` when dialing `resourceKey`.
  *
+ * @category wire schemas
  * @public
  */
+export class AdviseRequest extends Schema.Class<AdviseRequest>(
+  "LookupAdviseRequest",
+)({
+  resourceKey: Schema.String,
+  /** Directory row `nodeKey` to prefer (e.g. `fleet/Worker#w2`). */
+  prefer: Schema.String,
+}) {}
+
 /**
- * Lookup node has no dialable address — Layer error channel (not a sync throw).
+ * Clear placement advice for a resource key.
+ *
+ * @category wire schemas
+ * @public
+ */
+export class ClearAdviceRequest extends Schema.Class<ClearAdviceRequest>(
+  "LookupClearAdviceRequest",
+)({
+  resourceKey: Schema.String,
+}) {}
+
+/**
+ * Read the preferred directory `nodeKey` for a resource (if any).
+ *
+ * @category wire schemas
+ * @public
+ */
+export class PreferredRequest extends Schema.Class<PreferredRequest>(
+  "LookupPreferredRequest",
+)({
+  resourceKey: Schema.String,
+}) {}
+
+/**
+ * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
+ * {@link layerOptions}. Layer error channel (not a sync throw).
  *
  * @category errors
  * @public
@@ -205,7 +244,9 @@ const identitySpec = {
     error: DuplicateIdentity,
   }).annotate({
     description:
-      "First claim for `key` wins and returns the endpoint; later claims fail with DuplicateIdentity.",
+      "First claim for `key` wins and returns the endpoint. Later claims: same dial " +
+      "refreshes; dead/unreachable incumbent (NodeStatus.ping) is replaced; a live " +
+      "different dial fails with DuplicateIdentity.",
   }),
   resolve: Resource.effectFn({
     payload: ResolveRequest,
@@ -217,7 +258,7 @@ const identitySpec = {
 };
 
 /**
- * Lookup identity service — claim resource keys (first wins).
+ * Lookup identity service — claim resource keys (first wins; dead winners replaceable).
  *
  * @category services
  * @public
@@ -266,6 +307,136 @@ export class Directory extends Resource.Tag<Directory>()(
   directorySpec,
   { kind },
 ) {}
+
+const adviceSpec = {
+  advise: Resource.effectFn({
+    payload: AdviseRequest,
+    success: Schema.String,
+  }).annotate({
+    description:
+      "Last-write placement advice: prefer this directory nodeKey when dialing resourceKey. " +
+      "Stale prefer (not in nodesServing) is ignored by lookupClient.",
+  }),
+  clear: Resource.effectFn({
+    payload: ClearAdviceRequest,
+    success: Schema.Boolean,
+  }).annotate({
+    description: "Drop placement advice for resourceKey (true if a row was removed).",
+  }),
+  preferred: Resource.effectFn({
+    payload: PreferredRequest,
+    success: Schema.Option(Schema.String),
+  }).annotate({
+    description: "Read the preferred directory nodeKey for resourceKey, if any.",
+  }),
+};
+
+/**
+ * Lookup placement board — coordinator advice for nodeless / {@link Resource.lookupClient} dial.
+ *
+ * v1: last-write-wins, in-memory, no advisor ACL. Algorithms stay app-owned (who calls
+ * {@link advise}); Lookup only stores and surfaces the preference.
+ *
+ * @category services
+ * @public
+ */
+export class Advice extends Resource.Tag<Advice>()(
+  "@nikscripts/effect-pm/Lookup/Advice",
+  adviceSpec,
+  { kind },
+) {}
+
+/**
+ * Services a Lookup client layer provides — identity, directory, and placement advice.
+ *
+ * @category models
+ * @public
+ */
+export type Services = Identity | Directory | Advice;
+
+/**
+ * Publish placement advice (requires {@link Advice} in context).
+ *
+ * ```ts
+ * yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const advise = (input: {
+  readonly resourceKey: string;
+  readonly prefer: string;
+}): Effect.Effect<string, never, Advice> =>
+  Effect.flatMap(Advice, (svc) =>
+    svc.advise(
+      new AdviseRequest({
+        resourceKey: input.resourceKey,
+        prefer: input.prefer,
+      }),
+    ),
+  );
+
+/**
+ * Prefer `nodeKey` when dialing `resource` (Tag or key string).
+ * Coordinator sugar over {@link advise} — algorithms stay app-owned.
+ *
+ * ```ts
+ * yield* Lookup.prefer(Worker, "fleet/Worker#w2")
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const prefer = (
+  resource: string | { readonly key: string },
+  nodeKey: string,
+): Effect.Effect<string, never, Advice> =>
+  advise({
+    resourceKey: typeof resource === "string" ? resource : resource.key,
+    prefer: nodeKey,
+  });
+
+/**
+ * Prefer a directory row's `nodeKey` for `resourceKey`.
+ *
+ * ```ts
+ * const rows = yield* directory.nodesServing(...)
+ * yield* Lookup.preferEntry(Worker.key, rows[0]!)
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const preferEntry = (
+  resourceKey: string,
+  entry: { readonly nodeKey: string },
+): Effect.Effect<string, never, Advice> =>
+  advise({ resourceKey, prefer: entry.nodeKey });
+
+/**
+ * Clear placement advice for a resource key (requires {@link Advice} in context).
+ *
+ * @category constructors
+ * @public
+ */
+export const clearAdvice = (resourceKey: string): Effect.Effect<boolean, never, Advice> =>
+  Effect.flatMap(Advice, (svc) =>
+    svc.clear(new ClearAdviceRequest({ resourceKey })),
+  );
+
+/**
+ * Read preferred directory `nodeKey` for a resource (requires {@link Advice} in context).
+ *
+ * @category constructors
+ * @public
+ */
+export const preferred = (
+  resourceKey: string,
+): Effect.Effect<Option.Option<string>, never, Advice> =>
+  Effect.flatMap(Advice, (svc) =>
+    svc.preferred(new PreferredRequest({ resourceKey })),
+  );
 
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
@@ -322,7 +493,7 @@ const storedFromAdvertise = (
 
 /** Ping incumbent via NodeStatus.ping — true if reachable within timeout. */
 const incumbentAlive = (
-  entry: internal.StoredDirectoryEntry,
+  entry: internal.StoredEndpoint,
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
@@ -340,8 +511,14 @@ const incumbentAlive = (
   }
   // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
   // Addressed target → Resource.client auto-wires connect (shared MemoMap Layer).
+  // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
+  // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
-    const ctx = yield* Layer.build(Resource.client(NodeStatus.Tag, target));
+    const ctx = yield* Layer.build(
+      Resource.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Resource.clientVerify(false)),
+      ),
+    );
     yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;
       yield* status.ping;
@@ -373,8 +550,13 @@ const incumbentYield = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
+  // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
-    const ctx = yield* Layer.build(Resource.client(NodeStatus.Tag, target));
+    const ctx = yield* Layer.build(
+      Resource.client(NodeStatus.Tag, target).pipe(
+        Layer.provide(Resource.clientVerify(false)),
+      ),
+    );
     return yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;
       return yield* status.yield;
@@ -385,25 +567,55 @@ const incumbentYield = (
   );
 };
 
-/** Identity + Directory impl over one shared in-memory registry pair. */
+/** Identity + Directory + Advice impl over one shared in-memory registry. */
 const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const registries = yield* internal.makeRegistries();
       const identity = Resource.serve(Identity, {
         claim: (req: ClaimRequest) =>
-          registries.claims.claim(req.key, storedFromClaim(req)).pipe(
-            Effect.flatMap((outcome) =>
-              outcome._tag === "Duplicate"
-                ? Effect.fail(
-                    new DuplicateIdentity({
-                      key: outcome.key,
-                      original: toEndpoint(outcome.original),
-                    }),
-                  )
-                : Effect.succeed(toEndpoint(outcome.endpoint)),
-            ),
-          ),
+          Effect.gen(function* () {
+            const next = storedFromClaim(req);
+            const outcome = yield* registries.claims.claim(req.key, next);
+            if (outcome._tag === "Won") {
+              return toEndpoint(outcome.endpoint);
+            }
+            // Idempotent reclaim / refresh of the same dial target.
+            if (internal.sameDialTarget(outcome.original, next)) {
+              return toEndpoint(outcome.original);
+            }
+            const alive = yield* incumbentAlive(outcome.original);
+            if (!alive) {
+              const removed = yield* registries.claims.removeIfSameDial(
+                req.key,
+                outcome.original,
+              );
+              if (removed) {
+                const retry = yield* registries.claims.claim(req.key, next);
+                if (retry._tag === "Won") {
+                  return toEndpoint(retry.endpoint);
+                }
+                // Raced with another claimant — surface their endpoint.
+                return yield* new DuplicateIdentity({
+                  key: retry.key,
+                  original: toEndpoint(retry.original),
+                });
+              }
+              // Concurrent replace already cleared the dead row — try once more.
+              const retry = yield* registries.claims.claim(req.key, next);
+              if (retry._tag === "Won") {
+                return toEndpoint(retry.endpoint);
+              }
+              return yield* new DuplicateIdentity({
+                key: retry.key,
+                original: toEndpoint(retry.original),
+              });
+            }
+            return yield* new DuplicateIdentity({
+              key: outcome.key,
+              original: toEndpoint(outcome.original),
+            });
+          }),
         resolve: (req: ResolveRequest) =>
           registries.claims.resolve(req.key).pipe(
             Effect.map(Option.map(toEndpoint)),
@@ -460,12 +672,20 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
             Effect.map((entries) => entries.map(toDirectoryEntry)),
           ),
       });
-      return Layer.mergeAll(identity, directory);
+      const advice = Resource.serve(Advice, {
+        advise: (req: AdviseRequest) =>
+          registries.advice.set(req.resourceKey, req.prefer),
+        clear: (req: ClearAdviceRequest) =>
+          registries.advice.clear(req.resourceKey),
+        preferred: (req: PreferredRequest) =>
+          registries.advice.get(req.resourceKey),
+      });
+      return Layer.mergeAll(identity, directory, advice);
     }),
   );
 
 /**
- * Serve {@link Identity} + {@link Directory} on a Unix-domain path (same-machine lookup).
+ * Serve {@link Identity} + {@link Directory} + {@link Advice} on a Unix-domain path.
  *
  * @category layers & serving
  * @public
@@ -492,25 +712,6 @@ export const layerIpc = (
     },
   );
 
-/**
- * L1 same-machine default — bind {@link defaultIpcPath} (or `options.path`).
- * Second binder loses with `EADDRINUSE` (OS exclusivity).
- *
- * @category layers & serving
- * @public
- */
-export const layerDefaultLocal = (options?: {
-  readonly path?: string;
-  readonly unlink?: boolean;
-  readonly onConflict?: OnConflictResolved;
-}) => layerIpc(options?.path ?? defaultIpcPath, options);
-
-/**
- * Serve Lookup on an addressed {@link LookupNode} (ipc `{ path }` in v1).
- * Reads concrete {@link OnConflict} from the Lookup node stamp.
- *
- * @public
- */
 /** Fail a Layer build with {@link LookupUnaddressed}. @internal */
 const lookupUnaddressedLayer = <A = never>(
   node: string,
@@ -522,7 +723,15 @@ const lookupUnaddressedLayer = <A = never>(
     ),
   );
 
-export const layer = (
+/**
+ * Serve Lookup exclusively on an addressed {@link Node.Lookup} (ipc `{ path }` in v1).
+ * Reads concrete {@link OnConflict} from the Lookup node stamp.
+ * Same-machine bind-or-dial without a Node: {@link layer} / {@link layerOptions}.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const layerNode = (
   node: AnyNode & { readonly key: string },
   options?: { readonly unlink?: boolean },
 ): Layer.Layer<never, LookupUnaddressed> => {
@@ -608,7 +817,7 @@ export const directoryAdvertiseLayer = (
  */
 export const client = (
   node: AnyNode & { readonly path?: string },
-): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
+): Layer.Layer<Services, LookupUnaddressed> => {
   if (node.path === undefined) {
     return lookupUnaddressedLayer(
       "key" in node && typeof node.key === "string" ? node.key : "lookup",
@@ -616,43 +825,65 @@ export const client = (
   }
   const path = node.path;
   // Path overload of connectIpc — no UnaddressedNode on the error channel.
+  // Opt out of default-on client verify: Lookup.client is often composed before (or
+  // beside) the Lookup listen, and bind-or-dial ({@link layerOptions}) builds the
+  // dial side without a guaranteed live peer at Layer.build. Connectivity fails on
+  // the first Identity/Directory call instead.
   return Layer.mergeAll(
     Resource.client(Identity, node),
     Resource.client(Directory, node),
-  ).pipe(Layer.provide(node.pipe(connectIpc(path))));
+    Resource.client(Advice, node),
+  ).pipe(
+    Layer.provide(node.pipe(connectIpc(path))),
+    Layer.provide(Resource.clientVerify(false)),
+  );
 };
 
 /**
- * Client for the same-machine default lookup path.
+ * Dial the same-machine Lookup path ({@link defaultIpcPath} or `options.path`).
+ * Effect precedent: options factory beside a default Layer value (`layerAgentOptions`).
  *
  * @category clients
  * @public
  */
-export const clientDefaultLocal = (options?: {
+export const clientOptions = (options?: {
   readonly path?: string;
-}): Layer.Layer<Identity | Directory, LookupUnaddressed> => {
+}): Layer.Layer<Services, LookupUnaddressed> => {
   const path = options?.path ?? defaultIpcPath;
   const node = NodeTag()("effect-pm/Lookup/default", { path }).pipe(asLookup);
   return client(node);
 };
 
 /**
- * Bind-or-dial the same-machine default Lookup path (D7).
- * First process serves Identity+Directory; later processes dial it (`Layer.catchCause`).
+ * Bind-or-dial a same-machine Lookup path (L1 / D7).
+ * First process serves {@link Identity}+{@link Directory}+{@link Advice}; later processes dial
+ * (`Layer.catchCause`). Default `unlink: false` so a second process cannot unlink-steal
+ * a live sock (stale socks: pass `unlink: true` or a fresh `path`).
+ *
+ * Effect precedent: `layerAgentOptions` — pair with {@link layer} for the zero-config value.
  *
  * @category layers & serving
  * @public
  */
-export const bootstrapDefaultLocal = (options?: {
+export const layerOptions = (options?: {
   readonly path?: string;
   readonly unlink?: boolean;
-}): Layer.Layer<Identity | Directory> => {
+}): Layer.Layer<Services> => {
   const path = options?.path ?? defaultIpcPath;
-  // Bind-or-dial: try serve first. Default `unlink: false` so a second process cannot
-  // unlink-steal a live Lookup sock (stale socks: pass `unlink: true` or use a fresh path).
   return layerIpc(path, {
     unlink: options?.unlink ?? false,
   }).pipe(
-    Layer.catchCause(() => clientDefaultLocal({ path })),
-  ) as Layer.Layer<Identity | Directory>;
+    Layer.catchCause(() => clientOptions({ path })),
+  ) as Layer.Layer<Services>;
 };
+
+/**
+ * Same-machine default Lookup — {@link layerOptions}() on {@link defaultIpcPath}.
+ * Use `Layer.provide(Lookup.layer)` with no call. Override path via {@link layerOptions}.
+ *
+ * Effect precedent: `layerAgent` = `layerAgentOptions()`.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const layer: Layer.Layer<Services> = layerOptions();

@@ -2,7 +2,7 @@ import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
-import { replayLogEntry } from "./logCapture";
+import { replayLogEntry } from "../logs/relay";
 
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;

@@ -3,6 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import * as Lookup from "../src/Lookup";
 
 /**
  * Nameless ipc — `Node.unix([serve…])` mints path + Lookup.
@@ -30,10 +31,11 @@ describe("Node.unix nameless", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
-        Node.unix([Resource.serve(Jobs, jobsImpl)], {
-          lookupPath,
-          unlinkLookup: true,
-        }),
+        Node.unix([Resource.serve(Jobs, jobsImpl)]).pipe(
+          Layer.provide(
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
+          ),
+        ),
       );
       const clientCtx = yield* Layer.build(
         Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
@@ -55,10 +57,11 @@ describe("Node.unix nameless", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("one");
       const serverCtx = yield* Layer.build(
-        Node.unix(Resource.serve(Jobs, jobsImpl), {
-          lookupPath,
-          unlinkLookup: true,
-        }),
+        Node.unix(Resource.serve(Jobs, jobsImpl)).pipe(
+          Layer.provide(
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
+          ),
+        ),
       );
       const clientCtx = yield* Layer.build(
         Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
@@ -75,12 +78,13 @@ describe("Node.unix nameless", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("pair");
       const serverCtx = yield* Layer.build(
-        Node.unix(
-          [
-            Resource.serve(Jobs, jobsImpl),
-            Resource.serve(Emails, emailsImpl),
-          ],
-          { lookupPath, unlinkLookup: true },
+        Node.unix([
+          Resource.serve(Jobs, jobsImpl),
+          Resource.serve(Emails, emailsImpl),
+        ]).pipe(
+          Layer.provide(
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
+          ),
         ),
       );
       const clientCtx = yield* Layer.build(

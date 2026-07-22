@@ -1,8 +1,7 @@
 # Design: loud, eager transport failures
 
-**Status:** IN PROGRESS on `feat/loud-failures`. Topology core (§8.1–8.2) SHIPPED + tested; error-surfacing (§4 remap, §8.3 serve assertion) and verify (§4.3/§8.4) remain — see §9.
+**Status (2026-07-21):** Loud-failure track **Eng’d** — topology (§8.1–8.2), serve assert (§8.3), `ProtocolMismatch` / `MissingClientProtocol` (§4.1–4.2a), tier-1 + deep `verifyConnection`, **default-on client verify (§8.6)**, **F4 `contractHash`**.
 **Author intent:** kill the recurring "silent wiring failure" bug class at the library level.
-**Ownership note:** the runtime changes live in `src/Resource.ts` (the protocol/connect API — Agent C's zone), so §4.1–4.3 are a **spec to co-own with C**. The verification harness (§5) touches only `test/` + example smoke scripts and is **independently ownable** — it can land first and would have caught both motivating bugs on its own.
 
 ---
 
@@ -18,10 +17,15 @@
 - **Overload order:** the node→Layer form is declared **last** in each dual, because TS selects the last overload for a function used as a bare value (`node.pipe(connect)`); direct calls resolve top-down. Documented in-code.
 - **Loud fail is runtime, not compile-time.** `connect(node)` accepts any node and throws `UnaddressedNode` at call for a bare one, rather than a type-level `AddressedNode` gate. A compile-time gate would require overloading `makeNode` to return precise per-target url/kind types, which entangles the complex `store`/`logs` getter types — deferred as a possible refinement. Runtime throw is still eager + loud (at connect, not first RPC).
 
-**REMAINING (C-coupled follow-ups, well-specified now that the topology exists):**
-- **§8.3 serve-time `ProtocolKindMismatch`** — `wsServer`/`httpServer` assert each served tag's node `kind`. Coupled: `serverImpl` handles opaque `serve` layers and would need to read each served tag's bound node.
-- **§4.1/§4.2a reactive remap** — `MissingClientProtocol` (absent ambient protocol) and `ProtocolMismatch` (the "empty HTTP response" first-call defect). Coupled: the client-building / `forwardClient` path.
-- **§4.3/§8.4 `verify` handshake (F3/F4)** — investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
+**SHIPPED — §8.3 serve-time `ProtocolKindMismatch`** — `assertProtocolKinds` on `httpServer` / `wsServer` / `ipcServer` (set-membership for multi-protocol).
+
+**SHIPPED — §4.2a `ProtocolMismatch` remap** — `Resource.client` / `forwardClient` maps Effect's "empty HTTP response" `RpcClientDefect` (http client → ws server) to tagged `ProtocolMismatch`.
+
+**SHIPPED — §4.1 `MissingClientProtocol`** — nodeless `client(tag)` / `clientInstances` use `serviceOption(RpcClient.Protocol)`; absent ambient protocol → tagged `MissingClientProtocol` with remediation (Layer still requires Protocol in `R`).
+
+**REMAINING (owner-gated):**
+- **F4 `contractHash`** — **Eng’d:** stamped on `NodeStatus.resources[]` at serve; deep verify compares; tag-aware default-on client escalates to deep+hash.
+- **§4.3/§8.4 historical note (F3 path Eng’d via transport probe + deep NodeStatus):** investigation RESOLVED (2026-07-16): **Effect's RPC already ships a transport-level handshake.** The wire (`RpcMessage`) carries `Ping`/`Pong` (client sends `constPing`; **every RpcServer auto-answers** — `RpcServer.js` `case "Ping": send(constPong)`), and the client exposes an **`onConnect: Effect<void>`** hook; `makeProtocolSocket` documents built-in "connection hooks, ping timeouts, retry policy." So:
   - **F1/F3 verify is free and self-contained** — await `onConnect` / send one `Ping`, bounded by a timeout → `NodeUnreachable` (no Pong) or `ProtocolMismatch` (transport opened but handshake rejected — http↔ws). **No server-side application verb, works against any Effect RPC server today.** This unblocks **default-on `verify` for remote tags** (no host-health prerequisite).
   - **Socket vs http nuance:** socket is persistent (built-in ping timeouts / `onConnect`, verify nearly passive); http is stateless, so http-verify is one explicit `Ping` round-trip at connect.
   - **F4 (`contractHash`)** rides the `initialMessage` channel (`RpcServer` exposes `initialMessage: Effect<Option<unknown>>` to read a client's connect payload). Server-read exists; client-send needs a bit more — **still deferred** to land with host-health, but the mechanism is confirmed real.
@@ -29,7 +33,9 @@
 
   **UPDATE (2026-07-16) — spiked, and the node-level shape above does NOT hold.** A throwaway spike driving `Protocol.run(0, …)` + `send(0, constPing)` against real ws + http servers **times out on both**: the Ping/Pong correlation (clientId allocation, receive-loop latches) lives in `RpcClient.make` (`RpcClient.js:277-348`), not the bare `Protocol`, so you can't Ping a node's raw transport. And that machinery is **per-resource-group** (needs the RPC schema), not per-node — a node only carries the transport. `onConnect` is **socket-only** (stateless http has no connect event). So **node-level `verify(node)` via RPC primitives is architecturally awkward.** The realistic shapes are: (a) **resource-level** verify where a real client+group exists (`clientHttp(tag, …, { verify })` can make a genuine bounded call), or (b) a **transport-native probe** that bypasses RPC (raw ws-open / http `HEAD`), which reopens a separate connection and classifies mismatch only fuzzily. Both are real per-transport integration, not the "few lines on shipped primitives" the pre-spike note implied. **Recommendation:** the topology core (§8.1–8.2, shipped) already makes the mismatch un-expressible on the blessed path, so verify is a backstop; prioritize the §5 harness (higher-certainty CI value) and re-scope verify to the resource level as a deliberate follow-up once its true shape is chosen.
 
-**SHIPPED (2026-07-16) — `Resource.verifyConnection(node, { url?, timeout? })`, the F3 reachability slice.** After the Ping spike, verify landed as a **transport-native probe** (not RPC-level): socket = the ws stays open past a short window (`run` errors fast if it can't connect); http = the url answers at all. Fails with **`NodeUnreachable`** (remediation message) → a client fails fast at startup instead of hanging. Runtime `url` override handles bare browser nodes (kind inferred from scheme). Probes use `Layer.build` + `Effect.provide(context)` (strictEffectProvide-clean). Tested: reachable ws+http → ok, dead ports → `NodeUnreachable`; 506-suite green, LSP 0/0. **Deliberately does NOT classify an http↔ws mismatch** (an http probe can't tell a ws server from an http one that 4xx's a GET) — `connect`'s derived transport already prevents mis-dialing, so `verifyConnection` covers "is the peer there," and `ProtocolMismatch` precision stays a resource-level follow-up.
+**SHIPPED (2026-07-16) — `Resource.verifyConnection(node, { url?, timeout? })`, the F3 reachability slice.** After the Ping spike, verify landed as a **transport-native probe** (not RPC-level): socket = the ws stays open past a short window (`run` errors fast if it can't connect); http = the url answers at all. Fails with **`NodeUnreachable`** (remediation message) → a client fails fast at startup instead of hanging. Runtime `url` override handles bare browser nodes (kind inferred from scheme). Probes use `Layer.build` + `Effect.provide(context)` (strictEffectProvide-clean). Tested: reachable ws+http → ok, dead ports → `NodeUnreachable`; 506-suite green, LSP 0/0.
+
+**SHIPPED (2026-07-21) — deep classification.** `{ deep: true }` escalates after tier-1: dials auto-served `NodeStatus` over the `selectEndpoint` pick (or `{ all: true }`). Transport up / RPC silent → `ProtocolUnanswered`; optional `resource` key → `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged. See [`verify-connection-classification.md`](./verify-connection-classification.md).
 
 ---
 
@@ -95,13 +101,11 @@ A one-shot handshake at `connect` that pings the server and returns eagerly with
 
 **Sequencing:** 4.1 → 4.2(a) → (4.2(b) + 4.3 together, since both need the kind marker / host-health verb). 4.1 and 4.2(a) deliver most of the value and need no new server surface.
 
-## 5. Verification harness (independently ownable, land first)
+## 5. Verification harness
 
-This is the part that isn't in `Resource.ts` and doesn't collide with any active worktree. It also *reproduces* both motivating bugs, so it's worth building even before §4:
-
-1. **A per-failure-mode test matrix** (`test/`): for each of F1–F4, assert the misconfiguration produces the **named** typed error **eagerly** (or, pre-fix, assert the current bad behavior so the fix is a visible diff). F1 already has partial coverage in `test/queue-remote-websocket.test.ts` (the mismatch test asserts a failure — extend it to assert the *tagged* error once F1 lands).
-2. **A headless fleet smoke test** (example CI): boot Droplet + Mini, run one producer, assert (a) queues fill, (b) NodeStatus reaches ready, (c) a stream delivers frames — from node probes, no browser. Turns the manual "three servers + Playwright + eyeballs" ritual into a CI gate. This alone would have caught both bugs.
-3. **A transport conformance matrix:** every resource type {queue, process, run, shardmap, httpapi} × {http, ws, mismatch}, generated once, so "streams over the wire, fails loudly on mismatch" becomes a proven invariant per type instead of a per-type surprise.
+1. **Per-failure-mode matrix** — **SHIPPED for F1/F2/F3/F4:** `ProtocolMismatch`, `MissingClientProtocol`, `verifyConnection` deep classification + `ContractMismatch` via `contractHash`.
+2. **Headless fleet smoke** — **SHIPPED:** `test/fleet-smoke.test.ts` (ws producer + NodeStatus).
+3. **Transport conformance matrix** — **SHIPPED** for queue/process/run/shardmap × {http, ws} + http→ws mismatch → `ProtocolMismatch` (`test/transport-conformance.test.ts`, `test/shardmap-remote.test.ts`). **HttpApi row = N/A** — `HttpApiResource` is Effect `HttpApiClient` + concurrency gate, not RpcClient transport / `ProtocolMismatch`.
 
 ## 6. Success criteria
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect } from "effect";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
+import { Duration, Effect, FileSystem, Layer, Path } from "effect";
 import { TestClock } from "effect/testing";
 import { LogAnnotationKeys } from "../src/LogContext";
 import * as LogEntry from "../src/LogEntry";
@@ -9,6 +11,8 @@ import * as Process from "../src/Process";
 import * as Store from "../src/Store";
 import { durableTailPolicy, meetsStoreLevel } from "../src/internal/logs/durableTailPolicy";
 import { lineIdFromEntry, makeLineIdClaim } from "../src/internal/logs/lineId";
+
+const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 class ProcA extends Process.Tag<ProcA>()("test/logs-tail/A") {}
 class ProcB extends Process.Tag<ProcB>()("test/logs-tail/B") {}
@@ -65,6 +69,16 @@ describe("durable log store tail", () => {
       const id = lineIdFromEntry(entry("once", { lineId: "L1" }));
       expect(yield* claim(id)).toBe(true);
       expect(yield* claim(id)).toBe(false);
+    }),
+  );
+
+  it.effect("lineId claim seed rejects already-durable ids", () =>
+    Effect.gen(function* () {
+      const id = lineIdFromEntry(entry("seeded", { lineId: "S1" }));
+      const claim = yield* makeLineIdClaim(ProcA.key, { seed: [id] });
+      expect(yield* claim(id)).toBe(false);
+      const other = lineIdFromEntry(entry("fresh", { lineId: "S2" }));
+      expect(yield* claim(other)).toBe(true);
     }),
   );
 
@@ -132,5 +146,49 @@ describe("durable log store tail", () => {
       const last = snap[snap.length - 1];
       expect(last?.annotations[LogAnnotationKeys.lineId]).toBeDefined();
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
+  );
+
+  it.live("SQLite rematerialize does not re-append a seeded lineId", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectory();
+      const filename = path.join(directory, "lineid-memo.sqlite");
+
+      yield* Effect.gen(function* () {
+        yield* Effect.logInfo("persist-once").pipe(Logs.withScope(ProcA));
+        yield* Effect.sleep(Duration.millis(800));
+        expect(yield* Logs.byResource(ProcA.key)).toHaveLength(1);
+      }).pipe(Effect.provide(AppStore.layer({ filename })), Effect.scoped);
+
+      const prior = yield* Logs.byResource(ProcA.key).pipe(
+        Effect.provide(AppStore.layer({ filename })),
+        Effect.scoped,
+      );
+      const lineId = prior[0]?.annotations[LogAnnotationKeys.lineId];
+      expect(lineId).toBeDefined();
+
+      // Rematerialize: re-log with the same lineId annotation (capture path). Seeded
+      // claim keeps count at 1; a fresh message proves the tail is alive.
+      yield* Effect.gen(function* () {
+        const again = Effect.logInfo("persist-once").pipe(
+          Effect.annotateLogs({ [LogAnnotationKeys.lineId]: lineId! }),
+          Logs.withScope(ProcA),
+        );
+        yield* again;
+        yield* again;
+        yield* Effect.logInfo("fresh-after-rematerialize").pipe(
+          Logs.withScope(ProcA),
+        );
+        yield* Effect.sleep(Duration.millis(1000));
+        const after = yield* Logs.byResource(ProcA.key);
+        expect(
+          after.filter((row) => row.message === "persist-once"),
+        ).toHaveLength(1);
+        expect(
+          after.filter((row) => row.message === "fresh-after-rematerialize"),
+        ).toHaveLength(1);
+      }).pipe(Effect.provide(AppStore.layer({ filename })), Effect.scoped);
+    }).pipe(Effect.provide(nodePlatform)),
   );
 });

@@ -14,10 +14,11 @@ One tag. Distribute it across the droplets you actually run — Context service 
 ``` ts
 import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
 import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 // ---cut---
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
-class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
   Resource.distributed([DropletEast, DropletWest, DropletCentral]),
@@ -33,17 +34,18 @@ class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
 ``` ts
 import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
 import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 import { Duration, Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
-class DropletEast extends Resource.Node<DropletEast>("app/DropletEast") {}
-class DropletWest extends Resource.Node<DropletWest>("app/DropletWest") {}
-class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral") {}
+class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
   Resource.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
-  Resource.httpServer(resource).pipe(
+  Node.httpServer(resource).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 // ---cut---

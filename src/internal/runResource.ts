@@ -344,6 +344,11 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
+    // Fail-loud Soft: AppStore missing this RunResource registration dies at layer build.
+    yield* Store.resolveOrDie(
+      scopeKey,
+      builtInRunResourceStoreContract(scopeTag),
+    );
     const storageContext = yield* Effect.context<Store.Storage>();
     const storeEffects = Store.provideContext(
       Store.catchWriteErrors(

@@ -1014,17 +1014,11 @@ export interface QueueResourceConfigBase<T> {
    * `RetryScheduled` / `RetryExhausted` lifecycle on the {@link QueueHandleApi.events} stream.
    *
    * In-place retry of the worker effect is a separate concern — put `Effect.retry(...)` on your
-   * `effect`. Supersedes the deprecated {@link QueueResourceConfigBase.retries}.
+   * `effect`.
    *
    * @default 1 (try once; no auto re-enqueue)
    */
   readonly attempts?: number;
-  /**
-   * @deprecated Use {@link QueueResourceConfigBase.attempts} (= `retries` + 1). Max times an
-   * item may be auto re-enqueued on failure.
-   * @default Infinity
-   */
-  readonly retries?: number;
   /**
    * How {@link QueueHandleApi.shutdown} winds down. Either way it stops accepting new items
    * immediately (status `phase` → `"draining"`), lets in-flight items finish, and once the queue
@@ -1055,8 +1049,8 @@ export interface QueueResourceConfigBase<T> {
  *   (emits `RetryScheduled`, or `RetryExhausted` once the budget is spent).
  * - `"deadLetter"` — emit a `DeadLettered` event; do **not** re-enqueue.
  * - `"drop"` — emit a `Dropped` event; do **not** re-enqueue.
- * - `"default"` — fall back to the queue's policy (auto re-enqueue when `attempts`/`retries` is
- *   set, otherwise log a warning).
+ * - `"default"` — fall back to the queue's policy (auto re-enqueue when `attempts` is set,
+ *   otherwise log a warning).
  *
  * @category models
  * @public
@@ -1826,16 +1820,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const logScopeTag = { key: queueName };
     const tapLogs = <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
       withLogScope(logScopeTag)(eff);
-    // `attempts` (preferred) supersedes the deprecated `retries` (= attempts - 1).
+    // `attempts` → max auto re-enqueues (= attempts - 1). Unset → no auto re-enqueue budget.
     const maxRetries =
-      config.attempts !== undefined
-        ? Math.max(0, config.attempts - 1)
-        : (config.retries ?? Infinity);
+      config.attempts !== undefined ? Math.max(0, config.attempts - 1) : Infinity;
     // The worker auto re-enqueues failed items at their priority, up to `maxRetries`, whenever
-    // a bound (`attempts`/`retries`) is set. Observe outcomes via the `events` stream; drive
-    // custom per-error disposition by handling `Failed`/`Exit` there.
-    const autoReEnqueue =
-      config.attempts !== undefined || config.retries !== undefined;
+    // `attempts` is set. Observe outcomes via the `events` stream; drive custom per-error
+    // disposition by handling `Failed`/`Exit` there.
+    const autoReEnqueue = config.attempts !== undefined;
     // ─── Allocate internal state ───
     // The lane store is injected (FIFO for the default queue, weighted for CustomQueueResource); the
     // rest of the engine drives it lane-agnostically through the `LaneStore` interface.

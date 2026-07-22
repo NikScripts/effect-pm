@@ -85,17 +85,18 @@ export class WnbaDatabase extends Resource.withReadiness(
 ) {}
 ```
 
-Options field names match the produced spec (`status` / `changes`). `changes` is the **element** schema of the stream. Serve an impl with those fields as usual (`Resource.serve` / `Resource.httpServer`); `/health` picks up the attached readiness automatically.
+Options field names match the produced spec (`status` / `changes`). `changes` is the **element** schema of the stream. Serve an impl with those fields as usual (`Resource.serve` / `Node.httpServer`); `/health` picks up the attached readiness automatically.
 
 ## Shared majority + one outlier on one port
 
-`serveAllHttp` is retired — every host is `Resource.httpServer([...serve layers])`. When **most** resources share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Resource.provide`, isolate the outlier on its own `serve`:
+`serveAllHttp` is retired — every host is `Node.httpServer([...serve layers])`. When **most** resources share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Resource.provide`, isolate the outlier on its own `serve`:
 
 ``` ts
 import { Layer } from "effect"
 import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Node from "@nikscripts/effect-pm/Node"
 
-const Host = Resource.httpServer([
+const Host = Node.httpServer([
   Resource.provide(SharedHandlers.layer, [
     Resource.serve(Database, dbImpl),
     Resource.serve(Workers, workersImpl),

@@ -89,6 +89,7 @@ const httpServerBase = (
           key: entry.groupId,
           kind: entry.kind,
           ready: result.ready,
+          contractHash: entry.contractHash,
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );
@@ -135,7 +136,9 @@ const httpServerBase = (
       // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
       // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it — an
       // http POST handler or a ws upgrade — on the same router (`HttpRouter.serve` below).
-      const rpcAppLayer = RpcServer.layer(merged).pipe(
+      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
+      const rpcRaw: any = RpcServer.layer(merged);
+      const rpcAppLayer = (rpcRaw as Layer.Layer<never, never, never>).pipe(
         Layer.provide(
           nodeTag[Resource.groupSym].toLayer(
             nodeHandlers as unknown as Parameters<
@@ -163,10 +166,10 @@ const httpServerBase = (
             Effect.orDie,
           );
         }),
-      );
+      ) as any as Layer.Layer<never, never, never>;
       const served = HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
         Layer.provideMerge(options?.serialization ?? Resource.defaultSerialization),
-      );
+      ) as any as Layer.Layer<never, never, HttpServer.HttpServer>;
       const advertise = yield* directoryAdvertiseMerge(
         options?.advertiseNode,
         entries,
@@ -176,7 +179,7 @@ const httpServerBase = (
       );
       return served.pipe(Layer.provideMerge(advertise));
     }),
-  ) as unknown as Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
+  ) as Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
 
 
 /**
@@ -242,7 +245,7 @@ export function httpServer(
     | ReadonlyArray<Layer.Layer<never, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, any, unknown> {
+): Layer.Layer<never, any, any> {
   return serverImpl(Resource.serverProtocolHttp, "Http", servesOrOptions, maybeOptions);
 }
 
@@ -259,7 +262,7 @@ function serverImpl(
     | ReadonlyArray<Layer.Layer<never, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, any, unknown> {
+): Layer.Layer<never, any, any> {
   const serves = Array.isArray(servesOrOptions)
     ? (servesOrOptions as unknown as ServerServeList)
     : Layer.isLayer(servesOrOptions)
@@ -269,13 +272,13 @@ function serverImpl(
     return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
       Layer.provideMerge(mergeServeList(serves)),
       Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
-    );
+    ) as Layer.Layer<never, any, any>;
   }
   return httpServerBase(
     serverProtocol,
     serverKind,
     servesOrOptions as HttpServerOptions | undefined,
-  );
+  ) as Layer.Layer<never, any, any>;
 }
 
 /**
@@ -322,7 +325,7 @@ export function wsServer(
     | ReadonlyArray<Layer.Layer<never, any, any>>
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, any, unknown> {
+): Layer.Layer<never, any, any> {
   return serverImpl(
     Resource.serverProtocolWebsocket,
     "WebSocket",

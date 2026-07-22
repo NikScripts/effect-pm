@@ -253,21 +253,14 @@ export type ListenOptions = {
 };
 
 /**
- * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal} —
- * {@link ListenOptions} plus Lookup bootstrap knobs.
+ * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal}.
+ * Same as {@link ListenOptions} — Lookup is composed with `.pipe(Layer.provide(…))`,
+ * not listen options (`lookupPath` / `bootstrapLookup` removed).
  *
  * @category models
  * @public
  */
-export type NamelessListenOptions = ListenOptions & {
-  readonly lookupPath?: string;
-  readonly unlinkLookup?: boolean;
-  /**
-   * When `false`, skip {@link Lookup.bootstrapDefaultLocal} — caller provides
-   * Identity / Directory (e.g. a custom Lookup server). Default `true`.
-   */
-  readonly bootstrapLookup?: boolean;
-};
+export type NamelessListenOptions = ListenOptions;
 
 /**
  * {@link resolveHttpTarget} / a positional `Node.Tag()(name, badString)` got a string that is
@@ -1060,6 +1053,94 @@ export class NodeUnreachable extends Data.TaggedError("NodeUnreachable")<{
 }> {
   override get message() {
     return `Node "${this.node}" did not respond at ${this.url} — is it running, and are the url and kind right?`;
+  }
+}
+
+/**
+ * Transport answered, but the Effect RPC protocol did not — typically something else is listening
+ * on the address (wrong process / wrong protocol). Surfaced by
+ * {@link Resource.verifyConnection}`(node, { deep: true })` after the cheap reachability probe
+ * succeeds.
+ *
+ * @category errors
+ * @public
+ */
+export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
+  readonly node: string;
+  readonly url: string;
+  readonly kind: ProtocolKind;
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return (
+      `Node "${this.node}" is reachable at ${this.url} but did not answer the RPC protocol ` +
+      `(${this.kind}) — is something else listening there?`
+    );
+  }
+}
+
+/**
+ * The peer answered {@link NodeStatus}, but the target resource key is not in `status.resources`.
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource })`.
+ *
+ * @category errors
+ * @public
+ */
+export class ServiceNotServed extends Data.TaggedError("ServiceNotServed")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly served: ReadonlyArray<string>;
+}> {
+  override get message() {
+    const list = this.served.length === 0 ? "none" : this.served.join(", ");
+    return (
+      `Node "${this.node}" at ${this.url} does not serve "${this.resource}" ` +
+      `(serves: ${list}).`
+    );
+  }
+}
+
+/**
+ * The peer serves the target resource, but reports it not ready (`ready: false`).
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource })`.
+ *
+ * @category errors
+ * @public
+ */
+export class ServiceNotReady extends Data.TaggedError("ServiceNotReady")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly detail?: string;
+}> {
+  override get message() {
+    const why = this.detail !== undefined ? ` (${this.detail})` : "";
+    return `Node "${this.node}" serves "${this.resource}" but it is not ready${why}.`;
+  }
+}
+
+/**
+ * Client and server disagree on a resource's wire contract (`contractHash` mismatch).
+ * Surfaced by {@link Resource.verifyConnection}`(node, { deep: true, resource, contractHash })`
+ * and by default-on addressed {@link Resource.client} verify (F4).
+ *
+ * @category errors
+ * @public
+ */
+export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
+  readonly node: string;
+  readonly url: string;
+  readonly resource: string;
+  readonly expected: string;
+  readonly actual: string | undefined;
+}> {
+  override get message() {
+    const got = this.actual === undefined ? "(missing)" : this.actual;
+    return (
+      `Node "${this.node}" at ${this.url} serves "${this.resource}" with contract ` +
+      `${got}, but this client expects ${this.expected} — redeploy the stale side.`
+    );
   }
 }
 

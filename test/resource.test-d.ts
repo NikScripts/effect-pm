@@ -240,7 +240,8 @@ class HostedWire extends Resource.Tag<HostedWire>()(
   { ping: Resource.effect(Schema.String) },
   { node: WireNode },
 ) {}
-const _hostedWire: Layer.Layer<HostedWire> = Resource.client(HostedWire);
+const _hostedWire: Layer.Layer<HostedWire, Resource.ClientVerifyError> =
+  Resource.client(HostedWire);
 void _hostedWire;
 
 // nodeless tag: client still takes the ambient Protocol (additive, non-breaking).

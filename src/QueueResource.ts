@@ -45,7 +45,6 @@ import type {
   ResourceTag,
 } from "./Resource";
 import type { NodeKey } from "./Node";
-import * as Node from "./Node";
 // Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
 import {
   QueueItemCodecDescriptorSchema,

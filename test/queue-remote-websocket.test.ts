@@ -1,4 +1,4 @@
-import { Duration, Effect, Exit, Fiber, Layer, Schema, Scope, Stream } from "effect";
+import { Duration, Effect, Fiber, Layer, Schema, Scope, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
@@ -9,6 +9,7 @@ import { QueueResource } from "../src";
 import type { QueueLayerConfig } from "../src/QueueResource";
 import * as Resource from "../src/Resource";
 import * as Node from "../src/Node";
+import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // The WEBSOCKET remote path — the transport a browser dashboard actually uses (`{ protocol:
 // "websocket" }`, so many live streams multiplex over one connection). The http path is covered by
@@ -98,15 +99,15 @@ it("events (Enqueued/Started/Completed) stream over WebSocket", () =>
     ).pipe(Effect.timeout(Duration.seconds(10))),
   ));
 
-it("MISMATCH: an http client against a {protocol:websocket} server FAILS (does not silently drop)", () =>
+it("MISMATCH: an http client against a {protocol:websocket} server FAILS as ProtocolMismatch", () =>
   Effect.runPromise(
     withServer({ effect: () => Effect.void }, clientHttp, (_port) =>
       Effect.gen(function* () {
         const q = yield* WsQueue;
         // The bug: `q.add` over the wrong protocol used to fail and get `Effect.ignore`'d, so nothing
-        // enqueued and the dashboard showed empty queues. Lock in that it is observably a FAILURE.
+        // enqueued and the dashboard showed empty queues. Named ProtocolMismatch remap (loud-failures 4.2a).
         const exit = yield* Effect.exit(q.add({ n: 1 }));
-        expect(Exit.isFailure(exit)).toBe(true);
+        expectTaggedFailure(exit, "ProtocolMismatch");
       }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
   ));

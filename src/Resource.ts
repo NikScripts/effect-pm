@@ -30,11 +30,9 @@
  * - {@link Resource.serveInstances} — serve many factory instances behind one group,
  *   routed by the per-call instance-key header.
  *
- * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
- * default on both, so client/server can't disagree on the codec):
- * - {@link Resource.httpServer} — expose one or more {@link Resource.serve} layers on an http
- *   `RpcServer` in one call;
- * - {@link Resource.httpClient} — wire a {@link Resource.Node}'s transport from a `url`.
+ * Over **http**, pair {@link Resource.serve} with {@link Node.httpServer} (ndjson by default so
+ * client/server can't disagree on the codec). Dial with {@link Resource.clientHttp} /
+ * {@link Node.connect} against a {@link Node.Tag}.
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
@@ -90,6 +88,7 @@ import {
 } from "./internal/store/registration";
 // Type-only — avoids a runtime Resource↔Lookup cycle; claim path dynamic-imports the module.
 import type {
+  Advice as LookupAdvice,
   Directory as LookupDirectory,
   DirectoryEntry as LookupDirectoryEntry,
   Identity as LookupIdentity,
@@ -102,17 +101,23 @@ import {
   isAddressedNode,
   ListenNode,
   NodeKey,
+  ContractMismatch,
   NodeUnreachable,
   ProtocolKind,
+  ProtocolUnanswered,
   resolveHttpTarget,
+  ServiceNotReady,
+  ServiceNotServed,
   Tag as makeNode,
   UnaddressedNode,
 } from "./internal/nodeCore";
+import { hashContract } from "./internal/contractHash";
 import {
   bindNodeProtocolBuilders,
   connectAddressed,
   connectLayer,
   invalidHttpTargetLayer,
+  selectEndpoint,
   unaddressedLayer,
 } from "./internal/nodeConnect";
 // Node listen/connect used only inside functions via dynamic import where needed;
@@ -198,6 +203,160 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
 export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPayload")<{
   readonly reason?: "missing" | "void" | "empty-fields";
 }> {}
+
+/**
+ * An RPC call failed with a signature that means the client transport doesn't match the
+ * server (classic: http client → WebSocket server → Effect's "empty HTTP response" defect).
+ * Remapped at the {@link Resource.client} boundary so the failure is catchable by `_tag`
+ * instead of looking like an opaque `RpcClientDefect`. Topology already designs this out on
+ * the blessed path ({@link Node.connect} derives the transport); this is the legible backstop
+ * when an escape-hatch protocol is still wrong.
+ *
+ * @category errors
+ * @public
+ */
+export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
+  readonly resource: string;
+  readonly method: string;
+  readonly cause: unknown;
+}> {
+  override get message() {
+    return (
+      `Resource "${this.resource}" method "${this.method}" hit a transport/protocol mismatch ` +
+      `(often an http client dialing a WebSocket server). Use Node.connect / the node's declared ` +
+      `kind (protocolWebsocket / socketClient), not a guessed transport.`
+    );
+  }
+}
+
+/**
+ * A nodeless {@link Resource.client}`(tag)` was built with no ambient {@link RpcClient.Protocol}.
+ * Replaces Effect's opaque "Service not found: …/Protocol" die with a remediation message naming
+ * the three ways to connect. The Layer still *requires* `RpcClient.Protocol` in `R` (compile-time)
+ * and keeps `E = never` (this replaces a defect, not a typed channel callers already matched);
+ * catch via `Exit` / `_tag` when probing an unsatisfied build.
+ *
+ * @category errors
+ * @public
+ */
+export class MissingClientProtocol extends Data.TaggedError("MissingClientProtocol")<{
+  readonly resource: string;
+}> {
+  override get message() {
+    return (
+      `Resource.client("${this.resource}") has no ambient RpcClient.Protocol. ` +
+      `Connect it with Node.connect(node) / Resource.client(tag, node), ` +
+      `Resource.clientHttp(tag, target), or Resource.socketClient(node) ` +
+      `(or Layer.provide a protocolHttp / protocolWebsocket / protocolIpc layer).`
+    );
+  }
+}
+
+/**
+ * Default-on verify mode for addressed {@link client} / {@link clientHttp} / {@link socketClient}.
+ * - `"reject"` (default) — layer build runs {@link verifyConnection}; peer down → {@link NodeUnreachable}
+ *   (tag-aware clients also deep-check the resource + F4 {@link contractHash})
+ * - `"status"` — probe runs but failure is ignored (connect proceeds)
+ * - `false` — skip verify
+ *
+ * Opt out: `Resource.client(Tag).pipe(Layer.provide(Resource.clientVerify(false)))`.
+ *
+ * @category models
+ * @public
+ */
+export type ClientVerifyMode = false | "reject" | "status";
+
+/**
+ * Errors default-on / deep client verify may surface on addressed client Layers.
+ *
+ * @category models
+ * @public
+ */
+export type ClientVerifyError =
+  | NodeUnreachable
+  | UnaddressedNode
+  | ProtocolUnanswered
+  | ServiceNotServed
+  | ServiceNotReady
+  | ContractMismatch;
+
+/**
+ * Ambient default-on client verify mode (§8.6). Defaults to `"reject"`.
+ *
+ * @category services
+ * @public
+ */
+export const ClientVerify = Context.Reference<ClientVerifyMode>(
+  "@nikscripts/effect-pm/Resource/ClientVerify",
+  { defaultValue: (): ClientVerifyMode => "reject" },
+);
+
+/**
+ * Override {@link ClientVerify} for addressed client layers.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const clientVerify = (mode: ClientVerifyMode): Layer.Layer<never> =>
+  Layer.succeed(ClientVerify, mode);
+
+/**
+ * Effect's http RPC client surfaces a wrong-protocol peer as `RpcClientDefect` with these
+ * fixed messages (see `effect/unstable/rpc/RpcClient`). Match the defect `_tag` + those
+ * strings — the only discriminant the wire gives us.
+ *
+ * @internal
+ */
+const isHttpProtocolMismatchDefect = (err: unknown): boolean => {
+  if (!Predicate.hasProperty(err, "_tag") || err._tag !== "RpcClientError") {
+    return false;
+  }
+  if (!Predicate.hasProperty(err, "reason")) {
+    return false;
+  }
+  const reason = err.reason;
+  if (
+    !Predicate.hasProperty(reason, "_tag") ||
+    reason._tag !== "RpcClientDefect" ||
+    !Predicate.hasProperty(reason, "message") ||
+    typeof reason.message !== "string"
+  ) {
+    return false;
+  }
+  const msg = reason.message;
+  return (
+    msg.includes("Received empty HTTP response from RPC server") ||
+    msg.includes("HTTP response ended before RPC request completed")
+  );
+};
+
+/**
+ * Remap known http↔ws mismatch defects on a wire Effect / Stream / thunk to
+ * {@link ProtocolMismatch}. Identity for anything else.
+ *
+ * @internal
+ */
+const remapProtocolMismatch = (
+  resource: string,
+  method: string,
+  value: unknown,
+): unknown => {
+  if (Effect.isEffect(value)) {
+    return Effect.catch(value as Effect.Effect<unknown, unknown>, (err) =>
+      isHttpProtocolMismatchDefect(err)
+        ? new ProtocolMismatch({ resource, method, cause: err })
+        : Effect.fail(err),
+    );
+  }
+  if (Stream.isStream(value)) {
+    return Stream.mapError(value as Stream.Stream<unknown, unknown>, (err) =>
+      isHttpProtocolMismatchDefect(err)
+        ? new ProtocolMismatch({ resource, method, cause: err })
+        : err,
+    );
+  }
+  return value;
+};
 
 /**
  * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
@@ -1792,7 +1951,7 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * ```ts
  * const scoresImpl = Resource.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
  * Resource.layer(ScoresDb, scoresImpl);                    // local
- * Resource.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
+ * Node.httpServer([Resource.serve(ScoresDb, scoresImpl)]); // served — same impl, both typed
  * ```
  *
  * @category constructors
@@ -2074,16 +2233,28 @@ export interface ResourceTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
 }
 
 /**
- * Identity-claiming resources need a dialable Node — Tag-bound (`nodes` / `{ node }`) and/or
- * the {@link ListenNode} from {@link Node.unix} / {@link Node.http} / {@link Node.ws}
- * (including minted address-less Nodes).
+ * Identity-claiming resources need Lookup's Identity client **and** a dialable Node —
+ * Tag-bound (`nodes` / `{ node }`) and/or the {@link ListenNode} from {@link Node.unix} /
+ * {@link Node.http} / {@link Node.ws} (including minted address-less Nodes).
+ *
+ * Remediation: (1) `Layer.provide(Lookup.client / layer / layerOptions)` on the listen or
+ * resource layer; (2) give the Tag a dialable self via protocol listen or
+ * {@link nodes}`([Node])`. Recipe: `docs/guides/identity-coordinator.md`.
  *
  * @category errors
  * @public
  */
 export class IdentitySelfRequired extends Data.TaggedError("IdentitySelfRequired")<{
   readonly tag: string;
-}> {}
+}> {
+  override get message() {
+    return (
+      `Identity "${this.tag}" needs Lookup.Identity and a dialable self ` +
+      `(Node.unix/http/ws listen or Resource.nodes([Node])). ` +
+      `Pipe Layer.provide(Lookup.client) / Lookup.layer / Lookup.layerOptions.`
+    );
+  }
+}
 
 /**
  * Identity-stamped Tags may carry at most one Node (S1). Multi-node fleets use ordinary Tags +
@@ -2113,8 +2284,9 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
 }> {}
 
 /**
- * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4).
- * `"first"` = `rows[0]`; custom sync fn returns the dial target.
+ * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4) and no live
+ * {@link Lookup.Advice} prefer matches a row. `"first"` = `rows[0]`; custom sync
+ * fn returns the dial target.
  *
  * @category models
  * @public
@@ -2126,7 +2298,8 @@ export type LookupClientPick =
     ) => LookupDirectoryEntry);
 
 /**
- * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous.
+ * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous
+ * and placement advice is absent or stale.
  *
  * @category models
  * @public
@@ -2338,6 +2511,18 @@ export const kindOf = (tag: unknown): string | undefined => {
   }
   return undefined;
 };
+
+/**
+ * F4 wire-contract fingerprint for a resource tag — same value the server stamps on
+ * `NodeStatus.resources[].contractHash` at serve. Compare via
+ * {@link verifyConnection}`({ deep: true, resource, contractHash })`.
+ *
+ * @category introspection
+ * @public
+ */
+export const contractHash = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): string => hashContract(tag.groupId, kindOf(tag) ?? "resource", tag[specSym]);
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
@@ -3094,7 +3279,11 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
       : { url: endpoint.url as string, kind: endpoint.kind };
   const node = makeNode()(endpoint.nodeKey, target);
   // Dialable makeNode → AddressedNode; clientLayer auto-wires connect.
-  return clientLayer(tag, node) as Layer.Layer<Self>;
+  // Opt out of default-on verify: this helper runs inside Layer.unwrap (identity
+  // claim / lookupClient), and nested deep verify deadlocks on the peer dial.
+  return clientLayer(tag, node).pipe(
+    Layer.provide(clientVerify(false)),
+  ) as Layer.Layer<Self>;
 };
 
 /**
@@ -3261,6 +3450,8 @@ export interface ServedResource {
   readonly group: RpcGroup.RpcGroup<any>;
   readonly kind: string;
   readonly readiness: Effect.Effect<Readiness>;
+  /** F4 wire-contract fingerprint — stamped at serve from the tag Spec. */
+  readonly contractHash: string;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
   /** Declared transport set of the tag's {@link Node}, when node-bound — the server asserts its own
@@ -3425,10 +3616,12 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
           onSome: (registry) => {
             const bound = nodeOf(tag);
             const boundKinds = nodeKindsOf(tag);
+            const kind = kindOf(tag) ?? "resource";
             return registry.register({
               groupId: tag.groupId,
               group,
-              kind: kindOf(tag) ?? "resource",
+              kind,
+              contractHash: hashContract(tag.groupId, kind, tag[specSym]),
               readiness: readinessCheckServed(tag, wireImpl),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
@@ -3589,7 +3782,7 @@ export interface ResourceInstance<S extends Spec> {
  *
  * **Not** how you serve a single custom resource on a shared node: this returns a
  * {@link ResourceInstance} for the {@link serveInstances} family. To serve a custom `Resource.Tag`
- * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Resource.httpServer},
+ * alongside queues/processes, pass its {@link Resource.serve} layer to {@link Node.httpServer},
  * then reach it with {@link Resource.client}.
  *
  * @category constructors
@@ -3739,10 +3932,12 @@ export const forwardClient = <S extends Spec>(
     }
     service[key] =
       m.payload === undefined
-        ? call(undefined, { headers })
+        ? remapProtocolMismatch(instanceKey, key, call(undefined, { headers }))
         : m.annotations.callStyle === "pair"
-          ? (arg0: unknown, arg1?: unknown) => call([arg0, arg1], { headers })
-          : (payload: unknown) => call(payload, { headers });
+          ? (arg0: unknown, arg1?: unknown) =>
+              remapProtocolMismatch(instanceKey, key, call([arg0, arg1], { headers }))
+          : (payload: unknown) =>
+              remapProtocolMismatch(instanceKey, key, call(payload, { headers }));
   }
   // Boundary assertion (runtime-safe): every method verified present above; RPC validates
   // every payload/result against the spec schemas at the wire.
@@ -3928,13 +4123,21 @@ const socketClient = <Self>(
     readonly url?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self> =>
+): Layer.Layer<Self, NodeUnreachable | UnaddressedNode> => {
   // a per-node shortcut = `connect` + {@link protocolWebsocket}. Same url resolution as
   // {@link httpClient}: `options.url` → the node's own url → `"/rpc"` (same-origin) fallback.
-  connectLayer(
+  const url = options?.url ?? node.url ?? "/rpc";
+  const wired = connectLayer(
     node,
-    protocolWebsocket(options?.url ?? node.url ?? "/rpc", options?.serialization),
+    protocolWebsocket(url, options?.serialization),
   );
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      yield* applyClientVerify(node as AnyNode, { url });
+      return wired;
+    }),
+  ) as Layer.Layer<Self, NodeUnreachable | UnaddressedNode>;
+};
 
 /**
  * Build an **ipc** client `Protocol` — Effect socket RPC over a Unix-domain path
@@ -4009,79 +4212,347 @@ const probeHttpReachable = (url: string, timeout: Duration.Input) =>
     yield* HttpClient.get(url).pipe(Effect.asVoid, Effect.timeout(timeout), Effect.provide(ctx));
   }).pipe(Effect.scoped);
 
+/** One endpoint to probe — same shape as {@link selectEndpoint}. @internal */
+type VerifyEndpoint = {
+  readonly kind: ProtocolKind;
+  readonly url?: string;
+  readonly path?: string;
+};
+
+/** Address string used in verify errors (url or ipc path). @internal */
+const verifyAddressOf = (ep: VerifyEndpoint): string | undefined =>
+  ep.kind === "IpcSocket" ? ep.path : ep.url;
+
 /**
- * **Verify a node is reachable, eagerly** — a fail-fast startup check for a remote {@link Node}. Opens
- * one bounded connection to the node's declared `url`/`kind` and fails with {@link NodeUnreachable} if
- * it doesn't answer, so a client refuses to start against a down / misaddressed backend instead of
- * hanging or failing opaquely at the first RPC. Complements {@link Resource.connect} (which derives the
- * transport from the node so the wrong protocol can't be *dialed*): `connect` prevents mis-wiring,
- * `verifyConnection` catches a peer that isn't there.
+ * Endpoints {@link verifyConnection} probes. Overrides (`url`/`path`) win as a single synthetic
+ * endpoint; `{ all: true }` walks every declared transport; otherwise the same
+ * {@link selectEndpoint} pick {@link connect} would dial.
  *
- * ```ts
- * yield* Resource.verifyConnection(Droplet);                     // NodeUnreachable if the Droplet is down
- * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
- * yield* Resource.verifyConnection(Droplet, { url: "/rpc" });    // runtime url (bare node, e.g. a browser)
- * ```
- *
- * The `url` resolves `options.url` → the node's own `url`; `kind` is the node's, else inferred from the
- * effective url's scheme (`ws(s)://` → socket, else http). Scope: a **reachability** check (F3). It does
- * not distinguish a protocol *mismatch* on the http side (a socket server answers an http probe) —
- * `connect` already makes the client dial the node's declared kind; a `socket` node pointed at a
- * non-socket server surfaces here as unreachable.
- *
- * @category serving
- * @public
+ * @internal
  */
-export const verifyConnection = (
-  node: NodeKey<unknown> & {
+const verifyEndpointsOf = (
+  node: AnyNode,
+  options?: {
     readonly url?: string;
     readonly path?: string;
-    readonly kind?: ProtocolKind;
+    readonly all?: boolean;
   },
-  options?: { readonly timeout?: Duration.Input; readonly url?: string; readonly path?: string },
-): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
-  const effectiveUrl = options?.url ?? node.url;
-  const kind: ProtocolKind | undefined =
-    node.kind ??
-    (options?.path !== undefined || node.path !== undefined
-      ? "IpcSocket"
-      : effectiveUrl !== undefined
-        ? effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
-          ? "WebSocket"
-          : "Http"
-        : undefined);
-  if (kind === undefined) {
-    return Effect.fail(new UnaddressedNode({ node: node.key }));
-  }
-  if (kind === "IpcSocket") {
-    const path = options?.path ?? node.path;
-    if (path === undefined) {
-      return Effect.fail(new UnaddressedNode({ node: node.key }));
+): ReadonlyArray<VerifyEndpoint> | UnaddressedNode => {
+  if (options?.url !== undefined || options?.path !== undefined) {
+    if (options.path !== undefined && options.url === undefined) {
+      return [{ kind: "IpcSocket", path: options.path }];
     }
-    const timeout = options?.timeout ?? "3 seconds";
+    const url = options.url;
+    if (url === undefined) {
+      return new UnaddressedNode({ node: node.key });
+    }
+    const kind: ProtocolKind =
+      url.startsWith("ws://") || url.startsWith("wss://") ? "WebSocket" : "Http";
+    return [{ kind, url, path: options.path }];
+  }
+  if (options?.all === true && node.endpoints !== undefined) {
+    const out: Array<VerifyEndpoint> = [];
+    if (node.endpoints.Http !== undefined) {
+      out.push({ kind: "Http", url: node.endpoints.Http.url });
+    }
+    if (node.endpoints.WebSocket !== undefined) {
+      out.push({ kind: "WebSocket", url: node.endpoints.WebSocket.url });
+    }
+    if (node.endpoints.IpcSocket !== undefined) {
+      out.push({ kind: "IpcSocket", path: node.endpoints.IpcSocket.path });
+    }
+    if (out.length === 0) {
+      return new UnaddressedNode({ node: node.key });
+    }
+    return out;
+  }
+  const selected = selectEndpoint(node);
+  if (selected === undefined) {
+    return new UnaddressedNode({ node: node.key });
+  }
+  return [selected];
+};
+
+/** Tier-1 transport reachability for one endpoint. @internal */
+const probeEndpointReachable = (
+  nodeKey: string,
+  ep: VerifyEndpoint,
+  timeout: Duration.Input,
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
+  const address = verifyAddressOf(ep);
+  if (address === undefined) {
+    return Effect.fail(new UnaddressedNode({ node: nodeKey }));
+  }
+  if (ep.kind === "IpcSocket") {
     const window = Duration.millis(Math.min(Duration.toMillis(timeout), 500));
     return Effect.gen(function* () {
       const { NodeSocket } = yield* Effect.promise(() => import("@effect/platform-node"));
-      const socket = yield* NodeSocket.makeNet({ path });
+      const socket = yield* NodeSocket.makeNet({ path: address });
       yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
     }).pipe(
       Effect.scoped,
       Effect.mapError(
-        (cause: unknown) =>
-          new NodeUnreachable({ node: node.key, url: path, cause }),
+        (cause: unknown) => new NodeUnreachable({ node: nodeKey, url: address, cause }),
       ),
     );
   }
-  const url = options?.url ?? node.url;
-  if (url === undefined) {
-    return Effect.fail(new UnaddressedNode({ node: node.key }));
+  const fail = Effect.mapError(
+    (cause: unknown) => new NodeUnreachable({ node: nodeKey, url: address, cause }),
+  );
+  return ep.kind === "WebSocket"
+    ? probeSocketReachable(address, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(
+        fail,
+      )
+    : probeHttpReachable(address, timeout).pipe(fail);
+};
+
+/**
+ * Tier-2/3/4: after transport is up, dial {@link NodeStatus} over the endpoint's protocol. Failures
+ * classify as {@link ProtocolUnanswered}; optional `resource` checks served-key / readiness;
+ * optional `contractHash` compares the F4 wire fingerprint.
+ *
+ * Dynamic-imports the status tag so Resource ⇄ nodeStatusResource stays acyclic.
+ *
+ * @internal
+ */
+const probeEndpointDeep = (
+  nodeKey: string,
+  ep: VerifyEndpoint,
+  timeout: Duration.Input,
+  resource: string | undefined,
+  expectedHash: string | undefined,
+): Effect.Effect<
+  void,
+  | ProtocolUnanswered
+  | ServiceNotServed
+  | ServiceNotReady
+  | ContractMismatch
+  | UnaddressedNode
+> => {
+  const address = verifyAddressOf(ep);
+  if (address === undefined) {
+    return Effect.fail(new UnaddressedNode({ node: nodeKey }));
+  }
+  const dialTarget =
+    ep.kind === "IpcSocket"
+      ? makeNode()(`@pm/verify/${nodeKey}`, { path: address })
+      : makeNode()(`@pm/verify/${nodeKey}`, { url: address, kind: ep.kind });
+  return Effect.gen(function* () {
+    const { NodeStatusResource } = yield* Effect.promise(
+      () => import("./internal/nodeStatusResource"),
+    );
+    // Skip default-on verify on this nested NodeStatus client (we *are* the verify probe).
+    const ctx = yield* Layer.build(
+      clientLayer(NodeStatusResource, dialTarget).pipe(
+        Layer.provide(clientVerify(false)),
+      ),
+    );
+    const snap = yield* Effect.gen(function* () {
+      const status = yield* NodeStatusResource;
+      return yield* status.status.get;
+    }).pipe(Effect.provide(ctx));
+    if (resource === undefined) {
+      return;
+    }
+    const row = snap.resources.find((r) => r.key === resource);
+    if (row === undefined) {
+      return yield* new ServiceNotServed({
+        node: nodeKey,
+        url: address,
+        resource,
+        served: snap.resources.map((r) => r.key),
+      });
+    }
+    if (!row.ready) {
+      return yield* new ServiceNotReady({
+        node: nodeKey,
+        url: address,
+        resource,
+        ...(row.detail !== undefined ? { detail: row.detail } : {}),
+      });
+    }
+    if (expectedHash !== undefined && row.contractHash !== expectedHash) {
+      return yield* new ContractMismatch({
+        node: nodeKey,
+        url: address,
+        resource,
+        expected: expectedHash,
+        actual: row.contractHash,
+      });
+    }
+  }).pipe(
+    Effect.scoped,
+    Effect.timeout(timeout),
+    Effect.mapError((cause) => {
+      if (
+        cause instanceof ServiceNotServed ||
+        cause instanceof ServiceNotReady ||
+        cause instanceof ContractMismatch ||
+        cause instanceof UnaddressedNode
+      ) {
+        return cause;
+      }
+      return new ProtocolUnanswered({
+        node: nodeKey,
+        url: address,
+        kind: ep.kind,
+        cause,
+      });
+    }),
+  );
+};
+
+/** Options for the cheap (tier-1) {@link verifyConnection} probe. @public */
+export type VerifyConnectionOptions = {
+  readonly timeout?: Duration.Input;
+  readonly url?: string;
+  readonly path?: string;
+  /** Probe every declared endpoint (default: the {@link selectEndpoint} pick). */
+  readonly all?: boolean;
+};
+
+/** Options for deep (tier-2/3/4) {@link verifyConnection} — RPC + optional resource / F4 hash. @public */
+export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
+  readonly deep: true;
+  /** When set, require this resource key in `NodeStatus.resources` and `ready: true`. */
+  readonly resource?: string;
+  /**
+   * Expected F4 {@link contractHash} for `resource`. When set (requires `resource`), mismatch
+   * → {@link ContractMismatch}.
+   */
+  readonly contractHash?: string;
+};
+
+/**
+ * **Verify a node is reachable, eagerly** — a fail-fast startup check for a remote {@link Node}.
+ * Default: one bounded **transport** probe (tier 1) against the endpoint {@link connect} would
+ * dial (`selectEndpoint`, or every endpoint with `{ all: true }`). Fails
+ * {@link NodeUnreachable} if nothing answers.
+ *
+ * With `{ deep: true }`, escalates after transport OK: dials the auto-served {@link NodeStatus}
+ * over that endpoint. Transport up but RPC silent → {@link ProtocolUnanswered}; optional
+ * `resource` key → {@link ServiceNotServed} / {@link ServiceNotReady}; optional
+ * `contractHash` → {@link ContractMismatch} (F4).
+ *
+ * ```ts
+ * yield* Resource.verifyConnection(Droplet);                          // tier 1
+ * yield* Resource.verifyConnection(Droplet, { timeout: "1 second" });
+ * yield* Resource.verifyConnection(Droplet, { deep: true });          // + NodeStatus RPC
+ * yield* Resource.verifyConnection(Droplet, {
+ *   deep: true,
+ *   resource: Emails.groupId,
+ *   contractHash: Resource.contractHash(Emails),
+ * });
+ * yield* Resource.verifyConnection(Droplet, { all: true });           // every endpoint
+ * ```
+ *
+ * Complements {@link connect}: `connect` prevents mis-wiring the client transport;
+ * `verifyConnection` catches a peer that isn't there (or, with `deep`, isn't speaking RPC /
+ * isn't serving the resource you need / has a stale contract).
+ *
+ * @category serving
+ * @public
+ */
+export function verifyConnection(
+  node: AnyNode,
+  options?: VerifyConnectionOptions,
+): Effect.Effect<void, NodeUnreachable | UnaddressedNode>;
+export function verifyConnection(
+  node: AnyNode,
+  options: VerifyConnectionDeepOptions,
+): Effect.Effect<void, ClientVerifyError>;
+export function verifyConnection(
+  node: AnyNode,
+  options?: VerifyConnectionOptions & {
+    readonly deep?: boolean;
+    readonly resource?: string;
+    readonly contractHash?: string;
+  },
+): Effect.Effect<void, ClientVerifyError> {
+  const endpoints = verifyEndpointsOf(node, options);
+  if (endpoints instanceof UnaddressedNode) {
+    return Effect.fail(endpoints);
   }
   const timeout = options?.timeout ?? "3 seconds";
-  const fail = Effect.mapError((cause: unknown) => new NodeUnreachable({ node: node.key, url, cause }));
-  return kind === "WebSocket"
-    ? probeSocketReachable(url, Duration.millis(Math.min(Duration.toMillis(timeout), 500))).pipe(fail)
-    : probeHttpReachable(url, timeout).pipe(fail);
+  const deep = options?.deep === true;
+  const resource = options?.resource;
+  const expectedHash = options?.contractHash;
+  return Effect.forEach(
+    endpoints,
+    (ep) =>
+      Effect.gen(function* () {
+        yield* probeEndpointReachable(node.key, ep, timeout);
+        if (deep) {
+          yield* probeEndpointDeep(node.key, ep, timeout, resource, expectedHash);
+        }
+      }),
+    { discard: true },
+  );
+}
+
+/** Absolute dial targets we can probe at layer build (skip relative same-origin `/rpc`). */
+const isProbeableAddress = (options?: {
+  readonly url?: string;
+  readonly path?: string;
+}): boolean =>
+  options?.path !== undefined ||
+  (options?.url !== undefined &&
+    (options.url.startsWith("http://") ||
+      options.url.startsWith("https://") ||
+      options.url.startsWith("ws://") ||
+      options.url.startsWith("wss://")));
+
+/** Tag-aware default-on verify options — deep + resource + F4 hash. @internal */
+type ClientVerifyProbeOptions = VerifyConnectionOptions & {
+  readonly resource?: string;
+  readonly contractHash?: string;
 };
+
+/**
+ * Default-on client verify (§8.6) — `"reject"` unless {@link ClientVerify} overrides.
+ * When `resource` + `contractHash` are set (tag-aware clients), escalates to deep F3/F4.
+ * @internal
+ */
+const applyClientVerify = (
+  node: AnyNode,
+  options?: ClientVerifyProbeOptions,
+): Effect.Effect<void, ClientVerifyError> =>
+  Effect.gen(function* () {
+    const mode = yield* ClientVerify;
+    if (mode === false) {
+      return;
+    }
+    // Relative browser same-origin URLs are not probeable from Node — skip.
+    if (
+      options !== undefined &&
+      !isProbeableAddress(options) &&
+      !isAddressedNode(node)
+    ) {
+      return;
+    }
+    if (
+      !isAddressedNode(node) &&
+      options?.url === undefined &&
+      options?.path === undefined
+    ) {
+      return;
+    }
+    const deep =
+      options?.resource !== undefined && options.contractHash !== undefined;
+    const probe = deep
+      ? verifyConnection(node, {
+          ...options,
+          deep: true,
+          resource: options.resource,
+          contractHash: options.contractHash,
+        })
+      : verifyConnection(node, options);
+    if (mode === "status") {
+      yield* Effect.ignore(Effect.exit(probe));
+      return;
+    }
+    yield* probe;
+  });
 
 /** A {@link clientHttp} `target` that is neither a port, a `":port"`, nor an `http(s)://` url. @internal */
 // [extracted to Node module — was Resource.ts:4780-4795]
@@ -4123,14 +4594,29 @@ export function clientHttp<Self, S extends Spec>(
   options?: {
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-): Layer.Layer<Self, InvalidHttpTarget> {
+): Layer.Layer<Self, InvalidHttpTarget | ClientVerifyError> {
   const resolved = resolveHttpTarget(target);
   if (Result.isFailure(resolved)) {
     return invalidHttpTargetLayer(resolved.failure);
   }
-  return clientLayer(tag).pipe(
-    Layer.provide(protocolHttp(resolved.success, options?.serialization)),
+  const url = resolved.success;
+  const wired = clientLayer(tag).pipe(
+    Layer.provide(protocolHttp(url, options?.serialization)),
   );
+  // Nodeless clientHttp — deep F3/F4 probe on the resolved URL (default-on verify).
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      yield* applyClientVerify(
+        { key: tag.key } as AnyNode,
+        {
+          url,
+          resource: tag.groupId,
+          contractHash: contractHash(tag),
+        },
+      );
+      return wired;
+    }),
+  ) as Layer.Layer<Self, InvalidHttpTarget | ClientVerifyError>;
 }
 
 // ── multi-node: the fleet + peer clients ──
@@ -4381,17 +4867,23 @@ export const isIdentity = (tag: unknown): boolean =>
  * {@link Lookup.Directory}`nodesServing(tag.key)`.
  *
  * **Fail-closed by default:** missing or more than one directory row →
- * {@link LookupClientError}. Opt into soft pick with `{ pick: "first" }` or a sync
- * `(rows) => DirectoryEntry` (D4). Identity resolve ignores `pick` (unique by key).
+ * {@link LookupClientError}. When N&gt;1, a live {@link Lookup.Advice} prefer that
+ * matches a directory row wins before D4 `{ pick }`. Opt into soft pick with
+ * `{ pick: "first" }` or a sync `(rows) => DirectoryEntry`. Identity resolve
+ * ignores advice / `pick` (unique by key).
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
- * `lookupClient(Tag)` keeps that fail-closed contract.
+ * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
  *
  * ```ts
  * // Sole endpoint (identity winner or one directory row):
- * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.bootstrapDefaultLocal()))
+ * Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
- * // N>1 replicas — opt-in pick (still fail on 0):
+ * // Coordinator published advice — bare client honors prefer:
+ * yield* Lookup.advise({ resourceKey: Mail.key, prefer: "fleet/Mail#w2" })
+ * Resource.lookupClient(Mail)
+ *
+ * // N>1 replicas — opt-in pick when no advice (still fail on 0):
  * Resource.lookupClient(Mail, { pick: "first" })
  *
  * // You already know an addressed Node — client auto-connects:
@@ -4407,7 +4899,7 @@ export const lookupClient = <Self, S extends Spec>(
 ): Layer.Layer<
   Self,
   LookupClientError,
-  LookupIdentity | LookupDirectory
+  LookupIdentity | LookupDirectory | LookupAdvice
 > =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -4433,6 +4925,14 @@ export const lookupClient = <Self, S extends Spec>(
       if (entries.length === 1) {
         return clientLayerForEndpoint(tag, entries[0]!);
       }
+      // M5 — honor placement advice when the preferred node is still advertised.
+      const prefer = yield* Lookup.preferred(tag.key);
+      if (Option.isSome(prefer)) {
+        const advised = entries.find((row) => row.nodeKey === prefer.value);
+        if (advised !== undefined) {
+          return clientLayerForEndpoint(tag, advised);
+        }
+      }
       const pick = options?.pick;
       if (pick === undefined) {
         return yield* new LookupClientError({
@@ -4447,7 +4947,7 @@ export const lookupClient = <Self, S extends Spec>(
   ) as Layer.Layer<
     Self,
     LookupClientError,
-    LookupIdentity | LookupDirectory
+    LookupIdentity | LookupDirectory | LookupAdvice
   >;
 
 /**
@@ -4463,9 +4963,9 @@ export type DiscoverClientOptions = LookupClientOptions & {
 };
 
 /**
- * Sugar: {@link lookupClient} + {@link Lookup.bootstrapDefaultLocal} — discover an
- * endpoint for `tag` via Lookup (identity, then directory) and dial it. Not Effect
- * “local” vs remote; name is **discover**.
+ * Sugar: {@link lookupClient} + {@link Lookup.layer} / {@link Lookup.layerOptions} —
+ * discover an endpoint for `tag` via Lookup (identity, then directory) and dial it.
+ * Not Effect “local” vs remote; name is **discover**.
  *
  * ```ts
  * Resource.discoverClient(Jobs, { lookupPath })
@@ -4484,10 +4984,12 @@ export const discoverClient = <Self, S extends Spec>(
       Effect.map((Lookup) =>
         lookupClient(tag, clientOptions).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlink !== undefined ? { unlink } : {}),
-            }),
+            lookupPath === undefined && unlink === undefined
+              ? Lookup.layer
+              : Lookup.layerOptions({
+                  ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+                  ...(unlink !== undefined ? { unlink } : {}),
+                }),
           ),
         ),
       ),
@@ -4562,10 +5064,12 @@ export function discoverClients(
           ]),
         ).pipe(
           Layer.provide(
-            Lookup.bootstrapDefaultLocal({
-              ...(lookupPath !== undefined ? { path: lookupPath } : {}),
-              ...(unlink !== undefined ? { unlink } : {}),
-            }),
+            lookupPath === undefined && unlink === undefined
+              ? Lookup.layer
+              : Lookup.layerOptions({
+                  ...(lookupPath !== undefined ? { path: lookupPath } : {}),
+                  ...(unlink !== undefined ? { unlink } : {}),
+                }),
           ),
         ),
       ),
@@ -5004,14 +5508,14 @@ function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf> & {
     readonly [nodeSym]: AddressedNode<HSelf>;
   },
-): Layer.Layer<Self>;
+): Layer.Layer<Self, ClientVerifyError>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
   node: AddressedNode<HSelf>,
-): Layer.Layer<Self>;
+): Layer.Layer<Self, ClientVerifyError>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: ResourceTag<Self, S>,
   node: NodeKey<HSelf>,
@@ -5022,18 +5526,30 @@ function clientLayer<Self, S extends Spec>(
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   node?: NodeKey<unknown>,
-): Layer.Layer<Self, never, RpcClient.Protocol> {
+): Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol> {
   const group = tag[groupSym];
   // an explicit `node` (for a nodeless tag) wins; otherwise the tag's own node, if any.
   const nodeKey = node ?? tag[nodeSym];
-  // no node anywhere: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
+  // no node anywhere: take the transport from the ambient `RpcClient.Protocol`.
+  // `serviceOption` so a missing protocol surfaces as {@link MissingClientProtocol} (not Effect's
+  // opaque "Service not found" die). Typed as `E = never` like before — this replaces a defect,
+  // not a channel that callers already handled; Protocol stays required in `R`.
   if (nodeKey === undefined) {
     return Layer.effect(
       tag,
-      Effect.flatMap(RpcClient.make(group), (client) =>
-        buildClientService(tag, client),
-      ),
-    );
+      Effect.gen(function* () {
+        const protocol = yield* Effect.serviceOption(RpcClient.Protocol);
+        if (Option.isNone(protocol)) {
+          return yield* new MissingClientProtocol({ resource: tag.key });
+        }
+        const client = yield* Effect.provideService(
+          RpcClient.make(group),
+          RpcClient.Protocol,
+          protocol.value,
+        );
+        return yield* buildClientService(tag, client);
+      }),
+    ) as unknown as Layer.Layer<Self, never, RpcClient.Protocol>;
   }
   // node chosen (from the tag or the argument): resolve the transport from that node service and
   // provide it locally to the client, so the layer requires the node rather than the ambient
@@ -5056,12 +5572,27 @@ function clientLayer<Self, S extends Spec>(
   );
   // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
+  // Default-on verify (reject): peer down / wrong-or-stale contract fails Layer build —
+  // opt out via {@link clientVerify}. Reserved NodeStatus is auto-served and absent from
+  // `status.resources`, so it stays tier-1 (reachability only).
   if (isAddressedNode(nodeKey as AnyNode)) {
-    return layer.pipe(
-      Layer.provide(connectAddressed(nodeKey as AddressedNode<unknown>)),
-    ) as Layer.Layer<Self, never, RpcClient.Protocol>;
+    const addressed = nodeKey as AddressedNode<unknown>;
+    const connected = layer.pipe(Layer.provide(connectAddressed(addressed)));
+    const deepResource =
+      tag.groupId === "@pm/node-status"
+        ? undefined
+        : {
+            resource: tag.groupId,
+            contractHash: contractHash(tag),
+          };
+    return Layer.unwrap(
+      Effect.gen(function* () {
+        yield* applyClientVerify(addressed, deepResource);
+        return connected;
+      }),
+    ) as Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol>;
   }
-  return layer as Layer.Layer<Self, never, RpcClient.Protocol>;
+  return layer as Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol>;
 }
 
 /** A wire-only instance tag for {@link clientInstances} — keyed via the covariant
@@ -5102,7 +5633,18 @@ const clientInstances = <
   ...tags: Tags
 ): Layer.Layer<InstanceIdentifiers<Tags, S>, never, RpcClient.Protocol> =>
   Layer.effectContext(
-    Effect.map(RpcClient.make(factory[groupSym]), (rpc) => {
+    Effect.gen(function* () {
+      const protocol = yield* Effect.serviceOption(RpcClient.Protocol);
+      if (Option.isNone(protocol)) {
+        return yield* new MissingClientProtocol({
+          resource: factory.groupId,
+        });
+      }
+      const rpc = yield* Effect.provideService(
+        RpcClient.make(factory[groupSym]),
+        RpcClient.Protocol,
+        protocol.value,
+      );
       let context = Context.empty();
       for (const tag of tags) {
         const service = nestService(
@@ -5114,7 +5656,11 @@ const clientInstances = <
       // per-instance `Context.add` loop. Runtime-safe — built key-for-key from `tags`.
       return context as Context.Context<InstanceIdentifiers<Tags, S>>;
     }),
-  );
+  ) as unknown as Layer.Layer<
+    InstanceIdentifiers<Tags, S>,
+    never,
+    RpcClient.Protocol
+  >;
 
 // ── stream helpers: tag-dispatched consumption of an event stream ──
 
@@ -5314,5 +5860,5 @@ export {
 // `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
 // exported above under their public names. The whole surface is now a tree-shakeable module
 // namespace: **`import * as Resource from "@nikscripts/effect-pm/Resource"`** — `Resource.Tag`
-// / `Resource.Node` pull only what's used.
+// pulls only what's used. Transport nodes: `import * as Node from "@nikscripts/effect-pm/Node"`.
 

@@ -52,7 +52,6 @@ import type { LogSort } from "./internal/manager/logQuery";
 import { queryDurableNode, queryDurableScope } from "./internal/logs/durableRead";
 import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
-import * as Node from "./Node";
 
 /**
  * **Node log key** — durable bucket id for one runtime host. Must equal {@link Node.Tag} `.key`
@@ -224,75 +223,3 @@ export const byResource = (
   queryDurableScope(resolveResourceLogKey(resource), {
     limit: options?.limit ?? queryLimitDefault,
   });
-
-/**
- * @deprecated Use {@link layer}.
- *
- * @category layers & serving
- * @public
- */
-export const relayWithCaptureLoggerLayer = layer;
-
-/**
- * @deprecated Use {@link layer}.
- *
- * @category layers & serving
- * @public
- */
-export const logRelayLayer = relay.relayLayer;
-
-/**
- * @deprecated Use {@link Relay}.
- *
- * @category context
- * @public
- */
-export const LogRelay = relay.LogRelay;
-
-/**
- * @deprecated Use {@link replay}.
- *
- * @category utils
- * @public
- */
-export const replayLogEntry = relay.replayLogEntry;
-
-/**
- * @deprecated Use {@link layer} internals — prefer {@link layer}.
- *
- * @category layers & serving
- * @public
- */
-export const captureLogger = relay.captureLogger;
-
-/**
- * @deprecated Use {@link layer}.
- *
- * @category layers & serving
- * @public
- */
-export const captureLoggerLayer = relay.captureLoggerLayer;
-
-/**
- * @deprecated Use {@link relayLayer}.
- *
- * @category layers & serving
- * @public
- */
-export const relayOnlyLayer = relay.relayLayer;
-
-/**
- * @deprecated Use {@link relayLayer}.
- *
- * @category layers & serving
- * @public
- */
-export const relayLayer = relay.relayLayer;
-
-/**
- * @deprecated Use {@link relayLayer}.
- *
- * @category layers & serving
- * @public
- */
-export const logsRelayLayer = relay.relayLayer;

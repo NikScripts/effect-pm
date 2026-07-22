@@ -324,9 +324,12 @@ export const materializeEngineQueueStoreForItem = <Item extends Schema.Top>(
   wire?: QueueWireSchemas,
 ): Effect.Effect<MaterializedEngineQueueStore<Item>, never, Storage> =>
   Effect.gen(function* () {
+    const contract = makeEngineQueueStoreContract(itemSchema, wire);
+    // Fail-loud Soft: incomplete AppStore dies at layer build (Queue + CustomQueue).
+    yield* Store.resolveOrDie(scopeKey, contract);
     const storageContext = yield* Effect.context<Storage>();
     const storeEffects = pipe(
-      Store.effects(scopeKey, makeEngineQueueStoreContract(itemSchema, wire)),
+      Store.effects(scopeKey, contract),
       Store.catchWriteErrors,
     );
     return Store.provideContext(storeEffects, storageContext);

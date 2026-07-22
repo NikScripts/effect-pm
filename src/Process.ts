@@ -80,7 +80,6 @@ import {
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import {
   makeProcessExecutionEvent,
-  processEventReadPayload,
   processExecutionEventVoid,
 } from "./internal/processEvent";
 import {
@@ -114,7 +113,6 @@ import type {
   Subscribable,
 } from "./Resource";
 import type { NodeKey } from "./Node";
-import * as Node from "./Node";
 import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import * as Store from "./Store";
@@ -1551,14 +1549,6 @@ export const processStatus = Schema.Struct({
 export const processLogEntry = LogEntrySchema;
 
 /**
- * Read payload for process store `events` queries.
- *
- * @deprecated Shape reads use the baked-in Store read payload (`limit` / nested `where`).
- * @public
- */
-export { processEventReadPayload };
-
-/**
  * Execution event union for void processes (no `success` field on `Completed`).
  *
  * @category wire schemas
@@ -2438,6 +2428,9 @@ const buildProcessImpl = <A, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const scheduleSvc = Context.get(scheduleCtx, ProcessScheduleTag);
 
+    // Fail-loud Soft: AppStore missing this engine registration dies at layer build
+    // (not silent empty journals on first write). Soft-default Memory always materializes.
+    yield* Store.resolveOrDie(tag.key, builtInProcessStoreContract(tag));
     const storeEffects = pipe(
       Store.effects(tag.key, builtInProcessStoreContract(tag)),
       Store.catchWriteErrors,

@@ -4,7 +4,6 @@
  * @internal test fixture only
  */
 
-import * as Resource from "../../src/Resource";
 import * as Store from "../../src/Store";
 import { testBillingNodeKey } from "./logKeys";
 import * as Node from "../../src/Node";

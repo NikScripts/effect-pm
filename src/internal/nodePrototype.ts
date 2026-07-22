@@ -1,5 +1,6 @@
 /**
- * {@link Prototype} — address-less Node template (`.make` / `.instance` / `.listen` → {@link unix}).
+ * {@link Prototype} — address-less Node template (`.make` / `.instance` / `.listen` →
+ * {@link unix} / {@link http} / {@link ws} / {@link nPipe}).
  *
  * @internal
  */
@@ -26,8 +27,17 @@ import {
   type ServesForCatalog,
 } from "./nodeListenCommon"
 import { http } from "./nodeHttp"
+import { nPipe } from "./nodeNPipe"
 import { unix } from "./nodeUnix"
 import { ws } from "./nodeWs"
+
+/** Prototype ctor options — `kind` picks the listen sibling; `ipc` selects unix vs nPipe. */
+export type PrototypeOptions = {
+  readonly kind?: ProtocolKind
+  /** Ipc transport when `kind` is unset / `"IpcSocket"`. Default `"unix"`. */
+  readonly ipc?: "unix" | "nPipe"
+  readonly onConflict?: OnConflict
+}
 
 /**
  * Prototype Node template (D7) — a Node kind, nested on {@link Node} as `Prototype`.
@@ -37,18 +47,21 @@ import { ws } from "./nodeWs"
  * class MailWorker extends Prototype<MailWorker, Mail>("app/MailWorker") {}
  * // Named clone with a fixed address (class ctor):
  * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
- * // Dynamic instances — curry serves once; factory takes suffix (auto when omitted):
+ * // Dynamic instances — same protocol siblings + Lookup pipe as unix/http/ws/nPipe:
  * const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
- * mailWorker()
- * mailWorker("w1")
+ * mailWorker().pipe(Layer.provide(Lookup.layer))
+ * mailWorker("w1").pipe(Layer.provide(Lookup.layer))
  * ```
+ *
+ * Lookup is **not** baked in — pipe `Lookup.layer` / `layerOptions` / `client` like the
+ * protocol listen siblings.
  *
  * @category constructors
  * @public
  */
 export const Prototype = <Self, ROut = never>(
   name: string,
-  options?: { readonly kind?: ProtocolKind; readonly onConflict?: OnConflict },
+  options?: PrototypeOptions,
 ) => {
   const protoOnConflict = options?.onConflict;
   const instance = (suffix?: string) => {
@@ -142,6 +155,7 @@ export const Prototype = <Self, ROut = never>(
   return Object.assign(Context.Service<Self, Record<string, never>>()(name), {
     isPrototype: true as const,
     kind: options?.kind,
+    ipc: options?.ipc ?? ("unix" as const),
     onConflict: protoOnConflict ?? ("inherit" as const),
     url: undefined as undefined,
     path: undefined as undefined,
@@ -149,13 +163,16 @@ export const Prototype = <Self, ROut = never>(
     make,
     /**
      * Dynamic instance Node — wire key `prototypeKey#suffix`, for {@link listen} /
-     * {@link peersLayer} `self`. Prefer {@link makePrototype}'s `.listen(serves)` to spawn.
+     * {@link peersLayer} `self`. Prefer `.listen(serves)` to spawn.
      * Omit `suffix` to mint one at listen.
      */
     instance,
     /**
-     * Curry a serve list into a dynamic-instance factory (sugar over
-     * `unix` / `http` / `ws`(proto.instance(suffix), serves) by `kind`).
+     * Curry a serve list into a dynamic-instance factory — sugar over
+     * {@link unix} / {@link http} / {@link ws} / {@link nPipe}
+     * `(proto.instance(suffix), serves)` by `kind` / `ipc`.
+     * Same Lookup story as those siblings: pipe `Lookup.layer` when advertise needs it.
+     * Keep in sync with the protocol listen siblings (handoff § Protocol listen siblings).
      * Returns a **Layer** only — after `Layer.build`, the minted Node is
      * {@link ListenNode} in context.
      */
@@ -178,6 +195,9 @@ export const Prototype = <Self, ROut = never>(
         }
         if (options?.kind === "WebSocket") {
           return ws<typeof node, Serves>(node, serves, listenOptions);
+        }
+        if (options?.ipc === "nPipe") {
+          return nPipe<typeof node, Serves>(node, serves, listenOptions);
         }
         return unix<typeof node, Serves>(node, serves, listenOptions);
       },
