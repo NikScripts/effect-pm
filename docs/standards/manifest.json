@@ -1065,6 +1065,14 @@
           "title": "Never touch a shared branch without a per-action go"
         },
         {
+          "id": "working-agreement.no-force-push",
+          "severity": "must",
+          "appliesTo": [
+            "process"
+          ],
+          "title": "Never force-push a shared branch"
+        },
+        {
           "id": "working-agreement.changesets-and-releases",
           "severity": "must",
           "appliesTo": [
@@ -1155,5 +1163,5 @@
       ]
     }
   ],
-  "ruleCount": 127
+  "ruleCount": 128
 }

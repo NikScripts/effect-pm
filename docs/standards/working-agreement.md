@@ -39,6 +39,23 @@ user-owned branch requires **explicit, per-action approval**. "Prepare to merge"
 approval for one action does not carry to the next. Your own working branch is yours to push freely
 — the gate is only on shared history.
 
+{#no-force-push .must appliesTo=process}
+## Never force-push a shared branch
+
+`push --force` (and `--force-with-lease`) is forbidden on `integration`, `main`, and any branch
+another agent may have based work on — a stale force-push silently deletes other agents' landed
+work. A rejected push means your local view is stale: **fetch, merge, and push normally** — the
+rejection is the system working, not an obstacle to override. Force-push is permissible only on a
+private working branch that is yours alone, and never after sharing it.
+
+``` sh
+# ❌ bad — the rejection was telling you integration moved
+git push --force origin HEAD:integration
+
+# ✅ good — integrate what landed, then push
+git fetch origin && git merge origin/integration && git push origin HEAD:integration
+```
+
 {#changesets-and-releases .must appliesTo=process}
 ## Changesets and releases are deliberate
 
