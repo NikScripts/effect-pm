@@ -56,7 +56,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             items: [
               {
                 slug: "",
-                href: "/",
+                href: "/docs/index",
                 title: "← All docs",
               },
             ],

@@ -1,28 +1,39 @@
-import { chapterBySlug } from "../lib/content.js";
-import { renderChapter } from "../lib/docs-content.js";
-import { PrevNext } from "../components/PrevNext.js";
-import { DraftBanner, PageAside } from "../components/PageAside.js";
 import { PageMeta } from "../components/PageMeta.js";
-import { firstParagraphs } from "../lib/page-desc.js";
 
-// Home = the "Getting started" overview chapter, rendered through the Effect pipeline.
-export default async function HomePage() {
-  const chapter = chapterBySlug("index");
-  if (!chapter) return <p>Missing content/index.dj</p>;
-  const { element, meta, toc } = await renderChapter(chapter.raw);
+// Landing — full-viewport brand hero. The docs proper start at /docs/index.
+export default function LandingPage() {
   return (
     <>
-      <PageMeta title={`${meta.title} — Hyperlink`} description={firstParagraphs(chapter.raw)} />
-      <DraftBanner meta={meta} />
-      <article className="prose">
-        {element}
-        <PrevNext slug="index" />
-      </article>
-      <PageAside meta={meta} toc={toc} />
+      <PageMeta
+        title="Hyperlink for Effect"
+        description="Hyperlink Services for Effect — define a Service once, run it in any runtime, and yield* the same typed Handle everywhere."
+      />
+      <section className="landing">
+        <div className="landing-inner">
+          <h1 className="landing-title">Hyperlink</h1>
+          <h3 className="landing-sub">for Effect</h3>
+          <div className="landing-tagline">
+            <span>Define once</span>
+            <span>run anywhere</span>
+            <span>
+              <code>yield*</code> everywhere
+            </span>
+          </div>
+          <p className="landing-pitch">
+            An Effect Service lives inside one runtime. A Hyperlink doesn&apos;t: declare its
+            contract once, run the implementation wherever it belongs — in-process, another
+            process, another machine — and reach it from every runtime through the same typed
+            Handle. Queues, long-running processes, and scheduled work included, with a dashboard
+            that already knows them.
+          </p>
+          <p className="landing-soon">Coming soon</p>
+          <a className="landing-preview" href="/docs/index">
+            Preview the docs →
+          </a>
+        </div>
+      </section>
     </>
   );
 }
 
-// Dynamic in dev so content edits re-render (HMR); static SSG in the build.
-export const getConfig = async () =>
-  import.meta.env.DEV ? ({ render: "dynamic" } as const) : ({ render: "static" } as const);
+export const getConfig = async () => ({ render: "static" }) as const;

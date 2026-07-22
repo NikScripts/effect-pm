@@ -224,8 +224,7 @@ export interface NavItem {
 // Book URLs are flat: `docs/guides/queues.md` and `docs/examples/queue/foo.md` become
 // `/docs/queues` and `/docs/foo` (folder is organization only). Basename must be unique
 // site-wide — see the collision guard in `content.ts`.
-const hrefFor = (slug: string, group: string): string =>
-  group === "" && slug === "index" ? "/" : `/docs/${slug}`;
+const hrefFor = (slug: string, _group: string): string => `/docs/${slug}`;
 
 // Resolve one slug to a nav item; the title comes from the page's own block (SSOT).
 // A parse error falls back to the slug so one bad file can't blank the nav.

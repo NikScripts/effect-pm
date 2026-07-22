@@ -2054,3 +2054,88 @@ pre:focus-within > .copy-btn {
   border-radius: 4px;
 }
 .shortcuts-list dd { margin: 0; color: var(--muted-fg); }
+
+/* --- landing page (/) — full-viewport brand hero, no sidebar --- */
+body:has(.landing) {
+  padding: 0;
+}
+body:has(.landing) .layout {
+  max-width: none;
+  gap: 0;
+}
+body:has(.landing) .sidebar {
+  display: none;
+}
+.landing {
+  /* fill the viewport below the sticky topbar at every size (dvh: stable on iOS) */
+  min-height: calc(100dvh - 3.2rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1.25rem calc(2.5rem + env(safe-area-inset-bottom));
+}
+.landing-inner {
+  max-width: 70rem; /* ~1120px body cap */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.landing-title {
+  margin: 0;
+  font-size: clamp(3.6rem, 13vw, 7.5rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  background: linear-gradient(135deg, var(--fg) 35%, var(--primary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.landing-sub {
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.25rem, 3.6vw, 2rem);
+  font-weight: 500;
+  color: var(--muted-fg);
+  letter-spacing: 0.01em;
+}
+.landing-tagline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: clamp(2rem, 5vh, 3.2rem) 0;
+  font-family: var(--font-mono);
+  font-size: clamp(1.05rem, 2.6vw, 1.4rem);
+  color: var(--fg);
+}
+.landing-tagline code {
+  color: var(--primary);
+}
+.landing-pitch {
+  max-width: 44rem;
+  margin: 0;
+  font-size: clamp(1rem, 2.2vw, 1.15rem);
+  line-height: 1.7;
+  color: var(--muted-fg);
+}
+.landing-soon {
+  margin: clamp(2rem, 5vh, 3rem) 0 0;
+  padding: 0.5rem 1.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+  background: var(--panel);
+}
+.landing-preview {
+  margin-top: 1.1rem;
+  font-size: 0.95rem;
+  color: var(--muted-fg);
+  text-decoration: none;
+}
+.landing-preview:hover {
+  color: var(--primary);
+}
