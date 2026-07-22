@@ -4,7 +4,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import type { ProcessSpec } from "../src/Process";
 
 // Type-level proof: Process toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
-// until `grantLocal` discharges it (same bundle pattern as QueueHyperlink / RunHyperlink).
+// until `grantLocal` discharges it (same bundle pattern as WorkPool / RunHyperlink).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
   "hyperlink-ts/test/process-built-resource.test-d/WorkerDep",

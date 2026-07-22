@@ -44,7 +44,7 @@
  *   {@link ProcessTagOptions.error} on {@link Tag} (positional or config object). Use
  *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over
  *   toolkit's location-transparent layers (the same `yield* Tag` runs local or remote; only the layer
- *   changes). This mirrors `QueueHyperlink`: the light `Process.Tag` path pulls no engine code, and the
+ *   changes). This mirrors `WorkPool`: the light `Process.Tag` path pulls no engine code, and the
  *   engine loads only when a runtime verb (`make` / `layer` / `serve`) is referenced.
  *
  * @module Process
@@ -1474,7 +1474,7 @@ export type ProcessServiceFactory = typeof defineProcessService;
 // engine helpers here and the Hyperlink toolkit below are all its members: `Process.make`,
 // `Process.Service`, `Process.currentScheduleId`, `Process.scheduleControls`, `Process.Tag`,
 // `Process.schedule`, `Process.layer`, … Member access tree-shakes — a `Process.Tag`-only consumer
-// pulls no engine code, mirroring `QueueHyperlink`.
+// pulls no engine code, mirroring `WorkPool`.
 // ============================================================================
 
 export { make };
@@ -1495,7 +1495,7 @@ export const Errors = {
 // #  Hyperlink toolkit — the light contract (schemas / specs / combinators /  #
 // #  Tag / Schedule) plus the heavy layers (layer / serve / serveRemote).    #
 // #  A process is a Hyperlink: driven locally or remotely over RPC through    #
-// #  the toolkit's location-transparent layers, exactly like QueueHyperlink.  #
+// #  the toolkit's location-transparent layers, exactly like WorkPool.  #
 // #                                                                          #
 // ############################################################################
 
@@ -2240,7 +2240,7 @@ export const Tag = <Self>() => {
   }
   // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
   // call-signature *object* type (`ProcessTagBuild<Self>`) even when it implements exactly those
-  // overloads — a known TS limitation (the same class as QueueHyperlink's `nameQueueService` cast).
+  // overloads — a known TS limitation (the same class as WorkPool's `nameQueueService` cast).
   // It's soundness-guarded: `process-built-resource` / `process-contract-shape` .test-d.ts exercise
   // `Process.Tag()` in every form, so a drift between `build` and `ProcessTagBuild` fails the build.
   return build as ProcessTagBuild<Self>;

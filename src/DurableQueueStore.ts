@@ -1,5 +1,5 @@
 /**
- * **DurableQueueStore** — the *durability plane* of a `QueueHyperlink`: a priority-native store of
+ * **DurableQueueStore** — the *durability plane* of a `WorkPool`: a priority-native store of
  * pending + in-flight work, so no enqueued item is lost across a restart (**at-least-once** +
  * dedup key). This is the abstract port; backends live behind it (SQLite today —
  * `hyperlink-ts/storage/sqlite`). Inspired by Effect's `PersistedQueue` (we lift its

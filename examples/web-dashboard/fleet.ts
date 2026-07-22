@@ -6,7 +6,7 @@
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";
-import * as QueueHyperlink from "../../src/QueueHyperlink";
+import * as WorkPool from "../../src/WorkPool";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as Node from "../../src/Node";
@@ -22,17 +22,17 @@ export class Droplet extends Node.Tag<Droplet>()("hub/droplet") {}
 const Job = Schema.Struct({ id: Schema.String });
 
 // leaf queue tags
-export class Mail extends QueueHyperlink.Tag<Mail>()("@acme/queues/Mail", { payload: Job, node: Droplet }) {}
-export class Jobs extends QueueHyperlink.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job, node: Droplet }) {}
-export class Billing extends QueueHyperlink.Tag<Billing>()("@acme/queues/Billing", { payload: Job, node: Droplet }) {}
-export class Notify extends QueueHyperlink.Tag<Notify>()("@acme/queues/Notify", { payload: Job, node: Droplet }) {}
-export class Worker1 extends QueueHyperlink.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job, node: Droplet }) {}
-export class Worker2 extends QueueHyperlink.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job, node: Droplet }) {}
-export class Worker3 extends QueueHyperlink.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job, node: Droplet }) {}
-export class RegionUS extends QueueHyperlink.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job, node: Droplet }) {}
-export class RegionEU extends QueueHyperlink.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job, node: Droplet }) {}
-export class Daily extends QueueHyperlink.Tag<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
-export class Weekly extends QueueHyperlink.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
+export class Mail extends WorkPool.Tag<Mail>()("@acme/queues/Mail", { payload: Job, node: Droplet }) {}
+export class Jobs extends WorkPool.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job, node: Droplet }) {}
+export class Billing extends WorkPool.Tag<Billing>()("@acme/queues/Billing", { payload: Job, node: Droplet }) {}
+export class Notify extends WorkPool.Tag<Notify>()("@acme/queues/Notify", { payload: Job, node: Droplet }) {}
+export class Worker1 extends WorkPool.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job, node: Droplet }) {}
+export class Worker2 extends WorkPool.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job, node: Droplet }) {}
+export class Worker3 extends WorkPool.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job, node: Droplet }) {}
+export class RegionUS extends WorkPool.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job, node: Droplet }) {}
+export class RegionEU extends WorkPool.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job, node: Droplet }) {}
+export class Daily extends WorkPool.Tag<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
+export class Weekly extends WorkPool.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
 
 // a process bound to the Mini node — it runs there, not on the Droplet.
 export class KeyRotation extends Process.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {

@@ -13,7 +13,7 @@
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
-import * as QueueHyperlink from "../../src/QueueHyperlink";
+import * as WorkPool from "../../src/WorkPool";
 import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
@@ -98,7 +98,7 @@ export class ScoresDb extends Hyperlink.Tag<ScoresDb>()(
   ),
 ) {}
 
-export class BoxScoreQueue extends QueueHyperlink.Tag<BoxScoreQueue>()(
+export class BoxScoreQueue extends WorkPool.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   { payload: importJob, node: WnbaNode },
 ).pipe(
@@ -122,7 +122,7 @@ export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
 ).pipe(Process.schedule([])) {}
-export class PlayByPlayQueue extends QueueHyperlink.Tag<PlayByPlayQueue>()(
+export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}

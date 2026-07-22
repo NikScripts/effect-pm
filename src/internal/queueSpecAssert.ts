@@ -1,5 +1,5 @@
 /**
- * Queue instance spec validation — single boundary cast site for {@link QueueHyperlink.Tag}
+ * Queue instance spec validation — single boundary cast site for {@link WorkPool.Tag}
  * and {@link CustomQueueHyperlink.Tag}.
  *
  * @remarks
@@ -14,7 +14,7 @@
 import { Data, DateTime, Duration, Schema } from "effect";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 import { flattenHyperlinkSpec } from "../Hyperlink";
-import { buildQueueEvent } from "../QueueHyperlink";
+import { buildQueueEvent } from "../WorkPool";
 import type { CustomQueueInstanceSpec } from "../CustomQueueHyperlink";
 
 /** Structural mismatch between wired and baseline queue specs. @internal */
@@ -150,7 +150,7 @@ const smokeWireSlots = (
 
 /**
  * Validate a wired queue spec against its erased baseline.
- * **The only** `QueueInstanceSpec` boundary assertion in QueueHyperlink tag build.
+ * **The only** `QueueInstanceSpec` boundary assertion in WorkPool tag build.
  *
  * @internal
  */

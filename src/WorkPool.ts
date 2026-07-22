@@ -5,7 +5,7 @@
  * local or remote; only the layer changes).
  *
  * @remarks
- * This is the first slice of porting `QueueHyperlink` onto the toolkit. It covers the
+ * This is the first slice of porting `WorkPool` onto the toolkit. It covers the
  * **control / observation** verbs only — `size`, `sizes`, `isEmpty`, `completed`, `start`,
  * `pause`, `resume`, `shutdown`, `clear` — all of which have fixed schemas (no item type).
  *
@@ -22,16 +22,16 @@
  * ({@link Hyperlink.serveInstances}) remains for resources whose contract is identical
  * across instances (e.g. RunHyperlink).
  *
- * This module is the **public `QueueHyperlink` namespace** — the `hyperlink-ts/QueueHyperlink`
- * subpath and the barrel `export * as QueueHyperlink` both resolve here. The light `Tag` / spec /
+ * This module is the **public `WorkPool` namespace** — the `hyperlink-ts/WorkPool`
+ * subpath and the barrel `export * as WorkPool` both resolve here. The light `Tag` / spec /
  * schemas live in this file (engine-free, tree-shakeable); the heavy engine lives in
  * `./internal/queueHyperlink` and is pulled in only by the runtime verbs (`layer` / `serve` /
  * `serveRemote` / `make`). Consume it as a module namespace:
  *
- *   import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
- *   class Mail extends QueueHyperlink.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
+ *   import * as WorkPool from "hyperlink-ts/WorkPool";
+ *   class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
  *
- * @module QueueHyperlink
+ * @module WorkPool
  */
 import { DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Hyperlink from "./Hyperlink";
@@ -81,7 +81,7 @@ import type {
   QueueMetrics,
   QueueReleaseEncodingError,
   QueueReleaseOptions,
-  QueueHyperlinkConfigWithItemSchema,
+  WorkPoolConfigWithItemSchema,
   QueueRouteOptions,
   QueueStatus,
 } from "./internal/queueHyperlink";
@@ -393,7 +393,7 @@ export type QueueEventSchema<
 /**
  * Build the `events` union **schema** for a queue item schema `Sch` with optional `success`/`error`
  * wire slots (default {@link Schema.Void} / {@link Schema.Never}) — the runtime schema behind
- * {@link QueueHyperlink.events}, whose decoded type is {@link QueueEventSchema}. @public
+ * {@link WorkPool.events}, whose decoded type is {@link QueueEventSchema}. @public
  * @category wire schemas
  */
 export const queueEvent = <
@@ -509,7 +509,7 @@ export const historyQuery = {
 /**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
- * slice. Mirrors the matching members of `QueueHyperlink`'s `QueueHandleApi`.
+ * slice. Mirrors the matching members of `WorkPool`'s `QueueHandleApi`.
  *
  * @category wire schemas
  * @public
@@ -729,7 +729,7 @@ type QueueInstanceSpec<
  * type and `itemSchema` baked in:
  *
  * ```ts
- * class MyQueue extends QueueHyperlink.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
+ * class MyQueue extends WorkPool.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
  * // or: Tag()(key, { payload: JobSchema, success?, error? })
  * const q = yield* MyQueue;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
@@ -747,7 +747,7 @@ type QueueInstanceSpec<
  *
  * @category utils
  */
-export const kind = "hyperlink-ts/QueueHyperlink";
+export const kind = "hyperlink-ts/WorkPool";
 
 /**
  * Config-object overload of {@link Tag}. `payload` is the item schema (required); `success` (worker
@@ -829,11 +829,11 @@ const materializeQueueTag = <
 /**
  * A queue handle — the value `yield* MyQueue` produces. The **named** compact form of a queue's
  * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so
- * it hovers as `QueueHyperlink<EmailJob>` instead of an expanded member wall; prettify-ts / the docs
+ * it hovers as `WorkPool<EmailJob>` instead of an expanded member wall; prettify-ts / the docs
  * D3 popover expand it to the full shape on demand.
  *
  * @typeParam Payload - the decoded item type (`add(item)` etc.)
- * @typeParam Success - the worker success value (`Completed.success` on {@link QueueHyperlink.events})
+ * @typeParam Success - the worker success value (`Completed.success` on {@link WorkPool.events})
  * @typeParam Error - the worker failure channel (`Failed.cause`)
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol`
  *   for a remote {@link Hyperlink.client})
@@ -841,7 +841,7 @@ const materializeQueueTag = <
  * @category models
  * @public
  */
-export interface QueueHyperlink<
+export interface WorkPool<
   Payload,
   Success = void,
   Error = never,
@@ -908,13 +908,13 @@ export interface QueueHyperlink<
   readonly events: Stream.Stream<QueueEvent<Payload, Error, Success>>;
 }
 
-/** This queue's decoded item type — the `Payload` of its {@link QueueHyperlink} handle. @internal */
+/** This queue's decoded item type — the `Payload` of its {@link WorkPool} handle. @internal */
 type QueueItemOf<F extends Schema.Struct.Fields> = Hyperlink.Decoded<Schema.Struct<F>>;
 
 /**
- * The queue's {@link Hyperlink.Tag} whose service value is the **named** {@link QueueHyperlink} handle
+ * The queue's {@link Hyperlink.Tag} whose service value is the **named** {@link WorkPool} handle
  * (via the `Svc` seam on {@link HyperlinkTag}), so `yield* MyQueue` hovers as
- * `QueueHyperlink<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
+ * `WorkPool<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
  * @category models
  */
 export type QueueTag<
@@ -925,7 +925,7 @@ export type QueueTag<
 > = HyperlinkTag<
   Self,
   QueueInstanceSpec<F, Success, Error>,
-  QueueHyperlink<QueueItemOf<F>, Success["Type"], Error["Type"]>
+  WorkPool<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
 /**
@@ -944,13 +944,13 @@ export type QueueNodeBoundTag<
   Self,
   QueueInstanceSpec<F, Success, Error>,
   HSelf,
-  QueueHyperlink<QueueItemOf<F>, Success["Type"], Error["Type"]>
+  WorkPool<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
 /**
- * Name the built queue tag's service as {@link QueueHyperlink}. The single, deliberate cast in this
+ * Name the built queue tag's service as {@link WorkPool}. The single, deliberate cast in this
  * module: `ServiceOf<QueueInstanceSpec<F, Success, Error>>` and
- * `QueueHyperlink<QueueItemOf<F>, Success["Type"], Error["Type"]>` are **mutually assignable** — proven
+ * `WorkPool<QueueItemOf<F>, Success["Type"], Error["Type"]>` are **mutually assignable** — proven
  * bidirectionally in `test/queue-handle.test-d.ts` — but TS can't verify that equality for *generic*
  * `F` at the invariant service-`Shape` position, so the generic factory needs one assertion here.
  * Owner-approved (the alternative was a schema-field hover, not `EmailJob`). The `.test-d.ts` is the
@@ -969,8 +969,8 @@ const nameQueueService = <
 
 /**
  * Define a queue as a named service {@link Tag}:
- * `class Mail extends QueueHyperlink.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
- * *is* the Tag — `yield* Mail` inside an Effect resolves the {@link QueueHyperlink} handle
+ * `class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
+ * *is* the Tag — `yield* Mail` inside an Effect resolves the {@link WorkPool} handle
  * (enqueue / status / metrics), while {@link layer} provides the running queue and {@link serve}
  * exposes it over RPC. `payload` is the item schema; the {@link QueueTagConfig} overload adds
  * `success` / `error` wire schemas for the worker's result and failures.
@@ -1067,7 +1067,7 @@ const queueTag = <Self>() => {
 };
 
 /**
- * The worker config for {@link QueueHyperlink.layer} — the engine queue config **without**
+ * The worker config for {@link WorkPool.layer} — the engine queue config **without**
  * `itemSchema` (the tag already carries it). The item type is the tag's `itemSchema` decoded
  * type, so `effect: (item, ctx) => …` is typed against it.
  *
@@ -1075,7 +1075,7 @@ const queueTag = <Self>() => {
  * @public
  */
 export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
-  QueueHyperlinkConfigWithItemSchema<Item, E, R, A>,
+  WorkPoolConfigWithItemSchema<Item, E, R, A>,
   "itemSchema" | "refill"
 > & {
   /**
@@ -1206,10 +1206,10 @@ const buildQueueImpl = <
     // location-transparent `QueueInstanceSpec<F>` baseline) without a raw↔prettified `View` mismatch
     // on the enqueue payloads, nor a generic discriminated-union reduction wall on `events`. The
     // declared worker `Success`/`Error` ride the tag's carriers and surface on the named
-    // `QueueHyperlink` handle (what `yield* Tag` reads); the worker `effect`'s own signature (via the
+    // `WorkPool` handle (what `yield* Tag` reads); the worker `effect`'s own signature (via the
     // config's `QueueErrorValueOf`/`QueueSuccessValueOf`) is what constrains them at build.
     const handle = yield* makeQueueEffect<
-      QueueHyperlinkConfigWithItemSchema<
+      WorkPoolConfigWithItemSchema<
         any,
         QueueErrorValueOf<Error>,
         R | RR,
@@ -1220,7 +1220,7 @@ const buildQueueImpl = <
       ...effectiveConfig,
       itemSchema,
       store,
-    } as QueueHyperlinkConfigWithItemSchema<
+    } as WorkPoolConfigWithItemSchema<
       any,
       QueueErrorValueOf<Error>,
       R | RR,
@@ -1350,7 +1350,7 @@ const withDefaultMemory = <A, E, R>(
 
 /**
  * Local queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
- * `QueueHyperlink.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
+ * `WorkPool.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
  *
  * @category layers & serving
  * @public
@@ -1405,8 +1405,8 @@ export const layerMemory = <
  *
  * ```ts
  * Node.httpServer([
- *   QueueHyperlink.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
- *   QueueHyperlink.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
+ *   WorkPool.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
+ *   WorkPool.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
  * ]).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port })));
  * ```
  *
@@ -1460,7 +1460,7 @@ export const serveRemoteMemory = <
  *
  * ```ts
  * Node.httpServer([
- *   QueueHyperlink.serve(RosterQueue, { effect, itemSchema }),
+ *   WorkPool.serve(RosterQueue, { effect, itemSchema }),
  *   Process.serve(SeasonMatches, { effect }),
  * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
  * ```
@@ -1521,15 +1521,15 @@ export const serveMemory = <
  */
 /**
  * A **config-patch layer** for the queue `tag` — the toolkit successor to the old
- * `QueueHyperlink.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
+ * `WorkPool.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
  * environment) and its patch (concurrency / rateLimit / attempts / …) folds onto the layer's base
  * config at build. Keyed by `tag.key`; later patches win. Config lives in the layer, not the tag,
  * so `configure` takes the tag and returns a layer rather than being a tag method.
  *
  * ```ts
  * const Prod = Layer.mergeAll(
- *   QueueHyperlink.layer(MyQueue, { effect }),
- *   QueueHyperlink.configure(MyQueue, { concurrency: 3, rateLimit: { window: "1 second", limit: 5 } }),
+ *   WorkPool.layer(MyQueue, { effect }),
+ *   WorkPool.configure(MyQueue, { concurrency: 3, rateLimit: { window: "1 second", limit: 5 } }),
  * );
  * ```
  *
@@ -1553,8 +1553,8 @@ export const configure = <
  * `itemSchema` injected. Pass a bare spec object to add app-specific methods (merged with built-in):
  *
  * ```ts
- * QueueHyperlink.store(Mail)
- * QueueHyperlink.store(Mail, {
+ * WorkPool.store(Mail)
+ * WorkPool.store(Mail, {
  *   campaignAudit: campaignAuditSchema,
  * }, ({ campaignAudit, entry }) => ({
  *   appendCampaignAudit: campaignAudit.append,
@@ -1580,8 +1580,8 @@ export function store(tag: QueueStoreTag, extended?: StoreShapes) {
     : facetStoreRegistration(tag, contract, extended);
 }
 
-// The light `Tag` lives here (no engine) so `QueueHyperlink.Tag` member access tree-shakes.
-// DX: `import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"` → `QueueHyperlink.Tag`.
+// The light `Tag` lives here (no engine) so `WorkPool.Tag` member access tree-shakes.
+// DX: `import * as WorkPool from "hyperlink-ts/WorkPool"` → `WorkPool.Tag`.
 export { queueTag as Tag };
 
 /**
@@ -1627,7 +1627,7 @@ export {
   withSchemaVersion,
 } from "./internal/queueHyperlink";
 export type { EffectContext, QueueEntry, QueueHandle } from "./internal/queueHyperlink";
-// The queue type surface lives HERE, namespace-style (`QueueHyperlink.QueueStatus`) — the barrel
+// The queue type surface lives HERE, namespace-style (`WorkPool.QueueStatus`) — the barrel
 // no longer re-exports these bare (effect has no top-level; neither do we).
 export type {
   BuiltInTakeAlgorithm,
@@ -1652,16 +1652,16 @@ export type {
   QueueOnFailure,
   QueueReleaseEncodingError,
   QueueReleaseOptions,
-  QueueHyperlinkConfig,
-  QueueHyperlinkConfigBase,
-  QueueHyperlinkConfigWithItemSchema,
-  QueueHyperlinkConfigWithoutItemSchema,
-  QueueHyperlinkDefinition,
-  QueueHyperlinkMetadata,
-  QueueHyperlinkOptionsWithItemSchema,
-  QueueHyperlinkOptionsWithoutItemSchema,
-  QueueHyperlinkRateLimitOptions,
-  QueueHyperlinkServiceDefinition,
+  WorkPoolConfig,
+  WorkPoolConfigBase,
+  WorkPoolConfigWithItemSchema,
+  WorkPoolConfigWithoutItemSchema,
+  WorkPoolDefinition,
+  WorkPoolMetadata,
+  WorkPoolOptionsWithItemSchema,
+  WorkPoolOptionsWithoutItemSchema,
+  WorkPoolRateLimitOptions,
+  WorkPoolServiceDefinition,
   QueueRouteOptions,
   QueueStatus,
   QueueWorkerEffect,

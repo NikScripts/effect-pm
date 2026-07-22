@@ -14,10 +14,10 @@ import {
 } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import { QueueHyperlink } from "../src";
-import { queueControlSpec } from "../src/QueueHyperlink";
-import { QueueMissingItemSchemaError } from "../src/QueueHyperlink";
-import type { QueueEntry } from "../src/QueueHyperlink";
+import { WorkPool } from "../src";
+import { queueControlSpec } from "../src/WorkPool";
+import { QueueMissingItemSchemaError } from "../src/WorkPool";
+import type { QueueEntry } from "../src/WorkPool";
 import * as Logs from "../src/Logs";
 import * as Hyperlink from "../src/Hyperlink";
 import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Hyperlink";
@@ -181,7 +181,7 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(meta("size").description).toContain("pending items");
 });
 
-// ── data plane (model B): the designed form — QueueHyperlink.Tag<Self>()(id, itemSchema) ──
+// ── data plane (model B): the designed form — WorkPool.Tag<Self>()(id, itemSchema) ──
 // The item is a struct; `add`/`prioritize`/`defer` take it DIRECTLY (the whole item schema is
 // the rpc payload), and `enqueue` takes the full entry array directly.
 const NumberItem = Schema.Struct({ n: Schema.Number });
@@ -192,7 +192,7 @@ interface NumberItem {
 type NumberIn = NumberItem | ReadonlyArray<NumberItem>;
 const asItems = (p: NumberIn): ReadonlyArray<NumberItem> =>
   "n" in p ? [p] : p;
-class Numbers extends QueueHyperlink.Tag<Numbers>()("test/Numbers", { payload: NumberItem }) {}
+class Numbers extends WorkPool.Tag<Numbers>()("test/Numbers", { payload: NumberItem }) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];
@@ -339,12 +339,12 @@ it("enqueue's wire schema (the server's decode gate) rejects malformed entries",
   ).toBe(true);
 });
 
-// ── QueueHyperlink.layer: the engine wired behind the toolkit tag, run locally ──
-class LocalQueue extends QueueHyperlink.Tag<LocalQueue>()("test/LocalQueue", {
+// ── WorkPool.layer: the engine wired behind the toolkit tag, run locally ──
+class LocalQueue extends WorkPool.Tag<LocalQueue>()("test/LocalQueue", {
   payload: NumberItem,
 }) {}
 
-it("QueueHyperlink.layer runs the engine behind the toolkit tag (local)", () => {
+it("WorkPool.layer runs the engine behind the toolkit tag (local)", () => {
   const program = Effect.gen(function* () {
     const seen = yield* Ref.make<Array<number>>([]);
     const q = yield* LocalQueue;
@@ -376,7 +376,7 @@ it("QueueHyperlink.layer runs the engine behind the toolkit tag (local)", () => 
     expect(Option.getOrThrow(emptied)).toBe(true);
   }).pipe(
     Effect.provide(
-      QueueHyperlink.layerMemory(LocalQueue, {
+      WorkPool.layerMemory(LocalQueue, {
         effect: (_item: NumberItem) => Effect.void,
         concurrency: 1,
       }),
@@ -386,12 +386,12 @@ it("QueueHyperlink.layer runs the engine behind the toolkit tag (local)", () => 
   return Effect.runPromise(program);
 });
 
-// ── QueueHyperlink.layer scopes worker logs readable via Hyperlink.logs ──
-class LoggingQueue extends QueueHyperlink.Tag<LoggingQueue>()("test/LoggingQueue", {
+// ── WorkPool.layer scopes worker logs readable via Hyperlink.logs ──
+class LoggingQueue extends WorkPool.Tag<LoggingQueue>()("test/LoggingQueue", {
   payload: NumberItem,
 }) {}
 
-it("QueueHyperlink.layer scopes worker logs via Hyperlink.logs", () => {
+it("WorkPool.layer scopes worker logs via Hyperlink.logs", () => {
   const program = Effect.gen(function* () {
     const q = yield* LoggingQueue;
     const { stream } = yield* Hyperlink.logs(LoggingQueue);
@@ -412,7 +412,7 @@ it("QueueHyperlink.layer scopes worker logs via Hyperlink.logs", () => {
     Effect.provide(
       // Soft-default Memory for the engine; LogRelay alone for live Hyperlink.logs
       // (do not provideMerge a Node-only AppStore — Soft would capture that Storage).
-      QueueHyperlink.layer(LoggingQueue, {
+      WorkPool.layer(LoggingQueue, {
         effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
         concurrency: 1,
       }).pipe(Layer.provideMerge(Logs.layer)),
@@ -426,7 +426,7 @@ it("QueueHyperlink.layer scopes worker logs via Hyperlink.logs", () => {
 // A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
 class QueueNode extends Node.Tag<QueueNode>()("queue/node") {}
-class NodeNumbers extends QueueHyperlink.Tag<NodeNumbers>()("test/NodeNumbers", {
+class NodeNumbers extends WorkPool.Tag<NodeNumbers>()("test/NodeNumbers", {
   payload: NumberItem,
   node: QueueNode,
 }) {}

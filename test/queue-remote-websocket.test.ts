@@ -5,15 +5,15 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueHyperlink } from "../src";
-import type { QueueLayerConfig } from "../src/QueueHyperlink";
+import { WorkPool } from "../src";
+import type { QueueLayerConfig } from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // The WEBSOCKET remote path — the transport a browser dashboard actually uses (`{ protocol:
 // "websocket" }`, so many live streams multiplex over one connection). The http path is covered by
-// `queue-remote-http.test.ts`; this proves the SAME `QueueHyperlink.serve` streams status + events to
+// `queue-remote-http.test.ts`; this proves the SAME `WorkPool.serve` streams status + events to
 // a ws client, and — importantly — that a protocol MISMATCH (http client → ws server) FAILS rather
 // than silently dropping calls. That mismatch was a real dashboard bug (the example's producer spoke
 // http against a ws server, `Effect.ignore`'d the failure, and enqueued nothing).
@@ -21,7 +21,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class WsQueue extends QueueHyperlink.Tag<WsQueue>()("queue-remote-ws/Q", { payload: Item }) {}
+class WsQueue extends WorkPool.Tag<WsQueue>()("queue-remote-ws/Q", { payload: Item }) {}
 
 // ws client transport (matches `Hyperlink.ws` / a `{protocol:"websocket"}` server).
 const clientWs = (port: number) =>
@@ -39,7 +39,7 @@ const clientHttp = (port: number) =>
   );
 
 const serveWs = (config: QueueLayerConfig<Item, void, never, never>) =>
-  Node.wsServer([QueueHyperlink.serveMemory(WsQueue, config)]).pipe(
+  Node.wsServer([WorkPool.serveMemory(WsQueue, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
 

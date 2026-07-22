@@ -13,7 +13,7 @@
 
 import { Effect } from "effect";
 import { Atom, type AtomRegistry, type Reactivity } from "effect/unstable/reactivity";
-import type { QueueHandle } from "../../src/QueueHyperlink";
+import type { QueueHandle } from "../../src/WorkPool";
 
 /** What an atom on this runtime may additionally require (provided by the runtime). */
 type RuntimeServices<R> = R | AtomRegistry.AtomRegistry | Reactivity.Reactivity;

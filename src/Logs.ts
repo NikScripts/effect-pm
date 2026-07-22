@@ -203,10 +203,10 @@ const resolveHyperlinkLogKey = (
  * Read durable logs for a **specific resource** by **full key** (same string as
  * {@link Hyperlink.logs}`(tag)` / store registration / lineage segment).
  *
- * Pass a scope tag (`Process.Tag` / `QueueHyperlink.Tag` / …) or its `.key` string.
+ * Pass a scope tag (`Process.Tag` / `WorkPool.Tag` / …) or its `.key` string.
  * Hyperlink kind is {@link Hyperlink.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Process.store` / `QueueHyperlink.store`, …) on the
+ * Requires that resource's store registration (`Process.store` / `WorkPool.store`, …) on the
  * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
  * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *

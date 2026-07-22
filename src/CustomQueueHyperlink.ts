@@ -1,6 +1,6 @@
 /**
  * **CustomQueueHyperlink** — the public N-level managed-queue namespace, mirroring
- * {@link QueueHyperlink} but with N-level lanes, `Record<string, number>` sizes, and
+ * {@link WorkPool} but with N-level lanes, `Record<string, number>` sizes, and
  * `add(item, level?)` where `level` is a numeric index or a configured name.
  *
  * This module is the public face: the `hyperlink-ts/CustomQueueHyperlink` subpath and the
@@ -54,12 +54,12 @@ import {
   queueReleaseEncodingError,
   queueReleaseOptions,
   queueRouteOptions,
-} from "./QueueHyperlink";
+} from "./WorkPool";
 import { configureLayer, foldConfiguredSpec } from "./HyperlinkConfigure";
 import type { ConfigPatch } from "./HyperlinkConfigure";
 
 /** @public Re-export for custom-queue wire schemas. */
-export { queueLogEntry as customQueueLogEntry } from "./QueueHyperlink";
+export { queueLogEntry as customQueueLogEntry } from "./WorkPool";
 
 /**
  * Per-lane pending counts keyed by configured name (or `"0"`, `"1"`, …).
@@ -310,7 +310,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
 };
 
 /**
- * Define a custom-queue **instance** — same shape as {@link QueueHyperlink.Tag}, with
+ * Define a custom-queue **instance** — same shape as {@link WorkPool.Tag}, with
  * `levelCount` / `namedLevels` baked into the wire level union:
  *
  * ```ts
@@ -334,7 +334,7 @@ export const kind = "hyperlink-ts/CustomQueueHyperlink";
 /**
  * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
  * schema; `levelCount` is the number of priority lanes; `namedLevels` maps names → lane indices.
- * Optional `success` / `error` wire slots match {@link QueueHyperlink.Tag} (stamped for engine + store).
+ * Optional `success` / `error` wire slots match {@link WorkPool.Tag} (stamped for engine + store).
  *
  * @category models
  * @public
@@ -500,7 +500,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
 
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
-    // discharge `context` into every Effect method uniformly — same bundle pattern as QueueHyperlink.
+    // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
     const impl: Hyperlink.WithRequirement<
       ImplOf<CustomQueueInstanceSpec<F>>,
       R | RR

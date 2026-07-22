@@ -27,10 +27,10 @@ import {
   Service as engineQueueService,
 } from "../src/internal/queueHyperlink";
 // This suite exercises the queue **engine** primitives directly (name-only `Tag`, positional
-// `make`, `layer(tag, config)`) — distinct from the public `QueueHyperlink` namespace whose `Tag`
+// `make`, `layer(tag, config)`) — distinct from the public `WorkPool` namespace whose `Tag`
 // takes an `itemSchema`. Reconstruct the flat engine exports into the historical object shape so
-// the call-sites read `QueueHyperlink.make` / `.Tag` / `.layer` / `.Service`.
-const QueueHyperlink = {
+// the call-sites read `WorkPool.make` / `.Tag` / `.layer` / `.Service`.
+const WorkPool = {
   make: makeQueueEffect,
   Tag: engineQueueTag,
   layer: queueHyperlinkLayer,
@@ -79,7 +79,7 @@ const forkDrainCounter = <T, E, EE, R>(
 describe("QueueHandle — status ref shape", () => {
   it.live("make() handle: status is Subscribable (get + changes), no statusNow", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "probe-status-ref",
         paused: true,
         effect: (_n: number) => Effect.void,
@@ -104,11 +104,11 @@ describe("QueueHandle — status ref shape", () => {
   );
 });
 
-describe("QueueHyperlink.make — basic processing", () => {
+describe("WorkPool.make — basic processing", () => {
   it.live("processes items added via add", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-basic",
         effect: (n: number) =>
           Ref.update(results, (arr) => [...arr, n]),
@@ -124,7 +124,7 @@ describe("QueueHyperlink.make — basic processing", () => {
 
   it.live("emits lifecycle events on the `events` stream", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-events",
         effect: (_n: number) => Effect.void,
         concurrency: 1,
@@ -144,7 +144,7 @@ describe("QueueHyperlink.make — basic processing", () => {
 
   it.live("emits a Failed event when an item fails", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-events-failed",
         effect: (_n: number) => Effect.fail("boom" as const),
         concurrency: 1,
@@ -163,7 +163,7 @@ describe("QueueHyperlink.make — basic processing", () => {
 
   it.live("emits queue-level events (Enqueued, Drained)", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-events-lifecycle",
         effect: (_n: number) => Effect.void,
         concurrency: 1,
@@ -183,7 +183,7 @@ describe("QueueHyperlink.make — basic processing", () => {
 
   it.live("emits a Cleared event when the queue is cleared", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-events-cleared",
         paused: true,
         effect: (_n: number) => Effect.void,
@@ -205,7 +205,7 @@ describe("QueueHyperlink.make — basic processing", () => {
 
   it.live("reflects pending sizes + paused on the status stream", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-status",
         paused: true,
         effect: (_n: number) => Effect.void,
@@ -227,7 +227,7 @@ describe("QueueHyperlink.make — basic processing", () => {
 
   it.live("emits windowed metrics on the metrics stream", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-metrics",
         effect: (_n: number) => Effect.void,
         concurrency: 1,
@@ -258,7 +258,7 @@ describe("QueueHyperlink.make — basic processing", () => {
   it.live("re-enqueues an entry taken straight off the events stream", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-enqueue-roundtrip",
         effect: (n: number) => Ref.update(seen, (a) => [...a, n]),
         concurrency: 1,
@@ -293,7 +293,7 @@ describe("QueueHyperlink.make — basic processing", () => {
   it.live("auto re-enqueues a failing item up to `attempts` (no hook)", () =>
     Effect.gen(function* () {
       const tries = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-auto-retry",
         effect: (_n: number) =>
           Ref.update(tries, (n) => n + 1).pipe(
@@ -322,7 +322,7 @@ describe("QueueHyperlink.make — basic processing", () => {
     Effect.gen(function* () {
       class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
       const caught = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-typed-failed",
         effect: (n: number) => Effect.fail(new Boom({ n })),
         concurrency: 1,
@@ -356,7 +356,7 @@ describe("QueueHyperlink.make — basic processing", () => {
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-single-string",
         effect: (value: string) =>
           Ref.update(results, (arr) => [...arr, value]),
@@ -372,7 +372,7 @@ describe("QueueHyperlink.make — basic processing", () => {
   it.live("processes prioritized items before normal", () =>
     Effect.gen(function* () {
       const order = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-priority",
         effect: (s: string) =>
           Ref.update(order, (arr) => [...arr, s]),
@@ -391,7 +391,7 @@ describe("QueueHyperlink.make — basic processing", () => {
   it.live("processes items in priority order (high > normal > low)", () =>
     Effect.gen(function* () {
       const order = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-defer",
         paused: true,
         effect: (s: string) =>
@@ -411,10 +411,10 @@ describe("QueueHyperlink.make — basic processing", () => {
   );
 });
 
-describe("QueueHyperlink.make — size and status", () => {
+describe("WorkPool.make — size and status", () => {
   it.live("size tracks pending items", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-size",
         effect: (_n: number) => Effect.sleep(Duration.millis(50)),
         concurrency: 1,
@@ -428,7 +428,7 @@ describe("QueueHyperlink.make — size and status", () => {
 
   it.live("completed counts processed items", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-completed",
         effect: (_n: number) => Effect.void,
         ...fastConfig,
@@ -442,7 +442,7 @@ describe("QueueHyperlink.make — size and status", () => {
 
   it.live("clear empties queues and resets counter", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-clear",
         effect: (_n: number) => Effect.sleep(Duration.seconds(10)),
         concurrency: 1,
@@ -459,7 +459,7 @@ describe("QueueHyperlink.make — size and status", () => {
   it.live("release exports pending entries and releases dedupe keys", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<ReadonlyArray<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-release-pending",
         paused: true,
         key: (item: { readonly id: string }) => item.id,
@@ -485,7 +485,7 @@ describe("QueueHyperlink.make — size and status", () => {
 
   it.live("releaseEncoded requires itemSchema", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-release-encoded-missing-schema",
         paused: true,
         effect: (_item: { readonly id: string }) => Effect.void,
@@ -502,7 +502,7 @@ describe("QueueHyperlink.make — size and status", () => {
 
   it.live("drop and deadLetter remove matching pending entries", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-drop-dead-letter",
         paused: true,
         key: (item: { readonly id: string }) => item.id,
@@ -522,11 +522,11 @@ describe("QueueHyperlink.make — size and status", () => {
   );
 });
 
-describe("QueueHyperlink.make — pause/resume", () => {
+describe("WorkPool.make — pause/resume", () => {
   it.live("pause stops processing, resume continues", () =>
     Effect.gen(function* () {
       const count = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-pause",
         paused: true,
         effect: (_n: number) => Ref.update(count, (n) => n + 1),
@@ -551,11 +551,11 @@ describe("QueueHyperlink.make — pause/resume", () => {
   );
 });
 
-describe("QueueHyperlink.make — dedup (key)", () => {
+describe("WorkPool.make — dedup (key)", () => {
   it.live("drops duplicate items by key", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-dedup",
         effect: (item: { readonly id: string }) =>
           Ref.update(processed, (arr) => [...arr, item.id]),
@@ -574,7 +574,7 @@ describe("QueueHyperlink.make — dedup (key)", () => {
   it.live("releases keys for pending items removed by clear", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-dedup-clear",
         paused: true,
         effect: (item: { readonly id: string }) =>
@@ -597,10 +597,10 @@ describe("QueueHyperlink.make — dedup (key)", () => {
   );
 });
 
-describe("QueueHyperlink.layer + Tag", () => {
+describe("WorkPool.layer + Tag", () => {
   it.live("Tag produces a valid Context.Service key", () =>
     Effect.gen(function* () {
-      const tag = QueueHyperlink.Tag<
+      const tag = WorkPool.Tag<
         { readonly _tag: "TestQueue" },
         number,
         never,
@@ -612,7 +612,7 @@ describe("QueueHyperlink.layer + Tag", () => {
 
   it.live("layer produces a working queue via make", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-layer-make",
         effect: (_n: number) => Effect.void,
         ...fastConfig,
@@ -626,7 +626,7 @@ describe("QueueHyperlink.layer + Tag", () => {
 
   it.live("positional make matches config object form", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make((_n: number) => Effect.void, {
+      const queue = yield* WorkPool.make((_n: number) => Effect.void, {
         name: "test-positional-make",
         ...fastConfig,
       });
@@ -637,7 +637,7 @@ describe("QueueHyperlink.layer + Tag", () => {
   );
 });
 
-describe("QueueHyperlink.make — events", () => {
+describe("WorkPool.make — events", () => {
   it.live("Enqueued events carry the batch envelope (items, priority, attempts)", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<
@@ -647,7 +647,7 @@ describe("QueueHyperlink.make — events", () => {
           attempts: ReadonlyArray<number>;
         }>
       >([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-enqueued-events",
         effect: (_n: number) => Effect.void,
         ...fastConfig,
@@ -683,7 +683,7 @@ describe("QueueHyperlink.make — events", () => {
   it.live("start is idempotent (manual autoStart)", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-start-idempotent",
         autoStart: false,
         effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
@@ -699,11 +699,11 @@ describe("QueueHyperlink.make — events", () => {
   );
 });
 
-describe("QueueHyperlink.make — self-enqueue guard", () => {
+describe("WorkPool.make — self-enqueue guard", () => {
   it.live("warns and drops when effect tries to self-enqueue", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-self-enqueue",
         effect: (item: string, ctx) =>
           Effect.gen(function* () {
@@ -725,7 +725,7 @@ describe("QueueHyperlink.make — self-enqueue guard", () => {
   it.live("allows enqueue of different items from effect", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-derived-enqueue",
         effect: (item: string, ctx) =>
           Effect.gen(function* () {
@@ -746,11 +746,11 @@ describe("QueueHyperlink.make — self-enqueue guard", () => {
   );
 });
 
-describe("QueueHyperlink.make — autoStart", () => {
+describe("WorkPool.make — autoStart", () => {
   it.live("does not process until start when autoStart is false", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-autostart-deferred",
         autoStart: false,
         effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
@@ -771,7 +771,7 @@ describe("QueueHyperlink.make — autoStart", () => {
   it.live("start is idempotent", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-autostart-idempotent",
         autoStart: false,
         effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
@@ -789,7 +789,7 @@ describe("QueueHyperlink.make — autoStart", () => {
   it.live("start after shutdown does not process queued items", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-autostart-shutdown-first",
         autoStart: false,
         effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
@@ -808,7 +808,7 @@ describe("QueueHyperlink.make — autoStart", () => {
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
       const events = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-shutdown-drain",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
         concurrency: 1,
@@ -842,7 +842,7 @@ describe("QueueHyperlink.make — autoStart", () => {
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
       const dropped = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-shutdown-finish-active",
         // paused so the items sit queued (nothing in-flight) — finishActive must discard them
         paused: true,
@@ -876,7 +876,7 @@ describe("QueueHyperlink.make — autoStart", () => {
     Effect.gen(function* () {
       // worker blocks on a gate so the item stays in-flight → queue stays "draining"
       const gate = yield* Deferred.make<void>();
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-shutdown-idempotent",
         effect: (_n: number) => Deferred.await(gate),
         concurrency: 1,
@@ -898,7 +898,7 @@ describe("QueueHyperlink.make — autoStart", () => {
   it.live("Drained event fires only after queues drain empty (manual start)", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-autostart-drained",
         autoStart: false,
         effect: (_n: number) => Effect.void,
@@ -923,7 +923,7 @@ describe("QueueHyperlink.make — autoStart", () => {
   it.live("no Drained event with default autoStart and no work", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-drained-no-auto-layer-only",
         effect: (_n: number) => Effect.void,
         concurrency: 4,
@@ -939,7 +939,7 @@ describe("QueueHyperlink.make — autoStart", () => {
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-drained-default-autostart-drain",
         effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
         concurrency: 1,
@@ -966,7 +966,7 @@ describe("QueueHyperlink.make — autoStart", () => {
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
 
-      class DrainedQueue extends QueueHyperlink.Service<DrainedQueue, number, never>()(
+      class DrainedQueue extends WorkPool.Service<DrainedQueue, number, never>()(
         "@test/DrainedLayerYieldQueue",
         {
           effect: (_n: number) => Effect.void,
@@ -989,7 +989,7 @@ describe("QueueHyperlink.make — autoStart", () => {
       const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
 
-      class DrainedQueue extends QueueHyperlink.Service<DrainedQueue, number, never>()(
+      class DrainedQueue extends WorkPool.Service<DrainedQueue, number, never>()(
         "@test/DrainedLayerManualStartQueue",
         {
           autoStart: false,
@@ -1018,16 +1018,16 @@ describe("QueueHyperlink.make — autoStart", () => {
     }),
   );
 
-  it.live("QueueHyperlink.layer with Tag does not cold-start onDrained", () =>
+  it.live("WorkPool.layer with Tag does not cold-start onDrained", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
-      const DrainedQueue = QueueHyperlink.Tag<
+      const DrainedQueue = WorkPool.Tag<
         { readonly _tag: "DrainedTagQueue" },
         number,
         never,
         never
       >()("@test/DrainedTagQueue");
-      const DrainedQueueLive = QueueHyperlink.layer(DrainedQueue, {
+      const DrainedQueueLive = WorkPool.layer(DrainedQueue, {
         effect: (_n: number) => Effect.void,
         concurrency: 1,
       });
@@ -1045,7 +1045,7 @@ describe("QueueHyperlink.make — autoStart", () => {
   it.live("clear triggers a Drained event only after workers have been started", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-clear-drained-after-start",
         autoStart: false,
         paused: true,
@@ -1073,10 +1073,10 @@ const EmailItem = Schema.Struct({
   subject: Schema.String,
 });
 
-describe("QueueHyperlink.make — itemSchema", () => {
+describe("WorkPool.make — itemSchema", () => {
   it.live("fails single-item enqueue before the queue mutates", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-schema-single",
         itemSchema: EmailItem,
         effect: () => Effect.void,
@@ -1093,7 +1093,7 @@ describe("QueueHyperlink.make — itemSchema", () => {
 
   it.live("fails batch enqueue atomically when any item is invalid", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-schema-batch",
         itemSchema: EmailItem,
         effect: () => Effect.void,
@@ -1129,7 +1129,7 @@ describe("QueueHyperlink.make — itemSchema", () => {
   it.live("rateLimit enforces minimum gap between item effect starts", () =>
     Effect.gen(function* () {
       const starts = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-rate-limit",
         concurrency: 1,
         rateLimit: { limit: 1, window: Duration.millis(80) },
@@ -1147,7 +1147,7 @@ describe("QueueHyperlink.make — itemSchema", () => {
   it.live("emits RateLimitExceeded events", () =>
     Effect.gen(function* () {
       const hits = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-rate-limit-hook",
         concurrency: 1,
         rateLimit: { limit: 1, window: Duration.millis(60) },
@@ -1171,7 +1171,7 @@ describe("QueueHyperlink.make — itemSchema", () => {
 
   it.live("releaseEncoded exports JSON payloads for schema-backed queues", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-release-encoded",
         paused: true,
         itemSchema: EmailItem,
@@ -1191,11 +1191,11 @@ describe("QueueHyperlink.make — itemSchema", () => {
   );
 });
 
-describe("QueueHyperlink.make — Hyperlink.runForEachTag over .events", () => {
+describe("WorkPool.make — Hyperlink.runForEachTag over .events", () => {
   it.live("dispatches lifecycle tags from a live queue's events stream", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<Array<string>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-runforeachtag",
         effect: (_n: number) => Effect.void,
         concurrency: 1,
@@ -1227,7 +1227,7 @@ describe("QueueHyperlink.make — Hyperlink.runForEachTag over .events", () => {
     Effect.gen(function* () {
       class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
       const caught = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-runforeachtag-catch",
         effect: (n: number) => Effect.fail(new Boom({ n })),
         concurrency: 1,
@@ -1254,11 +1254,11 @@ describe("QueueHyperlink.make — Hyperlink.runForEachTag over .events", () => {
   );
 });
 
-describe("QueueHyperlink.make — enqueue (entry re-injection)", () => {
+describe("WorkPool.make — enqueue (entry re-injection)", () => {
   it.live("re-injects a batch of entries off .events preserving priority", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-enqueue-batch-roundtrip",
         paused: true,
         effect: (n: number) => Ref.update(seen, (a) => [...a, n]),
@@ -1293,11 +1293,11 @@ describe("QueueHyperlink.make — enqueue (entry re-injection)", () => {
   );
 });
 
-describe("QueueHyperlink.make — onFailure disposition", () => {
+describe("WorkPool.make — onFailure disposition", () => {
   it.live("'drop' drops the failed item without re-enqueue (overriding attempts)", () =>
     Effect.gen(function* () {
       const tries = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-onfailure-drop",
         effect: (_n: number) =>
           Ref.update(tries, (n) => n + 1).pipe(
@@ -1325,7 +1325,7 @@ describe("QueueHyperlink.make — onFailure disposition", () => {
     Effect.gen(function* () {
       class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
       const seenCause = yield* Ref.make<Array<number>>([]);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-onfailure-deadletter",
         effect: (n: number) => Effect.fail(new Boom({ n })),
         // cause is Cause<Boom> — read the typed failure off it
@@ -1355,7 +1355,7 @@ describe("QueueHyperlink.make — onFailure disposition", () => {
   it.live("'retry' re-enqueues even when attempts is unset", () =>
     Effect.gen(function* () {
       const tries = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-onfailure-retry",
         effect: (_n: number) =>
           Effect.gen(function* () {
@@ -1383,7 +1383,7 @@ describe("QueueHyperlink.make — onFailure disposition", () => {
   it.live("'default' falls back to the queue's auto re-enqueue policy", () =>
     Effect.gen(function* () {
       const tries = yield* Ref.make(0);
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-onfailure-default",
         effect: (_n: number) =>
           Ref.update(tries, (n) => n + 1).pipe(
@@ -1408,10 +1408,10 @@ describe("QueueHyperlink.make — onFailure disposition", () => {
   );
 });
 
-describe("QueueHyperlink.make — OTEL metrics", () => {
+describe("WorkPool.make — OTEL metrics", () => {
   it.live("records per-queue counters via Effect Metric", () =>
     Effect.gen(function* () {
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name: "test-otel-metrics",
         effect: (_n: number) => Effect.void,
         concurrency: 1,
@@ -1444,13 +1444,13 @@ describe("QueueHyperlink.make — OTEL metrics", () => {
   );
 });
 
-describe("QueueHyperlink.make — Hyperlink.logs", () => {
+describe("WorkPool.make — Hyperlink.logs", () => {
   const scopeTag = (name: string) => ({ key: name });
 
   it.live("scopes worker-effect logs readable via Hyperlink.logs", () =>
     Effect.gen(function* () {
       const name = "test-logs-worker";
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name,
         effect: (n: number) => Effect.logInfo(`processing ${String(n)}`),
         concurrency: 1,
@@ -1475,7 +1475,7 @@ describe("QueueHyperlink.make — Hyperlink.logs", () => {
   it.live("scopes engine shutdown logs readable via Hyperlink.logs", () =>
     Effect.gen(function* () {
       const name = "test-logs-engine";
-      const queue = yield* QueueHyperlink.make({
+      const queue = yield* WorkPool.make({
         name,
         effect: (_n: number) => Effect.void,
         concurrency: 1,

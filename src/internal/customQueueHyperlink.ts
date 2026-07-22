@@ -46,7 +46,7 @@ import {
   type QueueOnFailure,
   type QueueReleaseEncodingError,
   type QueueReleaseOptions,
-  type QueueHyperlinkConfigBase,
+  type WorkPoolConfigBase,
   type QueueRouteOptions,
   type QueueStatus,
   type QueueRefill,
@@ -148,7 +148,7 @@ export type CustomQueueHandle<
  * @public
  */
 export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
-  QueueHyperlinkConfigBase<T>,
+  WorkPoolConfigBase<T>,
   "levelCount"
 > &
   CustomQueueLevelConfig & {
@@ -167,7 +167,7 @@ export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
  * @public
  */
 export type CustomQueueHyperlinkConfigWithItemSchema<T, E, R> = Omit<
-  QueueHyperlinkConfigBase<T>,
+  WorkPoolConfigBase<T>,
   "levelCount"
 > &
   CustomQueueLevelConfig & {

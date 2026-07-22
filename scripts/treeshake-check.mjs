@@ -32,8 +32,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** @type {Case[]} */
 const cases = [
   {
-    name: "QueueHyperlink",
-    entry: "src/QueueHyperlink.ts",
+    name: "WorkPool",
+    entry: "src/WorkPool.ts",
     engine: ["src/internal/queueHyperlink.ts"],
     member: "Tag",
   },

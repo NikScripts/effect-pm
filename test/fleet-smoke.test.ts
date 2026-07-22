@@ -2,7 +2,7 @@ import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueHyperlink } from "../src";
+import { WorkPool } from "../src";
 import * as NodeStatus from "../src/NodeStatus";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
@@ -21,12 +21,12 @@ const Job = Schema.Struct({ id: Schema.String });
 interface Job {
   readonly id: string;
 }
-class Mail extends QueueHyperlink.Tag<Mail>()("smoke/Mail", { payload: Job }) {}
-class Jobs extends QueueHyperlink.Tag<Jobs>()("smoke/Jobs", { payload: Job }) {}
+class Mail extends WorkPool.Tag<Mail>()("smoke/Mail", { payload: Job }) {}
+class Jobs extends WorkPool.Tag<Jobs>()("smoke/Jobs", { payload: Job }) {}
 
 const server = Node.wsServer([
-  QueueHyperlink.serveMemory(Mail, { effect: () => Effect.void }),
-  QueueHyperlink.serveMemory(Jobs, { effect: () => Effect.void }),
+  WorkPool.serveMemory(Mail, { effect: () => Effect.void }),
+  WorkPool.serveMemory(Jobs, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports ready", () =>

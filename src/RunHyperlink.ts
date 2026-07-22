@@ -2,7 +2,7 @@
  * RunHyperlink — concurrency gate for effects.
  *
  * Wraps any effect with bounded concurrency via `Semaphore`. Unlike
- * {@link QueueHyperlink}, there are no queues, priorities, or background workers —
+ * {@link WorkPool}, there are no queues, priorities, or background workers —
  * the gate is applied inline at the call site. Each `run` acquires a permit,
  * executes the effect, and releases the permit on completion.
  *
@@ -34,7 +34,7 @@
  *
  * ## Remote usage
  *
- * Declare wire schemas on the tag, then serve or connect like {@link QueueHyperlink} / {@link Process}:
+ * Declare wire schemas on the tag, then serve or connect like {@link WorkPool} / {@link Process}:
  *
  * ```ts
  * class FetchGate extends RunHyperlink.Tag<FetchGate>()("@app/FetchGate", {

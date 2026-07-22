@@ -2,7 +2,7 @@ import { Duration, Effect, Fiber, Layer, Stream } from "effect";
 import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import { Schema } from "effect";
@@ -14,7 +14,7 @@ interface NumberItem {
   readonly n: number;
 }
 
-class LogQueue extends QueueHyperlink.Tag<LogQueue>()("test/logs-resource/Q", {
+class LogQueue extends WorkPool.Tag<LogQueue>()("test/logs-resource/Q", {
   payload: NumberItem,
 }) {}
 
@@ -25,7 +25,7 @@ class EnvNode extends Node.Tag<EnvNode>()(testBillingNodeKey) {}
 class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   EnvNode.logs,
   Process.store(LogProc),
-  QueueHyperlink.store(LogQueue),
+  WorkPool.store(LogQueue),
 ) {}
 
 it("Hyperlink.logs surfaces queue worker lines on stream + query", () =>
@@ -56,7 +56,7 @@ it("Hyperlink.logs surfaces queue worker lines on stream + query", () =>
     }).pipe(
       Effect.provide(
         // AppStore (Logs.layer + Storage) must build before auto-started queue workers fork.
-        QueueHyperlink.layer(LogQueue, {
+        WorkPool.layer(LogQueue, {
           effect: (item) => Effect.logInfo(`handling ${String(item.n)}`),
           concurrency: 1,
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),

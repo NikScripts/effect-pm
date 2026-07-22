@@ -15,7 +15,7 @@ import { client, nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "..
 import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
-import { kind as queueKind, queueMetrics, queueStatus } from "../QueueHyperlink";
+import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
 import { kind as customQueueKind, customQueueStatus } from "../CustomQueueHyperlink";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";

@@ -1142,7 +1142,7 @@ export const resolveOrDie = <const C extends StoreContractValue>(
       Effect.die(
         `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store. ` +
           `If Soft override captured an AppStore, register this engine on that Store.Service ` +
-          `(Process.store / QueueHyperlink.store / CustomQueueHyperlink.store / RunHyperlink.store) ` +
+          `(Process.store / WorkPool.store / CustomQueueHyperlink.store / RunHyperlink.store) ` +
           `alongside Node.logs — or omit Soft override so Memory soft-default materializes the scope.`,
       ),
     ),
@@ -1419,16 +1419,16 @@ export type TagClass<
  *
  * Three input shapes:
  *
- * - **Single store** — bare registration: `QueueHyperlink.store(Mail)` → `yield* MailStore`
- * - **Tag-keyed multi** — array: `[QueueHyperlink.store(Mail), …]` → `yield* AppStore.at(Mail)`
- * - **Custom-keyed** — object: `{ mail: QueueHyperlink.store(Mail), … }` → `yield* AppStore.at("mail")`
+ * - **Single store** — bare registration: `WorkPool.store(Mail)` → `yield* MailStore`
+ * - **Tag-keyed multi** — array: `[WorkPool.store(Mail), …]` → `yield* AppStore.at(Mail)`
+ * - **Custom-keyed** — object: `{ mail: WorkPool.store(Mail), … }` → `yield* AppStore.at("mail")`
  *
  * `layerMemory` uses in-memory refs. `layer({ filename })` persists to SQLite (`filename` required).
  *
  * @example Single store
  * ```ts
  * class MailStore extends Store.Service<MailStore>("@app/MailStore")(
- *   QueueHyperlink.store(Mail),
+ *   WorkPool.store(Mail),
  * ) {}
  *
  * const handle = yield* MailStore;

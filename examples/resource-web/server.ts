@@ -15,7 +15,7 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Hyperlink from "../../src/Hyperlink";
-import { serve as queueEntry } from "../../src/QueueHyperlink";
+import { serve as queueEntry } from "../../src/WorkPool";
 import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
@@ -26,7 +26,7 @@ import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
 import { Polling } from "../../src/Polling";
 import * as Store from "../../src/Store";
-import * as QueueHyperlink from "../../src/QueueHyperlink";
+import * as WorkPool from "../../src/WorkPool";
 import * as Process from "../../src/Process";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, FetchGate, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
@@ -229,7 +229,7 @@ const scoresDbImpl = {
 
 class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaStore")(
   WnbaNode.logs,
-  QueueHyperlink.store(BoxScoreQueue),
+  WorkPool.store(BoxScoreQueue),
 ) {}
 
 class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
@@ -240,7 +240,7 @@ class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveSto
 
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
   StatsNode.logs,
-  QueueHyperlink.store(PlayByPlayQueue),
+  WorkPool.store(PlayByPlayQueue),
   CustomQueueHyperlink.store(ImportJobs),
 ) {}
 

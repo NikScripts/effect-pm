@@ -40,9 +40,9 @@
       "types": "./dist/Polling.d.ts",
       "default": "./dist/Polling.js"
     },
-    "./QueueHyperlink": {
-      "types": "./dist/QueueHyperlink.d.ts",
-      "default": "./dist/QueueHyperlink.js"
+    "./WorkPool": {
+      "types": "./dist/WorkPool.d.ts",
+      "default": "./dist/WorkPool.js"
     },
     "./CustomQueueHyperlink": {
       "types": "./dist/CustomQueueHyperlink.d.ts",

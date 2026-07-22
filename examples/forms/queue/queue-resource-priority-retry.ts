@@ -1,14 +1,14 @@
 /**
  * @module examples/forms/queue/queue-hyperlink-priority-retry
  *
- * QueueHyperlink priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
+ * WorkPool priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
  * observation via `events` + `Hyperlink.runForEachTag`.
  *
  * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:queue-hyperlink`
  */
 
 import { Cause, Duration, Effect, Schema } from "effect";
-import { QueueHyperlink, Hyperlink } from "../../../src";
+import { WorkPool, Hyperlink } from "../../../src";
 
 // ── Contract: payload + typed worker failure ──────────────────────────────────
 
@@ -29,7 +29,7 @@ class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
   reason: Schema.String,
 }) {}
 
-class EmailQueue extends QueueHyperlink.Tag<EmailQueue>()("examples/EmailQueue", {
+class EmailQueue extends WorkPool.Tag<EmailQueue>()("examples/EmailQueue", {
   payload: EmailJob,
   error: SendError,
 }) {}
@@ -47,7 +47,7 @@ const waitUntilCompleted = (expected: number) =>
 
 // ── Layer: worker + policy (Tag stays free of runtime config) ─────────────────
 
-const EmailQueueLive = QueueHyperlink.layer(EmailQueue, {
+const EmailQueueLive = WorkPool.layer(EmailQueue, {
   paused: true, // enqueue / subscribe first; drain only after `resume`
   concurrency: 1, // sequential — log order stays readable for the demo
   capacity: 100,

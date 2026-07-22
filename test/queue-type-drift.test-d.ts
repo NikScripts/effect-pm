@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import type {
   QueueEntry,
   QueueEvent,
@@ -17,23 +17,23 @@ import * as Hyperlink from "../src/Hyperlink";
 // fix is retain-narrower: tighten the schema to the type, never widen the type to a looser schema.
 
 const EmailJob = Schema.Struct({ to: Schema.String });
-const entrySchema = QueueHyperlink.queueEntry(EmailJob);
+const entrySchema = WorkPool.queueEntry(EmailJob);
 // concrete Success/Error slots so the event union reduces
-const eventSchema = QueueHyperlink.queueEvent(EmailJob, {
+const eventSchema = WorkPool.queueEvent(EmailJob, {
   success: Schema.Number,
   error: Schema.String,
 });
 
 // ── QueueMetrics ⇄ queueMetrics.Type ─────────────────────────────────────────────
 declare const hMetrics: QueueMetrics;
-declare const sMetrics: Hyperlink.Decoded<typeof QueueHyperlink.queueMetrics>;
-const _metricsToSchema: Hyperlink.Decoded<typeof QueueHyperlink.queueMetrics> = hMetrics;
+declare const sMetrics: Hyperlink.Decoded<typeof WorkPool.queueMetrics>;
+const _metricsToSchema: Hyperlink.Decoded<typeof WorkPool.queueMetrics> = hMetrics;
 const _metricsToType: QueueMetrics = sMetrics;
 
 // ── QueueReleaseOptions ⇄ queueReleaseOptions.Type ───────────────────────────────
 declare const hRelease: QueueReleaseOptions;
-declare const sRelease: Hyperlink.Decoded<typeof QueueHyperlink.queueReleaseOptions>;
-const _releaseToSchema: Hyperlink.Decoded<typeof QueueHyperlink.queueReleaseOptions> = hRelease;
+declare const sRelease: Hyperlink.Decoded<typeof WorkPool.queueReleaseOptions>;
+const _releaseToSchema: Hyperlink.Decoded<typeof WorkPool.queueReleaseOptions> = hRelease;
 const _releaseToType: QueueReleaseOptions = sRelease;
 
 // ── QueueEntry<T> ⇄ queueEntry(itemSchema).Type ──────────────────────────────────

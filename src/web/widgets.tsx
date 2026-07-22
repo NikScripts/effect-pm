@@ -55,7 +55,7 @@ import {
   tagWireKey,
 } from "./data";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
-import { kind as queueKind } from "../QueueHyperlink";
+import { kind as queueKind } from "../WorkPool";
 import { kind as customQueueKind } from "../CustomQueueHyperlink";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";

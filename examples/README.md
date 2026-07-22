@@ -45,7 +45,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | File | Teaches |
 |------|---------|
-| [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) | `QueueHyperlink.Service`, priority, dedup key, handler retry |
+| [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) | `WorkPool.Service`, priority, dedup key, handler retry |
 | [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) | `CustomQueueHyperlink.Tag`, named lanes, `add(item, level?)`, weighted take |
 
 ### Hyperlink

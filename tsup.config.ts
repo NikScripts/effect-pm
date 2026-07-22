@@ -18,7 +18,7 @@ export default defineConfig([
       index: "src/index.ts",
       Process: "src/Process.ts",
       Polling: "src/Polling.ts",
-      QueueHyperlink: "src/QueueHyperlink.ts",
+      WorkPool: "src/WorkPool.ts",
       CustomQueueHyperlink: "src/CustomQueueHyperlink.ts",
       Hyperlink: "src/Hyperlink.ts",
       Node: "src/Node.ts",

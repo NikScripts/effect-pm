@@ -5,7 +5,7 @@ import {
   processExecutionEventVoid,
 } from "../src/internal/processEvent";
 import { makeRunHyperlinkFactEvent } from "../src/internal/runHyperlinkEvent";
-import { buildQueueEvent } from "../src/QueueHyperlink";
+import { buildQueueEvent } from "../src/WorkPool";
 
 const terminalTags = ["Started", "Completed", "Failed"] as const;
 

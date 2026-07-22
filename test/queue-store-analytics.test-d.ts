@@ -1,6 +1,6 @@
 import type { DateTime, Duration, Effect, Option, Stream } from "effect";
 import * as Schema from "effect/Schema";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Store from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 import type {
@@ -24,15 +24,15 @@ const expectExact = <_Check extends true>(): void => {};
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends QueueHyperlink.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
+class Jobs extends WorkPool.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
 
 type Ev = QueueStoreEvent<typeof Jobs>;
 type Entry = QueueStoreEntry<typeof Jobs>;
 type Failed = QueueStoreFailed<typeof Jobs>;
 type Completed = QueueStoreCompleted<typeof Jobs>;
 
-// ── Tier 3: `QueueHyperlink.store(queue)` resolves to base + the 12 reads ──────
-type Regs = RegsOfStoreInput<[ReturnType<typeof QueueHyperlink.store<typeof Jobs>>]>;
+// ── Tier 3: `WorkPool.store(queue)` resolves to base + the 12 reads ──────
+type Regs = RegsOfStoreInput<[ReturnType<typeof WorkPool.store<typeof Jobs>>]>;
 type Handle = StoreHandleAtKey<Regs, typeof Jobs>;
 
 // base is still present
@@ -77,10 +77,10 @@ expectExact<
 expectExact<Equals<QueueStoreStats["retried"], number>>();
 expectExact<Equals<QueueStoreLatency["p99"], Duration.Duration>>();
 
-// ── `QueueHyperlink.store(queue, additions)` = base + reads + additions ────────
+// ── `WorkPool.store(queue, additions)` = base + reads + additions ────────
 const auditSchema = Schema.Struct({ campaignId: Schema.String });
 type RegsWithAdditions = RegsOfStoreInput<
-  [ReturnType<typeof QueueHyperlink.store<typeof Jobs, { readonly audit: typeof auditSchema }>>]
+  [ReturnType<typeof WorkPool.store<typeof Jobs, { readonly audit: typeof auditSchema }>>]
 >;
 type HandleWithAdditions = StoreHandleAtKey<RegsWithAdditions, typeof Jobs>;
 
@@ -107,14 +107,14 @@ void _engine.retryExhausted;
 void _engine.failures;
 
 // ── bare single Store.Service: service type is the handle (no at) ─────────────
-const jobsStoreRegistration = QueueHyperlink.store(Jobs);
+const jobsStoreRegistration = WorkPool.store(Jobs);
 
 class JobsStore extends Store.Service<JobsStore>("@test/SingleJobsStore")(
   jobsStoreRegistration,
 ) {}
 
 type SingleHandle = StoreHandleAtKey<
-  RegsOfStoreInput<ReturnType<typeof QueueHyperlink.store<typeof Jobs>>>,
+  RegsOfStoreInput<ReturnType<typeof WorkPool.store<typeof Jobs>>>,
   typeof Jobs
 >;
 

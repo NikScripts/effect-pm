@@ -1,7 +1,7 @@
 /**
  * Built-in {@link RunHyperlink} store contract.
  *
- * Three tiers (mirrors {@link QueueHyperlink}):
+ * Three tiers (mirrors {@link WorkPool}):
  * - **Tier 1** — lean base (`builtInRunHyperlinkStoreContract`)
  * - **Tier 2** — analytics read-extension (`makeRunHyperlinkStoreAnalyticsContract`)
  *

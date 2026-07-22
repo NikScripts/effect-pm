@@ -1315,7 +1315,7 @@ export const builtHyperlinkSym: unique symbol = Symbol.for(
 /**
  * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
  * Effect methods, paired with the {@link Context.Context} captured at build time. Used by
- * {@link QueueHyperlink}, {@link RunHyperlink}, and {@link Process} (any toolkit resource that builds
+ * {@link WorkPool}, {@link RunHyperlink}, and {@link Process} (any toolkit resource that builds
  * its driver under ambient `R`). {@link layer} / {@link serve} grant locally via {@link grantLocal};
  * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
  * one materialization backs both paths.
@@ -2106,7 +2106,7 @@ export const localCapSym: unique symbol = Symbol.for(
 export const fromServiceSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/fromService",
 );
-/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/QueueHyperlink`) is
+/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/WorkPool`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
  *  classify a tag without sniffing its spec. Absent on a bare {@link Hyperlink.Tag}. @internal */
 export const kindSym: unique symbol = Symbol.for(
@@ -2495,14 +2495,14 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
 
 /** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every resource tag carries a
  *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
- *  `hyperlink-ts/QueueHyperlink`); a bare tag defaults to this so nothing is ever kind-less.
+ *  `hyperlink-ts/WorkPool`); a bare tag defaults to this so nothing is ever kind-less.
  *
  * @category nodes & fleet
  * @public
  */
 export const kind = "hyperlink-ts/Hyperlink";
 
-/** The contract kind a tag was built for (e.g. `hyperlink-ts/QueueHyperlink`, or {@link kind}
+/** The contract kind a tag was built for (e.g. `hyperlink-ts/WorkPool`, or {@link kind}
  *  for a bare {@link Hyperlink.Tag}); `undefined` only for a non-tag. The robust replacement for
  *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {

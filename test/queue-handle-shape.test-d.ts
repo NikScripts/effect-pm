@@ -1,6 +1,6 @@
 import { Effect, Schema, Stream } from "effect";
 import type { QueueHandle } from "../src/internal/queueHyperlink";
-import type { queueStatus } from "../src/QueueHyperlink";
+import type { queueStatus } from "../src/WorkPool";
 import type { CustomQueueHandle } from "../src/internal/customQueueHyperlink";
 import type { customQueueStatus } from "../src/CustomQueueHyperlink";
 import * as Hyperlink from "../src/Hyperlink";

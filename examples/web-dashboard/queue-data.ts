@@ -4,7 +4,7 @@
  * Tag-driven data layer. Each queue **tag** is the source of truth; this builds the
  * atom bundle the widgets need (status / metrics+history / trend / logs + controls)
  * straight from the tag's live service. The service comes from `Hyperlink.client` over
- * http — so this is the **remote** layer (swap `clientLayer` for `QueueHyperlink.layer`
+ * http — so this is the **remote** layer (swap `clientLayer` for `WorkPool.layer`
  * to run the engine locally; the widgets don't change). No `REGISTRY`, no `TREE`.
  */
 import { Effect, Layer, Stream } from "effect";

@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
-import { Process, QueueHyperlink, RunHyperlink } from "../src";
+import { Process, WorkPool, RunHyperlink } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -42,13 +42,13 @@ const remote = <A, E, R>(
   );
 };
 
-// ── QueueHyperlink ────────────────────────────────────────────────────────────────────────────────
+// ── WorkPool ────────────────────────────────────────────────────────────────────────────────
 const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class ConfQueue extends QueueHyperlink.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
-const queueServe = QueueHyperlink.serveMemory(ConfQueue, { effect: () => Effect.void });
+class ConfQueue extends WorkPool.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
+const queueServe = WorkPool.serveMemory(ConfQueue, { effect: () => Effect.void });
 const queueOp = Effect.gen(function* () {
   const q = yield* ConfQueue;
   const completed: number[] = [];

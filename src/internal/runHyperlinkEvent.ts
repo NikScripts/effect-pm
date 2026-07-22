@@ -23,7 +23,7 @@ const runFinishedBase = {
 
 /**
  * Build the run fact union for a store contract — same terminal `_tag` names as
- * {@link QueueHyperlink} worker events (`Started`, `Completed`, `Failed`).
+ * {@link WorkPool} worker events (`Started`, `Completed`, `Failed`).
  *
  * @internal
  */
