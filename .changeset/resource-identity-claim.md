@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Resource.identity (S1)** — claim-then-serve-or-client at Lookup.

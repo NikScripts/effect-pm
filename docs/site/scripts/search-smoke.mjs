@@ -26,7 +26,7 @@ const browser = await chromium.launch();
   const heads = await panel.locator(".search-section-head span").allTextContents();
   if (!heads.includes("API Reference")) fail(`typeahead sections: ${heads.join(", ")}`);
   const firstHit = await panel.locator(".search-hit .search-hit-title").first().textContent();
-  if (!firstHit.includes("Resource.Subscribable"))
+  if (!firstHit.includes("Hyperlink.Subscribable"))
     fail(`typeahead top hit for subscribable: ${firstHit}`);
   const href = await panel.locator(".search-hit").first().getAttribute("href");
   console.log("typeahead top:", firstHit.trim(), "->", href);
@@ -58,7 +58,7 @@ const browser = await chromium.launch();
     .locator(".search-page .search-hit .search-hit-title")
     .first()
     .textContent();
-  if (!pageTop.includes("Resource.Subscribable")) fail(`/search top hit: ${pageTop}`);
+  if (!pageTop.includes("Hyperlink.Subscribable")) fail(`/search top hit: ${pageTop}`);
   console.log("full page top:", pageTop.trim());
 
   // "show all" narrows to one section with type param
@@ -84,7 +84,7 @@ const browser = await chromium.launch();
     .locator(".search-page .search-hit .search-hit-title")
     .first()
     .textContent();
-  if (!top.includes("Resource.ref")) fail(`/search?q=ref top: ${top}`);
+  if (!top.includes("Hyperlink.ref")) fail(`/search?q=ref top: ${top}`);
   console.log("direct /search?q=ref top:", top.trim());
   const glossary = await page.locator(".search-section-head span").allTextContents();
   console.log("sections on ref page:", glossary.join(", "));
@@ -111,7 +111,7 @@ const browser = await chromium.launch();
   console.log("cmd-k opens spotlight modal; esc closes");
 
   // API pages get the portaled copy button (guide .code-block pres render theirs server-side)
-  await page.goto(`${base}/api/effect-pm/Resource/ref`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/api/hyperlink-ts/Hyperlink/ref`, { waitUntil: "networkidle" });
   const pre = page
     .locator("main pre")
     .filter({ has: page.locator(".copy-btn") })

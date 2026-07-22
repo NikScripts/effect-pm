@@ -1,6 +1,6 @@
 # Deploying the docs site (DigitalOcean App Platform + Cloudflare)
 
-The site is a Node service (Waku `start`): effect-pm pages are pre-rendered static; effect dep
+The site is a Node service (Waku `start`): hyperlink-ts pages are pre-rendered static; effect dep
 API pages SSR on demand reading `api-data/` + `api-hovers/` from disk. **The artifact deploys;
 DO never builds** — a fresh builder has no hover cache (that's a 1.5 h gen-hovers run per deploy).
 
@@ -33,9 +33,9 @@ link-check gates the build) → docker image from `docs/` context → push `:lat
 ## Local smoke of the exact image
 
 ```sh
-cd docs && docker build -f site/Dockerfile -t effect-pm-docs:test .
-docker run --rm -p 8081:8080 effect-pm-docs:test
-# static:  curl localhost:8081/api/effect-pm/Polling
+cd docs && docker build -f site/Dockerfile -t hyperlink-ts-docs:test .
+docker run --rm -p 8081:8080 hyperlink-ts-docs:test
+# static:  curl localhost:8081/api/hyperlink-ts/Polling
 # SSR:     curl localhost:8081/api/effect/Effect/retry   (hover popups present)
 # assets:  curl localhost:8081/search/api.json  /llms.txt  /sitemap.xml
 ```

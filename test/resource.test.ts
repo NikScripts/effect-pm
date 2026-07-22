@@ -1,8 +1,8 @@
 import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
-import { forwardClient, groupOf, specOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { forwardClient, groupOf, specOf } from "../src/Hyperlink";
 
 // ── runForEachTag: tag-dispatched stream consumption (cast-free, dual, overloaded) ──
 type Ev =
@@ -21,7 +21,7 @@ it("runForEachTag dispatches by tag — handler map, pipeable, types inferred", 
     const seen: Array<string> = [];
     // pipeable + handler map; `e.n` / `e.s` only compile if inference narrowed per tag.
     yield* events.pipe(
-      Resource.runForEachTag({
+      Hyperlink.runForEachTag({
         A: (e) => Effect.sync(() => seen.push(`A${e.n}`)),
         B: (e) => Effect.sync(() => seen.push(`B${e.s}`)),
         // C deliberately unhandled → ignored
@@ -31,7 +31,7 @@ it("runForEachTag dispatches by tag — handler map, pipeable, types inferred", 
 
     // data-first + single tag
     const aValues: Array<number> = [];
-    yield* Resource.runForEachTag(events, "A", (e) =>
+    yield* Hyperlink.runForEachTag(events, "A", (e) =>
       Effect.sync(() => aValues.push(e.n)),
     );
     expect(aValues).toEqual([1, 2]);
@@ -49,7 +49,7 @@ it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)"
     const seen: Array<string> = [];
     // pipeable + handler map — forks automatically; we get a Fiber back, not a blocked effect.
     const fiber = yield* events.pipe(
-      Resource.runForEachTagScoped({
+      Hyperlink.runForEachTagScoped({
         A: (e) => Effect.sync(() => seen.push(`A${e.n}`)),
         B: (e) => Effect.sync(() => seen.push(`B${e.s}`)),
       }),
@@ -62,19 +62,19 @@ it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)"
 });
 
 it("effectFn rejects void or empty payloads at build time", () => {
-  const effectFnAny = Resource.effectFn as unknown as (payload: unknown) => unknown;
-  expect(() => effectFnAny(Schema.Void)).toThrow(Resource.EffectFnMissingPayload);
-  expect(() => effectFnAny({})).toThrow(Resource.EffectFnMissingPayload);
-  expect(() => effectFnAny({ payload: Schema.Void })).toThrow(Resource.EffectFnMissingPayload);
+  const effectFnAny = Hyperlink.effectFn as unknown as (payload: unknown) => unknown;
+  expect(() => effectFnAny(Schema.Void)).toThrow(Hyperlink.EffectFnMissingPayload);
+  expect(() => effectFnAny({})).toThrow(Hyperlink.EffectFnMissingPayload);
+  expect(() => effectFnAny({ payload: Schema.Void })).toThrow(Hyperlink.EffectFnMissingPayload);
 });
 
 // A resource with both a no-payload method (property) and a payload method.
-class Echo extends Resource.Tag<Echo>()("test/Echo", {
-  ping: Resource.effect(Schema.String),
-  shout: Resource.effectFn({ msg: Schema.String }, Schema.String),
+class Echo extends Hyperlink.Tag<Echo>()("test/Echo", {
+  ping: Hyperlink.effect(Schema.String),
+  shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
 
-// True two-sided round-trip in-process: the real `Resource.server` handlers are wired to
+// True two-sided round-trip in-process: the real `Hyperlink.server` handlers are wired to
 // the same `forwardClient` the production client layer uses, over RpcTest's in-memory
 // transport. So `yield* svc.*` runs the client forwarder → wire → server → impl → back.
 it("client ↔ server round-trips in-memory", () => {
@@ -86,7 +86,7 @@ it("client ↔ server round-trips in-memory", () => {
     expect(yield* svc.shout({ msg: "hi" })).toBe("HI");
   }).pipe(
     Effect.provide(
-      Resource.serveRemote(Echo, {
+      Hyperlink.serveRemote(Echo, {
         ping: Effect.succeed("pong"),
         shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
       }),
@@ -99,9 +99,9 @@ it("client ↔ server round-trips in-memory", () => {
 });
 
 // ── multi-instance: many instances of one factory, one server, routed by id ──
-const Counter = Resource.tagFor("counter", {
-  bump: Resource.effectFn({ by: Schema.Number }, Schema.Number),
-  label: Resource.effect(Schema.String),
+const Counter = Hyperlink.tagFor("counter", {
+  bump: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),
+  label: Hyperlink.effect(Schema.String),
 });
 class Alpha extends Counter<Alpha>("test/Alpha") {}
 class Beta extends Counter<Beta>("test/Beta") {}
@@ -134,10 +134,10 @@ it("server family routes calls to the right instance by key header", () => {
     expect(yield* b.bump({ by: 1 })).toBe(11);
   }).pipe(
     Effect.provide(
-      Resource.serveInstances(
+      Hyperlink.serveInstances(
         Counter,
-        Resource.instance(Alpha, alphaImpl),
-        Resource.instance(Beta, betaImpl),
+        Hyperlink.instance(Alpha, alphaImpl),
+        Hyperlink.instance(Beta, betaImpl),
       ),
     ),
     Effect.scoped,
@@ -146,14 +146,14 @@ it("server family routes calls to the right instance by key header", () => {
 });
 
 // ── resource-level description (tools: section help / panel title) ──
-class Described extends Resource.Tag<Described>()("described", {
-  ping: Resource.effect(Schema.String),
+class Described extends Hyperlink.Tag<Described>()("described", {
+  ping: Hyperlink.effect(Schema.String),
 }, {
   description: "A described resource.",
 }) {}
-const DescribedFamily = Resource.tagFor(
+const DescribedFamily = Hyperlink.tagFor(
   "describedFamily",
-  { tick: Resource.effect(Schema.Void) },
+  { tick: Hyperlink.effect(Schema.Void) },
   { description: "A described family." },
 );
 class FamA extends DescribedFamily<FamA>("describedFamily/A") {}
@@ -164,11 +164,11 @@ it("carries a resource-level description on tags and factory instances", () => {
 });
 
 // ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
-class Widgets extends Resource.Tag<Widgets>()("widgets", {
-  size: Resource.effect(Schema.Number), // same method name as Crates.size, different type
+class Widgets extends Hyperlink.Tag<Widgets>()("widgets", {
+  size: Hyperlink.effect(Schema.Number), // same method name as Crates.size, different type
 }) {}
-class Crates extends Resource.Tag<Crates>()("crates", {
-  size: Resource.effect(Schema.String),
+class Crates extends Hyperlink.Tag<Crates>()("crates", {
+  size: Hyperlink.effect(Schema.String),
 }) {}
 
 it("two resource types sharing a method name coexist on one server (group prefix)", () => {
@@ -185,8 +185,8 @@ it("two resource types sharing a method name coexist on one server (group prefix
   }).pipe(
     Effect.provide(
       Layer.mergeAll(
-        Resource.serveRemote(Widgets, { size: Effect.succeed(42) }),
-        Resource.serveRemote(Crates, { size: Effect.succeed("dozen") }),
+        Hyperlink.serveRemote(Widgets, { size: Effect.succeed(42) }),
+        Hyperlink.serveRemote(Crates, { size: Effect.succeed("dozen") }),
       ),
     ),
     Effect.scoped,

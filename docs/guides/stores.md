@@ -11,7 +11,7 @@ engine-owned SQL) live in [`docs/standards/storage.md`](../standards/storage.md)
 ## The recipe (Effect-true)
 
 Toolkit engines (`Process.layer` / `serve` / `serveRemote`, and the Queue / CustomQueue /
-RunResource counterparts) **soft-default** `Store.layerDefaultMemory` via
+RunHyperlink counterparts) **soft-default** `Store.layerDefaultMemory` via
 `Store.withDefaultStorage` — **R is fulfilled** out of the box. `*Memory` variants are
 aliases of the same soft-default (ephemeral engine journal — **no** Logs platform).
 
@@ -22,9 +22,9 @@ Override by providing your app store **into** the toolkit layer so Soft unwrap s
 import { Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
-import * as Process from "@nikscripts/effect-pm/Process"
-import * as Store from "@nikscripts/effect-pm/Store"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as Process from "hyperlink-ts/Process"
+import * as Store from "hyperlink-ts/Store"
+import * as Node from "hyperlink-ts/Node"
 
 class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
 class Daily extends Process.Tag<Daily>()("app/Daily") {}
@@ -36,12 +36,12 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 
 // Soft unwrap sees AppStore.Storage — engines write the SQLite journal.
 const live = Process.layer(Daily, { effect: poll }).pipe(
-  Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
+  Layer.provideMerge(AppStore.layer({ filename: ".hyperlink-ts/data.sqlite" })),
 )
 
 // httpServer form — Layer.provide is fine when you do not `yield* AppStore` in-process:
 Node.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
-  Layer.provide(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
+  Layer.provide(AppStore.layer({ filename: ".hyperlink-ts/data.sqlite" })),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 )
 ```
@@ -66,7 +66,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 
 **Do not** sibling-`Layer.merge` the toolkit layer with AppStore and expect override — Soft never sees `Storage`, engines stay on the default journal, and the AppStore file stays empty.
 
-**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge and toolkit layers **die at build** (`Store.resolveOrDie`) when the engine scope is missing. Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueResource.store` / ….
+**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge and toolkit layers **die at build** (`Store.resolveOrDie`) when the engine scope is missing. Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueHyperlink.store` / ….
 
 ## One store per Node (intentional multi-node = N stores)
 
@@ -90,5 +90,5 @@ Node journal + resource `_logs` copies of the same live line are intentional —
 
 ## Related
 
-- [`docs/guides/logs.md`](./logs.md) — fans, `_logs`, `Resource.logs`
+- [`docs/guides/logs.md`](./logs.md) — fans, `_logs`, `Hyperlink.logs`
 - [`docs/standards/storage.md`](../standards/storage.md) — persistence shapes

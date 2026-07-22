@@ -3,27 +3,27 @@ import { FetchHttpClient, HttpServer, HttpRouter } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 // The beta.18 mechanism: N resources needing different implementations of the SAME dependency tag, each
-// isolated. `Resource.serve` preserves the handler's requirement `R`, so a per-resource `Layer.provide`
+// isolated. `Hyperlink.serve` preserves the handler's requirement `R`, so a per-resource `Layer.provide`
 // discharges it — and the layers still merge onto one shared RpcServer.
 
 class Dep extends Context.Service<Dep, number>()(
-  "@nikscripts/effect-pm/test/multi-resource-isolated-deps.test/Dep",
+  "hyperlink-ts/test/multi-resource-isolated-deps.test/Dep",
 ) {}
 
-class A extends Resource.Tag<A>()("proto/A", { read: Resource.effect(Schema.Number) }) {}
-class B extends Resource.Tag<B>()("proto/B", { read: Resource.effect(Schema.Number) }) {}
+class A extends Hyperlink.Tag<A>()("proto/A", { read: Hyperlink.effect(Schema.Number) }) {}
+class B extends Hyperlink.Tag<B>()("proto/B", { read: Hyperlink.effect(Schema.Number) }) {}
 
 // one impl reading the Dep tag — its requirement `R = Dep` is inferred + preserved by `serve`
 const impl = { read: Effect.map(Dep, (value) => value) };
 
 // each resource's handler layer, its own Dep value provided — isolated
-const layerA = Resource.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
-const layerB = Resource.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
+const layerA = Hyperlink.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
+const layerB = Hyperlink.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
-const merged = Resource.groupOf(A).merge(Resource.groupOf(B));
+const merged = Hyperlink.groupOf(A).merge(Hyperlink.groupOf(B));
 
 const Server = HttpRouter.serve(
   RpcServer.layerHttp({ group: merged, path: "/rpc", protocol: "http" }).pipe(
@@ -54,8 +54,8 @@ it("serve preserves R so per-resource deps are isolated on one shared RpcServer"
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            Resource.client(A).pipe(Layer.provide(clientTransport)),
-            Resource.client(B).pipe(Layer.provide(clientTransport)),
+            Hyperlink.client(A).pipe(Layer.provide(clientTransport)),
+            Hyperlink.client(B).pipe(Layer.provide(clientTransport)),
           ),
         ),
         Effect.scoped,

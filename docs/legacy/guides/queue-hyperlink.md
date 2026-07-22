@@ -1,9 +1,9 @@
-# QueueResource
+# QueueHyperlink
 
 A **queue** is a managed three-level priority worker pool (`high`, `normal`, `low`). You provide an
 **`effect`** that processes one item; the runtime handles concurrency, dedup, retry, pause/resume,
 optional schema validation, observability, and (opt-in) durability. It's a location-transparent
-`Resource` — the same `yield* Tag` drives it local or over RPC.
+`Hyperlink` — the same `yield* Tag` drives it local or over RPC.
 
 It is also the **golden `Store` example**: its lifecycle event log is a full three-tier `Store`
 contract (lean base → engine write-extension → consumer analytics read-extension). If you are wiring
@@ -14,16 +14,16 @@ contract (lean base → engine write-extension → consumer analytics read-exten
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
+import { QueueHyperlink } from "hyperlink-ts/QueueHyperlink";
 
 const Job = Schema.Struct({ id: Schema.String });
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
+class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
 ```
 
-- **`QueueResource.layer(Tag, config)`** — local layer (auto-starts workers).
-- **`QueueResource.serve(Tag, config)`** / **`serveRemote`** — host it over RPC.
-- **`QueueResource.make(config)`** — scoped engine handle, for tests / low-level composition.
-- **`Resource.client(Tag)`** — remote handle (dashboard).
+- **`QueueHyperlink.layer(Tag, config)`** — local layer (auto-starts workers).
+- **`QueueHyperlink.serve(Tag, config)`** / **`serveRemote`** — host it over RPC.
+- **`QueueHyperlink.make(config)`** — scoped engine handle, for tests / low-level composition.
+- **`Hyperlink.client(Tag)`** — remote handle (dashboard).
 
 ### Typed outcome slots (`success` / `error`)
 
@@ -31,7 +31,7 @@ The config-object form of the tag declares the worker's **outcome wire schemas**
 worker's return, the lifecycle event log, and (in turn) the store analytics:
 
 ```ts
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", {
+class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", {
   payload: Job,
   error: RosterError,       // → Failed.cause is Cause<RosterError>, not Cause<unknown>
   success: RosterResult,    // → worker MUST return Effect<RosterResult, …>; Completed.success is RosterResult
@@ -58,7 +58,7 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
 | `refill` | Self-feed from a source — see below. |
 
 > **Removed:** `captureLogs` — logs use the [`Logs`](../../LOGS.md) platform +
-> `Resource.logs(tag)` / `NodeStatus.logs` (see [history-and-persistence.md](./history-and-persistence.md)).
+> `Hyperlink.logs(tag)` / `NodeStatus.logs` (see [history-and-persistence.md](./history-and-persistence.md)).
 
 ## Handle surface (`yield* Tag`)
 
@@ -67,13 +67,13 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
 - **State:** `size` / `sizes` / `isEmpty` / `completed`.
 - **Lifecycle:** `start` / `pause` / `resume` / `shutdown` / `clear`.
 - **Observe:** `status` (`status.get` / `status.changes`), `metrics.stream` / `metrics.query`, `events`.
-  Per-resource logs are **not** on the handle — use `Resource.logs(Tag)` (local) or
+  Per-resource logs are **not** on the handle — use `Hyperlink.logs(Tag)` (local) or
   `NodeStatus.logs` + `LogEntry.hasKey` (remote).
 
 ## Self-refill
 
 ```ts
-QueueResource.layer(RosterQueue, {
+QueueHyperlink.layer(RosterQueue, {
   effect,
   refill: { onStart: true, onDrained: true, load: (queue) => loadFromDb(queue) },
 });
@@ -88,11 +88,11 @@ Durability is **presence-driven** — provide a `DurableQueueStore` layer and de
 tag — the queue's *work* becomes durable:
 
 ```ts
-import { SQLiteDurableQueueStore } from "@nikscripts/effect-pm/storage/sqlite";
+import { SQLiteDurableQueueStore } from "hyperlink-ts/storage/sqlite";
 
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
+class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
 
-QueueResource.layer(RosterQueue, { effect })
+QueueHyperlink.layer(RosterQueue, { effect })
   .pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
 ```
 
@@ -106,7 +106,7 @@ below (the observability plane).
 
 Every queue records its **lifecycle events** into a `Store`. The contract is built in three tiers, each
 for a different audience. The observability store is **baked in** (in-memory default), so it works with
-zero configuration; register `QueueResource.store(tag)` on an app `Store.Service` to get durable,
+zero configuration; register `QueueHyperlink.store(tag)` on an app `Store.Service` to get durable,
 queryable analytics.
 
 ## Full-capture — the merged single-outcome event (be precise here)
@@ -130,9 +130,9 @@ and `Completed.success` is `void`. Typed **error** capture (`Failed.cause: Cause
 declare `error` on the tag.
 
 One type-system caveat: the **RPC / consumer-facing `events` stream** types `Completed.success` as `unknown`
-(the runtime value is the real `A`) — `ResourceTag` is spec-invariant and Effect can't reduce a union's `.Type`
+(the runtime value is the real `A`) — `HyperlinkTag` is spec-invariant and Effect can't reduce a union's `.Type`
 through a generic field. The typed `A` lands everywhere else: the worker return, the engine event,
-`store.completed`, and the `QueueResource.store` analytics (`slowest` / `lastFailure` / …).
+`store.completed`, and the `QueueHyperlink.store` analytics (`slowest` / `lastFailure` / …).
 
 ## Tier 1 — lean base (`record` / `events`)
 
@@ -184,7 +184,7 @@ const engineContract = Store.extend(
 The engine builds its recorder over that contract with the transform layer — this is the pattern to copy:
 
 ```ts
-// Inside QueueResource.layer, conceptually:
+// Inside QueueHyperlink.layer, conceptually:
 const storeEffects = Store.catchWriteErrors(
   Store.effects(tag.key, engineQueueStoreContract(tag)),
 );
@@ -198,16 +198,16 @@ the queue** — an encode/wiring **defect** still propagates. Queue-level facts 
 
 ## Tier 3 — consumer analytics read-extension
 
-`QueueResource.store(queue)` is the registration app code puts on a `Store.Service`. It is the lean
+`QueueHyperlink.store(queue)` is the registration app code puts on a `Store.Service`. It is the lean
 base **plus** advanced analytics reads — pure derivations over the persisted event log. Internally it is
 the same lean base `Store.extend`-ed with the analytics reads, so the concrete read signatures are
 preserved exactly like Tier 2 (base = `Store.contract`, every tier = `Store.extend`):
 
 ```ts
-class Jobs extends QueueResource.Tag<Jobs>()("@app/Jobs", jobSchema) {}
+class Jobs extends QueueHyperlink.Tag<Jobs>()("@app/Jobs", jobSchema) {}
 
 class JobsStore extends Store.Service<JobsStore>("@app/JobsStore")(
-  QueueResource.store(Jobs),
+  QueueHyperlink.store(Jobs),
 ) {}
 
 const program = Effect.gen(function* () {
@@ -217,11 +217,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-`QueueResource.store(queue, additions)` adds app-specific shapes on top of base + analytics (each
+`QueueHyperlink.store(queue, additions)` adds app-specific shapes on top of base + analytics (each
 addition gets its own `.append` / `.read`):
 
 ```ts
-QueueResource.store(Jobs, {
+QueueHyperlink.store(Jobs, {
   campaignAudit: Schema.Struct({ campaignId: Schema.String, note: Schema.String }),
 });
 // → yield* store.campaignAudit.append({ campaignId, note })  alongside all analytics reads
@@ -257,7 +257,7 @@ Real usage of every read is exercised in `test/queue-store-analytics.test.ts`.
 event log to SQLite so analytics survive restarts. Same tag → an app store layer overrides the queue's
 baked-in in-memory default.
 
-## The impl side — one `Resource.provideContext`
+## The impl side — one `Hyperlink.provideContext`
 
 The three-tier contracts are only half the golden model. The queue's resource **impl** uses the
 mirror-image primitive. `buildQueueImpl` constructs every worker method **unwrapped** — each still carrying
@@ -265,11 +265,11 @@ the worker requirement `R | RR` — then discharges it in a single call:
 
 ```ts
 const context = yield* Effect.context<R | RR>();
-return Resource.provideContext(impl, tag[Resource.specSym], context);
+return Hyperlink.provideContext(impl, tag[Hyperlink.specSym], context);
 ```
 
-`Resource.provideContext` is the Resource counterpart to `Store.catchWriteErrors` — a one-liner over
-`Resource.mapEffects` that `Effect.provideContext`s every Effect method uniformly (`R` → `Exclude<R, Ctx>`),
+`Hyperlink.provideContext` is the Hyperlink counterpart to `Store.catchWriteErrors` — a one-liner over
+`Hyperlink.mapEffects` that `Effect.provideContext`s every Effect method uniformly (`R` → `Exclude<R, Ctx>`),
 a no-op on the ones carrying no `R` (`start` / `pause` / `resume` / `shutdown`), and leaving `Stream` /
 `Subscribable` members (`status` / `size` / `isEmpty` / `events`) untouched. It's **subtractive**: whatever
 the context doesn't cover survives as a residual requirement (caught at the `ImplOf` assignment), never
@@ -282,5 +282,5 @@ falsely claimed `never`. One call — no per-method `Effect.provideContext(...)`
 - [`store-backing.md`](./store-backing.md) — EventJournal + `StoreWriteError` semantics
 - [toolkit-by-example.md](./toolkit-by-example.md) — full queue patterns (local, remote, instances, UI)
 - [history-and-persistence.md](./history-and-persistence.md) — history + the durable work queue
-- [resource-configure.md](./resource-configure.md) — per-env `.configure` overrides
+- [hyperlink-configure.md](./hyperlink-configure.md) — per-env `.configure` overrides
 </content>

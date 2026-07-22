@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/http-api-resource-layer-effect
  *
- * HttpApiResource.layerEffect on an existing client Layer. Run: `pnpm run example:http-api-resource-layer-effect`
+ * HttpApiHyperlink.layerEffect on an existing client Layer. Run: `pnpm run example:http-api-resource-layer-effect`
  */
 
 import { Context, Effect, Layer, Ref, Schema } from "effect";
@@ -13,7 +13,7 @@ import {
   HttpApiEndpoint,
   HttpApiGroup,
 } from "effect/unstable/httpapi";
-import { acceptJson, HttpApiResource } from "../../../src";
+import { acceptJson, HttpApiHyperlink } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const Post = Schema.Struct({
@@ -39,7 +39,7 @@ class DecodeCapture extends Context.Service<
     readonly record: (label: string) => Effect.Effect<void>;
     readonly count: () => Effect.Effect<number>;
   }
->()("@nikscripts/effect-pm/examples/forms/resource/http-api-resource-layer-effect/DecodeCapture") {}
+>()("hyperlink-ts/examples/forms/resource/http-api-resource-layer-effect/DecodeCapture") {}
 
 const DecodeCaptureNoop = Layer.succeed(DecodeCapture, {
   record: (_label: string) => Effect.void,
@@ -66,7 +66,7 @@ const _make = Effect.gen(function* () {
 });
 
 export class DemoApiClient extends Context.Service<DemoApiClient>()(
-  "@nikscripts/effect-pm/examples/forms/resource/http-api-resource-layer-effect/DemoApiClient",
+  "hyperlink-ts/examples/forms/resource/http-api-resource-layer-effect/DemoApiClient",
   {
     make: _make,
   },
@@ -80,8 +80,8 @@ export class DemoApiClient extends Context.Service<DemoApiClient>()(
     DecodeCaptureNoop,
   );
 
-  // Brown-field path: wrap existing _make with effect-pm transport limits.
-  static readonly resourceLayerCapture = HttpApiResource.layerEffect(
+  // Brown-field path: wrap existing _make with hyperlink-ts transport limits.
+  static readonly resourceLayerCapture = HttpApiHyperlink.layerEffect(
     DemoApiClient,
     _make,
     { concurrency: 2 },

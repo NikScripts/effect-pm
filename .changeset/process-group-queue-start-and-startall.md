@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **ProcessGroup `startAll`** now runs **`QueueHandle.start`** for every registered queue **before** starting processes (pairs with **`QueueResource` `autoStart: false`**).

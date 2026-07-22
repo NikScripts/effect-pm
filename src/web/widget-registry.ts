@@ -2,7 +2,7 @@
  * @module web/widget-registry
  *
  * How the dashboard grid picks a card for each resource. A widget is bound to a resource **kind**
- * (its type — every tag carries one, see {@link Resource.kindOf}) or to an exact **key** (one
+ * (its type — every tag carries one, see {@link Hyperlink.kindOf}) or to an exact **key** (one
  * specific resource). Resolution is **key first, then kind, then a basic fallback**, so a custom
  * card for one queue wins over the generic queue card, which wins over "unknown".
  *
@@ -42,7 +42,7 @@ export interface Widget {
 }
 
 /** The widget set. An exact {@link byKey} match beats a {@link byKind} match; `fallback` renders any
- *  resource neither covers (a bare `…/Resource`, or a kind nobody registered). @public */
+ *  resource neither covers (a bare `…/Hyperlink`, or a kind nobody registered). @public */
 export interface WidgetRegistry {
   readonly byKey: HashMap.HashMap<string, Widget>;
   readonly byKind: HashMap.HashMap<string, Widget>;
@@ -54,7 +54,7 @@ export type WidgetEntry =
   | { readonly _tag: "kind"; readonly kind: string; readonly widget: Widget }
   | { readonly _tag: "key"; readonly key: string; readonly widget: Widget };
 
-/** Bind a widget to every resource of a kind — e.g. `forKind(QueueResource.kind, MyQueueCard)`. @public */
+/** Bind a widget to every resource of a kind — e.g. `forKind(QueueHyperlink.kind, MyQueueCard)`. @public */
 export const forKind = (kind: string, widget: Widget): WidgetEntry => ({ _tag: "kind", kind, widget });
 
 /** Bind a widget to one exact resource key — overrides that resource's kind widget. @public */

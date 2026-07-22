@@ -1,10 +1,10 @@
 import { it, describe, expect } from "@effect/vitest";
 import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
-import * as RunResource from "../src/RunResource";
+import * as RunHyperlink from "../src/RunHyperlink";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";
 import { StoreWriteError } from "../src/internal/store/errors";
-import { builtInRunResourceStoreContract } from "../src/internal/store/runResourceStoreSpec";
+import { builtInRunHyperlinkStoreContract } from "../src/internal/store/runHyperlinkStoreSpec";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -15,13 +15,13 @@ const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
     yield* Ref.update(active, (x) => x - 1);
   });
 
-describe("RunResource.make", () => {
+describe("RunHyperlink.make", () => {
   it.live("concurrency 1 enforces serial execution", () =>
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
       const work = trackedWork(active, peak);
-      const gate = yield* RunResource.make({
+      const gate = yield* RunHyperlink.make({
         name: "@test/serial-runner",
         effect: (_: void) => work,
         concurrency: 1,
@@ -39,7 +39,7 @@ describe("RunResource.make", () => {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
       const work = trackedWork(active, peak);
-      const gate = yield* RunResource.make({
+      const gate = yield* RunHyperlink.make({
         name: "@test/concurrency-4-runner",
         effect: (_: void) => work,
         concurrency: 4,
@@ -55,7 +55,7 @@ describe("RunResource.make", () => {
 
   it.live("gates a function effect with concurrency", () =>
     Effect.gen(function* () {
-      const gate = yield* RunResource.make({
+      const gate = yield* RunHyperlink.make({
         name: "@test/Multiply",
         effect: (n: number) => Effect.succeed(n * 2),
         concurrency: 2,
@@ -70,7 +70,7 @@ describe("RunResource.make", () => {
 
   it.live("does not expose observation subscribables", () =>
     Effect.gen(function* () {
-      const gate = yield* RunResource.make({
+      const gate = yield* RunHyperlink.make({
         name: "@test/UnobservedGate",
         effect: (n: number) => Effect.succeed(n + 1),
         concurrency: 1,
@@ -81,13 +81,13 @@ describe("RunResource.make", () => {
   );
 });
 
-describe("RunResource.Service", () => {
+describe("RunHyperlink.Service", () => {
   it.live("limits concurrency on parameterized gate", () =>
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
-      const SlowGate = RunResource.Tag<{ readonly _tag: "SlowGate" }>()("@test/SlowGate", { payload: Schema.String, success: Schema.String });
-      const gateLayer = RunResource.layerMemory(SlowGate, {
+      const SlowGate = RunHyperlink.Tag<{ readonly _tag: "SlowGate" }>()("@test/SlowGate", { payload: Schema.String, success: Schema.String });
+      const gateLayer = RunHyperlink.layerMemory(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
             const n = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -113,7 +113,7 @@ describe("RunResource.Service", () => {
     }),
   );
 
-  class SlowGate extends RunResource.Service<SlowGate>()("@test/SlowGateService", {
+  class SlowGate extends RunHyperlink.Service<SlowGate>()("@test/SlowGateService", {
     payload: Schema.String,
     success: Schema.String,
     effect: (s: string) => Effect.succeed(s.toUpperCase()),
@@ -144,14 +144,14 @@ describe("RunResource.Service", () => {
   );
 });
 
-describe("RunResource.Tag + layer", () => {
-  const TestGate = RunResource.Tag<{ readonly _tag: "TestGate" }>()(
+describe("RunHyperlink.Tag + layer", () => {
+  const TestGate = RunHyperlink.Tag<{ readonly _tag: "TestGate" }>()(
     "@test/TestGate",
     Schema.Number,
     Schema.Number,
   );
 
-  const testLayer = RunResource.layerMemory(TestGate, {
+  const testLayer = RunHyperlink.layerMemory(TestGate, {
     effect: (n: number) => Effect.succeed(n + 100),
     concurrency: 1,
   });
@@ -161,7 +161,7 @@ describe("RunResource.Tag + layer", () => {
   });
 
   it("Tag accepts schema config object", () => {
-    const ConfigGate = RunResource.Tag<{ readonly _tag: "ConfigGate" }>()("@test/ConfigGate", {
+    const ConfigGate = RunHyperlink.Tag<{ readonly _tag: "ConfigGate" }>()("@test/ConfigGate", {
       payload: Schema.Number,
       success: Schema.Number,
       description: "config-object tag",
@@ -191,7 +191,7 @@ describe("RunResource.Tag + layer", () => {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
       const live = Layer.mergeAll(
-        RunResource.layerMemory(TestGate, {
+        RunHyperlink.layerMemory(TestGate, {
           effect: (n: number) =>
             Effect.gen(function* () {
               const nActive = yield* Ref.updateAndGet(active, (x) => x + 1);
@@ -203,7 +203,7 @@ describe("RunResource.Tag + layer", () => {
             }),
           concurrency: 1,
         }),
-        RunResource.configure(TestGate, { concurrency: 3 }),
+        RunHyperlink.configure(TestGate, { concurrency: 3 }),
       );
 
       yield* Effect.gen(function* () {
@@ -219,12 +219,12 @@ describe("RunResource.Tag + layer", () => {
   );
 });
 
-describe("RunResource.make — default store bridge", () => {
+describe("RunHyperlink.make — default store bridge", () => {
   const scopeKey = "@test/default-store-gate";
 
   it.effect("auto-writes facts to layerDefaultMemory without AppStore registration", () =>
     Effect.gen(function* () {
-      const gate = yield* RunResource.make({
+      const gate = yield* RunHyperlink.make({
         name: scopeKey,
         scopeKey,
         effect: (n: number) => Effect.succeed(n),
@@ -233,7 +233,7 @@ describe("RunResource.make — default store bridge", () => {
       yield* gate.run(1);
 
       const bridge = yield* Storage;
-      const store = yield* bridge.at(scopeKey, builtInRunResourceStoreContract({ key: scopeKey }));
+      const store = yield* bridge.at(scopeKey, builtInRunHyperlinkStoreContract({ key: scopeKey }));
       const facts = yield* store.facts();
       expect(facts.map((row) => row._tag).sort()).toEqual([
         "Completed",
@@ -244,7 +244,7 @@ describe("RunResource.make — default store bridge", () => {
 
   it.effect("persists failed runs and state transitions on the default bridge", () =>
     Effect.gen(function* () {
-      const gate = yield* RunResource.make({
+      const gate = yield* RunHyperlink.make({
         name: scopeKey,
         scopeKey: `${scopeKey}/failed`,
         effect: (n: number) =>
@@ -257,7 +257,7 @@ describe("RunResource.make — default store bridge", () => {
       const failedScope = `${scopeKey}/failed`;
       const store = yield* bridge.at(
         failedScope,
-        builtInRunResourceStoreContract({ key: failedScope }),
+        builtInRunHyperlinkStoreContract({ key: failedScope }),
       );
       const facts = yield* store.facts();
       const history = yield* store.stateHistory();
@@ -272,10 +272,10 @@ describe("RunResource.make — default store bridge", () => {
   );
 });
 
-describe("RunResource.layer — baked default store bridge", () => {
-  const BakedGate = RunResource.Tag<{ readonly _tag: "BakedGate" }>()("@test/BakedGate", { payload: Schema.Number, success: Schema.Number });
+describe("RunHyperlink.layer — baked default store bridge", () => {
+  const BakedGate = RunHyperlink.Tag<{ readonly _tag: "BakedGate" }>()("@test/BakedGate", { payload: Schema.Number, success: Schema.Number });
 
-  const bakedLayer = RunResource.layerMemory(BakedGate, {
+  const bakedLayer = RunHyperlink.layerMemory(BakedGate, {
     effect: (n: number) => Effect.succeed(n),
     concurrency: 1,
   });
@@ -288,7 +288,7 @@ describe("RunResource.layer — baked default store bridge", () => {
       const bridge = yield* Storage;
       const store = yield* bridge.at(
         BakedGate.key,
-        builtInRunResourceStoreContract(BakedGate),
+        builtInRunHyperlinkStoreContract(BakedGate),
       );
       const facts = yield* store.facts();
       expect(facts.map((row) => row._tag).sort()).toEqual([
@@ -302,16 +302,16 @@ describe("RunResource.layer — baked default store bridge", () => {
   );
 });
 
-describe("RunResource.layer — RunResource.store records", () => {
-  const StoreGate = RunResource.Tag<{ readonly _tag: "StoreGate" }>()("@test/StoreGate", { payload: Schema.Number, success: Schema.Number });
+describe("RunHyperlink.layer — RunHyperlink.store records", () => {
+  const StoreGate = RunHyperlink.Tag<{ readonly _tag: "StoreGate" }>()("@test/StoreGate", { payload: Schema.Number, success: Schema.Number });
 
-  const storeGateRegistration = RunResource.store(StoreGate);
+  const storeGateRegistration = RunHyperlink.store(StoreGate);
 
   class TestRunStore extends Store.Service<TestRunStore>("@test/RunStore")(
     storeGateRegistration,
   ) {}
 
-  const live = RunResource.layer(StoreGate, {
+  const live = RunHyperlink.layer(StoreGate, {
     effect: (n: number) => Effect.succeed(n * 2),
     concurrency: 1,
   }).pipe(Layer.provideMerge(TestRunStore.layerMemory));
@@ -334,20 +334,20 @@ describe("RunResource.layer — RunResource.store records", () => {
   );
 });
 
-describe("RunResource.store — persistence fidelity", () => {
-  const FidelityGate = RunResource.Tag<{ readonly _tag: "FidelityGate" }>()("@test/FidelityGate", {
+describe("RunHyperlink.store — persistence fidelity", () => {
+  const FidelityGate = RunHyperlink.Tag<{ readonly _tag: "FidelityGate" }>()("@test/FidelityGate", {
     payload: Schema.Number,
     success: Schema.Number,
     error: Schema.String,
   });
 
-  const fidelityRegistration = RunResource.store(FidelityGate);
+  const fidelityRegistration = RunHyperlink.store(FidelityGate);
 
   class FidelityStore extends Store.Service<FidelityStore>("@test/FidelityStore")(
     fidelityRegistration,
   ) {}
 
-  const live = RunResource.layer(FidelityGate, {
+  const live = RunHyperlink.layer(FidelityGate, {
     effect: (n: number) =>
       n >= 0 ? Effect.succeed(n * 3) : Effect.fail(`bad:${String(n)}`),
     concurrency: 1,
@@ -370,8 +370,8 @@ describe("RunResource.store — persistence fidelity", () => {
   );
 });
 
-describe("RunResource.makeRunner", () => {
-  const Runner = RunResource.makeRunner({
+describe("RunHyperlink.makeRunner", () => {
+  const Runner = RunHyperlink.makeRunner({
     name: "@test/Runner",
     concurrency: 2,
   });
@@ -392,20 +392,20 @@ describe("RunResource.makeRunner", () => {
   );
 });
 
-describe("RunResource — unit gates and interrupts", () => {
-  class UnitGate extends RunResource.Service<UnitGate>()("@test/UnitGate", {
+describe("RunHyperlink — unit gates and interrupts", () => {
+  class UnitGate extends RunHyperlink.Service<UnitGate>()("@test/UnitGate", {
     payload: Schema.Void,
     success: Schema.Number,
     effect: () => Effect.succeed(42),
     concurrency: 1,
   }) {}
 
-  class BareEffectGate extends RunResource.Service<BareEffectGate>()("@test/BareEffectGate", {
+  class BareEffectGate extends RunHyperlink.Service<BareEffectGate>()("@test/BareEffectGate", {
     effect: Effect.void,
     concurrency: 1,
   }) {}
 
-  class BareThunkGate extends RunResource.Service<BareThunkGate>()("@test/BareThunkGate", {
+  class BareThunkGate extends RunHyperlink.Service<BareThunkGate>()("@test/BareThunkGate", {
     success: Schema.Number,
     effect: Effect.succeed(99),
     concurrency: 1,
@@ -440,13 +440,13 @@ describe("RunResource — unit gates and interrupts", () => {
   );
 
   const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {
-    const HoldGate = RunResource.Tag<{ readonly _tag: "HoldGate" }>()(key, {
+    const HoldGate = RunHyperlink.Tag<{ readonly _tag: "HoldGate" }>()(key, {
       payload: Schema.Void,
       success: Schema.Void,
     });
     return {
       tag: HoldGate,
-      layer: RunResource.layerMemory(HoldGate, {
+      layer: RunHyperlink.layerMemory(HoldGate, {
         effect: () => Deferred.await(hold),
         concurrency: 1,
       }),
@@ -476,10 +476,10 @@ describe("RunResource — unit gates and interrupts", () => {
   );
 });
 
-describe("RunResource.layer — store failure isolation", () => {
+describe("RunHyperlink.layer — store failure isolation", () => {
   const scopeKey = "@test/store-failure-gate";
 
-  const FailingBridgeGate = RunResource.Tag<{ readonly _tag: "FailingBridgeGate" }>()(scopeKey, {
+  const FailingBridgeGate = RunHyperlink.Tag<{ readonly _tag: "FailingBridgeGate" }>()(scopeKey, {
     payload: Schema.Number,
     success: Schema.Number,
   });
@@ -501,7 +501,7 @@ describe("RunResource.layer — store failure isolation", () => {
     changes: () => Effect.die(new Error("unused")),
   } as unknown as StorageApi);
 
-  const live = RunResource.layerMemory(FailingBridgeGate, {
+  const live = RunHyperlink.layerMemory(FailingBridgeGate, {
     effect: (n: number) => Effect.succeed(n + 1),
     concurrency: 1,
   }).pipe(Layer.provideMerge(failingBridgeLayer));

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Per-resource dependencies at the serve — `Resource.serve` / `Resource.httpServer`.** When resources on

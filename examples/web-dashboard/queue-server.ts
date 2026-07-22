@@ -2,7 +2,7 @@
  * @module examples/web-dashboard/queue-server
  *
  * The node: runs the real queue engines and serves each over http (one path per
- * queue) so the browser can reach them with `Resource.client`. Drives live traffic
+ * queue) so the browser can reach them with `Hyperlink.client`. Drives live traffic
  * the sanctioned way — a **client** that enqueues over the wire (a loopback producer
  * here), not server-side `yield* tag` (a node doesn't expose its served service).
  * Run: `pnpm run example:queue-server`.
@@ -11,10 +11,10 @@ import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serve as queueEntry } from "../../src/QueueResource";
-import * as QueueResource from "../../src/QueueResource";
+import { serve as queueEntry } from "../../src/QueueHyperlink";
+import * as QueueHyperlink from "../../src/QueueHyperlink";
 import { HistoryStore } from "../../src/HistoryStore";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
 import {
   Billing,
@@ -38,17 +38,17 @@ const PORT = 7777;
 /** Node journal + per-queue log shapes — `layerMemory` bakes in Logs.layer + durable tails. */
 class DropletStore extends Store.Service<DropletStore>("@examples/web-dashboard/DropletStore")(
   Droplet.logs,
-  QueueResource.store(Mail),
-  QueueResource.store(Jobs),
-  QueueResource.store(Billing),
-  QueueResource.store(Notify),
-  QueueResource.store(Worker1),
-  QueueResource.store(Worker2),
-  QueueResource.store(Worker3),
-  QueueResource.store(RegionUS),
-  QueueResource.store(RegionEU),
-  QueueResource.store(Daily),
-  QueueResource.store(Weekly),
+  QueueHyperlink.store(Mail),
+  QueueHyperlink.store(Jobs),
+  QueueHyperlink.store(Billing),
+  QueueHyperlink.store(Notify),
+  QueueHyperlink.store(Worker1),
+  QueueHyperlink.store(Worker2),
+  QueueHyperlink.store(Worker3),
+  QueueHyperlink.store(RegionUS),
+  QueueHyperlink.store(RegionEU),
+  QueueHyperlink.store(Daily),
+  QueueHyperlink.store(Weekly),
 ) {}
 
 // ── request-rate monitor ─────────────────────────────────────────────────────
@@ -110,26 +110,26 @@ const serveLayer = Node.wsServer([
 
 // loopback client transport: ONE Droplet-node transport the producers share (the single /rpc
 // endpoint, procedures group-prefixed). It MUST match the server's protocol — the server is a
-// `wsServer` above, so the producer dials WebSocket via `Resource.protocolWebsocket`. (Dialing http
+// `wsServer` above, so the producer dials WebSocket via `Hyperlink.protocolWebsocket`. (Dialing http
 // against a ws server fails per-call — `q.add` → "empty HTTP response from RPC server" — and the
 // producer's `Effect.ignore` swallows it, so nothing enqueues and the dashboard shows empty queues.
 // That mismatch was this example's original "no live data" bug.)
 const loopback = Node.connect(
   Droplet,
-  Resource.protocolWebsocket(`ws://localhost:${PORT}/rpc`),
+  Hyperlink.protocolWebsocket(`ws://localhost:${PORT}/rpc`),
 );
 const clientLayer = Layer.mergeAll(
-  Resource.client(Mail).pipe(Layer.provide(loopback)),
-  Resource.client(Jobs).pipe(Layer.provide(loopback)),
-  Resource.client(Billing).pipe(Layer.provide(loopback)),
-  Resource.client(Notify).pipe(Layer.provide(loopback)),
-  Resource.client(Worker1).pipe(Layer.provide(loopback)),
-  Resource.client(Worker2).pipe(Layer.provide(loopback)),
-  Resource.client(Worker3).pipe(Layer.provide(loopback)),
-  Resource.client(RegionUS).pipe(Layer.provide(loopback)),
-  Resource.client(RegionEU).pipe(Layer.provide(loopback)),
-  Resource.client(Daily).pipe(Layer.provide(loopback)),
-  Resource.client(Weekly).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Mail).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Jobs).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Billing).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Notify).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Worker1).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Worker2).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Worker3).pipe(Layer.provide(loopback)),
+  Hyperlink.client(RegionUS).pipe(Layer.provide(loopback)),
+  Hyperlink.client(RegionEU).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Daily).pipe(Layer.provide(loopback)),
+  Hyperlink.client(Weekly).pipe(Layer.provide(loopback)),
 );
 
 let rngState = 0x9e3779b9;

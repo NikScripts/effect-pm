@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Promote `Store.Storage` and `Store.layerDefaultMemory` to the public API.**

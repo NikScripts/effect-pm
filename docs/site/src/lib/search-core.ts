@@ -4,8 +4,8 @@
 //
 // Ranking model (each lever exists for a measured reason — see test/search-rank.test.ts):
 //   - field boosts: identifier fields beat prose (`Subscribable` should find the API page).
-//   - identifier tokenization: camelCase + dot-paths split, so `queue res` finds QueueResource.
-//   - doc boosts (the per-document lever MiniSearch gives us): package tier (effect-pm first),
+//   - identifier tokenization: camelCase + dot-paths split, so `queue res` finds QueueHyperlink.
+//   - doc boosts (the per-document lever MiniSearch gives us): package tier (hyperlink-ts first),
 //     kind weight (modules/namespaces/classes over helper consts), and a DAMPENED popularity
 //     factor from the reference graph — types only, where declaration references mean something.
 //   - exact dominance: an exact name/title match multiplies AFTER everything else, so popularity
@@ -40,7 +40,7 @@ export interface SearchSections {
 }
 
 // Identifier-aware tokenizer: split on separators AND camelCase humps, keeping the full word too
-// (`QueueResource` -> queueresource, queue, resource) so both exact and part queries match.
+// (`QueueHyperlink` -> queueresource, queue, resource) so both exact and part queries match.
 export const tokenize = (s: string): Array<string> =>
   s
     .split(/[\s.,;:!?()[\]{}<>"'`|/\\-]+/)
@@ -49,7 +49,7 @@ export const tokenize = (s: string): Array<string> =>
     .filter((w) => w.length > 1);
 
 const packageTier: Record<string, number> = {
-  "effect-pm": 2.0, // our own API outranks dependencies decisively
+  "hyperlink-ts": 2.0, // our own API outranks dependencies decisively
   effect: 1.0,
 };
 

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Rename **`Node.clientsFor` → `Node.clients`** (no shim). Overloads:

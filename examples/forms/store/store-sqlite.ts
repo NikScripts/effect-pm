@@ -19,7 +19,7 @@ class AppStore extends Store.Service<AppStore>("@examples/SqliteStore")(
   Store.register("thermo", contract).pipe(Store.retention(100)),
 ) {}
 
-const filename = ".effect-pm/examples-store.sqlite";
+const filename = ".hyperlink-ts/examples-store.sqlite";
 
 const program = Effect.gen(function* () {
   const handle = yield* AppStore;

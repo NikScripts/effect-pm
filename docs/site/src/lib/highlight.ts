@@ -58,7 +58,7 @@ const ALIAS: Record<string, string> = {
 
 // Twoslash type-checks each opted-in block against OUR types. Omitting `fsMap` makes it read the
 // real filesystem (rooted at the repo), so `effect` resolves from node_modules; `paths` maps the
-// package name to its source so `@nikscripts/effect-pm/*` → `src/*`.
+// package name to its source so `hyperlink-ts/*` → `src/*`.
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const compilerOptions: ts.CompilerOptions = {
   module: ts.ModuleKind.ESNext,
@@ -71,8 +71,8 @@ const compilerOptions: ts.CompilerOptions = {
   noEmit: true, // twoslasher renders both our package (extension-less) and effect deps (gen-hovers);
   baseUrl: repoRoot, // noEmit is required alongside allowImportingTsExtensions (twoslash never emits)
   paths: {
-    "@nikscripts/effect-pm": ["src/index.ts"],
-    "@nikscripts/effect-pm/*": ["src/*"],
+    "hyperlink-ts": ["src/index.ts"],
+    "hyperlink-ts/*": ["src/*"],
   },
 };
 
@@ -114,7 +114,7 @@ const hoverExpandLinks = new WeakMap<object, ReadonlyArray<Annotate.Link>>();
 // (`const emails: `, `SqliteClient.backup: `) — a method-call head (`take(self: …): `) trips the
 // lazy head regex, and a pathological type would blow up the popup.
 // A substitutable declaration head: keyword + (possibly generic-qualified) name + `: `.
-// `QueueResource<{ to: string; }>.add: ` qualifies (brackets balance, junk only inside them);
+// `QueueHyperlink<{ to: string; }>.add: ` qualifies (brackets balance, junk only inside them);
 // `H.add(item: Email): ` does NOT — a depth-zero `(` marks a callable head, which the
 // callableForm path owns (substituting a head that already spells the params would double them).
 const isSimpleHead = (head: string): boolean => {
@@ -191,9 +191,9 @@ const declName =
 // real JSDoc comments.
 const EXPAND_OPEN = "@@PMEXPAND@@";
 
-// The declaration head of a hover — `const emails: QueueResource<…>` → `const emails: ` (everything
+// The declaration head of a hover — `const emails: QueueHyperlink<…>` → `const emails: ` (everything
 // up to the type), so the expanded box reads as the same declaration with the body spelled out.
-// DEPTH-AWARE: a generic-qualified head (`QueueResource<{ to: string; }>.add: …`) has colons inside
+// DEPTH-AWARE: a generic-qualified head (`QueueHyperlink<{ to: string; }>.add: …`) has colons inside
 // the type arguments; the head's colon is the first one at bracket depth zero.
 const declHead = (text: string): string => {
   let depth = 0;
@@ -827,7 +827,7 @@ export const renderJsdocToReact = (
  */
 export const highlightSourceWithHovers = (
   fileText: string, // the whole source file (read by the caller through effect/FileSystem)
-  relFile: string, // repo-relative, e.g. "src/QueueResource.ts" — for the @filename directive
+  relFile: string, // repo-relative, e.g. "src/QueueHyperlink.ts" — for the @filename directive
   startLine: number, // 1-based first line of the declaration
   endLine: number, // 1-based last line (inclusive)
   ownerDocLinks?: Record<string, string> // the page symbol's resolved {@link} map (for its hovers)

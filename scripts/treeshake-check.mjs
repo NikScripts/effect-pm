@@ -32,15 +32,15 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** @type {Case[]} */
 const cases = [
   {
-    name: "QueueResource",
-    entry: "src/QueueResource.ts",
-    engine: ["src/internal/queueResource.ts"],
+    name: "QueueHyperlink",
+    entry: "src/QueueHyperlink.ts",
+    engine: ["src/internal/queueHyperlink.ts"],
     member: "Tag",
   },
   {
-    name: "CustomQueueResource",
-    entry: "src/CustomQueueResource.ts",
-    engine: ["src/internal/customQueueResource.ts", "src/internal/queueResource.ts"],
+    name: "CustomQueueHyperlink",
+    entry: "src/CustomQueueHyperlink.ts",
+    engine: ["src/internal/customQueueHyperlink.ts", "src/internal/queueHyperlink.ts"],
     member: "Tag",
   },
   {
@@ -57,12 +57,12 @@ const cases = [
     member: "Tag",
   },
   {
-    // `RunResource` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
-    // engine. A `RunResource.Tag`-only import must not retain the engine (`makeRunResourceHandleEffect`
+    // `RunHyperlink` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
+    // engine. A `RunHyperlink.Tag`-only import must not retain the engine (`makeRunHyperlinkHandleEffect`
     // / `make` / `layer` / `serve`).
-    name: "RunResource",
-    entry: "src/RunResource.ts",
-    engine: ["src/internal/runResource.ts"],
+    name: "RunHyperlink",
+    entry: "src/RunHyperlink.ts",
+    engine: ["src/internal/runHyperlink.ts"],
     member: "Tag",
   },
   {

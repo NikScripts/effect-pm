@@ -1,7 +1,7 @@
 // Generate llms.txt + llms-full.txt (llmstxt.org convention, effect-ecosystem practice):
 // an AI-consumable INDEX of the site and a FULL markdown dump of the docs — chapters verbatim
 // (the .md sources are the SSOT), plus the API surface as module summaries with one line per
-// effect-pm symbol (dep packages are documented upstream; their modules are listed, not dumped).
+// hyperlink-ts symbol (dep packages are documented upstream; their modules are listed, not dumped).
 // Absolute links when DOCS_SITE_ORIGIN is set (same gate as the sitemap), relative otherwise.
 //
 //   tsx scripts/gen-llms.ts
@@ -96,13 +96,13 @@ const program = Effect.gen(function* () {
     Effect.map((d) => d.packages),
     Effect.orElseSucceed(() => [])
   );
-  const own = index.find((p) => p.slug === "effect-pm");
+  const own = index.find((p) => p.slug === "hyperlink-ts");
 
   // ---- llms.txt: the index ----
   const indexLines: Array<string> = [
-    "# effect-pm",
+    "# hyperlink-ts",
     "",
-    "> Build cross-runtime Services on Effect: declare a service shape once as a Resource Tag,",
+    "> Build cross-runtime Services on Effect: declare a service shape once as a Hyperlink Tag,",
     "> run it on one runtime, and call it from another over RPC with the same typed Handle.",
     "",
     "## Docs",
@@ -113,7 +113,7 @@ const program = Effect.gen(function* () {
     "## API Reference",
     ...(own?.modules ?? []).map(
       (m) =>
-        `- [${m.entry}](${link(`/api/effect-pm/${m.slug}`)}) (${m.count} exports)${
+        `- [${m.entry}](${link(`/api/hyperlink-ts/${m.slug}`)}) (${m.count} exports)${
           m.summary !== undefined ? `: ${stripMarkers(m.summary)}` : ""
         }`
     ),
@@ -127,7 +127,7 @@ const program = Effect.gen(function* () {
 
   // ---- llms-full.txt: chapters verbatim + API one-liners ----
   const fullParts: Array<string> = [
-    "# effect-pm — full documentation",
+    "# hyperlink-ts — full documentation",
     "",
     "Generated from the docs sources and the compiler-extracted API model.",
     "",
@@ -136,11 +136,11 @@ const program = Effect.gen(function* () {
     fullParts.push("", "---", "", `<!-- ${link(`/docs/${c.slug}`)} -->`, "", c.raw.trim());
   }
   if (own !== undefined) {
-    fullParts.push("", "---", "", "# API Reference — @nikscripts/effect-pm", "");
+    fullParts.push("", "---", "", "# API Reference — hyperlink-ts", "");
     for (const m of own.modules) {
-      fullParts.push(`## ${m.entry} (${link(`/api/effect-pm/${m.slug}`)})`);
+      fullParts.push(`## ${m.entry} (${link(`/api/hyperlink-ts/${m.slug}`)})`);
       if (m.summary !== undefined) fullParts.push("", stripMarkers(m.summary));
-      const summaryFile = nodePath.join(dataDir, "effect-pm", `${m.slug}.json`);
+      const summaryFile = nodePath.join(dataDir, "hyperlink-ts", `${m.slug}.json`);
       const rows = yield* fs.readFileString(summaryFile).pipe(
         Effect.flatMap(
           Schema.decodeUnknownEffect(

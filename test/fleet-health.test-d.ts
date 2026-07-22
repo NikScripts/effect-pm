@@ -4,18 +4,18 @@
 import { Effect, Exit, Layer } from "effect";
 import * as FleetHealth from "../src/FleetHealth";
 import * as MultiNode from "../src/MultiNode";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.nodes([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 
-type Spec = Resource.SpecOf<typeof MeshHealth>;
-type Glass = Resource.Shape<MeshHealth>;
+type Spec = Hyperlink.SpecOf<typeof MeshHealth>;
+type Glass = Hyperlink.Shape<MeshHealth>;
 
 // ── Spec: leaf vs fleet ──────────────────────────────────────────────────────
 
@@ -100,8 +100,8 @@ void successes;
 class BoundGlass extends FleetHealth.Tag<BoundGlass>()({ node: DropletEast }) {}
 
 // Spec stamped on both unbound (MeshHealth) and node-bound tags is the FleetHealth contract.
-type AloneSpec = Resource.SpecOf<typeof MeshHealth>;
-type BoundSpec = Resource.SpecOf<typeof BoundGlass>;
+type AloneSpec = Hyperlink.SpecOf<typeof MeshHealth>;
+type BoundSpec = Hyperlink.SpecOf<typeof BoundGlass>;
 type AloneSpecKeys = keyof AloneSpec extends "local" | "byNode" | "status"
   ? "local" | "byNode" | "status" extends keyof AloneSpec
     ? true
@@ -116,29 +116,29 @@ type BoundSpecKeys = keyof BoundSpec extends "local" | "byNode" | "status"
 true satisfies BoundSpecKeys;
 
 // `{ node }` overload stamps the droplet (unbound tags stay unbound).
-const _boundNode: Node.NodeKey<unknown> = Resource.nodeOf(BoundGlass)!;
+const _boundNode: Node.NodeKey<unknown> = Hyperlink.nodeOf(BoundGlass)!;
 void _boundNode;
-type BoundHasNode = NonNullable<ReturnType<typeof Resource.nodeOf>> extends Node.NodeKey<unknown>
+type BoundHasNode = NonNullable<ReturnType<typeof Hyperlink.nodeOf>> extends Node.NodeKey<unknown>
   ? true
   : false;
 true satisfies BoundHasNode;
 
 const _alone: Layer.Layer<
-  Resource.PeersId<MeshHealth> | Resource.SelfNodeId<MeshHealth>
+  Hyperlink.PeersId<MeshHealth> | Hyperlink.SelfNodeId<MeshHealth>
 > = FleetHealth.alone(MeshHealth);
 void _alone;
 
 const _layer: Layer.Layer<
-  MeshHealth | Resource.Local<MeshHealth>,
+  MeshHealth | Hyperlink.Local<MeshHealth>,
   never,
-  Resource.PeersId<MeshHealth> | Resource.SelfNodeId<MeshHealth>
+  Hyperlink.PeersId<MeshHealth> | Hyperlink.SelfNodeId<MeshHealth>
 > = FleetHealth.layer(MeshHealth);
 void _layer;
 
 const _boundLayer: Layer.Layer<
-  BoundGlass | Resource.Local<BoundGlass>,
+  BoundGlass | Hyperlink.Local<BoundGlass>,
   never,
-  Resource.PeersId<BoundGlass> | Resource.SelfNodeId<BoundGlass>
+  Hyperlink.PeersId<BoundGlass> | Hyperlink.SelfNodeId<BoundGlass>
 > = FleetHealth.layer(BoundGlass);
 void _boundLayer;
 
@@ -150,6 +150,6 @@ void _serve;
 const _serveRemote: Layer.Layer<
   never,
   never,
-  Resource.PeersId<MeshHealth> | Resource.SelfNodeId<MeshHealth>
+  Hyperlink.PeersId<MeshHealth> | Hyperlink.SelfNodeId<MeshHealth>
 > = FleetHealth.serveRemote(MeshHealth);
 void _serveRemote;

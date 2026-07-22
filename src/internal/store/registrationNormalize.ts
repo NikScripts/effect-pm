@@ -18,8 +18,8 @@ import {
 import { isStoreSpec, type StoreSpec } from "./spec";
 import { StoreDuplicateScopeKey } from "./errors";
 
-export const storeStandaloneSym = Symbol.for("@nikscripts/effect-pm/Store/standalone");
-export const storeSingleSym = Symbol.for("@nikscripts/effect-pm/Store/single");
+export const storeStandaloneSym = Symbol.for("hyperlink-ts/Store/standalone");
+export const storeSingleSym = Symbol.for("hyperlink-ts/Store/single");
 
 /** @internal */
 export interface NormalizedStoreRegistration<

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Store shape reads:** remove the per-shape read-payload argument from `Store.shape`. Every shape now shares one baked-in read payload (`limit`, `before`, `after`, and a Drizzle relational-query-style nested `where` with full operators / `AND` / `OR` / `NOT`).

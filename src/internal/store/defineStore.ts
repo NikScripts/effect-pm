@@ -29,9 +29,9 @@ import {
 import type { StoreContractValue } from "./contractDef";
 import type { StoreLogLevel } from "./types";
 
-export const storeRegsSym = Symbol.for("@nikscripts/effect-pm/Store/registrations");
-export const storeDefaultLogLevelSym = Symbol.for("@nikscripts/effect-pm/Store/defaultLogLevel");
-export const storeNamedSym = Symbol.for("@nikscripts/effect-pm/Store/named");
+export const storeRegsSym = Symbol.for("hyperlink-ts/Store/registrations");
+export const storeDefaultLogLevelSym = Symbol.for("hyperlink-ts/Store/defaultLogLevel");
+export const storeNamedSym = Symbol.for("hyperlink-ts/Store/named");
 
 /** @internal */
 export type RegistrationHandleOf<R> =
@@ -344,16 +344,16 @@ export const defineStandaloneStore = <
   contract: C,
 ): StandaloneStoreClass<
   { readonly _tag: ScopeKeyOf<Scope> },
-  `@nikscripts/effect-pm/Store/scope/${ScopeKeyOf<Scope>}`,
+  `hyperlink-ts/Store/scope/${ScopeKeyOf<Scope>}`,
   ScopeKeyOf<Scope>,
   C,
   Scope extends StoreScopeTag ? Scope : undefined
 > => {
   type ScopeKey = ScopeKeyOf<Scope>;
   type Self = { readonly _tag: ScopeKey };
-  type Id = `@nikscripts/effect-pm/Store/scope/${ScopeKey}`;
+  type Id = `hyperlink-ts/Store/scope/${ScopeKey}`;
   const scopeKey = (typeof scope === "string" ? scope : scope.key) as ScopeKey;
-  const id = `@nikscripts/effect-pm/Store/scope/${scopeKey}` as Id;
+  const id = `hyperlink-ts/Store/scope/${scopeKey}` as Id;
   const plainSpec = contract.spec;
 
   const base = Context.Service<Self, StoreHandleFromContract<C>>()(id);

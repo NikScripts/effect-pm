@@ -1,5 +1,5 @@
 /**
- * Wire schemas stamped on {@link RunResource.Tag} / {@link RunResource.Service} factories.
+ * Wire schemas stamped on {@link RunHyperlink.Tag} / {@link RunHyperlink.Service} factories.
  *
  * @module internal/runTagSchemas
  * @internal
@@ -8,11 +8,11 @@
 import { Schema } from "effect";
 
 export const successSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/RunResource/success",
+  "hyperlink-ts/RunHyperlink/success",
 );
 
 export const errorSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/RunResource/error",
+  "hyperlink-ts/RunHyperlink/error",
 );
 
 /**

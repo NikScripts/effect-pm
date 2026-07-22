@@ -1,7 +1,7 @@
 import { Effect, Layer } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -14,7 +14,7 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 class AddrNode extends Node.Tag<AddrNode>()("cd/addr", { url: "wss://x/rpc" }) {}
 class BareNode extends Node.Tag<BareNode>()("cd/bare") {}
 const prog = Effect.void as Effect.Effect<void, never, AddrNode>;
-const proto = Resource.protocolHttp("http://x/rpc");
+const proto = Hyperlink.protocolHttp("http://x/rpc");
 
 const dcDerived = Effect.provide(prog, Node.connect(AddrNode)); // data-first, derived
 const dcExplicit = Effect.provide(prog, Node.connect(AddrNode, proto)); // data-first, explicit

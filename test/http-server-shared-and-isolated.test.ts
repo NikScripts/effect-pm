@@ -3,31 +3,31 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
 /**
  * Escape hatch for "one outlier with a private dep on an otherwise shared host":
- * `Resource.provide(shared, [serve…])` for the homogeneous majority next to an
+ * `Hyperlink.provide(shared, [serve…])` for the homogeneous majority next to an
  * isolated `serve.pipe(Layer.provide(private))` — one `httpServer`, one `/rpc`.
  * (Replacement for the retired `serveAllHttp` rewrite cliff.)
  */
 class SharedDep extends Context.Service<SharedDep, number>()(
-  "@nikscripts/effect-pm/test/http-server-shared-and-isolated.test/SharedDep",
+  "hyperlink-ts/test/http-server-shared-and-isolated.test/SharedDep",
 ) {}
 
 class PrivateDep extends Context.Service<PrivateDep, number>()(
-  "@nikscripts/effect-pm/test/http-server-shared-and-isolated.test/PrivateDep",
+  "hyperlink-ts/test/http-server-shared-and-isolated.test/PrivateDep",
 ) {}
 
-class MajorityA extends Resource.Tag<MajorityA>()("sharedIso/A", {
-  read: Resource.effect(Schema.Number),
+class MajorityA extends Hyperlink.Tag<MajorityA>()("sharedIso/A", {
+  read: Hyperlink.effect(Schema.Number),
 }) {}
-class MajorityB extends Resource.Tag<MajorityB>()("sharedIso/B", {
-  read: Resource.effect(Schema.Number),
+class MajorityB extends Hyperlink.Tag<MajorityB>()("sharedIso/B", {
+  read: Hyperlink.effect(Schema.Number),
 }) {}
-class Outlier extends Resource.Tag<Outlier>()("sharedIso/Outlier", {
-  read: Resource.effect(Schema.Number),
+class Outlier extends Hyperlink.Tag<Outlier>()("sharedIso/Outlier", {
+  read: Hyperlink.effect(Schema.Number),
 }) {}
 
 const sharedImpl = { read: Effect.map(SharedDep, (n) => n) };
@@ -35,11 +35,11 @@ const outlierImpl = { read: Effect.map(PrivateDep, (n) => n) };
 
 const Node = PmNode.httpServer(
   [
-    Resource.provide(Layer.succeed(SharedDep, 10), [
-      Resource.serveRemote(MajorityA, sharedImpl),
-      Resource.serveRemote(MajorityB, sharedImpl),
+    Hyperlink.provide(Layer.succeed(SharedDep, 10), [
+      Hyperlink.serveRemote(MajorityA, sharedImpl),
+      Hyperlink.serveRemote(MajorityB, sharedImpl),
     ]),
-    Resource.serveRemote(Outlier, outlierImpl).pipe(
+    Hyperlink.serveRemote(Outlier, outlierImpl).pipe(
       Layer.provide(Layer.succeed(PrivateDep, 99)),
     ),
   ],
@@ -69,9 +69,9 @@ describe("httpServer — shared majority + isolated outlier", () => {
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            Resource.client(MajorityA).pipe(Layer.provide(protocol(`${base}/rpc`))),
-            Resource.client(MajorityB).pipe(Layer.provide(protocol(`${base}/rpc`))),
-            Resource.client(Outlier).pipe(Layer.provide(protocol(`${base}/rpc`))),
+            Hyperlink.client(MajorityA).pipe(Layer.provide(protocol(`${base}/rpc`))),
+            Hyperlink.client(MajorityB).pipe(Layer.provide(protocol(`${base}/rpc`))),
+            Hyperlink.client(Outlier).pipe(Layer.provide(protocol(`${base}/rpc`))),
           ),
         ),
         Effect.scoped,

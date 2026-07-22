@@ -18,7 +18,7 @@ import {
   RpcSerialization,
   RpcServer,
 } from "effect/unstable/rpc"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
   ProtocolKind,
@@ -43,7 +43,7 @@ export interface HttpServerOptions {
   readonly health?: { readonly path?: HttpRouter.PathInput };
   /**
    * Node log key for auto-mounted {@link NodeStatus} durable `logs.query`
-   * (`Resource.store(Node)` / `Node.logs`). When omitted, inferred from served tags'
+   * (`Hyperlink.store(Node)` / `Node.logs`). When omitted, inferred from served tags'
    * bound {@link Node} when all share one key.
    */
   readonly node?: string | { readonly key: string };
@@ -61,7 +61,7 @@ export interface HttpServerOptions {
   readonly onConflict?: OnConflict;
 }
 
-/** A server RPC-protocol builder — {@link Resource.serverProtocolHttp} or {@link Resource.serverProtocolWebsocket}. */
+/** A server RPC-protocol builder — {@link Hyperlink.serverProtocolHttp} or {@link Hyperlink.serverProtocolWebsocket}. */
 type ServerProtocol = (
   path: HttpRouter.PathInput,
 ) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
@@ -70,15 +70,15 @@ const httpServerBase = (
   serverProtocol: ServerProtocol,
   serverKind: ProtocolKind,
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer> =>
+): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const registry = yield* Resource.ServedResources;
+      const registry = yield* Hyperlink.ServedHyperlinks;
       const entries = yield* registry.all;
       if (entries.length === 0) {
         return yield* Effect.die(
           new Error(
-            "Node.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+            "Node.httpServer: no resources registered — provideMerge at least one Hyperlink.serve(...) layer",
           ),
         );
       }
@@ -112,7 +112,7 @@ const httpServerBase = (
       // registered resources, so a client can inspect any node without the author wiring it. Built here
       // (not a registered `serve` layer) so it reports the user resources without counting itself.
       const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./nodeStatusResource"),
+        () => import("./nodeStatusHyperlink"),
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
@@ -124,13 +124,13 @@ const httpServerBase = (
       const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
         ? nodeEntry.impl
         : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
-      const nodeFlat = Resource.flattenImpl(nodeImpl, nodeTag[Resource.specSym]);
+      const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
-        nodeHandlers[Resource.wireTag(nodeTag.groupId, key)] = (payload) =>
-          Resource.invokeWireMethod(member, nodeTag[Resource.specSym][key] as Resource.AnyMethod, payload);
+        nodeHandlers[Hyperlink.wireTag(nodeTag.groupId, key)] = (payload) =>
+          Hyperlink.invokeWireMethod(member, nodeTag[Hyperlink.specSym][key] as Hyperlink.AnyMethod, payload);
       }
-      const merged = [...entries.map((entry) => entry.group), nodeTag[Resource.groupSym]].reduce(
+      const merged = [...entries.map((entry) => entry.group), nodeTag[Hyperlink.groupSym]].reduce(
         (acc, group) => acc.merge(group),
       );
       // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
@@ -140,9 +140,9 @@ const httpServerBase = (
       const rpcRaw: any = RpcServer.layer(merged);
       const rpcAppLayer = (rpcRaw as Layer.Layer<never, never, never>).pipe(
         Layer.provide(
-          nodeTag[Resource.groupSym].toLayer(
+          nodeTag[Hyperlink.groupSym].toLayer(
             nodeHandlers as unknown as Parameters<
-              (typeof nodeTag)[typeof Resource.groupSym]["toLayer"]
+              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
             >[0],
           ),
         ),
@@ -168,7 +168,7 @@ const httpServerBase = (
         }),
       ) as any as Layer.Layer<never, never, never>;
       const served = HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
-        Layer.provideMerge(options?.serialization ?? Resource.defaultSerialization),
+        Layer.provideMerge(options?.serialization ?? Hyperlink.defaultSerialization),
       ) as any as Layer.Layer<never, never, HttpServer.HttpServer>;
       const advertise = yield* directoryAdvertiseMerge(
         options?.advertiseNode,
@@ -179,30 +179,30 @@ const httpServerBase = (
       );
       return served.pipe(Layer.provideMerge(advertise));
     }),
-  ) as Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
+  ) as Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
 
 
 /**
  * The shared http server for resources composed with {@link serve} — the multi-resource,
  * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
- * {@link ServedResources} registry, merges every registered group onto **one** `RpcServer` at `path`
+ * {@link ServedHyperlinks} registry, merges every registered group onto **one** `RpcServer` at `path`
  * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each
  * `serve` layer carries **its own** `Layer.provide`d dependency, resources needing different
  * implementations of the same tag stay isolated — no shared union-provide.
  *
  * Pass the `serve` layers as the first argument (recommended) — it bundles the `provideMerge` +
- * {@link Resource.servedResourcesLayer}, so you list resources and provide only the platform (and any shared
+ * {@link Hyperlink.servedHyperlinksLayer}, so you list resources and provide only the platform (and any shared
  * dependency):
  *
  * ```ts
- * const Node = Resource.httpServer([
+ * const Node = Hyperlink.httpServer([
  *   // homogeneous majority — one shared dependency, stated once
- *   Resource.provide(ImportHandlers.plain, [
- *     Resource.serve(SeasonMatches, seasonMatchesImpl),
- *     Resource.serve(LiveScorePoller, pollerImpl),
+ *   Hyperlink.provide(ImportHandlers.plain, [
+ *     Hyperlink.serve(SeasonMatches, seasonMatchesImpl),
+ *     Hyperlink.serve(LiveScorePoller, pollerImpl),
  *   ]),
  *   // outlier — private dependency, isolated on its own serve layer
- *   Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(ImportHandlers.hooked)),
+ *   Hyperlink.serve(SeasonImport, importImpl).pipe(Layer.provide(ImportHandlers.hooked)),
  * ], { health: { path: "/health" } }).pipe(
  *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
  * );
@@ -212,7 +212,7 @@ const httpServerBase = (
  * shared + isolated deps, no second port.
  *
  * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
- * not pruned) + {@link Resource.servedResourcesLayer} yourself. Either way the handlers ride the context the
+ * not pruned) + {@link Hyperlink.servedHyperlinksLayer} yourself. Either way the handlers ride the context the
  * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
  * a silent runtime gap.
  *
@@ -229,7 +229,7 @@ export function httpServer<Serve extends Layer.Layer<never, any, any>>(
 >;
 export function httpServer(
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
+): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
 export function httpServer<Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
@@ -246,7 +246,7 @@ export function httpServer(
     | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, any, any> {
-  return serverImpl(Resource.serverProtocolHttp, "Http", servesOrOptions, maybeOptions);
+  return serverImpl(Hyperlink.serverProtocolHttp, "Http", servesOrOptions, maybeOptions);
 }
 
 // Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
@@ -271,7 +271,7 @@ function serverImpl(
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
       Layer.provideMerge(mergeServeList(serves)),
-      Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
+      Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
     ) as Layer.Layer<never, any, any>;
   }
   return httpServerBase(
@@ -287,11 +287,11 @@ function serverImpl(
  * client**, so a dashboard never trips the browser's ~6-connection-per-origin HTTP/1.1 cap that
  * starves streams over plain HTTP. Identical to {@link httpServer} in every other way — same serve
  * list, same options, same `/health` — it just speaks WebSocket instead of HTTP POST. Clients connect
- * with {@link socketClient} (or `Resource.layerProtocol(Resource.protocolWebsocket())`); a fleet whose
- * peers also serve over this should add `Resource.layerPeerProtocol(Resource.protocolWebsocket)`.
+ * with {@link Hyperlink.ws} (or `Hyperlink.layerProtocol(Hyperlink.protocolWebsocket())`); a fleet whose
+ * peers also serve over this should add `Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)`.
  *
  * ```ts
- * const Node = Resource.wsServer([Resource.serve(Jobs, jobsImpl)]).pipe(
+ * const Node = Hyperlink.wsServer([Hyperlink.serve(Jobs, jobsImpl)]).pipe(
  *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
  * );
  * ```
@@ -309,7 +309,7 @@ export function wsServer<Serve extends Layer.Layer<never, any, any>>(
 >;
 export function wsServer(
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Resource.ServedResources | HttpServer.HttpServer>;
+): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
 export function wsServer<Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
@@ -327,7 +327,7 @@ export function wsServer(
   maybeOptions?: HttpServerOptions,
 ): Layer.Layer<never, any, any> {
   return serverImpl(
-    Resource.serverProtocolWebsocket,
+    Hyperlink.serverProtocolWebsocket,
     "WebSocket",
     servesOrOptions,
     maybeOptions,

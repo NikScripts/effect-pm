@@ -2,11 +2,11 @@
  * @module examples/web-dashboard/fleet
  *
  * The fleet, defined **once, as tags** — shared by the server (which nodes them) and
- * the browser (which reaches them via `Resource.client`). The `Group.Tag` tree IS the
+ * the browser (which reaches them via `Hyperlink.client`). The `Group.Tag` tree IS the
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";
-import * as QueueResource from "../../src/QueueResource";
+import * as QueueHyperlink from "../../src/QueueHyperlink";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as Node from "../../src/Node";
@@ -22,17 +22,17 @@ export class Droplet extends Node.Tag<Droplet>()("hub/droplet") {}
 const Job = Schema.Struct({ id: Schema.String });
 
 // leaf queue tags
-export class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", { payload: Job, node: Droplet }) {}
-export class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job, node: Droplet }) {}
-export class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", { payload: Job, node: Droplet }) {}
-export class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", { payload: Job, node: Droplet }) {}
-export class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job, node: Droplet }) {}
-export class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job, node: Droplet }) {}
-export class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job, node: Droplet }) {}
-export class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job, node: Droplet }) {}
-export class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job, node: Droplet }) {}
-export class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
-export class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
+export class Mail extends QueueHyperlink.Tag<Mail>()("@acme/queues/Mail", { payload: Job, node: Droplet }) {}
+export class Jobs extends QueueHyperlink.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job, node: Droplet }) {}
+export class Billing extends QueueHyperlink.Tag<Billing>()("@acme/queues/Billing", { payload: Job, node: Droplet }) {}
+export class Notify extends QueueHyperlink.Tag<Notify>()("@acme/queues/Notify", { payload: Job, node: Droplet }) {}
+export class Worker1 extends QueueHyperlink.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job, node: Droplet }) {}
+export class Worker2 extends QueueHyperlink.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job, node: Droplet }) {}
+export class Worker3 extends QueueHyperlink.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job, node: Droplet }) {}
+export class RegionUS extends QueueHyperlink.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job, node: Droplet }) {}
+export class RegionEU extends QueueHyperlink.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job, node: Droplet }) {}
+export class Daily extends QueueHyperlink.Tag<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
+export class Weekly extends QueueHyperlink.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
 
 // a process bound to the Mini node — it runs there, not on the Droplet.
 export class KeyRotation extends Process.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {

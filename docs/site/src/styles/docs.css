@@ -1907,7 +1907,7 @@ pre:focus-within > .copy-btn {
   border-radius: 4px;
 }
 
-/* package page, effect-pm layout: flagship hero cards + compact module grid */
+/* package page, hyperlink-ts layout: flagship hero cards + compact module grid */
 .api-pkg-stats {
   margin: -0.4rem 0 1.4rem;
   color: var(--muted-fg);

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Breaking — silo per-domain storage facets onto `RuntimeStorage` directly.**

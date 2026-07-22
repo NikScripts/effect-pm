@@ -6,7 +6,7 @@ import { Storage } from "../src/Store";
 // is Storage-free while reads and non-Storage requirements survive subtractively.
 
 class Dep extends Context.Service<Dep, number>()(
-  "@nikscripts/effect-pm/test/store-provide-context.test-d/Dep",
+  "hyperlink-ts/test/store-provide-context.test-d/Dep",
 ) {}
 
 const rowSchema = Schema.Struct({ value: Schema.String });

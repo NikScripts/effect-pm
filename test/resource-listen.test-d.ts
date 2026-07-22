@@ -1,17 +1,17 @@
 import { Effect, Schema } from "effect";
 import type { Layer } from "effect";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // C2/C3 — listen requires the full ROut; partial omit is a type error.
 // Specs must differ structurally — identical shapes collapse Jobs | Emails in TS.
 
-class Jobs extends Resource.Tag<Jobs>()("listen-d/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("listen-d/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Resource.Tag<Emails>()("listen-d/Emails", {
-  emails: Resource.effect(Schema.String),
+class Emails extends Hyperlink.Tag<Emails>()("listen-d/Emails", {
+  emails: Hyperlink.effect(Schema.String),
 }) {}
 
 class Worker extends Node.Tag<Worker, Jobs | Emails>()("listen-d/Worker", {
@@ -22,13 +22,13 @@ const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
 const full: Layer.Layer<any, any, any> = Node.unix(Worker, [
-  Resource.serve(Jobs, jobsImpl),
-  Resource.serve(Emails, emailsImpl),
+  Hyperlink.serve(Jobs, jobsImpl),
+  Hyperlink.serve(Emails, emailsImpl),
 ]);
 
 // @ts-expect-error C3: Emails missing from listen catalog
 const partial: Layer.Layer<any, any, any> = Node.unix(Worker, [
-  Resource.serve(Jobs, jobsImpl),
+  Hyperlink.serve(Jobs, jobsImpl),
 ]);
 
 void full;
@@ -48,13 +48,13 @@ void clientsPartial;
 const clientsPartialArr = Node.clients(Worker, [Jobs]);
 void clientsPartialArr;
 
-class BoundJobs extends Resource.Tag<BoundJobs>()("listen-d/BoundJobs", {
-  jobs: Resource.effect(Schema.Number),
-}).pipe(Resource.andNode(Worker)) {}
+class BoundJobs extends Hyperlink.Tag<BoundJobs>()("listen-d/BoundJobs", {
+  jobs: Hyperlink.effect(Schema.Number),
+}).pipe(Hyperlink.andNode(Worker)) {}
 
-class BoundEmails extends Resource.Tag<BoundEmails>()("listen-d/BoundEmails", {
-  emails: Resource.effect(Schema.String),
-}).pipe(Resource.andNode(Worker)) {}
+class BoundEmails extends Hyperlink.Tag<BoundEmails>()("listen-d/BoundEmails", {
+  emails: Hyperlink.effect(Schema.String),
+}).pipe(Hyperlink.andNode(Worker)) {}
 
 const clientsBoundRest = Node.clients(BoundJobs, BoundEmails);
 void clientsBoundRest;

@@ -5,7 +5,7 @@ import type {
   makeEngineQueueStoreContract,
   MaterializedEngineQueueStore,
 } from "../src/internal/store/queueStoreSpec";
-import * as QueueResource from "../src/QueueResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
 
 type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -13,7 +13,7 @@ const expectExact = <_Check extends true>(): void => {};
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends QueueResource.Tag<Jobs>()("@test/WriterJobs", { payload: jobSchema }) {}
+class Jobs extends QueueHyperlink.Tag<Jobs>()("@test/WriterJobs", { payload: jobSchema }) {}
 
 type ItemSchema = typeof jobSchema;
 type Writer = MaterializedEngineQueueStore<ItemSchema>;
@@ -26,7 +26,7 @@ type ExpectedWriter = Store.StoreProvidedContext<
 >;
 expectExact<Equals<Writer, ExpectedWriter>>();
 
-// Schema-first path (CustomQueue / QueueResource.make) matches tag path for the same item schema.
+// Schema-first path (CustomQueue / QueueHyperlink.make) matches tag path for the same item schema.
 type SchemaContract = ReturnType<typeof makeEngineQueueStoreContract<ItemSchema>>;
 type SchemaWriter = MaterializedEngineQueueStore<ItemSchema>;
 type ExpectedSchemaWriter = Store.StoreProvidedContext<

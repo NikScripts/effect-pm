@@ -4,7 +4,7 @@
 // output, prototype extractor deleted. Writes docs/site/api-data/ (one file per symbol +
 // per-module summaries + index/paths/doclinks/locations sidecars).
 //
-//   tsx scripts/gen-api.ts [pkgSlug ...]     (no args = effect-pm + every documented effect dep)
+//   tsx scripts/gen-api.ts [pkgSlug ...]     (no args = hyperlink-ts + every documented effect dep)
 
 import * as nodePath from "node:path"; // pure path math only — no IO (keeps the extractor pure)
 import { fileURLToPath } from "node:url";
@@ -29,7 +29,7 @@ const packageJsonPath = nodePath.join(repoRoot, "package.json");
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 
 // The documented package. `slug` is the URL segment (/api/<slug>/…); `name` is the npm name.
-const pkgSlug = "effect-pm";
+const pkgSlug = "hyperlink-ts";
 
 // git, through effect/unstable/process (never node:child_process). Returns trimmed stdout, or "" if
 // the command fails — every git call here is best-effort metadata (origin URL, branch, submodule SHA).
@@ -66,8 +66,8 @@ const pkgNameOf = (parsed: unknown): string =>
     ? parsed.name
     : pkgSlug;
 
-// The `effect` / `@effect/*` packages effect-pm actually depends on (runtime + peer). We document only
-// these — the wider monorepo (ai/atom/other-sql/browser/bun) is surface a consumer of effect-pm never
+// The `effect` / `@effect/*` packages hyperlink-ts actually depends on (runtime + peer). We document only
+// these — the wider monorepo (ai/atom/other-sql/browser/bun) is surface a consumer of hyperlink-ts never
 // touches. Derived from OUR package.json so it tracks the deps automatically.
 const effectDepsOf = (parsed: unknown): ReadonlySet<string> => {
   const names = new Set<string>();
@@ -153,8 +153,8 @@ const compilerOptions: ts.CompilerOptions = {
   types: [],
   baseUrl: repoRoot,
   paths: {
-    "@nikscripts/effect-pm": ["src/index.ts"],
-    "@nikscripts/effect-pm/*": ["src/*"],
+    "hyperlink-ts": ["src/index.ts"],
+    "hyperlink-ts/*": ["src/*"],
   },
 };
 
@@ -386,8 +386,8 @@ const program = Effect.gen(function* () {
   // index and invert — each page learns which documented symbols reference it. Programs are
   // rebuilt per package WITH the source `paths` (P4), so cross-package references count.
   const referencePaths: Record<string, Array<string>> = {
-    "@nikscripts/effect-pm": [nodePath.join(repoRoot, "src/index.ts")],
-    "@nikscripts/effect-pm/*": [nodePath.join(repoRoot, "src/*")],
+    "hyperlink-ts": [nodePath.join(repoRoot, "src/index.ts")],
+    "hyperlink-ts/*": [nodePath.join(repoRoot, "src/*")],
   };
   for (const effectSpec of effectSpecs) {
     referencePaths[effectSpec.name] = [nodePath.join(effectSpec.srcDir, "index.ts")];

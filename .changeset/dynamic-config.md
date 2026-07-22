@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add the public `DynamicConfig` module — hot-swappable config on top of Effect `Config`.

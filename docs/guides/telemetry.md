@@ -1,8 +1,8 @@
 {#telemetry title="Telemetry" status="draft" done="api previews types verified" appliesTo=all}
 # Telemetry
 
-Every effect-pm node already writes into Effect's `Metric` registry — queues, processes, HTTP
-clients, runtime gauges. **Telemetry** serves that registry as a Resource: leaf fields for this
+Every hyperlink-ts node already writes into Effect's `Metric` registry — queues, processes, HTTP
+clients, runtime gauges. **Telemetry** serves that registry as a Hyperlink: leaf fields for this
 node, fleet folds when the tag is meshed. OTEL stays the professional sink; Telemetry is for custom
 glass (CLI, TUI, web) over the same tags.
 
@@ -12,29 +12,29 @@ One tag. Distribute it across the droplets you actually run — Context service 
 
 {.twoslash}
 ``` ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 // ---cut---
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
 ## Serve it on a droplet
 
 `Telemetry.serve` forks the sampler and mounts leaf + fleet handlers. Discharge the mesh with
-`Resource.peersLayer` so fleet fields can fold the other nodes' leaf `snapshot`s.
+`Hyperlink.peersLayer` so fleet fields can fold the other nodes' leaf `snapshot`s.
 
 {.twoslash}
 ``` ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as Telemetry from "hyperlink-ts/Telemetry"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Duration, Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
@@ -42,7 +42,7 @@ class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
@@ -52,7 +52,7 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
 const east = Telemetry.serve(FleetMetrics, {
   interval: Duration.seconds(1),
 }).pipe(
-  Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)),
+  Layer.provide(Hyperlink.peersLayer(FleetMetrics, DropletEast)),
   nodeServer(3001),
 )
 // east: Layer — this droplet samples its registry and reaches West + Central for fleet folds
@@ -62,7 +62,7 @@ A single-node app with no peers uses `Telemetry.alone` instead of `peersLayer`:
 
 {.twoslash}
 ``` ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
+import * as Telemetry from "hyperlink-ts/Telemetry"
 import { Layer } from "effect"
 class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
 // ---cut---
@@ -78,7 +78,7 @@ const local = Telemetry.layer(FleetTelemetry).pipe(
 
 {.twoslash}
 ``` ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
+import * as Telemetry from "hyperlink-ts/Telemetry"
 import { Effect } from "effect"
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()() {}
 const program = Effect.gen(function* () {
@@ -98,7 +98,7 @@ recurse). One yield, columns + total:
 
 {.twoslash}
 ``` ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry"
+import * as Telemetry from "hyperlink-ts/Telemetry"
 import { Effect } from "effect"
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()() {}
 const program = Effect.gen(function* () {
@@ -119,7 +119,7 @@ const total = yield* glass.fleetInFlight
 ## OTEL stays the grown-up sink
 
 Telemetry does not retain, alert, or query history. Wire `@effect/opentelemetry` when you need
-collectors; keep Telemetry when you want the registry on a Resource tag your CLI / TUI / web already
+collectors; keep Telemetry when you want the registry on a Hyperlink tag your CLI / TUI / web already
 speak.
 
 Runnable form: `pnpm run example:telemetry-fleet-glass`. For readiness across the same mesh

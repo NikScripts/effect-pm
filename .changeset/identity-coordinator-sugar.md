@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Identity coordinator sugar (M6)** — recipe guide + lean prefer helpers.

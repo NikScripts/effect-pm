@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Upgrade effect + platform-node + sql-sqlite-node + vitest from `4.0.0-beta.92` to `4.0.0-beta.98`.

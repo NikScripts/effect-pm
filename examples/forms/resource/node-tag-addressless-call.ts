@@ -2,11 +2,11 @@
  * @module examples/forms/resource/node-tag-addressless-call
  *
  * **Address-less Node.Tag — call terminal.** Lookup is **piped** onto
- * {@link Resource.lookupClient} (same shape as the serve side).
+ * {@link Hyperlink.lookupClient} (same shape as the serve side).
  *
  * Terminal B (after serve is up):
  * ```bash
- * LOOKUP_SOCK=/tmp/effect-pm-forms-addressless.sock \\
+ * LOOKUP_SOCK=/tmp/hyperlink-ts-forms-addressless.sock \\
  *   pnpm exec tsx examples/forms/resource/node-tag-addressless-call.ts
  * ```
  */
@@ -14,21 +14,21 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Config, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 const lookupSock = Config.string("LOOKUP_SOCK").pipe(
-  Config.withDefault("/tmp/effect-pm-forms-addressless.sock"),
+  Config.withDefault("/tmp/hyperlink-ts-forms-addressless.sock"),
 )
 
 const program = Effect.gen(function* () {
   const path = yield* lookupSock
   // Give the serve process a moment if started in parallel.
   yield* Effect.sleep("200 millis")
-  const client = Resource.lookupClient(Jobs).pipe(
+  const client = Hyperlink.lookupClient(Jobs).pipe(
     Layer.provide(
       Lookup.layerOptions({ path, unlink: false }),
     ),

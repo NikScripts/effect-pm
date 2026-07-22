@@ -1,25 +1,25 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Schema } from "effect";
-import * as QueueResource from "../src/QueueResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
 import { Storage } from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 
-// Soft-default Memory: QueueResource.layer exposes Storage (layerDefaultMemory) with no AppStore.
+// Soft-default Memory: QueueHyperlink.layer exposes Storage (layerDefaultMemory) with no AppStore.
 // Engines write via a declared Storage dependency; read back through the same bridge. `it.live` = real clock.
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class EmailQueue extends QueueResource.Tag<EmailQueue>()("@app/EmailQueue", { payload: jobSchema }) {}
+class EmailQueue extends QueueHyperlink.Tag<EmailQueue>()("@app/EmailQueue", { payload: jobSchema }) {}
 
 // Declares an `error` wire schema: its worker fails with a `string`, so the queue's declared error
 // channel is `string` (with no `error` slot the channel would default to `never` — an infallible
 // worker — and `Effect.fail("boom")` would not typecheck).
-class FailingQueue extends QueueResource.Tag<FailingQueue>()("@app/FailingQueue", {
+class FailingQueue extends QueueHyperlink.Tag<FailingQueue>()("@app/FailingQueue", {
   payload: jobSchema,
   error: Schema.String,
 }) {}
 
-describe("QueueResource → baked store persistence", () => {
+describe("QueueHyperlink → baked store persistence", () => {
   it.live("persists lifecycle events to the baked-in store, readable back", () =>
     Effect.gen(function* () {
       const queue = yield* EmailQueue;
@@ -48,7 +48,7 @@ describe("QueueResource → baked store persistence", () => {
     }).pipe(
       // Only the queue layer — it bakes + exposes the store. No app Store.Service.
       Effect.provide(
-        QueueResource.layerMemory(EmailQueue, {
+        QueueHyperlink.layerMemory(EmailQueue, {
           effect: () => Effect.void,
           autoStart: true,
         }),
@@ -84,7 +84,7 @@ describe("QueueResource → baked store persistence", () => {
       expect(tags).toContain("RetryExhausted");
     }).pipe(
       Effect.provide(
-        QueueResource.layerMemory(FailingQueue, {
+        QueueHyperlink.layerMemory(FailingQueue, {
           effect: () => Effect.fail("boom" as const),
           attempts: 1,
           autoStart: true,

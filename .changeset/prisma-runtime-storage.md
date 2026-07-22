@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Ship `PrismaRuntimeStorage` as a Prisma-backed `RuntimeStorage` adapter over normalized runtime records.

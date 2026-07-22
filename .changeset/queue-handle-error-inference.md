@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Queue handles now carry the tag's declared `Success`/`Error` types.** `yield* MyQueue` on a payload-only tag types as `QueueResource<Payload, void, never, never>` — the error channel is `never` (was `unknown`) and success is `void`, both driven by the tag's `success`/`error` schema slots rather than defaulting loosely. Declare `error: <Schema>` on the tag and the worker's failure type is constrained to it and surfaces on `events`' `Failed.cause` as a `Cause<Error>`.

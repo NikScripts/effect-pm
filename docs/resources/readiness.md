@@ -13,22 +13,22 @@ Acquisition vs readiness: get hard dependencies ready by acquiring them eagerly 
 
 ## Attach readiness to a tag
 
-`Resource.withReadiness` is dual — **data-first** `withReadiness(tag, fn)` or **data-last**
+`Hyperlink.withReadiness` is dual — **data-first** `withReadiness(tag, fn)` or **data-last**
 `.pipe(withReadiness(fn))`. Both are supported on node-bound tags (including many sites in one
 program); prefer whichever reads cleaner. The derivation reads the **materialized service** and
 returns `{ ready, detail? }`. Prefer an **inferred** `svc` (or a minimal structural type of the
-fields you read) over annotating `Resource.ServiceOf<typeof spec>` — the tag already carries the
+fields you read) over annotating `Hyperlink.ServiceOf<typeof spec>` — the tag already carries the
 spec. A tag with no derivation is **ready by default**, so unaware resources never falsely fail a
 gate.
 
 ``` ts
 import { Effect, Schema } from "effect"
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
-class Cache extends Resource.Tag<Cache>()("app/Cache", {
-  warm: Resource.effect(Schema.Boolean),
+class Cache extends Hyperlink.Tag<Cache>()("app/Cache", {
+  warm: Hyperlink.effect(Schema.Boolean),
 }).pipe(
-  Resource.withReadiness((svc) =>
+  Hyperlink.withReadiness((svc) =>
     Effect.map(svc.warm, (warm) =>
       warm ? { ready: true as const } : { ready: false as const, detail: "cold" },
     ),
@@ -40,19 +40,19 @@ Derivations **stack**. A later `withReadiness` receives the previous check as `b
 
 ## Depend on another resource
 
-`Resource.readinessOf(tag)` yields that tag’s service and runs *its* derivation. The dependency lands in the Effect’s requirements — compile-time checked — and works whether the dependency is local or reached over RPC. `Resource.allReady([...])` AND-combines checks (first not-ready wins, with its `detail`).
+`Hyperlink.readinessOf(tag)` yields that tag’s service and runs *its* derivation. The dependency lands in the Effect’s requirements — compile-time checked — and works whether the dependency is local or reached over RPC. `Hyperlink.allReady([...])` AND-combines checks (first not-ready wins, with its `detail`).
 
 ``` ts
 import { Effect, Schema } from "effect"
-import * as QueueResource from "@nikscripts/effect-pm/QueueResource"
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
 const Job = Schema.Struct({ id: Schema.String })
 // Database — some other resource on this node that already has withReadiness
 
-class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Job).pipe(
-  Resource.withReadiness((_svc, base) =>
-    Resource.allReady([base, Resource.readinessOf(Database)]),
+class Jobs extends QueueHyperlink.Tag<Jobs>()("app/Jobs", Job).pipe(
+  Hyperlink.withReadiness((_svc, base) =>
+    Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
   ),
 ) {}
 ```
@@ -61,47 +61,47 @@ When `Database` reports not ready, `Jobs` degrades too — one readiness pass, s
 
 ## Monitored dependencies
 
-Many operational deps share the same contract shape: a `status` read, a live `changes` stream, and readiness derived from status. `Resource.monitoredDependency` builds that pair so you don’t re-hand-roll it per league or per dep type. Still a plain `Resource.Tag` — **not** a new kind.
+Many operational deps share the same contract shape: a `status` read, a live `changes` stream, and readiness derived from status. `Hyperlink.monitoredDependency` builds that pair so you don’t re-hand-roll it per league or per dep type. Still a plain `Hyperlink.Tag` — **not** a new kind.
 
 ``` ts
 import { Schema } from "effect"
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
 const DbStatus = Schema.Struct({
   connected: Schema.Boolean,
   latencyMs: Schema.Number,
 })
 
-const { spec, readiness } = Resource.monitoredDependency({
+const { spec, readiness } = Hyperlink.monitoredDependency({
   status: DbStatus,
   changes: DbStatus,
   readyWhen: (s) => s.connected,
   detail: (s) => `${s.latencyMs}ms`,
 })
 
-export class WnbaDatabase extends Resource.withReadiness(
-  Resource.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
+export class WnbaDatabase extends Hyperlink.withReadiness(
+  Hyperlink.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
   readiness,
 ) {}
 ```
 
-Options field names match the produced spec (`status` / `changes`). `changes` is the **element** schema of the stream. Serve an impl with those fields as usual (`Resource.serve` / `Node.httpServer`); `/health` picks up the attached readiness automatically.
+Options field names match the produced spec (`status` / `changes`). `changes` is the **element** schema of the stream. Serve an impl with those fields as usual (`Hyperlink.serve` / `Node.httpServer`); `/health` picks up the attached readiness automatically.
 
 ## Shared majority + one outlier on one port
 
-`serveAllHttp` is retired — every host is `Node.httpServer([...serve layers])`. When **most** resources share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Resource.provide`, isolate the outlier on its own `serve`:
+`serveAllHttp` is retired — every host is `Node.httpServer([...serve layers])`. When **most** resources share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Hyperlink.provide`, isolate the outlier on its own `serve`:
 
 ``` ts
 import { Layer } from "effect"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 
 const Host = Node.httpServer([
-  Resource.provide(SharedHandlers.layer, [
-    Resource.serve(Database, dbImpl),
-    Resource.serve(Workers, workersImpl),
+  Hyperlink.provide(SharedHandlers.layer, [
+    Hyperlink.serve(Database, dbImpl),
+    Hyperlink.serve(Workers, workersImpl),
   ]),
-  Resource.serve(Outlier, outlierImpl).pipe(Layer.provide(HookedHandlers.layer)),
+  Hyperlink.serve(Outlier, outlierImpl).pipe(Layer.provide(HookedHandlers.layer)),
 ])
 ```
 

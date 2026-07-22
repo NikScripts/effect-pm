@@ -12,7 +12,7 @@ export default async function HomePage() {
   const { element, meta, toc } = await renderChapter(chapter.raw);
   return (
     <>
-      <PageMeta title={`${meta.title} — effect-pm`} description={firstParagraphs(chapter.raw)} />
+      <PageMeta title={`${meta.title} — hyperlink-ts`} description={firstParagraphs(chapter.raw)} />
       <DraftBanner meta={meta} />
       <article className="prose">
         {element}

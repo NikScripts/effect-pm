@@ -4,7 +4,7 @@
  * @internal
  */
 import { Effect, Layer, Random } from "effect"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
   catalogSym,
@@ -45,11 +45,11 @@ export type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
   ? Exclude<R, undefined>
   : never;
 
-/** True when the first arg is a {@link Resource.Tag} (has {@link Resource.specSym}). @internal */
-export const isResourceTagArg = (u: unknown): u is Resource.PipeableTag =>
+/** True when the first arg is a {@link Hyperlink.Tag} (has {@link Hyperlink.specSym}). @internal */
+export const isHyperlinkTagArg = (u: unknown): u is Hyperlink.PipeableTag =>
   (typeof u === "object" || typeof u === "function") &&
   u !== null &&
-  Resource.specSym in u;
+  Hyperlink.specSym in u;
 
 /** True when the first arg is a serve layer or non-empty serve list. @internal */
 export const isServeArg = (
@@ -78,6 +78,7 @@ export const isIpcListenNode = (node: AnyNode): boolean => {
   return node.path === undefined && node.url === undefined;
 };
 
+/** A Layer that fails immediately with `error` (eager transport-wiring failure). @internal */
 export const failLayer = <E>(error: E): Layer.Layer<never, E> =>
   Layer.unwrap(
     Effect.map(
@@ -86,12 +87,14 @@ export const failLayer = <E>(error: E): Layer.Layer<never, E> =>
     ),
   );
 
+/** A Layer that fails with {@link ListenUseProtocol} — listen used where connect was meant. @internal */
 export const failUseProtocol = (
   protocol: "unix" | "http" | "ws",
   detail: string,
 ): Layer.Layer<never, ListenUseProtocol> =>
   failLayer(new ListenUseProtocol({ protocol, detail }));
 
+/** A Layer that fails with a tag-node resolution error (missing / ambiguous bound node). @internal */
 export const failListenTagNode = (fields: {
   readonly tag: string;
   readonly reason: "missing" | "ambiguous";
@@ -194,7 +197,7 @@ export const withListenNode = <A, E, R>(
  * The key an anonymous `unix` / `http` / `ws` / `nPipe` listen mints for its address-less node: a
  * **legible name** from the first served resource's key (`@app/Emails` → `Emails` — last segment only)
  * plus a random tail, under the full package prefix — e.g.
- * `@nikscripts/effect-pm/anonymous-node/Emails#k3f9q`. `Random` (a default Reference, no service to
+ * `hyperlink-ts/anonymous-node/Emails#k3f9q`. `Random` (a default Reference, no service to
  * provide) gives the tail; the random keeps it unique per materialization (a generated key is a local,
  * ephemeral identity — a shared identity needs an explicit `Node.Tag` key). @internal
  */
@@ -203,7 +206,7 @@ export const anonymousNodeKey = (
 ): Effect.Effect<string> =>
   Effect.map(Random.next, (n) => {
     const rand = n.toString(36).slice(2, 8)
-    const firstKey = Resource.servedKeyOf(list[0])
+    const firstKey = Hyperlink.servedKeyOf(list[0])
     const name = firstKey?.split("/").pop() ?? "node"
-    return `@nikscripts/effect-pm/anonymous-node/${name}#${rand}`
+    return `hyperlink-ts/anonymous-node/${name}#${rand}`
   })

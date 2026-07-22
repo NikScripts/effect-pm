@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Examples: a unified **`pm`** entrypoint that drives the same `Fleet` tags two ways — no subcommand launches the styled Ink dashboard; a subcommand runs a single command and exits (`pm Mail statusNow`, `pm Mail pause`, `pm KeyRotation start`, `pm ls`), over http via the shared data layer. Resource command names are the tag's display name, lengthened to the shortest unique slash-suffix only when two collide.

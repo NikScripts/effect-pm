@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Resource.discoverClients`** — multi-tag sugar over `discoverClient`: one Lookup bootstrap, then `Layer.mergeAll` of each `lookupClient`.

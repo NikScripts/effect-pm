@@ -1,12 +1,12 @@
-// The `docs/Double` RunResource — declared here in a plain (non-"use client") module so a
-// content hot-edit that re-imports the RunResourceIsland entry doesn't re-declare it (the
+// The `docs/Double` RunHyperlink — declared here in a plain (non-"use client") module so a
+// content hot-edit that re-imports the RunHyperlinkIsland entry doesn't re-declare it (the
 // registry rejects a duplicate group id). Declared once; the island imports these atoms.
 
 import { Effect, Schema, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as RunResource from "@pm/RunResource";
+import * as RunHyperlink from "@pm/RunHyperlink";
 
-class Double extends RunResource.Service<Double>()("docs/Double", {
+class Double extends RunHyperlink.Service<Double>()("docs/Double", {
   payload: Schema.Number,
   success: Schema.Number,
   concurrency: 2, // only 2 run at once; extra calls queue behind the gate

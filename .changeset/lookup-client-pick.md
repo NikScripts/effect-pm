@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **D4 — `lookupClient(Tag, { pick })`** opt-in soft pick when N>1 directory rows.

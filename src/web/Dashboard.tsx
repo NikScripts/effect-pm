@@ -2,10 +2,10 @@
  * @module web/Dashboard
  *
  * The batteries-included resource dashboard: point it at a reactive `runtime` (an
- * `Atom.runtime(layer)` over your tags — local engine or `Resource.client` over http) and a
+ * `Atom.runtime(layer)` over your tags — local engine or `Hyperlink.client` over http) and a
  * root `Group`, and it renders the responsive drill-down — a grid of queue / process /
  * subgroup cards, a detail view per resource (stats + chart + controls + logs), and a routed
- * fullscreen log viewer (`/Group/Resource/logs`). Navigation is URL-backed (deep links +
+ * fullscreen log viewer (`/Group/Hyperlink/logs`). Navigation is URL-backed (deep links +
  * back/forward) and animated with view transitions.
  *
  * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` with the
@@ -43,7 +43,7 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useProcessBundle, useQueu
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, ResourceReadinessBanner, RunResourceDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, RunHyperlinkDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
@@ -109,7 +109,7 @@ const LogBox = (props: {
   );
 };
 
-/** Fullscreen logs page for a resource — its own route (`/…/Resource/logs`). */
+/** Fullscreen logs page for a resource — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
   const bundle = isProcessTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
@@ -205,7 +205,7 @@ const QueueDetail = (props: {
         <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
-      <ResourceReadinessBanner tag={props.tag} />
+      <HyperlinkReadinessBanner tag={props.tag} />
       <QueueStats bundle={bundle} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0 sm:flex-1">
@@ -237,7 +237,7 @@ const ProcessDetail = (props: {
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
         <ProcessStatusBadge supervising={s?.supervising} />
       </div>
-      <ResourceReadinessBanner tag={props.tag} />
+      <HyperlinkReadinessBanner tag={props.tag} />
       <ProcessStats bundle={bundle} />
       <ProcessControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
       <ScheduleEditor bundle={bundle} onOpenFull={props.onOpenSchedule} />
@@ -260,7 +260,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
         <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
         <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
-      <ResourceReadinessBanner tag={props.tag} />
+      <HyperlinkReadinessBanner tag={props.tag} />
       <ApiStats bundle={bundle} />
       <div className="overflow-hidden rounded-xl border bg-card p-3"><ApiMetricChart bundle={bundle} /></div>
       <ApiEndpointTable bundle={bundle} />
@@ -319,7 +319,7 @@ const DashboardInner = (props: {
     if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isRunTag(selected)) return <RunResourceDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isRunTag(selected)) return <RunHyperlinkDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     return <></>;
   }
 
@@ -454,7 +454,7 @@ const NodeResourceView = (props: {
   if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
   if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
   if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isRunTag(tag)) return <RunResourceDetail tag={tag} onBack={props.onBack} />;
+  if (isRunTag(tag)) return <RunHyperlinkDetail tag={tag} onBack={props.onBack} />;
   return <></>;
 };
 
@@ -472,7 +472,7 @@ export const DashboardView = <R, ER>(props: {
   const [health, setHealth] = React.useState(false);
   const [node, setNode] = React.useState<NodeRef | null>(null);
   const [nodeTag, setNodeTag] = React.useState<unknown>(null);
-  const openResource = React.useCallback(
+  const openHyperlink = React.useCallback(
     (resourceKey: string): void => {
       const found = leafByKey(props.group, resourceKey);
       if (found !== undefined) setNodeTag(found);
@@ -488,13 +488,13 @@ export const DashboardView = <R, ER>(props: {
         {nodeTag !== null ? (
           <NodeResourceView tag={nodeTag} onBack={() => setNodeTag(null)} />
         ) : node !== null ? (
-          <NodeDetail node={node} onBack={() => setNode(null)} onOpenResource={openResource} />
+          <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />
         ) : health ? (
           <HealthBoard
             group={props.group}
             onBack={() => setHealth(false)}
             onOpenNode={setNode}
-            onOpenResource={openResource}
+            onOpenHyperlink={openHyperlink}
           />
         ) : (
           <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />

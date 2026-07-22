@@ -2,7 +2,7 @@ import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // D5/D6 — node directory on Lookup: advertise / nodesServing / unregister / livenessReplace.
@@ -10,7 +10,7 @@ import * as Node from "../src/Node";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-lookup-dir-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-lookup-dir-${label}-${process.pid}-${now}.sock`;
   });
 
 const withLookup = <A, E>(
@@ -26,8 +26,8 @@ const withLookup = <A, E>(
     );
   }).pipe(Effect.scoped);
 
-class Jobs extends Resource.Tag<Jobs>()("lookup-dir/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("lookup-dir/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 const jobsImpl = { jobs: Effect.succeed(1) };
@@ -168,7 +168,7 @@ describe("Lookup directory livenessReplace", () => {
 
       // listen advertises when Directory is provided
       const workerCtx = yield* Layer.build(
-        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
       const dir = Context.get(lookupCtx, Lookup.Directory);
@@ -227,7 +227,7 @@ describe("Lookup directory livenessReplace", () => {
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-stale",
               kind: "IpcSocket",
-              path: `/tmp/effect-pm-lookup-dir-missing-${process.pid}.sock`,
+              path: `/tmp/hyperlink-ts-lookup-dir-missing-${process.pid}.sock`,
               serves: ["lookup-dir/Jobs"],
             }),
           );
@@ -266,7 +266,7 @@ describe("Node.unix directory wire", () => {
 
       yield* Effect.gen(function* () {
         yield* Layer.build(
-        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
         );
         const dir = Context.get(lookupCtx, Lookup.Directory);
         const during = yield* dir
@@ -345,7 +345,7 @@ describe("Lookup directory askIncumbent", () => {
       const lookupCtx = Context.merge(lookupServer, lookupClient);
 
       const workerCtx = yield* Layer.build(
-        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
       const dir = Context.get(lookupCtx, Lookup.Directory);
@@ -408,7 +408,7 @@ describe("Lookup directory askIncumbent", () => {
       const lookupCtx = Context.merge(lookupServer, lookupClient);
 
       const workerCtx = yield* Layer.build(
-        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
       const dir = Context.get(lookupCtx, Lookup.Directory);

@@ -1,6 +1,6 @@
-# effect-pm docs site (`docs/site/`)
+# hyperlink-ts docs site (`docs/site/`)
 
-The official `@nikscripts/effect-pm` website — a bespoke **Waku (RSC) + Effect** app.
+The official `hyperlink-ts` website — a bespoke **Waku (RSC) + Effect** app.
 Content is authored in **Djot** (in `.md` files, so GitHub renders them) and rendered
 classless; read over Tailscale on your phone.
 

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **`Resource.selfHost(tag)` — the host key a multi-host instance runs as**, the same key its

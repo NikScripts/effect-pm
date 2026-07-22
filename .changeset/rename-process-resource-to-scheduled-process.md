@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Rename the toolkit process tag `ProcessResource` → **`ScheduledProcess`** (namespace + the

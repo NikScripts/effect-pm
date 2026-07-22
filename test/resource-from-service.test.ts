@@ -2,12 +2,12 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // `fromService`: an existing service **interface** is the source of truth. The contract gives a schema
 // only for the wired member (`add`); every other interface member becomes a local, written **bare**
-// (`Resource.local`, no `()`), its type taken from the interface. One merged handle: wired + local
+// (`Hyperlink.local`, no `()`), its type taken from the interface. One merged handle: wired + local
 // members sit together; the locals just carry a `Local<CounterShape>` requirement that the local layer
 // grants (and a client can't). The interface is a standalone type — passing the class itself would be
 // a circular base reference.
@@ -19,13 +19,13 @@ interface CounterShape {
   };
   readonly label: string; // local raw value → Effect<string, Local>
 }
-class Counter extends Resource.fromService<Counter, CounterShape>()("from-svc/Counter", {
-  current: Resource.local,
-  add: Resource.effectFn(Schema.Number, Schema.Number),
+class Counter extends Hyperlink.fromService<Counter, CounterShape>()("from-svc/Counter", {
+  current: Hyperlink.local,
+  add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   admin: {
-    reset: Resource.local,
+    reset: Hyperlink.local,
   },
-  label: Resource.local,
+  label: Hyperlink.local,
 }) {}
 
 it("fromService merged handle serves wired + local (effect / nested / raw value) via the local layer", () =>
@@ -33,7 +33,7 @@ it("fromService merged handle serves wired + local (effect / nested / raw value)
     Effect.gen(function* () {
       // The impl is the service itself — the wired handler plus each local's interface-shaped value.
       // `ImplOf` types each local from the interface (a wrong-typed local impl would not compile).
-      const layer = Resource.layer(Counter, {
+      const layer = Hyperlink.layer(Counter, {
         current: Effect.succeed(5),
         add: (by: number) => Effect.succeed(by + 1),
         admin: { reset: Effect.void },
@@ -60,7 +60,7 @@ it("fromService serves over RPC — the wired member crosses http; locals stay o
       // A fromService resource serves exactly like any resource: only its wired members are mounted
       // (locals are off-wire), and the impl provides the whole interface.
       const server = Node.httpServer([
-        Resource.serve(Counter, {
+        Hyperlink.serve(Counter, {
           current: Effect.succeed(5),
           add: (by: number) => Effect.succeed(by + 1),
           admin: { reset: Effect.void },
@@ -77,8 +77,8 @@ it("fromService serves over RPC — the wired member crosses http; locals stay o
           expect(yield* c.add(41)).toBe(42);
         }).pipe(
           Effect.provide(
-            Resource.client(Counter).pipe(
-              Layer.provide(Resource.protocolHttp(`http://127.0.0.1:${port}/rpc`)),
+            Hyperlink.client(Counter).pipe(
+              Layer.provide(Hyperlink.protocolHttp(`http://127.0.0.1:${port}/rpc`)),
             ),
           ),
           Effect.scoped,

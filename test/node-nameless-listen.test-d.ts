@@ -1,10 +1,10 @@
 import { Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class Jobs extends Resource.Tag<Jobs>()("nameless-d/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("nameless-d/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 declare const serve: Layer.Layer<Jobs, never, never>;

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Refactor the SQLite `RuntimeStorage` adapter to use Effect SQL (`effect/unstable/sql`’s `SqlClient` via `@effect/sql-sqlite-node`) instead of calling `better-sqlite3` directly from package code.

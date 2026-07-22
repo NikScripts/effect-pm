@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **New: `Telemetry` — a thin, custom, dashboard-native metrics surface.** Serves a host's whole Effect

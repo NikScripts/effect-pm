@@ -13,7 +13,7 @@ import {
 import {
   RpcClient,
 } from "effect/unstable/rpc"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
   catalogSym,
@@ -38,17 +38,17 @@ import {
 
 /**
  * Union of Tag `Self` identifiers from a {@link clients} tag list.
- * Shallow {@link Resource.PipeableTag} only — `ResourceTag<…>` here reopens TS2589 under stock tsc.
+ * Shallow {@link Hyperlink.PipeableTag} only — `HyperlinkTag<…>` here reopens TS2589 under stock tsc.
  *
  * @internal
  */
-type ServicesOfTags<Tags extends ReadonlyArray<Resource.PipeableTag>> =
+type ServicesOfTags<Tags extends ReadonlyArray<Hyperlink.PipeableTag>> =
   Tags[number] extends Context.Key<infer S, any> ? S : never;
 
 /** Non-empty tag list for {@link clients}. @internal */
 type TagList = readonly [
-  Resource.PipeableTag,
-  ...ReadonlyArray<Resource.PipeableTag>,
+  Hyperlink.PipeableTag,
+  ...ReadonlyArray<Hyperlink.PipeableTag>,
 ];
 
 /** Tags that cover a catalog node's `ROut` (C3). @internal */
@@ -78,18 +78,18 @@ const clientsNodeMismatchLayer = (
     ),
   );
 
-const tagKey = (tag: Resource.PipeableTag): string =>
+const tagKey = (tag: Hyperlink.PipeableTag): string =>
   typeof tag === "function" && tag !== null && "key" in tag
     ? String((tag as { readonly key: string }).key)
     : "?";
 
 const mergeClientLayers = (
   node: AddressedNode<unknown>,
-  tags: ReadonlyArray<Resource.PipeableTag>,
+  tags: ReadonlyArray<Hyperlink.PipeableTag>,
 ): Layer.Layer<never> => {
   const clients = tags.map((tag) =>
-    Resource.client(
-      tag as Resource.ResourceTag<any, any>,
+    Hyperlink.client(
+      tag as Hyperlink.HyperlinkTag<any, any>,
       // Keep AddressedNode — drives the auto-connect overload (not bare NodeKey).
       node,
     ),
@@ -114,14 +114,14 @@ const asAddressed = (node: unknown): AddressedNode<unknown> | undefined =>
   isAddressedNode(node as AnyNode) ? (node as AddressedNode<unknown>) : undefined;
 
 const clientsFromBoundTags = (
-  tags: ReadonlyArray<Resource.PipeableTag>,
+  tags: ReadonlyArray<Hyperlink.PipeableTag>,
 ): Layer.Layer<never, UnaddressedNode | ClientsNodeMismatch> => {
-  const first = asAddressed(Resource.nodeOf(tags[0]));
+  const first = asAddressed(Hyperlink.nodeOf(tags[0]));
   if (first === undefined) {
     return unaddressedLayer(tagKey(tags[0]!));
   }
   for (const tag of tags) {
-    if (Resource.nodeOf(tag) !== first) {
+    if (Hyperlink.nodeOf(tag) !== first) {
       return clientsNodeMismatchLayer(tags.map(tagKey));
     }
   }
@@ -175,14 +175,14 @@ export function clients(
 ): Layer.Layer<never, UnaddressedNode | ClientsNodeMismatch> {
   const addressed = asAddressed(first);
   if (addressed !== undefined) {
-    const tags: ReadonlyArray<Resource.PipeableTag> = isTagList(second)
+    const tags: ReadonlyArray<Hyperlink.PipeableTag> = isTagList(second)
       ? second
       : second !== undefined
         ? ([second, ...rest] as unknown as TagList)
         : [];
     return mergeClientLayers(addressed, tags);
   }
-  const tags: ReadonlyArray<Resource.PipeableTag> = isTagList(first)
+  const tags: ReadonlyArray<Hyperlink.PipeableTag> = isTagList(first)
     ? first
     : second !== undefined
       ? ([first, second, ...rest] as unknown as TagList)
@@ -208,7 +208,7 @@ export function clients(
  * address or pass a protocol.
  *
  * Derived connect Layers are WeakMap-memoized per Node class so multiple
- * `Resource.client(Tag, MyNode)` call sites share one MemoMap transport.
+ * `Hyperlink.client(Tag, MyNode)` call sites share one MemoMap transport.
  *
  * @category connect
  * @public
@@ -236,7 +236,7 @@ export const connect: {
     if (protocol !== undefined) {
       return connectLayer(node, protocol);
     }
-    // Addressed path — canonical memoized Layer (same object Resource.client auto-connect uses).
+    // Addressed path — canonical memoized Layer (same object Hyperlink.client auto-connect uses).
     if (
       (node.kind === "IpcSocket" && typeof node.path === "string") ||
       ((node.kind === "Http" || node.kind === "WebSocket") &&
@@ -250,8 +250,8 @@ export const connect: {
 
 /**
  * Wire a node over **http** — Effect's `layerProtocolHttp` transport, {@link connect} pinned to
- * `kind: "Http"`. Dual: `MyNode.pipe(Resource.connectHttp)` uses the node's own `url` (or `"/rpc"`);
- * `MyNode.pipe(Resource.connectHttp(url))` overrides it.
+ * `kind: "Http"`. Dual: `MyNode.pipe(Hyperlink.connectHttp)` uses the node's own `url` (or `"/rpc"`);
+ * `MyNode.pipe(Hyperlink.connectHttp(url))` overrides it.
  *
  * @category connect
  * @public
@@ -271,13 +271,13 @@ export const connectHttp: {
     // Prefer the node's OWN Http endpoint over the primary `url` — a multi-protocol `{ http, ws }` node
     // has a WebSocket primary-or-http primary but its Http endpoint is the right target for `connectHttp`.
   ): Layer.Layer<unknown> =>
-    connectLayer(node, Resource.protocolHttp(url ?? node.endpoints?.Http?.url ?? node.url ?? "/rpc")),
+    connectLayer(node, Hyperlink.protocolHttp(url ?? node.endpoints?.Http?.url ?? node.url ?? "/rpc")),
 );
 
 /**
  * Wire a node over a **WebSocket** — Effect's `layerProtocolSocket` transport (WS in the
- * browser), {@link connect} pinned to `kind: "WebSocket"`. Dual: `MyNode.pipe(Resource.connectSocket)`
- * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Resource.connectSocket(url))` overrides it.
+ * browser), {@link connect} pinned to `kind: "WebSocket"`. Dual: `MyNode.pipe(Hyperlink.connectSocket)`
+ * uses the node's own `url` (or `"/rpc"`); `MyNode.pipe(Hyperlink.connectSocket(url))` overrides it.
  *
  * @category connect
  * @public
@@ -299,14 +299,14 @@ export const connectSocket: {
   ): Layer.Layer<unknown> =>
     connectLayer(
       node,
-      Resource.protocolWebsocket(url ?? node.endpoints?.WebSocket?.url ?? node.url ?? "/rpc"),
+      Hyperlink.protocolWebsocket(url ?? node.endpoints?.WebSocket?.url ?? node.url ?? "/rpc"),
     ),
 );
 
 /**
  * Wire a node over **IpcSocket** — Unix-domain socket RPC ({@link protocolIpc}), {@link connect}
- * pinned to `kind: "IpcSocket"`. Dual: `MyNode.pipe(Resource.connectIpc)` uses the node's own `path`;
- * `MyNode.pipe(Resource.connectIpc(path))` overrides it.
+ * pinned to `kind: "IpcSocket"`. Dual: `MyNode.pipe(Hyperlink.connectIpc)` uses the node's own `path`;
+ * `MyNode.pipe(Hyperlink.connectIpc(path))` overrides it.
  *
  * @category connect
  * @public
@@ -327,7 +327,7 @@ export const connectIpc: {
     if (sock === undefined) {
       return unaddressedLayer(node.key);
     }
-    return connectLayer(node, Resource.protocolIpc(sock));
+    return connectLayer(node, Hyperlink.protocolIpc(sock));
   },
 );
 

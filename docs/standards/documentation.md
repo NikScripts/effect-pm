@@ -25,7 +25,7 @@ codebase does not use `@param` / `@returns`; they duplicate the types and rot as
  * for a runtime on the same machine, or a full url for one across the network.
  *
  * @example
- * Effect.provide(program, Resource.clientHttp(Emails, 3001))
+ * Effect.provide(program, Hyperlink.clientHttp(Emails, 3001))
  *
  * @public
  */
@@ -69,7 +69,7 @@ export, so a reader lands with context.
 ``` ts
 /**
  * The queue worker namespace — Tag, make, layer, serve.
- * @module QueueResource
+ * @module QueueHyperlink
  */
 
 /** @public */
@@ -130,7 +130,7 @@ Hang nearly every page off one load-bearing mental model, stated up front. New m
 of that spine — recontextualization, not a pile of independent topics. Error handling is "what that
 one channel does," not a new chapter identity.
 
-For this book the spine is the **Resource**: a [**Tag**](/docs/glossary#tag) carrying a
+For this book the spine is the **Hyperlink**: a [**Tag**](/docs/glossary#tag) carrying a
 [**Contract**](/docs/glossary#contract), fulfilled by an **Implementation**, placed by a
 [**Layer**](/docs/glossary#layer), used through a [**Handle**](/docs/glossary#handle) that reads the
 same locally or across a network. If a feature cannot be phrased as a facet of that spine, either
@@ -239,10 +239,10 @@ powerful the thing is. Lead with the code doing the job and let it carry the cla
 
 ``` ts
 // ✅ good — the feature, shown
-const worker = QueueResource.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
+const worker = QueueHyperlink.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))
 
 // ❌ bad — telling, not showing
-// "effect-pm makes serving a queue across runtimes effortless and elegant."
+// "hyperlink-ts makes serving a queue across runtimes effortless and elegant."
 ```
 
 {#narrative-code-is-verified .must appliesTo=docs}
@@ -272,7 +272,7 @@ first time it matters on a page. A term a doc comment already defines belongs in
 {#capitalize-domain-terms .should appliesTo=docs}
 ## Capitalize the domain terms
 
-The toolkit's concepts are proper terms — **Tag**, **Service**, **Contract**, **Resource**, **Layer**,
+The toolkit's concepts are proper terms — **Tag**, **Service**, **Contract**, **Hyperlink**, **Layer**,
 **Handle**, **Node**, **Implementation** — and read as such: capitalized, so *a Tag* (the concept) is
 distinct from the ordinary word. The glossary is the list of what counts; a lowercase `tag` in prose
 reads as a mistake. Where a word is genuinely generic — "reach it through an HTTP client" — leave it be;

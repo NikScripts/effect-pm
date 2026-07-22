@@ -1,13 +1,13 @@
 import { Schema, Stream } from "effect";
 import * as ApiMetrics from "../src/ApiMetrics";
 import { apiUsageSnapshot } from "../src/ApiUsageSchema";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 type UsageSnapshot = Schema.Schema.Type<typeof apiUsageSnapshot>;
 class Demo extends ApiMetrics.Tag<Demo>()("shape/api-metrics") {}
-type Service = Resource.ShapeOf<Resource.SpecOf<typeof Demo>, typeof Demo>;
+type Service = Hyperlink.ShapeOf<Hyperlink.SpecOf<typeof Demo>, typeof Demo>;
 
-type UsageIsSubscribable = Service["usage"] extends Resource.Subscribable<UsageSnapshot>
+type UsageIsSubscribable = Service["usage"] extends Hyperlink.Subscribable<UsageSnapshot>
   ? true
   : false;
 true satisfies UsageIsSubscribable;

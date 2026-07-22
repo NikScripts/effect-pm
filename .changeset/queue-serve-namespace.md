@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Fix: `QueueResource.serve` now resolves.** The beta.19 engine-`serve` for queues was added to

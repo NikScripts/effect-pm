@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **`InvalidHttpTarget` uses the Layer/Effect error channel** — no sync `throw` (same precedent as `UnaddressedNode`).

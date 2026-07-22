@@ -1,10 +1,10 @@
 /**
- * CustomQueueResource engine — N-level managed queue engine (local `make` entry point).
+ * CustomQueueHyperlink engine — N-level managed queue engine (local `make` entry point).
  *
- * For toolkit tags, layers, and RPC use the public `CustomQueueResource` namespace
- * (`src/CustomQueueResource.ts`) / `CustomQueueResource.Tag` from the barrel.
+ * For toolkit tags, layers, and RPC use the public `CustomQueueHyperlink` namespace
+ * (`src/CustomQueueHyperlink.ts`) / `CustomQueueHyperlink.Tag` from the barrel.
  *
- * @module internal/customQueueResource
+ * @module internal/customQueueHyperlink
  * @internal
  */
 import {
@@ -17,7 +17,7 @@ import {
   Stream,
   Types,
 } from "effect";
-import * as Resource from "../Resource";
+import * as Hyperlink from "../Hyperlink";
 import { isJsonValue } from "./json";
 import { resolveCustomQueueLevel } from "./customQueueLevels";
 import { levelToDefaultPriority } from "./priorityMapping";
@@ -46,7 +46,7 @@ import {
   type QueueOnFailure,
   type QueueReleaseEncodingError,
   type QueueReleaseOptions,
-  type QueueResourceConfigBase,
+  type QueueHyperlinkConfigBase,
   type QueueRouteOptions,
   type QueueStatus,
   type QueueRefill,
@@ -56,7 +56,7 @@ import {
   QueueItemValidationError,
   makeQueueItemCodecDescriptor,
   type QueueStoreWriter,
-} from "./queueResource";
+} from "./queueHyperlink";
 
 export type { CustomQueueStatus } from "./queueProjection";
 
@@ -65,7 +65,7 @@ export type { CustomQueueStatus } from "./queueProjection";
 // ============================================================================
 
 /**
- * Named level registry and default lane for {@link CustomQueueResource}.
+ * Named level registry and default lane for {@link CustomQueueHyperlink}.
  *
  * @category models
  * @public
@@ -100,13 +100,13 @@ export interface CustomQueueHandleApi<
 > {
   readonly add: CustomQueueEnqueue<T, EEnqueue, R>;
   readonly enqueue: QueueEnqueueEntries<T, R>;
-  readonly size: Resource.Subscribable<number>;
+  readonly size: Hyperlink.Subscribable<number>;
   readonly sizes: Effect.Effect<Record<string, number>, never, R>;
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
-  readonly isEmpty: Resource.Subscribable<boolean>;
+  readonly isEmpty: Hyperlink.Subscribable<boolean>;
   readonly completed: Effect.Effect<number>;
   readonly events: Stream.Stream<QueueEvent<T, E>>;
-  readonly status: Resource.Subscribable<CustomQueueStatus>;
+  readonly status: Hyperlink.Subscribable<CustomQueueStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
@@ -147,8 +147,8 @@ export type CustomQueueHandle<
  * @category models
  * @public
  */
-export type CustomQueueResourceConfigWithoutItemSchema<T, E, R> = Omit<
-  QueueResourceConfigBase<T>,
+export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
+  QueueHyperlinkConfigBase<T>,
   "levelCount"
 > &
   CustomQueueLevelConfig & {
@@ -166,8 +166,8 @@ export type CustomQueueResourceConfigWithoutItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
-  QueueResourceConfigBase<T>,
+export type CustomQueueHyperlinkConfigWithItemSchema<T, E, R> = Omit<
+  QueueHyperlinkConfigBase<T>,
   "levelCount"
 > &
   CustomQueueLevelConfig & {
@@ -178,7 +178,7 @@ export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
     ) => Effect.Effect<void, E, R>;
     readonly onFailure?: QueueOnFailure<T, E, R>;
     readonly refill?: CustomQueueRefill<T, E, QueueEnqueueErrors, R>;
-    /** Internal store recorder — wired by {@link CustomQueueResource.layer}. @internal */
+    /** Internal store recorder — wired by {@link CustomQueueHyperlink.layer}. @internal */
     readonly store?: QueueStoreWriter<T, E, void>;
   };
 
@@ -187,19 +187,19 @@ export type CustomQueueResourceConfigWithItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type CustomQueueResourceConfig<T, E, R> =
-  | CustomQueueResourceConfigWithoutItemSchema<T, E, R>
-  | CustomQueueResourceConfigWithItemSchema<T, E, R>;
+export type CustomQueueHyperlinkConfig<T, E, R> =
+  | CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R>
+  | CustomQueueHyperlinkConfigWithItemSchema<T, E, R>;
 
 /** @public */
-export type CustomQueueResourceOptionsWithoutItemSchema<T, E, R> = Omit<
-  CustomQueueResourceConfigWithoutItemSchema<T, E, R>,
+export type CustomQueueHyperlinkOptionsWithoutItemSchema<T, E, R> = Omit<
+  CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R>,
   "effect"
 >;
 
 /** @public */
-export type CustomQueueResourceOptionsWithItemSchema<T, E, R> = Omit<
-  CustomQueueResourceConfigWithItemSchema<T, E, R>,
+export type CustomQueueHyperlinkOptionsWithItemSchema<T, E, R> = Omit<
+  CustomQueueHyperlinkConfigWithItemSchema<T, E, R>,
   "effect"
 >;
 
@@ -326,7 +326,7 @@ const validateItemsWithSchema = <T>(
 };
 
 const adaptRefill = <T, E, EEnqueue, R>(
-  config: CustomQueueResourceConfig<T, E, R>,
+  config: CustomQueueHyperlinkConfig<T, E, R>,
   levels: ReturnType<typeof levelResolution>,
   projection: ReturnType<typeof buildCustomQueueProjection>,
 ): QueueRefill<T, E, EEnqueue, R> | undefined =>
@@ -367,7 +367,7 @@ const castProjection = (
   >;
 
 const makeCustomQueueEffectWithoutSchema = <
-  const C extends CustomQueueResourceConfigWithoutItemSchema<any, any, any>,
+  const C extends CustomQueueHyperlinkConfigWithoutItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -399,7 +399,7 @@ const makeCustomQueueEffectWithoutSchema = <
   });
 
 const makeCustomQueueEffectWithSchema = <
-  const C extends CustomQueueResourceConfigWithItemSchema<any, any, any>,
+  const C extends CustomQueueHyperlinkConfigWithItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -489,12 +489,12 @@ const makeCustomQueueEffectWithSchema = <
 };
 
 const hasItemSchema = <T, E, R>(
-  config: CustomQueueResourceConfig<T, E, R>,
-): config is CustomQueueResourceConfigWithItemSchema<T, E, R> =>
+  config: CustomQueueHyperlinkConfig<T, E, R>,
+): config is CustomQueueHyperlinkConfigWithItemSchema<T, E, R> =>
   config.itemSchema !== undefined;
 
 const makeCustomQueueEffectFromConfig = (
-  config: CustomQueueResourceConfig<any, any, any>,
+  config: CustomQueueHyperlinkConfig<any, any, any>,
 ): Effect.Effect<CustomQueueHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
   hasItemSchema(config)
     ? makeCustomQueueEffectWithSchema(config)
@@ -503,16 +503,16 @@ const makeCustomQueueEffectFromConfig = (
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
-    | CustomQueueResourceOptionsWithoutItemSchema<any, any, any>
-    | CustomQueueResourceOptionsWithItemSchema<any, any, any>
+    | CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any>
+    | CustomQueueHyperlinkOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 > = { readonly effect: F } & (O extends undefined ? unknown : O);
 
 function makeCustomQueueEffect<
   const F extends QueueWorkerEffect<any, any, any, any>,
   const O extends
-    | CustomQueueResourceOptionsWithoutItemSchema<any, any, any>
-    | CustomQueueResourceOptionsWithItemSchema<any, any, any>
+    | CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any>
+    | CustomQueueHyperlinkOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 >(
   effect: F,
@@ -527,7 +527,7 @@ function makeCustomQueueEffect<
   never,
   Scope.Scope | InferQueueWorkerRequirements<CustomConfigFromEffect<F, O>>
 >;
-function makeCustomQueueEffect<const C extends CustomQueueResourceConfig<any, any, any>>(
+function makeCustomQueueEffect<const C extends CustomQueueHyperlinkConfig<any, any, any>>(
   config: C,
 ): Effect.Effect<
   CustomQueueHandle<
@@ -540,14 +540,14 @@ function makeCustomQueueEffect<const C extends CustomQueueResourceConfig<any, an
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
 function makeCustomQueueEffect(
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | CustomQueueResourceConfig<any, any, any>,
-  options?: (CustomQueueResourceOptionsWithoutItemSchema<any, any, any> &
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | CustomQueueHyperlinkConfig<any, any, any>,
+  options?: (CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any> &
     CustomQueueLevelConfig),
 ): Effect.Effect<CustomQueueHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.levelCount === undefined) {
       return Effect.die(
-        new Error("CustomQueueResource.make requires levelCount in config or options"),
+        new Error("CustomQueueHyperlink.make requires levelCount in config or options"),
       );
     }
     return makeCustomQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
@@ -555,9 +555,9 @@ function makeCustomQueueEffect(
   return makeCustomQueueEffectFromConfig(effectOrConfig);
 }
 
-// Flat engine surface. The public `CustomQueueResource` namespace (`src/CustomQueueResource.ts`)
+// Flat engine surface. The public `CustomQueueHyperlink` namespace (`src/CustomQueueHyperlink.ts`)
 // re-exports `makeCustomQueueEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
-// flat (not an object literal) so `import * as CustomQueueResource` member access tree-shakes:
-// `CustomQueueResource.Tag` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
+// flat (not an object literal) so `import * as CustomQueueHyperlink` member access tree-shakes:
+// `CustomQueueHyperlink.Tag` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
 // public namespace can source both engine helpers from one module.
 export { makeCustomQueueEffect, queueRateLimiterLayer };

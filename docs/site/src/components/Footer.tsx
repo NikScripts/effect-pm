@@ -4,7 +4,7 @@
 import * as React from "react";
 
 const GITHUB = "https://github.com/NikScripts/effect-pm";
-const NPM = "https://www.npmjs.com/package/@nikscripts/effect-pm";
+const NPM = "https://www.npmjs.com/package/hyperlink-ts";
 const LICENSE = `${GITHUB}/blob/main/LICENSE`;
 
 export function Footer(): React.ReactElement {
@@ -12,7 +12,7 @@ export function Footer(): React.ReactElement {
     <footer className="site-footer">
       <div className="site-footer-inner">
         <div className="site-footer-brand">
-          <span className="site-footer-name">effect-pm</span>
+          <span className="site-footer-name">hyperlink-ts</span>
           <p className="site-footer-tag">
             Effect-native processes, queues, and resources — one contract, local or over RPC.
           </p>

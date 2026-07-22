@@ -61,7 +61,7 @@ This pushes both commits and version tags.
 
 ### Version History
 
-- **v0.7.0-beta.0** — Effect-first process runtime (`Polling` + `ProcessSchedule` layers, supervisor, exports). See `CHANGELOG.md`, `docs/legacy/PROCESS-API.md`, and `docs/legacy/RESOURCE-API.md`.
+- **v0.7.0-beta.0** — Effect-first process runtime (`Polling` + `ProcessSchedule` layers, supervisor, exports). See `CHANGELOG.md`, `docs/legacy/PROCESS-API.md`, and `docs/legacy/HYPERLINK-API.md`.
 - **v0.6.0-beta.x** — `ProcessStore` foundation, queue / `ProcessGroup` typing work
 - **v0.1.0** - Initial release
 - **v0.1.1** - Bug fixes and type exports
@@ -87,7 +87,7 @@ npm publish --dry-run
 npm pack --dry-run
 
 # Check published package info
-npm info @nikscripts/effect-pm
+npm info hyperlink-ts
 ```
 
 ### Troubleshooting
@@ -110,6 +110,6 @@ npm run build
 
 **Want to unpublish (within 72 hours):**
 ```bash
-npm unpublish @nikscripts/effect-pm@0.x.x
+npm unpublish hyperlink-ts@0.x.x
 ```
 ⚠️ Only use for serious issues, not recommended

@@ -28,7 +28,7 @@ export const nav: ReadonlyArray<NavGroup> = [
   {
     label: "Resources",
     slugs: [
-      "creating-a-resource",
+      "creating-a-hyperlink",
       "contracts",
       "fleets-and-peers",
       "readiness",
@@ -39,7 +39,7 @@ export const nav: ReadonlyArray<NavGroup> = [
     label: "Guides",
     slugs: [
       "queues",
-      "run-resources",
+      "run-hyperlinks",
       "processes",
       "stores",
       "logs",
@@ -63,7 +63,7 @@ export const nav: ReadonlyArray<NavGroup> = [
     // A collapsible group over the API routes: our own package first, then the all-packages index.
     label: "API Reference",
     links: [
-      { label: "Effect PM", href: "/api/effect-pm" },
+      { label: "Effect PM", href: "/api/hyperlink-ts" },
       { label: "All Packages", href: "/api" },
     ],
   },

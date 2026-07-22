@@ -3,15 +3,15 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
 // `constant` fields are PLAIN values (no yield*), resolved once at acquire — identical local and remote.
 
-class Cfg extends Resource.Tag<Cfg>()("const-test/Cfg", {
-  maxSize: Resource.constant(Schema.Number),
-  name: Resource.constant(Schema.String),
-  current: Resource.effect(Schema.Number),
+class Cfg extends Hyperlink.Tag<Cfg>()("const-test/Cfg", {
+  maxSize: Hyperlink.constant(Schema.Number),
+  name: Hyperlink.constant(Schema.String),
+  current: Hyperlink.effect(Schema.Number),
 }) {}
 
 const impl = {
@@ -27,7 +27,7 @@ it("constant fields are plain, resolved once — LOCAL", () =>
       expect(c.maxSize).toBe(100); // plain number, no yield*
       expect(c.name).toBe("roster"); // plain string
       expect(yield* c.current).toBe(7); // effect field still yields
-    }).pipe(Effect.provide(Resource.layer(Cfg, impl)), Effect.scoped),
+    }).pipe(Effect.provide(Hyperlink.layer(Cfg, impl)), Effect.scoped),
   ));
 
 const protocol = (url: string) =>
@@ -36,7 +36,7 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const Node = PmNode.httpServer([Resource.serve(Cfg, impl)]).pipe(
+const Node = PmNode.httpServer([Hyperlink.serve(Cfg, impl)]).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
@@ -53,7 +53,7 @@ it("constant fields are plain, resolved once — REMOTE (same shape)", () =>
         expect(c.name).toBe("roster");
         expect(yield* c.current).toBe(7);
       }).pipe(
-        Effect.provide(Resource.client(Cfg).pipe(Layer.provide(protocol(`${base}/rpc`)))),
+        Effect.provide(Hyperlink.client(Cfg).pipe(Layer.provide(protocol(`${base}/rpc`)))),
         Effect.scoped,
       );
     }).pipe(Effect.provide(Node), Effect.scoped),

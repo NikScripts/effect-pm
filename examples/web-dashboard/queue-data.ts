@@ -3,14 +3,14 @@
  *
  * Tag-driven data layer. Each queue **tag** is the source of truth; this builds the
  * atom bundle the widgets need (status / metrics+history / trend / logs + controls)
- * straight from the tag's live service. The service comes from `Resource.client` over
- * http — so this is the **remote** layer (swap `clientLayer` for `QueueResource.layer`
+ * straight from the tag's live service. The service comes from `Hyperlink.client` over
+ * http — so this is the **remote** layer (swap `clientLayer` for `QueueHyperlink.layer`
  * to run the engine locally; the widgets don't change). No `REGISTRY`, no `TREE`.
  */
 import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import * as Resource from "../../src/Resource";
-import { specOf } from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
+import { specOf } from "../../src/Hyperlink";
 import * as Group from "../../src/Group";
 import * as LogEntry from "../../src/LogEntry";
 import * as NodeStatus from "../../src/NodeStatus";
@@ -77,21 +77,21 @@ export const kindOf = (member: unknown): "queue" | "process" => {
 // In Node (the TUI) there's no proxy, so reach the servers directly.
 const inBrowser = typeof window !== "undefined";
 const dropletRpc = inBrowser ? "/rpc" : "http://localhost:7777/rpc";
-/** The Mini node's rpc endpoint (used by `httpClient`). */
+/** The Mini node's rpc endpoint (used by `http`). */
 export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 
 // One transport per HOST — each node serves its whole group on one /rpc (httpServer),
 // so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini. WebSocket
 // (not http) so the browser's many live streams multiplex over one connection per node instead
-// of starving at the ~6-connection HTTP/1.1 cap — see docs/observe/dashboard.md. `socketClient`
+// of starving at the ~6-connection HTTP/1.1 cap — see docs/observe/dashboard.md. `ws`
 // resolves a "/path" against the page origin, and swaps http→ws for the non-browser (CLI) url.
-const dropletTransport = Resource.socketClient(Droplet, { url: dropletRpc });
-const miniTransport = Resource.socketClient(MiniNode, { url: miniUrl });
+const dropletTransport = Hyperlink.ws(Droplet, { url: dropletRpc });
+const miniTransport = Hyperlink.ws(MiniNode, { url: miniUrl });
 
 // Point the nodeless NodeStatus client at a specific node with the 2-arg `client(tag, node)` form — it
 // reads the node's value and unwraps its transport. (The node is exposed in `appLayer` below.)
 const nodeStatusLayer = (resourceKey: string) =>
-  Resource.client(NodeStatus.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
+  Hyperlink.client(NodeStatus.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
@@ -101,19 +101,19 @@ export const appLayer = Layer.mergeAll(
   // without this, that node isn't resolvable and the node status hangs on "connecting…".
   dropletTransport,
   miniTransport,
-  Resource.client(Mail).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Jobs).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Billing).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Notify).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Worker1).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Worker2).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Worker3).pipe(Layer.provide(dropletTransport)),
-  Resource.client(RegionUS).pipe(Layer.provide(dropletTransport)),
-  Resource.client(RegionEU).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Daily).pipe(Layer.provide(dropletTransport)),
-  Resource.client(Weekly).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Mail).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Jobs).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Billing).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Notify).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Worker1).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Worker2).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Worker3).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(RegionUS).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(RegionEU).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Daily).pipe(Layer.provide(dropletTransport)),
+  Hyperlink.client(Weekly).pipe(Layer.provide(dropletTransport)),
   // KeyRotation lives on the Mini node — its own transport, not the Droplet.
-  Resource.client(KeyRotation).pipe(Layer.provide(miniTransport)),
+  Hyperlink.client(KeyRotation).pipe(Layer.provide(miniTransport)),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */
@@ -136,7 +136,7 @@ export interface QueueBundle {
   readonly clear: CommandAtom;
   readonly shutdown: CommandAtom;
 }
-type QueueStatus = QueueSvc["status"] extends Resource.Subscribable<infer S> ? S : never;
+type QueueStatus = QueueSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
 type QueueMetrics = QueueSvc["metrics"] extends {
   readonly stream: Stream.Stream<infer M, infer _E, infer _R>;
 } ? M : never;
@@ -187,7 +187,7 @@ const cachedAccumulator = <A, R>(opts: {
 
 const cache = new Map<string, QueueBundle>();
 
-const resourceLogsAccumulator = (resourceKey: string) =>
+const hyperlinkLogsAccumulator = (resourceKey: string) =>
   runtime.atom(
     cachedAccumulator({
       key: `${resourceKey}/logs`,
@@ -264,7 +264,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: resourceLogsAccumulator(tag.key),
+    logs: hyperlinkLogsAccumulator(tag.key),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
@@ -274,7 +274,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   return bundle;
 };
 
-type ProcessStatus = ProcessSvc["status"] extends Resource.Subscribable<infer S> ? S : never;
+type ProcessStatus = ProcessSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
 
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface ProcessBundle {
@@ -295,7 +295,7 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),
     // cached + query-then-tail, same generic mechanism as the queue.
-    logs: resourceLogsAccumulator(tag.key),
+    logs: hyperlinkLogsAccumulator(tag.key),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),

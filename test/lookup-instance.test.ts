@@ -3,7 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -12,12 +12,12 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-inst-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-inst-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Resource.Tag<Jobs>()("inst/Jobs", {
-  jobs: Resource.effect(Schema.Number),
-}).pipe(Resource.distributed) {}
+class Jobs extends Hyperlink.Tag<Jobs>()("inst/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
+}).pipe(Hyperlink.distributed) {}
 
 const jobsImpl = (n: number) => ({ jobs: Effect.succeed(n) });
 
@@ -51,7 +51,7 @@ describe("Node.Prototype.instance / .listen", () => {
       yield* Layer.build(Lookup.layerNode(lookupNode));
 
       const mailWorker = MailWorker.listen(
-        [Resource.serve(Jobs, jobsImpl(9))],
+        [Hyperlink.serve(Jobs, jobsImpl(9))],
       );
       const ctx = yield* Layer.build(
         mailWorker("w2").pipe(Layer.provide(lookupClient)),
@@ -85,11 +85,11 @@ describe("Node.Prototype.instance / .listen", () => {
       const lookup = Context.merge(lookupServer, lookupCtx);
 
       const worker = MailWorker.listen(
-        [Resource.serve(Jobs, jobsImpl(3))],
+        [Hyperlink.serve(Jobs, jobsImpl(3))],
       )
       // second factory with different impl — same Prototype, own curry
       const workerB = MailWorker.listen(
-        [Resource.serve(Jobs, jobsImpl(5))],
+        [Hyperlink.serve(Jobs, jobsImpl(5))],
       )
       const a = yield* Layer.build(
         worker().pipe(Layer.provide(lookupClient)),
@@ -115,14 +115,14 @@ describe("Node.Prototype.instance / .listen", () => {
       // Bare lookupClient stays fail-closed when many instances serve the Tag.
       const exit = yield* Effect.exit(
         Layer.build(
-          Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
+          Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
         ).pipe(Effect.scoped),
       );
       expectTaggedFailure(exit, "LookupClientError");
 
       // D4 — opt-in pick dials one replica.
       const soft = yield* Layer.build(
-        Resource.lookupClient(Jobs, { pick: "first" }).pipe(
+        Hyperlink.lookupClient(Jobs, { pick: "first" }).pipe(
           Layer.provide(lookupClient),
         ),
       );
@@ -139,7 +139,7 @@ describe("Node.Prototype.instance / .listen", () => {
       // Custom picker selects the Jobs=5 worker by ListenNode key.
       const nodeB = Context.get(b, Node.ListenNode);
       const softB = yield* Layer.build(
-        Resource.lookupClient(Jobs, {
+        Hyperlink.lookupClient(Jobs, {
           pick: (rows) =>
             rows.find((r) => r.nodeKey === nodeB.key) ?? rows[0]!,
         }).pipe(Layer.provide(lookupClient)),
@@ -156,16 +156,16 @@ describe("Node.Prototype.instance / .listen", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(25))),
   );
 
-  it.effect("named instance suffix is stable; peersLayer folds both via directory", () =>
+  it.live("named instance suffix is stable; peersLayer folds both via directory", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("peers-lookup");
       const lookupNode = Node.Tag()("inst/peers-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
-      class FleetJobs extends Resource.Tag<FleetJobs>()("inst/FleetJobs", {
-        jobs: Resource.effect(Schema.Number),
-        fleetJobs: Resource.effect(Schema.Number).pipe(Resource.fleet),
-      }).pipe(Resource.distributed) {}
+      class FleetJobs extends Hyperlink.Tag<FleetJobs>()("inst/FleetJobs", {
+        jobs: Hyperlink.effect(Schema.Number),
+        fleetJobs: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
+      }).pipe(Hyperlink.distributed) {}
 
       class PoolWorker extends Node.Prototype<PoolWorker, FleetJobs>(
         "inst/PoolWorker",
@@ -173,7 +173,7 @@ describe("Node.Prototype.instance / .listen", () => {
 
       const fleetImpl = (own: number) =>
         Effect.gen(function* () {
-          const peers = yield* Resource.peers(FleetJobs);
+          const peers = yield* Hyperlink.peers(FleetJobs);
           return {
             jobs: Effect.succeed(own),
             fleetJobs: combineQuery(peers, (p) => p.jobs, combineSum).pipe(
@@ -190,15 +190,15 @@ describe("Node.Prototype.instance / .listen", () => {
       const east = PoolWorker.instance("east");
       const westLive = PoolWorker.listen(
         [
-          Resource.serve(FleetJobs, fleetImpl(5)).pipe(
-            Layer.provide(Resource.peersFrom(FleetJobs, {})),
+          Hyperlink.serve(FleetJobs, fleetImpl(5)).pipe(
+            Layer.provide(Hyperlink.peersFrom(FleetJobs, {})),
           ),
         ],
       );
       const eastLive = PoolWorker.listen(
         [
-          Resource.serve(FleetJobs, fleetImpl(2)).pipe(
-            Layer.provide(Resource.peersLayer(FleetJobs, east)),
+          Hyperlink.serve(FleetJobs, fleetImpl(2)).pipe(
+            Layer.provide(Hyperlink.peersLayer(FleetJobs, east)),
           ),
         ],
       );
@@ -208,12 +208,12 @@ describe("Node.Prototype.instance / .listen", () => {
       );
 
       const peersCtx = yield* Layer.build(
-        Resource.peersLayer(FleetJobs, east).pipe(
+        Hyperlink.peersLayer(FleetJobs, east).pipe(
           Layer.provide(lookupClient),
         ),
       );
       const peerKeys = Object.keys(
-        yield* Resource.peers(FleetJobs).pipe(Effect.provide(peersCtx)),
+        yield* Hyperlink.peers(FleetJobs).pipe(Effect.provide(peersCtx)),
       );
       expect(peerKeys).toContain("inst/PoolWorker#west");
       expect(peerKeys).not.toContain("inst/PoolWorker#east");
@@ -242,7 +242,7 @@ describe("Node.Prototype.instance / .listen", () => {
         expect(yield* jobs.jobs).toBe(2);
         return yield* jobs.fleetJobs;
       }).pipe(
-        Effect.provide(Resource.client(FleetJobs, dialEast)),
+        Effect.provide(Hyperlink.client(FleetJobs, dialEast)),
         Effect.scoped,
       );
       expect(total).toBe(7);

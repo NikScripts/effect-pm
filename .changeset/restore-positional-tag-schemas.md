@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Restore positional wire-schema overloads on `QueueResource.Tag`, `Process.Tag`, and `RunResource.Tag`.

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Tighten Node transport `anyUnknownInErrorContext` surface (batch 1 — internal first).

@@ -1,5 +1,5 @@
 {
-  "name": "@nikscripts/effect-pm",
+  "name": "hyperlink-ts",
   "version": "0.8.0-beta.28",
   "packageManager": "pnpm@10.33.4",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
@@ -40,17 +40,17 @@
       "types": "./dist/Polling.d.ts",
       "default": "./dist/Polling.js"
     },
-    "./QueueResource": {
-      "types": "./dist/QueueResource.d.ts",
-      "default": "./dist/QueueResource.js"
+    "./QueueHyperlink": {
+      "types": "./dist/QueueHyperlink.d.ts",
+      "default": "./dist/QueueHyperlink.js"
     },
-    "./CustomQueueResource": {
-      "types": "./dist/CustomQueueResource.d.ts",
-      "default": "./dist/CustomQueueResource.js"
+    "./CustomQueueHyperlink": {
+      "types": "./dist/CustomQueueHyperlink.d.ts",
+      "default": "./dist/CustomQueueHyperlink.js"
     },
-    "./Resource": {
-      "types": "./dist/Resource.d.ts",
-      "default": "./dist/Resource.js"
+    "./Hyperlink": {
+      "types": "./dist/Hyperlink.d.ts",
+      "default": "./dist/Hyperlink.js"
     },
     "./Node": {
       "types": "./dist/Node.d.ts",
@@ -60,9 +60,9 @@
       "types": "./dist/MultiNode.d.ts",
       "default": "./dist/MultiNode.js"
     },
-    "./ResourceConfigure": {
-      "types": "./dist/ResourceConfigure.d.ts",
-      "default": "./dist/ResourceConfigure.js"
+    "./HyperlinkConfigure": {
+      "types": "./dist/HyperlinkConfigure.d.ts",
+      "default": "./dist/HyperlinkConfigure.js"
     },
     "./Logs": {
       "types": "./dist/Logs.d.ts",
@@ -124,13 +124,13 @@
       "types": "./dist/ApiUsageSchema.d.ts",
       "default": "./dist/ApiUsageSchema.js"
     },
-    "./HttpApiResource": {
-      "types": "./dist/HttpApiResource.d.ts",
-      "default": "./dist/HttpApiResource.js"
+    "./HttpApiHyperlink": {
+      "types": "./dist/HttpApiHyperlink.d.ts",
+      "default": "./dist/HttpApiHyperlink.js"
     },
-    "./RunResource": {
-      "types": "./dist/RunResource.d.ts",
-      "default": "./dist/RunResource.js"
+    "./RunHyperlink": {
+      "types": "./dist/RunHyperlink.d.ts",
+      "default": "./dist/RunHyperlink.js"
     },
     "./HttpClientRunGate": {
       "types": "./dist/HttpClientRunGate.d.ts",
@@ -204,8 +204,8 @@
     "example:session": "bash scripts/effect-example.sh",
     "example:dashboard-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-live.tsx",
-    "example:queue-resource": "tsx examples/forms/queue/queue-resource-priority-retry.ts",
-    "example:custom-queue-resource": "tsx examples/forms/queue/custom-queue-resource-n-level.ts",
+    "example:queue-hyperlink": "tsx examples/forms/queue/queue-hyperlink-priority-retry.ts",
+    "example:custom-queue-hyperlink": "tsx examples/forms/queue/custom-queue-hyperlink-n-level.ts",
     "example:process-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
     "example:process-supervisor-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
     "example:sports-polling-accelerating": "tsx examples/forms/polling/polling-spaced-read.ts && tsx examples/forms/polling/polling-accelerating-reset-cadence.ts && tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",

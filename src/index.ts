@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  *
- * **effect-pm** (`@nikscripts/effect-pm`) — Effect-first **process orchestration** and **queue
+ * **hyperlink-ts** (`hyperlink-ts`) — Effect-first **process orchestration** and **queue
  * resources** for long-running applications.
  *
  * @remarks
@@ -14,24 +14,24 @@
  *   fork-time requirements stay accurate in TypeScript. Run windows are built with
  *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
  *   `Process.window` / `Process.at`).
- * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
+ * - **`QueueHyperlink`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
  * - **`Store`** — EventJournal-backed execution / queue / run / log history; process stores via
  *   `Process.store(tag)` and `Store.Service`.
- * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
- *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
+ * - **Toolkit (location-transparent resources)** — **`Hyperlink`** is the foundation: a tag is
+ *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Hyperlink.client` /
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
  *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
- *   `@nikscripts/effect-pm/Process`) and the toolkit queue (from
- *   `@nikscripts/effect-pm/QueueResource`) — each with `Tag` / `layer` / `configure` / `serve` /
+ *   `hyperlink-ts/Process`) and the toolkit queue (from
+ *   `hyperlink-ts/QueueHyperlink`) — each with `Tag` / `layer` / `configure` / `serve` /
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See the live book under `docs/resources/` and `docs/guides/`.
- * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
+ * - **`RunHyperlink`**, **`HttpClientRunGate`**, **`HttpApiHyperlink`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
- *   (metrics/logs history); in-memory or SQLite (`@nikscripts/effect-pm/storage/sqlite`).
+ *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
  *
  * ## Where to read next
  *
@@ -44,27 +44,27 @@
  * ## Import style
  *
  * Every public API lives under a **namespace** in its source module
- * (`ResourceConfigure`, `Store`, …). The root barrel re-exports the same bindings under
+ * (`HyperlinkConfigure`, `Store`, …). The root barrel re-exports the same bindings under
  * short names where useful.
  *
  * ## Dedicated subpaths
  *
- * Service/resource subpaths mirror namespaces: **`@nikscripts/effect-pm/Process`**,
- * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/ResourceConfigure`**,
- * **`@nikscripts/effect-pm/Store`**, and **`@nikscripts/effect-pm/Logs`**.
+ * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Process`**,
+ * **`hyperlink-ts/QueueHyperlink`**, **`hyperlink-ts/HyperlinkConfigure`**,
+ * **`hyperlink-ts/Store`**, and **`hyperlink-ts/Logs`**.
  *
- * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueResource`** (toolkit queue),
- * **`@nikscripts/effect-pm/MultiNode`** (multi-instance gather/fold),
- * **`@nikscripts/effect-pm/Group`**,
- * **`@nikscripts/effect-pm/HistoryStore`**,
- * and **`@nikscripts/effect-pm/DurableQueueStore`**.
+ * Toolkit subpaths: **`hyperlink-ts/Hyperlink`** (foundation + `specOf` / `methodMeta`),
+ * **`hyperlink-ts/QueueHyperlink`** (toolkit queue),
+ * **`hyperlink-ts/MultiNode`** (multi-instance gather/fold),
+ * **`hyperlink-ts/Group`**,
+ * **`hyperlink-ts/HistoryStore`**,
+ * and **`hyperlink-ts/DurableQueueStore`**.
  *
  * Durable logs: register `Node.logs` / toolkit `*.store(tag)` on a {@link Store.Service}
  * (`layerMemory` / `layer` bake in capture + per-registration tails). Capture/relay:
- * `@nikscripts/effect-pm/Logs`.
+ * `hyperlink-ts/Logs`.
  *
- * Durable adapters: **`@nikscripts/effect-pm/storage/sqlite`**
+ * Durable adapters: **`hyperlink-ts/storage/sqlite`**
  * (`SQLiteDurableQueueStore`, `SQLiteHistoryStore`).
  *
  * ## Source-only helpers
@@ -80,33 +80,33 @@
  * at script entry (`examples/shared/demo-harness.ts`, same idea as `@effect/platform-node`
  * samples). **Tests** may use `Effect.provide` with layers, matching Effect’s own suites.
  *
- * @module @nikscripts/effect-pm
+ * @module hyperlink-ts
  */
 
 // ============================================================================
-// effect-pm - Main exports (see @packageDocumentation above)
+// hyperlink-ts - Main exports (see @packageDocumentation above)
 // ============================================================================
 
 // The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
 // access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
-// engine only when used. Engine + Resource toolkit are both members (`Process.make`, `Process.Tag`, …).
+// engine only when used. Engine + Hyperlink toolkit are both members (`Process.make`, `Process.Tag`, …).
 export * as Process from "./Process";
 export { ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
 export * as Polling from "./Polling";
-// The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serve`
+// The single unified QueueHyperlink namespace. `export * as` (module namespace, Effect-style) so
+// member access tree-shakes: `QueueHyperlink.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
-export * as QueueResource from "./QueueResource";
-export * as RunResource from "./RunResource";
+export * as QueueHyperlink from "./QueueHyperlink";
+export * as RunHyperlink from "./RunHyperlink";
 export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
   acceptJson,
   instrumentEndpoints,
-  type HttpApiResourceConfig,
-  type HttpApiResourceLayerEffectConfig,
-} from "./HttpApiResource";
-export * as HttpApiResource from "./HttpApiResource";
+  type HttpApiHyperlinkConfig,
+  type HttpApiHyperlinkLayerEffectConfig,
+} from "./HttpApiHyperlink";
+export * as HttpApiHyperlink from "./HttpApiHyperlink";
 export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
@@ -133,7 +133,7 @@ export type {
 export {
   DuplicateGroupId,
   DuplicateInstance,
-  DuplicateResourceKey,
+  DuplicateHyperlinkKey,
   EffectFnMissingPayload,
   IdentityMultiNode,
   IdentitySelfRequired,
@@ -149,10 +149,10 @@ export {
   isVoidCommand,
   isEffect,
   specOf,
-} from "./Resource";
-// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` /
-// `Node.Tag` pull only what's used. Import `* as Resource` / `* as Node` from the subpath.
-export * as Resource from "./Resource";
+} from "./Hyperlink";
+// `Hyperlink` as a tree-shakeable module namespace (Effect-style): `Hyperlink.Tag` /
+// `Node.Tag` pull only what's used. Import `* as Hyperlink` / `* as Node` from the subpath.
+export * as Hyperlink from "./Hyperlink";
 export * as Node from "./Node";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
@@ -170,8 +170,8 @@ export type {
   MethodAnnotations,
   MethodKind,
   MethodMeta,
-  ResourceInstance,
-  ResourceTag,
+  HyperlinkInstance,
+  HyperlinkTag,
   ServiceOf,
   Shape,
   ShapeOf,
@@ -181,7 +181,7 @@ export type {
   Wire,
   WireOf,
   WireShape,
-} from "./Resource";
+} from "./Hyperlink";
 export type {
   AnyNode,
   AddressedNode,
@@ -194,16 +194,16 @@ export type {
 } from "./Node";
 
 /**
- * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},
- * and {@link RunResource.Service}.
+ * Layer-composed configure patches for {@link Process.Service}, {@link QueueHyperlink.Service},
+ * and {@link RunHyperlink.Service}.
  */
 export {
   configureLayer,
   foldConfig,
   resourceConfigureTagKey,
-} from "./ResourceConfigure";
-export * as ResourceConfigure from "./ResourceConfigure";
-export type { ConfigPatch } from "./ResourceConfigure";
+} from "./HyperlinkConfigure";
+export * as HyperlinkConfigure from "./HyperlinkConfigure";
+export type { ConfigPatch } from "./HyperlinkConfigure";
 
 // CLI
 
@@ -259,12 +259,12 @@ export type {
 
 // Types - Polling
 
-// Types - QueueResource
-export * as CustomQueueResource from "./CustomQueueResource";
+// Types - QueueHyperlink
+export * as CustomQueueHyperlink from "./CustomQueueHyperlink";
 
 export type {
   CustomQueueTagConfig,
-} from "./CustomQueueResource";
+} from "./CustomQueueHyperlink";
 
 export {
   customQueueControlSpec,
@@ -273,7 +273,7 @@ export {
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,
-} from "./CustomQueueResource";
+} from "./CustomQueueHyperlink";
 
 export {
   QueueItemCodecDescriptorSchema,
@@ -286,34 +286,34 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./QueueResource";
+} from "./QueueHyperlink";
 
-// Types - RunResource
+// Types - RunHyperlink
 export type {
   RunGateHandle,
   RunGateStatus,
-  RunResourceConfig,
-  RunResourceHandle,
-  RunResourceLayerConfig,
-  RunResourceLayerEffect,
-  RunResourceRunner,
-  RunResourceRunnerConfig,
-  RunResourceServiceConfig,
-  RunResourceServiceDefinition,
-  RunResourceServiceEffect,
-  RunResourceStaticRun,
-  RunResourceTagDefinition,
-  RunResourceTagSchemas,
-  RunResourceWireSchemas,
+  RunHyperlinkConfig,
+  RunHyperlinkHandle,
+  RunHyperlinkLayerConfig,
+  RunHyperlinkLayerEffect,
+  RunHyperlinkRunner,
+  RunHyperlinkRunnerConfig,
+  RunHyperlinkServiceConfig,
+  RunHyperlinkServiceDefinition,
+  RunHyperlinkServiceEffect,
+  RunHyperlinkStaticRun,
+  RunHyperlinkTagDefinition,
+  RunHyperlinkTagSchemas,
+  RunHyperlinkWireSchemas,
   RunInstanceSpec,
-} from "./RunResource";
+} from "./RunHyperlink";
 export {
   runGateStatus,
   runSpec,
-  kind as runResourceKind,
-  layer as runResourceLayer,
-  serve as runResourceServe,
-  serveRemote as runResourceServeRemote,
-} from "./RunResource";
+  kind as runHyperlinkKind,
+  layer as runHyperlinkLayer,
+  serve as runHyperlinkServe,
+  serveRemote as runHyperlinkServeRemote,
+} from "./RunHyperlink";
 
 // Types - Control Service

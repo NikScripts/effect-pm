@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Clock, Duration, Effect, Layer, Ref } from "effect";
 import * as Process from "../src/Process";
-import { foldConfig } from "../src/ResourceConfigure";
-import * as QueueResource from "../src/QueueResource";
-import type { EffectContext } from "../src/QueueResource";
+import { foldConfig } from "../src/HyperlinkConfigure";
+import * as QueueHyperlink from "../src/QueueHyperlink";
+import type { EffectContext } from "../src/QueueHyperlink";
 
-describe("ResourceConfigure", () => {
+describe("HyperlinkConfigure", () => {
   it("foldConfig stacks partial patches and function updaters", () => {
     const base = { concurrency: 10, paused: false, label: "a" };
     const effective = foldConfig(
@@ -29,11 +29,11 @@ describe("ResourceConfigure", () => {
     expect(effective.effect(3)).toBe(8);
   });
 
-  it.effect("QueueResource.Service folds configure layer before runtime", () =>
+  it.effect("QueueHyperlink.Service folds configure layer before runtime", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make(0);
 
-      class TestQueue extends QueueResource.Service<TestQueue, number, never>()(
+      class TestQueue extends QueueHyperlink.Service<TestQueue, number, never>()(
         "@test/ConfigureQueue",
         {
           effect: (_item: number, _ctx: EffectContext<number, never, never>) =>
@@ -64,11 +64,11 @@ describe("ResourceConfigure", () => {
     }),
   );
 
-  it.live("QueueResource.Service configure can patch rateLimit", () =>
+  it.live("QueueHyperlink.Service configure can patch rateLimit", () =>
     Effect.gen(function* () {
       const starts = yield* Ref.make(0);
 
-      class RateLimitedQueue extends QueueResource.Service<RateLimitedQueue, number, never>()(
+      class RateLimitedQueue extends QueueHyperlink.Service<RateLimitedQueue, number, never>()(
         "@test/ConfigureRateLimitQueue",
         {
           effect: () => Ref.update(starts, (n) => n + 1),

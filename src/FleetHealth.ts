@@ -3,7 +3,7 @@
  *
  * Per-node readiness (`withReadiness` → `/health` / `NodeStatus`) stays **local** and never hops to
  * peers. FleetHealth is the **separate** glass: leaf `local` is this node's readiness aggregate;
- * fleet fields fold peers' `local` via {@link Resource.peers} with Effect `Exit` kept intact so a
+ * fleet fields fold peers' `local` via {@link Hyperlink.peers} with Effect `Exit` kept intact so a
  * down neighbour is {@link Unreachable}, not silently omitted.
  *
  * ## Shape (Telemetry twin)
@@ -12,14 +12,14 @@
  *   shape as `NodeStatus.resources`).
  * - Fleet: `byNode` / `status` — map + rollup (`ok` | `degraded` | `partial`).
  *
- * Discharge the mesh with {@link Resource.peersLayer} (or {@link alone} for a single node).
+ * Discharge the mesh with {@link Hyperlink.peersLayer} (or {@link alone} for a single node).
  *
  * @module FleetHealth
  */
 import { Effect, Exit, Layer, Schema } from "effect";
 import { combineByNodeExit, combineQuery } from "./MultiNode";
 import * as NodeStatus from "./NodeStatus";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import {
   Tag as resourceTag,
   layer as resourceLayer,
@@ -29,9 +29,9 @@ import {
   fleet,
   type NodeBoundTag,
   type PeersId,
-  type ResourceTag,
+  type HyperlinkTag,
   type SelfNodeId,
-} from "./Resource";
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 import * as Node from "./Node";
 
@@ -118,12 +118,12 @@ const fleetHealthSpec = {
 export type FleetHealthSpec = typeof fleetHealthSpec;
 
 /**
- * This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`).
+ * This contract's canonical kind (stamped on every tag; read via `Hyperlink.kindOf`).
  *
  * @category utils
  * @public
  */
-export const kind = "@nikscripts/effect-pm/FleetHealth";
+export const kind = "hyperlink-ts/FleetHealth";
 
 /**
  * A FleetHealth instance tag.
@@ -131,7 +131,7 @@ export const kind = "@nikscripts/effect-pm/FleetHealth";
  * @category models
  * @public
  */
-export type FleetHealthTag<Self> = ResourceTag<Self, FleetHealthSpec>;
+export type FleetHealthTag<Self> = HyperlinkTag<Self, FleetHealthSpec>;
 
 /**
  * A node-bound {@link FleetHealthTag}.
@@ -161,7 +161,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  *
  * ```ts
  * class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
- *   Resource.nodes([DropletEast, DropletWest]),
+ *   Hyperlink.nodes([DropletEast, DropletWest]),
  * ) {}
  * ```
  *
@@ -212,7 +212,7 @@ export interface FleetHealthOptions {
 
 /** Identity node for a **non-meshed** FleetHealth instance. @internal */
 class FleetHealthAloneNode extends Node.Tag<FleetHealthAloneNode>()(
-  "@nikscripts/effect-pm/FleetHealth/alone",
+  "hyperlink-ts/FleetHealth/alone",
 ) {}
 
 /**
@@ -225,8 +225,8 @@ export const alone = <Self>(
   tag: FleetHealthTag<Self>,
 ): Layer.Layer<PeersId<Self> | SelfNodeId<Self>> =>
   Layer.merge(
-    Resource.peersFrom(tag, {}),
-    Resource.selfNodeLayer(tag, FleetHealthAloneNode),
+    Hyperlink.peersFrom(tag, {}),
+    Hyperlink.selfNodeLayer(tag, FleetHealthAloneNode),
   );
 
 /** Build {@link LocalHealth} from a readiness row list. @internal */
@@ -298,8 +298,8 @@ const buildImpl = <Self>(
   PeersId<Self> | SelfNodeId<Self>
 > =>
   Effect.gen(function* () {
-    const self = yield* Resource.selfNode(tag);
-    const peers = yield* Resource.peers(tag);
+    const self = yield* Hyperlink.selfNode(tag);
+    const peers = yield* Hyperlink.peers(tag);
     const readiness = options?.readiness ?? Effect.succeed([]);
     const local = readiness.pipe(Effect.map(localFrom));
     return {
@@ -317,7 +317,7 @@ const buildImpl = <Self>(
   });
 
 /**
- * Local layer — wires leaf + fleet fields. Requires {@link alone} or {@link Resource.peersLayer}.
+ * Local layer — wires leaf + fleet fields. Requires {@link alone} or {@link Hyperlink.peersLayer}.
  *
  * @category layers & serving
  * @public
@@ -326,7 +326,7 @@ export const layer = <Self>(
   tag: FleetHealthTag<Self>,
   options?: FleetHealthOptions,
 ): Layer.Layer<
-  Self | Resource.Local<Self>,
+  Self | Hyperlink.Local<Self>,
   never,
   PeersId<Self> | SelfNodeId<Self>
 > =>
@@ -351,11 +351,11 @@ export const serveRemote = <Self>(
   );
 
 /**
- * Serve **and** grant the local instance — counterpart to {@link Resource.serve}.
+ * Serve **and** grant the local instance — counterpart to {@link Hyperlink.serve}.
  *
  * ```ts
  * FleetHealth.serve(MeshHealth, { readiness }).pipe(
- *   Layer.provide(Resource.peersLayer(MeshHealth, DropletEast)),
+ *   Layer.provide(Hyperlink.peersLayer(MeshHealth, DropletEast)),
  * )
  * ```
  *

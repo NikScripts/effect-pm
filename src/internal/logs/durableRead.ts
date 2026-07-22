@@ -77,7 +77,7 @@ export const queryDurableScope = (
 };
 
 /**
- * Node journal via Storage (`Resource.store(node)` / `Node.logs`), or `[]` when unregistered.
+ * Node journal via Storage (`Hyperlink.store(node)` / `Node.logs`), or `[]` when unregistered.
  *
  * @internal
  */

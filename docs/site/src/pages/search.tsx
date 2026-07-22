@@ -8,8 +8,8 @@ export default function SearchPage() {
   return (
     <>
       <PageMeta
-        title="Search — effect-pm"
-        description="Search the effect-pm docs, API reference, and glossary."
+        title="Search — hyperlink-ts"
+        description="Search the hyperlink-ts docs, API reference, and glossary."
       />
       <article className="prose">
         <h1>Search</h1>

@@ -1,18 +1,18 @@
 /**
- * Layer-composed configuration for {@link Process.Service}, {@link QueueResource.Service},
- * and {@link RunResource.Service}.
+ * Layer-composed configuration for {@link Process.Service}, {@link QueueHyperlink.Service},
+ * and {@link RunHyperlink.Service}.
  *
  * @remarks
  * - **Defaults** live on the service factory (`defaultSpec` / factory config).
  * - **`configureLayer`** appends a {@link ConfigPatch} under a resource id (Context tag).
  * - The resource **`layer`** calls {@link foldConfiguredSpec} once at acquisition, then builds
- *   runtime state (for example {@link QueueResource}'s `makeQueueRuntime`).
+ *   runtime state (for example {@link QueueHyperlink}'s `makeQueueRuntime`).
  * - Patches are **not** hot-reloaded after the layer is built.
  * - **`Layer.provide` / `Layer.provideMerge` order** is ordinary Effect layering for patch/service
  *   conflicts. Soft Storage override is **not** “later wins”: provide the app
  *   {@link Store.Service} **into** the toolkit `layer` / `serve` (see `docs/guides/stores.md`).
  *
- * @module ResourceConfigure
+ * @module HyperlinkConfigure
  */
 
 import { Context, Effect, Layer, Option } from "effect";
@@ -113,7 +113,7 @@ const emptyPatches = <T extends object>(): ReadonlyArray<ConfigPatch<T>> => [];
  * @internal
  */
 export const resourceConfigureTagKey = (resourceId: string): string =>
-  `@nikscripts/effect-pm/ResourceConfigure/${resourceId}`;
+  `hyperlink-ts/HyperlinkConfigure/${resourceId}`;
 
 const resourceConfigureTag = <T extends object>(resourceId: string) =>
   Context.Service<never, ReadonlyArray<ConfigPatch<T>>>()(
@@ -184,19 +184,19 @@ export const configureWrapEffectField = <
   }));
 
 // Layer-composed configure patches for resource and process services. The module is the
-// namespace (`import * as ResourceConfigure`): `configureLayer` / `foldConfig` /
+// namespace (`import * as HyperlinkConfigure`): `configureLayer` / `foldConfig` /
 // `foldConfiguredSpec` are the flat exports above; `tagKey` / `wrapEffectField` are aliased
 // below so the namespace members match. Root imports match these bindings.
 
 /**
- * Deterministic configure tag key for a resource id, aliased as `ResourceConfigure.tagKey`.
+ * Deterministic configure tag key for a resource id, aliased as `HyperlinkConfigure.tagKey`.
  *
  * @public
  */
 export { resourceConfigureTagKey as tagKey };
 
 /**
- * Wrap a configured spec's `effect` field, aliased as `ResourceConfigure.wrapEffectField`.
+ * Wrap a configured spec's `effect` field, aliased as `HyperlinkConfigure.wrapEffectField`.
  *
  * @public
  */

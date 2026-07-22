@@ -3,22 +3,22 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
-import { specOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { specOf } from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
 // A **nested** spec: top-level leaves alongside groups of leaves — an `effect`, a `stream`, and a
 // payload `effectFn` living under `connections` / `admin`. Proves the spec-tree flattens on the wire and
 // nests back in the service (the same `yield* Tag` code, local or remote).
-class Server extends Resource.Tag<Server>()("nest-test/Server", {
-  name: Resource.effect(Schema.String),
+class Server extends Hyperlink.Tag<Server>()("nest-test/Server", {
+  name: Hyperlink.effect(Schema.String),
   connections: {
-    size: Resource.effect(Schema.Number),
-    total: Resource.effect(Schema.Number),
-    changes: Resource.stream(Schema.Number),
+    size: Hyperlink.effect(Schema.Number),
+    total: Hyperlink.effect(Schema.Number),
+    changes: Hyperlink.stream(Schema.Number),
   },
   admin: {
-    ban: Resource.effectFn(Schema.Struct({ user: Schema.String }), Schema.Boolean),
+    ban: Hyperlink.effectFn(Schema.Struct({ user: Schema.String }), Schema.Boolean),
   },
 }) {}
 
@@ -66,13 +66,13 @@ it("nested spec — LOCAL: groups resolve; nested stream + payload fn work", () 
       // nested stream
       const seen = yield* Stream.runCollect(p.connections.changes);
       expect(Array.from(seen)).toEqual([1, 2, 3]);
-    }).pipe(Effect.provide(Resource.layer(Server, impl)), Effect.scoped),
+    }).pipe(Effect.provide(Hyperlink.layer(Server, impl)), Effect.scoped),
   ));
 
 it("nested spec — REMOTE over http: same nested access across the wire", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const Node = PmNode.httpServer([Resource.serve(Server, impl)]).pipe(
+      const Node = PmNode.httpServer([Hyperlink.serve(Server, impl)]).pipe(
         Layer.provideMerge(NodeHttpServer.layerTest),
       );
 
@@ -92,7 +92,7 @@ it("nested spec — REMOTE over http: same nested access across the wire", () =>
           expect(Array.from(seen)).toEqual([1, 2, 3]);
         }).pipe(
           Effect.provide(
-            Resource.client(Server).pipe(Layer.provide(protocol(`${base}/rpc`))),
+            Hyperlink.client(Server).pipe(Layer.provide(protocol(`${base}/rpc`))),
           ),
           Effect.scoped,
         );

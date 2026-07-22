@@ -1,6 +1,6 @@
 "use client";
 
-// The most basic resource: a RunResource (a concurrency-gated effect you call on demand).
+// The most basic resource: a RunHyperlink (a concurrency-gated effect you call on demand).
 // Create it → run it from a button → watch the live in-flight count. No dashboard widget;
 // live values read straight off the service's Subscribables. Tailwind scoped to .pm-dashboard.
 
@@ -8,7 +8,7 @@ import * as React from "react";
 import "../styles/widgets.css";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
-import { runFn, inFlightAtom } from "./double-resource.js";
+import { runFn, inFlightAtom } from "./double-hyperlink.js";
 
 const stat = (label: string, value: React.ReactNode) => (
   <span key={label} className="text-muted-foreground">
@@ -30,7 +30,7 @@ function Panel(): React.ReactElement {
     <div className="pm-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">docs/Double</span>
-        <span className="text-xs text-muted-foreground">RunResource · concurrency 2 · in your browser</span>
+        <span className="text-xs text-muted-foreground">RunHyperlink · concurrency 2 · in your browser</span>
       </div>
       <div className="flex flex-wrap gap-4 text-xs">
         {stat("last result", last)}
@@ -59,7 +59,7 @@ function Panel(): React.ReactElement {
   );
 }
 
-export function RunResourceIsland(): React.ReactElement {
+export function RunHyperlinkIsland(): React.ReactElement {
   return (
     <RegistryProvider>
       <Panel />

@@ -89,7 +89,7 @@ const program = Effect.gen(function* () {
   const wanted = process.argv.slice(2);
   // Only the effect-smol packages: their source lives under repos/ and needs the precompute.
   const pkgs = (yield* packages())
-    .filter((p) => p.slug !== "effect-pm")
+    .filter((p) => p.slug !== "hyperlink-ts")
     .filter((p) => wanted.length === 0 || wanted.includes(p.slug));
   if (pkgs.length === 0) {
     yield* Console.error("no effect packages in api-data — run gen-api first");

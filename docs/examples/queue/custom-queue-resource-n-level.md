@@ -1,24 +1,24 @@
-{#custom-queue-resource-n-level title="CustomQueue — N-Level Lanes" status="draft" appliesTo=all}
+{#custom-queue-hyperlink-n-level title="CustomQueue — N-Level Lanes" status="draft" appliesTo=all}
 # CustomQueue — N-Level Lanes
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/forms/queue/custom-queue-resource-n-level.ts`](https://github.com/NikScripts/effect-pm/blob/integration/examples/forms/queue/custom-queue-resource-n-level.ts)  
-**Run:** `pnpm run example:custom-queue-resource`  
+**Source:** [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](https://github.com/NikScripts/effect-pm/blob/integration/examples/forms/queue/custom-queue-resource-n-level.ts)  
+**Run:** `pnpm run example:custom-queue-hyperlink`  
 **Hub:** [Examples → Queue](/docs/examples#queue)
 
-`CustomQueueResource` — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
+`CustomQueueHyperlink` — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
 
 {.twoslash}
 ``` ts
 import { Effect, Schema } from "effect"
-import { CustomQueueResource } from "@nikscripts/effect-pm"
+import { CustomQueueHyperlink } from "hyperlink-ts"
 
 const JobSchema = Schema.Struct({ id: Schema.String, kind: Schema.String })
 
 /** Tag factory: config object — `{ payload, levelCount, namedLevels? }`. */
-class Jobs extends CustomQueueResource.Tag<Jobs>()("examples/CustomJobs", {
+class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("examples/CustomJobs", {
   payload: JobSchema,
   levelCount: 4,
   namedLevels: { interactive: 0, standard: 2, batch: 3 },
@@ -46,7 +46,7 @@ const program = Effect.gen(function* () {
 void Effect.runPromise(
   program.pipe(
     Effect.provide(
-      CustomQueueResource.layer(Jobs, {
+      CustomQueueHyperlink.layer(Jobs, {
         levelCount: 4,
         namedLevels: { interactive: 0, standard: 2, batch: 3 },
         takeAlgorithm: "weighted",

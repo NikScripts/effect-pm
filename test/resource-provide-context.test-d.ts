@@ -1,29 +1,29 @@
 import { Context, Effect, Stream, Schema } from "effect";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
-// Type-level proof: `Resource.provideContext` strips the provided `R` from every Effect method — the result
-// is R-free and assignable to `Resource.ImplOf` — while Stream / Subscribable members are left untouched.
+// Type-level proof: `Hyperlink.provideContext` strips the provided `R` from every Effect method — the result
+// is R-free and assignable to `Hyperlink.ImplOf` — while Stream / Subscribable members are left untouched.
 
 class Dep extends Context.Service<Dep, number>()(
-  "@nikscripts/effect-pm/test/resource-provide-context.test-d/Dep",
+  "hyperlink-ts/test/resource-provide-context.test-d/Dep",
 ) {}
 
-class T extends Resource.Tag<T>()("provide-context-d/T", {
-  value: Resource.ref(Schema.Number),
-  feed: Resource.stream(Schema.Number),
-  scaled: Resource.effect(Schema.Number),
-  add: Resource.effectFn(Schema.Struct({ by: Schema.Number })),
+class T extends Hyperlink.Tag<T>()("provide-context-d/T", {
+  value: Hyperlink.ref(Schema.Number),
+  feed: Hyperlink.stream(Schema.Number),
+  scaled: Hyperlink.effect(Schema.Number),
+  add: Hyperlink.effectFn(Schema.Struct({ by: Schema.Number })),
   group: {
-    stream: Resource.stream(Schema.Number),
-    query: Resource.effect(Schema.Array(Schema.Number)),
+    stream: Hyperlink.stream(Schema.Number),
+    query: Hyperlink.effect(Schema.Array(Schema.Number)),
   },
 }) {}
 
-type Spec = Resource.SpecOf<typeof T>;
+type Spec = Hyperlink.SpecOf<typeof T>;
 
 // The pre-provide impl: each Effect method still carries the worker requirement `Dep` (annotated with
 // `WithRequirement` so the destructured params keep their contextual types from the spec).
-const impl: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep> = {
+const impl: Hyperlink.WithRequirement<Hyperlink.ImplOf<Spec>, Dep> = {
   value: { get: Effect.succeed(1), changes: Stream.make(1) },
   feed: Stream.make(1),
   scaled: Effect.map(Dep, (n) => n), // requires Dep
@@ -34,10 +34,10 @@ const impl: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep> = {
   },
 };
 
-const provided = Resource.provideContext(impl, T[Resource.specSym], Context.make(Dep, 1));
+const provided = Hyperlink.provideContext(impl, T[Hyperlink.specSym], Context.make(Dep, 1));
 
 // The provided impl is R-free and satisfies `ImplOf` — the whole point (no cast at the queue call site).
-provided satisfies Resource.ImplOf<Spec>;
+provided satisfies Hyperlink.ImplOf<Spec>;
 
 // Each Effect method is R-free: `scaled` is a bare `Effect<number, never, never>` …
 void ({} as typeof provided.scaled satisfies Effect.Effect<number, never, never>);
@@ -54,17 +54,17 @@ void ({} as typeof provided.group.query satisfies Effect.Effect<
 
 // Stream and Subscribable members are untouched.
 void ({} as typeof provided.feed satisfies Stream.Stream<number>);
-void ({} as typeof provided.value satisfies Resource.Subscribable<number>);
+void ({} as typeof provided.value satisfies Hyperlink.Subscribable<number>);
 void ({} as typeof provided.group.stream satisfies Stream.Stream<number>);
 
 // --- Soundness: `provideContext` is SUBTRACTIVE (`Exclude<R, Ctx>`), not an unconditional strip to
 // `never`. A method needing a service the provided context does NOT cover keeps a residual requirement,
 // so the mistake surfaces at the `ImplOf` assignment instead of crashing at runtime. ---
 class Dep2 extends Context.Service<Dep2, string>()(
-  "@nikscripts/effect-pm/test/resource-provide-context.test-d/Dep2",
+  "hyperlink-ts/test/resource-provide-context.test-d/Dep2",
 ) {}
 
-const implPartial: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep | Dep2> = {
+const implPartial: Hyperlink.WithRequirement<Hyperlink.ImplOf<Spec>, Dep | Dep2> = {
   value: { get: Effect.succeed(1), changes: Stream.make(1) },
   feed: Stream.make(1),
   scaled: Effect.flatMap(Dep2, () => Effect.map(Dep, (n) => n)), // needs BOTH Dep and Dep2
@@ -76,7 +76,7 @@ const implPartial: Resource.WithRequirement<Resource.ImplOf<Spec>, Dep | Dep2> =
 };
 
 // Provide ONLY `Dep` — `Dep2` is left uncovered.
-const partial = Resource.provideContext(implPartial, T[Resource.specSym], Context.make(Dep, 1));
+const partial = Hyperlink.provideContext(implPartial, T[Hyperlink.specSym], Context.make(Dep, 1));
 
 // `scaled` retains the residual `Dep2` (subtractive) — NOT a false `never`. This mutual-assignability
 // assertion fails to compile if `ProvidedContext` ever regresses to an unconditional `never` (a `never`
@@ -92,8 +92,8 @@ type ResidualIsExactlyDep2 = [ScaledResidual] extends [Dep2]
 true satisfies ResidualIsExactlyDep2;
 
 // `mapEffects` with a type-preserving transform returns the same shape (Out defaults to Impl).
-const traced = Resource.mapEffects(provided, T[Resource.specSym], (e) =>
-  Effect.withSpan(e, "resource"),
+const traced = Hyperlink.mapEffects(provided, T[Hyperlink.specSym], (e) =>
+  Effect.withSpan(e, "hyperlink"),
 );
 type Provided = typeof provided;
 type Traced = typeof traced;

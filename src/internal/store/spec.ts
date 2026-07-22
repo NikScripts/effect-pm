@@ -69,7 +69,7 @@ export type ShapeNamespace<
 
 /**
  * Reconstruct a leaf shape's `{ append, read }` members. The leaf's row/read schemas are recovered by
- * {@link NormalizeShape}'s `infer … extends` (the store's analogue of `Resource.AsMethod`): prop-presence
+ * {@link NormalizeShape}'s `infer … extends` (the store's analogue of `Hyperlink.AsMethod`): prop-presence
  * inference is **F-independent**, so it reduces under a generic row schema (e.g. `queueEvent<F>`) without
  * `TS2589` — unlike `Extract`/`&`/deep-mapping. This is the exact per-leaf computation the flat handle
  * already used, so a flat contract's leaf type is unchanged. @internal

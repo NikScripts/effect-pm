@@ -27,8 +27,10 @@ re-derive the naming from chat history.
 1. **Module**: `src/Resource.ts` → the `Hyperlink` namespace (`import * as Hyperlink from
    "hyperlink-ts/Hyperlink"` — final subpath naming is part of this work; keep the
    `import * as X` namespace convention).
-2. **Package identity**: `package.json` name → `hyperlink-ts`; subpath exports;
-   `@nikscripts` scope stays unless the owner says otherwise.
+2. **Package identity**: `package.json` name → **`hyperlink-ts`** (unscoped — owner
+   2026-07-22: do **not** keep `@nikscripts`). Subpath exports under that name.
+   Wire/runtime ids that today use `@nikscripts/effect-pm/…` move to a
+   `hyperlink-ts/…` (or agreed) prefix in the same sweep.
 3. **Every `Resource.` call site** — src, examples, test, docs (guides use it in twoslash
    blocks; they typecheck, so misses fail loudly).
 4. **Docs site**: glossary entries (Resource/Tag/Contract/Handle), nav, api-slugs, the
@@ -61,6 +63,7 @@ responsible track owns them.
 ## Open questions for the owner (ask, don't assume)
 
 1. `effect-hyperlink`: keep as signpost or unpublish (deadline above)?
-2. GitHub repo rename (effect-pm → ?) and the `@nikscripts` scope question.
+2. GitHub repo rename (effect-pm → ?) — **npm scope settled:** drop `@nikscripts`,
+   publish as bare `hyperlink-ts`.
 3. Docs domain (blocks DOCS_SITE_ORIGIN, the banner stamp, and deploy — see
    docs/site/deploy/README.md).

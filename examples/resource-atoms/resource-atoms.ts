@@ -1,7 +1,7 @@
 /**
  * @module examples/resource-atoms/resource-atoms
  *
- * `makeResourceAtoms(runtime, tag)` — derive a reactive atom set from a `Resource`
+ * `makeHyperlinkAtoms(runtime, tag)` — derive a reactive atom set from a `Hyperlink`
  * tag. It's a projection of the `Spec` (alongside `ServiceOf` / RPC group / client
  * / server): one atom per method, classified from the contract metadata —
  *
@@ -14,8 +14,8 @@
 
 import { Effect, Schema } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import { methodMeta, specOf, isVoidCommand } from "../../src/Resource";
-import type { AnyMethod, FlatSpec, ResourceTag, Spec } from "../../src/Resource";
+import { methodMeta, specOf, isVoidCommand } from "../../src/Hyperlink";
+import type { AnyMethod, FlatSpec, HyperlinkTag, Spec } from "../../src/Hyperlink";
 
 /** One spec method → its atom kind, by the contract. */
 type AtomOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
@@ -37,9 +37,9 @@ export type ResourceAtoms<S extends Spec> = {
     : never;
 };
 
-export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
+export const makeHyperlinkAtoms = <Self extends R, S extends Spec, R, ER>(
   runtime: Atom.AtomRuntime<R, ER>,
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
 ): ResourceAtoms<S> => {
   const reactivityKey = [tag.key];
   const keys = { reactivityKeys: reactivityKey };

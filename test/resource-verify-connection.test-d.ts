@@ -13,7 +13,7 @@ import type {
   ServiceNotServed,
   UnaddressedNode,
 } from "../src/Node";
-import { verifyConnection } from "../src/Resource";
+import { verifyConnection } from "../src/Hyperlink";
 
 type ErrOf<T> = T extends Effect.Effect<infer _A, infer E, infer _R> ? E : never;
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;

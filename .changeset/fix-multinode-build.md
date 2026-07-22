@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Fix broken beta.25 build.** The `Host`→`Node` rename moved `MultiHost.ts`→`MultiNode.ts`, but the root

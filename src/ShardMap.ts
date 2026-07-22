@@ -1,9 +1,9 @@
 /**
- * ShardMap — partitioned key/value Resource factory.
+ * ShardMap — partitioned key/value Hyperlink factory.
  *
  * One map across a fleet of nodes: declare `key` / `value` schemas, distribute across
  * `app/Droplet*` nodes, and every routed `get` / `put` / `delete` forwards to the owning
- * shard via {@link Resource.peers}. Leaf `*Local` ops stay on this node. Fleet folds report
+ * shard via {@link Hyperlink.peers}. Leaf `*Local` ops stay on this node. Fleet folds report
  * shard sizes. An unreachable owner degrades to a miss — not a cascading health failure.
  *
  * Persistence: the local shard is **SQLite SSOT** (table `effect_pm_shard_map`).
@@ -16,7 +16,7 @@
  *   key: Schema.String,
  *   value: Schema.Struct({ id: Schema.String, userId: Schema.String }),
  *   keyOf: (s) => s.id,
- * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
+ * }).pipe(Hyperlink.nodes([DropletEast, DropletWest])) {}
  *
  * @module ShardMap
  */
@@ -24,15 +24,15 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Effect, Layer, Option, Ref, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { combineByNode, combineQuery, combineSum } from "./MultiNode";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import {
   Tag as resourceTag,
   type Local,
   type NodeBoundTag,
   type PeersId,
-  type ResourceTag,
+  type HyperlinkTag,
   type SelfNodeId,
-} from "./Resource";
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 import * as internal from "./internal/shardMap";
 import * as shardMapSql from "./internal/shardMapSql";
@@ -42,12 +42,12 @@ import * as shardMapSql from "./internal/shardMapSql";
 // ============================================================================
 
 /**
- * This contract's canonical kind (stamped on every tag; read via `Resource.kindOf`).
+ * This contract's canonical kind (stamped on every tag; read via `Hyperlink.kindOf`).
  *
  * @category utils
  * @public
  */
-export const kind = "@nikscripts/effect-pm/ShardMap";
+export const kind = "hyperlink-ts/ShardMap";
 
 /**
  * Stable owner pick for a **fixed** node set — sort keys, then `Hash.string` modulo.
@@ -111,7 +111,7 @@ const buildShardMapSpec = <
 ) => {
   const optionValue = Schema.Option(value);
   return {
-    get: Resource.effectFn({
+    get: Hyperlink.effectFn({
       payload: key,
       success: optionValue,
       error,
@@ -119,7 +119,7 @@ const buildShardMapSpec = <
       description:
         "Value for `key` from whichever node owns the shard (miss if unreachable).",
     }),
-    put: Resource.effectFn({
+    put: Hyperlink.effectFn({
       payload: value,
       success: Schema.Boolean,
       error,
@@ -127,43 +127,43 @@ const buildShardMapSpec = <
       description:
         "Upsert on the owning node (key via `keyOf`); `true` when written, `false` if owner unreachable.",
     }),
-    delete: Resource.effectFn({
+    delete: Hyperlink.effectFn({
       payload: key,
       success: Schema.Boolean,
       error,
     }).annotate({
       description: "Delete on the owning node; `true` when an entry was removed.",
     }),
-    getLocal: Resource.effectFn({
+    getLocal: Hyperlink.effectFn({
       payload: key,
       success: optionValue,
       error,
     }).annotate({
       description: "Read from this node's shard only (no forward).",
     }),
-    putLocal: Resource.effectFn({
+    putLocal: Hyperlink.effectFn({
       payload: value,
       success: Schema.Void,
       error,
     }).annotate({
       description: "Write into this node's shard only (no forward).",
     }),
-    deleteLocal: Resource.effectFn({
+    deleteLocal: Hyperlink.effectFn({
       payload: key,
       success: Schema.Boolean,
       error,
     }).annotate({
       description: "Delete from this node's shard only.",
     }),
-    sizeLocal: Resource.effect(Schema.Number).annotate({
+    sizeLocal: Hyperlink.effect(Schema.Number).annotate({
       description: "Entry count on this node's shard.",
     }),
-    sizeByNode: Resource.effect(Schema.Record(Schema.String, Schema.Number))
-      .pipe(Resource.fleet)
+    sizeByNode: Hyperlink.effect(Schema.Record(Schema.String, Schema.Number))
+      .pipe(Hyperlink.fleet)
       .annotate({
-        description: "Shard sizes keyed by node (`Resource.peers` + self).",
+        description: "Shard sizes keyed by node (`Hyperlink.peers` + self).",
       }),
-    size: Resource.effect(Schema.Number).pipe(Resource.fleet).annotate({
+    size: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet).annotate({
       description: "Sum of shard sizes across the mesh.",
     }),
   };
@@ -240,7 +240,7 @@ export type ShardMapTag<
   Key extends Schema.Top,
   Value extends Schema.Top,
   Error extends Schema.Top = typeof Schema.Never,
-> = ResourceTag<Self, ShardMapSpecOf<Key, Value, Error>> & {
+> = HyperlinkTag<Self, ShardMapSpecOf<Key, Value, Error>> & {
   readonly [internal.keySchemaSym]: Key;
   readonly [internal.valueSchemaSym]: Value;
   readonly [internal.keyOfSym]: (
@@ -300,7 +300,7 @@ export interface ShardMapSchemas<
  *   key: SessionId,
  *   value: Session,
  *   keyOf: (s) => s.id,
- * }).pipe(Resource.nodes([DropletEast, DropletWest])) {}
+ * }).pipe(Hyperlink.nodes([DropletEast, DropletWest])) {}
  *
  * @category constructors
  * @public
@@ -329,8 +329,8 @@ export const Tag =
             description: schemas.description,
             node: schemas.node,
           });
-    // SAFE: ResourceTag + schema stamps = ShardMapTag; Spec/Symbol identity is opaque under Top
-    // (same boundary as QueueResource's `nameQueueService`).
+    // SAFE: HyperlinkTag + schema stamps = ShardMapTag; Spec/Symbol identity is opaque under Top
+    // (same boundary as QueueHyperlink's `nameQueueService`).
     return Object.assign(tag, {
       [internal.keySchemaSym]: schemas.key,
       [internal.valueSchemaSym]: schemas.value,
@@ -347,7 +347,7 @@ type ValueT<Value extends Schema.Top> = Schema.Schema.Type<Value>;
 
 /**
  * Leaf peer surface used by routed/`size*` folds — the PeerServices mapped type does not
- * reduce under Schema.Top Key/Value (same opacity Resource.peersLayer documents).
+ * reduce under Schema.Top Key/Value (same opacity Hyperlink.peersLayer documents).
  *
  * @internal
  */
@@ -361,7 +361,7 @@ type PeerLeaf<Key extends Schema.Top, Value extends Schema.Top> = {
 };
 
 /**
- * Concrete engine handlers — written against decoded Key/Value types. `Resource.ImplOf` under
+ * Concrete engine handlers — written against decoded Key/Value types. `Hyperlink.ImplOf` under
  * Schema.Top does not reduce to this shape (Telemetry avoids the problem via a concrete Spec);
  * {@link asImpl} / {@link asServeImpl} are the documented boundary.
  *
@@ -384,8 +384,8 @@ type ShardMapImpl<Key extends Schema.Top, Value extends Schema.Top> = {
 };
 
 /**
- * The served SQL-backed shard + routed/fleet members. Requires {@link Resource.peers} /
- * {@link Resource.selfNode} and {@link SqlClient} (toolkit layers install schema + provide a
+ * The served SQL-backed shard + routed/fleet members. Requires {@link Hyperlink.peers} /
+ * {@link Hyperlink.selfNode} and {@link SqlClient} (toolkit layers install schema + provide a
  * default `:memory:` client).
  *
  * @internal
@@ -416,18 +416,18 @@ const buildImpl = <
     // Rows already passed UnknownFromJsonString in shardMapSql.loadScope.
     const seeded = seededUnknown as Map<string, ValueT<Value>>;
     const store = yield* Ref.make(seeded);
-    const peers = yield* Resource.peers(tag);
-    const self = yield* Resource.selfNode(tag);
+    const peers = yield* Hyperlink.peers(tag);
+    const self = yield* Hyperlink.selfNode(tag);
 
     const nodeKeys = (): ReadonlyArray<string> => {
-      const declared = Resource.distributedOf(tag).map((n) => n.key);
+      const declared = Hyperlink.distributedOf(tag).map((n) => n.key);
       if (declared.length > 0) {
         return declared;
       }
       return [self, ...Object.keys(peers)];
     };
 
-    // SAFE: PeerServiceOf does not reduce under Schema.Top Spec params (see Resource.peersLayer).
+    // SAFE: PeerServiceOf does not reduce under Schema.Top Spec params (see Hyperlink.peersLayer).
     const asPeerLeaf = (peer: unknown): PeerLeaf<Key, Value> =>
       peer as unknown as PeerLeaf<Key, Value>;
 
@@ -543,7 +543,7 @@ const buildImpl = <
   });
 
 /**
- * Bridge concrete {@link ShardMapImpl} → {@link Resource.ImplOf}. ImplOf stays opaque under
+ * Bridge concrete {@link ShardMapImpl} → {@link Hyperlink.ImplOf}. ImplOf stays opaque under
  * Schema.Top Key/Value Method params (Telemetry avoids this via a concrete Spec const).
  *
  * @internal
@@ -554,12 +554,12 @@ const asImpl = <
   Error extends Schema.Top,
 >(
   impl: ShardMapImpl<Key, Value>,
-): Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>> =>
+): Hyperlink.ImplOf<ShardMapSpecOf<Key, Value, Error>> =>
   // SAFE: handlers match get/put/delete/*/size* wire; ImplOf does not reduce under Schema.Top.
-  impl as unknown as Resource.ImplOf<ShardMapSpecOf<Key, Value, Error>>;
+  impl as unknown as Hyperlink.ImplOf<ShardMapSpecOf<Key, Value, Error>>;
 
 /**
- * Bridge concrete {@link ShardMapImpl} → {@link Resource.ServeImplOf}.
+ * Bridge concrete {@link ShardMapImpl} → {@link Hyperlink.ServeImplOf}.
  *
  * @internal
  */
@@ -569,9 +569,9 @@ const asServeImpl = <
   Error extends Schema.Top,
 >(
   impl: ShardMapImpl<Key, Value>,
-): Resource.ServeImplOf<ShardMapSpecOf<Key, Value, Error>, never> =>
+): Hyperlink.ServeImplOf<ShardMapSpecOf<Key, Value, Error>, never> =>
   // SAFE: same Schema.Top ImplOf opacity as asImpl for the serve/serveRemote path.
-  impl as unknown as Resource.ServeImplOf<ShardMapSpecOf<Key, Value, Error>, never>;
+  impl as unknown as Hyperlink.ServeImplOf<ShardMapSpecOf<Key, Value, Error>, never>;
 
 // ============================================================================
 // Layer / serve
@@ -580,7 +580,7 @@ const asServeImpl = <
 /**
  * Local layer — SQL-backed shard + routed/fleet members. Opens SQLite (`:memory:` by default;
  * override with `{ filename }`). Requires the mesh capability
- * ({@link Resource.peersLayer}, or {@link Resource.peersFrom} + {@link Resource.selfNodeLayer}).
+ * ({@link Hyperlink.peersLayer}, or {@link Hyperlink.peersFrom} + {@link Hyperlink.selfNodeLayer}).
  *
  * @category layers & serving
  * @public
@@ -597,15 +597,15 @@ export const layer = <
   withSqlite(
     options,
     buildImpl(tag, options).pipe(
-      Effect.map((impl) => Resource.layer(tag, asImpl(impl))),
+      Effect.map((impl) => Hyperlink.layer(tag, asImpl(impl))),
       Layer.unwrap,
     ),
   );
 
 /**
- * Serve this ShardMap **remotely (served-only)** — counterpart to {@link Resource.serveRemote}.
+ * Serve this ShardMap **remotely (served-only)** — counterpart to {@link Hyperlink.serveRemote}.
  * Mounts routed + fleet handlers **without** granting the local instance. Opens SQLite
- * (`:memory:` by default). Requires the mesh capability ({@link Resource.peersLayer} or
+ * (`:memory:` by default). Requires the mesh capability ({@link Hyperlink.peersLayer} or
  * peersFrom + selfNodeLayer).
  *
  * @category layers & serving
@@ -623,23 +623,23 @@ export const serveRemote = <
   withSqlite(
     options,
     buildImpl(tag, options).pipe(
-      Effect.map((impl) => Resource.serveRemote(tag, asServeImpl(impl))),
+      Effect.map((impl) => Hyperlink.serveRemote(tag, asServeImpl(impl))),
       Layer.unwrap,
     ),
   );
 
 /**
  * Serve this ShardMap **and** grant its local instance from **one** materialization —
- * counterpart to {@link Resource.serve}. Opens SQLite (`:memory:` by default; pass
+ * counterpart to {@link Hyperlink.serve}. Opens SQLite (`:memory:` by default; pass
  * `{ filename }` for a durable file). Requires the mesh capability:
  *
  * @example
  * ShardMap.serve(Sessions).pipe(
- *   Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
+ *   Layer.provide(Hyperlink.peersLayer(Sessions, DropletEast)),
  * )
  *
  * // Durable file:
- * ShardMap.serve(Sessions, { filename: ".effect-pm/sessions.sqlite" })
+ * ShardMap.serve(Sessions, { filename: ".hyperlink-ts/sessions.sqlite" })
  *
  * @category layers & serving
  * @public
@@ -655,7 +655,7 @@ export const serve = <
 ) =>
   withSqlite(
     options,
-    Resource.serve(
+    Hyperlink.serve(
       tag,
       buildImpl(tag, options).pipe(Effect.map((impl) => asImpl(impl))),
     ),

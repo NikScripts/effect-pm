@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **ShardMap** local shards are SQLite SSOT (not the Store bridge).

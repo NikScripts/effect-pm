@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **ApiMetrics is now a per-instance resource that serves on a host like queues/processes (BREAKING).** Previously `ApiMetrics` used one shared RPC group (`tagFor` + `serveInstances`/`clientInstances`, routed by a key header), which didn't compose with `serveAllHttp` — so a `connectHttp`'d dashboard couldn't read API-usage panels over the same transport. Each `ApiMetrics` tag now has its **own per-instance RPC group** and can bind to a `Resource.Host`:

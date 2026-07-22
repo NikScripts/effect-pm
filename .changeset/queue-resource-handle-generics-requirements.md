@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Breaking:** `QueueHandle`, `QueueResource.Service`, `QueueResource.Tag`, and `QueueResourceConfig` reorder type parameters so **worker/requirements channel `R` is last**. Order is **`T`**, **`E`** (worker item effect failure), **`EEnqueue`** (schema enqueue failures, usually `never` without `itemSchema`), **`R`** (ambient services).

@@ -11,7 +11,7 @@
  * priority first, while running.
  *
  * TUI controls (always): pick a size [1] S [2] M [3] L [4] XL [0] auto.
- * Resource controls are locked by default — Ctrl+E for edit mode (a red border warns
+ * Hyperlink controls are locked by default — Ctrl+E for edit mode (a red border warns
  * you): [p] pause [r] resume [c] clear [x] stop · [b] burst. Quit with Ctrl+C.
  *
  *   pnpm run example:queue-mock

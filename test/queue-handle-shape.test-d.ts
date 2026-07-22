@@ -1,9 +1,9 @@
 import { Effect, Schema, Stream } from "effect";
-import type { QueueHandle } from "../src/internal/queueResource";
-import type { queueStatus } from "../src/QueueResource";
-import type { CustomQueueHandle } from "../src/internal/customQueueResource";
-import type { customQueueStatus } from "../src/CustomQueueResource";
-import * as Resource from "../src/Resource";
+import type { QueueHandle } from "../src/internal/queueHyperlink";
+import type { queueStatus } from "../src/QueueHyperlink";
+import type { CustomQueueHandle } from "../src/internal/customQueueHyperlink";
+import type { customQueueStatus } from "../src/CustomQueueHyperlink";
+import * as Hyperlink from "../src/Hyperlink";
 
 type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
 type CustomStatus = Schema.Schema.Type<typeof customQueueStatus>;
@@ -12,7 +12,7 @@ type CustomStatus = Schema.Schema.Type<typeof customQueueStatus>;
 type Handle = QueueHandle<number>;
 type StatusShape = Handle["status"];
 
-type StatusIsSubscribable = StatusShape extends Resource.Subscribable<QueueStatus>
+type StatusIsSubscribable = StatusShape extends Hyperlink.Subscribable<QueueStatus>
   ? true
   : false;
 true satisfies StatusIsSubscribable;
@@ -30,7 +30,7 @@ true satisfies StatusNowAbsent;
 type CustomHandle = CustomQueueHandle<string>;
 type CustomStatusShape = CustomHandle["status"];
 
-type CustomStatusIsSubscribable = CustomStatusShape extends Resource.Subscribable<CustomStatus>
+type CustomStatusIsSubscribable = CustomStatusShape extends Hyperlink.Subscribable<CustomStatus>
   ? true
   : false;
 true satisfies CustomStatusIsSubscribable;

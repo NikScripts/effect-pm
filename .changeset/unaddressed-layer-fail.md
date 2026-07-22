@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 **Unaddressed Node failures use Effect/Layer error channels** — no sync `throw`.

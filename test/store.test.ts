@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Schema } from "effect";
-import * as QueueResource from "../src/QueueResource";
-import * as RunResource from "../src/RunResource";
-import * as Resource from "../src/Resource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as RunHyperlink from "../src/RunHyperlink";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
 const readingSchema = Schema.Struct({
@@ -25,25 +25,25 @@ type ThermometerHandle = Store.HandleOf<typeof thermometerContract>;
 const readingOnlyContract = Store.contract({ readings: readingSchema });
 type ReadingOnlyHandle = Store.HandleOf<typeof readingOnlyContract>;
 
-class LabThermometer extends Resource.Tag<LabThermometer>()("@app/LabThermometer", {
-  temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.withStore(thermometerContract)) {}
+class LabThermometer extends Hyperlink.Tag<LabThermometer>()("@app/LabThermometer", {
+  temperature: Hyperlink.ref(Schema.Number),
+}).pipe(Hyperlink.withStore(thermometerContract)) {}
 
-class Mail extends Resource.Tag<Mail>()("@app/Mail", {
-  send: Resource.effect(Schema.Void),
+class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
+  send: Hyperlink.effect(Schema.Void),
 }) {}
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends QueueResource.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
+class MailQueue extends QueueHyperlink.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
+class FetchGate extends RunHyperlink.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
-const fetchGateRegistration = RunResource.store(FetchGate);
+const fetchGateRegistration = RunHyperlink.store(FetchGate);
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 
-const mailQueueRegistration = QueueResource.store(MailQueue, {
+const mailQueueRegistration = QueueHyperlink.store(MailQueue, {
   campaignAudit: campaignAuditSchema,
 });
 
@@ -194,7 +194,7 @@ describe("Store.Service", () => {
     }).pipe(Effect.provide(DropletStoreArray.layerMemory), Effect.scoped),
   );
 
-  it.effect("QueueResource.store exposes typed emit effects + extended shapes", () =>
+  it.effect("QueueHyperlink.store exposes typed emit effects + extended shapes", () =>
     Effect.gen(function* () {
       const store = yield* QueueStore;
       // record persists the same QueueEvent the live stream carries; events reads them back.
@@ -213,7 +213,7 @@ describe("Store.Service", () => {
     }).pipe(Effect.provide(QueueStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("RunResource.store exposes typed fact + stateHistory methods", () =>
+  it.effect("RunHyperlink.store exposes typed fact + stateHistory methods", () =>
     Effect.gen(function* () {
       const store = yield* RunGateStore;
       const keys = Object.keys(store);
@@ -285,7 +285,7 @@ describe("Store.Service", () => {
     expect(extended.pipe).toBeTypeOf("function");
   });
 
-  it.effect("standalone Resource.store is yieldable with a single layer", () =>
+  it.effect("standalone Hyperlink.store is yieldable with a single layer", () =>
     Effect.gen(function* () {
       const store = (yield* mailStore) as unknown as ThermometerHandle;
       yield* store.readings.append({ value: 42 });

@@ -1,23 +1,23 @@
 import { Effect, Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 class Worker extends Node.Tag<Worker>()("listen-tag-d/Worker", {
   path: "/tmp/x.sock",
 }) {}
 
-class Jobs extends Resource.Tag<Jobs>()("listen-tag-d/Jobs", {
-  jobs: Resource.effect(Schema.Number),
-}).pipe(Resource.andNode(Worker)) {}
+class Jobs extends Hyperlink.Tag<Jobs>()("listen-tag-d/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
+}).pipe(Hyperlink.andNode(Worker)) {}
 
 const bound = Node.unix(Jobs, { jobs: Effect.succeed(7) });
 expectTypeOf(bound).toMatchTypeOf<
-  Layer.Layer<Jobs | Resource.Local<Jobs> | Node.ListenNode, never, never>
+  Layer.Layer<Jobs | Hyperlink.Local<Jobs> | Node.ListenNode, never, never>
 >();
 
-class Nodeless extends Resource.Tag<Nodeless>()("listen-tag-d/Nodeless", {
-  jobs: Resource.effect(Schema.Number),
+class Nodeless extends Hyperlink.Tag<Nodeless>()("listen-tag-d/Nodeless", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 // @ts-expect-error nodeless Tag — sole Node required

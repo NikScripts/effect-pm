@@ -1,20 +1,20 @@
 # Metrics — OTEL for pro tools, Telemetry for custom
 
-Every effect-pm host emits into Effect's per-process **`Metric` registry** (queues, processes, API
+Every hyperlink-ts host emits into Effect's per-process **`Metric` registry** (queues, processes, API
 clients, and Effect's own runtime metrics). That one registry feeds **two** independent sinks — pick per
 need, or run both:
 
 | | What | When |
 |---|---|---|
 | **OTEL export** | wire `@effect/opentelemetry`, push OTLP to a collector | you want a **professional** stack — Sentry, Grafana, Honeycomb, alerting, retention |
-| **`Telemetry` resource** | serve the registry as a `Resource` (`snapshot` + `live`) | you want to build something **custom** in-app — a fleet page, a TUI, a `pm metrics` command — with no external infra |
+| **`Telemetry` resource** | serve the registry as a `Hyperlink` (`snapshot` + `live`) | you want to build something **custom** in-app — a fleet page, a TUI, a `pm metrics` command — with no external infra |
 
 They don't compete: same source, different readers. `Telemetry` is deliberately **thin** — it serves the
 data; it does not retain, alert, or query. That's OTEL/Grafana's job.
 
-## OTEL export (the professional path — doc only, no effect-pm dependency)
+## OTEL export (the professional path — doc only, no hyperlink-ts dependency)
 
-effect-pm ships **no** OTEL code: the metrics are standard Effect `Metric`, so they export as-is. Add
+hyperlink-ts ships **no** OTEL code: the metrics are standard Effect `Metric`, so they export as-is. Add
 `@effect/opentelemetry` as a **peer** and provide its metric layer, pointing OTLP at your collector.
 Representative wiring (check `@effect/opentelemetry` for the current layer names):
 
@@ -42,16 +42,16 @@ dashboards, alerting, and history.
 
 ## Telemetry resource (the custom path)
 
-Declare a tag, serve it on each host, and read it anywhere with `Resource.client`.
+Declare a tag, serve it on each host, and read it anywhere with `Hyperlink.client`.
 
 ```ts
-import * as Telemetry from "@nikscripts/effect-pm/Telemetry";
+import * as Telemetry from "hyperlink-ts/Telemetry";
 
 // hostless — the dashboard reaches each host via client(FleetTelemetry, host)
 class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
 
 // serve it on a host (like a queue/process) — the sampler runs in the served scope
-const host = Resource.httpServer([Telemetry.serve(FleetTelemetry)]).pipe(
+const host = Hyperlink.httpServer([Telemetry.serve(FleetTelemetry)]).pipe(
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 );
 
@@ -61,7 +61,7 @@ const program = Effect.gen(function* () {
   const snap = yield* t.snapshot;             // MetricsSnapshot { ts, metrics: [...] }
   const roster = snap.metrics.find((m) => m.id === "queue_enqueued_total" && m.labels.queue === "roster");
 });
-// provided with: Resource.client(FleetTelemetry).pipe(Layer.provide(connectHttp(host, …)))
+// provided with: Hyperlink.client(FleetTelemetry).pipe(Layer.provide(connectHttp(host, …)))
 ```
 
 ### The `MetricsSnapshot` envelope (the wire contract)
@@ -80,7 +80,7 @@ type MetricsSnapshot = { ts: number; metrics: ReadonlyArray<MetricDatum> };
 
 ### Fleet glass (elevated)
 
-When Telemetry is meshed (`Resource.peersLayer` / `peersFrom` + `selfNode`), fleet fields fold leaf
+When Telemetry is meshed (`Hyperlink.peersLayer` / `peersFrom` + `selfNode`), fleet fields fold leaf
 snapshots across the pack:
 
 - `inFlightByNode` — `queue_in_flight` gauge per node key
@@ -90,7 +90,7 @@ Single-node (no peers): discharge with `Telemetry.alone(tag)`.
 
 ```ts
 Telemetry.serve(FleetMetrics).pipe(
-  Layer.provide(Resource.peersLayer(FleetMetrics, DropletEast)),
+  Layer.provide(Hyperlink.peersLayer(FleetMetrics, DropletEast)),
 )
 const glass = yield* FleetMetrics
 const columns = yield* glass.inFlightByNode

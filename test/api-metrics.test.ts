@@ -11,9 +11,9 @@ import type { HttpClientError } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../src/ApiMetrics";
-import * as HttpApiResource from "../src/HttpApiResource";
+import * as HttpApiHyperlink from "../src/HttpApiHyperlink";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 const ClientId = "test/api-metrics/client" as const;
@@ -28,7 +28,7 @@ const demoApi = HttpApi.make("api-metrics-demo").add(
   HttpApiGroup.make("g").add(pingEndpoint),
 );
 
-class DemoClient extends HttpApiResource.Service<DemoClient>()(ClientId, demoApi, {
+class DemoClient extends HttpApiHyperlink.Service<DemoClient>()(ClientId, demoApi, {
   concurrency: 2,
 }) {}
 
@@ -57,7 +57,7 @@ beforeEach(() => {
 });
 
 describe("ApiMetrics.Tag", () => {
-  it("auto-suffixes the Resource key and stores clientIdSym", () => {
+  it("auto-suffixes the Hyperlink key and stores clientIdSym", () => {
     expect(DemoMetrics.key).toBe(ApiMetrics.metricsKeyFor(ClientId));
     expect(ApiMetrics.clientIdOf(DemoMetrics)).toBe(ClientId);
     // per-instance group: the groupId is the metrics key (its own wire prefix), not a shared family
@@ -66,7 +66,7 @@ describe("ApiMetrics.Tag", () => {
 });
 
 describe("ApiMetrics.layer", () => {
-  it.effect("usage.get reflects HttpApiResource endpoint calls", () =>
+  it.effect("usage.get reflects HttpApiHyperlink endpoint calls", () =>
     Effect.gen(function* () {
       const client = yield* DemoClient;
       const metrics = yield* DemoMetrics;
@@ -125,7 +125,7 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
   });
 
   // Two metrics tags served on one node via `httpServer`; each reached over http with its own
-  // per-instance group — `Resource.client` routes to the right one (no shared key header).
+  // per-instance group — `Hyperlink.client` routes to the right one (no shared key header).
   const alphaSnap = {
     clientId: ClientId,
     inFlight: 0,
@@ -155,8 +155,8 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
     metrics: Stream.empty,
   };
   const Server = Node.httpServer([
-    Resource.serve(DemoMetrics, alphaImpl),
-    Resource.serve(OtherMetrics, betaImpl),
+    Hyperlink.serve(DemoMetrics, alphaImpl),
+    Hyperlink.serve(OtherMetrics, betaImpl),
   ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
   it("httpServer serves both; clients read the right one", () =>
@@ -180,8 +180,8 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
         }).pipe(
           Effect.provide(
             Layer.mergeAll(
-              Resource.client(DemoMetrics),
-              Resource.client(OtherMetrics),
+              Hyperlink.client(DemoMetrics),
+              Hyperlink.client(OtherMetrics),
             ).pipe(Layer.provide(protocol)),
           ),
           Effect.scoped,
@@ -191,7 +191,7 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
 });
 
 describe("ApiMetrics.layerFor", () => {
-  it("links metrics tag to HttpApiResource.Service key", () => {
+  it("links metrics tag to HttpApiHyperlink.Service key", () => {
     const layer = ApiMetrics.layerFor(DemoMetrics, DemoClient);
     expect(layer).toBeDefined();
   });

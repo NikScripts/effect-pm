@@ -4,7 +4,7 @@
  *
  * @internal
  */
-import type { QueueStatus } from "./queueResource";
+import type { QueueStatus } from "./queueHyperlink";
 import { defaultPriorityToLevel, type PriorityToLevel } from "./priorityMapping";
 
 /** Inputs for {@link QueueRuntimeProjection.buildStatus}. @internal */

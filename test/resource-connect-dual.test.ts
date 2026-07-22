@@ -3,8 +3,8 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as QueueResource from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // `Node.connect` and its `connectHttp` / `connectSocket` shortcuts are dual (data-first + pipeable
@@ -40,7 +40,7 @@ describe("Node ProtocolKind inference", () => {
 
 // ── end-to-end: node-derived clients round-trip over BOTH transports ──────────────────────────────
 // One harness, two transports. The tag's bound node is wired with the pipeable node client (url
-// overridden to the test port); `Resource.client(tag)` resolves the bound node, so no ambient protocol
+// overridden to the test port); `Hyperlink.client(tag)` resolves the bound node, so no ambient protocol
 // is threaded by hand (the class of the HealthBoard's "connecting…" bug). Proves the derived-connect
 // path streams live over a real ws server AND a real http server.
 const Item = Schema.Struct({ n: Schema.Number });
@@ -48,7 +48,7 @@ interface Item {
   readonly n: number;
 }
 class HubNode extends Node.Tag<HubNode>()("cd/hub") {}
-class HubQueue extends QueueResource.Tag<HubQueue>()("cd/HubQueue", {
+class HubQueue extends QueueHyperlink.Tag<HubQueue>()("cd/HubQueue", {
   payload: Item,
   node: HubNode,
 }) {}
@@ -75,7 +75,7 @@ const withPortClient = (connectAt: (port: number) => Layer.Layer<HubNode>) =>
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* assertStreams.pipe(
-      Effect.provide(Resource.client(HubQueue).pipe(Layer.provide(connectAt(port)))),
+      Effect.provide(Hyperlink.client(HubQueue).pipe(Layer.provide(connectAt(port)))),
       Effect.scoped,
     );
   });
@@ -86,7 +86,7 @@ describe("node-derived clients stream live", () => {
       HubNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`)),
     ).pipe(
       Effect.provide(
-        Node.wsServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+        Node.wsServer([QueueHyperlink.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       ),
@@ -100,7 +100,7 @@ describe("node-derived clients stream live", () => {
       HubNode.pipe(Node.connectHttp(`http://127.0.0.1:${port}/rpc`)),
     ).pipe(
       Effect.provide(
-        Node.httpServer([QueueResource.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
+        Node.httpServer([QueueHyperlink.serveMemory(HubQueue, { effect: () => Effect.void })]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       ),

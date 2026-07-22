@@ -13,14 +13,14 @@ import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Jobs extends Resource.Tag<Jobs>()("forms/http/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("forms/http/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 const live = Node.http(
-  Resource.serve(Jobs, { jobs: Effect.succeed(7) }),
+  Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
 ).pipe(Layer.provide(Lookup.layer))
 
 NodeRuntime.runMain(

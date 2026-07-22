@@ -474,8 +474,8 @@ const walkPackage = (
 };
 
 // Resolve one extracted symbol's JSDoc {@link} targets through the LinkResolver — the compiler picks
-// the exact symbol, so bare names disambiguate by context (`layer` inside QueueResource's docs is
-// QueueResource.layer). Runs AFTER extraction, once every symbol in the package has a URL.
+// the exact symbol, so bare names disambiguate by context (`layer` inside QueueHyperlink's docs is
+// QueueHyperlink.layer). Runs AFTER extraction, once every symbol in the package has a URL.
 const docLinksOf = (
   resolver: LinkResolver.LinkResolver,
   decl: ts.Declaration

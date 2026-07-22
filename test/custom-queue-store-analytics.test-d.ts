@@ -1,6 +1,6 @@
 import type { DateTime, Effect, Option, Stream } from "effect";
 import * as Schema from "effect/Schema";
-import * as CustomQueueResource from "../src/CustomQueueResource";
+import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 import * as Store from "../src/Store";
 import type {
   QueueStoreCompleted,
@@ -21,7 +21,7 @@ const expectExact = <_Check extends true>(): void => {};
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends CustomQueueResource.Tag<Jobs>()("@test/CustomAnalyticsJobs", {
+class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@test/CustomAnalyticsJobs", {
   payload: jobSchema,
   levelCount: 4,
 }) {}
@@ -31,7 +31,7 @@ type Entry = QueueStoreEntry<typeof Jobs>;
 type Failed = QueueStoreFailed<typeof Jobs>;
 type Completed = QueueStoreCompleted<typeof Jobs>;
 
-type Regs = RegsOfStoreInput<[ReturnType<typeof CustomQueueResource.store<typeof Jobs>>]>;
+type Regs = RegsOfStoreInput<[ReturnType<typeof CustomQueueHyperlink.store<typeof Jobs>>]>;
 type Handle = StoreHandleAtKey<Regs, typeof Jobs>;
 
 declare const _handle: Handle;

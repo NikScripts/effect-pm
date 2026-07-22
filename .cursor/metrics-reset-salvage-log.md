@@ -26,7 +26,7 @@
 ## Overhaul direction (locked 2026-06-19)
 
 - **ProcessGroup as control boundary is dead.**
-- Each Process / Resource owns its own RPC controls (`Rpc.make` / group on the resource).
+- Each Process / Hyperlink owns its own RPC controls (`Rpc.make` / group on the resource).
 - A compose **layer** starts the server and routes to whatever resources were registered for exposure.
 - Salvaged group-centric control (`ControlProtocol`, `ControlRouter`, `ControlTransportRpc` envelope) is **legacy baseline** until rewrite lands.
 - Keep: CommandAuth, Effect RPC patterns, Terminal/ops-ui as reference UI.
@@ -48,4 +48,4 @@
 Remote + local: telemetry-redesign-bake-faed, hub-runresource-vertical, hub-63-projection,
 queue-telemetry-*, queue-facet-refactor-a3b5, facet/docs/restore 158c, rewrite/store-transport,
 transport-protocol-unify, integration-jun-2026, all c64a verticals (SHAs in salvage/* tags).
-Worktree removed: effect-pm-alt-transport.
+Worktree removed: hyperlink-ts-alt-transport.

@@ -3,21 +3,21 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
-import { Process, QueueResource, RunResource } from "../src";
-import * as Resource from "../src/Resource";
+import { Process, QueueHyperlink, RunHyperlink } from "../src";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // Transport conformance matrix: each resource type × {ws, http} must stream/respond over the wire, and
 // a protocol MISMATCH (http client → ws server) must FAIL loudly rather than silently drop — the exact
-// shape of the dashboard's "no live data" bug. Uses the shipped `Resource.protocolWebsocket` /
+// shape of the dashboard's "no live data" bug. Uses the shipped `Hyperlink.protocolWebsocket` /
 // `protocolHttp` client transports and `wsServer` / `httpServer`.
 
 type Kind = "ws" | "http";
 const proto = (kind: Kind, port: number): Layer.Layer<RpcClient.Protocol> =>
   kind === "ws"
-    ? Resource.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`)
-    : Resource.protocolHttp(`http://127.0.0.1:${port}/rpc`);
+    ? Hyperlink.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`)
+    : Hyperlink.protocolHttp(`http://127.0.0.1:${port}/rpc`);
 
 // Serve `served` over `serverKind`, reach it with a `clientKind` transport, run `op`, return its value.
 const remote = <A, E, R>(
@@ -42,13 +42,13 @@ const remote = <A, E, R>(
   );
 };
 
-// ── QueueResource ────────────────────────────────────────────────────────────────────────────────
+// ── QueueHyperlink ────────────────────────────────────────────────────────────────────────────────
 const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class ConfQueue extends QueueResource.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
-const queueServe = QueueResource.serveMemory(ConfQueue, { effect: () => Effect.void });
+class ConfQueue extends QueueHyperlink.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
+const queueServe = QueueHyperlink.serveMemory(ConfQueue, { effect: () => Effect.void });
 const queueOp = Effect.gen(function* () {
   const q = yield* ConfQueue;
   const completed: number[] = [];
@@ -76,12 +76,12 @@ const procOp = Effect.gen(function* () {
   return typeof snap.supervising === "boolean";
 });
 
-// ── RunResource ──────────────────────────────────────────────────────────────────────────────────
-class ConfGate extends RunResource.Tag<ConfGate>()("conf/G", {
+// ── RunHyperlink ──────────────────────────────────────────────────────────────────────────────────
+class ConfGate extends RunHyperlink.Tag<ConfGate>()("conf/G", {
   payload: Schema.Number,
   success: Schema.Number,
 }) {}
-const gateServe = RunResource.serveMemory(ConfGate, {
+const gateServe = RunHyperlink.serveMemory(ConfGate, {
   effect: (n: number) => Effect.succeed(n * 2),
 });
 const gateOp = Effect.gen(function* () {
@@ -93,17 +93,17 @@ const gateOp = Effect.gen(function* () {
 // rule steers async control flow to Effect; here the assertion just rides the promise `remote` returns).
 describe("transport conformance: streams/responds over BOTH transports", () => {
   it.each(["ws", "http"] as const)("queue over %s", (kind) =>
-    remote(kind, kind, queueServe, Resource.client(ConfQueue), queueOp).then((r) =>
+    remote(kind, kind, queueServe, Hyperlink.client(ConfQueue), queueOp).then((r) =>
       expect(r).toBeGreaterThan(0),
     ),
   );
   it.each(["ws", "http"] as const)("process over %s", (kind) =>
-    remote(kind, kind, procServe, Resource.client(ConfProc), procOp).then((r) =>
+    remote(kind, kind, procServe, Hyperlink.client(ConfProc), procOp).then((r) =>
       expect(r).toBe(true),
     ),
   );
   it.each(["ws", "http"] as const)("run over %s", (kind) =>
-    remote(kind, kind, gateServe, Resource.client(ConfGate), gateOp).then((r) =>
+    remote(kind, kind, gateServe, Hyperlink.client(ConfGate), gateOp).then((r) =>
       expect(r).toBe(42),
     ),
   );
@@ -136,11 +136,11 @@ describe("transport conformance: an http client against a ws server FAILS as Pro
   const gateRun = Effect.flatMap(ConfGate, (g) => g.run(1));
 
   it("queue mismatch → ProtocolMismatch", () =>
-    mismatchExit(queueServe, Resource.client(ConfQueue), queueAdd).then((exit) =>
+    mismatchExit(queueServe, Hyperlink.client(ConfQueue), queueAdd).then((exit) =>
       expectTaggedFailure(exit, "ProtocolMismatch"),
     ));
   it("run mismatch → ProtocolMismatch", () =>
-    mismatchExit(gateServe, Resource.client(ConfGate), gateRun).then((exit) =>
+    mismatchExit(gateServe, Hyperlink.client(ConfGate), gateRun).then((exit) =>
       expectTaggedFailure(exit, "ProtocolMismatch"),
     ));
 });

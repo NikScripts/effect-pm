@@ -7,7 +7,7 @@ export default function NotFound() {
   return (
     <div className="notfound">
       <PageMeta
-        title="Page not found — effect-pm"
+        title="Page not found — hyperlink-ts"
         description="This page does not exist; search the docs instead."
       />
       <h1>Page not found</h1>

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 `@nikscripts/effect-pm/web`: add **View Transitions** helpers — `ViewTransitionProvider`, `useViewTransition`, and `useViewTransitionStyle` — to animate navigation (a card morphs to fill the screen, then back) instead of cutting, degrading to an instant update where the API is unavailable.

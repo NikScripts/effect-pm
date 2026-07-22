@@ -130,7 +130,7 @@ export function NavBar({
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/">
-            effect-pm
+            hyperlink-ts
           </a>
           {version !== undefined && version !== "" ? (
             <a className="version-badge" href="/releases">

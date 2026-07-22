@@ -1,12 +1,12 @@
 /**
  * **ApiMetrics** — observability contract for outbound API clients (HttpApi and future transports).
  *
- * Uses {@link Resource.tagFor} so many client instances share **one RPC group** on the wire;
- * instances are routed by their Resource `key` header. Link each metrics tag to an outbound
- * client via a shared **`clientId` string** (the {@link HttpApiResource.Service} Context key).
+ * Uses {@link Hyperlink.tagFor} so many client instances share **one RPC group** on the wire;
+ * instances are routed by their Hyperlink `key` header. Link each metrics tag to an outbound
+ * client via a shared **`clientId` string** (the {@link HttpApiHyperlink.Service} Context key).
  *
  * @remarks
- * Browser-safe: import from `@nikscripts/effect-pm/ApiMetrics` only in tag files — never the
+ * Browser-safe: import from `hyperlink-ts/ApiMetrics` only in tag files — never the
  * Service class. Declare tags with {@link ApiMetrics.Tag}:
  *
  * ```ts
@@ -42,9 +42,9 @@ import {
   ref,
   stream,
   type NodeBoundTag,
-  type ResourceTag,
+  type HyperlinkTag,
   type Subscribable,
-} from "./Resource";
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 
 // ============================================================================
@@ -58,14 +58,14 @@ import type { NodeKey } from "./Node";
  * @public
  */
 export const clientIdSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/ApiMetrics/clientId",
+  "hyperlink-ts/ApiMetrics/clientId",
 );
 
-/** Default suffix appended to `clientId` for the Resource instance key. @internal */
+/** Default suffix appended to `clientId` for the Hyperlink instance key. @internal */
 export const metricsKeySuffix = "/metrics";
 
 /**
- * Default Resource key for a metrics tag bound to `clientId`.
+ * Default Hyperlink key for a metrics tag bound to `clientId`.
  *
  * @category utils
  * @public
@@ -82,22 +82,22 @@ export const metricsKeyFor = (clientId: string): string =>
 export interface ApiMetricsTagOptions {
   /** Metrics window cadence. @default 5 seconds */
   readonly windowMs?: Duration.Duration | undefined;
-  /** Resource-level description (dashboard panel title). */
+  /** Hyperlink-level description (dashboard panel title). */
   readonly description?: string | undefined;
 }
 
 /**
- * An {@link ApiMetrics} instance tag — a {@link ResourceTag} plus the linked client id.
+ * An {@link ApiMetrics} instance tag — a {@link HyperlinkTag} plus the linked client id.
  *
  * @category models
  * @public
  */
-export type ApiMetricsTag<Self> = ResourceTag<Self, ApiMetricsSpec> & {
+export type ApiMetricsTag<Self> = HyperlinkTag<Self, ApiMetricsSpec> & {
   readonly [clientIdSym]: string;
 };
 
 /**
- * A node-bound {@link ApiMetricsTag} — its `[nodeSym]` narrowed to the node (so `Resource.client`
+ * A node-bound {@link ApiMetricsTag} — its `[nodeSym]` narrowed to the node (so `Hyperlink.client`
  * resolves the transport). A **named** type so a consumer can `export` a node-bound metrics tag
  * without leaking the internal `clientIdSym` (TS4020). Returned by `ApiMetrics.Tag()(id, { node })`.
  *
@@ -130,13 +130,13 @@ const apiMetricsSpec = {
 };
 
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
- *  classify it via {@link Resource.kindOf} without sniffing the spec. @public
+ *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. @public
  *
  * @category utils
  */
-export const kind = "@nikscripts/effect-pm/ApiMetrics";
+export const kind = "hyperlink-ts/ApiMetrics";
 
-/** The per-instance Resource key (wire group prefix) for a metrics tag. A node-bound tag prefixes by
+/** The per-instance Hyperlink key (wire group prefix) for a metrics tag. A node-bound tag prefixes by
  *  its node's key, so two nodes serving the **same** `clientId` (e.g. the same SDP client behind two
  *  league nodes) get distinct groups and never collide. @internal */
 const keyFor = (clientId: string, node: NodeKey<unknown> | undefined): string =>
@@ -215,8 +215,8 @@ export interface ApiMetricsConstructOptions<HSelf = never> {
 
 /**
  * Serve this metrics resource **remotely (served-only)** — the counterpart to
- * {@link Resource.serveRemote}. Mounts the metrics RPC handlers and registers into
- * {@link Resource.servedResourcesLayer} **without** granting the local instance. For a pure
+ * {@link Hyperlink.serveRemote}. Mounts the metrics RPC handlers and registers into
+ * {@link Hyperlink.servedHyperlinksLayer} **without** granting the local instance. For a pure
  * gateway/edge; use {@link serve} when the serving node also reads the metrics in-process.
  *
  * @category layers & serving
@@ -234,7 +234,7 @@ export const serveRemote = <Self>(
 
 /**
  * Serve this metrics resource **and** grant its local instance from **one** materialization — the
- * counterpart to {@link Resource.serve}, fed from the in-process usage registry
+ * counterpart to {@link Hyperlink.serve}, fed from the in-process usage registry
  * ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add the tag to the served node's
  * `Group` and drop this into {@link Node.httpServer}; a served-**only** edge uses {@link serveRemote}.
  *
@@ -249,7 +249,7 @@ export const serve = <Self>(
 /**
  * Class factory for an {@link ApiMetrics} instance tag — its own per-instance RPC group, so it
  * serves on a node alongside queues/processes via {@link ApiMetrics.serve} and is reached with
- * `Resource.client`. Bind it to a node with `{ node }`.
+ * `Hyperlink.client`. Bind it to a node with `{ node }`.
  *
  * @example
  * ```ts
@@ -261,7 +261,7 @@ export const serve = <Self>(
  */
 // `Context.Service`-shaped: `<Self>()(clientId, options?)`. Only `Self` is explicit; the client id's
 // literal isn't carried on the tag (`clientIdSym` is `string`). The node-bearing call narrows the
-// return so `Resource.client` resolves its transport (window cadence lives on the layer/serve).
+// return so `Hyperlink.client` resolves its transport (window cadence lives on the layer/serve).
 const tag = <Self>() => {
   function build(clientId: string): ApiMetricsTag<Self>;
   function build<HSelf>(

@@ -4,7 +4,7 @@ import { TestClock } from "effect/testing";
 import { LogAnnotationKeys } from "../src/LogContext";
 import * as Logs from "../src/Logs";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import * as Node from "../src/Node";
 
@@ -12,7 +12,7 @@ class BillingNode extends Node.Tag<BillingNode>()("test/two-copies/node") {}
 class SyncProc extends Process.Tag<SyncProc>()("test/two-copies/proc") {}
 
 class QuietProc extends Process.Tag<QuietProc>()("test/stream-level/quiet") {}
-const QuietProcWithStreamLevel = Resource.logStreamLevelWarn(QuietProc);
+const QuietProcWithStreamLevel = Hyperlink.logStreamLevelWarn(QuietProc);
 
 class RegProc extends Process.Tag<RegProc>()("test/stream-level/reg") {}
 
@@ -42,7 +42,7 @@ describe("node + resource durable copies", () => {
         yield* Effect.gen(function* () {
           while (true) {
             const nodeRows = yield* Logs.byNode(BillingNode, { limit: 50 });
-            const resourceRows = yield* Logs.byResource(SyncProc.key,);
+            const resourceRows = yield* Logs.byHyperlink(SyncProc.key,);
             const shared = nodeRows.find((row) => row.message === "shared-line");
             const lineId = shared?.annotations[LogAnnotationKeys.lineId];
             if (
@@ -63,11 +63,11 @@ describe("node + resource durable copies", () => {
     ));
 });
 
-describe("Resource.logStreamLevel / Store.streamLevel", () => {
-  it("logStreamLevelWarn drops Info on live Resource.logs stream", () =>
+describe("Hyperlink.logStreamLevel / Store.streamLevel", () => {
+  it("logStreamLevelWarn drops Info on live Hyperlink.logs stream", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { stream } = yield* Resource.logs(QuietProcWithStreamLevel);
+        const { stream } = yield* Hyperlink.logs(QuietProcWithStreamLevel);
         const collected = yield* Effect.forkChild(
           Stream.runCollect(Stream.take(stream, 1)),
         );
@@ -86,11 +86,11 @@ describe("Resource.logStreamLevel / Store.streamLevel", () => {
       ),
     ));
 
-  it.effect("Store.streamLevelWarn stamps tag for Resource.logs", () =>
+  it.effect("Store.streamLevelWarn stamps tag for Hyperlink.logs", () =>
     Effect.gen(function* () {
       const relay = yield* Logs.Relay;
       yield* TestClock.adjust(Duration.millis(1));
-      const { stream } = yield* Resource.logs(RegProc);
+      const { stream } = yield* Hyperlink.logs(RegProc);
       const collected = yield* Effect.forkChild(
         Stream.runCollect(Stream.take(stream, 1)),
       );

@@ -14,17 +14,17 @@ import {
 } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src";
-import { queueControlSpec } from "../src/QueueResource";
-import { QueueMissingItemSchemaError } from "../src/QueueResource";
-import type { QueueEntry } from "../src/QueueResource";
+import { QueueHyperlink } from "../src";
+import { queueControlSpec } from "../src/QueueHyperlink";
+import { QueueMissingItemSchemaError } from "../src/QueueHyperlink";
+import type { QueueEntry } from "../src/QueueHyperlink";
 import * as Logs from "../src/Logs";
-import * as Resource from "../src/Resource";
-import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
+import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // A queue family built from the control contract: many instances share the "queue" group.
-const Queue = Resource.tagFor("queue", queueControlSpec);
+const Queue = Hyperlink.tagFor("queue", queueControlSpec);
 class Jobs extends Queue<Jobs>("@app/Jobs") {}
 class Mail extends Queue<Mail>("@app/Mail") {}
 
@@ -43,15 +43,15 @@ const makeImpl = () => {
   const statusRef = Effect.runSync(SubscriptionRef.make(initial));
   const patch = (f: (s: typeof initial) => typeof initial) =>
     Effect.runSync(SubscriptionRef.update(statusRef, f));
-  const statusSub = Resource.subscribable(statusRef);
+  const statusSub = Hyperlink.subscribable(statusRef);
   return {
     // live current state — `status` is the SSOT Subscribable; the scalars are mapped views (`ref` impls).
     status: statusSub,
-    size: Resource.mapSubscribable(
+    size: Hyperlink.mapSubscribable(
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
     ),
-    isEmpty: Resource.mapSubscribable(
+    isEmpty: Hyperlink.mapSubscribable(
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
@@ -123,10 +123,10 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     expect(yield* head(mail.size)).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(
     Effect.provide(
-      Resource.serveInstances(
+      Hyperlink.serveInstances(
         Queue,
-        Resource.instance(Jobs, jobsImpl),
-        Resource.instance(Mail, mailImpl),
+        Hyperlink.instance(Jobs, jobsImpl),
+        Hyperlink.instance(Mail, mailImpl),
       ),
     ),
     Effect.scoped,
@@ -181,7 +181,7 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(meta("size").description).toContain("pending items");
 });
 
-// ── data plane (model B): the designed form — QueueResource.Tag<Self>()(id, itemSchema) ──
+// ── data plane (model B): the designed form — QueueHyperlink.Tag<Self>()(id, itemSchema) ──
 // The item is a struct; `add`/`prioritize`/`defer` take it DIRECTLY (the whole item schema is
 // the rpc payload), and `enqueue` takes the full entry array directly.
 const NumberItem = Schema.Struct({ n: Schema.Number });
@@ -192,7 +192,7 @@ interface NumberItem {
 type NumberIn = NumberItem | ReadonlyArray<NumberItem>;
 const asItems = (p: NumberIn): ReadonlyArray<NumberItem> =>
   "n" in p ? [p] : p;
-class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", { payload: NumberItem }) {}
+class Numbers extends QueueHyperlink.Tag<Numbers>()("test/Numbers", { payload: NumberItem }) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];
@@ -225,7 +225,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     expect(
       yield* Stream.runHead(svc.size).pipe(Effect.map(Option.getOrThrow)),
     ).toBe(3);
-  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Hyperlink.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -262,7 +262,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
       },
     ]);
     expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
-  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Hyperlink.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -302,7 +302,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
       ),
     );
     expect(caught).toBe("missing:test/Numbers");
-  }).pipe(Effect.provide(Resource.serveRemote(Numbers, impl)), Effect.scoped);
+  }).pipe(Effect.provide(Hyperlink.serveRemote(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
 
@@ -339,18 +339,18 @@ it("enqueue's wire schema (the server's decode gate) rejects malformed entries",
   ).toBe(true);
 });
 
-// ── QueueResource.layer: the engine wired behind the toolkit tag, run locally ──
-class LocalQueue extends QueueResource.Tag<LocalQueue>()("test/LocalQueue", {
+// ── QueueHyperlink.layer: the engine wired behind the toolkit tag, run locally ──
+class LocalQueue extends QueueHyperlink.Tag<LocalQueue>()("test/LocalQueue", {
   payload: NumberItem,
 }) {}
 
-it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
+it("QueueHyperlink.layer runs the engine behind the toolkit tag (local)", () => {
   const program = Effect.gen(function* () {
     const seen = yield* Ref.make<Array<number>>([]);
     const q = yield* LocalQueue;
     // the same `yield* Tag` surface the contract declares — backed by the live engine
     yield* Effect.forkScoped(
-      Resource.runForEachTag(q.events, "Completed", (e) =>
+      Hyperlink.runForEachTag(q.events, "Completed", (e) =>
         Ref.update(seen, (a) => [...a, e.entry.item.n]),
       ),
     );
@@ -376,7 +376,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     expect(Option.getOrThrow(emptied)).toBe(true);
   }).pipe(
     Effect.provide(
-      QueueResource.layerMemory(LocalQueue, {
+      QueueHyperlink.layerMemory(LocalQueue, {
         effect: (_item: NumberItem) => Effect.void,
         concurrency: 1,
       }),
@@ -386,15 +386,15 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
   return Effect.runPromise(program);
 });
 
-// ── QueueResource.layer scopes worker logs readable via Resource.logs ──
-class LoggingQueue extends QueueResource.Tag<LoggingQueue>()("test/LoggingQueue", {
+// ── QueueHyperlink.layer scopes worker logs readable via Hyperlink.logs ──
+class LoggingQueue extends QueueHyperlink.Tag<LoggingQueue>()("test/LoggingQueue", {
   payload: NumberItem,
 }) {}
 
-it("QueueResource.layer scopes worker logs via Resource.logs", () => {
+it("QueueHyperlink.layer scopes worker logs via Hyperlink.logs", () => {
   const program = Effect.gen(function* () {
     const q = yield* LoggingQueue;
-    const { stream } = yield* Resource.logs(LoggingQueue);
+    const { stream } = yield* Hyperlink.logs(LoggingQueue);
     const collected = yield* Effect.forkChild(
       Stream.runCollect(
         Stream.take(
@@ -410,9 +410,9 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
     expect(entry?.level).toBe("Info");
   }).pipe(
     Effect.provide(
-      // Soft-default Memory for the engine; LogRelay alone for live Resource.logs
+      // Soft-default Memory for the engine; LogRelay alone for live Hyperlink.logs
       // (do not provideMerge a Node-only AppStore — Soft would capture that Storage).
-      QueueResource.layer(LoggingQueue, {
+      QueueHyperlink.layer(LoggingQueue, {
         effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
         concurrency: 1,
       }).pipe(Layer.provideMerge(Logs.layer)),
@@ -426,14 +426,14 @@ it("QueueResource.layer scopes worker logs via Resource.logs", () => {
 // A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
 class QueueNode extends Node.Tag<QueueNode>()("queue/node") {}
-class NodeNumbers extends QueueResource.Tag<NodeNumbers>()("test/NodeNumbers", {
+class NodeNumbers extends QueueHyperlink.Tag<NodeNumbers>()("test/NodeNumbers", {
   payload: NumberItem,
   node: QueueNode,
 }) {}
 const _nodeedQueueClient: Layer.Layer<NodeNumbers, never, QueueNode> =
-  Resource.client(NodeNumbers);
+  Hyperlink.client(NodeNumbers);
 void _nodeedQueueClient;
 // a nodeless queue keeps the ambient-Protocol client.
 const _nodelessQueueClient: Layer.Layer<Numbers, never, RpcClient.Protocol> =
-  Resource.client(Numbers);
+  Hyperlink.client(Numbers);
 void _nodelessQueueClient;

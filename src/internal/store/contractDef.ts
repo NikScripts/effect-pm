@@ -18,9 +18,9 @@ import {
   type StoreReadPayload,
 } from "./where";
 
-export const storeContractSym = Symbol.for("@nikscripts/effect-pm/Store/contractDef");
-export const storeShapeSym = Symbol.for("@nikscripts/effect-pm/Store/shape");
-export const shapeRefSym = Symbol.for("@nikscripts/effect-pm/Store/shapeRef");
+export const storeContractSym = Symbol.for("hyperlink-ts/Store/contractDef");
+export const storeShapeSym = Symbol.for("hyperlink-ts/Store/shape");
+export const shapeRefSym = Symbol.for("hyperlink-ts/Store/shapeRef");
 
 /** @deprecated Empty read payload — reads now use {@link storeReadPayloadSchema}. @internal */
 export const emptyPayloadSchema = Schema.Struct({});
@@ -741,7 +741,7 @@ export function mergeStoreContracts(
 
 /**
  * Set a value at a (possibly dotted) path in the resolved-handle tree, creating intermediate groups.
- * Mirrors `Resource.setPath`. @internal
+ * Mirrors `Hyperlink.setPath`. @internal
  */
 const setHandlePath = (
   obj: Record<string, unknown>,
@@ -755,7 +755,7 @@ const setHandlePath = (
   }
   let node = obj;
   for (const part of parts) {
-    // Same tree-walk `as Record<string, unknown>` idiom as `Resource.nestService`/`setPath`.
+    // Same tree-walk `as Record<string, unknown>` idiom as `Hyperlink.nestService`/`setPath`.
     node[part] = (node[part] as Record<string, unknown> | undefined) ?? {};
     node = node[part] as Record<string, unknown>;
   }
@@ -765,7 +765,7 @@ const setHandlePath = (
 /**
  * Nest a flat dotted-key resolved handle back into the shape tree so `handle.sensors.temperature.append`
  * works. **Identity (same reference) when there are no dotted keys**, so a flat contract's handle is
- * byte-identical to before. Mirrors `Resource.nestService`. @internal
+ * byte-identical to before. Mirrors `Hyperlink.nestService`. @internal
  */
 export const nestHandle = (flat: Record<string, unknown>): Record<string, unknown> => {
   if (!Object.keys(flat).some((key) => key.includes("."))) {

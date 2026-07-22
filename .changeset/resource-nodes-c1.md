@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Resource.nodes / andNode (C1)** — one Node set on the Tag handle.

@@ -1,12 +1,12 @@
 import { Schema } from "effect";
-import * as QueueResource from "../src/QueueResource";
+import * as QueueHyperlink from "../src/QueueHyperlink";
 import type {
   QueueEntry,
   QueueEvent,
   QueueMetrics,
   QueueReleaseOptions,
-} from "../src/internal/queueResource";
-import * as Resource from "../src/Resource";
+} from "../src/internal/queueHyperlink";
+import * as Hyperlink from "../src/Hyperlink";
 
 // SSOT drift guard (Stage-2 M6): each hand-authored PUBLIC type must stay structurally equal to its
 // schema `.Type`. They are kept as explicit `interface`s (owner rule — public types are not
@@ -17,36 +17,36 @@ import * as Resource from "../src/Resource";
 // fix is retain-narrower: tighten the schema to the type, never widen the type to a looser schema.
 
 const EmailJob = Schema.Struct({ to: Schema.String });
-const entrySchema = QueueResource.queueEntry(EmailJob);
+const entrySchema = QueueHyperlink.queueEntry(EmailJob);
 // concrete Success/Error slots so the event union reduces
-const eventSchema = QueueResource.queueEvent(EmailJob, {
+const eventSchema = QueueHyperlink.queueEvent(EmailJob, {
   success: Schema.Number,
   error: Schema.String,
 });
 
 // ── QueueMetrics ⇄ queueMetrics.Type ─────────────────────────────────────────────
 declare const hMetrics: QueueMetrics;
-declare const sMetrics: Resource.Decoded<typeof QueueResource.queueMetrics>;
-const _metricsToSchema: Resource.Decoded<typeof QueueResource.queueMetrics> = hMetrics;
+declare const sMetrics: Hyperlink.Decoded<typeof QueueHyperlink.queueMetrics>;
+const _metricsToSchema: Hyperlink.Decoded<typeof QueueHyperlink.queueMetrics> = hMetrics;
 const _metricsToType: QueueMetrics = sMetrics;
 
 // ── QueueReleaseOptions ⇄ queueReleaseOptions.Type ───────────────────────────────
 declare const hRelease: QueueReleaseOptions;
-declare const sRelease: Resource.Decoded<typeof QueueResource.queueReleaseOptions>;
-const _releaseToSchema: Resource.Decoded<typeof QueueResource.queueReleaseOptions> = hRelease;
+declare const sRelease: Hyperlink.Decoded<typeof QueueHyperlink.queueReleaseOptions>;
+const _releaseToSchema: Hyperlink.Decoded<typeof QueueHyperlink.queueReleaseOptions> = hRelease;
 const _releaseToType: QueueReleaseOptions = sRelease;
 
 // ── QueueEntry<T> ⇄ queueEntry(itemSchema).Type ──────────────────────────────────
-declare const hEntry: QueueEntry<Resource.Decoded<typeof EmailJob>>;
-declare const sEntry: Resource.Decoded<typeof entrySchema>;
-const _entryToSchema: Resource.Decoded<typeof entrySchema> = hEntry;
-const _entryToType: QueueEntry<Resource.Decoded<typeof EmailJob>> = sEntry;
+declare const hEntry: QueueEntry<Hyperlink.Decoded<typeof EmailJob>>;
+declare const sEntry: Hyperlink.Decoded<typeof entrySchema>;
+const _entryToSchema: Hyperlink.Decoded<typeof entrySchema> = hEntry;
+const _entryToType: QueueEntry<Hyperlink.Decoded<typeof EmailJob>> = sEntry;
 
 // ── QueueEvent<T, E, A> ⇄ queueEvent(item, { success, error }).Type ──────────────
-declare const hEvent: QueueEvent<Resource.Decoded<typeof EmailJob>, string, number>;
-declare const sEvent: Resource.Decoded<typeof eventSchema>;
-const _eventToSchema: Resource.Decoded<typeof eventSchema> = hEvent;
-const _eventToType: QueueEvent<Resource.Decoded<typeof EmailJob>, string, number> = sEvent;
+declare const hEvent: QueueEvent<Hyperlink.Decoded<typeof EmailJob>, string, number>;
+declare const sEvent: Hyperlink.Decoded<typeof eventSchema>;
+const _eventToSchema: Hyperlink.Decoded<typeof eventSchema> = hEvent;
+const _eventToType: QueueEvent<Hyperlink.Decoded<typeof EmailJob>, string, number> = sEvent;
 
 void [
   _metricsToSchema,

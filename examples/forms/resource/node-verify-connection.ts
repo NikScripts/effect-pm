@@ -13,16 +13,16 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import { Effect, Layer, Schema } from "effect"
 import { HttpServer } from "effect/unstable/http"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
 class Droplet extends Node.Tag<Droplet>()("forms/verify/Droplet") {}
 
-class Emails extends Resource.Tag<Emails>()("forms/verify/Emails", {
-  ping: Resource.effect(Schema.String),
+class Emails extends Hyperlink.Tag<Emails>()("forms/verify/Emails", {
+  ping: Hyperlink.effect(Schema.String),
 }) {}
 
 const Server = Node.httpServer([
-  Resource.serve(Emails, { ping: Effect.succeed("pong") }),
+  Hyperlink.serve(Emails, { ping: Effect.succeed("pong") }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest))
 
 const program = Effect.gen(function* () {
@@ -31,9 +31,9 @@ const program = Effect.gen(function* () {
   const url = `http://127.0.0.1:${port}/rpc`
 
   // Tier 1 — cheap transport probe (default).
-  yield* Resource.verifyConnection(Droplet, { url })
+  yield* Hyperlink.verifyConnection(Droplet, { url })
   // Deep — RPC NodeStatus + require Emails ready.
-  yield* Resource.verifyConnection(Droplet, {
+  yield* Hyperlink.verifyConnection(Droplet, {
     url,
     deep: true,
     resource: "forms/verify/Emails",

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Node catalog + `listen` (C2–C4)** — typed `ROut`, prove at listen, keep `*Server`.

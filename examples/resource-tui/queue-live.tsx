@@ -1,15 +1,15 @@
 /**
  * @module examples/resource-tui/queue-live
  *
- * The queue widget driven by a **real toolkit `QueueResource`** — no mock. A real
+ * The queue widget driven by a **real toolkit `QueueHyperlink`** — no mock. A real
  * local queue (worker + producer) feeds the shared `PageXL` from its live `status`
- * and `metrics` streams; the log tail comes from {@link Resource.logs}.
+ * and `metrics` streams; the log tail comes from {@link Hyperlink.logs}.
  *
- * Soft Storage: `QueueResource.layerMemory(…).pipe(Layer.provide(TuiStore.layerMemory))`
+ * Soft Storage: `QueueHyperlink.layerMemory(…).pipe(Layer.provide(TuiStore.layerMemory))`
  * — provide AppStore into the toolkit layer (see `docs/guides/stores.md`).
  *
- * `Atom.runtime(layer)` is the seam: this is `QueueResource.layer` (local) today;
- * swapping in `Resource.client(tag)` (remote) changes nothing else.
+ * `Atom.runtime(layer)` is the seam: this is `QueueHyperlink.layer` (local) today;
+ * swapping in `Hyperlink.client(tag)` (remote) changes nothing else.
  *
  * Ctrl+E enters edit mode (red border) for [p] pause [r] resume [c] clear
  * [x] shutdown. Quit with Ctrl+C.
@@ -21,9 +21,9 @@ import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { QueueResource } from "../../src";
+import { QueueHyperlink } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
@@ -39,11 +39,11 @@ import * as Node from "../../src/Node";
 // ── a real queue ────────────────────────────────────────────────────────────
 const NAME = "@acme/queues/MailQueue";
 const Job = Schema.Struct({ id: Schema.String });
-class MailQueue extends QueueResource.Tag<MailQueue>()(NAME, { payload: Job }) {}
+class MailQueue extends QueueHyperlink.Tag<MailQueue>()(NAME, { payload: Job }) {}
 class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
 class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/queue-live/Store")(
   TuiNode.logs,
-  QueueResource.store(MailQueue),
+  QueueHyperlink.store(MailQueue),
 ) {}
 
 class WorkerError extends Data.TaggedError("WorkerError")<{
@@ -63,9 +63,9 @@ const hexKey = (): string =>
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
-// Resource.logs surfaces those lines on the live log tail (filter relay by resource key).
+// Hyperlink.logs surfaces those lines on the live log tail (filter relay by resource key).
 class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
-const QueueLayer = QueueResource.layerMemory(MailQueue, {
+const QueueLayer = QueueHyperlink.layerMemory(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`processing ${job.id}`);
@@ -127,10 +127,10 @@ const LEVEL_COLOR: Record<string, string> = {
   Fatal: "red",
 };
 
-// live log tail via Resource.logs — newest accumulated, capped
+// live log tail via Hyperlink.logs — newest accumulated, capped
 const logsAtom = runtime.atom(
   Stream.unwrap(
-    Effect.map(Resource.logs(MailQueue), (h) =>
+    Effect.map(Hyperlink.logs(MailQueue), (h) =>
       h.stream.pipe(Stream.filter(LogEntry.hasKey(MailQueue.key))),
     ),
   ).pipe(

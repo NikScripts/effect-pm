@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Queue lane take algorithm** — pluggable scheduling on `QueueResource` without changing the public enqueue API.

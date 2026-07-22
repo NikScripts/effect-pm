@@ -1,4 +1,4 @@
-import * as Resource from "../../../src/Resource";
+import * as Hyperlink from "../../../src/Hyperlink";
 import * as Store from "../../../src/Store";
 /**
  * @module examples/forms/store/store-memory
@@ -19,9 +19,9 @@ const contract = Store.contract(
   }),
 );
 
-class LabSensor extends Resource.Tag<LabSensor>()("@examples/LabSensor", {
-  temperature: Resource.ref(Schema.Number),
-}).pipe(Resource.withStore(contract)) {}
+class LabSensor extends Hyperlink.Tag<LabSensor>()("@examples/LabSensor", {
+  temperature: Hyperlink.ref(Schema.Number),
+}).pipe(Hyperlink.withStore(contract)) {}
 
 class AppStore extends Store.Service<AppStore>("@examples/Store")(
   Store.scoped(LabSensor, contract),

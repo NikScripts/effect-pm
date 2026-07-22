@@ -6,15 +6,15 @@ import {
   interruptRunBody,
   interruptWaitingAcquire,
   startRun,
-} from "../src/internal/runResourceStatus";
+} from "../src/internal/runHyperlinkStatus";
 import {
   makeRunCompletedFact,
   makeRunFailedFact,
   makeRunStartedFact,
   makeRunStateChange,
-  toResourceState,
-} from "../src/internal/runResourceFacts";
-import type { RunGateStatus } from "../src/internal/runResource";
+  toHyperlinkState,
+} from "../src/internal/runHyperlinkFacts";
+import type { RunGateStatus } from "../src/internal/runHyperlink";
 
 const baseStatus = (patch: Partial<RunGateStatus> = {}): RunGateStatus => ({
   resourceId: "@test/Gate",
@@ -30,7 +30,7 @@ const baseStatus = (patch: Partial<RunGateStatus> = {}): RunGateStatus => ({
   ...patch,
 });
 
-describe("runResourceStatus", () => {
+describe("runHyperlinkStatus", () => {
   it("enterWaiting increments waiting and stamps observedAt", () => {
     const next = enterWaiting(baseStatus(), 100);
     expect(next).toMatchObject({ waiting: 1, observedAt: 100 });
@@ -62,7 +62,7 @@ describe("runResourceStatus", () => {
   });
 });
 
-describe("runResourceFacts", () => {
+describe("runHyperlinkFacts", () => {
   it("builds typed fact rows", () => {
     expect(
       makeRunStartedFact({
@@ -111,6 +111,6 @@ describe("runResourceFacts", () => {
       current,
     });
     expect(change.previous).toBeNull();
-    expect(change.current).toEqual(toResourceState(current));
+    expect(change.current).toEqual(toHyperlinkState(current));
   });
 });

@@ -1,7 +1,7 @@
 import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import * as Lookup from "../src/Lookup";
 
@@ -12,15 +12,15 @@ import * as Lookup from "../src/Lookup";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-nameless-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-nameless-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Resource.Tag<Jobs>()("nameless/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("nameless/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Resource.Tag<Emails>()("nameless/Emails", {
-  emails: Resource.effect(Schema.String),
+class Emails extends Hyperlink.Tag<Emails>()("nameless/Emails", {
+  emails: Hyperlink.effect(Schema.String),
 }) {}
 
 const jobsImpl = { jobs: Effect.succeed(11) };
@@ -31,14 +31,14 @@ describe("Node.unix nameless", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
-        Node.unix([Resource.serve(Jobs, jobsImpl)]).pipe(
+        Node.unix([Hyperlink.serve(Jobs, jobsImpl)]).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
       const clientCtx = yield* Layer.build(
-        Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
+        Hyperlink.discoverClient(Jobs, { lookupPath, unlink: false }),
       );
 
       const n = yield* Effect.gen(function* () {
@@ -48,7 +48,7 @@ describe("Node.unix nameless", () => {
 
       expect(n).toBe(11);
       const listenNode = Context.get(serverCtx, Node.ListenNode);
-      expect(listenNode.key.startsWith("@nikscripts/effect-pm/anonymous-node/")).toBe(true);
+      expect(listenNode.key.startsWith("hyperlink-ts/anonymous-node/")).toBe(true);
       expect(typeof listenNode.path).toBe("string");
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
@@ -57,14 +57,14 @@ describe("Node.unix nameless", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("one");
       const serverCtx = yield* Layer.build(
-        Node.unix(Resource.serve(Jobs, jobsImpl)).pipe(
+        Node.unix(Hyperlink.serve(Jobs, jobsImpl)).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
         ),
       );
       const clientCtx = yield* Layer.build(
-        Resource.discoverClient(Jobs, { lookupPath, unlink: false }),
+        Hyperlink.discoverClient(Jobs, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
@@ -79,8 +79,8 @@ describe("Node.unix nameless", () => {
       const lookupPath = yield* tmpSock("pair");
       const serverCtx = yield* Layer.build(
         Node.unix([
-          Resource.serve(Jobs, jobsImpl),
-          Resource.serve(Emails, emailsImpl),
+          Hyperlink.serve(Jobs, jobsImpl),
+          Hyperlink.serve(Emails, emailsImpl),
         ]).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
@@ -88,7 +88,7 @@ describe("Node.unix nameless", () => {
         ),
       );
       const clientCtx = yield* Layer.build(
-        Resource.discoverClients([Jobs, Emails], {
+        Hyperlink.discoverClients([Jobs, Emails], {
           lookupPath,
           unlink: false,
         }),
@@ -108,7 +108,7 @@ describe("Node.unix nameless", () => {
     Effect.gen(function* () {
       // Unique default path via env would collide suites — pin via array form above.
       // Rest shape is type-checked here against the same tags.
-      const layer = Resource.discoverClients(Jobs, Emails);
+      const layer = Hyperlink.discoverClients(Jobs, Emails);
       expect(Layer.isLayer(layer)).toBe(true);
     }),
   );

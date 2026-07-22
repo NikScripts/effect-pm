@@ -20,8 +20,8 @@ const twoslasher = createTwoslasher({
     types: [],
     baseUrl: repoRoot,
     paths: {
-      "@nikscripts/effect-pm": ["src/index.ts"],
-      "@nikscripts/effect-pm/*": ["src/*"],
+      "hyperlink-ts": ["src/index.ts"],
+      "hyperlink-ts/*": ["src/*"],
     },
   },
 });

@@ -18,14 +18,14 @@ Goal: happy path is **one recipe** (`stores.md`); intentional multi-node / two-c
 
 | Defense | Where |
 |---------|--------|
-| Soft-default Memory via `Store.withDefaultStorage` — R fulfilled; `*Memory` aliases | Process / Queue / CustomQueue / RunResource toolkit layers |
-| Soft SQLite capture + sibling-merge empty-file guards | `test/storage-correctness-guards.test.ts` (Process, Queue, RunResource, CustomQueue) |
+| Soft-default Memory via `Store.withDefaultStorage` — R fulfilled; `*Memory` aliases | Process / Queue / CustomQueue / RunHyperlink toolkit layers |
+| Soft SQLite capture + sibling-merge empty-file guards | `test/storage-correctness-guards.test.ts` (Process, Queue, RunHyperlink, CustomQueue) |
 | Node-logs-only Soft → layer build dies (`resolveOrDie`) | same guards + stores guide note |
 | Dual-`DemoStore` process-store forms fixed | `examples/forms/process-store/*` |
 | Living Soft teachability (examples + TSDoc ripple) | #65 S1–S2 |
 | AGENTS persistence → stores guide; cutover-00 §2 refreshed | repo tip |
 | `Store.Service.layerMemory` / `layer` bake `Logs.layer` + per-registration `_logs` tails | `src/Store.ts` |
-| Private `_logs` / full-key `Logs.byResource` | #57 / #59 |
+| Private `_logs` / full-key `Logs.byHyperlink` | #57 / #59 |
 
 **Intentionally allowed**
 
@@ -42,11 +42,11 @@ Goal: happy path is **one recipe** (`stores.md`); intentional multi-node / two-c
 ```ts
 // Soft unwrap sees AppStore.Storage — engines write that journal.
 Process.layer(Daily, { effect: poll }).pipe(
-  Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/data.sqlite" })),
+  Layer.provideMerge(AppStore.layer({ filename: ".hyperlink-ts/data.sqlite" })),
 )
 
 // httpServer — Layer.provide is fine when you do not yield* AppStore in-process:
-Resource.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
+Hyperlink.wsServer([Process.serve(Daily, { effect: poll })]).pipe(
   Layer.provide(AppStore.layer({ filename })),
   …
 )
@@ -65,7 +65,7 @@ There is no “later-wins Soft override.” Soft peeks ambient `Storage` **at to
 | # | Footgun | Today | Defense |
 |---|---------|-------|---------|
 | **P0** | Sibling `Layer.merge(engine, AppStore)` expecting Soft override | Silent empty SQLite | stores guide + Soft guards (Process/Queue/Run/CustomQueue) |
-| **P1** | Expect logs from `layerDefaultMemory` alone | Empty `by*` / `Resource.logs` | stores guide + TSDoc |
+| **P1** | Expect logs from `layerDefaultMemory` alone | Empty `by*` / `Hyperlink.logs` | stores guide + TSDoc |
 | **P1** | Soft-override with store that omits engine registration | Layer build dies (`resolveOrDie`) | **Eng’d** — Process/Queue/CustomQueue/Run probe at build |
 | **P1** | Missing `Node.logs` / toolkit `.store(tag)` | Empty durable queries | docs / empty-query honesty |
 | **P2** | Nested / second `Logs.layer` or second `Store.Service` in one Node | Two buses/journals | Document-only (Phase C) |

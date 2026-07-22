@@ -18,7 +18,7 @@ import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
 
 const program = Effect.gen(function* () {
-  const path = `/tmp/effect-pm-forms-lookup-${process.pid}.sock`
+  const path = `/tmp/hyperlink-ts-forms-lookup-${process.pid}.sock`
   const lookupNode = Node.Tag()("forms/Lookup", { path }).pipe(Node.asLookup)
 
   // Exclusive serve on the branded node (not bind-or-dial beside it)

@@ -5,7 +5,7 @@
  */
 import { Clock, DateTime, Duration, Effect, Option, PubSub, Ref, Schedule, Scope, Stream, SubscriptionRef } from "effect";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
-import type * as Resource from "../Resource";
+import type * as Hyperlink from "../Hyperlink";
 
 /** @internal */
 export interface EndpointUsageEvent {
@@ -37,7 +37,7 @@ interface UsageSink {
   readonly exit: Effect.Effect<void>;
   readonly record: (event: EndpointUsageEvent) => Effect.Effect<void>;
   readonly metrics: Stream.Stream<ApiUsageMetrics>;
-  readonly usage: Resource.Subscribable<ApiUsageSnapshot>;
+  readonly usage: Hyperlink.Subscribable<ApiUsageSnapshot>;
 }
 
 const endpointKey = (group: string, endpoint: string): string => `${group}\0${endpoint}`;
@@ -132,7 +132,7 @@ const makeUsageSink = (
     });
     const snapshotRef = yield* SubscriptionRef.make(yield* snapshot);
     const refreshSnapshot = Effect.flatMap(snapshot, (s) => SubscriptionRef.set(snapshotRef, s));
-    const usage: Resource.Subscribable<ApiUsageSnapshot> = {
+    const usage: Hyperlink.Subscribable<ApiUsageSnapshot> = {
       get: snapshot,
       changes: SubscriptionRef.changes(snapshotRef),
     };

@@ -8,7 +8,7 @@ import { defineConfig } from "waku/config";
 // shiki spans), and Vite's dev server sends identity encoding — browsing the dev box from a phone
 // (documenting while building) downloads it all uncompressed. Gzip at the dev middleware layer
 // cuts an 11 MB page to ~0.5 MB. Production hosting compresses at the edge; this is dev parity.
-// CLIENT-only stub for @effect/platform-node: Resource.ts / internal/node.ts reach it through
+// CLIENT-only stub for @effect/platform-node: Hyperlink.ts / internal/node.ts reach it through
 // DYNAMIC import() on node-transport paths a browser can never take, but the bundler chases
 // dynamic imports into node:fs/http/worker_threads. A resolveId hook scoped to the client
 // environment is deterministic where environment-level alias merging proved not to be; the server
@@ -61,7 +61,7 @@ export default defineConfig({
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.
     assetsInclude: ["**/*.md"],
-    // `@pm` -> the effect-pm package SOURCE, so island widgets bundle with THIS app's
+    // `@pm` -> the hyperlink-ts package SOURCE, so island widgets bundle with THIS app's
     // single `effect`/`react` instance (a dual instance would break atom reactivity).
     resolve: {
       // Source-imported package widgets pull react/lucide/recharts from the repo's

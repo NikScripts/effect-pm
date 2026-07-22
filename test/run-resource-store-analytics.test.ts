@@ -1,21 +1,21 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option, Schema } from "effect";
-import * as RunResource from "../src/RunResource";
+import * as RunHyperlink from "../src/RunHyperlink";
 import * as Store from "../src/Store";
 
-class PriceGate extends RunResource.Tag<{ readonly _tag: "PriceGate" }>()("@test/AnalyticsPriceGate", {
+class PriceGate extends RunHyperlink.Tag<{ readonly _tag: "PriceGate" }>()("@test/AnalyticsPriceGate", {
   payload: Schema.Number,
   success: Schema.Number,
   error: Schema.String,
 }) {}
 
-const registration = RunResource.store(PriceGate);
+const registration = RunHyperlink.store(PriceGate);
 
 class PriceStore extends Store.Service<PriceStore>("@test/AnalyticsPriceStore")(
   registration,
 ) {}
 
-describe("RunResource.store — analytics read-extension", () => {
+describe("RunHyperlink.store — analytics read-extension", () => {
   it.effect("derivations compute over seeded run facts", () =>
     Effect.gen(function* () {
       const store = yield* PriceStore;

@@ -1,7 +1,7 @@
 "use client";
 
-// The base building block: a custom resource via `Resource.Tag`, driven from buttons.
-// The resource itself (contract + layer + atoms) lives in ./counter-resource — declared
+// The base building block: a custom resource via `Hyperlink.Tag`, driven from buttons.
+// The resource itself (contract + layer + atoms) lives in ./counter-hyperlink — declared
 // once, so a content hot-edit that re-imports this entry can't re-register it. This file
 // is just the UI. Tailwind scoped to .pm-dashboard.
 
@@ -9,7 +9,7 @@ import * as React from "react";
 import "../styles/widgets.css";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
-import { countAtom, increment, reset } from "./counter-resource.js";
+import { countAtom, increment, reset } from "./counter-hyperlink.js";
 
 function Panel(): React.ReactElement {
   const r = useAtomValue(countAtom);
@@ -22,7 +22,7 @@ function Panel(): React.ReactElement {
     <div className="pm-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">docs/Counter</span>
-        <span className="text-xs text-muted-foreground">Resource.Tag · in your browser</span>
+        <span className="text-xs text-muted-foreground">Hyperlink.Tag · in your browser</span>
       </div>
       <div className="text-3xl font-semibold tabular-nums text-foreground">{count}</div>
       <div className="flex flex-wrap items-center gap-2">

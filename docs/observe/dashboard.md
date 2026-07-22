@@ -6,7 +6,7 @@ API / group cards, each with stats, charts, controls, and streaming logs. You po
 reactive runtime and a root `Group`:
 
 ``` tsx
-import { Dashboard } from "@nikscripts/effect-pm/web"
+import { Dashboard } from "hyperlink-ts/web"
 import { Atom } from "effect/unstable/reactivity"
 
 const runtime = Atom.runtime(appLayer) // appLayer: your resource clients over a transport
@@ -20,9 +20,9 @@ wants.
 
 A resource client reaches its node over an RPC **transport**. The library ships two:
 
-- **`Resource.httpClient(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
+- **`Hyperlink.http(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
   or backend-to-backend** caller, or any client that opens only a handful of streams.
-- **`Resource.socketClient(node, { url })`** — a single **WebSocket**. Use this for a **browser
+- **`Hyperlink.ws(node, { url })`** — a single **WebSocket**. Use this for a **browser
   dashboard**.
 
 ### Why the browser needs the WebSocket
@@ -37,7 +37,7 @@ even get a response. The visible symptom is a dashboard that half-works: some ca
 sit frozen, **no charts, no logs** — with no error, because the requests are simply queued forever.
 
 A **WebSocket multiplexes every stream for a node over one connection**, so the 6-connection cap
-never applies. `socketClient` is the browser-shaped transport; `httpClient` is not.
+never applies. `ws` is the browser-shaped transport; `http` is not.
 
 {.note}
 HTTP/2 (a TLS production server) multiplexes too, so the cap is an HTTP/1.1 phenomenon — but your
@@ -53,20 +53,20 @@ serve list and options, it just speaks WebSocket):
 
 ``` ts
 Node.wsServer(
-  [Resource.serve(Jobs, jobsImpl) /* … */],
+  [Hyperlink.serve(Jobs, jobsImpl) /* … */],
 )
 ```
 
-**2. Client** — one `socketClient` per node. A same-origin **path** resolves against the page
+**2. Client** — one `ws` per node. A same-origin **path** resolves against the page
 `location` (its host, and `http→ws` / `https→wss`), so you just pass `"/rpc"` — no URL assembly, and
 it's safe in a module a server also imports (resolution is lazy):
 
 ``` ts
-const transport = Resource.socketClient(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
+const transport = Hyperlink.ws(JobsNode, { url: "/rpc" }) // → ws(s)://<page host>/rpc
 
 const appLayer = Layer.mergeAll(
   transport,
-  Resource.client(Jobs).pipe(Layer.provide(transport)),
+  Hyperlink.client(Jobs).pipe(Layer.provide(transport)),
 )
 ```
 
@@ -94,15 +94,15 @@ default to HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh 
 or the fold 404s against the ws-only `/rpc`. One knob per node, alongside `peersLayer`:
 
 ``` ts
-Node.wsServer([Resource.serve(WorkerPool, poolImpl) /* … */]).pipe(
-  Layer.provide(Resource.peersLayer(WorkerPool, ThisNode)),
-  Layer.provide(Resource.layerPeerProtocol(Resource.protocolWebsocket)), // peers speak ws too
+Node.wsServer([Hyperlink.serve(WorkerPool, poolImpl) /* … */]).pipe(
+  Layer.provide(Hyperlink.peersLayer(WorkerPool, ThisNode)),
+  Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)), // peers speak ws too
 )
 ```
 
-Under the hood every client transport is the same seam — `Resource.layerProtocol(protocol)` sets a
-client wire from an `RpcClient.Protocol` (build one with `Resource.protocolHttp` /
-`Resource.protocolWebsocket`), and `socketClient` / `httpClient` are per-node shortcuts over it.
+Under the hood every client transport is the same seam — `Hyperlink.layerProtocol(protocol)` sets a
+client wire from an `RpcClient.Protocol` (build one with `Hyperlink.protocolHttp` /
+`Hyperlink.protocolWebsocket`), and `ws` / `http` are per-node shortcuts over it.
 
 ## Widgets
 

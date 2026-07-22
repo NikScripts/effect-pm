@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Fix `QueueResource` refill dependency support: a refill `load` can now require its **own**

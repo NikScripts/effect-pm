@@ -3,13 +3,13 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { HistoryStore, QueueResource } from "../src";
-import type { QueueLayerConfig } from "../src/QueueResource";
-import * as Resource from "../src/Resource";
+import { HistoryStore, QueueHyperlink } from "../src";
+import type { QueueLayerConfig } from "../src/QueueHyperlink";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// The full remote path: a REAL toolkit QueueResource engine served over http via
-// `httpServer([QueueResource.serveMemory(...)])`, driven by `Resource.client` over the wire. The same `yield* Tag`
+// The full remote path: a REAL toolkit QueueHyperlink engine served over http via
+// `httpServer([QueueHyperlink.serveMemory(...)])`, driven by `Hyperlink.client` over the wire. The same `yield* Tag`
 // surface a local consumer uses — only the provided layer differs. This proves "remote queue
 // usage, all pieces together": control (add/pause), reads (completed/status.get), the rich-entry
 // handoff (release), and a live stream (status) all crossing real RPC.
@@ -17,7 +17,7 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class RemoteQueue extends QueueResource.Tag<RemoteQueue>()("queue-remote/Q", {
+class RemoteQueue extends QueueHyperlink.Tag<RemoteQueue>()("queue-remote/Q", {
   payload: NumberItem,
 }) {}
 
@@ -34,7 +34,7 @@ const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
 ) => {
   const server = Node.httpServer([
-    QueueResource.serveMemory(RemoteQueue, config),
+    QueueHyperlink.serveMemory(RemoteQueue, config),
   ]).pipe(
     // server-side history backend for metrics backfill
     Layer.provide(HistoryStore.layerMemory()),
@@ -47,7 +47,7 @@ const withServer = <A, E>(
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
       Effect.provide(
-        Resource.client(RemoteQueue).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(RemoteQueue).pipe(Layer.provide(clientHttp(port))),
       ),
       Effect.scoped,
     );

@@ -1,10 +1,10 @@
 /**
  * @module examples/resource-web/hub
  *
- * The review fixture for the shipped `@nikscripts/effect-pm/web` widgets — one of each **unique**
+ * The review fixture for the shipped `hyperlink-ts/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled process (the WNBA live-score
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
- * nodes (served by `server.ts`); the browser reaches each via `Resource.httpClient` (vite proxies
+ * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.http` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
  * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serve`. `ScoresDb` is a dependency
  * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
@@ -12,16 +12,16 @@
  */
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as Resource from "../../src/Resource";
-import * as QueueResource from "../../src/QueueResource";
-import * as CustomQueueResource from "../../src/CustomQueueResource";
+import * as Hyperlink from "../../src/Hyperlink";
+import * as QueueHyperlink from "../../src/QueueHyperlink";
+import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as Process from "../../src/Process";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
-import * as RunResource from "../../src/RunResource";
+import * as RunHyperlink from "../../src/RunHyperlink";
 import * as Node from "../../src/Node";
 
 const importJob = Schema.Struct({ id: Schema.String });
@@ -31,7 +31,7 @@ const session = Schema.Struct({ id: Schema.String, user: Schema.String });
 // on `LiveNode`, the play-by-play queue on `StatsNode` — so the dashboard's node die shows three
 // pips (a pyramid).
 /** The three nodes' ports (one process, three servers — see `server.ts`). Exported so the node urls
- *  here and the servers stay in sync. Each node carries its server-side url so `Resource.peersLayer`
+ *  here and the servers stay in sync. Each node carries its server-side url so `Hyperlink.peersLayer`
  *  can reach its peers; the browser overrides it with a vite-proxied path (below). */
 export const HOST_PORTS = { wnba: 7780, live: 7781, stats: 7782 } as const;
 const rpcUrl = (port: number) => `http://127.0.0.1:${port}/rpc`;
@@ -42,28 +42,28 @@ export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", { url: rpcUrl
 
 // A **multi-node** resource: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
-// total across the fleet — a `fleet`-tagged query the layer folds from `Resource.peers` + its own
+// total across the fleet — a `fleet`-tagged query the layer folds from `Hyperlink.peers` + its own
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
 // servers.
-export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
-  active: Resource.effect(Schema.Number),
-  fleetActive: Resource.effect(Schema.Number).pipe(Resource.fleet),
+export class WorkerPool extends Hyperlink.Tag<WorkerPool>()("wnba/WorkerPool", {
+  active: Hyperlink.effect(Schema.Number),
+  fleetActive: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
   // a per-node view (one row per node) — needs `selfNode` to key this instance's own row
-  activeByNode: Resource.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
+  activeByNode: Hyperlink.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Hyperlink.fleet),
 }).pipe(
-  Resource.nodes([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
+  Hyperlink.nodes([WnbaNode, LiveNode, StatsNode]), // nodeless, every instance an equal peer
 ) {}
 
 // A **fleet-health** mesh across the three nodes — each instance reports its own readiness; `byNode`
 // folds every peer's (Reachable / Unreachable), `status` rolls that up. Dogfoods the FleetHealth widget.
 export class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Resource.nodes([WnbaNode, LiveNode, StatsNode]),
+  Hyperlink.nodes([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A **telemetry** mesh — each node's Metric registry (the queues emit `queue_in_flight`). `fleetInFlight`
 // folds every node's in-flight, `inFlightByNode` breaks it down. Dogfoods the Telemetry widget.
 export class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.nodes([WnbaNode, LiveNode, StatsNode]),
+  Hyperlink.nodes([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A **shard-map** mesh — active game sessions partitioned across the three nodes by `consistentHash`.
@@ -72,12 +72,12 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
   key: Schema.String,
   value: session,
   keyOf: (s) => s.id,
-}).pipe(Resource.nodes([WnbaNode, LiveNode, StatsNode])) {}
+}).pipe(Hyperlink.nodes([WnbaNode, LiveNode, StatsNode])) {}
 
 // A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
-// driven concurrently so the RunResourceCard shows live in-flight / waiting / done counters.
-export class FetchGate extends RunResource.Tag<FetchGate>()("wnba/FetchGate", {
+// driven concurrently so the RunHyperlinkCard shows live in-flight / waiting / done counters.
+export class FetchGate extends RunHyperlink.Tag<FetchGate>()("wnba/FetchGate", {
   payload: Schema.String,
   success: Schema.Number,
   error: Schema.String,
@@ -86,26 +86,26 @@ export class FetchGate extends RunResource.Tag<FetchGate>()("wnba/FetchGate", {
 // A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
 // DB blips the queue cascades to degraded. This dogfoods `readinessOf` + the readiness cascade.
-export class ScoresDb extends Resource.Tag<ScoresDb>()(
+export class ScoresDb extends Hyperlink.Tag<ScoresDb>()(
   "wnba/ScoresDb",
-  { connected: Resource.effect(Schema.Boolean) },
+  { connected: Hyperlink.effect(Schema.Boolean) },
   { node: WnbaNode },
 ).pipe(
-  Resource.withReadiness((svc) =>
+  Hyperlink.withReadiness((svc) =>
     Effect.map(svc.connected, (c) =>
       c ? { ready: true } : { ready: false, detail: "connecting to scores DB…" },
     ),
   ),
 ) {}
 
-export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
+export class BoxScoreQueue extends QueueHyperlink.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   { payload: importJob, node: WnbaNode },
 ).pipe(
-  Resource.withReadiness((_svc, base) =>
+  Hyperlink.withReadiness((_svc, base) =>
     Effect.gen(function* () {
       const queue = yield* base;
-      const db = yield* Resource.readinessOf(ScoresDb);
+      const db = yield* Hyperlink.readinessOf(ScoresDb);
       const ready = queue.ready && db.ready;
       return ready
         ? { ready: true as const }
@@ -122,13 +122,13 @@ export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
 ).pipe(Process.schedule([])) {}
-export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
+export class PlayByPlayQueue extends QueueHyperlink.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}
 // A **custom queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
-// the CustomQueueResource widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
-export class ImportJobs extends CustomQueueResource.Tag<ImportJobs>()("wnba/ImportJobs", {
+// the CustomQueueHyperlink widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
+export class ImportJobs extends CustomQueueHyperlink.Tag<ImportJobs>()("wnba/ImportJobs", {
   payload: importJob,
   levelCount: 3,
   namedLevels: { hot: 0, warm: 1, cold: 2 },
@@ -160,17 +160,17 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 
 // ── Browser runtime ──────────────────────────────────────────────────────────
 // Every resource — the box-score queue, live-score poller, play-by-play queue, and the scores
-// API-usage tap — is served remotely (server.ts); the browser is a thin `Resource.client` over each
+// API-usage tap — is served remotely (server.ts); the browser is a thin `Hyperlink.client` over each
 // node's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaNode` alongside the box-score queue.
 // One transport per node → one pip each, auto-fed by `NodeStatus`.
 // A browser opens many concurrent live streams (each resource's status + metrics + logs); over
-// HTTP/1.1 that dies at the ~6-connection-per-origin cap. `socketClient` rides ONE multiplexed
+// HTTP/1.1 that dies at the ~6-connection-per-origin cap. `ws` rides ONE multiplexed
 // WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
 // A `"/path"` url resolves against the page origin (browser host + http/https→ws/wss), lazily — so
 // `hub.ts` is safe to import from the Node server too (nothing reads `location` at load).
-const wnbaTransport = Resource.socketClient(WnbaNode, { url: "/rpc" });
-const liveTransport = Resource.socketClient(LiveNode, { url: "/live/rpc" });
-const statsTransport = Resource.socketClient(StatsNode, { url: "/stats/rpc" });
+const wnbaTransport = Hyperlink.ws(WnbaNode, { url: "/rpc" });
+const liveTransport = Hyperlink.ws(LiveNode, { url: "/live/rpc" });
+const statsTransport = Hyperlink.ws(StatsNode, { url: "/stats/rpc" });
 
 // Expose each node itself in the runtime (not only the resource clients): the node-status die reads
 // `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one
@@ -179,21 +179,21 @@ const appLayer = Layer.mergeAll(
   wnbaTransport,
   liveTransport,
   statsTransport,
-  Resource.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
-  Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
-  Resource.client(ImportJobs).pipe(Layer.provide(statsTransport)),
-  Resource.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(ScoresDb).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
+  Hyperlink.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
+  Hyperlink.client(ImportJobs).pipe(Layer.provide(statsTransport)),
+  Hyperlink.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(ScoresDb).pipe(Layer.provide(wnbaTransport)),
   // WorkerPool is a *nodeless* multi-node tag, so the client names which instance to read — here the
   // one on WnbaNode. `client(tag, node)` resolves the transport from that node, so the requirement is
   // the node (satisfied by wnbaTransport), enforced at compile time.
-  Resource.client(WorkerPool, WnbaNode).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(FleetMetrics, WnbaNode).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(Sessions, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(WorkerPool, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(FleetMetrics, WnbaNode).pipe(Layer.provide(wnbaTransport)),
+  Hyperlink.client(Sessions, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   // FetchGate is a nodeless run gate served on LiveNode; name the instance to read (like WorkerPool).
-  Resource.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
+  Hyperlink.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */

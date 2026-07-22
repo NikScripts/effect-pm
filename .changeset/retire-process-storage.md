@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": major
+"hyperlink-ts": major
 ---
 
 **Removed the legacy RuntimeStorage facet substrate (BREAKING).** Deleted public modules and subpaths for `ProcessStorage`, the facet `ProcessStore` builder, `ProcessStoreEvent`, `RuntimeStorage`, `Query`, `store/ProcessLifecycle`, and `storage/redis`, plus the SQLite `layerProcessStore` / `SQLiteRuntimeStorage` facade.

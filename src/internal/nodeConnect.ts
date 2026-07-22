@@ -1,6 +1,6 @@
 /**
  * Shared Node dial helpers — one {@link connectLayer} implementation for
- * {@link Node.connect} and {@link Resource.client} auto-connect so MemoMap can
+ * {@link Node.connect} and {@link Hyperlink.client} auto-connect so MemoMap can
  * share a single transport per Node class.
  *
  * @internal
@@ -17,19 +17,21 @@ import type {
 import {
   InvalidHttpTarget,
   invalidHttpTargetOf,
+  portOf,
   UnaddressedNode,
 } from "./nodeCore"
 
-/** Protocol builders injected from Resource (avoids Resource↔Node import cycles). */
+/** Protocol builders injected from Hyperlink (avoids Hyperlink↔Node import cycles). @internal */
 export type NodeProtocolBuilders = {
-  readonly protocolHttp: (url: string) => Layer.Layer<RpcClient.Protocol>
+  // `protocolHttp` takes a port too — a bare-port node resolves its host via Config at the dial.
+  readonly protocolHttp: (target: number | string) => Layer.Layer<RpcClient.Protocol>
   readonly protocolWebsocket: (url: string) => Layer.Layer<RpcClient.Protocol>
   readonly protocolIpc: (path: string) => Layer.Layer<RpcClient.Protocol>
 }
 
 let builders: NodeProtocolBuilders | undefined
 
-/** Called from Resource after protocol helpers exist. @internal */
+/** Called from Hyperlink after protocol helpers exist. @internal */
 export const bindNodeProtocolBuilders = (b: NodeProtocolBuilders): void => {
   builders = b
 }
@@ -37,7 +39,7 @@ export const bindNodeProtocolBuilders = (b: NodeProtocolBuilders): void => {
 const protocols = (): NodeProtocolBuilders => {
   if (builders === undefined) {
     throw new Error(
-      "@nikscripts/effect-pm: Node connect used before Resource protocol builders were bound",
+      "hyperlink-ts: Node connect used before Hyperlink protocol builders were bound",
     )
   }
   return builders
@@ -45,7 +47,7 @@ const protocols = (): NodeProtocolBuilders => {
 
 /**
  * Re-key an RPC protocol under a {@link Node} service — the transport-agnostic
- * primitive both {@link Node.connect} and auto-wired {@link Resource.client} use.
+ * primitive both {@link Node.connect} and auto-wired {@link Hyperlink.client} use.
  *
  * @internal
  */
@@ -135,9 +137,11 @@ export const protocolForNode = (
   if (sel.url === undefined) {
     return unaddressedLayer(node.key)
   }
+  // A bare-port node dials via `protocolHttp(port)` — the host resolves from the client Config; a full
+  // url uses `sel.url` as-is. (`sel.url` is the localhost preview for a bare port.)
   return sel.kind === "WebSocket"
     ? protocolWebsocket(sel.url)
-    : protocolHttp(sel.url)
+    : protocolHttp(portOf(node) ?? sel.url)
 }
 
 /** Protocol for a type-narrowed {@link AddressedNode} — no error channel. @internal */
@@ -153,7 +157,7 @@ export const protocolForDialable = (
     if (sel.kind !== "IpcSocket" && sel.url !== undefined) {
       return sel.kind === "WebSocket"
         ? protocolWebsocket(sel.url)
-        : protocolHttp(sel.url)
+        : protocolHttp(portOf(node) ?? sel.url)
     }
   }
   // primary fallback — an AddressedNode always carries a dialable primary.
@@ -162,7 +166,7 @@ export const protocolForDialable = (
   }
   return node.kind === "WebSocket"
     ? protocolWebsocket(node.url)
-    : protocolHttp(node.url)
+    : protocolHttp(portOf(node) ?? node.url)
 }
 
 /**
@@ -174,6 +178,7 @@ export const protocolForDialable = (
  */
 const addressedConnectMemo = new WeakMap<object, Layer.Layer<never>>()
 
+/** Derive (and memoize) the connect Layer for an {@link AddressedNode}. @internal */
 export const connectAddressed = <Self>(
   node: AddressedNode<Self>,
 ): Layer.Layer<Self> => {

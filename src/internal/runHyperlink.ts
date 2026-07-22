@@ -1,5 +1,5 @@
 /**
- * RunResource engine — semaphore gate handles with optional live observation.
+ * RunHyperlink engine — semaphore gate handles with optional live observation.
  *
  * @internal
  */
@@ -14,16 +14,16 @@ import {
   SubscriptionRef,
 } from "effect";
 import {
-  builtInRunResourceStoreContract,
-  type RunResourceStateChangeReason,
+  builtInRunHyperlinkStoreContract,
+  type RunHyperlinkStateChangeReason,
   type RunStateChange,
-} from "./store/runResourceStoreSpec";
-import { mapSubscribable, subscribable, type Subscribable } from "../Resource";
+} from "./store/runHyperlinkStoreSpec";
+import { mapSubscribable, subscribable, type Subscribable } from "../Hyperlink";
 import * as Store from "../Store";
 import type { StoreScopeTag } from "./store/registration";
 import { errorOf, successOf } from "./runTagSchemas";
-import { makeRunStateChange, extractRunFailure } from "./runResourceFacts";
-import { runStatusTransitions } from "./runResourceStatus";
+import { makeRunStateChange, extractRunFailure } from "./runHyperlinkFacts";
+import { runStatusTransitions } from "./runHyperlinkStatus";
 
 // ============================================================================
 // Engine types
@@ -52,8 +52,8 @@ export type RunGateHandle<T, A, E> = {
   readonly run: RunGateRun<T, A, E>;
 };
 
-/** Observable handle from {@link makeRunResourceHandleEffect}. @internal */
-export type RunResourceHandle<T, A, E> = RunGateHandle<T, A, E> & {
+/** Observable handle from {@link makeRunHyperlinkHandleEffect}. @internal */
+export type RunHyperlinkHandle<T, A, E> = RunGateHandle<T, A, E> & {
   readonly status: Subscribable<RunGateStatus>;
   readonly waiting: Subscribable<number>;
   readonly inFlight: Subscribable<number>;
@@ -63,7 +63,7 @@ export type RunResourceHandle<T, A, E> = RunGateHandle<T, A, E> & {
 };
 
 /** @internal */
-export interface RunResourceConfig<T, A, E> {
+export interface RunHyperlinkConfig<T, A, E> {
   readonly name?: string;
   readonly scopeKey?: string;
   readonly tag?: StoreScopeTag;
@@ -72,18 +72,18 @@ export interface RunResourceConfig<T, A, E> {
 }
 
 /** @internal */
-export interface RunResourceRunnerConfig {
+export interface RunHyperlinkRunnerConfig {
   readonly name?: string;
   readonly concurrency?: number;
 }
 
 /** @internal */
-export interface RunResourceRunner {
+export interface RunHyperlinkRunner {
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>;
 }
 
 /** Engine-facing store context — `Storage` discharged at the gate boundary. @internal */
-interface RunResourceStoreContext {
+interface RunHyperlinkStoreContext {
   readonly resourceId: string;
   readonly persistSuccess: boolean;
   readonly persistTypedError: boolean;
@@ -91,7 +91,7 @@ interface RunResourceStoreContext {
     readonly append: (row: unknown) => Effect.Effect<void>;
   };
   readonly recordStateChange: (
-    reason: RunResourceStateChangeReason,
+    reason: RunHyperlinkStateChangeReason,
     previous: RunGateStatus | null,
     current: RunGateStatus,
   ) => Effect.Effect<void>;
@@ -135,7 +135,7 @@ const makeStatusSubscribables = (
   } as const;
 };
 
-const makeRunResourceStoreContext = (options: {
+const makeRunHyperlinkStoreContext = (options: {
   readonly resourceId: string;
   readonly scopeKey: string;
   readonly tag?: StoreScopeTag;
@@ -147,7 +147,7 @@ const makeRunResourceStoreContext = (options: {
       readonly append: (change: RunStateChange) => Effect.Effect<void>;
     };
   };
-}): Effect.Effect<RunResourceStoreContext> =>
+}): Effect.Effect<RunHyperlinkStoreContext> =>
   Effect.gen(function* () {
     const scopeTag = options.tag ?? { key: options.scopeKey };
     const { storeEffects, resourceId } = options;
@@ -192,13 +192,13 @@ const makeObservedRun =
     sem: Semaphore.Semaphore,
     effect: (input: T) => Effect.Effect<A, E>,
     statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
-    store: RunResourceStoreContext,
+    store: RunHyperlinkStoreContext,
     runSeqRef: Ref.Ref<number>,
     concurrency: number,
   ): RunGateRun<T, A, E> => {
   const publishStatus = (
     update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
-    reason: RunResourceStateChangeReason,
+    reason: RunHyperlinkStateChangeReason,
     durationMs?: number,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
@@ -319,9 +319,9 @@ const makeObservedRun =
  * @internal
  */
 export const makeRunGateHandleEffect = <T, A, E>(
-  config: RunResourceConfig<T, A, E>,
+  config: RunHyperlinkConfig<T, A, E>,
 ): Effect.Effect<RunGateHandle<T, A, E>, never, Store.Storage> =>
-  Effect.map(makeRunResourceHandleEffect(config), (handle) => ({
+  Effect.map(makeRunHyperlinkHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
 
@@ -330,9 +330,9 @@ export const makeRunGateHandleEffect = <T, A, E>(
  *
  * @internal
  */
-export const makeRunResourceHandleEffect = <T, A, E>(
-  config: RunResourceConfig<T, A, E>,
-): Effect.Effect<RunResourceHandle<T, A, E>, never, Store.Storage> => {
+export const makeRunHyperlinkHandleEffect = <T, A, E>(
+  config: RunHyperlinkConfig<T, A, E>,
+): Effect.Effect<RunHyperlinkHandle<T, A, E>, never, Store.Storage> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
   const scopeKey = config.scopeKey ?? resourceId;
@@ -344,19 +344,19 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
-    // Fail-loud Soft: AppStore missing this RunResource registration dies at layer build.
+    // Fail-loud Soft: AppStore missing this RunHyperlink registration dies at layer build.
     yield* Store.resolveOrDie(
       scopeKey,
-      builtInRunResourceStoreContract(scopeTag),
+      builtInRunHyperlinkStoreContract(scopeTag),
     );
     const storageContext = yield* Effect.context<Store.Storage>();
     const storeEffects = Store.provideContext(
       Store.catchWriteErrors(
-        Store.effects(scopeKey, builtInRunResourceStoreContract(scopeTag)),
+        Store.effects(scopeKey, builtInRunHyperlinkStoreContract(scopeTag)),
       ),
       storageContext,
     );
-    const store = yield* makeRunResourceStoreContext({
+    const store = yield* makeRunHyperlinkStoreContext({
       resourceId,
       scopeKey,
       tag: config.tag,
@@ -367,7 +367,7 @@ export const makeRunResourceHandleEffect = <T, A, E>(
     });
     const runSeqRef = yield* Ref.make(0);
     yield* Effect.logDebug(
-      `RunResource "${resourceId}" initialized: concurrency=${String(concurrency)}`,
+      `RunHyperlink "${resourceId}" initialized: concurrency=${String(concurrency)}`,
     );
     return {
       run: makeObservedRun(
@@ -391,19 +391,19 @@ export const makeRunResourceHandleEffect = <T, A, E>(
 export const makeGateInternal = (concurrency: number) =>
   Effect.map(
     Semaphore.make(concurrency),
-    (sem): RunResourceRunner =>
+    (sem): RunHyperlinkRunner =>
       <A, E, R>(effect: Effect.Effect<A, E, R>) => sem.withPermits(1)(effect),
   );
 
 /** @internal */
 export const makeRunnerEffect = (
-  config: RunResourceRunnerConfig,
-): Effect.Effect<RunResourceRunner> => {
+  config: RunHyperlinkRunnerConfig,
+): Effect.Effect<RunHyperlinkRunner> => {
   const concurrency = config.concurrency ?? 1;
   return makeGateInternal(concurrency).pipe(
     Effect.tap(() =>
       Effect.logDebug(
-        `RunResource runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
+        `RunHyperlink runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
       ),
     ),
   );
@@ -412,7 +412,7 @@ export const makeRunnerEffect = (
 /** @internal */
 export const makeRunnerFromConcurrency = (
   concurrency: number | undefined,
-): Effect.Effect<RunResourceRunner, never, never> =>
+): Effect.Effect<RunHyperlinkRunner, never, never> =>
   concurrency === undefined
     ? Effect.succeed(<A, E, R>(effect: Effect.Effect<A, E, R>) => effect)
     : makeGateInternal(concurrency);

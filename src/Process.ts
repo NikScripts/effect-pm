@@ -39,12 +39,12 @@
  * access tree-shakes. It carries two cooperating surfaces:
  * - **Engine** — {@link make} (+ {@link Service}, {@link currentScheduleId}, {@link scheduleControls},
  *   {@link Errors}): construct and run a supervised process directly.
- * - **Resource toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a process as a
- *   {@link Resource}; declare optional {@link ProcessTagOptions.success} and
+ * - **Hyperlink toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a process as a
+ *   {@link Hyperlink}; declare optional {@link ProcessTagOptions.success} and
  *   {@link ProcessTagOptions.error} on {@link Tag} (positional or config object). Use
  *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over
  *   toolkit's location-transparent layers (the same `yield* Tag` runs local or remote; only the layer
- *   changes). This mirrors `QueueResource`: the light `Process.Tag` path pulls no engine code, and the
+ *   changes). This mirrors `QueueHyperlink`: the light `Process.Tag` path pulls no engine code, and the
  *   engine loads only when a runtime verb (`make` / `layer` / `serve`) is referenced.
  *
  * @module Process
@@ -76,7 +76,7 @@ import {
   configureWrapEffectField,
   foldConfiguredSpec,
   type ConfigPatch,
-} from "./ResourceConfigure";
+} from "./HyperlinkConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import {
   makeProcessExecutionEvent,
@@ -97,9 +97,9 @@ import type {
   ReconcileResult,
   ScheduleDefineApi,
 } from "./internal/processSchedule";
-// ── toolkit (Resource) surface — the light contract + heavy layers assembled into `Process` ──
-import * as Resource from "./Resource";
-import { buildRpcGroup, groupSym, specSym } from "./Resource";
+// ── toolkit (Hyperlink) surface — the light contract + heavy layers assembled into `Process` ──
+import * as Hyperlink from "./Hyperlink";
+import { buildRpcGroup, groupSym, specSym } from "./Hyperlink";
 import type {
   FlatSpec,
   HandlerContextOf,
@@ -108,10 +108,10 @@ import type {
   Method,
   NodeBoundTag,
   RefField,
-  ResourceTag,
+  HyperlinkTag,
   Spec,
   Subscribable,
-} from "./Resource";
+} from "./Hyperlink";
 import type { NodeKey } from "./Node";
 import { LogEntrySchema } from "./LogEntry";
 import { facetStoreRegistration } from "./internal/store/facetStore";
@@ -246,7 +246,7 @@ export interface ProcessServiceDefinition<Self, Id extends string, E, R>
   readonly tag: Context.Key<Self, Process<R>>;
   readonly layer: Layer.Layer<Self>;
   /**
-   * Factory defaults before {@link configure} layers (see `ResourceConfigure` module).
+   * Factory defaults before {@link configure} layers (see `HyperlinkConfigure` module).
    */
   readonly defaultSpec: ProcessMakeOptions<E, R>;
   /**
@@ -291,12 +291,12 @@ export interface ProcessScheduleContext {
 class ProcessScheduleContextTag extends Context.Service<
   ProcessScheduleContextTag,
   ProcessScheduleContext
->()("@nikscripts/effect-pm/Process/ProcessScheduleContextTag") {}
+>()("hyperlink-ts/Process/ProcessScheduleContextTag") {}
 
 class ProcessScheduleControlsTag extends Context.Service<
   ProcessScheduleControlsTag,
   ProcessScheduleControls
->()("@nikscripts/effect-pm/Process/ProcessScheduleControlsTag") {}
+>()("hyperlink-ts/Process/ProcessScheduleControlsTag") {}
 
 /**
  * Identifier attached to the schedule entry that started the current run.
@@ -1471,10 +1471,10 @@ export type ProcessServiceFactory = typeof defineProcessService;
 // Engine surface (top-level exports)
 //
 // `Process` is a module namespace (Effect-style — the barrel does `export * as Process`), so the
-// engine helpers here and the Resource toolkit below are all its members: `Process.make`,
+// engine helpers here and the Hyperlink toolkit below are all its members: `Process.make`,
 // `Process.Service`, `Process.currentScheduleId`, `Process.scheduleControls`, `Process.Tag`,
 // `Process.schedule`, `Process.layer`, … Member access tree-shakes — a `Process.Tag`-only consumer
-// pulls no engine code, mirroring `QueueResource`.
+// pulls no engine code, mirroring `QueueHyperlink`.
 // ============================================================================
 
 export { make };
@@ -1492,10 +1492,10 @@ export const Errors = {
 
 // ############################################################################
 // #                                                                          #
-// #  Resource toolkit — the light contract (schemas / specs / combinators /  #
+// #  Hyperlink toolkit — the light contract (schemas / specs / combinators /  #
 // #  Tag / Schedule) plus the heavy layers (layer / serve / serveRemote).    #
-// #  A process is a Resource: driven locally or remotely over RPC through    #
-// #  the toolkit's location-transparent layers, exactly like QueueResource.  #
+// #  A process is a Hyperlink: driven locally or remotely over RPC through    #
+// #  the toolkit's location-transparent layers, exactly like QueueHyperlink.  #
 // #                                                                          #
 // ############################################################################
 
@@ -1541,7 +1541,7 @@ export const processStatus = Schema.Struct({
 });
 
 /**
- * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Resource.logs}.
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Hyperlink.logs}.
  *
  * @category wire schemas
  * @public
@@ -1573,12 +1573,12 @@ export const processExecutionEventFor = makeProcessExecutionEvent;
 
 /**
  * This contract's canonical **kind** — stamped on every process tag so consumers (e.g. the
- * dashboard) can classify it via {@link Resource.kindOf} without sniffing the spec.
+ * dashboard) can classify it via {@link Hyperlink.kindOf} without sniffing the spec.
  *
  * @category wire schemas
  * @public
  */
-export const kind = "@nikscripts/effect-pm/Process";
+export const kind = "hyperlink-ts/Process";
 
 /**
  * This contract's canonical **kind** for a standalone {@link Schedule} resource.
@@ -1586,7 +1586,7 @@ export const kind = "@nikscripts/effect-pm/Process";
  * @category schedule
  * @public
  */
-export const scheduleKind = "@nikscripts/effect-pm/Process/Schedule";
+export const scheduleKind = "hyperlink-ts/Process/Schedule";
 
 // ============================================================================
 // Base process spec (observation + lifecycle — no schedule verbs)
@@ -1605,27 +1605,27 @@ export const processControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
   // change (uniform local + remote), mirroring the queue's `status` ref.
-  status: Resource.ref(processStatus).annotate({
+  status: Hyperlink.ref(processStatus).annotate({
     description:
       "Live current-state snapshot: supervising, armed, active instances, next trigger/transition, " +
       "poll cadence, and cumulative run metrics.",
   }),
 
   // ── lifecycle commands ──
-  start: Resource.effect(Schema.Void).annotate({
+  start: Hyperlink.effect(Schema.Void).annotate({
     description: "Begin supervising — fork the trigger driver (idempotent).",
   }),
-  stop: Resource.effect(Schema.Void).annotate({
+  stop: Hyperlink.effect(Schema.Void).annotate({
     description: "Stop supervising — interrupt the driver and any active run instances.",
     destructive: true,
   }),
 
   // ── cadence commands (no-ops while not supervising / no polling layer) ──
-  wake: Resource.effect(Schema.Void).annotate({
+  wake: Hyperlink.effect(Schema.Void).annotate({
     description:
       "End the current polling wait immediately — the next tick runs now; cadence unchanged.",
   }),
-  resetCadence: Resource.effect(Schema.Void).annotate({
+  resetCadence: Hyperlink.effect(Schema.Void).annotate({
     description:
       "Reset the cadence preset to its initial state (backoff → initial, accelerating → slow) and wake.",
   }),
@@ -1650,14 +1650,14 @@ export const buildProcessSpec = <
   const eventSchema = processStoreEventSchema(wire?.success, wire?.error);
   return {
     ...processControlSpec,
-    events: Resource.stream(eventSchema).annotate({
+    events: Hyperlink.stream(eventSchema).annotate({
       description:
         "Live execution lifecycle (Started / Completed / Failed / Interrupted). Same union as the " +
         "durable Process.store journal — persist == stream.",
     }),
     run: (wire?.error !== undefined
-      ? Resource.effect(wire?.success ?? Schema.Void, wire.error)
-      : Resource.effect(wire?.success ?? Schema.Void)
+      ? Hyperlink.effect(wire?.success ?? Schema.Void, wire.error)
+      : Hyperlink.effect(wire?.success ?? Schema.Void)
     ).annotate({
       description:
         "Run the process worker effect once, tracked — returns success; failures typed on error.",
@@ -1673,7 +1673,7 @@ export const buildProcessSpec = <
  */
 export const processSpec = buildProcessSpec();
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
-// The spec is validated (without widening) at the `Resource.Tag` call site.
+// The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
 /**
  * The base (schedule-less, result-less) process spec.
@@ -1717,16 +1717,16 @@ export { successOf, errorOf };
  * @public
  */
 export const scheduleGroupSpec = {
-  entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
+  entries: Hyperlink.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "The process's current schedule entries (run windows), reactive.",
   }),
-  set: Resource.effectFn(Schema.Array(processScheduleEntry)).annotate({
+  set: Hyperlink.effectFn(Schema.Array(processScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Resource.effectFn(processScheduleEntry).annotate({
+  add: Hyperlink.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  clear: Resource.effect(Schema.Void).annotate({
+  clear: Hyperlink.effect(Schema.Void).annotate({
     description: "Remove all schedule entries (disarms until new entries are added).",
     destructive: true,
   }),
@@ -1748,40 +1748,40 @@ type ScheduleGroupSpec = { readonly schedule: typeof scheduleGroupSpec };
  * @category schedule
  * @public
  */
-export const scheduleResourceSpec = {
-  entries: Resource.ref(Schema.Array(processScheduleEntry)).annotate({
+export const scheduleHyperlinkSpec = {
+  entries: Hyperlink.ref(Schema.Array(processScheduleEntry)).annotate({
     description: "All schedule entries (run windows), reactive.",
   }),
-  get: Resource.effectFn({ id: Schema.String }, Schema.Option(processScheduleEntry)).annotate({
+  get: Hyperlink.effectFn({ id: Schema.String }, Schema.Option(processScheduleEntry)).annotate({
     description: "Look up a single entry by id (absent if none matches).",
   }),
-  has: Resource.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
+  has: Hyperlink.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Whether an entry with the given id exists.",
   }),
-  set: Resource.effectFn(Schema.Array(processScheduleEntry)).annotate({
+  set: Hyperlink.effectFn(Schema.Array(processScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Resource.effectFn(processScheduleEntry).annotate({
+  add: Hyperlink.effectFn(processScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  upsert: Resource.effectFn(processScheduleEntry).annotate({
+  upsert: Hyperlink.effectFn(processScheduleEntry).annotate({
     description: "Insert or replace an entry, keyed by its id.",
   }),
-  remove: Resource.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
+  remove: Hyperlink.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Remove the entry with the given id; returns whether one was removed.",
     destructive: true,
   }),
-  removeMany: Resource.effectFn(Schema.Array(Schema.String), Schema.Number).annotate({
+  removeMany: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Number).annotate({
     description: "Remove every entry whose id is listed; returns the count removed.",
     destructive: true,
   }),
-  clear: Resource.effect(Schema.Void).annotate({
+  clear: Hyperlink.effect(Schema.Void).annotate({
     description: "Remove all schedule entries.",
     destructive: true,
   }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
-// The spec is validated (without widening) at the `Resource.Tag` call site.
+// The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
 /**
  * The standalone {@link Schedule} resource's spec.
@@ -1789,7 +1789,7 @@ export const scheduleResourceSpec = {
  * @category models
  * @public
  */
-export type ScheduleResourceSpec = typeof scheduleResourceSpec;
+export type ScheduleHyperlinkSpec = typeof scheduleHyperlinkSpec;
 
 // ============================================================================
 // The `result` field (grafted onto a value-returning process)
@@ -1814,7 +1814,7 @@ export type ProcessInstanceSpec<
   E extends Schema.Top = typeof Schema.Never,
 > = typeof processControlSpec & {
   readonly events: ReturnType<typeof buildProcessSpec<A, E>>["events"];
-  readonly run: Resource.Method<undefined, A, E>;
+  readonly run: Hyperlink.Method<undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
 
 // ============================================================================
@@ -1975,7 +1975,7 @@ export const scheduleDefine = (
 
 /** Where a process tag's schedule mode (inline windows vs external reference) is stowed. @internal */
 const scheduleModeSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Process/scheduleMode",
+  "hyperlink-ts/Process/scheduleMode",
 );
 
 /** @internal */
@@ -1990,12 +1990,12 @@ const isProcessTagOptions = (value: unknown): value is ProcessTagOptions =>
 
 /** Graft `result` ref + stamp wire schemas on a process tag. @internal */
 const applyProcessTagSchemas = (
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   schemas: {
     readonly success?: Schema.Top;
     readonly error?: Schema.Top;
   },
-): ResourceTag<any, any, any> => {
+): HyperlinkTag<any, any, any> => {
   let next = tag;
   const stamp: Partial<Record<typeof successSym | typeof errorSym, Schema.Top>> =
     {};
@@ -2003,7 +2003,7 @@ const applyProcessTagSchemas = (
     next = augmentTag(
       next,
       {
-        result: Resource.ref(Schema.Option(schemas.success)).annotate({
+        result: Hyperlink.ref(Schema.Option(schemas.success)).annotate({
           description:
             "The latest value the process effect resolved to (absent until the first run completes).",
         }),
@@ -2022,9 +2022,9 @@ const applyProcessTagSchemas = (
 
 /** @internal */
 const withProcessReadiness = (
-  tag: ResourceTag<any, ProcessSpec>,
-): ResourceTag<any, ProcessSpec> =>
-  Resource.withReadiness(tag, (svc: ImplOf<ProcessSpec>) =>
+  tag: HyperlinkTag<any, ProcessSpec>,
+): HyperlinkTag<any, ProcessSpec> =>
+  Hyperlink.withReadiness(tag, (svc: ImplOf<ProcessSpec>) =>
     Effect.map(svc.status.get, (s) => ({
       ready: s.supervising,
       ...(s.supervising ? {} : { detail: "not supervising" }),
@@ -2039,17 +2039,17 @@ const buildProcessTag = <Self>(
     readonly success?: Schema.Top;
     readonly error?: Schema.Top;
   } = {},
-): ResourceTag<any, any, any> | NodeBoundTag<any, any, unknown, any> => {
+): HyperlinkTag<any, any, any> | NodeBoundTag<any, any, unknown, any> => {
   const node = options?.node;
   const tagOptions = { description: options?.description, kind };
   const success = positional.success ?? options?.success;
   const error = positional.error ?? options?.error;
   const spec = buildProcessSpec({ success, error });
-  const base: ResourceTag<any, any, any> =
+  const base: HyperlinkTag<any, any, any> =
     node === undefined
-      ? Resource.Tag<Self>()(key, spec, tagOptions)
-      : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
-  const stamped: ResourceTag<any, any, any> =
+      ? Hyperlink.Tag<Self>()(key, spec, tagOptions)
+      : Hyperlink.Tag<Self>()(key, spec, { ...tagOptions, node });
+  const stamped: HyperlinkTag<any, any, any> =
     success === undefined && error === undefined
       ? base
       : applyProcessTagSchemas(base, { success, error });
@@ -2059,7 +2059,7 @@ const buildProcessTag = <Self>(
 /** How a process is scheduled — read by the runtime to build the right impl. @internal */
 type ScheduleMode =
   | { readonly _tag: "inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
-  | { readonly _tag: "reference"; readonly source: ResourceTag<unknown, ScheduleResourceSpec> };
+  | { readonly _tag: "reference"; readonly source: HyperlinkTag<unknown, ScheduleHyperlinkSpec> };
 
 /** Runtime guard for a stamped {@link ScheduleMode} — its `_tag` discriminant. @internal */
 const isScheduleMode = (value: unknown): value is ScheduleMode =>
@@ -2083,10 +2083,10 @@ const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
  * the same (mutated) tag — so `class X extends Tag()(...).pipe(combinator) {}` extends it. @internal
  */
 const augmentTag = (
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   flatAddition: FlatSpec,
   stamp: object,
-): ResourceTag<any, any, any> => {
+): HyperlinkTag<any, any, any> => {
   const nextFlat: FlatSpec = { ...tag[specSym], ...flatAddition };
   return Object.assign(
     tag,
@@ -2130,17 +2130,17 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  */
 export function schedule(
   windows: ReadonlyArray<ScheduleWindow>,
-): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S & ScheduleGroupSpec>;
+): <Self, S extends Spec>(tag: HyperlinkTag<Self, S>) => HyperlinkTag<any, S & ScheduleGroupSpec>;
 export function schedule(
-  source: ResourceTag<any, ScheduleResourceSpec>,
-): <Self, S extends Spec>(tag: ResourceTag<Self, S>) => ResourceTag<any, S>;
+  source: HyperlinkTag<any, ScheduleHyperlinkSpec>,
+): <Self, S extends Spec>(tag: HyperlinkTag<Self, S>) => HyperlinkTag<any, S>;
 export function schedule(
-  windowsOrSource: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any, any>,
-): (tag: ResourceTag<any, any, any>) => ResourceTag<any, any, any> {
+  windowsOrSource: ReadonlyArray<ScheduleWindow> | HyperlinkTag<any, any, any>,
+): (tag: HyperlinkTag<any, any, any>) => HyperlinkTag<any, any, any> {
   // A type-guard (not bare `Array.isArray`) so the else-branch narrows to the tag: `Array.isArray`
   // alone won't remove a `ReadonlyArray` from the union.
   const isWindows = (
-    x: ReadonlyArray<ScheduleWindow> | ResourceTag<any, any, any>,
+    x: ReadonlyArray<ScheduleWindow> | HyperlinkTag<any, any, any>,
   ): x is ReadonlyArray<ScheduleWindow> => Array.isArray(x);
   if (isWindows(windowsOrSource)) {
     const mode: ScheduleMode = { _tag: "inline", windows: windowsOrSource };
@@ -2162,28 +2162,28 @@ export function schedule(
  * @public
  */
 export type ProcessTagBuild<Self> = {
-  (key: string): ResourceTag<Self, ProcessInstanceSpec>;
+  (key: string): HyperlinkTag<Self, ProcessInstanceSpec>;
   <A extends Schema.Top>(
     key: string,
     success: A,
-  ): ResourceTag<Self, ProcessInstanceSpec<A>>;
+  ): HyperlinkTag<Self, ProcessInstanceSpec<A>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
     success: A,
     error: E,
-  ): ResourceTag<Self, ProcessInstanceSpec<A, E>>;
+  ): HyperlinkTag<Self, ProcessInstanceSpec<A, E>>;
   <A extends Schema.Top>(
     key: string,
     options: ProcessTagOptions & { readonly success: A },
-  ): ResourceTag<Self, ProcessInstanceSpec<A>>;
+  ): HyperlinkTag<Self, ProcessInstanceSpec<A>>;
   <E extends Schema.Top>(
     key: string,
     options: ProcessTagOptions & { readonly error: E },
-  ): ResourceTag<Self, ProcessInstanceSpec<typeof Schema.Void, E>>;
+  ): HyperlinkTag<Self, ProcessInstanceSpec<typeof Schema.Void, E>>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
     options: ProcessTagOptions & { readonly success: A; readonly error: E },
-  ): ResourceTag<Self, ProcessInstanceSpec<A, E>>;
+  ): HyperlinkTag<Self, ProcessInstanceSpec<A, E>>;
   <HSelf>(
     key: string,
     options: ProcessTagOptions & { readonly node: NodeKey<HSelf> },
@@ -2192,7 +2192,7 @@ export type ProcessTagBuild<Self> = {
     key: string,
     options: ProcessTagOptions & { readonly success: A; readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, ProcessInstanceSpec<A>, HSelf>;
-  (key: string, options?: ProcessTagOptions): ResourceTag<Self, ProcessInstanceSpec>;
+  (key: string, options?: ProcessTagOptions): HyperlinkTag<Self, ProcessInstanceSpec>;
 };
 
 /**
@@ -2223,7 +2223,7 @@ export const Tag = <Self>() => {
     key: string,
     second?: Schema.Top | ProcessTagOptions,
     third?: Schema.Top,
-  ): ResourceTag<Self, ProcessSpec> | NodeBoundTag<Self, ProcessSpec, unknown> {
+  ): HyperlinkTag<Self, ProcessSpec> | NodeBoundTag<Self, ProcessSpec, unknown> {
     if (second === undefined) {
       return buildProcessTag<Self>(key, undefined);
     }
@@ -2240,7 +2240,7 @@ export const Tag = <Self>() => {
   }
   // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
   // call-signature *object* type (`ProcessTagBuild<Self>`) even when it implements exactly those
-  // overloads — a known TS limitation (the same class as QueueResource's `nameQueueService` cast).
+  // overloads — a known TS limitation (the same class as QueueHyperlink's `nameQueueService` cast).
   // It's soundness-guarded: `process-built-resource` / `process-contract-shape` .test-d.ts exercise
   // `Process.Tag()` in every form, so a drift between `build` and `ProcessTagBuild` fails the build.
   return build as ProcessTagBuild<Self>;
@@ -2264,20 +2264,20 @@ export const Schedule = <Self>() => {
   function build<HSelf>(
     key: string,
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, ScheduleResourceSpec, HSelf>;
+  ): NodeBoundTag<Self, ScheduleHyperlinkSpec, HSelf>;
   function build(
     key: string,
     options?: { readonly description?: string },
-  ): ResourceTag<Self, ScheduleResourceSpec>;
+  ): HyperlinkTag<Self, ScheduleHyperlinkSpec>;
   function build(
     key: string,
     options?: { readonly description?: string; readonly node?: NodeKey<unknown> },
-  ): ResourceTag<Self, ScheduleResourceSpec> {
+  ): HyperlinkTag<Self, ScheduleHyperlinkSpec> {
     const node = options?.node;
     const tagOptions = { description: options?.description, kind: scheduleKind };
     return node === undefined
-      ? Resource.Tag<Self>()(key, scheduleResourceSpec, tagOptions)
-      : Resource.Tag<Self>()(key, scheduleResourceSpec, { ...tagOptions, node });
+      ? Hyperlink.Tag<Self>()(key, scheduleHyperlinkSpec, tagOptions)
+      : Hyperlink.Tag<Self>()(key, scheduleHyperlinkSpec, { ...tagOptions, node });
   }
   return build;
 };
@@ -2385,13 +2385,13 @@ const fromWindow = (w: ScheduleWindow): ProcessScheduleEntry => ({
 /**
  * Build the live process driver behind `tag` and map it onto the toolkit service impl — the adapter
  * shared by {@link layer} / {@link serve} / {@link serveRemote}. The returned record is shaped to the
- * tag's composed spec (base, `+ schedule`, `+ result`); `Resource.layer` flattens it against the
+ * tag's composed spec (base, `+ schedule`, `+ result`); `Hyperlink.layer` flattens it against the
  * tag's flat spec, so extra members are simply present when the spec declares them.
  */
 const buildProcessImpl = <A, E, R>(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   baseConfig: ProcessLayerConfig<A, E, R>,
-): Effect.Effect<Resource.BuiltResource<ProcessSpec, R>, never, R | Scope.Scope | Store.Storage> =>
+): Effect.Effect<Hyperlink.BuiltHyperlink<ProcessSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
@@ -2484,7 +2484,7 @@ const buildProcessImpl = <A, E, R>(
           }
         : {};
     const resultMembers =
-      resultRef !== undefined ? { result: Resource.subscribable(resultRef) } : {};
+      resultRef !== undefined ? { result: Hyperlink.subscribable(resultRef) } : {};
 
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
     // Erased to the base `ProcessSpec` here (same as `run`) — stamped event schemas live on the tag wire.
@@ -2499,7 +2499,7 @@ const buildProcessImpl = <A, E, R>(
       ...scheduleMembers,
       ...resultMembers,
     };
-    return Resource.builtResource(
+    return Hyperlink.builtHyperlink(
       tag,
       impl,
       context,
@@ -2512,14 +2512,14 @@ const buildProcessImpl = <A, E, R>(
 
 // The public layers are **overloaded**: the visible signature is generic over the tag's composed spec
 // `S` (so a `+ schedule` / `+ result` tag is accepted and `Self` — the composed service — is granted),
-// while the implementation signature is loose (`ResourceTag<any, any, any>` + a loose impl) so the
+// while the implementation signature is loose (`HyperlinkTag<any, any, any>` + a loose impl) so the
 // dynamically-shaped `buildProcessImpl` record fits. Two deliberate choices keep the types shallow:
 //   1. the visible **return** names `HandlerContextOf<ProcessSpec>` (the concrete base), not
 //      `HandlerContextOf<S>` — walking that over an open `S` blows the instantiation depth, and the
 //      served handler set is a run-time concern anyway (see 2);
-//   2. internally the tag is narrowed to the concrete base spec (`baseTag`) before `Resource.serve`,
+//   2. internally the tag is narrowed to the concrete base spec (`baseTag`) before `Hyperlink.serve`,
 //      so its `HandlerContextOf`/`ImplOf` walks stay shallow.
-// At run time `Resource.serve` reads the tag's own `groupSym` / `specSym`, so the **full** handler set
+// At run time `Hyperlink.serve` reads the tag's own `groupSym` / `specSym`, so the **full** handler set
 // (incl. the grafted `schedule` / `result` verbs) is mounted even though the static `HandlerContextOf`
 // names the base. `buildProcessImpl` receives the original tag, so it still reads the composed metadata.
 
@@ -2546,18 +2546,18 @@ const withDefaultMemory = <A, E, R>(
  * @public
  */
 export function layer<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 export function layer(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  const baseTag: HyperlinkTag<any, ProcessSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildProcessImpl(tag, config), (built) =>
-        Resource.layer(baseTag, Resource.grantLocal(baseTag, built)),
+        Hyperlink.layer(baseTag, Hyperlink.grantLocal(baseTag, built)),
       ),
     ) as any,
   ) as any;
@@ -2570,11 +2570,11 @@ export function layer(
  * @public
  */
 export function layerMemory<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 export function layerMemory(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   return layer(tag, config) as any;
@@ -2589,7 +2589,7 @@ export function layerMemory(
  * @public
  */
 export function serve<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<ProcessSpec> | Store.Storage,
@@ -2597,15 +2597,15 @@ export function serve<Self, S extends Spec, A = void, E = never, R = never>(
   R
 >;
 export function serve(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  const baseTag: HyperlinkTag<any, ProcessSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (built) => Resource.serve(baseTag, built) as any,
+        (built) => Hyperlink.serve(baseTag, built) as any,
       ),
     ) as any,
   ) as any;
@@ -2618,7 +2618,7 @@ export function serve(
  * @public
  */
 export function serveMemory<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<
   Self | Local<Self> | HandlerContextOf<ProcessSpec> | Store.Storage,
@@ -2626,7 +2626,7 @@ export function serveMemory<Self, S extends Spec, A = void, E = never, R = never
   R
 >;
 export function serveMemory(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   return serve(tag, config) as any;
@@ -2642,19 +2642,19 @@ export function serveMemory(
  * @public
  */
 export function serveRemote<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
 export function serveRemote(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: ResourceTag<any, ProcessSpec> = tag;
+  const baseTag: HyperlinkTag<any, ProcessSpec> = tag;
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(
         buildProcessImpl(tag, config),
-        (built) => Resource.serveRemote(baseTag, built) as any,
+        (built) => Hyperlink.serveRemote(baseTag, built) as any,
       ),
     ) as any,
   ) as any;
@@ -2667,11 +2667,11 @@ export function serveRemote(
  * @public
  */
 export function serveRemoteMemory<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: ResourceTag<Self, S>,
+  tag: HyperlinkTag<Self, S>,
   config: ProcessLayerConfig<A, E, R>,
 ): Layer.Layer<HandlerContextOf<ProcessSpec> | Store.Storage, never, R>;
 export function serveRemoteMemory(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   config: ProcessLayerConfig<any, any, any>,
 ): Layer.Layer<any, any, any> {
   return serveRemote(tag, config) as any;
@@ -2685,7 +2685,7 @@ export function serveRemoteMemory(
  * @public
  */
 export const configure = <A = void, E = never, R = never>(
-  tag: ResourceTag<any, any, any>,
+  tag: HyperlinkTag<any, any, any>,
   patch: ConfigPatch<ProcessLayerConfig<A, E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
@@ -2731,13 +2731,13 @@ export function store(tag: StoreScopeTag, extended?: StoreShapes) {
 
 const buildScheduleImpl = (
   options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
-): Effect.Effect<ImplOf<ScheduleResourceSpec>, never, Scope.Scope> =>
+): Effect.Effect<ImplOf<ScheduleHyperlinkSpec>, never, Scope.Scope> =>
   Effect.gen(function* () {
     const ctx = yield* Layer.build(
       ProcessSchedule.inMemory((options?.initial ?? []).map(fromWindow)),
     );
     const scheduleSvc = Context.get(ctx, ProcessScheduleTag);
-    const impl: ImplOf<ScheduleResourceSpec> = {
+    const impl: ImplOf<ScheduleHyperlinkSpec> = {
       entries: entriesSubscribable(scheduleSvc),
       get: ({ id }: { readonly id: string }) =>
         Effect.map(scheduleSvc.get(id), Option.map(toWireEntry)),
@@ -2760,11 +2760,11 @@ const buildScheduleImpl = (
  * @public
  */
 export const scheduleLayer = <Self>(
-  tag: ResourceTag<Self, ScheduleResourceSpec>,
+  tag: HyperlinkTag<Self, ScheduleHyperlinkSpec>,
   options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
 ): Layer.Layer<Self | Local<Self>> =>
   Layer.unwrap(
-    Effect.map(buildScheduleImpl(options), (impl) => Resource.layer(tag, impl)),
+    Effect.map(buildScheduleImpl(options), (impl) => Hyperlink.layer(tag, impl)),
   );
 
 /**
@@ -2774,9 +2774,9 @@ export const scheduleLayer = <Self>(
  * @public
  */
 export const scheduleServe = <Self>(
-  tag: ResourceTag<Self, ScheduleResourceSpec>,
+  tag: HyperlinkTag<Self, ScheduleHyperlinkSpec>,
   options?: { readonly initial?: ReadonlyArray<ScheduleWindow> },
-): Layer.Layer<Self | Local<Self> | HandlerContextOf<ScheduleResourceSpec>> =>
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<ScheduleHyperlinkSpec>> =>
   Layer.unwrap(
-    Effect.map(buildScheduleImpl(options), (impl) => Resource.serve(tag, impl)),
+    Effect.map(buildScheduleImpl(options), (impl) => Hyperlink.serve(tag, impl)),
   );

@@ -20,7 +20,7 @@ const MAX_REFS = 40; // chips shown; the rest collapse into a count
 
 // One symbol, in full: /api/<pkg>/<module>/<symbol>. Loads only this symbol's file; the heavy
 // Shiki/twoslash markup is scoped to a single symbol. Shared by two routes: the static
-// /api/effect-pm/… route (our own package, pre-rendered at build) and the dynamic /api/[pkg]/… route
+// /api/hyperlink-ts/… route (our own package, pre-rendered at build) and the dynamic /api/[pkg]/… route
 // (the effect dependencies, SSR — too many/too heavy to pre-render).
 export async function ApiSymbolPage({
   pkg,
@@ -48,7 +48,7 @@ export async function ApiSymbolPage({
   return (
     <>
       <PageMeta
-        title={`${s.qualifiedName} — API — effect-pm`}
+        title={`${s.qualifiedName} — API — hyperlink-ts`}
         description={
           s.summary !== "" ? s.summary : `API reference for ${s.qualifiedName} (${s.kind}).`
         }

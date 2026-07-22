@@ -1,4 +1,4 @@
-# Setup — consuming `@nikscripts/effect-pm`
+# Setup — consuming `hyperlink-ts`
 
 How to install the package in another app (e.g. `services-hub`) and stand up resources, a
 server, and a CLI / TUI / web dashboard against them. For the *patterns* (defining queues,
@@ -8,7 +8,7 @@ this guide is the install + wiring checklist.
 ## 1. Install
 
 ```bash
-npm install @nikscripts/effect-pm effect
+npm install hyperlink-ts effect
 ```
 
 `effect` is a required peer. Add the others only for the surfaces you use:
@@ -16,9 +16,9 @@ npm install @nikscripts/effect-pm effect
 | If you use… | also install |
 | --- | --- |
 | any resource / server / `/cli` | *(nothing extra — `effect` covers it, incl. `effect/unstable/cli`)* |
-| `@nikscripts/effect-pm/tui` | `react`, plus **`ink`** (yours — `/tui` ships primitives + the binding, not Ink) |
-| `@nikscripts/effect-pm/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table`, `@tanstack/react-query` |
-| `@nikscripts/effect-pm/storage/sqlite` | `@effect/sql-sqlite-node` |
+| `hyperlink-ts/tui` | `react`, plus **`ink`** (yours — `/tui` ships primitives + the binding, not Ink) |
+| `hyperlink-ts/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table`, `@tanstack/react-query` |
+| `hyperlink-ts/storage/sqlite` | `@effect/sql-sqlite-node` |
 
 The package is ESM-only. UI deps are **optional peers**: a server-only consumer pulls none
 of React/Ink/recharts.
@@ -27,19 +27,19 @@ of React/Ink/recharts.
 
 | Import | Purpose |
 | --- | --- |
-| `…/Resource` | `Resource.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
+| `…/Hyperlink` | `Hyperlink.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
 | `…/QueueContract` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
 | `…/Process` | `Process.Tag` (light tag), `schedule` / `window` / `at`, `serve`, `serveRemote`, `layer` for a managed/polling process — plus `Process.Schedule`, a run-windows manager as its own resource |
-| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiResource` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiResource.Service` client |
+| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiHyperlink` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiHyperlink.Service` client |
 | `…/HostStatus` | the reserved host status resource (auto-served by `httpServer`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/MultiHost` | combine a field across N instances of one resource (`combineQuery` / `combineStream` / `Combine`) — isomorphic |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
 | `…/storage/sqlite` · `/redis` | durable storage backends |
-| **`…/cli`** | `makeResourceCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
+| **`…/cli`** | `makeHyperlinkCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
-| **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `ResourceReadinessBanner` |
+| **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `HyperlinkReadinessBanner` |
 
 > **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/Process`
 > (not the engine layers) so the worker engine + node deps stay out of the browser build.
@@ -51,7 +51,7 @@ splitting, and every optional peer (react/recharts/ink/sqlite/redis) externalize
 an ESM tree-shaking bundler (Vite, esbuild, Rollup, webpack 5) a browser build pulls only what
 it imports.
 
-- **Browser-safe (no node built-ins):** `…/web`, `…/Group`, `…/Resource`
+- **Browser-safe (no node built-ins):** `…/web`, `…/Group`, `…/Hyperlink`
   (`client`/`connect`/`connectHttp`/`Host`), `…/MultiHost`, `…/QueueContract` (`queueTag` + contract),
   `…/Process` (`Process.Tag`), `…/cli`, `…/tui`.
 - **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
@@ -61,21 +61,21 @@ it imports.
 
 **The rule that actually bites:** keep the **contract** (light tags) in a different module from
 the **implementation** (engine layers, storage, worker `effect`s, the server). A module that
-defines a tag *and* imports its `QueueResource.layer` / `Resource.httpServer` / a storage layer is
+defines a tag *and* imports its `QueueHyperlink.layer` / `Hyperlink.httpServer` / a storage layer is
 node-coupled — importing it in the browser just to get the tag drags the whole server in.
 
 ```ts
 // fleet.ts — BROWSER-SAFE: tags + hosts + groups only (light contracts)
-export class LeagueHost extends Resource.Host<LeagueHost>("nwsl/host") {}
+export class LeagueHost extends Hyperlink.Host<LeagueHost>("nwsl/host") {}
 export class Roster extends queueTag<Roster>()("nwsl/Roster", Job, { host: LeagueHost }) {}
 export class Nwsl extends Group.Tag<Nwsl>("nwsl")({ Roster }) {}
 
 // server.ts — NODE: imports fleet.ts + the engine / storage / HTTP server
 import { Roster } from "./fleet";
-const Server = Resource.httpServer([queueServe(Roster, { effect })]).pipe(/* storage + NodeHttpServer */);
+const Server = Hyperlink.httpServer([queueServe(Roster, { effect })]).pipe(/* storage + NodeHttpServer */);
 ```
 
-The browser imports `fleet.ts` (tags) + `…/web` + `Resource.client` / `connectHttp`; the server
+The browser imports `fleet.ts` (tags) + `…/web` + `Hyperlink.client` / `connectHttp`; the server
 imports `fleet.ts` + the layers. Same tags, no leak. Prefer specific subpaths over the root
 barrel in browser code — the barrel is node-safe but reaches the whole toolkit (~260 KB of
 chunks before shaking).
@@ -96,13 +96,13 @@ consumer or the widgets render unstyled:
 
    ```css
    @import "tailwindcss";
-   @source "../node_modules/@nikscripts/effect-pm/dist";
+   @source "../node_modules/hyperlink-ts/dist";
    ```
 
    Tailwind v3 (`tailwind.config`):
 
    ```js
-   content: ["./src/**/*.{ts,tsx}", "./node_modules/@nikscripts/effect-pm/dist/**/*.js"],
+   content: ["./src/**/*.{ts,tsx}", "./node_modules/hyperlink-ts/dist/**/*.js"],
    ```
 
 2. **Define the theme tokens** the widgets reference (`--card`, `--muted-foreground`, `--border`,
@@ -126,12 +126,12 @@ A `Host` lets a group of resources be served on one port (§4) and reached over 
 
 ```ts
 import { Schema } from "effect";
-import { Resource } from "@nikscripts/effect-pm/Resource";
-import { queueTag } from "@nikscripts/effect-pm/QueueResource";
-import * as Process from "@nikscripts/effect-pm/Process";
-import { Group } from "@nikscripts/effect-pm/Group";
+import { Hyperlink } from "hyperlink-ts/Hyperlink";
+import { queueTag } from "hyperlink-ts/QueueHyperlink";
+import * as Process from "hyperlink-ts/Process";
+import { Group } from "hyperlink-ts/Group";
 
-export class LeagueHost extends Resource.Host<LeagueHost>("nwsl/host") {}
+export class LeagueHost extends Hyperlink.Host<LeagueHost>("nwsl/host") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 export class RosterQueue extends queueTag<RosterQueue>()("nwsl/Roster", Job, { host: LeagueHost }) {}
@@ -150,14 +150,14 @@ group-id-prefixed). Each `serve` layer carries its resource's worker requirement
 import { Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
-import { Resource } from "@nikscripts/effect-pm/Resource";
-import { serve as queueServe } from "@nikscripts/effect-pm/QueueResource";
-import { serve as processServe } from "@nikscripts/effect-pm/Process";
-import { HistoryStore } from "@nikscripts/effect-pm/HistoryStore";
-import * as Logs from "@nikscripts/effect-pm/Logs";
-import * as ProcessStorage from "@nikscripts/effect-pm/ProcessStorage";
+import { Hyperlink } from "hyperlink-ts/Hyperlink";
+import { serve as queueServe } from "hyperlink-ts/QueueHyperlink";
+import { serve as processServe } from "hyperlink-ts/Process";
+import { HistoryStore } from "hyperlink-ts/HistoryStore";
+import * as Logs from "hyperlink-ts/Logs";
+import * as ProcessStorage from "hyperlink-ts/ProcessStorage";
 
-const LeagueServer = Resource.httpServer([
+const LeagueServer = Hyperlink.httpServer([
   queueServe(RosterQueue, { effect: (job) => loadRoster(job) }),
   processServe(SeasonMatches, { effect: pollSeason }),
 ]).pipe(
@@ -181,13 +181,13 @@ transport per host:
 
 ```ts
 import { Layer } from "effect";
-import { Resource } from "@nikscripts/effect-pm/Resource";
+import { Hyperlink } from "hyperlink-ts/Hyperlink";
 
 const base = "http://your-host:3001";
 const clients = Layer.mergeAll(
-  Resource.client(RosterQueue),
-  Resource.client(SeasonMatches),
-).pipe(Layer.provide(Resource.connectHttp(LeagueHost, { url: `${base}/rpc` })));
+  Hyperlink.client(RosterQueue),
+  Hyperlink.client(SeasonMatches),
+).pipe(Layer.provide(Hyperlink.connectHttp(LeagueHost, { url: `${base}/rpc` })));
 
 // anywhere with `clients` provided:
 //   const q = yield* RosterQueue; yield* q.add({ id });
@@ -205,9 +205,9 @@ To run a resource **in-process** instead, provide its `.layer` (from `…/QueueC
 import { Effect } from "effect";
 import { Command } from "effect/unstable/cli";
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { makeResourceCli, resourcesByName } from "@nikscripts/effect-pm/cli";
+import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
 
-const cli = makeResourceCli(resourcesByName([RosterQueue, SeasonMatches]), "hub");
+const cli = makeHyperlinkCli(resourcesByName([RosterQueue, SeasonMatches]), "hub");
 // hub RosterQueue status.get · hub RosterQueue pause · hub SeasonMatches start · hub ls
 NodeRuntime.runMain(
   Command.runWith(cli, { version: "0.0.0" })(process.argv.slice(2)).pipe(
@@ -219,7 +219,7 @@ NodeRuntime.runMain(
 
 Each contract query/mutate becomes a verb (flags from the payload schema); streams are
 skipped — use their one-shot peers (`status.get`, `metrics.query`). Per-resource logs are
-read via `Resource.logs` / `NodeStatus.logs` (see [`docs/LOGS.md`](../../LOGS.md)), not as
+read via `Hyperlink.logs` / `NodeStatus.logs` (see [`docs/LOGS.md`](../../LOGS.md)), not as
 CLI stream verbs on the resource contract.
 
 ### Web (`…/web`) and TUI (`…/tui`)
@@ -227,7 +227,7 @@ CLI stream verbs on the resource contract.
 Both render off the **same** reactive binding (Ink is React). Provide an `AtomRegistry` via
 `RegistryProvider`, build atoms from a tag (status / metrics / logs streams + controls) over
 `clients`, and read them with `useAtomValue` / drive controls with `useAtomSet`. Compose web
-widgets from `@nikscripts/effect-pm/web`, or terminal widgets from `@nikscripts/effect-pm/tui`
+widgets from `hyperlink-ts/web`, or terminal widgets from `hyperlink-ts/tui`
 (`bar`, `spark`, `compact`, `statusColor`, …). The `examples/web-dashboard` and
 `examples/resource-tui` trees (shipped in the package) are the working reference — copy their
 `queue-data` data layer and widgets as a starting point.
@@ -236,8 +236,8 @@ The batteries-included `<Dashboard runtime={Atom.runtime(layer)} group={Root} />
 responsive drill-down directly from a `Group.Tag` tree: a **hand-crafted widget per resource
 type** — queue (cards + chart + controls + logs), scheduled process (controls + a schedule editor
 with a fullscreen weekly view), and API-metrics (a paged card + usage chart + sortable endpoint
-table). It classifies each leaf by the contract's **stamped kind** (`Resource.kindOf` — see the
-[Resource API](../RESOURCE-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
+table). It classifies each leaf by the contract's **stamped kind** (`Hyperlink.kindOf` — see the
+[Hyperlink API](../HYPERLINK-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
 the tree renders as itself rather than a mis-typed cell. The `examples/resource-web` tree (one of
 each unique thing) is the working reference.
 
@@ -254,4 +254,4 @@ See [history-and-persistence.md](./history-and-persistence.md).
 ---
 
 Reference: [toolkit-by-example.md](./toolkit-by-example.md) (every pattern by example),
-[docs/RESOURCE-API.md](../RESOURCE-API.md), [docs/handoffs/archive/2026-07/features/ui-serve-all-http.md](../../handoffs/archive/2026-07/features/ui-serve-all-http.md).
+[docs/HYPERLINK-API.md](../HYPERLINK-API.md), [docs/handoffs/archive/2026-07/features/ui-serve-all-http.md](../../handoffs/archive/2026-07/features/ui-serve-all-http.md).

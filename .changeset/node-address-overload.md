@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Add an address overload to `Resource.Node`, matching `clientHttp`'s `target`. A node can now carry its endpoint as a **port**, a `":port"`, or a full **url** — not only `{ url }`:

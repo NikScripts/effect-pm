@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Live `value` fields land in the queues, plus the accessors + a de-brand to make them ergonomic.**

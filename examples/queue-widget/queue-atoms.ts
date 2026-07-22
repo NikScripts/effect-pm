@@ -13,7 +13,7 @@
 
 import { Effect } from "effect";
 import { Atom, type AtomRegistry, type Reactivity } from "effect/unstable/reactivity";
-import type { QueueHandle } from "../../src/QueueResource";
+import type { QueueHandle } from "../../src/QueueHyperlink";
 
 /** What an atom on this runtime may additionally require (provided by the runtime). */
 type RuntimeServices<R> = R | AtomRegistry.AtomRegistry | Reactivity.Reactivity;
@@ -60,7 +60,7 @@ export const makeQueueAtoms = <
 
   // Every control has the same shape: run a handle method on the resolved queue,
   // keyed so a press refreshes `stats`. (This repetition is exactly what a
-  // spec-driven factory erases generically — see `makeResourceAtoms`.)
+  // spec-driven factory erases generically — see `makeHyperlinkAtoms`.)
   type Handle = QueueHandle<T, E, EEnqueue, QR>;
   const command = <A, CR extends RuntimeServices<R>>(
     run: (handle: Handle) => Effect.Effect<A, never, CR>,

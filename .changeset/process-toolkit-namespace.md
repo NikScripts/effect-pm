@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 `Process` is now a single Effect **module namespace** (`export * as Process`) that carries both the supervisor engine and the location-transparent `Resource` toolkit — the same shape as `QueueResource`. Member access tree-shakes: a `Process.Tag`-only consumer pulls no engine code; `make` / `layer` / `serve` pull the engine only when referenced.

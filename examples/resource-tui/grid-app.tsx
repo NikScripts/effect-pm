@@ -3,7 +3,7 @@
  *
  * A full-screen terminal dashboard: a scrollable grid of resource "widgets", a
  * command bar, and a status/shortcuts bar. Each widget is an instance of one
- * `Resource.tagFor` family, rendered via the same `makeResourceAtoms` +
+ * `Hyperlink.tagFor` family, rendered via the same `makeHyperlinkAtoms` +
  * `atom-react` the web widget uses.
  *
  * - Keys: arrows / hjkl move selection (auto-scrolls to keep it visible); i / d / r
@@ -19,19 +19,19 @@ import { Box, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import * as React from "react";
 import { Effect, Layer, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import * as Resource from "../../src/Resource";
-import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
+import * as Hyperlink from "../../src/Hyperlink";
+import { makeHyperlinkAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
 } from "../../src/ui/atom-react";
 
-const Counter = Resource.tagFor("grid-counter", {
-  value: Resource.effect(Schema.Number),
-  inc: Resource.effect(Schema.Void),
-  dec: Resource.effect(Schema.Void),
-  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
+const Counter = Hyperlink.tagFor("grid-counter", {
+  value: Hyperlink.effect(Schema.Number),
+  inc: Hyperlink.effect(Schema.Void),
+  dec: Hyperlink.effect(Schema.Void),
+  reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
 });
 
 const impl = (start: number) => {
@@ -74,7 +74,7 @@ const SPECS = Array.from({ length: 24 }, (_, i) => {
 });
 
 const runtime = Atom.runtime(
-  SPECS.map((s) => Resource.layer(s.tag, impl(s.start))).reduce((a, b) =>
+  SPECS.map((s) => Hyperlink.layer(s.tag, impl(s.start))).reduce((a, b) =>
     Layer.merge(a, b),
   ),
 );
@@ -82,7 +82,7 @@ const runtime = Atom.runtime(
 const WIDGETS = SPECS.map((s) => ({
   name: s.name,
   color: s.color,
-  atoms: makeResourceAtoms(runtime, s.tag),
+  atoms: makeHyperlinkAtoms(runtime, s.tag),
 }));
 
 const FIRST = WIDGETS[0];

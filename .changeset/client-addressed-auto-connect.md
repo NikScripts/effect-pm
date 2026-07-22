@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Type-gated client auto-connect** — `Resource.client(Tag, Worker)` fully wires the transport when `Worker` is an {@link AddressedNode} (dialable `Node.Tag` target). Bare nodes stay fail-closed and still need `Node.connect` / lookup / `clientLocal`.

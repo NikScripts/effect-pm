@@ -4,7 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Node from "../src/Node";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 // Regression guard for multi-protocol nodes end-to-end: one `{ http, ws }` node served over BOTH
 // transports must (1) boot on httpServer AND wsServer — the P3 `ProtocolKindMismatch` set-membership
@@ -18,13 +18,13 @@ class Fleet extends Node.Tag<Fleet>()("mps/fleet", {
   ws: "ws://placeholder/rpc",
 }) {}
 // Bound to Fleet so each server runs the P3 check against Fleet's declared {Http, WebSocket} set.
-class Bound extends Resource.Tag<Bound>()(
+class Bound extends Hyperlink.Tag<Bound>()(
   "mps/bound",
-  { ping: Resource.effect(Schema.Number) },
+  { ping: Hyperlink.effect(Schema.Number) },
   { node: Fleet },
 ) {}
 // The contract a remote dials with an explicit transport (nodeless — no auto-select / no memo).
-class Wire extends Resource.Tag<Wire>()("mps/wire", { ping: Resource.effect(Schema.Number) }) {}
+class Wire extends Hyperlink.Tag<Wire>()("mps/wire", { ping: Hyperlink.effect(Schema.Number) }) {}
 
 const noop = { ping: Effect.succeed(0) };
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {
@@ -44,12 +44,12 @@ describe("multi-protocol node served over http + ws", () => {
       // Building each server = booting it. Both build ⇒ P3 held for Http AND WebSocket (a mismatch
       // would die here). Each `layerTest` binds its own ephemeral port.
       const httpCtx = yield* Layer.build(
-        Node.httpServer([Resource.serve(Bound, noop), Resource.serve(Wire, httpWire)]).pipe(
+        Node.httpServer([Hyperlink.serve(Bound, noop), Hyperlink.serve(Wire, httpWire)]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       );
       const wsCtx = yield* Layer.build(
-        Node.wsServer([Resource.serve(Bound, noop), Resource.serve(Wire, wsWire)]).pipe(
+        Node.wsServer([Hyperlink.serve(Bound, noop), Hyperlink.serve(Wire, wsWire)]).pipe(
           Layer.provideMerge(NodeHttpServer.layerTest),
         ),
       );
@@ -59,12 +59,12 @@ describe("multi-protocol node served over http + ws", () => {
           const wire = yield* Wire;
           return yield* wire.ping;
         }).pipe(
-          Effect.provide(Resource.client(Wire).pipe(Layer.provide(Resource.layerProtocol(transport)))),
+          Effect.provide(Hyperlink.client(Wire).pipe(Layer.provide(Hyperlink.layerProtocol(transport)))),
           Effect.scoped,
         );
 
-      const overHttp = yield* call(Resource.protocolHttp(`http://127.0.0.1:${portOf(httpCtx)}/rpc`));
-      const overWs = yield* call(Resource.protocolWebsocket(`ws://127.0.0.1:${portOf(wsCtx)}/rpc`));
+      const overHttp = yield* call(Hyperlink.protocolHttp(`http://127.0.0.1:${portOf(httpCtx)}/rpc`));
+      const overWs = yield* call(Hyperlink.protocolWebsocket(`ws://127.0.0.1:${portOf(wsCtx)}/rpc`));
 
       // http landed only on the http server (101 = 100+1), ws only on the ws server (201 = 200+1).
       expect(overHttp).toBe(101);

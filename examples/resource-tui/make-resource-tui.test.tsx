@@ -2,17 +2,17 @@ import { render } from "ink-testing-library";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
-import * as Resource from "../../src/Resource";
-import { makeResourceTui } from "./make-resource-tui";
+import * as Hyperlink from "../../src/Hyperlink";
+import { makeHyperlinkTui } from "./make-resource-tui";
 
-class Counter extends Resource.Tag<Counter>()("TuiCounter", {
-  current: Resource.effect(Schema.Number),
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
+class Counter extends Hyperlink.Tag<Counter>()("TuiCounter", {
+  current: Hyperlink.effect(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 let v = 0;
-const layer = Resource.layer(Counter, {
+const layer = Hyperlink.layer(Counter, {
   current: Effect.sync(() => v),
   increment: ({ by }) =>
     Effect.sync(() => {
@@ -27,7 +27,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 80));
 
 it("renders a widget per resource with live queries refreshed by command-bar actions", async () => {
   const runtime = Atom.runtime(layer);
-  const { App } = makeResourceTui({ counter: Counter }, runtime);
+  const { App } = makeHyperlinkTui({ counter: Counter }, runtime);
   const { lastFrame, stdin } = render(<App />);
   await tick();
 

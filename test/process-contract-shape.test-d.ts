@@ -6,7 +6,7 @@
  */
 import { Effect, Option, Schema } from "effect";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 
 declare const startAt: Date;
 declare const stopAt: Date;
@@ -48,7 +48,7 @@ const _proof = Effect.gen(function* () {
   const _status: typeof Process.processStatus.Type = yield* h.status.get;
   yield* h.start; // void lifecycle command
   yield* h.run;
-  const _logExport = yield* Resource.logs(Health);
+  const _logExport = yield* Hyperlink.logs(Health);
   const _logHistory: ReadonlyArray<typeof Process.processLogEntry.Type> = yield* _logExport.query({});
 
   const p = yield* Prices;

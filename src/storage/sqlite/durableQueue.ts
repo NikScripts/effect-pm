@@ -4,7 +4,7 @@
  * `SKIP LOCKED` needed). Lifts `PersistedQueue`'s lease / `attempts` / expiry-recovery blueprint
  * onto a priority-native schema (dedup, escalation, sizes are first-class).
  *
- * Off the core entry — import from `@nikscripts/effect-pm/storage/sqlite`.
+ * Off the core entry — import from `hyperlink-ts/storage/sqlite`.
  *
  * @module storage/sqlite/durableQueue
  */

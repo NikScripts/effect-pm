@@ -12,17 +12,17 @@
  */
 
 import { Effect, Layer, Schema } from "effect";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 
-export class Counter extends Resource.Tag<Counter>()("Counter", {
-  current: Resource.effect(Schema.Number),
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
+export class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+  current: Hyperlink.effect(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
-export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
-  list: Resource.effect(Schema.Array(Schema.String)),
-  status: Resource.effectFn(
+export class QueueManager extends Hyperlink.Tag<QueueManager>()("QueueManager", {
+  list: Hyperlink.effect(Schema.Array(Schema.String)),
+  status: Hyperlink.effectFn(
     { id: Schema.String },
     Schema.Struct({
       id: Schema.String,
@@ -30,13 +30,13 @@ export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
       paused: Schema.Boolean,
     }),
   ),
-  pause: Resource.effectFn({ id: Schema.String }),
-  resume: Resource.effectFn({ id: Schema.String }),
-  enqueue: Resource.effectFn({ id: Schema.String, item: Schema.String }),
+  pause: Hyperlink.effectFn({ id: Schema.String }),
+  resume: Hyperlink.effectFn({ id: Schema.String }),
+  enqueue: Hyperlink.effectFn({ id: Schema.String, item: Schema.String }),
 }) {}
 
 let count = 0;
-export const counterLayer = Resource.layer(Counter, {
+export const counterLayer = Hyperlink.layer(Counter, {
   current: Effect.sync(() => count),
   increment: ({ by }) =>
     Effect.sync(() => {
@@ -53,7 +53,7 @@ const queues = new Map<string, { pending: number; paused: boolean }>([
 ]);
 const at = (id: string) => queues.get(id) ?? { pending: 0, paused: false };
 
-export const queueManagerLayer = Resource.layer(QueueManager, {
+export const queueManagerLayer = Hyperlink.layer(QueueManager, {
   list: Effect.sync(() => Array.from(queues.keys())),
   status: ({ id }) =>
     Effect.sync(() => ({ id, pending: at(id).pending, paused: at(id).paused })),

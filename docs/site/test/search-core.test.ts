@@ -11,11 +11,11 @@ import {
 
 describe("search-core", () => {
   it("tokenizes identifiers: camelCase and dot-paths split, full word kept", () => {
-    expect(tokenize("QueueResource")).toContain("queueresource");
-    expect(tokenize("QueueResource")).toContain("queue");
-    expect(tokenize("QueueResource")).toContain("resource");
-    expect(tokenize("Resource.ref")).toContain("resource");
-    expect(tokenize("Resource.ref")).toContain("ref");
+    expect(tokenize("QueueHyperlink")).toContain("queueresource");
+    expect(tokenize("QueueHyperlink")).toContain("queue");
+    expect(tokenize("QueueHyperlink")).toContain("hyperlink");
+    expect(tokenize("Hyperlink.ref")).toContain("hyperlink");
+    expect(tokenize("Hyperlink.ref")).toContain("ref");
   });
 
   it("exact name match DOMINATES popularity (the retry lesson)", () => {
@@ -78,7 +78,7 @@ describe("search-core", () => {
     expect(hits[0]?.doc.id).toBe("/api/x/A/Layer");
   });
 
-  it("effect-pm outranks a dependency for the same match", () => {
+  it("hyperlink-ts outranks a dependency for the same match", () => {
     const docs: Array<SearchDoc> = [
       {
         id: "/api/effect/S/Subscribable",
@@ -92,32 +92,32 @@ describe("search-core", () => {
         refs: 3,
       },
       {
-        id: "/api/effect-pm/Resource/Subscribable",
+        id: "/api/hyperlink-ts/Hyperlink/Subscribable",
         type: "api",
-        title: "Resource.Subscribable",
-        url: "/api/effect-pm/Resource/Subscribable",
+        title: "Hyperlink.Subscribable",
+        url: "/api/hyperlink-ts/Hyperlink/Subscribable",
         summary: "",
         kind: "interface",
-        pkg: "effect-pm",
+        pkg: "hyperlink-ts",
         name: "Subscribable",
         refs: 3,
       },
     ];
     const index = buildIndex(docs);
     const hits = searchType(index, "subscribable", "api", 10);
-    expect(hits[0]?.doc.pkg).toBe("effect-pm");
+    expect(hits[0]?.doc.pkg).toBe("hyperlink-ts");
   });
 
   it("synonyms reach what prefix search can't (ws → websocket)", () => {
     const docs: Array<SearchDoc> = [
       {
-        id: "/api/effect-pm/Resource/protocolWebsocket",
+        id: "/api/hyperlink-ts/Hyperlink/protocolWebsocket",
         type: "api",
-        title: "Resource.protocolWebsocket",
-        url: "/api/effect-pm/Resource/protocolWebsocket",
+        title: "Hyperlink.protocolWebsocket",
+        url: "/api/hyperlink-ts/Hyperlink/protocolWebsocket",
         summary: "",
         kind: "const",
-        pkg: "effect-pm",
+        pkg: "hyperlink-ts",
         name: "protocolWebsocket",
       },
     ];
@@ -129,13 +129,13 @@ describe("search-core", () => {
   it("sections split by type", () => {
     const docs: Array<SearchDoc> = [
       {
-        id: "/api/effect-pm/Q/queue",
+        id: "/api/hyperlink-ts/Q/queue",
         type: "api",
         title: "Q.queue",
-        url: "/api/effect-pm/Q/queue",
+        url: "/api/hyperlink-ts/Q/queue",
         summary: "",
         kind: "const",
-        pkg: "effect-pm",
+        pkg: "hyperlink-ts",
         name: "queue",
       },
       {
@@ -173,14 +173,14 @@ describe.skipIf(chunkPaths.some((p) => !existsSync(p)))("search ranking (real co
   const index = buildIndex(docs);
   const top = (q: string): string => searchType(index, q, "api", 1)[0]?.doc.title ?? "";
 
-  it("ref → Resource.ref (effect-pm tier + popularity beat RefField)", () => {
-    expect(top("ref")).toBe("Resource.ref");
+  it("ref → Hyperlink.ref (hyperlink-ts tier + popularity beat RefField)", () => {
+    expect(top("ref")).toBe("Hyperlink.ref");
   });
   it("retry → Effect.retry (exact match beats txRetry's popularity)", () => {
     expect(top("retry")).toBe("Effect.retry");
   });
-  it("subscribable → Resource.Subscribable", () => {
-    expect(top("subscribable")).toBe("Resource.Subscribable");
+  it("subscribable → Hyperlink.Subscribable", () => {
+    expect(top("subscribable")).toBe("Hyperlink.Subscribable");
   });
   it("queue → a Queue module/type, not an internal schema const", () => {
     expect(/^Queue/.test(top("queue"))).toBe(true);

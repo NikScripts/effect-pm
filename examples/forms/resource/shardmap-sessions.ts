@@ -10,7 +10,7 @@
  */
 
 import { Effect, Layer, Option, Schema } from "effect";
-import * as Resource from "../../../src/Resource";
+import * as Hyperlink from "../../../src/Hyperlink";
 import * as ShardMap from "../../../src/ShardMap";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
@@ -33,7 +33,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Resource.nodes([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 
 /** Sticky partition so the demo always lands seat traffic on East / West visibly. */
@@ -79,12 +79,12 @@ const centralPeer = {
 
 const eastLayer = ShardMap.layer(Sessions, { partition: demoPartition }).pipe(
   Layer.provide(
-    Resource.peersFrom(Sessions, {
+    Hyperlink.peersFrom(Sessions, {
       [DropletWest.key]: westPeer,
       [DropletCentral.key]: centralPeer,
     }),
   ),
-  Layer.provide(Resource.selfNodeLayer(Sessions, DropletEast)),
+  Layer.provide(Hyperlink.selfNodeLayer(Sessions, DropletEast)),
 );
 
 const program = Effect.gen(function* () {

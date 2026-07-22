@@ -2,8 +2,8 @@
 # ShardMap
 
 The intro's Sessions beat — a key lives on *someone's* node; `get` forwards to the owner via
-`Resource.peers` — is a pattern every multi-droplet app reinvents. **ShardMap** is that pattern as a
-Resource factory: declare `key` / `value`, distribute across `app/Droplet*` nodes, and every routed
+`Hyperlink.peers` — is a pattern every multi-droplet app reinvents. **ShardMap** is that pattern as a
+Hyperlink factory: declare `key` / `value`, distribute across `app/Droplet*` nodes, and every routed
 `get` / `put` / `delete` finds the owner. Leaf `*Local` ops stay on this shard. Fleet folds report
 sizes. An unreachable owner degrades to a miss — never a silent write on the wrong droplet.
 
@@ -14,9 +14,9 @@ is a runtime option on `serve` / `layer` (default: `ShardMap.consistentHash`).
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as ShardMap from "hyperlink-ts/ShardMap"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Schema } from "effect"
 // ---cut---
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
@@ -35,7 +35,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
@@ -46,9 +46,9 @@ Central on the other machines; the caller's program does not change.
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as ShardMap from "hyperlink-ts/ShardMap"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
@@ -66,7 +66,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Resource.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
@@ -74,7 +74,7 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
   )
 // ---cut---
 const east = ShardMap.serve(Sessions).pipe(
-  Layer.provide(Resource.peersLayer(Sessions, DropletEast)),
+  Layer.provide(Hyperlink.peersLayer(Sessions, DropletEast)),
   nodeServer(3001),
 )
 // east: Layer — this droplet owns its shard and forwards the rest through peers
@@ -82,11 +82,11 @@ const east = ShardMap.serve(Sessions).pipe(
 
 ## Put and get from anywhere
 
-From East's HTTP edge or West's poller — same handle. Ownership + the hop stay inside the Resource.
+From East's HTTP edge or West's poller — same handle. Ownership + the hop stay inside the Hyperlink.
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
+import * as ShardMap from "hyperlink-ts/ShardMap"
 import { Effect, Schema } from "effect"
 const SessionId = Schema.String
 const Session = Schema.Struct({
@@ -128,7 +128,7 @@ Ops across the pack without inventing a second dashboard tag:
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
+import * as ShardMap from "hyperlink-ts/ShardMap"
 import { Effect, Schema } from "effect"
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
@@ -158,9 +158,9 @@ durable file. Boot loads rows once; mutations `UPSERT` / `DELETE`.
 
 {.twoslash}
 ``` ts
-import * as ShardMap from "@nikscripts/effect-pm/ShardMap"
-import * as Resource from "@nikscripts/effect-pm/Resource"
-import * as Node from "@nikscripts/effect-pm/Node"
+import * as ShardMap from "hyperlink-ts/ShardMap"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 const SessionId = Schema.String
@@ -169,11 +169,11 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Resource.distributed([DropletEast])) {}
+}).pipe(Hyperlink.distributed([DropletEast])) {}
 // ---cut---
 const live = ShardMap.serve(Sessions, {
-  filename: ".effect-pm/sessions.sqlite",
-}).pipe(Layer.provide(Resource.peersLayer(Sessions, DropletEast)))
+  filename: ".hyperlink-ts/sessions.sqlite",
+}).pipe(Layer.provide(Hyperlink.peersLayer(Sessions, DropletEast)))
 // omit filename → in-memory SQLite (default)
 ```
 

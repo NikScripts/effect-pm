@@ -1,14 +1,14 @@
 /**
- * @module internal/nodeStatusResource
+ * @module internal/nodeStatusHyperlink
  *
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
  * "are you up, how long, how many resources, and what are your logs?" without the node author
- * wiring anything. It's a nodeless {@link Resource.Tag} (one reserved group id); a client reaches
+ * wiring anything. It's a nodeless {@link Hyperlink.Tag} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url (see {@link NodeStatus}).
  *
- * Kept internal (not the public face) so {@link Resource} can dynamically import it from
- * `httpServer` without a static import cycle (`Resource` ⇄ this); `src/NodeStatus.ts` is the
+ * Kept internal (not the public face) so {@link Hyperlink} can dynamically import it from
+ * `httpServer` without a static import cycle (`Hyperlink` ⇄ this); `src/NodeStatus.ts` is the
  * public re-export.
  */
 import {
@@ -20,7 +20,7 @@ import {
   Schema,
   Stream,
 } from "effect";
-import * as Resource from "../Resource";
+import * as Hyperlink from "../Hyperlink";
 import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
@@ -29,17 +29,17 @@ import { queryDurableNode } from "./logs/durableRead";
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
 
-/** How often the live {@link NodeStatusResource} `status` stream re-emits a snapshot. */
+/** How often the live {@link NodeStatusHyperlink} `status` stream re-emits a snapshot. */
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
- * One served resource's readiness, as the node reports it — its wire key, {@link Resource.kindOf}
+ * One served resource's readiness, as the node reports it — its wire key, {@link Hyperlink.kindOf}
  * kind, optional F4 {@link contractHash}, whether it's ready, and (when not) why. The element of
  * {@link nodeStatus}'s `resources`.
  *
  * @internal
  */
-export const nodeResourceReadiness = Schema.Struct({
+export const nodeHyperlinkReadiness = Schema.Struct({
   key: Schema.String,
   kind: Schema.String,
   ready: Schema.Boolean,
@@ -49,7 +49,7 @@ export const nodeResourceReadiness = Schema.Struct({
 });
 
 /** A served resource's readiness as reported by its node. @internal */
-export type NodeResourceReadiness = typeof nodeResourceReadiness.Type;
+export type NodeHyperlinkReadiness = typeof nodeHyperlinkReadiness.Type;
 
 /**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
@@ -64,7 +64,7 @@ export const nodeStatus = Schema.Struct({
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
   resourceCount: Schema.Number,
-  resources: Schema.Array(nodeResourceReadiness),
+  resources: Schema.Array(nodeHyperlinkReadiness),
 });
 
 /** Live node status. @internal */
@@ -76,34 +76,34 @@ export type NodeStatus = typeof nodeStatus.Type;
  *
  * @internal
  */
-export class NodeStatusResource extends Resource.Tag<NodeStatusResource>()(
+export class NodeStatusHyperlink extends Hyperlink.Tag<NodeStatusHyperlink>()(
   HOST_STATUS_KEY,
   {
-  status: Resource.ref(nodeStatus).annotate({
+  status: Hyperlink.ref(nodeStatus).annotate({
     description:
       "Live node status (up / uptime / resource count / per-resource readiness) — " +
       "`status.get` for one-shot, `status.changes` re-emitted periodically.",
   }),
-  ping: Resource.effect(Schema.Number).annotate({
+  ping: Hyperlink.effect(Schema.Number).annotate({
     description: "Server epoch milliseconds — a round-trip liveness probe.",
   }),
   /**
    * Cooperative handoff ask (Lookup `askIncumbent`) — `true` = step aside so a
    * newcomer may take this `nodeKey`. Not Effect `yield*`; wire RPC only.
    */
-  yield: Resource.effect(Schema.Boolean).annotate({
+  yield: Hyperlink.effect(Schema.Boolean).annotate({
     description:
       "Cooperative handoff: true = accept yield (Lookup may replace the directory row). " +
       "Refuse with false. Distinct from Effect generator yield*.",
   }),
   logs: {
-    stream: Resource.stream(LogEntrySchema).annotate({
+    stream: Hyperlink.stream(LogEntrySchema).annotate({
       description:
         "Runtime-wide node log stream (recent tail, then live). Empty unless Logs.layer is provided.",
     }),
-    query: Resource.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
+    query: Hyperlink.effectFn({ limit: Schema.Number }, Schema.Array(LogEntrySchema)).annotate({
       description:
-        "Replay persisted node logs (newest `limit`) from `Resource.store(Node)` / `Node.logs` " +
+        "Replay persisted node logs (newest `limit`) from `Hyperlink.store(Node)` / `Node.logs` " +
         "registration Storage. Empty when the node journal is not registered (or `nodeLogKey` unknown).",
     }),
   },
@@ -116,14 +116,14 @@ export const buildNodeStatusImpl = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
   /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<NodeHyperlinkReadiness>>;
   /**
    * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
    * When omitted, query returns `[]`.
    */
   readonly nodeLogKey?: string;
   /**
-   * Cooperative handoff handler for {@link NodeStatusResource}.`yield`.
+   * Cooperative handoff handler for {@link NodeStatusHyperlink}.`yield`.
    * Default: accept (`true`) — Lookup then replaces the directory row.
    */
   readonly onYield?: Effect.Effect<boolean>;
@@ -143,7 +143,7 @@ export const buildNodeStatusImpl = (options: {
       resources,
     };
   });
-  const statusSub: Resource.Subscribable<NodeStatus> = {
+  const statusSub: Hyperlink.Subscribable<NodeStatus> = {
     get: computeStatus,
     changes: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => computeStatus)),
   };
@@ -181,12 +181,12 @@ export const buildNodeStatusImpl = (options: {
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeResourceReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<NodeHyperlinkReadiness>>;
   readonly nodeLogKey?: string;
 }): {
-  readonly tag: typeof NodeStatusResource;
+  readonly tag: typeof NodeStatusHyperlink;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;
 } => ({
-  tag: NodeStatusResource,
+  tag: NodeStatusHyperlink,
   impl: buildNodeStatusImpl(options),
 });

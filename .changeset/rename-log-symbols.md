@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Rename the structured-logging symbols from the vestigial `ProcessManagerLog*` to neutral `Log*`

@@ -1,12 +1,15 @@
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import { Layer, Schema } from "effect";
 
-class Emails extends Resource.Tag<Emails>()("app/Emails", {
-  add: Resource.effect(Schema.Void),
+class Emails extends Hyperlink.Tag<Emails>()("app/Emails", {
+  add: Hyperlink.effect(Schema.Void),
 }) {}
 
-// clientHttp: port | ":port" | url  ->  a client Layer<Self>
-const a: Layer.Layer<Emails> = Resource.clientHttp(Emails, 3001);
-const b: Layer.Layer<Emails> = Resource.clientHttp(Emails, ":3001");
-const c: Layer.Layer<Emails> = Resource.clientHttp(Emails, "https://mail.internal/rpc");
+// connect(tag, protocolHttp(port | ":port" | url))  ->  a client Layer<Self>
+const a: Layer.Layer<Emails> = Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001));
+const b: Layer.Layer<Emails> = Hyperlink.connect(Emails, Hyperlink.protocolHttp(":3001"));
+const c: Layer.Layer<Emails> = Hyperlink.connect(
+  Emails,
+  Hyperlink.protocolHttp("https://mail.internal/rpc"),
+);
 void a; void b; void c;

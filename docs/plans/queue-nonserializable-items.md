@@ -4,7 +4,7 @@
 
 ## The gap
 Queue items today are effectively serializable-or-nothing. There are two config variants —
-`QueueResourceConfigWithItemSchema` (has `itemSchema`, persistable + wire-able) and
+`QueueHyperlinkConfigWithItemSchema` (has `itemSchema`, persistable + wire-able) and
 `...WithoutItemSchema` (`itemSchema?: undefined`) — but the "without" path isn't a first-class
 **"items are non-serializable (functions, `Effect`s, class instances) — run local, no persistence"**
 feature. And there are **no tests** for a queue whose item type is non-serializable (only
@@ -17,7 +17,7 @@ Make "non-serializable items" a simple, safe, explicit mode:
 - When there's **no `itemSchema`** (or an explicit `nonSerializable: true`), the item type `T` may be
   anything — including functions and `Effect`s.
 - **Enqueue + entry-related methods become `local`-only** (they carry `T`, which can't cross the wire) —
-  so calling them through a `Resource.client` is a compile error, not a runtime blow-up. Reuse the
+  so calling them through a `Hyperlink.client` is a compile error, not a runtime blow-up. Reuse the
   existing `local` capability mechanism (the same one that gates local-only resource methods).
 - **Persistence is disabled** for that queue (no codec → no `persist`), enforced at the type level so
   you can't pair `persist` with a non-serializable item type.

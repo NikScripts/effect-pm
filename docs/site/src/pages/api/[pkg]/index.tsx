@@ -85,7 +85,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
   return (
     <>
       <PageMeta
-        title={`${p.name} — API — effect-pm`}
+        title={`${p.name} — API — hyperlink-ts`}
         description={`API reference for ${p.name}: ${p.modules.length} documented modules.`}
       />
       <article className="prose">
@@ -96,7 +96,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
         <p className="api-pkg-stats">
           {p.modules.length} modules · {total} documented exports
         </p>
-        {pkg === "effect-pm" ? (
+        {pkg === "hyperlink-ts" ? (
           <HeroLayout p={p} />
         ) : (
           <div className="api-index">

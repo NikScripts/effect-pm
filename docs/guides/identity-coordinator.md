@@ -2,7 +2,7 @@
 # Identity coordinator — one brain, many hands
 
 Exclusive resources claim at Lookup. Workers advertise. The winning brain can publish
-placement advice. Clients dial through Lookup — no `Resource.Manager`.
+placement advice. Clients dial through Lookup — no `Hyperlink.Manager`.
 
 Handoff SSOT: [`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md).
 Runnable form: [`examples/forms/resource/node-identity-coordinator.ts`](../../examples/forms/resource/node-identity-coordinator.ts).
@@ -24,12 +24,12 @@ the winner; hands come and go; Lookup stays the truth.
 ### 1. Stamp the brain
 
 ```ts
-class Router extends Resource.Tag<Router>()("fleet/Router", {
-  enqueue: Resource.effectFn({ job: Job }, Schema.Void),
-}).pipe(Resource.identity) {}
+class Router extends Hyperlink.Tag<Router>()("fleet/Router", {
+  enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
+}).pipe(Hyperlink.identity) {}
 ```
 
-`Resource.identity` makes `layer` / `serve` claim `fleet/Router` at Lookup. First live
+`Hyperlink.identity` makes `layer` / `serve` claim `fleet/Router` at Lookup. First live
 claimant serves; later claimants dial the winner. Dead winners are replaceable (NodeStatus
 ping).
 
@@ -39,8 +39,8 @@ ping).
 yield* Layer.build(Lookup.layerOptions({ path: lookupSock, unlink: true }))
 const lookup = Lookup.clientOptions({ path: lookupSock })
 
-Node.unix(RouterNode, [Resource.serve(Router, impl)]).pipe(Layer.provide(lookup))
-Node.unix([Resource.serve(Worker, impl)]).pipe(Layer.provide(lookup)) // advertise
+Node.unix(RouterNode, [Hyperlink.serve(Router, impl)]).pipe(Layer.provide(lookup))
+Node.unix([Hyperlink.serve(Worker, impl)]).pipe(Layer.provide(lookup)) // advertise
 ```
 
 Lookup stays **pipe-only** on listens — never bake `lookupPath` into listen options.
@@ -57,9 +57,9 @@ Last write wins. Stale prefer (node not in `nodesServing`) is ignored.
 ### 4. Dial hands
 
 ```ts
-Resource.lookupClient(Worker) // honors live Advice; else D4 { pick } / fail-closed
+Hyperlink.lookupClient(Worker) // honors live Advice; else D4 { pick } / fail-closed
 // or
-Resource.lookupClient(Worker, { pick: "first" })
+Hyperlink.lookupClient(Worker, { pick: "first" })
 ```
 
 ## When identity fails closed
@@ -69,9 +69,9 @@ Resource.lookupClient(Worker, { pick: "first" })
 
 1. Provide `Lookup.client` / `Lookup.layer` / `Lookup.layerOptions` (pipe on the listen or layer).
 2. Give the Tag a dialable endpoint — `Node.unix` / `http` / `ws` listen (ListenNode) or
-   `Resource.nodes([SomeNode])` / Tag-bound `{ path }` Node.
+   `Hyperlink.nodes([SomeNode])` / Tag-bound `{ path }` Node.
 
 ## What not to build
 
-- Do **not** invent `Resource.Manager` — identity + directory + advice is the pattern.
+- Do **not** invent `Hyperlink.Manager` — identity + directory + advice is the pattern.
 - Do **not** put Lookup bootstrap inside protocol listen options — pipe `Layer.provide`.

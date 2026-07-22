@@ -18,9 +18,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
 import { resources, resourcesLayer } from "./manager-resources";
-import { makeResourceCli } from "../../src/cli";
+import { makeHyperlinkCli } from "../../src/cli";
 
-const cli = makeResourceCli(resources, "pm");
+const cli = makeHyperlinkCli(resources, "pm");
 
 const program = Command.runWith(cli, { version: "0.0.0" })(
   process.argv.slice(2),

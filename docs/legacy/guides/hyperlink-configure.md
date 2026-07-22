@@ -1,8 +1,8 @@
-# Resource configure (layer patches)
+# Hyperlink configure (layer patches)
 
-Override **defaults** on `Process.Service`, `QueueResource.Service`, and `RunResource.Service` with **`Layer` patches** — not hot reload. Patches fold **once** when the resource `.layer` is built.
+Override **defaults** on `Process.Service`, `QueueHyperlink.Service`, and `RunHyperlink.Service` with **`Layer` patches** — not hot reload. Patches fold **once** when the resource `.layer` is built.
 
-**API:** `configureLayer`, `foldConfig`, `ConfigPatch` from `@nikscripts/effect-pm`. Per-service: `.configure`, `.wrapWorker` / `.wrapEffect` / `.wrapGate`, `.defaultSpec`.
+**API:** `configureLayer`, `foldConfig`, `ConfigPatch` from `hyperlink-ts`. Per-service: `.configure`, `.wrapWorker` / `.wrapEffect` / `.wrapGate`, `.defaultSpec`.
 
 ---
 
@@ -13,7 +13,7 @@ Override **defaults** on `Process.Service`, `QueueResource.Service`, and `RunRes
 | `defaultSpec` | Factory config before any patch |
 | `.configure(patch)` | Append one `ConfigPatch` (partial, `effect` updater, or full reducer) |
 | `.wrapWorker` / `.wrapEffect` / `.wrapGate` | Shorthand: replace only `effect` via `fn(previous) => next` |
-| Resource `.layer` | `foldConfiguredSpec(id, defaultSpec)` then build runtime |
+| Hyperlink `.layer` | `foldConfiguredSpec(id, defaultSpec)` then build runtime |
 
 **Not supported:** changing config after the queue/process/gate is running. Provide a new layer stack and rebuild.
 
@@ -30,7 +30,7 @@ Override **defaults** on `Process.Service`, `QueueResource.Service`, and `RunRes
 Pure merge helper (tests, custom tooling):
 
 ```typescript
-import { foldConfig } from "@nikscripts/effect-pm";
+import { foldConfig } from "hyperlink-ts";
 
 const effective = foldConfig(
   { concurrency: 10, label: "a" },
@@ -45,9 +45,9 @@ const effective = foldConfig(
 
 ```typescript
 import { Duration, Effect, Layer } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm";
+import { QueueHyperlink } from "hyperlink-ts";
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
+class EmailQueue extends QueueHyperlink.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   (email) => send(email).pipe(Effect.asVoid),
   { concurrency: 10 },
@@ -76,7 +76,7 @@ Patches apply **before** `makeQueueRuntime` (workers, hooks, enqueue validation)
 
 ```typescript
 import { Effect, Layer } from "effect";
-import { Process } from "@nikscripts/effect-pm";
+import { Process } from "hyperlink-ts";
 
 class Sync extends Process.Service<Sync>()("@app/Sync", {
   effect: Effect.log("default"),
@@ -100,9 +100,9 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 ## Run gate
 
 ```typescript
-import * as Store from "@nikscripts/effect-pm/Store";
+import * as Store from "hyperlink-ts/Store";
 
-const SendSms = RunResource.Service<SendSms>()("@app/Sms", {
+const SendSms = RunHyperlink.Service<SendSms>()("@app/Sms", {
   payload: PhoneSchema,
   success: Schema.Void,
   error: SmsErrorSchema,
@@ -115,20 +115,20 @@ const SendSmsLive = SendSms.layer.pipe(
 );
 ```
 
-`RunResource.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
+`RunHyperlink.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
 `Layer.provideMerge(AppStore.layerMemory)` (or SQLite `AppStore.layer({ filename })`) at the app root.
-{@link RunResource.make} still requires {@link Store.layerDefaultMemory} on the effect. See
+{@link RunHyperlink.make} still requires {@link Store.layerDefaultMemory} on the effect. See
 [store.md](./store.md#default-store-layerdefaultmemory).
 
 ---
 
 ## Tag key
 
-`resourceConfigureTagKey(id)` → `@nikscripts/effect-pm/ResourceConfigure/${id}`. Matches the service **name** / process **id** string.
+`resourceConfigureTagKey(id)` → `hyperlink-ts/HyperlinkConfigure/${id}`. Matches the service **name** / process **id** string.
 
 ---
 
 ## Related
 
-- [queue-resource.md](./queue-resource.md) — queue definition forms
+- [queue-hyperlink.md](./queue-hyperlink.md) — queue definition forms
 - [process.md](./process.md) — process definition forms

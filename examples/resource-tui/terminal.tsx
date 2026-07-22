@@ -19,7 +19,7 @@ import * as React from "react";
 import { Effect, Layer } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Command, type Flag } from "effect/unstable/cli";
-import { makeResourceTui, type AnyTag } from "./make-resource-tui";
+import { makeHyperlinkTui, type AnyTag } from "./make-resource-tui";
 
 const renderTui = (App: () => React.ReactElement): Effect.Effect<void> =>
   Effect.callback<void>((resume) => {
@@ -56,7 +56,7 @@ export const Terminal = {
         const runtime = Atom.runtime(Layer.succeedContext(context));
         const record =
           "members" in target ? target.members : { [target.key]: target };
-        const { App } = makeResourceTui(record, runtime);
+        const { App } = makeHyperlinkTui(record, runtime);
         yield* renderTui(App);
       }),
 

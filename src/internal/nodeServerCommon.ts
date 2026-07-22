@@ -4,7 +4,7 @@
  * @internal
  */
 import { Effect, Layer } from "effect"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
   OnConflict,
@@ -24,7 +24,7 @@ export type ServerServeList = readonly [
   ...ReadonlyArray<Layer.Layer<never, any, any>>,
 ];
 
-/** Merge a non-empty serve list — Effect's {@link Layer.mergeAll}, generic over the tuple. */
+/** Merge a non-empty serve list — Effect's {@link Layer.mergeAll}, generic over the tuple. @internal */
 export const mergeServeList = <Layers extends ServerServeList>(
   layers: Layers,
 ): Layer.Layer<
@@ -36,7 +36,7 @@ export const mergeServeList = <Layers extends ServerServeList>(
 
 /** Refuse to boot if any node-bound served resource declares a transport mismatch. @internal */
 export const assertProtocolKinds = (
-  entries: ReadonlyArray<Resource.ServedResource>,
+  entries: ReadonlyArray<Hyperlink.ServedHyperlink>,
   serverKind: ProtocolKind,
 ): Effect.Effect<void> =>
   Effect.forEach(
@@ -60,7 +60,7 @@ export const assertProtocolKinds = (
  */
 export const directoryAdvertiseMerge = (
   advertiseNode: (AnyNode & { readonly key: string }) | undefined,
-  entries: ReadonlyArray<Resource.ServedResource>,
+  entries: ReadonlyArray<Hyperlink.ServedHyperlink>,
   options?: { readonly onConflict?: OnConflict },
 ): Effect.Effect<Layer.Layer<never>> => {
   if (advertiseNode === undefined) {

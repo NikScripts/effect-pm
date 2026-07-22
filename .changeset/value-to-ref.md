@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Replace `value` fields with `ref` (a `Subscribable`).** A `value` was a plain property kept "live" by a

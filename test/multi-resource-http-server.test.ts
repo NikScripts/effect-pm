@@ -3,24 +3,24 @@ import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
-// End-to-end: Resource.serve + PmNode.httpServer + the served-resources registry. Two resources need
+// End-to-end: Hyperlink.serve + PmNode.httpServer + the served-resources registry. Two resources need
 // the SAME Dep tag with DIFFERENT values (isolated per resource), served on one /rpc, with /health
 // listing both (which only works if the registry was populated before httpServer read it).
 
 class Dep extends Context.Service<Dep, number>()(
-  "@nikscripts/effect-pm/test/multi-resource-http-server.test/Dep",
+  "hyperlink-ts/test/multi-resource-http-server.test/Dep",
 ) {}
 
-class A extends Resource.Tag<A>()("httpserver/A", { read: Resource.effect(Schema.Number) }) {}
-class B extends Resource.Tag<B>()("httpserver/B", { read: Resource.effect(Schema.Number) }) {}
+class A extends Hyperlink.Tag<A>()("httpserver/A", { read: Hyperlink.effect(Schema.Number) }) {}
+class B extends Hyperlink.Tag<B>()("httpserver/B", { read: Hyperlink.effect(Schema.Number) }) {}
 
 const impl = { read: Effect.map(Dep, (value) => value) };
 
-const layerA = Resource.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
-const layerB = Resource.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
+const layerA = Hyperlink.serveRemote(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
+const layerB = Hyperlink.serveRemote(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
 // the serves form — httpServer([...]) bundles the provideMerge + registry
 const Node = PmNode.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(
@@ -49,8 +49,8 @@ it("httpServer serves serve layers on one /rpc, isolated, with /health listing b
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            Resource.client(A).pipe(Layer.provide(protocol(`${base}/rpc`))),
-            Resource.client(B).pipe(Layer.provide(protocol(`${base}/rpc`))),
+            Hyperlink.client(A).pipe(Layer.provide(protocol(`${base}/rpc`))),
+            Hyperlink.client(B).pipe(Layer.provide(protocol(`${base}/rpc`))),
           ),
         ),
         Effect.scoped,

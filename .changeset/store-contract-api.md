@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Add shape-first `Store` contract API with EventJournal-backed persistence.** New `@nikscripts/effect-pm/Store` surface:

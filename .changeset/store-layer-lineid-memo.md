@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": patch
+"hyperlink-ts": patch
 ---
 
 Durable store-layer `(scopeKey, lineId)` memo for log tails.

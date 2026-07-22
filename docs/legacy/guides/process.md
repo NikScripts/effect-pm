@@ -3,7 +3,7 @@
 A **managed process** is a named unit of background work: an `effect` that runs to completion on
 each **repeat**, driven by a long-lived supervisor that coordinates **polling** (how long between
 repeats while armed) and **schedule** (whether repeats are allowed now). It's a location-transparent
-`Resource` — lifecycle + observability + schedule control behind one `Tag`.
+`Hyperlink` — lifecycle + observability + schedule control behind one `Tag`.
 
 `Process` is one module: the toolkit contract (`Process.Tag` / `Process.Schedule` / {@link ProcessTagOptions})
 plus the engine (`Process.make` / `layer` / `serve`) over **`Polling`** and the internal schedule
@@ -31,7 +31,7 @@ should use **`Process.layer`** (or register **`Process.store(tag)`** and append 
 
 ```ts
 import { Effect, Schema } from "effect";
-import * as Process from "@nikscripts/effect-pm/Process";
+import * as Process from "hyperlink-ts/Process";
 
 class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
 
@@ -42,15 +42,15 @@ const layer = Process.layer(LiveScores, {
 ```
 
 Provide `Logs.layer` + `Logs.persistLayer(node)` on the node stack for durable logs; read with
-`Resource.logs(LiveScores)` — see [`docs/LOGS.md`](../../LOGS.md).
+`Hyperlink.logs(LiveScores)` — see [`docs/LOGS.md`](../../LOGS.md).
 
 - **`Process.layer(Tag, config)`** — local driver (auto-starts).
 - **`Process.serve(Tag, config)`** / **`serveRemote`** — host over RPC.
-- **`Resource.client(Tag)`** — remote handle.
+- **`Hyperlink.client(Tag)`** — remote handle.
 
 ### Tag wire schemas (`success` / `error`)
 
-Declare on the tag via the **config object** (names match Effect `Resource.Method` slots:
+Declare on the tag via the **config object** (names match Effect `Hyperlink.Method` slots:
 `success` / `error`). Process has **no** tag-level `payload` (the tick body is in layer config).
 
 ```ts
@@ -95,7 +95,7 @@ class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule(
 ## Handle surface (`yield* Tag`)
 
 - **Lifecycle:** `start`, `stop`, `run` (typed success/error on RPC when stamped).
-- **Observe:** `status` (`status.get` / `status.changes`). Logs via `Resource.logs(Tag)` /
+- **Observe:** `status` (`status.get` / `status.changes`). Logs via `Hyperlink.logs(Tag)` /
   `NodeStatus.logs` + `LogEntry.hasKey` — not on the process handle.
 - **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
 - **Result** (when `success` on tag): `result.get` / `result.changes` — `Option` until first success.
@@ -110,7 +110,7 @@ event union — same shape the toolkit layer persists on terminal runs.
 ### Register
 
 ```ts
-import * as Store from "@nikscripts/effect-pm/Store";
+import * as Store from "hyperlink-ts/Store";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Process.store(Prices),
@@ -164,7 +164,7 @@ const live = Process.layer(Prices, { effect: poll }).pipe(
 
 // durable
 const durable = Process.layer(Prices, { effect: poll }).pipe(
-  Layer.provideMerge(AppStore.layer({ filename: ".effect-pm/process.sqlite" })),
+  Layer.provideMerge(AppStore.layer({ filename: ".hyperlink-ts/process.sqlite" })),
 );
 ```
 

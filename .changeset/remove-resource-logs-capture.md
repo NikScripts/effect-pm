@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": major
+"hyperlink-ts": major
 ---
 
 Remove per-resource built-in log capture from queue/process/custom-queue handles.

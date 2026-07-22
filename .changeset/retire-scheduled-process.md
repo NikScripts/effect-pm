@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Retire `ScheduledProcess` and privatize the schedule primitive (breaking).** The managed-process

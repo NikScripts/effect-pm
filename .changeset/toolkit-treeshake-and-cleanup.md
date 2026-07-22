@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Tree-shakeable, browser-safe resource tags + one unified `QueueResource` namespace + a clean `strictEffectProvide` gate.

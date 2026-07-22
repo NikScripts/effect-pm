@@ -13,7 +13,7 @@ import {
   RpcServer,
 } from "effect/unstable/rpc"
 import { unlinkBestEffort } from "./ipcPath"
-import * as Resource from "../Resource"
+import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
   type OnConflict,
@@ -70,11 +70,11 @@ export interface IpcServerOptions {
  * ```ts
  * class Worker extends Tag<Worker>()("worker", { path: "/tmp/worker.sock" }) {}
  *
- * const live = Resource.ipcServer(
- *   [Resource.serve(Jobs, jobsImpl)],
+ * const live = Hyperlink.ipcServer(
+ *   [Hyperlink.serve(Jobs, jobsImpl)],
  *   { path: "/tmp/worker.sock" },
  * )
- * // or Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)])
+ * // or Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)])
  * ```
  *
  * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route
@@ -109,7 +109,7 @@ export function ipcServer(
   return ipcServerBase(options).pipe(
     Layer.provideMerge(mergeServeList(list)),
     // Fresh registry per server — Lookup + Worker in one process must not share.
-    Layer.provide(Layer.fresh(Resource.servedResourcesLayer)),
+    Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
   ) as Layer.Layer<never, any, any>;
 }
 
@@ -117,15 +117,15 @@ export function ipcServer(
 /** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
 const ipcServerBase = (
   options: IpcServerOptions,
-): Layer.Layer<never, never, Resource.ServedResources> =>
+): Layer.Layer<never, never, Hyperlink.ServedHyperlinks> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const registry = yield* Resource.ServedResources;
+      const registry = yield* Hyperlink.ServedHyperlinks;
       const entries = yield* registry.all;
       if (entries.length === 0) {
         return yield* Effect.die(
           new Error(
-            "Node.ipcServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+            "Node.ipcServer: no resources registered — provideMerge at least one Hyperlink.serve(...) layer",
           ),
         );
       }
@@ -156,7 +156,7 @@ const ipcServerBase = (
       const inferredNodeKey =
         optionNodeKey ?? (boundKeys.length === 1 ? boundKeys[0] : undefined);
       const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./nodeStatusResource"),
+        () => import("./nodeStatusHyperlink"),
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
@@ -168,13 +168,13 @@ const ipcServerBase = (
       const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
         ? nodeEntry.impl
         : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
-      const nodeFlat = Resource.flattenImpl(nodeImpl, nodeTag[Resource.specSym]);
+      const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
-        nodeHandlers[Resource.wireTag(nodeTag.groupId, key)] = (payload) =>
-          Resource.invokeWireMethod(member, nodeTag[Resource.specSym][key] as Resource.AnyMethod, payload);
+        nodeHandlers[Hyperlink.wireTag(nodeTag.groupId, key)] = (payload) =>
+          Hyperlink.invokeWireMethod(member, nodeTag[Hyperlink.specSym][key] as Hyperlink.AnyMethod, payload);
       }
-      const merged = [...entries.map((entry) => entry.group), nodeTag[Resource.groupSym]].reduce(
+      const merged = [...entries.map((entry) => entry.group), nodeTag[Hyperlink.groupSym]].reduce(
         (acc, group) => acc.merge(group),
       );
       const { NodeFileSystem, NodeSocketServer } = yield* Effect.promise(
@@ -192,9 +192,9 @@ const ipcServerBase = (
       const rpcRaw: any = RpcServer.layer(merged);
       const rpc = (rpcRaw as Layer.Layer<never, never, never>).pipe(
         Layer.provide(
-          nodeTag[Resource.groupSym].toLayer(
+          nodeTag[Hyperlink.groupSym].toLayer(
             nodeHandlers as unknown as Parameters<
-              (typeof nodeTag)[typeof Resource.groupSym]["toLayer"]
+              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
             >[0],
           ),
         ),
@@ -202,7 +202,7 @@ const ipcServerBase = (
         // must not share SocketServer / protocol layers via MemoMap.
         Layer.provide(Layer.fresh(RpcServer.layerProtocolSocketServer)),
         Layer.provide(
-          Layer.fresh(options.serialization ?? Resource.defaultSerialization),
+          Layer.fresh(options.serialization ?? Hyperlink.defaultSerialization),
         ),
         Layer.provide(
           Layer.fresh(
@@ -232,4 +232,4 @@ const ipcServerBase = (
       );
       return withUnlink.pipe(Layer.provideMerge(advertise));
     }),
-  ) as Layer.Layer<never, never, Resource.ServedResources>;
+  ) as Layer.Layer<never, never, Hyperlink.ServedHyperlinks>;

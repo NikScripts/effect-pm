@@ -31,7 +31,7 @@ import { nPipe } from "./nodeNPipe"
 import { unix } from "./nodeUnix"
 import { ws } from "./nodeWs"
 
-/** Prototype ctor options — `kind` picks the listen sibling; `ipc` selects unix vs nPipe. */
+/** Prototype ctor options — `kind` picks the listen sibling; `ipc` selects unix vs nPipe. @internal */
 export type PrototypeOptions = {
   readonly kind?: ProtocolKind
   /** Ipc transport when `kind` is unset / `"IpcSocket"`. Default `"unix"`. */
@@ -48,7 +48,7 @@ export type PrototypeOptions = {
  * // Named clone with a fixed address (class ctor):
  * class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
  * // Dynamic instances — same protocol siblings + Lookup pipe as unix/http/ws/nPipe:
- * const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+ * const mailWorker = MailWorker.listen([Hyperlink.serve(Mail, impl)])
  * mailWorker().pipe(Layer.provide(Lookup.layer))
  * mailWorker("w1").pipe(Layer.provide(Lookup.layer))
  * ```

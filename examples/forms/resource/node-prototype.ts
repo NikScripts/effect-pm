@@ -14,29 +14,29 @@ import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
-import * as Resource from "../../../src/Resource"
+import * as Hyperlink from "../../../src/Hyperlink"
 
-class Mail extends Resource.Tag<Mail>()("forms/Mail", {
-  pending: Resource.effect(Schema.Number),
+class Mail extends Hyperlink.Tag<Mail>()("forms/Mail", {
+  pending: Hyperlink.effect(Schema.Number),
 }) {}
 
 class MailWorker extends Node.Prototype<MailWorker, Mail>("forms/MailWorker") {}
 
 const program = Effect.gen(function* () {
-  const sock = `/tmp/effect-pm-forms-proto-${process.pid}.sock`
-  const lookupPath = `/tmp/effect-pm-forms-proto-lookup-${process.pid}.sock`
+  const sock = `/tmp/hyperlink-ts-forms-proto-${process.pid}.sock`
+  const lookupPath = `/tmp/hyperlink-ts-forms-proto-lookup-${process.pid}.sock`
 
   // Named clone with a fixed address
   class East extends MailWorker.make("East", { path: sock }) {}
   const lookup = Lookup.layerOptions({ path: lookupPath, unlink: true })
   const named = Node.unix(
     East,
-    [Resource.serve(Mail, { pending: Effect.succeed(3) })],
+    [Hyperlink.serve(Mail, { pending: Effect.succeed(3) })],
   ).pipe(Layer.provide(lookup))
 
   // Dynamic instance — same Lookup pipe + protocol siblings as Node.unix / http / ws
   const spawn = MailWorker.listen([
-    Resource.serve(Mail, { pending: Effect.succeed(9) }),
+    Hyperlink.serve(Mail, { pending: Effect.succeed(9) }),
   ])
   const dynamic = spawn("w1").pipe(
     Layer.provide(Lookup.layerOptions({ path: lookupPath, unlink: false })),

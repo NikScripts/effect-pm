@@ -39,7 +39,7 @@
  *
  * @example Shape-first contract
  * ```ts
- * import * as Store from "@nikscripts/effect-pm/Store";
+ * import * as Store from "hyperlink-ts/Store";
  * import * as Schema from "effect/Schema";
  *
  * const thermometerContract = Store.contract({
@@ -66,7 +66,7 @@
  * ```ts
  * Effect.provide(
  *   program,
- *   AppStore.layer({ filename: ".effect-pm/data.sqlite" }),
+ *   AppStore.layer({ filename: ".hyperlink-ts/data.sqlite" }),
  * );
  * ```
  *
@@ -177,7 +177,7 @@ export { StoreDuplicateScopeKey, StoreScopeNotRegistered, StoreChangeEvent, Stor
  * @public
  */
 export class Storage extends Context.Service<Storage, StorageApi>()(
-  "@nikscripts/effect-pm/Store/Storage",
+  "hyperlink-ts/Store/Storage",
 ) {}
 
 /**
@@ -600,10 +600,10 @@ export type StoreProvidedContext<T, Ctx> = T extends (
  * present at runtime). @public
  * @category models
  */
-export type TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
+export type TypeId = "hyperlink-ts/Store/StoreEffects";
 
 /** @public */
-export const TypeId: TypeId = "@nikscripts/effect-pm/Store/StoreEffects";
+export const TypeId: TypeId = "hyperlink-ts/Store/StoreEffects";
 
 /**
  * Variance carrier for the {@link effects} brand — mirrors Effect's `Stream.Variance`. `C` is
@@ -903,7 +903,7 @@ export const logLevelNone = <R extends StoreRegistrationAny>(registration: R): R
 export const logLevel = logLevelAll;
 
 /**
- * Per-registration live stream floor for {@link Resource.logs} (distinct from durable {@link logLevel}).
+ * Per-registration live stream floor for {@link Hyperlink.logs} (distinct from durable {@link logLevel}).
  *
  * @category logging
  * @public
@@ -1142,7 +1142,7 @@ export const resolveOrDie = <const C extends StoreContractValue>(
       Effect.die(
         `Store.resolveOrDie: scope "${e.key}" is not registered in the provided store. ` +
           `If Soft override captured an AppStore, register this engine on that Store.Service ` +
-          `(Process.store / QueueResource.store / CustomQueueResource.store / RunResource.store) ` +
+          `(Process.store / QueueHyperlink.store / CustomQueueHyperlink.store / RunHyperlink.store) ` +
           `alongside Node.logs — or omit Soft override so Memory soft-default materializes the scope.`,
       ),
     ),
@@ -1156,7 +1156,7 @@ const callAt = (
 ): Effect.Effect<unknown> => {
   let node: unknown = handle;
   for (const part of path.split(".")) {
-    // Tree-walk idiom (as in `nestHandle` / `Resource.nestService`).
+    // Tree-walk idiom (as in `nestHandle` / `Hyperlink.nestService`).
     node = (node as Record<string, unknown>)[part];
   }
   if (typeof node !== "function") {
@@ -1419,16 +1419,16 @@ export type TagClass<
  *
  * Three input shapes:
  *
- * - **Single store** — bare registration: `QueueResource.store(Mail)` → `yield* MailStore`
- * - **Tag-keyed multi** — array: `[QueueResource.store(Mail), …]` → `yield* AppStore.at(Mail)`
- * - **Custom-keyed** — object: `{ mail: QueueResource.store(Mail), … }` → `yield* AppStore.at("mail")`
+ * - **Single store** — bare registration: `QueueHyperlink.store(Mail)` → `yield* MailStore`
+ * - **Tag-keyed multi** — array: `[QueueHyperlink.store(Mail), …]` → `yield* AppStore.at(Mail)`
+ * - **Custom-keyed** — object: `{ mail: QueueHyperlink.store(Mail), … }` → `yield* AppStore.at("mail")`
  *
  * `layerMemory` uses in-memory refs. `layer({ filename })` persists to SQLite (`filename` required).
  *
  * @example Single store
  * ```ts
  * class MailStore extends Store.Service<MailStore>("@app/MailStore")(
- *   QueueResource.store(Mail),
+ *   QueueHyperlink.store(Mail),
  * ) {}
  *
  * const handle = yield* MailStore;
@@ -1559,7 +1559,7 @@ export const scoped = <
   contract: C,
 ): StandaloneStore<
   { readonly _tag: ScopeKeyOf<ScopeKey> },
-  `@nikscripts/effect-pm/Store/scope/${ScopeKeyOf<ScopeKey>}`,
+  `hyperlink-ts/Store/scope/${ScopeKeyOf<ScopeKey>}`,
   ScopeKeyOf<ScopeKey>,
   C,
   ScopeKey extends StoreScopeTag ? ScopeKey : undefined
@@ -1582,8 +1582,8 @@ export const scoped = <
  *
  * @example
  * ```ts
- * class Thermometer extends Resource.Tag<Thermometer>()(key, contract).pipe(
- *   Resource.withStore(thermometerStoreSpec),
+ * class Thermometer extends Hyperlink.Tag<Thermometer>()(key, contract).pipe(
+ *   Hyperlink.withStore(thermometerStoreSpec),
  * ) {}
  * ```
  *

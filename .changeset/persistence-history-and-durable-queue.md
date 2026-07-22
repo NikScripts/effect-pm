@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Persistence — the two-plane design from `docs/handoffs/queue-persistence-design.md`.

@@ -2,7 +2,7 @@
  * @module examples/resource-tui/counter-app
  *
  * A resource rendered in the **terminal** — the third skin. It reuses the *exact*
- * `atom-react` hooks and `makeResourceAtoms` the web widget uses; only the
+ * `atom-react` hooks and `makeHyperlinkAtoms` the web widget uses; only the
  * renderer differs (Ink's `<Box>`/`<Text>` instead of the DOM). Hooks live in
  * React core, not the renderer, so "one contract → N renderers" just works.
  *
@@ -14,22 +14,22 @@ import { Box, Text, useApp, useInput } from "ink";
 import * as React from "react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import * as Resource from "../../src/Resource";
-import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
+import * as Hyperlink from "../../src/Hyperlink";
+import { makeHyperlinkAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
 } from "../../src/ui/atom-react";
 
-class Counter extends Resource.Tag<Counter>()("Counter", {
-  current: Resource.effect(Schema.Number),
-  reset: Resource.effect(Schema.Void).annotate({ destructive: true }),
-  increment: Resource.effectFn({ by: Schema.Number }),
+class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+  current: Hyperlink.effect(Schema.Number),
+  reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
 }) {}
 
 let value = 0;
-const counterLayer = Resource.layer(Counter, {
+const counterLayer = Hyperlink.layer(Counter, {
   current: Effect.sync(() => value),
   reset: Effect.sync(() => {
       value = 0;
@@ -41,7 +41,7 @@ const counterLayer = Resource.layer(Counter, {
 });
 
 const runtime = Atom.runtime(counterLayer);
-const atoms = makeResourceAtoms(runtime, Counter);
+const atoms = makeHyperlinkAtoms(runtime, Counter);
 
 const CounterPanel = (): React.ReactElement => {
   const { exit } = useApp();

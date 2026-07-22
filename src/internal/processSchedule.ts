@@ -112,7 +112,7 @@ export interface ProcessScheduleService {
 export class ProcessScheduleTag extends Context.Service<
   ProcessScheduleTag,
   ProcessScheduleService
->()("@nikscripts/effect-pm/internal/processSchedule/ProcessScheduleTag") {}
+>()("hyperlink-ts/internal/processSchedule/ProcessScheduleTag") {}
 
 // ============================================================================
 // Internal: sorting and normalization
@@ -371,7 +371,7 @@ const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
 /**
  * The builder handed to {@link define} (`at` / `window` / `fromStarts` / `all`). Exported so the
  * public re-export (`Process.scheduleDefine`) can name it; the dts bundler inlines it into the
- * `@nikscripts/effect-pm/Process` declarations.
+ * `hyperlink-ts/Process` declarations.
  */
 export interface ScheduleDefineApi {
   readonly at: typeof at;

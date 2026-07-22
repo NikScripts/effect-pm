@@ -5,7 +5,7 @@
  * ## Node log key (durable bucket)
  *
  * The argument to {@link byNode} is the **node log key** — it **must** equal the
- * {@link Node.Tag} `.key` for that OS process (the same string {@link Resource.selfNode}
+ * {@link Node.Tag} `.key` for that OS process (the same string {@link Hyperlink.selfNode}
  * returns). Register `Node.logs` on a {@link Store.Service}; the durable tail stamps
  * `annotations.node`. Use slash-separated paths (`billing/scores`).
  *
@@ -18,18 +18,18 @@
  * - **`stream`** / **`snapshot`** — unfiltered live bus (+ bounded tail).
  * - **Durable tails** — each store registration with an implicit `_logs` shape forks a Stream
  *   follower (`Node.logs`, `Process.store`, …). The shape is Effect-style private (omitted from
- *   public handle types); read via {@link Resource.logs} / {@link byNode} / {@link byResource}.
+ *   public handle types); read via {@link Hyperlink.logs} / {@link byNode} / {@link byHyperlink}.
  * - **`withScope`** — lineage annotation at resource materialize.
- * - **`byNode`** / **`byResource`** — durable reads from registration Storage.
+ * - **`byNode`** / **`byHyperlink`** — durable reads from registration Storage.
  *
- * Per-resource live + durable export: {@link Resource.logs} / {@link Resource.withLogExport}.
+ * Per-resource live + durable export: {@link Hyperlink.logs} / {@link Hyperlink.withLogExport}.
  *
  * @example Node journal via `Store.Service`
  * ```ts
- * import * as Resource from "@nikscripts/effect-pm/Resource";
- * import * as Logs from "@nikscripts/effect-pm/Logs";
- * import * as Process from "@nikscripts/effect-pm/Process";
- * import * as Store from "@nikscripts/effect-pm/Store";
+ * import * as Hyperlink from "hyperlink-ts/Hyperlink";
+ * import * as Logs from "hyperlink-ts/Logs";
+ * import * as Process from "hyperlink-ts/Process";
+ * import * as Store from "hyperlink-ts/Store";
  *
  * class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
  * class Daily extends Process.Tag<Daily>()("app/Daily") {}
@@ -55,7 +55,7 @@ import * as relay from "./internal/logs/relay";
 
 /**
  * **Node log key** — durable bucket id for one runtime host. Must equal {@link Node.Tag} `.key`
- * (same string as {@link Resource.selfNode}). Stored as `annotations.node` on node-journal lines.
+ * (same string as {@link Hyperlink.selfNode}). Stored as `annotations.node` on node-journal lines.
  *
  * @see `docs/LOGS.md` — Key catalog → Node log keys
  *
@@ -65,15 +65,15 @@ import * as relay from "./internal/logs/relay";
 export type NodeLogKey = string;
 
 /**
- * **Resource key** — identity of a queue, process, or tag (`Resource.Tag.key`). Used in lineage,
- * `byResource`, and {@link LogEntry.hasKey}.
+ * **Hyperlink key** — identity of a queue, process, or tag (`Hyperlink.Tag.key`). Used in lineage,
+ * `byHyperlink`, and {@link LogEntry.hasKey}.
  *
- * @see `docs/LOGS.md` — Key catalog → Resource keys
+ * @see `docs/LOGS.md` — Key catalog → Hyperlink keys
  *
  * @category models
  * @public
  */
-export type ResourceLogKey = string;
+export type HyperlinkLogKey = string;
 
 /**
  * Source carrying a **node log key** (`Node.Tag.key`).
@@ -157,7 +157,7 @@ export const withScope = withLogScope;
 const queryLimitDefault = 200;
 
 /**
- * Options shared by {@link byNode} / {@link byResource}.
+ * Options shared by {@link byNode} / {@link byHyperlink}.
  *
  * @category models
  * @public
@@ -172,7 +172,7 @@ export interface LogReadOptions {
 /**
  * Read durable logs for a **whole node** (every resource on that process).
  *
- * Needs `Node.logs` / `Resource.store(Node)` on an app {@link Store.Service} (Soft-override the
+ * Needs `Node.logs` / `Hyperlink.store(Node)` on an app {@link Store.Service} (Soft-override the
  * toolkit layer — see `docs/guides/stores.md`). Soft-default Memory alone is engine observability
  * only — no Logs platform / durable `_logs` tails.
  *
@@ -188,38 +188,38 @@ export const byNode = (
   });
 
 /**
- * Source carrying a **resource key** (`Resource.Tag.key` / store registration key).
+ * Source carrying a **resource key** (`Hyperlink.Tag.key` / store registration key).
  *
  * @category models
  * @public
  */
-export type ResourceLogKeySource = { readonly key: ResourceLogKey };
+export type HyperlinkLogKeySource = { readonly key: HyperlinkLogKey };
 
-const resolveResourceLogKey = (
-  resource: ResourceLogKey | ResourceLogKeySource,
-): ResourceLogKey => (typeof resource === "string" ? resource : resource.key);
+const resolveHyperlinkLogKey = (
+  resource: HyperlinkLogKey | HyperlinkLogKeySource,
+): HyperlinkLogKey => (typeof resource === "string" ? resource : resource.key);
 
 /**
  * Read durable logs for a **specific resource** by **full key** (same string as
- * {@link Resource.logs}`(tag)` / store registration / lineage segment).
+ * {@link Hyperlink.logs}`(tag)` / store registration / lineage segment).
  *
- * Pass a scope tag (`Process.Tag` / `QueueResource.Tag` / …) or its `.key` string.
- * Resource kind is {@link Resource.kindOf} on the tag — not a separate query argument.
+ * Pass a scope tag (`Process.Tag` / `QueueHyperlink.Tag` / …) or its `.key` string.
+ * Hyperlink kind is {@link Hyperlink.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Process.store` / `QueueResource.store`, …) on the
+ * Requires that resource's store registration (`Process.store` / `QueueHyperlink.store`, …) on the
  * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
  * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *
  * @remarks
- * Prefer {@link Resource.logs} for new code. See `docs/LOGS.md` — Store / query parameters.
+ * Prefer {@link Hyperlink.logs} for new code. See `docs/LOGS.md` — Store / query parameters.
  *
  * @category reads
  * @public
  */
-export const byResource = (
-  resource: ResourceLogKey | ResourceLogKeySource,
+export const byHyperlink = (
+  resource: HyperlinkLogKey | HyperlinkLogKeySource,
   options?: LogReadOptions,
 ): Effect.Effect<ReadonlyArray<LogEntry>> =>
-  queryDurableScope(resolveResourceLogKey(resource), {
+  queryDurableScope(resolveHyperlinkLogKey(resource), {
     limit: options?.limit ?? queryLimitDefault,
   });

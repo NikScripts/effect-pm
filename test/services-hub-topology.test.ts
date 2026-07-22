@@ -2,7 +2,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Group from "../src/Group";
 import * as Node from "../src/Node";
 
@@ -14,13 +14,13 @@ import * as Node from "../src/Node";
 class MiniNode extends Node.Tag<MiniNode>()("hub/miniNode") {}
 
 // Local on the Droplet (no node) — stands in for a roster import queue.
-class RosterQueue extends Resource.Tag<RosterQueue>()("hub/RosterQueue", {
-  count: Resource.effect(Schema.Number),
+class RosterQueue extends Hyperlink.Tag<RosterQueue>()("hub/RosterQueue", {
+  count: Hyperlink.effect(Schema.Number),
 }) {}
 
 // Remote on the Mini (node-bound) — stands in for the one poller that runs on the mini.
-class LiveScorePoller extends Resource.Tag<LiveScorePoller>()("hub/LiveScorePoller", 
-  { where: Resource.effect(Schema.String) },
+class LiveScorePoller extends Hyperlink.Tag<LiveScorePoller>()("hub/LiveScorePoller", 
+  { where: Hyperlink.effect(Schema.String) },
   { node: MiniNode },
 ) {}
 
@@ -35,13 +35,13 @@ class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 
 // The Mini nodes the poller.
 const MiniServer = Node.httpServer([
-  Resource.serve(LiveScorePoller, {
+  Hyperlink.serve(LiveScorePoller, {
     where: Effect.succeed("poller@mini"),
   }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 // The Droplet runs the roster queue locally.
-const RosterLocal = Resource.layer(RosterQueue, { count: Effect.succeed(42) });
+const RosterLocal = Hyperlink.layer(RosterQueue, { count: Effect.succeed(42) });
 
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {
   const address = Context.get(ctx, HttpServer.HttpServer).address;
@@ -56,9 +56,9 @@ it("nested hub group: local members + one remote (mini) member, one runtime", ()
       // The Droplet runtime: local layer for the queue + a client for the mini poller.
       const dropletRuntime = Layer.mergeAll(
         RosterLocal,
-        Resource.client(LiveScorePoller).pipe(
+        Hyperlink.client(LiveScorePoller).pipe(
           Layer.provide(
-            Resource.httpClient(MiniNode, {
+            Hyperlink.http(MiniNode, {
               url: `http://127.0.0.1:${portMini}/rpc`,
             }),
           ),

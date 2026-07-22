@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 **Lookup placement advice (M5)** — coordinators publish prefer; `lookupClient` honors it.

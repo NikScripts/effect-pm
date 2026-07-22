@@ -30,7 +30,7 @@ import type { RpcClient } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Node from "../../src/Node";
-import * as Resource from "../../src/Resource";
+import * as Hyperlink from "../../src/Hyperlink";
 
 const HTTP_PORT = 7791;
 const WS_PORT = 7792;
@@ -43,14 +43,14 @@ class Fleet extends Node.Tag<Fleet>()("mp-proof/fleet", {
 }) {}
 
 // Bound to Fleet — its presence makes each server run the P3 check against Fleet's declared set.
-class Bound extends Resource.Tag<Bound>()(
+class Bound extends Hyperlink.Tag<Bound>()(
   "mp-proof/bound",
-  { ping: Resource.effect(Schema.Number) },
+  { ping: Hyperlink.effect(Schema.Number) },
   { node: Fleet },
 ) {}
 
 // The wire contract a remote dials with an explicit transport (nodeless — no auto-select).
-class Wire extends Resource.Tag<Wire>()(RPC_KEY, { ping: Resource.effect(Schema.Number) }) {}
+class Wire extends Hyperlink.Tag<Wire>()(RPC_KEY, { ping: Hyperlink.effect(Schema.Number) }) {}
 
 const noop = { ping: Effect.succeed(0) };
 
@@ -64,12 +64,12 @@ const program = Effect.gen(function* () {
   // Both servers bind the SAME Fleet-bound `Bound` (⇒ P3 set-membership must hold for their transport)
   // plus the nodeless `Wire` the clients dial.
   yield* Layer.build(
-    Node.httpServer([Resource.serve(Bound, noop), Resource.serve(Wire, httpWire)]).pipe(
+    Node.httpServer([Hyperlink.serve(Bound, noop), Hyperlink.serve(Wire, httpWire)]).pipe(
       Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: HTTP_PORT })),
     ),
   );
   yield* Layer.build(
-    Node.wsServer([Resource.serve(Bound, noop), Resource.serve(Wire, wsWire)]).pipe(
+    Node.wsServer([Hyperlink.serve(Bound, noop), Hyperlink.serve(Wire, wsWire)]).pipe(
       Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: WS_PORT })),
     ),
   );
@@ -83,13 +83,13 @@ const program = Effect.gen(function* () {
       const wire = yield* Wire;
       return yield* wire.ping;
     }).pipe(
-      Effect.provide(Resource.client(Wire).pipe(Layer.provide(Resource.layerProtocol(transport)))),
+      Effect.provide(Hyperlink.client(Wire).pipe(Layer.provide(Hyperlink.layerProtocol(transport)))),
       Effect.scoped,
       Effect.tap((n) => Effect.logInfo(`  ${label} → ping returned ${n}`)),
     );
 
-  const overHttp = yield* callOver("over http", Resource.protocolHttp(`http://127.0.0.1:${HTTP_PORT}/rpc`));
-  const overWs = yield* callOver("over ws  ", Resource.protocolWebsocket(`ws://127.0.0.1:${WS_PORT}/rpc`));
+  const overHttp = yield* callOver("over http", Hyperlink.protocolHttp(`http://127.0.0.1:${HTTP_PORT}/rpc`));
+  const overWs = yield* callOver("over ws  ", Hyperlink.protocolWebsocket(`ws://127.0.0.1:${WS_PORT}/rpc`));
 
   const httpN = yield* Ref.get(httpHits);
   const wsN = yield* Ref.get(wsHits);

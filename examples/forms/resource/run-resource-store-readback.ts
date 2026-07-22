@@ -1,8 +1,8 @@
 /**
  * @module examples/forms/resource/run-resource-store-readback
  *
- * RunResource engine auto-writes run facts + state history; read them back via
- * {@link Store.Service} registration (`RunResource.store`) on an app store layer.
+ * RunHyperlink engine auto-writes run facts + state history; read them back via
+ * {@link Store.Service} registration (`RunHyperlink.store`) on an app store layer.
  *
  * `DemoStore.layerMemory` provides `StoreScopeBridgeTag` (same role as
  * {@link Store.layerDefaultMemory} when you have no custom aggregate store).
@@ -11,11 +11,11 @@
  */
 
 import { Effect, Layer, Schema } from "effect";
-import * as RunResource from "../../../src/RunResource";
+import * as RunHyperlink from "../../../src/RunHyperlink";
 import * as Store from "../../../src/Store";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-class PriceGate extends RunResource.Service<PriceGate>()("examples/PriceGate", {
+class PriceGate extends RunHyperlink.Service<PriceGate>()("examples/PriceGate", {
   payload: Schema.Number,
   success: Schema.Number,
   error: Schema.String,
@@ -24,7 +24,7 @@ class PriceGate extends RunResource.Service<PriceGate>()("examples/PriceGate", {
   concurrency: 2,
 }) {}
 
-const priceGateStore = RunResource.store(PriceGate);
+const priceGateStore = RunHyperlink.store(PriceGate);
 
 class DemoStore extends Store.Service<DemoStore>("@examples/RunStore")(priceGateStore) {}
 
@@ -32,7 +32,7 @@ const live = PriceGate.layer.pipe(Layer.provideMerge(DemoStore.layerMemory));
 
 const program = Effect.gen(function* () {
   yield* Effect.log("");
-  yield* Effect.log("=== RunResource.store readback after gate.run ===");
+  yield* Effect.log("=== RunHyperlink.store readback after gate.run ===");
 
   const gate = yield* PriceGate;
   yield* gate.run(3);

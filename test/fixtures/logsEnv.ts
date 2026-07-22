@@ -1,5 +1,5 @@
 /**
- * Shared logs stack for tests — capture + node durable journal via {@link Resource.store}.
+ * Shared logs stack for tests — capture + node durable journal via {@link Hyperlink.store}.
  *
  * @internal test fixture only
  */

@@ -2,7 +2,7 @@ import { Clock, Context, Duration, Effect, Layer, Option, Schema } from "effect"
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -11,11 +11,11 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-d7-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-d7-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Resource.Tag<Jobs>()("d7/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("d7/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 const jobsImpl = { jobs: Effect.succeed(7) };
@@ -84,7 +84,7 @@ describe("Lookup.Identity.resolve", () => {
   );
 });
 
-describe("Resource.lookupClient", () => {
+describe("Hyperlink.lookupClient", () => {
   it.effect("dials via directory nodesServing after listen advertises", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lc-lookup");
@@ -102,7 +102,7 @@ describe("Resource.lookupClient", () => {
       const lookup = Context.merge(lookupServer, lookupCtx);
 
       const worker = yield* Layer.build(
-        Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
       );
 
       const dir = Context.get(lookup, Lookup.Directory);
@@ -114,7 +114,7 @@ describe("Resource.lookupClient", () => {
       expect(rows.length).toBeGreaterThan(0);
 
       const client = yield* Layer.build(
-        Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
+        Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
       );
 
       const n = yield* Effect.gen(function* () {
@@ -140,10 +140,10 @@ describe("address-less listen", () => {
         const lookupClient = Lookup.client(lookupNode);
         const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
         const server = yield* Layer.build(
-          Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
+          Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
         );
         const client = yield* Layer.build(
-          Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
+          Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
         );
 
         const n = yield* Effect.gen(function* () {
@@ -168,12 +168,12 @@ describe("address-less listen", () => {
 
         const lookup = Lookup.layerOptions({ path: lookupPath });
         const first = yield* Layer.build(
-          Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookup)),
+          Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookup)),
         );
 
         const exit = yield* Effect.exit(
           Layer.build(
-            Node.unix(Worker, [Resource.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookup)),
+            Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookup)),
           ).pipe(Effect.scoped),
         );
         expectTaggedFailure(exit, "AddressLessClaimLost");

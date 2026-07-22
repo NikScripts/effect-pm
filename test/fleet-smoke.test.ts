@@ -2,9 +2,9 @@ import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src";
+import { QueueHyperlink } from "../src";
 import * as NodeStatus from "../src/NodeStatus";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // Headless smoke of the dashboard's live data path — over WebSocket, the transport a browser dashboard
@@ -21,12 +21,12 @@ const Job = Schema.Struct({ id: Schema.String });
 interface Job {
   readonly id: string;
 }
-class Mail extends QueueResource.Tag<Mail>()("smoke/Mail", { payload: Job }) {}
-class Jobs extends QueueResource.Tag<Jobs>()("smoke/Jobs", { payload: Job }) {}
+class Mail extends QueueHyperlink.Tag<Mail>()("smoke/Mail", { payload: Job }) {}
+class Jobs extends QueueHyperlink.Tag<Jobs>()("smoke/Jobs", { payload: Job }) {}
 
 const server = Node.wsServer([
-  QueueResource.serveMemory(Mail, { effect: () => Effect.void }),
-  QueueResource.serveMemory(Jobs, { effect: () => Effect.void }),
+  QueueHyperlink.serveMemory(Mail, { effect: () => Effect.void }),
+  QueueHyperlink.serveMemory(Jobs, { effect: () => Effect.void }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports ready", () =>
@@ -34,7 +34,7 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = address._tag === "TcpAddress" ? address.port : 0;
-      const wire = Resource.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`);
+      const wire = Hyperlink.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`);
 
       yield* Effect.gen(function* () {
         const mail = yield* Mail;
@@ -63,8 +63,8 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            Resource.client(Mail).pipe(Layer.provide(wire)),
-            Resource.client(NodeStatus.Tag).pipe(Layer.provide(wire)),
+            Hyperlink.client(Mail).pipe(Layer.provide(wire)),
+            Hyperlink.client(NodeStatus.Tag).pipe(Layer.provide(wire)),
           ),
         ),
         Effect.scoped,

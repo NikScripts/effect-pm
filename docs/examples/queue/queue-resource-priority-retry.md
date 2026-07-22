@@ -1,17 +1,17 @@
-{#queue-resource-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
+{#queue-hyperlink-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
 # Queue — Priority, Dedup, Retry
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/forms/queue/queue-resource-priority-retry.ts`](https://github.com/NikScripts/effect-pm/blob/integration/examples/forms/queue/queue-resource-priority-retry.ts)  
-**Run:** `pnpm run example:queue-resource`  
+**Source:** [`examples/forms/queue/queue-hyperlink-priority-retry.ts`](https://github.com/NikScripts/effect-pm/blob/integration/examples/forms/queue/queue-resource-priority-retry.ts)  
+**Run:** `pnpm run example:queue-hyperlink`  
 **Hub:** [Examples → Queue](/docs/examples#queue)  
 **Deep guide:** [Queues](/docs/queues)
 
 ## What this form shows
 
-One `QueueResource` handle exercising four operators together:
+One `QueueHyperlink` handle exercising four operators together:
 
 1. **Lanes** — `add` (normal), `prioritize` (high), `defer` (low); each accepts a batch array
    (one RPC round-trip when remote).
@@ -21,7 +21,7 @@ One `QueueResource` handle exercising four operators together:
 3. **Retry budget** — `attempts: 2` means one automatic re-enqueue after failure, then
    `RetryExhausted`. No `onFailure` here → the default disposition (retry until budget, then
    dead-letter). Per-error routing belongs in `onFailure` on the [Queues](/docs/queues) guide.
-4. **Lifecycle** — one `events` subscriber with `Resource.runForEachTag` (pick the tags you
+4. **Lifecycle** — one `events` subscriber with `Hyperlink.runForEachTag` (pick the tags you
    care about; ignore the rest). Prefer this over old onExit-style hooks.
 
 Surface is the tip **`Tag` + `layer`** split (contract vs runtime). Bootstrap: start
@@ -51,7 +51,7 @@ sends only.” On the tip `Tag` handle there is no top-level `queue.completed`; 
 {.twoslash}
 ``` ts
 import { Cause, Duration, Effect, Schema } from "effect"
-import { QueueResource, Resource } from "@nikscripts/effect-pm"
+import { QueueHyperlink, Hyperlink } from "hyperlink-ts"
 
 // ── Contract: payload + typed worker failure ──────────────────────────────────
 
@@ -72,7 +72,7 @@ class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
   reason: Schema.String,
 }) {}
 
-class EmailQueue extends QueueResource.Tag<EmailQueue>()("examples/EmailQueue", {
+class EmailQueue extends QueueHyperlink.Tag<EmailQueue>()("examples/EmailQueue", {
   payload: EmailJob,
   error: SendError,
 }) {}
@@ -90,7 +90,7 @@ const waitUntilCompleted = (expected: number) =>
 
 // ── Layer: worker + policy (Tag stays free of runtime config) ─────────────────
 
-const EmailQueueLive = QueueResource.layer(EmailQueue, {
+const EmailQueueLive = QueueHyperlink.layer(EmailQueue, {
   paused: true, // enqueue / subscribe first; drain only after `resume`
   concurrency: 1, // sequential — log order stays readable for the demo
   capacity: 100,
@@ -122,7 +122,7 @@ const program = Effect.gen(function* () {
   // Fork one subscriber before resume so early Enqueued / Started events aren't missed.
   yield* Effect.forkScoped(
     queue.events.pipe(
-      Resource.runForEachTag({
+      Hyperlink.runForEachTag({
         Enqueued: (e) =>
           Effect.logInfo(`enqueued ${String(e.entries.length)} ${e.priority} job(s)`),
         Completed: (e) =>
@@ -165,7 +165,7 @@ void Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueueLive),
     Effect.scoped,
-    Effect.tap(() => Effect.logInfo("form:queue-resource-priority-retry finished OK")),
+    Effect.tap(() => Effect.logInfo("form:queue-hyperlink-priority-retry finished OK")),
   ),
 )
 ```

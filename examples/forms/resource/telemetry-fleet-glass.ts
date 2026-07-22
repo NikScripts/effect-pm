@@ -10,7 +10,7 @@
  */
 
 import { Effect, Layer, Metric, Stream } from "effect";
-import * as Resource from "../../../src/Resource";
+import * as Hyperlink from "../../../src/Hyperlink";
 import * as Telemetry from "../../../src/Telemetry";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
@@ -24,7 +24,7 @@ class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 const fleetNodes = [DropletEast, DropletWest, DropletCentral] as const;
 
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Resource.nodes([...fleetNodes]),
+  Hyperlink.nodes([...fleetNodes]),
 ) {}
 
 /** Stamp this node's registry with a demo in-flight gauge. */
@@ -61,12 +61,12 @@ const peerLeaf = (inFlight: number) => ({
 
 const eastLayer = Telemetry.layer(FleetMetrics).pipe(
   Layer.provide(
-    Resource.peersFrom(FleetMetrics, {
+    Hyperlink.peersFrom(FleetMetrics, {
       [DropletWest.key]: peerLeaf(3),
       [DropletCentral.key]: peerLeaf(4),
     }),
   ),
-  Layer.provide(Resource.selfNodeLayer(FleetMetrics, DropletEast)),
+  Layer.provide(Hyperlink.selfNodeLayer(FleetMetrics, DropletEast)),
 );
 
 const program = Effect.gen(function* () {

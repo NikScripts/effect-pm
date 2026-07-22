@@ -2,7 +2,7 @@ import { Effect, Exit, Layer } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { combineByNode, combineByNodeExit, combineQuery } from "../src/MultiNode";
 import * as FleetHealth from "../src/FleetHealth";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
@@ -48,14 +48,14 @@ describe("FleetHealth.rollup", () => {
 
 describe("FleetHealth", () => {
   class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-    Resource.nodes([DropletEast, DropletWest]),
+    Hyperlink.nodes([DropletEast, DropletWest]),
   ) {}
 
   const peerLocal = (status: "ok" | "degraded", ready: boolean) => ({
     local: Effect.succeed(
       FleetHealth.LocalHealth.make({
         status,
-        resources: [{ key: "app/Jobs", kind: "@nikscripts/effect-pm/QueueResource", ready }],
+        resources: [{ key: "app/Jobs", kind: "hyperlink-ts/QueueHyperlink", ready }],
       }),
     ),
   });
@@ -75,7 +75,7 @@ describe("FleetHealth", () => {
 
   it.effect("alone mesh: leaf ok + trivial fleet fold", () => {
     const readiness = Effect.succeed([
-      { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
     ]);
     const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
       Layer.provide(FleetHealth.alone(MeshHealth)),
@@ -87,15 +87,15 @@ describe("FleetHealth", () => {
       expect(local.resources).toHaveLength(1);
       expect(yield* glass.status).toBe("ok");
       const byNode = yield* glass.byNode;
-      expect(Object.keys(byNode)).toEqual(["@nikscripts/effect-pm/FleetHealth/alone"]);
-      expect(byNode["@nikscripts/effect-pm/FleetHealth/alone"]?._tag).toBe("Reachable");
+      expect(Object.keys(byNode)).toEqual(["hyperlink-ts/FleetHealth/alone"]);
+      expect(byNode["hyperlink-ts/FleetHealth/alone"]?._tag).toBe("Reachable");
     }).pipe(Effect.provide(live));
   });
 
   it.effect("leaf degraded when any readiness row is not ready", () => {
     const readiness = Effect.succeed([
-      { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
-      { key: "app/Jobs", kind: "@nikscripts/effect-pm/QueueResource", ready: false },
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
+      { key: "app/Jobs", kind: "hyperlink-ts/QueueHyperlink", ready: false },
     ]);
     const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
       Layer.provide(FleetHealth.alone(MeshHealth)),
@@ -112,15 +112,15 @@ describe("FleetHealth", () => {
 
   it.effect("peers fold Reachable rows + rollup degraded", () => {
     const readiness = Effect.succeed([
-      { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
     ]);
     const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
       Layer.provide(
-        Resource.peersFrom(MeshHealth, {
+        Hyperlink.peersFrom(MeshHealth, {
           [DropletWest.key]: peerLocal("degraded", false),
         }),
       ),
-      Layer.provide(Resource.selfNodeLayer(MeshHealth, DropletEast)),
+      Layer.provide(Hyperlink.selfNodeLayer(MeshHealth, DropletEast)),
     );
     return Effect.gen(function* () {
       const glass = yield* MeshHealth;
@@ -137,16 +137,16 @@ describe("FleetHealth", () => {
 
   it.effect("peer defect ⇒ Unreachable and status partial", () => {
     const readiness = Effect.succeed([
-      { key: "app/Cache", kind: "@nikscripts/effect-pm/Resource", ready: true },
+      { key: "app/Cache", kind: "hyperlink-ts/Hyperlink", ready: true },
     ]);
     // Defect (die) keeps `local`'s error channel `never` while Exit is still Failure — Effect-true.
     const live = FleetHealth.layer(MeshHealth, { readiness }).pipe(
       Layer.provide(
-        Resource.peersFrom(MeshHealth, {
+        Hyperlink.peersFrom(MeshHealth, {
           [DropletWest.key]: { local: Effect.die("timeout") },
         }),
       ),
-      Layer.provide(Resource.selfNodeLayer(MeshHealth, DropletEast)),
+      Layer.provide(Hyperlink.selfNodeLayer(MeshHealth, DropletEast)),
     );
     return Effect.gen(function* () {
       const glass = yield* MeshHealth;
@@ -163,15 +163,15 @@ describe("FleetHealth", () => {
 
   it.effect("kind is stamped on the tag", () =>
     Effect.sync(() => {
-      expect(Resource.kindOf(MeshHealth)).toBe(FleetHealth.kind);
-      expect(FleetHealth.kind).toBe("@nikscripts/effect-pm/FleetHealth");
+      expect(Hyperlink.kindOf(MeshHealth)).toBe(FleetHealth.kind);
+      expect(FleetHealth.kind).toBe("hyperlink-ts/FleetHealth");
     }),
   );
 
   it("Tag()() is unbound; Tag()({ node }) stamps the droplet", () => {
     // MeshHealth is `Tag()()` (default key already claimed) — still unbound after distributed.
-    expect(Resource.nodeOf(MeshHealth)).toBeUndefined();
+    expect(Hyperlink.nodeOf(MeshHealth)).toBeUndefined();
     class BoundGlass extends FleetHealth.Tag<BoundGlass>()({ node: DropletEast }) {}
-    expect(Resource.nodeOf(BoundGlass)).toBe(DropletEast);
+    expect(Hyperlink.nodeOf(BoundGlass)).toBe(DropletEast);
   });
 });

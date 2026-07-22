@@ -2,7 +2,7 @@
 # Client verify — fail fast when the peer is wrong
 
 Addressed clients should not hang on a dead peer or silently talk past a stale contract.
-`Resource.verifyConnection` is the probe; addressed `Resource.client` / `clientHttp` /
+`Hyperlink.verifyConnection` is the probe; addressed `Hyperlink.client` / `clientHttp` /
 `socketClient` run it **by default**.
 
 Handoff SSOT: [`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
@@ -19,17 +19,17 @@ Building an addressed client Layer probes the peer before the handle is usable:
 | `false` | Skip verify |
 
 ```ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Layer } from "effect"
 
 // Opt out for a nested/bootstrap client (Lookup.client / identity ping do this internally):
-Resource.client(Emails, WorkerNode).pipe(
-  Layer.provide(Resource.clientVerify(false)),
+Hyperlink.client(Emails, WorkerNode).pipe(
+  Layer.provide(Hyperlink.clientVerify(false)),
 )
 
 // Soft: probe but don't fail the Layer
-Resource.clientHttp(Emails, 3001).pipe(
-  Layer.provide(Resource.clientVerify("status")),
+Hyperlink.clientHttp(Emails, 3001).pipe(
+  Layer.provide(Hyperlink.clientVerify("status")),
 )
 ```
 
@@ -39,17 +39,17 @@ F4 `contractHash`). Nodeless / bootstrap paths that would deadlock keep verify o
 ## Explicit probe
 
 ```ts
-import * as Resource from "@nikscripts/effect-pm/Resource"
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
-yield* Resource.verifyConnection(WorkerNode) // tier 1 — transport reachability
-yield* Resource.verifyConnection(WorkerNode, { timeout: "1 second" })
-yield* Resource.verifyConnection(WorkerNode, { deep: true }) // + NodeStatus RPC
-yield* Resource.verifyConnection(WorkerNode, {
+yield* Hyperlink.verifyConnection(WorkerNode) // tier 1 — transport reachability
+yield* Hyperlink.verifyConnection(WorkerNode, { timeout: "1 second" })
+yield* Hyperlink.verifyConnection(WorkerNode, { deep: true }) // + NodeStatus RPC
+yield* Hyperlink.verifyConnection(WorkerNode, {
   deep: true,
   resource: Emails.groupId,
-  contractHash: Resource.contractHash(Emails),
+  contractHash: Hyperlink.contractHash(Emails),
 })
-yield* Resource.verifyConnection(WorkerNode, { all: true }) // every declared endpoint
+yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared endpoint
 ```
 
 ## Failure ladder

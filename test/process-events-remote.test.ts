@@ -1,5 +1,5 @@
 /**
- * Process.events over real HTTP RPC — Resource.client ∩ Process.serve.
+ * Process.events over real HTTP RPC — Hyperlink.client ∩ Process.serve.
  * Complements local `process-events.test.ts` and control-plane `process-remote-http.test.ts`.
  */
 import { describe, expect, it } from "@effect/vitest";
@@ -8,7 +8,7 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
@@ -49,14 +49,14 @@ const withProcessHttp = (
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
-      Effect.provide(Resource.client(tag).pipe(Layer.provide(clientHttp(port)))),
+      Effect.provide(Hyperlink.client(tag).pipe(Layer.provide(clientHttp(port)))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(server), Effect.scoped);
 };
 
 describe("Process.events — remote HTTP", () => {
-  it.live("Started → Completed over Resource.client after remote run", () =>
+  it.live("Started → Completed over Hyperlink.client after remote run", () =>
     withProcessHttp(RemoteEventsProc, { effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
         const proc = yield* RemoteEventsProc;

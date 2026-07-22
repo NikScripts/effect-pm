@@ -1,8 +1,8 @@
 /**
- * **DurableQueueStore** — the *durability plane* of a `QueueResource`: a priority-native store of
+ * **DurableQueueStore** — the *durability plane* of a `QueueHyperlink`: a priority-native store of
  * pending + in-flight work, so no enqueued item is lost across a restart (**at-least-once** +
  * dedup key). This is the abstract port; backends live behind it (SQLite today —
- * `@nikscripts/effect-pm/storage/sqlite`). Inspired by Effect's `PersistedQueue` (we lift its
+ * `hyperlink-ts/storage/sqlite`). Inspired by Effect's `PersistedQueue` (we lift its
  * lease / `attempts` / expiry-recovery blueprint) but priority-native, not FIFO — see
  * `docs/handoffs/queue-persistence-design.md`.
  *
@@ -110,7 +110,7 @@ export interface DurableSizes {
  * @public
  */
 export class DurableQueueError extends Data.TaggedError(
-  "@nikscripts/effect-pm/DurableQueueError",
+  "hyperlink-ts/DurableQueueError",
 )<{
   readonly operation: string;
   readonly cause: unknown;
@@ -175,7 +175,7 @@ export interface DurableQueueStoreShape {
 /**
  * Durable queue store — the priority-native durability plane. `yield* DurableQueueStore` for the
  * service; provide a backend (e.g. `SQLiteDurableQueueStore.layer` from
- * `@nikscripts/effect-pm/storage/sqlite`).
+ * `hyperlink-ts/storage/sqlite`).
  *
  * @category context
  * @public
@@ -183,4 +183,4 @@ export interface DurableQueueStoreShape {
 export class DurableQueueStore extends Context.Service<
   DurableQueueStore,
   DurableQueueStoreShape
->()("@nikscripts/effect-pm/DurableQueueStore") {}
+>()("hyperlink-ts/DurableQueueStore") {}

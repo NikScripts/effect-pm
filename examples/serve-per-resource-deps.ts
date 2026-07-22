@@ -1,7 +1,7 @@
 /**
  * @module examples/serve-per-resource-deps
  *
- * Dogfoods `Resource.serve` / `PmNode.httpServer`: two resources that need **different implementations
+ * Dogfoods `Hyperlink.serve` / `PmNode.httpServer`: two resources that need **different implementations
  * of the same dependency tag**, served on one `/rpc`, isolated. `Matches` gets a "plain" `ImportHandlers`;
  * `Import` gets a "hooked" one — proven by each reading back its own label, plus `/health` listing both.
  *
@@ -14,23 +14,23 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
 const PORT = 7790;
 
 // one dependency tag, two mutually-exclusive implementations
 class ImportHandlers extends Context.Service<ImportHandlers, { readonly label: string }>()(
-  "@nikscripts/effect-pm/examples/serve-per-resource-deps/ImportHandlers",
+  "hyperlink-ts/examples/serve-per-resource-deps/ImportHandlers",
 ) {}
 const plainHandlers = Layer.succeed(ImportHandlers, { label: "plain" });
 const hookedHandlers = Layer.succeed(ImportHandlers, { label: "hooked" });
 
-class Matches extends Resource.Tag<Matches>()("example/Matches", {
-  handler: Resource.effect(Schema.String),
+class Matches extends Hyperlink.Tag<Matches>()("example/Matches", {
+  handler: Hyperlink.effect(Schema.String),
 }) {}
-class Import extends Resource.Tag<Import>()("example/Import", {
-  handler: Resource.effect(Schema.String),
+class Import extends Hyperlink.Tag<Import>()("example/Import", {
+  handler: Hyperlink.effect(Schema.String),
 }) {}
 
 // same impl body for both — it just reports which ImportHandlers it was given
@@ -39,8 +39,8 @@ const impl = { handler: Effect.map(ImportHandlers, (handlers) => handlers.label)
 // httpServer([...serve layers], options) — bundles the provideMerge + registry
 const Node = PmNode.httpServer(
   [
-    Resource.serveRemote(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
-    Resource.serveRemote(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
+    Hyperlink.serveRemote(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
+    Hyperlink.serveRemote(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
   ],
   { health: { path: "/health" } },
 ).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: PORT })));
@@ -63,8 +63,8 @@ const program = Effect.gen(function* () {
   }).pipe(
     Effect.provide(
       Layer.mergeAll(
-        Resource.client(Matches).pipe(Layer.provide(clientTransport)),
-        Resource.client(Import).pipe(Layer.provide(clientTransport)),
+        Hyperlink.client(Matches).pipe(Layer.provide(clientTransport)),
+        Hyperlink.client(Import).pipe(Layer.provide(clientTransport)),
       ),
     ),
     Effect.scoped,

@@ -4,10 +4,10 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Process from "../src/Process";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 // The full remote path: a REAL toolkit Process driver served over http via
-// `httpServer([Process.serveMemory(...)])`, driven by `Resource.client` over the wire — the same
+// `httpServer([Process.serveMemory(...)])`, driven by `Hyperlink.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
 // (start/stop), observation (`status`), the out-of-band run (run), and the schedule
 // CRUD all cross real RPC. An empty inline schedule keeps the process disarmed (so `armed` is
@@ -39,7 +39,7 @@ const withServer = <A, E>(
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
       Effect.provide(
-        Resource.client(RemoteProc).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(RemoteProc).pipe(Layer.provide(clientHttp(port))),
       ),
       Effect.scoped,
     );

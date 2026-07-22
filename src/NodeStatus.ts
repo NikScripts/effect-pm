@@ -7,7 +7,7 @@
  * `logs.query` query — empty unless `Logs.layer` is provided) and a `ping`. The node author wires nothing; clients just point a transport
  * at the node. — query a specific node by pointing the ambient `RpcClient.Protocol` at
  * that node's `/rpc`. {@link NodeStatus.clientHttp} is the batteries-included http client; for any
- * other transport, provide your own `RpcClient.Protocol` to `Resource.client(NodeStatus.Tag)`.
+ * other transport, provide your own `RpcClient.Protocol` to `Hyperlink.client(NodeStatus.Tag)`.
  *
  * ```ts
  * yield* Effect.gen(function* () {
@@ -20,14 +20,14 @@
 import { Layer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import * as Resource from "./Resource";
+import * as Hyperlink from "./Hyperlink";
 import {
-  NodeStatusResource,
+  NodeStatusHyperlink,
   nodeStatus,
-  nodeResourceReadiness,
+  nodeHyperlinkReadiness,
   type NodeStatus as NodeStatusType,
-  type NodeResourceReadiness as NodeResourceReadinessType,
-} from "./internal/nodeStatusResource";
+  type NodeHyperlinkReadiness as NodeHyperlinkReadinessType,
+} from "./internal/nodeStatusHyperlink";
 
 /** Live node status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
  *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.
@@ -46,7 +46,7 @@ export type Status = NodeStatusType;
 /** One served resource's readiness as reported by its node — the element of `status.resources`.
  * @category wire schemas
  *  @public */
-export const resourceReadiness = nodeResourceReadiness;
+export const resourceReadiness = nodeHyperlinkReadiness;
 
 /**
  * A served resource's readiness as reported by its node.
@@ -54,7 +54,7 @@ export const resourceReadiness = nodeResourceReadiness;
  * @category models
  * @public
  */
-export type ResourceReadiness = NodeResourceReadinessType;
+export type ResourceReadiness = NodeHyperlinkReadinessType;
 
 /**
  * The reserved node status resource tag — nodeless. Drive it with {@link NodeStatus.clientHttp}
@@ -63,7 +63,7 @@ export type ResourceReadiness = NodeResourceReadinessType;
  * @category constructors
  * @public
  */
-export const Tag = NodeStatusResource;
+export const Tag = NodeStatusHyperlink;
 
 /**
  * A client layer for the node status resource pointed at a node's `/rpc` `url` (ndjson over http,
@@ -73,8 +73,8 @@ export const Tag = NodeStatusResource;
  * @category clients
  * @public
  */
-export const clientHttp = (url: string): Layer.Layer<NodeStatusResource> =>
-  Resource.client(NodeStatusResource).pipe(
+export const clientHttp = (url: string): Layer.Layer<NodeStatusHyperlink> =>
+  Hyperlink.client(NodeStatusHyperlink).pipe(
     Layer.provide(
       RpcClient.layerProtocolHttp({ url }).pipe(
         Layer.provide(RpcSerialization.layerNdjson),

@@ -6,19 +6,19 @@
 
 import { Effect, Schema, Stream, SubscriptionRef } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as Resource from "@pm/Resource";
+import * as Hyperlink from "@pm/Hyperlink";
 
 // 1. the contract — `value` is a reactive ref (Subscribable: get + changes)
-class Counter extends Resource.Tag<Counter>()("docs/Counter", {
-  value: Resource.ref(Schema.Number),
-  increment: Resource.effectFn({ by: Schema.Number }),
-  reset: Resource.effect(Schema.Void),
+class Counter extends Hyperlink.Tag<Counter>()("docs/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
 }) {}
 
 // 2. the local implementation — a SubscriptionRef surfaced as the ref via `subscribable`
 const ref = Effect.runSync(SubscriptionRef.make(0));
-const counterLayer = Resource.layer(Counter, {
-  value: Resource.subscribable(ref),
+const counterLayer = Hyperlink.layer(Counter, {
+  value: Hyperlink.subscribable(ref),
   increment: ({ by }) => SubscriptionRef.update(ref, (n) => n + by),
   reset: SubscriptionRef.set(ref, 0),
 });

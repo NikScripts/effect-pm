@@ -3,7 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
-import * as Resource from "../src/Resource";
+import * as Hyperlink from "../src/Hyperlink";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // M5 — placement advice board on Lookup; lookupClient honors prefer before D4 pick.
@@ -11,11 +11,11 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    return `/tmp/effect-pm-lookup-adv-${label}-${process.pid}-${now}.sock`;
+    return `/tmp/hyperlink-ts-lookup-adv-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Resource.Tag<Jobs>()("lookup-adv/Jobs", {
-  jobs: Resource.effect(Schema.Number),
+class Jobs extends Hyperlink.Tag<Jobs>()("lookup-adv/Jobs", {
+  jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 describe("Lookup Advice", () => {
@@ -67,12 +67,12 @@ describe("Lookup Advice", () => {
 
       const a = yield* Layer.build(
         Node.unix([
-          Resource.serve(Jobs, { jobs: Effect.succeed(3) }),
+          Hyperlink.serve(Jobs, { jobs: Effect.succeed(3) }),
         ]).pipe(Layer.provide(lookupClient)),
       );
       const b = yield* Layer.build(
         Node.unix([
-          Resource.serve(Jobs, { jobs: Effect.succeed(5) }),
+          Hyperlink.serve(Jobs, { jobs: Effect.succeed(5) }),
         ]).pipe(Layer.provide(lookupClient)),
       );
 
@@ -93,7 +93,7 @@ describe("Lookup Advice", () => {
       // Bare client still fail-closed without advice.
       const bareExit = yield* Effect.exit(
         Layer.build(
-          Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
+          Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
         ).pipe(Effect.scoped),
       );
       expectTaggedFailure(bareExit, "LookupClientError");
@@ -104,7 +104,7 @@ describe("Lookup Advice", () => {
       }).pipe(Effect.provide(lookup));
 
       const soft = yield* Layer.build(
-        Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
+        Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
@@ -132,12 +132,12 @@ describe("Lookup Advice", () => {
 
       const a = yield* Layer.build(
         Node.unix([
-          Resource.serve(Jobs, { jobs: Effect.succeed(3) }),
+          Hyperlink.serve(Jobs, { jobs: Effect.succeed(3) }),
         ]).pipe(Layer.provide(lookupClient)),
       );
       const b = yield* Layer.build(
         Node.unix([
-          Resource.serve(Jobs, { jobs: Effect.succeed(5) }),
+          Hyperlink.serve(Jobs, { jobs: Effect.succeed(5) }),
         ]).pipe(Layer.provide(lookupClient)),
       );
 
@@ -148,13 +148,13 @@ describe("Lookup Advice", () => {
 
       const staleExit = yield* Effect.exit(
         Layer.build(
-          Resource.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
+          Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClient)),
         ).pipe(Effect.scoped),
       );
       expectTaggedFailure(staleExit, "LookupClientError");
 
       const soft = yield* Layer.build(
-        Resource.lookupClient(Jobs, { pick: "first" }).pipe(
+        Hyperlink.lookupClient(Jobs, { pick: "first" }).pipe(
           Layer.provide(lookupClient),
         ),
       );
