@@ -9,6 +9,7 @@ import { TwoslashHover } from "../islands/TwoslashHover.js";
 import { GlossaryHover } from "../islands/GlossaryHover.js";
 import { CodeCopy } from "../islands/CodeCopy.js";
 import { ShortcutsHelp } from "../islands/ShortcutsHelp.js";
+import { HoverGenProgress } from "../islands/HoverGenProgress.js";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as nodePath from "node:path";
@@ -92,6 +93,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <GlossaryHover data={glossaryEntries()} />
       <CodeCopy />
       <ShortcutsHelp />
+      <HoverGenProgress />
     </>
   );
 }

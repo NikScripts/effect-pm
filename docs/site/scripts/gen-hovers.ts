@@ -9,7 +9,9 @@
 //
 //   tsx scripts/gen-hovers.ts [pkgSlug ...]     (no args = every effect-smol package)
 
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import * as os from "node:os";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { Console, Data, Effect, Exit, Schema } from "effect";
@@ -85,8 +87,146 @@ const visibleText = (n: Hast): string => {
 const MAX_HOVER_LINES = 1100;
 const MAX_HOVER_BYTES = 4_500_000;
 
+// Shard protocol: the orchestrator (no --shard flag) spawns N children of this script, each with
+// `--shard=i/n`. A shard processes every n-th file, writes its cache fragment
+// (cache.shard-i.json) and a progress row (progress.shard-i.json) the orchestrator aggregates
+// into public/hover-progress.json — which the dev navbar polls to show a restamp pill.
+const shardArg = process.argv.find((a) => a.startsWith("--shard="));
+const shard = (() => {
+  const m = shardArg === undefined ? null : /^--shard=(\d+)\/(\d+)$/.exec(shardArg);
+  return m === null ? undefined : { i: Number(m[1]), n: Number(m[2]) };
+})();
+// Two lanes by SOURCE SIZE: a few monster files (Schema.ts, the generated httpapi internals)
+// need the ~7GB heap the old single process had; everything else fits a small heap. One heavy
+// worker + N light workers keeps peak RAM inside the machine. The split is derived from file
+// sizes identically in every process — no coordination channel needed.
+const lane = process.argv.find((a) => a.startsWith("--lane="))?.slice("--lane=".length);
+const heavyBytes = Number(process.env.HOVER_HEAVY_BYTES ?? 200_000);
+const shardLabel = shard === undefined ? "all-0" : `${lane ?? "all"}-${shard.i}`;
+const pkgArgs = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const progressPath = nodePath.join(repoRoot, "docs/site/public/hover-progress.json");
+
+interface ShardProgress {
+  readonly done: number;
+  readonly total: number;
+  readonly written: number;
+  readonly skipped: number;
+  readonly missed: number;
+  readonly files: number;
+  readonly exited: boolean;
+}
+
+const orchestrate = Effect.gen(function* () {
+  // Worker plan is RAM-bounded, not core-bounded: uniform shards can't work because the
+  // monster files need a ~7GB heap while N × 7GB doesn't fit a 24GB machine (8 × the inherited
+  // 8GB NODE_OPTIONS drowned it in swap; 5 × 3.5GB OOM-killed the shard that drew Schema.ts).
+  // So: ONE heavy-lane worker with the big heap for files over HOVER_HEAVY_BYTES, N light-lane
+  // workers with small heaps for the rest.
+  const lightShards = Math.max(1, Math.min(4, os.cpus().length - 2, Number(process.env.HOVER_SHARDS ?? 4)));
+  const lightHeapMb = Number(process.env.HOVER_SHARD_HEAP ?? 2560);
+  const heavyHeapMb = Number(process.env.HOVER_HEAVY_HEAP ?? 8192);
+  const plan: ReadonlyArray<{ label: string; args: ReadonlyArray<string>; heap: number }> = [
+    { label: "heavy-0", args: ["--lane=heavy", "--shard=0/1"], heap: heavyHeapMb },
+    ...Array.from({ length: lightShards }, (_, i) => ({
+      label: `light-${i}`,
+      args: ["--lane=light", `--shard=${i}/${lightShards}`],
+      heap: lightHeapMb,
+    })),
+  ];
+  const startedAt = Date.now();
+  const children = plan.map((p) =>
+    spawn(process.execPath, [...process.execArgv, process.argv[1], ...pkgArgs, ...p.args], {
+      stdio: ["ignore", "inherit", "inherit"],
+      env: { ...process.env, NODE_OPTIONS: `--max-old-space-size=${p.heap}` },
+    })
+  );
+  const readShard = (label: string): Effect.Effect<ShardProgress | undefined, never, FileSystem.FileSystem> =>
+    readJson(
+      nodePath.join(hoversDir, `progress.shard-${label}.json`),
+      Schema.Struct({
+        done: Schema.Number,
+        total: Schema.Number,
+        written: Schema.Number,
+        skipped: Schema.Number,
+        missed: Schema.Number,
+        files: Schema.Number,
+        exited: Schema.Boolean,
+      })
+    );
+  const aggregate = (status: "running" | "done") =>
+    Effect.gen(function* () {
+      const rows: Array<ShardProgress> = [];
+      for (const p of plan) {
+        const row = yield* readShard(p.label);
+        if (row !== undefined) rows.push(row);
+      }
+      const sum = (f: (r: ShardProgress) => number): number => rows.reduce((a, r) => a + f(r), 0);
+      yield* writeText(
+        progressPath,
+        `${JSON.stringify({
+          status,
+          done: sum((r) => r.done),
+          total: sum((r) => r.total),
+          written: sum((r) => r.written),
+          skipped: sum((r) => r.skipped),
+          missed: sum((r) => r.missed),
+          startedAt,
+          updatedAt: Date.now(),
+        })}\n`
+      );
+      return rows;
+    });
+  const allExited = Promise.all(
+    children.map(
+      (c) =>
+        new Promise<number>((resolve) => {
+          c.on("exit", (code) => resolve(code ?? 1));
+        })
+    )
+  );
+  let finished = false;
+  void allExited.then(() => {
+    finished = true;
+  });
+  while (!finished) {
+    yield* aggregate("running");
+    yield* Effect.promise(
+      () => new Promise<void>((resolve) => setTimeout(resolve, 2000))
+    ).pipe(Effect.race(Effect.promise(() => allExited.then(() => undefined))));
+  }
+  const codes = yield* Effect.promise(() => allExited);
+  // Final aggregate BEFORE cleanup — the fragments are the only record of the totals.
+  const rows = yield* aggregate("done");
+  // Merge shard cache fragments — together they cover every enumerated file, replacing cache.json
+  // wholesale exactly like the single-process run did.
+  const fs = yield* FileSystem.FileSystem;
+  const merged: Record<string, string> = {};
+  for (const p of plan) {
+    const fragment =
+      (yield* readJson(
+        nodePath.join(hoversDir, `cache.shard-${p.label}.json`),
+        Schema.Record(Schema.String, Schema.String)
+      )) ?? {};
+    Object.assign(merged, fragment);
+    yield* fs
+      .remove(nodePath.join(hoversDir, `cache.shard-${p.label}.json`))
+      .pipe(Effect.orElseSucceed(() => undefined));
+    yield* fs
+      .remove(nodePath.join(hoversDir, `progress.shard-${p.label}.json`))
+      .pipe(Effect.orElseSucceed(() => undefined));
+  }
+  yield* writeText(cachePath, `${JSON.stringify(merged)}\n`);
+  const sum = (f: (r: ShardProgress) => number): number => rows.reduce((a, r) => a + f(r), 0);
+  yield* Console.log(
+    `hovers: ${plan.length} shards (1 heavy + ${lightShards} light), ${sum((r) => r.files)} files, ${sum((r) => r.written)} written, ${sum(
+      (r) => r.skipped
+    )} cached, ${sum((r) => r.missed)} unmatched${codes.some((c) => c !== 0) ? " (SHARD FAILURES)" : ""}`
+  );
+  if (codes.some((c) => c !== 0)) return yield* Effect.fail(new Error("shard failed"));
+});
+
 const program = Effect.gen(function* () {
-  const wanted = process.argv.slice(2);
+  const wanted = pkgArgs;
   // Only the effect-smol packages: their source lives under repos/ and needs the precompute.
   const pkgs = (yield* packages())
     .filter((p) => p.slug !== "hyperlink-ts")
@@ -163,7 +303,33 @@ const program = Effect.gen(function* () {
   let written = 0;
   let missed = 0;
   let skipped = 0;
+  // This shard's slice: lane first (by source size — every process derives the same split),
+  // then every n-th file within the lane. Solo runs (no --shard) take everything.
+  const fsService = yield* FileSystem.FileSystem;
+  const sized: Array<readonly [string, Array<Sym>, number]> = [];
   for (const [relFile, syms] of byFile) {
+    const info = yield* fsService
+      .stat(nodePath.join(repoRoot, relFile))
+      .pipe(Effect.orElseSucceed(() => undefined));
+    sized.push([relFile, syms, info === undefined ? 0 : Number(info.size)]);
+  }
+  const inLane = sized.filter(([, , size]) =>
+    lane === undefined ? true : lane === "heavy" ? size > heavyBytes : size <= heavyBytes
+  );
+  const mine: Array<readonly [string, Array<Sym>]> = inLane
+    .filter((_, idx) => shard === undefined || idx % shard.n === shard.i)
+    .map(([relFile, syms]) => [relFile, syms] as const);
+  const shardProgressPath =
+    shard === undefined ? undefined : nodePath.join(hoversDir, `progress.shard-${shardLabel}.json`);
+  let done = 0;
+  const reportProgress = (exited: boolean): Effect.Effect<void, FileError, FileSystem.FileSystem> =>
+    shardProgressPath === undefined
+      ? Effect.void
+      : writeText(
+          shardProgressPath,
+          `${JSON.stringify({ done, total: mine.length, written, skipped, missed, files, exited })}\n`
+        );
+  for (const [relFile, syms] of mine) {
     files += 1;
     const fileText = yield* readFile(nodePath.join(repoRoot, relFile));
     if (fileText === undefined) continue;
@@ -241,14 +407,29 @@ const program = Effect.gen(function* () {
       );
       written += 1;
     }
+    done += 1;
+    yield* reportProgress(false);
   }
-  yield* writeText(cachePath, `${JSON.stringify(nextCache)}\n`);
-  yield* Console.log(
-    `hovers: ${pkgs.length} pkgs, ${files} files, ${written} written, ${skipped} cached, ${missed} unmatched`
-  );
+  if (shard === undefined) {
+    yield* writeText(cachePath, `${JSON.stringify(nextCache)}\n`);
+    yield* Console.log(
+      `hovers: ${pkgs.length} pkgs, ${files} files, ${written} written, ${skipped} cached, ${missed} unmatched`
+    );
+  } else {
+    yield* writeText(
+      nodePath.join(hoversDir, `cache.shard-${shardLabel}.json`),
+      `${JSON.stringify(nextCache)}\n`
+    );
+    yield* reportProgress(true);
+  }
 });
 
-const main = program.pipe(
+// Orchestrate when we're the top process (no --shard) and parallelism is available; the spawned
+// children re-enter this script as shard workers. `tsx` re-runs via process.execArgv, so children
+// inherit the loader and NODE_OPTIONS.
+const entry: Effect.Effect<void | undefined, FileError | Error, FileSystem.FileSystem> =
+  shard === undefined && process.env.HOVER_SHARDS !== "1" ? orchestrate : program;
+const main = entry.pipe(
   Effect.tapCause((cause) => Console.error(String(cause))),
   Effect.provide(NodeServices.layer)
 );
