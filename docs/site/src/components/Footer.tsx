@@ -14,7 +14,7 @@ export function Footer(): React.ReactElement {
         <div className="site-footer-brand">
           <span className="site-footer-name">Hyperlink</span>
           <p className="site-footer-tag">
-            Effect-native processes, queues, and resources — one contract, local or over RPC.
+            Hyperlink Services for Effect: one contract, local or over the network.
           </p>
         </div>
         <nav className="site-footer-cols" aria-label="Footer">
@@ -39,7 +39,7 @@ export function Footer(): React.ReactElement {
         </nav>
       </div>
       <div className="site-footer-legal">
-        © 2025 Nikolas Stow · Released under the{" "}
+        © 2026 Nikolas Stow · Released under the{" "}
         <a href={LICENSE} target="_blank" rel="noreferrer">
           MIT License
         </a>

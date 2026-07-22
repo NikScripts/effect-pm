@@ -2145,3 +2145,13 @@ body:has(.landing) .sidebar {
   color: var(--muted-fg);
   opacity: 0.8;
 }
+.landing-pitch strong {
+  color: var(--fg);
+}
+.landing-body {
+  max-width: 40rem;
+  margin: 1.1rem 0 0;
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+  line-height: 1.7;
+  color: var(--muted-fg);
+}

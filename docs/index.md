@@ -9,7 +9,7 @@
 **Build cross-runtime Services on Effect.**
 
 An Effect Service lives inside one runtime. A *Hyperlink Service* doesn't: define it once, run it
-on one runtime, and call it from another over RPC — with the same typed Handle.
+on one runtime, and call it from another over RPC, with the same typed Handle.
 
 A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
 there. Wiring those together normally means one side owns a Hyperlink and the others reach it through

@@ -20,8 +20,18 @@ export default function LandingPage() {
             </span>
           </div>
           <p className="landing-pitch">
-            Effect Services written with Hyperlink level up modularity and composability — across
-            runtimes, and across the network.
+            Effect Services written with Hyperlink stay modular and composable across runtimes and
+            across the network.
+          </p>
+          <p className="landing-body">
+            An Effect Service lives inside one runtime. A Hyperlink Service isn&apos;t bound to
+            one: define it once, run it where it belongs, and call it from any runtime with the
+            same typed Handle.
+          </p>
+          <p className="landing-body">
+            The contract carries a schema for every value that crosses the boundary. Serve it over
+            HTTP, WebSocket, unix socket, or IPC; the call site never changes, only the Layer at
+            the edge says where the implementation lives.
           </p>
           <p className="landing-credit">Inspired by and built on Effect RPC.</p>
           <p className="landing-soon">Coming soon</p>
