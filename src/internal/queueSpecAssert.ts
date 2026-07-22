@@ -15,7 +15,7 @@ import { Data, DateTime, Duration, Schema } from "effect";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 import { flattenHyperlinkSpec } from "../Hyperlink";
 import { buildQueueEvent } from "../WorkPool";
-import type { CustomQueueInstanceSpec } from "../CustomQueueHyperlink";
+import type { CustomQueueInstanceSpec } from "../WorkPool";
 
 /** Structural mismatch between wired and baseline queue specs. @internal */
 export class QueueSpecShapeError extends Data.TaggedError("QueueSpecShapeError")<{

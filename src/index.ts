@@ -259,12 +259,10 @@ export type {
 
 // Types - Polling
 
-// Types - WorkPool
-export * as CustomQueueHyperlink from "./CustomQueueHyperlink";
-
+// Types - WorkPool (the leveled queue folded into WorkPool.priority)
 export type {
   CustomQueueTagConfig,
-} from "./CustomQueueHyperlink";
+} from "./WorkPool";
 
 export {
   customQueueControlSpec,
@@ -273,7 +271,7 @@ export {
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,
-} from "./CustomQueueHyperlink";
+} from "./WorkPool";
 
 export {
   QueueItemCodecDescriptorSchema,

@@ -1,7 +1,7 @@
 import { Context, Effect } from "effect";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
-import type { CustomQueueInstanceSpec } from "../src/CustomQueueHyperlink";
+import type { CustomQueueInstanceSpec } from "../src/WorkPool";
 import { Schema } from "effect";
 
 // Type-level proof: CustomQueue toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
@@ -13,7 +13,7 @@ class WorkerDep extends Context.Service<WorkerDep, string>()(
 
 const JobSchema = Schema.Struct({ id: Schema.String });
 
-class TypedCqr extends CustomQueueHyperlink.Tag<TypedCqr>()("test/built-resource/Cqr", {
+class TypedCqr extends WorkPool.priority<TypedCqr>()("test/built-resource/Cqr", {
   payload: JobSchema,
   levelCount: 2,
 }) {}

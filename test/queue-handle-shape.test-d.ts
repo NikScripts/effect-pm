@@ -2,7 +2,7 @@ import { Effect, Schema, Stream } from "effect";
 import type { QueueHandle } from "../src/internal/queueHyperlink";
 import type { queueStatus } from "../src/WorkPool";
 import type { CustomQueueHandle } from "../src/internal/customQueueHyperlink";
-import type { customQueueStatus } from "../src/CustomQueueHyperlink";
+import type { customQueueStatus } from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 
 type QueueStatus = Schema.Schema.Type<typeof queueStatus>;

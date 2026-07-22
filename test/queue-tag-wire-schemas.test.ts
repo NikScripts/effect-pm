@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import * as WorkPool from "../src/WorkPool";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 
 const Job = Schema.Struct({ id: Schema.String });
 const Summary = Schema.Struct({ words: Schema.Number });
@@ -59,9 +58,9 @@ describe("WorkPool.Tag wire schemas (payload / success / error)", () => {
   });
 });
 
-describe("CustomQueueHyperlink.Tag wire schemas (config object only)", () => {
+describe("WorkPool.priority wire schemas (config object only)", () => {
   it("optional success / error stamped like WorkPool", () => {
-    class Q extends CustomQueueHyperlink.Tag<Q>()("@app/CQR", {
+    class Q extends WorkPool.priority<Q>()("@app/CQR", {
       payload: Job,
       levelCount: 2,
       success: Summary,

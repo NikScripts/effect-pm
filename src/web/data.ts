@@ -16,7 +16,7 @@ import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
-import { kind as customQueueKind, customQueueStatus } from "../CustomQueueHyperlink";
+import { priorityKind as customQueueKind, customQueueStatus } from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";

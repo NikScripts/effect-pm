@@ -14,7 +14,6 @@ import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as WorkPool from "../../src/WorkPool";
-import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
@@ -127,8 +126,8 @@ export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
   { payload: importJob, node: StatsNode },
 ) {}
 // A **custom queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
-// the CustomQueueHyperlink widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
-export class ImportJobs extends CustomQueueHyperlink.Tag<ImportJobs>()("wnba/ImportJobs", {
+// the priority-lane widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
+export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs", {
   payload: importJob,
   levelCount: 3,
   namedLevels: { hot: 0, warm: 1, cold: 2 },

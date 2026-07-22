@@ -44,10 +44,6 @@
       "types": "./dist/WorkPool.d.ts",
       "default": "./dist/WorkPool.js"
     },
-    "./CustomQueueHyperlink": {
-      "types": "./dist/CustomQueueHyperlink.d.ts",
-      "default": "./dist/CustomQueueHyperlink.js"
-    },
     "./Hyperlink": {
       "types": "./dist/Hyperlink.d.ts",
       "default": "./dist/Hyperlink.js"

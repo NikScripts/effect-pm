@@ -1,6 +1,6 @@
 import type { DateTime, Effect, Option, Stream } from "effect";
 import * as Schema from "effect/Schema";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Store from "../src/Store";
 import type {
   QueueStoreCompleted,
@@ -21,7 +21,7 @@ const expectExact = <_Check extends true>(): void => {};
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@test/CustomAnalyticsJobs", {
+class Jobs extends WorkPool.priority<Jobs>()("@test/CustomAnalyticsJobs", {
   payload: jobSchema,
   levelCount: 4,
 }) {}
@@ -31,7 +31,7 @@ type Entry = QueueStoreEntry<typeof Jobs>;
 type Failed = QueueStoreFailed<typeof Jobs>;
 type Completed = QueueStoreCompleted<typeof Jobs>;
 
-type Regs = RegsOfStoreInput<[ReturnType<typeof CustomQueueHyperlink.store<typeof Jobs>>]>;
+type Regs = RegsOfStoreInput<[ReturnType<typeof WorkPool.store<typeof Jobs>>]>;
 type Handle = StoreHandleAtKey<Regs, typeof Jobs>;
 
 declare const _handle: Handle;

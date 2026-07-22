@@ -19,7 +19,6 @@ export default defineConfig([
       Daemon: "src/Daemon.ts",
       Polling: "src/Polling.ts",
       WorkPool: "src/WorkPool.ts",
-      CustomQueueHyperlink: "src/CustomQueueHyperlink.ts",
       Hyperlink: "src/Hyperlink.ts",
       Node: "src/Node.ts",
       MultiNode: "src/MultiNode.ts",

@@ -32,15 +32,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** @type {Case[]} */
 const cases = [
   {
+    // A `WorkPool.Tag`-only import must drop BOTH the plain queue engine and the leveled
+    // (priority) engine — the leveled variant folded in as WorkPool.priority but stays tree-shakeable.
     name: "WorkPool",
     entry: "src/WorkPool.ts",
-    engine: ["src/internal/queueHyperlink.ts"],
-    member: "Tag",
-  },
-  {
-    name: "CustomQueueHyperlink",
-    entry: "src/CustomQueueHyperlink.ts",
-    engine: ["src/internal/customQueueHyperlink.ts", "src/internal/queueHyperlink.ts"],
+    engine: ["src/internal/queueHyperlink.ts", "src/internal/customQueueHyperlink.ts"],
     member: "Tag",
   },
   {

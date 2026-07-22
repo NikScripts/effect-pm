@@ -56,7 +56,7 @@ import {
 } from "./data";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import { kind as queueKind } from "../WorkPool";
-import { kind as customQueueKind } from "../CustomQueueHyperlink";
+import { priorityKind as customQueueKind } from "../WorkPool";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";

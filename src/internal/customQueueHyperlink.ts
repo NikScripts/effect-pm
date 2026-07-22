@@ -1,5 +1,5 @@
 /**
- * CustomQueueHyperlink engine — N-level managed queue engine (local `make` entry point).
+ * WorkPool priority (N-level lane) engine — N-level managed queue engine (local `make` entry point).
  *
  * For toolkit tags, layers, and RPC use the public `CustomQueueHyperlink` namespace
  * (`src/CustomQueueHyperlink.ts`) / `CustomQueueHyperlink.Tag` from the barrel.

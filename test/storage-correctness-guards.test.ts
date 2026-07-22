@@ -4,7 +4,6 @@ import { Duration, Effect, Exit, FileSystem, Layer, Path, Schema } from "effect"
 import { TestClock } from "effect/testing";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
 import * as Daemon from "../src/Daemon";
 import * as WorkPool from "../src/WorkPool";
 import * as Gate from "../src/Gate";
@@ -21,7 +20,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("test/storage-correctness/Jobs", {
   payload: jobSchema,
 }) {}
 
-class CustomJobs extends CustomQueueHyperlink.Tag<CustomJobs>()(
+class CustomJobs extends WorkPool.priority<CustomJobs>()(
   "test/storage-correctness/CustomJobs",
   {
     payload: jobSchema,
@@ -40,7 +39,7 @@ class AppStore extends Store.Service<AppStore>("@test/storage-correctness/FileSt
 ) {}
 
 const jobsRegistration = WorkPool.store(Jobs);
-const customJobsRegistration = CustomQueueHyperlink.store(CustomJobs);
+const customJobsRegistration = WorkPool.store(CustomJobs);
 const gateRegistration = Gate.store(TestGate);
 
 class QueueStore extends Store.Service<QueueStore>("@test/storage-correctness/QueueStore")(
@@ -331,7 +330,7 @@ describe("storage correctness — Gate Soft override parity", () => {
 
 describe("storage correctness — CustomQueue Soft override parity", () => {
   it.live(
-    "CustomQueueHyperlink.layer + provideMerge(AppStore.sqlite) persists across reconnect",
+    "WorkPool.layer + provideMerge(AppStore.sqlite) persists across reconnect",
     () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -345,7 +344,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
 
         yield* Effect.scoped(
           Effect.gen(function* () {
-            const live = CustomQueueHyperlink.layer(CustomJobs, {
+            const live = WorkPool.layer(CustomJobs, {
               levelCount: 2,
               namedLevels: { interactive: 0, batch: 1 },
               effect: () => Effect.void,
@@ -373,7 +372,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
   );
 
   it.live(
-    "sibling Layer.merge(CustomQueueHyperlink.layer, AppStore.sqlite) leaves the SQLite file empty",
+    "sibling Layer.merge(WorkPool.layer, AppStore.sqlite) leaves the SQLite file empty",
     () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -391,7 +390,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
         yield* Effect.scoped(
           Effect.gen(function* () {
             const live = Layer.merge(
-              CustomQueueHyperlink.layer(CustomJobs, {
+              WorkPool.layer(CustomJobs, {
                 levelCount: 2,
                 namedLevels: { interactive: 0, batch: 1 },
                 effect: () => Effect.void,

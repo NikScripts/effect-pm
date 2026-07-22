@@ -271,7 +271,7 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
  * (encodable; it crosses RPC) — subscribers discriminate on `_tag`.
  *
  * `success` defaults to {@link Schema.Void} and `error` to {@link Schema.Unknown} when the slot
- * is absent (the untyped / `CustomQueueHyperlink` fallback). The worker outcome is recorded
+ * is absent (the untyped / `WorkPool.priority` fallback). The worker outcome is recorded
  * **once** — `Completed` (with the typed `success`) or `Failed` (with the typed `cause`); there
  * is no separate `Exit` event (a consumer reconstructs `Exit<A, E>` from the two if needed). The
  * non-encodable `retry` affordance the old callbacks received is dropped — a subscriber holds the
@@ -1631,7 +1631,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  * `levelCount` / `namedLevels` baked into the wire level union:
  *
  * ```ts
- * class Jobs extends CustomQueueHyperlink.Tag<Jobs>()(
+ * class Jobs extends WorkPool.priority<Jobs>()(
  *   "@app/Jobs",
  *   JobSchema,
  *   8,
@@ -1646,7 +1646,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
  *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. */
-export const priorityKind = "hyperlink-ts/CustomQueueHyperlink";
+export const priorityKind = "hyperlink-ts/WorkPool/priority";
 
 /**
  * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
@@ -1671,7 +1671,7 @@ export interface CustomQueueTagConfig<
 
 /**
  * Define an N-level managed queue as a named service {@link Tag} (also exported as
- * {@link priority}): `class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/Jobs", { … }) {}`.
+ * {@link priority}): `class Jobs extends WorkPool.priority<Jobs>()("@app/Jobs", { … }) {}`.
  * The **priority (N-level lane)** peer of {@link Tag} — same WorkPool, with `levelCount` /
  * `namedLevels` priority lanes and `add(item, lane?)`. `class Jobs extends
  * WorkPool.priority<Jobs>()("@app/Jobs", { payload, levelCount: 2 }) {}`. The class *is* the Tag —
@@ -2206,6 +2206,9 @@ export {
   queueErrorsGroup as Errors,
   queueRateLimiterLayer as rateLimiterLayer,
 } from "./internal/queueHyperlink";
+
+// The priority (N-level lane) engine constructor — the {@link priority} peer of {@link make}.
+export { makeCustomQueueEffect as makePriority } from "./internal/customQueueHyperlink";
 
 // Codec schemas already imported locally from the light `queueSchema` module — surface them here.
 export {

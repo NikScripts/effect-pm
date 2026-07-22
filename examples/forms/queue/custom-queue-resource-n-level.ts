@@ -1,20 +1,20 @@
 /**
  * @module examples/forms/queue/custom-queue-hyperlink-n-level
  *
- * CustomQueueHyperlink — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
+ * WorkPool.priority — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
  * `layerMemory` soft-defaults in-memory Storage (R fulfilled). For durable journals + Logs,
- * Soft-override: `CustomQueueHyperlink.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`
+ * Soft-override: `WorkPool.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`
  * — see `docs/guides/stores.md`.
  * Run: `pnpm run example:custom-queue-hyperlink`
  */
 
 import { Effect, Schema } from "effect";
-import { CustomQueueHyperlink } from "../../../src";
+import { WorkPool } from "../../../src";
 
 const JobSchema = Schema.Struct({ id: Schema.String, kind: Schema.String });
 
 /** Tag factory: config object — `{ payload, levelCount, namedLevels? }`. */
-class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("examples/CustomJobs", {
+class Jobs extends WorkPool.priority<Jobs>()("examples/CustomJobs", {
   payload: JobSchema,
   levelCount: 4,
   namedLevels: { interactive: 0, standard: 2, batch: 3 },
@@ -38,7 +38,7 @@ const program = Effect.gen(function* () {
 Effect.runPromise(
   program.pipe(
     Effect.provide(
-      CustomQueueHyperlink.layerMemory(Jobs, {
+      WorkPool.layerMemory(Jobs, {
         levelCount: 4,
         namedLevels: { interactive: 0, standard: 2, batch: 3 },
         takeAlgorithm: "weighted",

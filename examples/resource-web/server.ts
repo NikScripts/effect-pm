@@ -16,7 +16,6 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Hyperlink from "../../src/Hyperlink";
 import { serve as queueEntry } from "../../src/WorkPool";
-import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
@@ -241,7 +240,7 @@ class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveSto
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
   StatsNode.logs,
   WorkPool.store(PlayByPlayQueue),
-  CustomQueueHyperlink.store(ImportJobs),
+  WorkPool.store(ImportJobs),
 ) {}
 
 // Dogfood durable registration journals: after the live-score poller has logged a few times, read
@@ -345,7 +344,7 @@ const statsNode = Node.wsServer([
   }),
   // a custom queue with named lanes (hot/warm/cold); its store facet lives in StatsStore (above), so
   // `serve` (not serveMemory) — one Store.Storage per node, shared like the queue's.
-  CustomQueueHyperlink.serve(ImportJobs, {
+  WorkPool.serve(ImportJobs, {
     levelCount: 3,
     namedLevels: { hot: 0, warm: 1, cold: 2 },
     concurrency: 1, // drain slower than we fill, so the named lanes carry a visible backlog
