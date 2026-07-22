@@ -1,7 +1,7 @@
 /**
  * Spawn a repo tool with inherited stdio and fail on non-zero exit.
  *
- * Used by the `hl` command tree so every check goes through Effect's
+ * Used by the `hyp` command tree so every check goes through Effect's
  * `ChildProcess` / `ChildProcessSpawner` instead of raw `node:child_process`.
  */
 import { Data, Effect } from "effect";

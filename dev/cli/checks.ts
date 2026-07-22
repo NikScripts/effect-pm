@@ -1,8 +1,9 @@
 /**
- * Concrete repo checks owned by `hl`.
+ * Concrete repo checks owned by `hyp`.
  *
  * Keep the argv lists here — `package.json` scripts are thin aliases that
- * call into this tree, not the other way around.
+ * call into this tree, not the other way around. Examples stay out until
+ * rewritten one by one.
  */
 import { Effect } from "effect";
 import { run } from "./run";
@@ -46,7 +47,7 @@ export const manifest = () =>
  * Default green gate for agents and CI.
  *
  * deps → typecheck → lint → test → markers.
- * `build`, `treeshake`, and `manifest` stay opt-in under `hl check …` for now.
+ * `build`, `treeshake`, and `manifest` stay opt-in under `hyp check …` for now.
  */
 export const verify = () =>
   Effect.gen(function* () {

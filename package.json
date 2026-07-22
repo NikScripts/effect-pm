@@ -164,7 +164,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "hl": "tsx dev/cli/main.ts",
+    "hyp": "tsx dev/cli/main.ts",
     "build": "tsx dev/cli/main.ts build",
     "typecheck": "tsx dev/cli/main.ts typecheck",
     "test": "tsx dev/cli/main.ts test",

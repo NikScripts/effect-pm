@@ -1,8 +1,9 @@
 /**
- * `hl` — Effect CLI command tree for repo / developer gates.
+ * `hyp` — Effect CLI command tree for repo / developer gates.
  *
  * This is **not** the published `hyperlink-ts/cli` resource CLI. That one
  * composes app tags; this one owns typecheck, lint, test, verify, etc.
+ * Examples stay out of this tree until rewritten one by one.
  */
 import { Command } from "effect/unstable/cli";
 import * as checks from "./checks";
@@ -69,29 +70,29 @@ const verify = Command.make("verify").pipe(
 );
 
 const typecheck = Command.make("typecheck").pipe(
-  Command.withDescription("Same as `hl check typecheck`."),
+  Command.withDescription("Same as `hyp check typecheck`."),
   Command.withHandler(() => checks.typecheck()),
 );
 
 const test = Command.make("test").pipe(
-  Command.withDescription("Same as `hl check test`."),
+  Command.withDescription("Same as `hyp check test`."),
   Command.withHandler(() => checks.test()),
 );
 
 const lint = Command.make("lint").pipe(
-  Command.withDescription("Same as `hl check lint`."),
+  Command.withDescription("Same as `hyp check lint`."),
   Command.withHandler(() => checks.lint()),
 );
 
 const build = Command.make("build").pipe(
-  Command.withDescription("Same as `hl check build`."),
+  Command.withDescription("Same as `hyp check build`."),
   Command.withHandler(() => checks.build()),
 );
 
 /**
- * Root `hl` command.
+ * Root `hyp` command.
  */
-export const hl = Command.make("hl").pipe(
+export const hyp = Command.make("hyp").pipe(
   Command.withDescription(
     "Hyperlink repo CLI — developer gates (verify, typecheck, lint, test, …).",
   ),
