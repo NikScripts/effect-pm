@@ -6,6 +6,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
+## 2026-07-22 — Rename: drop `@nikscripts` scope (publish `hyperlink-ts`)
+
+- **Owner said:** “@nikscripts we don’t need to keep”
+- **Chose (LOCKED):** npm package is bare **`hyperlink-ts`** — no `@nikscripts/` scope.
+  Brand/module rename SSOT remains [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md)
+  (`Resource` → `Hyperlink`, brand “Effect Hyperlink”).
+- **Still open:** `effect-hyperlink` signpost vs unpublish; GitHub repo rename; docs domain.
+- **Supervisor impact:** Eng must retarget `package.json` name + imports + wire ids off
+  `@nikscripts/effect-pm`.
+
 ## 2026-07-21 — Identity coordinator (managers collapse) LOCKED
 
 - **Owner said:** Sell the dream; “Oooh yes. Let’s build it.” Handoff first as the major goal.
