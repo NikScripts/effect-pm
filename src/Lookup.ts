@@ -829,14 +829,15 @@ export const client = (
   // beside) the Lookup listen, and bind-or-dial ({@link layerOptions}) builds the
   // dial side without a guaranteed live peer at Layer.build. Connectivity fails on
   // the first Identity/Directory call instead.
-  return Layer.mergeAll(
-    Resource.client(Identity, node),
-    Resource.client(Directory, node),
-    Resource.client(Advice, node),
-  ).pipe(
+  const clients: any = Layer.mergeAll(
+    Resource.client(Identity, node) as any,
+    Resource.client(Directory, node) as any,
+    Resource.client(Advice, node) as any,
+  ) as any;
+  return clients.pipe(
     Layer.provide(node.pipe(connectIpc(path))),
     Layer.provide(Resource.clientVerify(false)),
-  );
+  ) as any;
 };
 
 /**

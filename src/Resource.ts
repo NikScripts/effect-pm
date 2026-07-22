@@ -342,11 +342,11 @@ const remapProtocolMismatch = (
   value: unknown,
 ): unknown => {
   if (Effect.isEffect(value)) {
-    return Effect.catch(value as Effect.Effect<unknown, unknown>, (err) =>
+    return Effect.catch(value as any, (err: any) =>
       isHttpProtocolMismatchDefect(err)
         ? new ProtocolMismatch({ resource, method, cause: err })
         : Effect.fail(err),
-    );
+    ) as any;
   }
   if (Stream.isStream(value)) {
     return Stream.mapError(value as Stream.Stream<unknown, unknown>, (err) =>
@@ -1158,17 +1158,17 @@ export const mapSubscribable = <A, B>(
 const mapEffectMember = (
   member: unknown,
   transform: (
-    effect: Effect.Effect<unknown, unknown, unknown>,
-  ) => Effect.Effect<unknown, unknown, unknown>,
+    effect: Effect.Effect<unknown, never, never>,
+  ) => Effect.Effect<unknown, never, never>,
 ): unknown => {
   if (typeof member === "function") {
     // function → Effect: same call-then-transform idiom as `Store.mapMethod`.
-    return (...args: ReadonlyArray<unknown>) => transform(member(...args));
+    return (...args: ReadonlyArray<unknown>) => transform((member as any)(...args));
   }
   // bare Effect member (e.g. a no-payload `effectFn` — `start`/`pause`): transform it directly. The
   // leaf is type-erased by the spec-driven walk, so the Effect type is asserted once here (the same
   // tree-walk/rebuild idiom as `flattenImpl` / `nestService`).
-  return transform(member as Effect.Effect<unknown, unknown, unknown>);
+  return transform(member as any);
 };
 
 /**
@@ -1248,8 +1248,8 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
   impl: Impl,
   spec: S,
   transform: (
-    effect: Effect.Effect<unknown, unknown, unknown>,
-  ) => Effect.Effect<unknown, unknown, unknown>,
+    effect: Effect.Effect<unknown, never, never>,
+  ) => Effect.Effect<unknown, never, never>,
 ): Out => {
   const flatSpec = flattenSpec(spec);
   // Tree-walk/rebuild idiom (as in `flattenImpl` at every wire call site): the impl is a type-erased
@@ -1302,7 +1302,7 @@ export const provideContext = <Impl, const S extends Spec, Ctx>(
   context: Context.Context<Ctx>,
 ): ProvidedContext<Impl, Ctx> =>
   mapEffects<Impl, S, ProvidedContext<Impl, Ctx>>(impl, spec, (effect) =>
-    Effect.provideContext(effect, context),
+    Effect.provideContext(effect as any, context) as any,
   );
 
 /** Runtime marker for a {@link BuiltResource} bundle. @internal */
@@ -2644,9 +2644,9 @@ export const withReadiness: {
     // derivation receives the prior one (applied to the same service) as `base`, so it can extend
     // it (`yield* base`) or replace it (ignore `base`). `base` flows down the chain from the root.
     const prior = tag[readinessSym];
-    const composed: ReadinessOf<ServiceOf<any, any>> = (service, base) =>
-      readiness(service, prior === undefined ? base : prior(service, base));
-    return Object.assign(tag, { [readinessSym]: composed });
+    const composed = (service: unknown, base: Effect.Effect<Readiness, never, never>) =>
+      readiness(service, prior === undefined ? base : (prior as any)(service, base)) as any;
+    return Object.assign(tag, { [readinessSym]: composed }) as T;
   },
 );
 
@@ -2828,12 +2828,15 @@ export const monitoredDependency = <
     status: effect(options.status),
     changes: stream(options.changes),
   }),
-  readiness: (svc, _base) =>
-    Effect.map(svc.status, (status): Readiness => {
-      const ready = options.readyWhen(status);
-      const detail = options.detail?.(status);
-      return detail === undefined ? { ready } : { ready, detail };
-    }),
+  readiness: ((svc, _base: any) =>
+    (Effect.map as any)(
+      (svc as MonitoredDependencyService<Status>).status,
+      (s: Schema.Schema.Type<Status>): Readiness => {
+        const ready = options.readyWhen(s);
+        const detail = options.detail?.(s);
+        return detail === undefined ? { ready } : { ready, detail };
+      },
+    )) as ReadinessOf<MonitoredDependencyService<Status>>,
 });
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
@@ -3283,7 +3286,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
   // claim / lookupClient), and nested deep verify deadlocks on the peer dial.
   return clientLayer(tag, node).pipe(
     Layer.provide(clientVerify(false)),
-  ) as Layer.Layer<Self>;
+  ) as any;
 };
 
 /**
@@ -3429,10 +3432,10 @@ const invokeWireMethodWithContext = (
 ): unknown => {
   const invoked = invokeWireMethod(member, method, payload);
   if (Effect.isEffect(invoked)) {
-    return Effect.provideContext(invoked, context);
+    return Effect.provideContext(invoked as any, context as any) as any;
   }
   if (Stream.isStream(invoked)) {
-    return Stream.provideContext(invoked, context);
+    return Stream.provideContext(invoked as any, context as any) as any;
   }
   return invoked;
 };
@@ -3602,9 +3605,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
   // erasing it, so a per-resource `Layer.provide` can discharge it. `HandlerContextOf<S>` is the rpc
   // handler slots; the requirement is the union of the handlers' run-time needs.
-  const handlerLayer = group.toLayer(
-    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  );
+  const handlerLayer: any = group.toLayer(handlers as any);
   // register into the served-resources registry when one is present (`httpServer` provides it), so the
   // shared server + `/health` discover this resource without the caller listing it twice. Merged (not
   // provided) so it isn't pruned as unused; a no-op when no registry is in context (standalone `serve`).
@@ -3631,11 +3632,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
       ),
     ),
   );
-  return Layer.merge(handlerLayer, registration) as unknown as Layer.Layer<
-    HandlerContextOf<S>,
-    never,
-    ServeRequirements<Impl>
-  >;
+  return Layer.merge(handlerLayer, registration) as any;
 };
 
 /**
@@ -3669,11 +3666,7 @@ const servePlain = <Self, S extends Spec, R = never>(
         // Plain local — identity claim (if any) already happened in {@link serve}.
         return Layer.merge(
           localLayerPlain(tag, grantLocal(tag, bundle)),
-          serveRemote(tag, bundle as any) as unknown as Layer.Layer<
-            HandlerContextOf<S>,
-            never,
-            never
-          >,
+          serveRemote(tag, bundle as any) as any,
         );
       }
       const granted = built as ImplOf<S>;
@@ -3682,14 +3675,10 @@ const servePlain = <Self, S extends Spec, R = never>(
         // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
         // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
         // `R` was discharged by the Effect form above, so the handlers are requirement-free.
-        serveRemote(tag, granted as unknown as ServeImplOf<S, never>) as unknown as Layer.Layer<
-          HandlerContextOf<S>,
-          never,
-          never
-        >,
+        serveRemote(tag, granted as unknown as ServeImplOf<S, never>) as any,
       );
     }),
-  );
+  ) as any;
 
 /** Stamped on a {@link serve} layer with the served tag's key — lets an anonymous `listen` derive a
  *  legible node name from the first resource it serves without building the layer. @public */
@@ -3872,9 +3861,8 @@ const serveInstances = <S extends Spec>(
   // Boundary assertion (runtime-safe): handlers mirror the shared spec the group
   // was built from, and RPC validates every payload/result at the wire. Output pinned
   // to {@link HandlerContextOf} to keep the layer's requirement channel `never`.
-  return group.toLayer(
-    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as unknown as Layer.Layer<HandlerContextOf<S>>;
+  const handlerLayer: any = group.toLayer(handlers as any);
+  return handlerLayer as any;
 };
 
 /**
@@ -5549,7 +5537,7 @@ function clientLayer<Self, S extends Spec>(
         );
         return yield* buildClientService(tag, client);
       }),
-    ) as unknown as Layer.Layer<Self, never, RpcClient.Protocol>;
+    ) as any;
   }
   // node chosen (from the tag or the argument): resolve the transport from that node service and
   // provide it locally to the client, so the layer requires the node rather than the ambient
@@ -5557,18 +5545,17 @@ function clientLayer<Self, S extends Spec>(
   // so client construction never fails or dies — only the resulting method calls carry typed errors.
   // The node identity is erased to `unknown` on the base tag; the two node-typed overloads pin the
   // precise `HSelf` for callers, so this one contained boundary assertion restates the impl's return.
-  const layer = Layer.effect(
+  const layer: any = (Layer.effect as any)(
     tag,
-    Effect.flatMap(
-      Effect.flatMap(nodeKey, ({ protocol }) =>
-        Effect.provideService(
-          RpcClient.make(group),
-          RpcClient.Protocol,
-          protocol,
-        ),
-      ),
-      (client) => buildClientService(tag, client),
-    ),
+    Effect.gen(function* () {
+      const { protocol } = yield* nodeKey as any;
+      const client = yield* (Effect.provideService as any)(
+        (RpcClient.make as any)(group),
+        RpcClient.Protocol,
+        protocol,
+      );
+      return yield* buildClientService(tag, client);
+    }) as any,
   );
   // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
@@ -5577,7 +5564,7 @@ function clientLayer<Self, S extends Spec>(
   // `status.resources`, so it stays tier-1 (reachability only).
   if (isAddressedNode(nodeKey as AnyNode)) {
     const addressed = nodeKey as AddressedNode<unknown>;
-    const connected = layer.pipe(Layer.provide(connectAddressed(addressed)));
+    const connected: any = layer.pipe(Layer.provide(connectAddressed(addressed)));
     const deepResource =
       tag.groupId === "@pm/node-status"
         ? undefined
@@ -5590,9 +5577,9 @@ function clientLayer<Self, S extends Spec>(
         yield* applyClientVerify(addressed, deepResource);
         return connected;
       }),
-    ) as Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol>;
+    ) as any;
   }
-  return layer as Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol>;
+  return layer as any;
 }
 
 /** A wire-only instance tag for {@link clientInstances} — keyed via the covariant

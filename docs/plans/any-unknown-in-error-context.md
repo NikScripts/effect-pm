@@ -2,7 +2,8 @@
 
 **Status:** rule stays **off** in tsconfig; fix in batches (owner: all, internal first).  
 **Baseline (pre-batch-1):** 224 hits / 49 files.  
-**After batch 1 (Node transports):** ~169 hits / 42 files.
+**After batch 1 (Node transports):** ~169 hits / 42 files.  
+**After batch 2 (Resource + serve followers):** ~112 hits / 35 files.
 
 ## How to reproduce
 
