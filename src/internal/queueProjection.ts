@@ -54,12 +54,12 @@ export const defaultQueueProjection: QueueRuntimeProjection<{
 
 /** Build a name → level index registry with numeric fallbacks. @internal */
 export const buildLevelIndexLabels = (
-  levelCount: number,
-  namedLevels: Readonly<Record<string, number>>,
+  laneCount: number,
+  namedLanes: Readonly<Record<string, number>>,
 ): ReadonlyArray<string> => {
-  const labels = Array.from({ length: levelCount }, (_, i) => String(i));
-  for (const [name, level] of Object.entries(namedLevels)) {
-    if (level >= 0 && level < levelCount) labels[level] = name;
+  const labels = Array.from({ length: laneCount }, (_, i) => String(i));
+  for (const [name, level] of Object.entries(namedLanes)) {
+    if (level >= 0 && level < laneCount) labels[level] = name;
   }
   return labels;
 };
@@ -84,18 +84,18 @@ export interface CustomQueueStatus {
  * @internal
  */
 export const buildCustomQueueProjection = (options: {
-  readonly levelCount: number;
-  readonly namedLevels?: Readonly<Record<string, number>>;
+  readonly laneCount: number;
+  readonly namedLanes?: Readonly<Record<string, number>>;
 }): QueueRuntimeProjection<Record<string, number>, CustomQueueStatus> => {
-  const levelCount = Math.max(1, Math.floor(options.levelCount));
-  const labels = buildLevelIndexLabels(levelCount, options.namedLevels ?? {});
+  const laneCount = Math.max(1, Math.floor(options.laneCount));
+  const labels = buildLevelIndexLabels(laneCount, options.namedLanes ?? {});
 
   const projectSizes = (levels: ReadonlyArray<number>): Record<string, number> => {
     const out: Record<string, number> = {};
     // Every configured lane, always — an empty lane reports 0 (not omitted), so `sizes` is a stable
     // key set (a consumer's per-lane view doesn't reflow when a lane drains), matching the default
     // high/normal/low projection which always reports all three.
-    for (let i = 0; i < levelCount; i++) {
+    for (let i = 0; i < laneCount; i++) {
       out[labels[i] ?? String(i)] = Math.max(0, levels[i] ?? 0);
     }
     return out;
@@ -107,9 +107,9 @@ export const buildCustomQueueProjection = (options: {
       level === 0 ? "high" : level === 2 ? "low" : "normal",
     projectSizes,
     totalPending: (levels) =>
-      levels.slice(0, levelCount).reduce((sum, n) => sum + Math.max(0, n), 0),
+      levels.slice(0, laneCount).reduce((sum, n) => sum + Math.max(0, n), 0),
     isEmptyLevels: (levels) =>
-      levels.slice(0, levelCount).every((n) => n <= 0),
+      levels.slice(0, laneCount).every((n) => n <= 0),
     buildStatus: (ctx) => ({
       sizes: projectSizes(ctx.levels),
       paused: ctx.paused,

@@ -345,8 +345,8 @@ const statsNode = Node.wsServer([
   // a custom queue with named lanes (hot/warm/cold); its store facet lives in StatsStore (above), so
   // `serve` (not serveMemory) — one Store.Storage per node, shared like the queue's.
   WorkPool.serve(ImportJobs, {
-    levelCount: 3,
-    namedLevels: { hot: 0, warm: 1, cold: 2 },
+    laneCount: 3,
+    namedLanes: { hot: 0, warm: 1, cold: 2 },
     concurrency: 1, // drain slower than we fill, so the named lanes carry a visible backlog
     effect: importWorker,
     autoStart: true,

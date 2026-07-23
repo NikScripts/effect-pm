@@ -15,7 +15,7 @@ const JobSchema = Schema.Struct({ id: Schema.String });
 
 class TypedCqr extends WorkPool.priority<TypedCqr>()("test/built-resource/Cqr", {
   payload: JobSchema,
-  levelCount: 2,
+  laneCount: 2,
 }) {}
 
 type Built = Hyperlink.BuiltHyperlink<

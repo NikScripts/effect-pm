@@ -129,8 +129,8 @@ export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
 // the priority-lane widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
 export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs", {
   payload: importJob,
-  levelCount: 3,
-  namedLevels: { hot: 0, warm: 1, cold: 2 },
+  laneCount: 3,
+  namedLanes: { hot: 0, warm: 1, cold: 2 },
   node: StatsNode,
 }) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {

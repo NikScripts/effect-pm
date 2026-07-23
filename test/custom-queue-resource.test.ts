@@ -19,7 +19,7 @@ describe("WorkPool.makePriority", () => {
       const seen = yield* Ref.make<number[]>([]);
       const queue = yield* WorkPool.makePriority({
         name: "custom-levels",
-        levelCount: 5,
+        laneCount: 5,
         takeAlgorithm: "strict-descending",
         effect: (n: number) => Ref.update(seen, (arr) => [...arr, n]),
         concurrency: 1,
@@ -38,8 +38,8 @@ describe("WorkPool.makePriority", () => {
     Effect.gen(function* () {
       const queue = yield* WorkPool.makePriority({
         name: "custom-named",
-        levelCount: 4,
-        namedLevels: { urgent: 0, batch: 3 },
+        laneCount: 4,
+        namedLanes: { urgent: 0, batch: 3 },
         defaultLevel: 1,
         effect: (_item: string) => Effect.void,
         autoStart: false,
@@ -62,7 +62,7 @@ describe("WorkPool.makePriority", () => {
       const samples = yield* Ref.make({ g1: 0, g3: 0, n: 0 });
       const queue = yield* WorkPool.makePriority({
         name: "custom-weighted",
-        levelCount: 4,
+        laneCount: 4,
         takeAlgorithm: "weighted",
         effect: (n: number) =>
           Effect.gen(function* () {
@@ -93,7 +93,7 @@ describe("WorkPool.makePriority", () => {
     Effect.gen(function* () {
       const queue = yield* WorkPool.makePriority({
         name: "custom-status",
-        levelCount: 3,
+        laneCount: 3,
         effect: (_n: number) => Effect.void,
         autoStart: false,
       });

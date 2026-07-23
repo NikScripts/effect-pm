@@ -23,7 +23,7 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class Jobs extends WorkPool.priority<Jobs>()("@test/CustomAnalyticsJobs", {
   payload: jobSchema,
-  levelCount: 4,
+  laneCount: 4,
 }) {}
 
 type Ev = QueueStoreEvent<typeof Jobs>;

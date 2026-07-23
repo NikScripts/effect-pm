@@ -27,3 +27,9 @@ Migration:
   `hyperlink-ts/WorkPool` and `hyperlink-ts/Gate`.
 
 The leveled and HTTP engines remain tree-shakeable — a `WorkPool.Tag`-only import pulls neither engine.
+
+**Priority-lane vocabulary.** The mixed "level"/"lane" wording for `WorkPool.priority` is unified to
+**lane**: config `levelCount` → `laneCount`, `namedLevels` → `namedLanes`; `add(item, level?)` →
+`add(item, lane?)`; the entry wire field `level` → `lane`; config types `CustomQueueLevelConfig` →
+`CustomQueueLaneConfig`. (Log-stream levels and store levels are unrelated and unchanged; the engine's
+internal priority-`level` machinery is a different concept and also unchanged.)

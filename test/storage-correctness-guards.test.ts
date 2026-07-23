@@ -24,8 +24,8 @@ class CustomJobs extends WorkPool.priority<CustomJobs>()(
   "test/storage-correctness/CustomJobs",
   {
     payload: jobSchema,
-    levelCount: 2,
-    namedLevels: { interactive: 0, batch: 1 },
+    laneCount: 2,
+    namedLanes: { interactive: 0, batch: 1 },
   },
 ) {}
 
@@ -345,8 +345,8 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
         yield* Effect.scoped(
           Effect.gen(function* () {
             const live = WorkPool.layer(CustomJobs, {
-              levelCount: 2,
-              namedLevels: { interactive: 0, batch: 1 },
+              laneCount: 2,
+              namedLanes: { interactive: 0, batch: 1 },
               effect: () => Effect.void,
               autoStart: true,
             }).pipe(Layer.provideMerge(CustomQueueStore.layer({ filename })));
@@ -391,8 +391,8 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
           Effect.gen(function* () {
             const live = Layer.merge(
               WorkPool.layer(CustomJobs, {
-                levelCount: 2,
-                namedLevels: { interactive: 0, batch: 1 },
+                laneCount: 2,
+                namedLanes: { interactive: 0, batch: 1 },
                 effect: () => Effect.void,
                 autoStart: true,
               }),

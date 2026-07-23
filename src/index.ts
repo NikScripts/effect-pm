@@ -265,7 +265,7 @@ export type {
 export {
   customQueueControlSpec,
   customQueueEntry,
-  customQueueLevel,
+  customQueueLane,
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,

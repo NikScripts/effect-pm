@@ -16,7 +16,7 @@ describe("levelLaneStoreScheduled", () => {
   it.effect("weighted: service ∝ weight, and no level starves", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStoreScheduled<number>({
-        levelCount: 4,
+        laneCount: 4,
         capacity: 256,
         takeAlgorithm: "weighted",
       });
@@ -38,7 +38,7 @@ describe("levelLaneStoreScheduled", () => {
   it.effect("strict-descending: highest level index first (can starve lower)", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStoreScheduled<number>({
-        levelCount: 10,
+        laneCount: 10,
         capacity: 64,
         takeAlgorithm: "strict-descending",
       });
@@ -53,7 +53,7 @@ describe("levelLaneStoreScheduled", () => {
   it.effect("poll returns none when empty; isEmpty tracks occupancy", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStoreScheduled<number>({
-        levelCount: 4,
+        laneCount: 4,
         capacity: 64,
         takeAlgorithm: "weighted",
       });
@@ -68,7 +68,7 @@ describe("levelLaneStoreScheduled", () => {
   it.effect("sizes reports per-level occupancy", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStoreScheduled<string>({
-        levelCount: 8,
+        laneCount: 8,
         capacity: 64,
         takeAlgorithm: "weighted",
       });
@@ -83,7 +83,7 @@ describe("levelLaneStoreScheduled", () => {
   it.effect("custom take algorithm", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStoreScheduled<number>({
-        levelCount: 3,
+        laneCount: 3,
         capacity: 64,
         takeAlgorithm: ({ nonEmpty }) => {
           const level = nonEmpty[nonEmpty.length - 1]?.level;
@@ -99,7 +99,7 @@ describe("levelLaneStoreScheduled", () => {
   it.effect("drain returns everything (level ascending) and empties", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStoreScheduled<string>({
-        levelCount: 8,
+        laneCount: 8,
         capacity: 64,
         takeAlgorithm: "weighted",
       });

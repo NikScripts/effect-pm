@@ -62,7 +62,7 @@ describe("WorkPool.priority wire schemas (config object only)", () => {
   it("optional success / error stamped like WorkPool", () => {
     class Q extends WorkPool.priority<Q>()("@app/CQR", {
       payload: Job,
-      levelCount: 2,
+      laneCount: 2,
       success: Summary,
       error: WorkerErr,
     }) {}

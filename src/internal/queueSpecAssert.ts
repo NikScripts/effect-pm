@@ -4,7 +4,7 @@
  *
  * @remarks
  * **Invariant:** every method key and RPC kind on a wired spec must match the erased baseline
- * (`queueSpec(payload)` / `customQueueSpec(payload, levelConfig)`) — only the **`events`** stream
+ * (`queueSpec(payload)` / `customQueueSpec(payload, laneConfig)`) — only the **`events`** stream
  * element schema may differ (tag `success` / `error` wire slots).
  *
  * @module internal/queueSpecAssert

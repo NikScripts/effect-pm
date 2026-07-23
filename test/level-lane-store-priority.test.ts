@@ -27,7 +27,7 @@ describe("levelLaneStorePriority", () => {
   it.effect("strict order: level 0, then 1, then 2; FIFO within a level", () =>
     Effect.gen(function* () {
       const store = yield* makeLevelLaneStorePriority<string>({
-        levelCount: 3,
+        laneCount: 3,
         capacity: 64,
       });
       yield* store.offer("low", 2);
@@ -39,7 +39,7 @@ describe("levelLaneStorePriority", () => {
 
   it.effect("poll/isEmpty/sizes", () =>
     Effect.gen(function* () {
-      const store = yield* makeLevelLaneStorePriority<number>({ levelCount: 3, capacity: 64 });
+      const store = yield* makeLevelLaneStorePriority<number>({ laneCount: 3, capacity: 64 });
       assert.isTrue(yield* store.isEmpty);
       assert.isTrue(Option.isNone(yield* store.poll));
       yield* store.offer(1, 0);
@@ -53,7 +53,7 @@ describe("levelLaneStorePriority", () => {
 
   it.effect("extractMatching removes matches across levels, keeps the rest in order", () =>
     Effect.gen(function* () {
-      const store = yield* makeLevelLaneStorePriority<number>({ levelCount: 3, capacity: 64 });
+      const store = yield* makeLevelLaneStorePriority<number>({ laneCount: 3, capacity: 64 });
       yield* store.offer(10, 0);
       yield* store.offer(11, 1);
       yield* store.offer(20, 1);
@@ -66,7 +66,7 @@ describe("levelLaneStorePriority", () => {
 
   it.effect("drain returns everything (level order) and empties", () =>
     Effect.gen(function* () {
-      const store = yield* makeLevelLaneStorePriority<string>({ levelCount: 3, capacity: 64 });
+      const store = yield* makeLevelLaneStorePriority<string>({ laneCount: 3, capacity: 64 });
       yield* store.offer("h", 0);
       yield* store.offer("n", 1);
       yield* store.offer("l", 2);

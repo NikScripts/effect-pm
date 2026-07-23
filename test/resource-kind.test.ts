@@ -14,7 +14,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 
 class Q extends WorkPool.Tag<Q>()("kindtest/Q", { payload: Item }) {}
 class P extends Daemon.Tag<P>()("kindtest/P") {}
-class C extends WorkPool.priority<C>()("kindtest/C", { payload: Item, levelCount: 3 }) {}
+class C extends WorkPool.priority<C>()("kindtest/C", { payload: Item, laneCount: 3 }) {}
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}
 class T extends Telemetry.Tag<T>()() {}
 class F extends FleetHealth.Tag<F>()() {}

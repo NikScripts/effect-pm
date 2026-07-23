@@ -8,13 +8,13 @@ const jobSchema = Schema.Struct({ id: Schema.String });
 
 class Jobs extends WorkPool.priority<Jobs>()("@app/CustomJobs", {
   payload: jobSchema,
-  levelCount: 3,
-  namedLevels: { urgent: 0 },
+  laneCount: 3,
+  namedLanes: { urgent: 0 },
 }) {}
 
 class FailingJobs extends WorkPool.priority<FailingJobs>()("@app/FailingCustomJobs", {
   payload: jobSchema,
-  levelCount: 2,
+  laneCount: 2,
 }) {}
 
 describe("WorkPool.priority → baked store persistence", () => {
@@ -45,8 +45,8 @@ describe("WorkPool.priority → baked store persistence", () => {
     }).pipe(
       Effect.provide(
         WorkPool.layerMemory(Jobs, {
-          levelCount: 3,
-          namedLevels: { urgent: 0 },
+          laneCount: 3,
+          namedLanes: { urgent: 0 },
           effect: () => Effect.void,
           autoStart: true,
         }),
@@ -81,7 +81,7 @@ describe("WorkPool.priority → baked store persistence", () => {
     }).pipe(
       Effect.provide(
         WorkPool.layerMemory(FailingJobs, {
-          levelCount: 2,
+          laneCount: 2,
           effect: () => Effect.fail("boom" as const),
           attempts: 1,
           autoStart: true,

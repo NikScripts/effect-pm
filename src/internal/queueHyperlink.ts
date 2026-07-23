@@ -551,7 +551,7 @@ export interface QueueEngineHandle<
   A = void,
 > extends EngineQueueHandle<T, E, EEnqueue, R, A> {
   /** Enqueue at an explicit lane index (custom queues). */
-  readonly enqueueAtLevel: (
+  readonly enqueueAtLane: (
     items: T | ReadonlyArray<T>,
     level: number,
   ) => Effect.Effect<void, EEnqueue, R>;
@@ -581,8 +581,8 @@ export interface QueueEntry<T> {
   readonly entryId: string;
   readonly key?: string;
   readonly priority: Priority;
-  /** Numeric lane index when enqueued on a multi-level (custom) queue. */
-  readonly level?: number;
+  /** Numeric lane index when enqueued on a priority-lane (WorkPool.priority) queue. */
+  readonly lane?: number;
   readonly attempts: number;
   readonly timestamps: QueueEntryTimestamps;
   readonly batchId?: string;
@@ -992,7 +992,7 @@ export interface WorkPoolConfigBase<T> {
    *
    * @default 3
    */
-  readonly levelCount?: number;
+  readonly laneCount?: number;
   /**
    * How workers pick among non-empty lanes when taking the next item. `"priority"` is strict
    * lowest-index-first (the default 3-level behavior). `"weighted"` and `"strict-descending"`
@@ -1385,7 +1385,7 @@ const queueEntryFromInternal = <T>(
   entryId: internal.entryId,
   key: internal.key,
   priority: levelToPriority(internal.level),
-  level: internal.level,
+  lane: internal.level,
   attempts: internal.retries + 1,
   timestamps: {
     enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
@@ -1603,9 +1603,9 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
   readonly validateForEnqueue: ValidateForEnqueue<T, EEnqueue>;
   readonly encodeForRelease: ReleaseEntryEncoder<T> | undefined;
   readonly persistCodec: PersistCodec<T> | undefined;
-  /** Override config `levelCount` when wiring a custom preset. */
-  readonly levelCount?: number;
-  /** Fully custom lane store; when omitted, derived from config `levelCount` + `takeAlgorithm`. */
+  /** Override config `laneCount` when wiring a custom preset. */
+  readonly laneCount?: number;
+  /** Fully custom lane store; when omitted, derived from config `laneCount` + `takeAlgorithm`. */
   readonly makeLaneStore?: (
     capacity: number,
   ) => Effect.Effect<LaneStore<InternalItem<T>>>;
@@ -1624,11 +1624,11 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
 function buildQueueEngine<T, E, EEnqueue, R, A = void>(
   bindings: BuildQueueEngineBindings<T, E, EEnqueue, R, A>,
 ): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> {
-  const levelCount = bindings.levelCount ?? bindings.config.levelCount ?? 3;
+  const laneCount = bindings.laneCount ?? bindings.config.laneCount ?? 3;
   const makeLaneStore =
     bindings.makeLaneStore ??
     laneStoreFactoryFromConfig<InternalItem<T>>({
-      levelCount,
+      laneCount,
       takeAlgorithm: bindings.config.takeAlgorithm,
     });
   const projection = bindings.projection ?? defaultQueueProjection;
@@ -2543,7 +2543,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         (entry) =>
           enqueueInternal(
             [entry.item],
-            entry.level ?? levelOf(entry.priority),
+            entry.lane ?? levelOf(entry.priority),
             Math.max(0, entry.attempts - 1),
             DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
           ),
@@ -3248,7 +3248,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
       enqueue: (input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>) =>
         enqueueEntries(input),
-      enqueueAtLevel: enqueueAtLevelPublic,
+      enqueueAtLane: enqueueAtLevelPublic,
       levelSizes,
 
       // `size`/`isEmpty` are reactive Subscribables (the contract shape) — `.get` keeps the

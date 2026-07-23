@@ -81,7 +81,7 @@ import {
 import { makeCustomQueueEffect } from "./internal/customQueueHyperlink";
 import type {
   CustomQueueHandle,
-  CustomQueueLevelConfig,
+  CustomQueueLaneConfig,
   CustomQueueHyperlinkConfigWithItemSchema,
 } from "./internal/customQueueHyperlink";
 import type { StoreShapes } from "./internal/store/contractDef";
@@ -537,7 +537,7 @@ export const queueControlSpec = {
       "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
   }),
   size: Hyperlink.ref(Schema.Number).annotate({
-    description: "Total pending items across all priority levels.",
+    description: "Total pending items across all priority lanes.",
   }),
   isEmpty: Hyperlink.ref(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
@@ -863,7 +863,7 @@ export interface WorkPool<
 > {
   /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
   readonly status: Hyperlink.Subscribable<QueueStatus>;
-  /** Total pending items across all priority levels. */
+  /** Total pending items across all priority lanes. */
   readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
   readonly isEmpty: Hyperlink.Subscribable<boolean>;
@@ -1402,16 +1402,16 @@ export const customQueueStatus = Schema.Struct({
 
 /**
  * Level argument on the wire — numeric lane index or a name from the tag's
- * `namedLevels` registry (when declared at tag construction).
+ * `namedLanes` registry (when declared at tag construction).
  *
  * @category wire schemas
  * @public
  */
-export const customQueueLevel = (
-  namedLevels?: Readonly<Record<string, number>>,
+export const customQueueLane = (
+  namedLanes?: Readonly<Record<string, number>>,
 ): Schema.Schema<number | string> => {
   const names =
-    namedLevels === undefined ? [] : Object.keys(namedLevels).filter((n) => n.length > 0);
+    namedLanes === undefined ? [] : Object.keys(namedLanes).filter((n) => n.length > 0);
   return names.length === 0
     ? Schema.Union([Schema.Number, Schema.String])
     : Schema.Union([
@@ -1434,7 +1434,7 @@ export const customQueueEntry = <Sch extends Schema.Top>(
     entryId: Schema.String,
     key: Schema.optional(Schema.String),
     priority: queuePriority,
-    level: Schema.optional(Schema.Number),
+    lane: Schema.optional(Schema.Number),
     attempts: Schema.Number,
     timestamps: queueEntryTimestamps,
     batchId: Schema.optional(Schema.String),
@@ -1523,7 +1523,7 @@ export const customQueueControlSpec = {
 };
 
 /** Lane config for a custom queue tag. @internal */
-type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
+type CustomQueueTagLaneConfig = CustomQueueLaneConfig;
 
 /**
  * Build a custom-queue **instance** spec: shared {@link customQueueControlSpec} plus
@@ -1534,11 +1534,11 @@ type CustomQueueTagLevelConfig = CustomQueueLevelConfig;
  */
 export const customQueueSpec = <F extends Schema.Struct.Fields>(
   itemSchema: Schema.Struct<F>,
-  levelConfig: CustomQueueLevelConfig,
+  laneConfig: CustomQueueLaneConfig,
   wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
 ) => {
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
-  const level = customQueueLevel(levelConfig.namedLevels);
+  const level = customQueueLane(laneConfig.namedLanes);
   const entry = customQueueEntry(itemSchema);
   const eventSchema = buildQueueEvent(
     itemSchema,
@@ -1600,7 +1600,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
 type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
 /**
- * Wire `add` member — tuple payload surfaced as `add(item, level?)`.
+ * Wire `add` member — tuple payload surfaced as `add(item, lane?)`.
  *
  * @category models
  * @public
@@ -1628,7 +1628,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
 
 /**
  * Define a custom-queue **instance** — same shape as {@link WorkPool.Tag}, with
- * `levelCount` / `namedLevels` baked into the wire level union:
+ * `laneCount` / `namedLanes` baked into the wire level union:
  *
  * ```ts
  * class Jobs extends WorkPool.priority<Jobs>()(
@@ -1650,7 +1650,7 @@ export const priorityKind = "hyperlink-ts/WorkPool/priority";
 
 /**
  * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
- * schema; `levelCount` is the number of priority lanes; `namedLevels` maps names → lane indices.
+ * schema; `laneCount` is the number of priority lanes; `namedLanes` maps names → lane indices.
  * Optional `success` / `error` wire slots match {@link WorkPool.Tag} (stamped for engine + store).
  *
  * @category models
@@ -1661,8 +1661,8 @@ export interface CustomQueueTagConfig<
   Success extends Schema.Top = typeof Schema.Void,
 > {
   readonly payload: Schema.Struct<F>;
-  readonly levelCount: number;
-  readonly namedLevels?: Readonly<Record<string, number>>;
+  readonly laneCount: number;
+  readonly namedLanes?: Readonly<Record<string, number>>;
   readonly success?: Success;
   readonly error?: Schema.Top;
   readonly description?: string;
@@ -1672,9 +1672,9 @@ export interface CustomQueueTagConfig<
 /**
  * Define an N-level managed queue as a named service {@link Tag} (also exported as
  * {@link priority}): `class Jobs extends WorkPool.priority<Jobs>()("@app/Jobs", { … }) {}`.
- * The **priority (N-level lane)** peer of {@link Tag} — same WorkPool, with `levelCount` /
- * `namedLevels` priority lanes and `add(item, lane?)`. `class Jobs extends
- * WorkPool.priority<Jobs>()("@app/Jobs", { payload, levelCount: 2 }) {}`. The class *is* the Tag —
+ * The **priority (N-level lane)** peer of {@link Tag} — same WorkPool, with `laneCount` /
+ * `namedLanes` priority lanes and `add(item, lane?)`. `class Jobs extends
+ * WorkPool.priority<Jobs>()("@app/Jobs", { payload, laneCount: 2 }) {}`. The class *is* the Tag —
  * `yield* Jobs` resolves the handle, {@link layer} provides it and {@link serve} exposes it over RPC
  * (both dispatch to the leveled engine for a priority tag). `payload` is the item schema; optional
  * `success` / `error` add the worker wire schemas.
@@ -1702,14 +1702,14 @@ export const priority = <Self>() => {
     key: string,
     config: CustomQueueTagConfig<F, Success>,
   ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>> {
-    const levelConfig: CustomQueueTagLevelConfig = {
-      levelCount: config.levelCount,
-      namedLevels: config.namedLevels ?? {},
+    const laneConfig: CustomQueueTagLaneConfig = {
+      laneCount: config.laneCount,
+      namedLanes: config.namedLanes ?? {},
     };
     const wire = { success: config.success, error: config.error };
     const spec = assertCustomQueueInstanceSpec<F>(
-      customQueueSpec(config.payload, levelConfig, wire),
-      customQueueSpec(config.payload, levelConfig),
+      customQueueSpec(config.payload, laneConfig, wire),
+      customQueueSpec(config.payload, laneConfig),
       wire,
     );
     const base =
@@ -1849,8 +1849,8 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       },
       add: ((
         itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
-        level?: number | string,
-      ) => handle.add(itemOrItems, level).pipe(Effect.orDie)) as Hyperlink.WithRequirement<
+        lane?: number | string,
+      ) => handle.add(itemOrItems, lane).pipe(Effect.orDie)) as Hyperlink.WithRequirement<
         ImplOf<CustomQueueInstanceSpec<F>>,
         R | RR
       >["add"],

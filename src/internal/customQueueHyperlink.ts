@@ -19,7 +19,7 @@ import {
 } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import { isJsonValue } from "./json";
-import { resolveCustomQueueLevel } from "./customQueueLevels";
+import { resolveCustomQueueLane } from "./customQueueLevels";
 import { levelToDefaultPriority } from "./priorityMapping";
 import {
   buildCustomQueueProjection,
@@ -70,11 +70,11 @@ export type { CustomQueueStatus } from "./queueProjection";
  * @category models
  * @public
  */
-export interface CustomQueueLevelConfig {
-  /** Required lane count — one bounded queue per level index `0 … levelCount - 1`. */
-  readonly levelCount: number;
+export interface CustomQueueLaneConfig {
+  /** Required lane count — one bounded queue per level index `0 … laneCount - 1`. */
+  readonly laneCount: number;
   /** Map configured names to lane indices (e.g. `{ interactive: 2, batch: 5 }`). */
-  readonly namedLevels?: Record<string, number>;
+  readonly namedLanes?: Record<string, number>;
   /** Lane used when `add` omits a level. @default 0 */
   readonly defaultLevel?: number;
 }
@@ -87,11 +87,11 @@ export interface CustomQueueLevelConfig {
 export interface CustomQueueEnqueue<T, EEnqueue = never, R = never> {
   (
     items: T | ReadonlyArray<T>,
-    level?: number | string,
+    lane?: number | string,
   ): Effect.Effect<void, EEnqueue, R>;
 }
 
-/** Control + observe surface for custom N-level queues. @public */
+/** Control + observe surface for custom N-lane queues. @public */
 export interface CustomQueueHandleApi<
   T,
   E = never,
@@ -149,9 +149,9 @@ export type CustomQueueHandle<
  */
 export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
-  "levelCount"
+  "laneCount"
 > &
-  CustomQueueLevelConfig & {
+  CustomQueueLaneConfig & {
     readonly itemSchema?: undefined;
     readonly effect: (
       item: T,
@@ -168,9 +168,9 @@ export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
  */
 export type CustomQueueHyperlinkConfigWithItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
-  "levelCount"
+  "laneCount"
 > &
-  CustomQueueLevelConfig & {
+  CustomQueueLaneConfig & {
     readonly itemSchema: Schema.Codec<T, unknown, never, never>;
     readonly effect: (
       item: T,
@@ -226,9 +226,9 @@ const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray
 const normalizeEnqueueInput = <A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> =>
   isReadonlyArray(input) ? input : [input];
 
-const levelResolution = (config: CustomQueueLevelConfig) => ({
-  levelCount: Math.max(1, Math.floor(config.levelCount)),
-  namedLevels: config.namedLevels ?? {},
+const levelResolution = (config: CustomQueueLaneConfig) => ({
+  laneCount: Math.max(1, Math.floor(config.laneCount)),
+  namedLanes: config.namedLanes ?? {},
   defaultLevel: config.defaultLevel ?? 0,
 });
 
@@ -238,11 +238,11 @@ const wrapCustomQueueHandle = <T, E, EEnqueue, R>(
   projection: ReturnType<typeof buildCustomQueueProjection>,
 ): CustomQueueHandle<T, E, EEnqueue, R> => {
   const resolveLevel = (input?: number | string) =>
-    resolveCustomQueueLevel({ ...levels, input });
+    resolveCustomQueueLane({ ...levels, input });
 
   return {
     add: (items, level?) =>
-      engine.enqueueAtLevel(normalizeEnqueueInput(items), resolveLevel(level)),
+      engine.enqueueAtLane(normalizeEnqueueInput(items), resolveLevel(level)),
     enqueue: engine.enqueue,
     size: engine.size,
     sizes: Effect.map(engine.levelSizes, projection.projectSizes),
@@ -349,10 +349,10 @@ const adaptRefill = <T, E, EEnqueue, R>(
         },
       } satisfies QueueRefill<T, E, EEnqueue, R>);
 
-const buildCustomProjection = (config: CustomQueueLevelConfig) =>
+const buildCustomProjection = (config: CustomQueueLaneConfig) =>
   buildCustomQueueProjection({
-    levelCount: levelResolution(config).levelCount,
-    namedLevels: config.namedLevels,
+    laneCount: levelResolution(config).laneCount,
+    namedLanes: config.namedLanes,
   });
 
 const castProjection = (
@@ -386,10 +386,10 @@ const makeCustomQueueEffectWithoutSchema = <
     const engine = yield* buildQueueEngine({
       config: {
         ...config,
-        levelCount: levels.levelCount,
+        laneCount: levels.laneCount,
         refill: adaptRefill(config, levels, projection),
       },
-      levelCount: levels.levelCount,
+      laneCount: levels.laneCount,
       projection: castProjection(projection),
       validateForEnqueue: (items) => Effect.succeed(items),
       encodeForRelease: undefined,
@@ -471,10 +471,10 @@ const makeCustomQueueEffectWithSchema = <
     const engine = yield* buildQueueEngine({
       config: {
         ...config,
-        levelCount: levels.levelCount,
+        laneCount: levels.laneCount,
         refill: adaptRefill(config, levels, projection),
       },
-      levelCount: levels.levelCount,
+      laneCount: levels.laneCount,
       projection: castProjection(projection),
       validateForEnqueue: (items) =>
         validateItemsWithSchema(queueName, config.itemSchema, codecId, items),
@@ -516,7 +516,7 @@ function makeCustomQueueEffect<
     | undefined = undefined,
 >(
   effect: F,
-  options: O & CustomQueueLevelConfig,
+  options: O & CustomQueueLaneConfig,
 ): Effect.Effect<
   CustomQueueHandle<
     InferQueueItem<CustomConfigFromEffect<F, O>>,
@@ -542,12 +542,12 @@ function makeCustomQueueEffect<const C extends CustomQueueHyperlinkConfig<any, a
 function makeCustomQueueEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | CustomQueueHyperlinkConfig<any, any, any>,
   options?: (CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any> &
-    CustomQueueLevelConfig),
+    CustomQueueLaneConfig),
 ): Effect.Effect<CustomQueueHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {
-    if (options === undefined || options.levelCount === undefined) {
+    if (options === undefined || options.laneCount === undefined) {
       return Effect.die(
-        new Error("CustomQueueHyperlink.make requires levelCount in config or options"),
+        new Error("CustomQueueHyperlink.make requires laneCount in config or options"),
       );
     }
     return makeCustomQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
