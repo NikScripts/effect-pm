@@ -8,7 +8,7 @@ import { Schema } from "effect";
 // until `grantLocal` discharges it (same bundle pattern as WorkPool / Daemon / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
-  "hyperlink-ts/test/custom-queue-built-resource.test-d/WorkerDep",
+  "hyperlink-ts/test/custom-queue-driver.test-d/WorkerDep",
 ) {}
 
 const JobSchema = Schema.Struct({ id: Schema.String });
