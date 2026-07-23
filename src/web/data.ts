@@ -11,10 +11,10 @@
 import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperlink";
-import type { NodeKey } from "../Node";
+import { nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperlink";
+import { connect } from "../Node";
+import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
-import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
 import { priorityKind as customQueueKind, customQueueStatus } from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
@@ -265,7 +265,7 @@ export interface DaemonBundle {
  *  Read-only. */
 export interface NodeBundle {
   readonly id: string;
-  readonly status: ValueAtom<NodeStatus.Status>;
+  readonly status: ValueAtom<NodeStatusSnapshot>;
   /** The node's runtime-wide log stream (recent tail, then live). */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
@@ -446,14 +446,18 @@ const hyperlinkLogsAtom = <R, ER>(
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(
+      // A dead node surfaces NodeUnreachable; the dashboard atoms have no error channel, so it
+      // becomes a defect the atom's AsyncResult reports (same as before the node-handle move).
+      stream: Stream.unwrap(Effect.map(node, (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
+        Stream.orDie,
       ),
-      query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(node, (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+        Effect.orDie,
       ),
-    }).pipe(Stream.provide(nodeStatusClient(node))),
+    }).pipe(Stream.provide(nodeConn(node))),
   );
 
 /** Build (once per runtime+tag) the atom bundle for a queue tag. */
@@ -799,7 +803,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
   return bundle;
 };
 
-// A NodeStatus client over a specific node's transport: a NodeKey's *value* is the RPC `Protocol`,
+// (comment removed)
 // so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
 // requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
@@ -807,8 +811,10 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
 // way to point a nodeless tag (NodeStatus) at a specific node. (The node is exposed at runtime via
 // `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
 // makes for node-bearing tags.)
-const nodeStatusClient = (node: NodeKey<unknown>) =>
-  client(NodeStatus.Tag, node as NodeKey<never>);
+const nodeConn = (node: NodeKey<unknown>) =>
+  // Connect the node so `yield* node` yields its handle (protocol + status/logs/ping). The list is
+  // heterogeneous, so the node is erased; these are real addressed dashboard nodes.
+  connect(node as AddressedNode<unknown>);
 
 /** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
  *  reserved `NodeStatus` resource over that node's transport. */
@@ -827,21 +833,26 @@ export const nodeStatusBundle = <R, ER>(
       // Provide the per-node client at the STREAM level so its scope spans the whole subscription.
       // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
       // returned the stream, interrupting it — "all fibers interrupted".)
-      Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status.changes)).pipe(
-        Stream.provide(nodeStatusClient(ref.node)),
+      Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
+        Stream.provide(nodeConn(ref.node)),
+        Stream.orDie,
       ),
     ),
     logs: runtime.atom(
-      // `cachedAccumulator`'s live + history both require `NodeStatus.Tag`; provide the per-node
-      // client once over the combined stream (same stream-scoped provide as `status`).
+      // `cachedAccumulator`'s live + history both read the node's status; provide the per-node
+      // connection once over the combined stream (stream-scoped so it spans the subscription).
       cachedAccumulator({
         key: logsKey,
         cap: 300,
-        stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(Stream.map(toLogLine)),
-        query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
-          Effect.map((entries) => entries.map(toLogLine)),
+        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.logs.stream)).pipe(
+          Stream.map(toLogLine),
+          Stream.orDie,
         ),
-      }).pipe(Stream.provide(nodeStatusClient(ref.node))),
+        query: Effect.flatMap(ref.node, (h) => h.logs.query({ limit: 300 })).pipe(
+          Effect.map((entries) => entries.map(toLogLine)),
+          Effect.orDie,
+        ),
+      }).pipe(Stream.provide(nodeConn(ref.node))),
     ),
     // Ready-count over time, accumulated client-side from the status stream — a compact readiness
     // sparkline (no server change). Dips when a resource degrades (e.g. a dependency blips).
@@ -849,10 +860,11 @@ export const nodeStatusBundle = <R, ER>(
       cachedAccumulator({
         key: `${ref.id}/health`,
         cap: 120,
-        stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status.changes)).pipe(
+        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
           Stream.map((st) => st.resources.filter((x) => x.ready).length),
+          Stream.orDie,
         ),
-      }).pipe(Stream.provide(nodeStatusClient(ref.node))),
+      }).pipe(Stream.provide(nodeConn(ref.node))),
     ),
   };
   cache.set(ref.id, bundle);

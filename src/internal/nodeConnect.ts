@@ -49,13 +49,13 @@ const protocols = (): NodeProtocolBuilders => {
 /**
  * The status/logs/ping accessors on a connected node handle — lazy over the node's own `protocol`.
  * Each dynamically imports the status engine on access (so nodeConnect never statically pulls it,
- * and it stays off the light Tag path); the real dial logic is `nodeStatusHyperlink.nodeStatusAccessors`.
+ * and it stays off the light Tag path); the real dial logic is `nodeStatus.nodeStatusAccessors`.
  * @internal
  */
 const lazyStatusAccessors = (
   protocol: Context.Service.Shape<typeof RpcClient.Protocol>,
 ): NodeStatusAccessors => {
-  const load = Effect.promise(() => import("./nodeStatusHyperlink"))
+  const load = Effect.promise(() => import("./nodeStatus"))
   const of = (protocol: Context.Service.Shape<typeof RpcClient.Protocol>) =>
     Effect.map(load, (m) => m.nodeStatusAccessors(protocol))
   return {

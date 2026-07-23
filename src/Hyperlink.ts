@@ -4396,7 +4396,7 @@ const probeEndpointReachable = (
  * classify as {@link ProtocolUnanswered}; optional `resource` checks served-key / readiness;
  * optional `contractHash` compares the F4 wire fingerprint.
  *
- * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatusHyperlink stays acyclic.
+ * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatus stays acyclic.
  *
  * @internal
  */
@@ -4423,17 +4423,17 @@ const probeEndpointDeep = (
       ? makeNode()(`@pm/verify/${nodeKey}`, { path: address })
       : makeNode()(`@pm/verify/${nodeKey}`, { url: address, kind: ep.kind });
   return Effect.gen(function* () {
-    const { NodeStatusHyperlink } = yield* Effect.promise(
-      () => import("./internal/nodeStatusHyperlink"),
+    const { NodeStatusTag } = yield* Effect.promise(
+      () => import("./internal/nodeStatus"),
     );
     // Skip default-on verify on this nested NodeStatus client (we *are* the verify probe).
     const ctx = yield* Layer.build(
-      clientLayer(NodeStatusHyperlink, dialTarget).pipe(
+      clientLayer(NodeStatusTag, dialTarget).pipe(
         Layer.provide(clientVerify(false)),
       ),
     );
     const snap = yield* Effect.gen(function* () {
-      const status = yield* NodeStatusHyperlink;
+      const status = yield* NodeStatusTag;
       return yield* status.status.get;
     }).pipe(Effect.provide(ctx));
     if (resource === undefined) {

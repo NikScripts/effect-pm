@@ -75,7 +75,7 @@ import {
   withEntries,
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
-import type { Status as NodeStatusValue } from "../NodeStatus";
+import type { Status as NodeStatusValue } from "../Node";
 import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";

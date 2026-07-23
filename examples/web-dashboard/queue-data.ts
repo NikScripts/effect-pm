@@ -88,10 +88,10 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 const dropletTransport = Hyperlink.ws(Droplet, { url: dropletRpc });
 const miniTransport = Hyperlink.ws(MiniNode, { url: miniUrl });
 
-// Point the nodeless Node.status client at a specific node with the 2-arg `client(tag, node)` form — it
-// reads the node's value and unwraps its transport. (The node is exposed in `appLayer` below.)
-const nodeStatusLayer = (resourceKey: string) =>
-  Hyperlink.client(Node.status.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
+// The node this resource lives on — connect it so `yield* node` yields the handle (status/logs/ping).
+const nodeFor = (resourceKey: string) =>
+  nodeOf(resourceKey) === "mini" ? MiniNode : Droplet;
+const nodeStatusLayer = (resourceKey: string) => Node.connect(nodeFor(resourceKey));
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
@@ -192,12 +192,14 @@ const hyperlinkLogsAccumulator = (resourceKey: string) =>
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(Node.status.Tag, (h) => h.logs.stream)).pipe(
+      stream: Stream.unwrap(Effect.map(nodeFor(resourceKey), (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
+        Stream.orDie,
       ),
-      query: Effect.flatMap(Node.status.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(nodeFor(resourceKey), (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+        Effect.orDie,
       ),
     }).pipe(Stream.provide(nodeStatusLayer(resourceKey))),
   );

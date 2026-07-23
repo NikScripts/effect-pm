@@ -143,12 +143,14 @@ export function listenLocal(
   return unix(node, serves as ServeLayerList, options)
 }
 
-/**
- * The reserved node-status surface, folded into the Node namespace: `Node.status.Tag` is the
- * status Hyperlink every node serves automatically, `Node.status.clientHttp` the
- * batteries-included client. See the {@link status} namespace for the full surface.
- *
- * @category services
- * @public
- */
-export * as status from "./NodeStatus"
+// ── Node status ──
+// Every node auto-serves its status/logs/ping; you read them straight off a connected node handle
+// (`const n = yield* MyNode; yield* n.ping` / `n.status.get` / `n.logs.stream`). The engine is a lazy
+// internal (pulled only on connect, off the light Tag path). These are the light snapshot types.
+
+/** A node's live status snapshot — what `(yield* MyNode).status.get` resolves to. @category services @public */
+export type { NodeStatus as Status } from "./internal/nodeStatus"
+/** One served resource's readiness — an element of {@link Status}`.resources`. @category services @public */
+export type { ResourceReadiness } from "./internal/nodeStatus"
+/** The {@link ResourceReadiness} wire schema (for composing your own health surfaces). @category services @public */
+export { resourceReadiness } from "./internal/nodeStatus"

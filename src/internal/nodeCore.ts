@@ -11,7 +11,7 @@ import type { HttpRouter } from "effect/unstable/http"
 import type { RpcClient } from "effect/unstable/rpc"
 import type { RpcSerialization } from "effect/unstable/rpc"
 import type { LogEntry } from "../LogEntry"
-import type { NodeStatus as NodeStatusSnapshot } from "./nodeStatusHyperlink"
+import type { NodeStatus as NodeStatusSnapshot } from "./nodeStatus"
 
 /**
  * The reserved status/logs/ping features every node auto-serves, read straight off a connected node

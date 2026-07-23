@@ -29,7 +29,6 @@ import {
 } from "./internal/nodeCore";
 import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
-import * as NodeStatus from "./NodeStatus";
 import * as internal from "./internal/lookup";
 
 /** Wire + resolve helpers re-exported for apps that stamp policies on nodes. @public */
@@ -514,11 +513,17 @@ const incumbentAlive = (
   // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
   // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
+    // NodeStatus is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
+    const { NodeStatusTag } = yield* Effect.promise(
+      () => import("./internal/nodeStatus"),
+    );
     const ctx = yield* Layer.build(
-      NodeStatus.client(target),
+      Hyperlink.client(NodeStatusTag, target).pipe(
+        Layer.provide(Hyperlink.clientVerify(false)),
+      ),
     );
     yield* Effect.gen(function* () {
-      const status = yield* NodeStatus.Tag;
+      const status = yield* NodeStatusTag;
       yield* status.ping;
     }).pipe(Effect.provide(ctx));
   }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(2)));
@@ -550,11 +555,16 @@ const incumbentYield = (
   }
   // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
+    const { NodeStatusTag } = yield* Effect.promise(
+      () => import("./internal/nodeStatus"),
+    );
     const ctx = yield* Layer.build(
-      NodeStatus.client(target),
+      Hyperlink.client(NodeStatusTag, target).pipe(
+        Layer.provide(Hyperlink.clientVerify(false)),
+      ),
     );
     return yield* Effect.gen(function* () {
-      const status = yield* NodeStatus.Tag;
+      const status = yield* NodeStatusTag;
       return yield* status.yield;
     }).pipe(Effect.provide(ctx));
   }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(2)));

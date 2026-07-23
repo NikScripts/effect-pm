@@ -26,7 +26,6 @@ export default defineConfig([
       Logs: "src/Logs.ts",
       LogEntry: "src/LogEntry.ts",
       LogContext: "src/LogContext.ts",
-      NodeStatus: "src/NodeStatus.ts",
       HistoryStore: "src/HistoryStore.ts",
       DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",

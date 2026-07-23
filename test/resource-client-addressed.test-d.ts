@@ -4,7 +4,7 @@
  */
 import { Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
-import * as NodeStatus from "../src/NodeStatus";
+import { NodeStatusTag } from "../src/internal/nodeStatus";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -16,11 +16,11 @@ class PortNode extends Node.Tag<PortNode>()("ca/Port", 3001) {}
 class Bare extends Node.Tag<Bare>()("ca/Bare") {}
 
 // Dialable Tag → AddressedNode → auto-connect, R = never
-runFullyWired(Hyperlink.client(NodeStatus.Tag, Droplet));
+runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 
 // Bare node: still needs Node in R — not fully wired
 // @ts-expect-error — bare client(tag, Bare) still requires Bare
-runFullyWired(Hyperlink.client(NodeStatus.Tag, Bare));
+runFullyWired(Hyperlink.client(NodeStatusTag, Bare));
 
 // Derived connect is compile-gated on AddressedNode
 // @ts-expect-error — bare Tag cannot derive connect
@@ -29,7 +29,7 @@ Node.connect(Bare);
 // Explicit protocol still wires a bare node
 const proto = Hyperlink.protocolHttp("http://x/rpc");
 runFullyWired(
-  Hyperlink.client(NodeStatus.Tag, Bare).pipe(
+  Hyperlink.client(NodeStatusTag, Bare).pipe(
     Layer.provide(Node.connect(Bare, proto)),
   ),
 );
