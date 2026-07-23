@@ -327,7 +327,7 @@ export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
 };
 
 /** The leaf resource tag in a group tree whose wire key is `key` (as reported by a node's
- *  `NodeStatus.resources[].key`), or `undefined` if not found. Lets the node page open a served
+ *  `Node.Status.resources[].key`), or `undefined` if not found. Lets the node page open a served
  *  resource's detail directly (without round-tripping through the group route). */
 export const leafByKey = (group: unknown, key: string): unknown => {
   const walk = (node: unknown): unknown => {

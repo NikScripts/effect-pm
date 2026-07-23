@@ -2391,7 +2391,7 @@ const fromWindow = (w: ScheduleWindow): DaemonScheduleEntry => ({
 const buildDaemonImpl = <A, E, R>(
   tag: HyperlinkTag<any, any, any>,
   baseConfig: DaemonLayerConfig<A, E, R>,
-): Effect.Effect<Hyperlink.BuiltHyperlink<DaemonSpec, R>, never, R | Scope.Scope | Store.Storage> =>
+): Effect.Effect<Hyperlink.Driver<DaemonSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
     const scope = yield* Effect.scope;
@@ -2499,7 +2499,7 @@ const buildDaemonImpl = <A, E, R>(
       ...scheduleMembers,
       ...resultMembers,
     };
-    return Hyperlink.builtHyperlink(
+    return Hyperlink.driver(
       tag,
       impl,
       context,

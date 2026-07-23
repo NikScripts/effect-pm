@@ -40,8 +40,8 @@ const cases = [
     member: "Tag",
   },
   {
-    // `Process` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
-    // / `window`) and the engine (`make` / `layer` / `serve`). A `Process.Tag`-only import must not
+    // `Daemon` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
+    // / `window`) and the engine (`make` / `layer` / `serve`). A `Daemon.Tag`-only import must not
     // retain the engine's separate source files.
     name: "Daemon",
     entry: "src/Daemon.ts",
@@ -53,9 +53,8 @@ const cases = [
     member: "Tag",
   },
   {
-    // `RunHyperlink` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
-    // engine. A `RunHyperlink.Tag`-only import must not retain the engine (`makeRunHyperlinkHandleEffect`
-    // / `make` / `layer` / `serve`).
+    // `Gate` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
+    // engine. A `Gate.Tag`-only import must not retain the engine (`make` / `layer` / `serve`).
     name: "Gate",
     entry: "src/Gate.ts",
     engine: ["src/internal/runHyperlink.ts"],

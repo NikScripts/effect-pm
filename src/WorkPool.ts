@@ -1334,7 +1334,7 @@ const buildQueueImpl = <
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return Hyperlink.builtHyperlink(tag, impl, context);
+    return Hyperlink.driver(tag, impl, context);
   });
 
 /**
@@ -1775,7 +1775,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
   tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Effect.Effect<
-  Hyperlink.BuiltHyperlink<CustomQueueInstanceSpec<F>, R | RR>,
+  Hyperlink.Driver<CustomQueueInstanceSpec<F>, R | RR>,
   never,
   R | RR | Scope.Scope | Store.Storage
 > =>
@@ -1862,7 +1862,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return Hyperlink.builtHyperlink(tag, impl, context);
+    return Hyperlink.driver(tag, impl, context);
   });
 
 /** A WorkPool tag — plain or {@link priority} — the runtime verbs dispatch over by kind. @internal */

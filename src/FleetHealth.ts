@@ -9,7 +9,7 @@
  * ## Shape (Telemetry twin)
  *
  * - Leaf: `local` — this node's `ok` / `degraded` + per-resource rows (same readiness SSOT
- *   shape as `NodeStatus.resources`).
+ *   shape as `Node.Status.resources`).
  * - Fleet: `byNode` / `status` — map + rollup (`ok` | `degraded` | `partial`).
  *
  * Discharge the mesh with {@link Hyperlink.peersLayer} (or {@link alone} for a single node).
@@ -102,7 +102,7 @@ const byNodeSchema = Schema.Record(Schema.String, nodeReport);
 const fleetHealthSpec = {
   local: effect(LocalHealth).annotate({
     description:
-      "This node's readiness aggregate (same SSOT shape as NodeStatus.resources) — leaf only.",
+      "This node's readiness aggregate (same SSOT shape as Node.Status.resources) — leaf only.",
   }),
   byNode: effect(byNodeSchema).pipe(fleet).annotate({
     description:

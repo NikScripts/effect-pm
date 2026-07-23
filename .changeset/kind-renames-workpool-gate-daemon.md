@@ -33,3 +33,18 @@ The leveled and HTTP engines remain tree-shakeable — a `WorkPool.Tag`-only imp
 `add(item, lane?)`; the entry wire field `level` → `lane`; config types `CustomQueueLevelConfig` →
 `CustomQueueLaneConfig`. (Log-stream levels and store levels are unrelated and unchanged; the engine's
 internal priority-`level` machinery is a different concept and also unchanged.)
+
+**Advanced-authoring surface renamed.** The pre-provide impl bundle used when building a custom kind is
+renamed off the old internal brand:
+
+| Before | After |
+|---|---|
+| `Hyperlink.BuiltHyperlink<S, R>` (type) | `Hyperlink.Driver<S, R>` |
+| `Hyperlink.builtHyperlink(tag, impl, ctx)` | `Hyperlink.driver(tag, impl, ctx)` |
+| `Hyperlink.isBuiltHyperlink(u)` | `Hyperlink.isDriver(u)` |
+| `Hyperlink.builtHyperlinkSym` | `Hyperlink.driverSym` |
+
+**`ServedHyperlink` surface demoted to `@internal`.** `Hyperlink.ServedHyperlink`,
+`Hyperlink.ServedHyperlinks`, and `Hyperlink.servedHyperlinksLayer` are the served-resources registry —
+plumbing consumed only by the transport servers. They are no longer part of the documented public
+surface (still exported for cross-module use, but marked `@internal`; do not depend on them).

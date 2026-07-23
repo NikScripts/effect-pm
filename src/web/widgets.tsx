@@ -2223,7 +2223,7 @@ export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): Reac
 export const NodeDetail = (props: {
   readonly node: NodeRef;
   readonly onBack: () => void;
-  /** Open a served resource's detail page, by its wire key (`NodeStatus.resources[].key`). */
+  /** Open a served resource's detail page, by its wire key (`Node.Status.resources[].key`). */
   readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);

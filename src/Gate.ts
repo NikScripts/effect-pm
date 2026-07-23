@@ -63,7 +63,7 @@
 import { Context, Effect, Layer, Schema, Scope } from "effect";
 import * as Hyperlink from "./Hyperlink";
 import type {
-  BuiltHyperlink,
+  Driver,
   HandlerContextOf,
   ImplOf,
   Local,
@@ -670,7 +670,7 @@ const buildRunImpl = <
   tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Effect.Effect<
-  BuiltHyperlink<RunInstanceSpec<I, A, E>, R>,
+  Driver<RunInstanceSpec<I, A, E>, R>,
   never,
   R | Scope.Scope | Store.Storage
 > =>
@@ -718,7 +718,7 @@ const buildRunImpl = <
       interrupted: handle.interrupted,
       run: runImpl,
     } as Hyperlink.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>;
-    return Hyperlink.builtHyperlink(tag, impl, context);
+    return Hyperlink.driver(tag, impl, context);
   });
 
 // ============================================================================
@@ -818,7 +818,7 @@ export function serveRemote(
   tag: HyperlinkTag<any, any, any>,
   config: GateLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `BuiltHyperlink` and
+  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `Driver` and
   // `Hyperlink.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
   // overload above). Mirrors `Daemon.serveRemote`.
   const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;

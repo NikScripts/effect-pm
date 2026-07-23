@@ -97,8 +97,9 @@ const nodeStatusLayer = (resourceKey: string) => Node.connect(nodeFor(resourceKe
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
   // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself is
-  // in the runtime context. The HealthBoard's per-node `Node.status` reads it via `client(tag, node)`;
-  // without this, that node isn't resolvable and the node status hangs on "connecting…".
+  // in the runtime context. The HealthBoard reads each node's status straight off its connected
+  // handle (`(yield* node).status`), which dials the node's own transport; without the node in
+  // context that dial can't resolve and the node status hangs on "connecting…".
   dropletTransport,
   miniTransport,
   Hyperlink.client(Mail).pipe(Layer.provide(dropletTransport)),

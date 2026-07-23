@@ -1307,9 +1307,9 @@ export const provideContext = <Impl, const S extends Spec, Ctx>(
     Effect.provideContext(effect as any, context) as any,
   );
 
-/** Runtime marker for a {@link BuiltHyperlink} bundle. @internal */
-export const builtHyperlinkSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Hyperlink/BuiltHyperlink",
+/** Runtime marker for a {@link Driver} bundle. @internal */
+export const driverSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/Driver",
 );
 
 /**
@@ -1323,40 +1323,40 @@ export const builtHyperlinkSym: unique symbol = Symbol.for(
  * @category models
  * @public
  */
-export interface BuiltHyperlink<S extends Spec, R> {
-  readonly [builtHyperlinkSym]: true;
+export interface Driver<S extends Spec, R> {
+  readonly [driverSym]: true;
   readonly impl: WithRequirement<ImplOf<S>, R>;
   readonly workerContext: Context.Context<R>;
 }
 
 /**
- * True when `u` is a {@link BuiltHyperlink} bundle.
+ * True when `u` is a {@link Driver} bundle.
  *
  * @category guards
  * @public
  */
-export const isBuiltHyperlink = (u: unknown): u is BuiltHyperlink<Spec, unknown> =>
-  Predicate.hasProperty(u, builtHyperlinkSym);
+export const isDriver = (u: unknown): u is Driver<Spec, unknown> =>
+  Predicate.hasProperty(u, driverSym);
 
 /**
  * Pair a pre-provide impl with the worker context captured at build time. Pass `tag` so the concrete
- * {@link Spec} `S` is pinned for {@link BuiltHyperlink} typing.
+ * {@link Spec} `S` is pinned for {@link Driver} typing.
  *
  * @category constructors
  * @public
  */
-export const builtHyperlink = <Self, S extends Spec, R>(
+export const driver = <Self, S extends Spec, R>(
   _tag: HyperlinkTag<Self, S>,
   impl: WithRequirement<ImplOf<S>, R>,
   workerContext: Context.Context<R>,
-): BuiltHyperlink<S, R> => ({
-  [builtHyperlinkSym]: true as const,
+): Driver<S, R> => ({
+  [driverSym]: true as const,
   impl,
   workerContext,
 });
 
 /**
- * Discharge a {@link BuiltHyperlink}'s captured worker context into every Effect method — yields the
+ * Discharge a {@link Driver}'s captured worker context into every Effect method — yields the
  * `R`-free {@link ImplOf} shape for {@link layer} / the local grant in {@link serve}.
  *
  * @category constructors
@@ -1364,7 +1364,7 @@ export const builtHyperlink = <Self, S extends Spec, R>(
  */
 export const grantLocal = <Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
-  built: BuiltHyperlink<S, R>,
+  built: Driver<S, R>,
 ): ImplOf<S> =>
   provideContext(built.impl, tag[specSym], built.workerContext) as ImplOf<S>;
 
@@ -2516,7 +2516,7 @@ export const kindOf = (tag: unknown): string | undefined => {
 
 /**
  * F4 wire-contract fingerprint for a resource tag — same value the server stamps on
- * `NodeStatus.resources[].contractHash` at serve. Compare via
+ * `Node.Status.resources[].contractHash` at serve. Compare via
  * {@link verifyConnection}`({ deep: true, resource, contractHash })`.
  *
  * @category introspection
@@ -3440,7 +3440,7 @@ const invokeWireMethodWithContext = (
  * `/health` + node-status.
  *
  * @category models
- * @public
+ * @internal
  */
 export interface ServedHyperlink {
   readonly groupId: string;
@@ -3464,7 +3464,7 @@ export interface ServedHyperlink {
  * registers **only if it's present** (so `serve` also works standalone).
  *
  * @category models
- * @public
+ * @internal
  */
 export class ServedHyperlinks extends Context.Service<
   ServedHyperlinks,
@@ -3481,7 +3481,7 @@ export class ServedHyperlinks extends Context.Service<
  * Provide this standalone only to collect `serve` registrations without a server.
  *
  * @category serving
- * @public
+ * @internal
  */
 export const servedHyperlinksLayer: Layer.Layer<ServedHyperlinks> = Layer.effect(
   ServedHyperlinks,
@@ -3576,12 +3576,12 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: Impl | BuiltHyperlink<S, any>,
+  impl: Impl | Driver<S, any>,
 ): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
-  const wireImpl = isBuiltHyperlink(impl) ? impl.impl : impl;
-  const workerContext = isBuiltHyperlink(impl) ? impl.workerContext : undefined;
+  const wireImpl = isDriver(impl) ? impl.impl : impl;
+  const workerContext = isDriver(impl) ? impl.workerContext : undefined;
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
   const flatImpl = flattenImpl(wireImpl as Record<string, unknown>, tag[specSym]);
   for (const [key, member] of Object.entries(flatImpl)) {
@@ -3650,13 +3650,13 @@ const servePlain = <Self, S extends Spec, R = never>(
   tag: HyperlinkTag<Self, S>,
   impl:
     | ImplOf<S>
-    | BuiltHyperlink<S, R>
-    | Effect.Effect<ImplOf<S> | BuiltHyperlink<S, R>, never, R>,
+    | Driver<S, R>
+    | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> =>
   Layer.unwrap(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
-      if (isBuiltHyperlink(built)) {
-        const bundle = built as BuiltHyperlink<S, R>;
+      if (isDriver(built)) {
+        const bundle = built as Driver<S, R>;
         // Plain local — identity claim (if any) already happened in {@link serve}.
         return Layer.merge(
           localLayerPlain(tag, grantLocal(tag, bundle)),
@@ -3700,8 +3700,8 @@ export const serve = <Self, S extends Spec, R = never>(
   tag: HyperlinkTag<Self, S>,
   impl:
     | ImplOf<S>
-    | BuiltHyperlink<S, R>
-    | Effect.Effect<ImplOf<S> | BuiltHyperlink<S, R>, never, R>,
+    | Driver<S, R>
+    | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
   // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
   // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
@@ -4499,7 +4499,7 @@ export type VerifyConnectionOptions = {
 /** Options for deep (tier-2/3/4) {@link verifyConnection} — RPC + optional resource / F4 hash. @public */
 export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
   readonly deep: true;
-  /** When set, require this resource key in `NodeStatus.resources` and `ready: true`. */
+  /** When set, require this resource key in `Node.Status.resources` and `ready: true`. */
   readonly resource?: string;
   /**
    * Expected F4 {@link contractHash} for `resource`. When set (requires `resource`), mismatch

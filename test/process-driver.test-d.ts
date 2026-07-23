@@ -3,7 +3,7 @@ import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 import type { DaemonSpec } from "../src/Daemon";
 
-// Type-level proof: Daemon toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
+// Type-level proof: Daemon toolkit layers materialize a `Driver` — impl carries worker `R`
 // until `grantLocal` discharges it (same bundle pattern as WorkPool / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
@@ -12,9 +12,9 @@ class WorkerDep extends Context.Service<WorkerDep, string>()(
 
 class TypedProc extends Daemon.Tag<TypedProc>()("test/built-resource/Typed") {}
 
-type Built = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep>;
+type Built = Hyperlink.Driver<DaemonSpec, WorkerDep>;
 
-// `BuiltHyperlink` pairs a requirement-carrying impl with captured worker context.
+// `Driver` pairs a requirement-carrying impl with captured worker context.
 type ImplCarriesWorkerDep = Built["impl"] extends Hyperlink.WithRequirement<
   Hyperlink.ImplOf<DaemonSpec>,
   WorkerDep
@@ -28,8 +28,8 @@ type ContextHasWorkerDep = Built["workerContext"] extends Context.Context<Worker
   : false;
 true satisfies ContextHasWorkerDep;
 
-// `grantLocal` signature: `BuiltHyperlink<S, R>` in → `ImplOf<S>` out (R stripped from Effect methods).
-type GrantLocalOut = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep> extends Parameters<
+// `grantLocal` signature: `Driver<S, R>` in → `ImplOf<S>` out (R stripped from Effect methods).
+type GrantLocalOut = Hyperlink.Driver<DaemonSpec, WorkerDep> extends Parameters<
   typeof Hyperlink.grantLocal<typeof TypedProc, DaemonSpec, WorkerDep>
 >[1]
   ? ReturnType<typeof Hyperlink.grantLocal<typeof TypedProc, DaemonSpec, WorkerDep>> extends Hyperlink.ImplOf<DaemonSpec>
@@ -38,8 +38,8 @@ type GrantLocalOut = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep> extends Par
   : false;
 true satisfies GrantLocalOut;
 
-// Soundness: a plain `ImplOf` is not assignable to `BuiltHyperlink` without the marker.
-type PlainImplIsNotBuilt = Hyperlink.BuiltHyperlink<DaemonSpec, WorkerDep> extends Hyperlink.ImplOf<DaemonSpec>
+// Soundness: a plain `ImplOf` is not assignable to `Driver` without the marker.
+type PlainImplIsNotBuilt = Hyperlink.Driver<DaemonSpec, WorkerDep> extends Hyperlink.ImplOf<DaemonSpec>
   ? false
   : true;
 true satisfies PlainImplIsNotBuilt;
