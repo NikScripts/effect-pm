@@ -23,9 +23,9 @@ import {
   withSchemaVersion,
   makeQueueEffect,
   Tag as engineQueueTag,
-  queueHyperlinkLayer,
+  workPoolLayer,
   Service as engineQueueService,
-} from "../src/internal/queueHyperlink";
+} from "../src/internal/workPool";
 // This suite exercises the queue **engine** primitives directly (name-only `Tag`, positional
 // `make`, `layer(tag, config)`) — distinct from the public `WorkPool` namespace whose `Tag`
 // takes an `itemSchema`. Reconstruct the flat engine exports into the historical object shape so
@@ -33,7 +33,7 @@ import {
 const WorkPool = {
   make: makeQueueEffect,
   Tag: engineQueueTag,
-  layer: queueHyperlinkLayer,
+  layer: workPoolLayer,
   Service: engineQueueService,
 };
 import * as Hyperlink from "../src/Hyperlink";

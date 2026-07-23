@@ -20,8 +20,8 @@ src/internal/queueResource.ts:QueueResourceConfigWithItemSchema
 src/internal/queueTagSchemas.ts:errorSym
 src/internal/queueTagSchemas.ts:itemSchemaSym
 src/internal/queueTagSchemas.ts:successSym
-src/internal/runTagSchemas.ts:errorSym
-src/internal/runTagSchemas.ts:successSym
+src/internal/gateTagSchemas.ts:errorSym
+src/internal/gateTagSchemas.ts:successSym
 src/internal/store/contractDef.ts:CUSTOM_APPEND_ALIAS
 src/internal/store/contractDef.ts:CUSTOM_EFFECT
 src/internal/store/contractDef.ts:CUSTOM_FN

@@ -36,7 +36,7 @@ const cases = [
     // (priority) engine — the leveled variant folded in as WorkPool.priority but stays tree-shakeable.
     name: "WorkPool",
     entry: "src/WorkPool.ts",
-    engine: ["src/internal/queueHyperlink.ts", "src/internal/customQueueHyperlink.ts"],
+    engine: ["src/internal/workPool.ts", "src/internal/workPoolPriority.ts"],
     member: "Tag",
   },
   {
@@ -57,7 +57,7 @@ const cases = [
     // engine. A `Gate.Tag`-only import must not retain the engine (`make` / `layer` / `serve`).
     name: "Gate",
     entry: "src/Gate.ts",
-    engine: ["src/internal/runHyperlink.ts"],
+    engine: ["src/internal/gate.ts"],
     member: "Tag",
   },
   {

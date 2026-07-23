@@ -7,7 +7,7 @@ import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/st
 import {
   builtInGateStoreContract,
   runFactSchemaForTag,
-} from "../src/internal/store/runHyperlinkStoreSpec";
+} from "../src/internal/store/gateStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 

@@ -4,7 +4,7 @@ import {
   makeDaemonExecutionEvent,
   processExecutionEventVoid,
 } from "../src/internal/processEvent";
-import { makeGateFactEvent } from "../src/internal/runHyperlinkEvent";
+import { makeGateFactEvent } from "../src/internal/gateEvent";
 import { buildQueueEvent } from "../src/WorkPool";
 
 const terminalTags = ["Started", "Completed", "Failed"] as const;

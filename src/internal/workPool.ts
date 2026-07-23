@@ -60,7 +60,7 @@
  * program.pipe(Effect.provide(EmailQueue.layer))
  * ```
  *
- * @module internal/queueHyperlink
+ * @module internal/workPool
  * @internal
  */
 
@@ -539,7 +539,7 @@ export type QueueHandle<
 > = EngineQueueHandle<T, E, EEnqueue, R, A>;
 
 /**
- * Engine handle — includes custom-queue hooks used by {@link CustomQueueHyperlink}.
+ * Engine handle — includes custom-queue hooks used by {@link WorkPoolPriority}.
  *
  * @internal
  */
@@ -1224,7 +1224,7 @@ export class QueueShutdownError extends Data.TaggedError(
 const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray<A> =>
   Array.isArray(input);
 
-const queueHyperlinkKind = "queue" as const;
+const workPoolKind = "queue" as const;
 
 type EnqueueErrOf<C> = C extends WorkPoolConfigWithItemSchema<
   infer _T,
@@ -1597,7 +1597,7 @@ const validateItemsWithSchema = <T>(
   });
 };
 
-/** Extension point for {@link CustomQueueHyperlink} and other queue presets. @internal */
+/** Extension point for {@link WorkPoolPriority} and other queue presets. @internal */
 interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
   readonly config: QueueRuntimeConfig<T, E, EEnqueue, R, A>;
   readonly validateForEnqueue: ValidateForEnqueue<T, EEnqueue>;
@@ -1807,7 +1807,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
   encodeForRelease: ReleaseEntryEncoder<T> | undefined,
   persistCodec: PersistCodec<T> | undefined,
   // Injected lane structure — the only lane-specific dependency. The default queue passes the FIFO
-  // factory; CustomQueueHyperlink passes the weighted one. The engine imports neither impl (only the
+  // factory; WorkPoolPriority passes the weighted one. The engine imports neither impl (only the
   // `LaneStore` type), so a bundle pulls only the lane store it actually wires.
   makeLaneStore: (
     capacity: number,
@@ -1833,7 +1833,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // disposition by handling `Failed`/`Exit` there.
     const autoReEnqueue = config.attempts !== undefined;
     // ─── Allocate internal state ───
-    // The lane store is injected (FIFO for the default queue, weighted for CustomQueueHyperlink); the
+    // The lane store is injected (FIFO for the default queue, weighted for WorkPoolPriority); the
     // rest of the engine drives it lane-agnostically through the `LaneStore` interface.
     const laneStore = yield* makeLaneStore(capacity);
 
@@ -3387,7 +3387,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 // Public API
 // ============================================================================
 
-const queueHyperlinkLayerFromConfig = (
+const workPoolLayerFromConfig = (
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any, any>>,
   config: WorkPoolConfig<any, any, any, any>,
 ): Layer.Layer<any, never, any> => {
@@ -3403,7 +3403,7 @@ const queueHyperlinkLayerFromConfig = (
   );
 };
 
-function queueHyperlinkLayer<
+function workPoolLayer<
   Self,
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
@@ -3415,7 +3415,7 @@ function queueHyperlinkLayer<
   effect: F,
   options?: O,
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>;
-function queueHyperlinkLayer<Self, const C extends WorkPoolConfig<any, any, any>>(
+function workPoolLayer<Self, const C extends WorkPoolConfig<any, any, any>>(
   tag: Context.Key<
     Self,
     EngineQueueHandle<
@@ -3427,15 +3427,15 @@ function queueHyperlinkLayer<Self, const C extends WorkPoolConfig<any, any, any>
   >,
   config: C,
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>>;
-function queueHyperlinkLayer(
+function workPoolLayer(
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any>>,
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolConfig<any, any, any>,
   options?: WorkPoolOptionsWithoutItemSchema<any, any, any> | WorkPoolOptionsWithItemSchema<any, any, any>,
 ): Layer.Layer<any, never, any> {
   if (typeof effectOrConfig === "function") {
-    return queueHyperlinkLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
+    return workPoolLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
   }
-  return queueHyperlinkLayerFromConfig(tag, effectOrConfig);
+  return workPoolLayerFromConfig(tag, effectOrConfig);
 }
 
 const queueServiceLayerFromDefaultSpec = <
@@ -3463,7 +3463,7 @@ const queueServiceWrapWorker = <C extends WorkPoolConfig<any, any, any>>(
   fn: (previous: C["effect"]) => C["effect"],
 ): Layer.Layer<never> => configureWrapEffectField(resourceId, fn);
 
-const queueHyperlinkServiceWithoutSchema = <
+const workPoolServiceWithoutSchema = <
   Self,
   const Name extends string,
   const C extends WorkPoolConfigWithoutItemSchema<any, any, any>,
@@ -3504,7 +3504,7 @@ const queueHyperlinkServiceWithoutSchema = <
   const wrapWorker: ServiceDef["wrapWorker"] = (fn) => queueServiceWrapWorker<Spec>(name, fn);
   return Object.assign(base, {
     id: name,
-    kind: queueHyperlinkKind,
+    kind: workPoolKind,
     tag: base,
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
@@ -3521,7 +3521,7 @@ const queueHyperlinkServiceWithoutSchema = <
   }) satisfies ServiceDef;
 };
 
-const queueHyperlinkServiceWithSchema = <
+const workPoolServiceWithSchema = <
   Self,
   const Name extends string,
   const C extends WorkPoolConfigWithItemSchema<any, any, any>,
@@ -3563,7 +3563,7 @@ const queueHyperlinkServiceWithSchema = <
   const wrapWorker: ServiceDef["wrapWorker"] = (fn) => queueServiceWrapWorker<Spec>(name, fn);
   return Object.assign(base, {
     id: name,
-    kind: queueHyperlinkKind,
+    kind: workPoolKind,
     tag: base,
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
@@ -3587,12 +3587,12 @@ const queueHyperlinkServiceWithSchema = <
 // The public `WorkPool` namespace (`src/WorkPool.ts`) re-exports these under their
 // public names: `makeQueueEffect` → `make`, {@link Service}, {@link queueSchemaGroup} → `Schema`,
 // {@link queueErrorsGroup} → `Errors`, and `queueRateLimiterLayer` → `rateLimiterLayer`.
-// `queueHyperlinkLayer` / {@link Tag} are engine primitives kept for internal reuse — the public
+// `workPoolLayer` / {@link Tag} are engine primitives kept for internal reuse — the public
 // namespace surfaces the *contract's* `Tag` / `layer` instead. Flat exports (not an object literal)
 // so `import * as WorkPool` member access tree-shakes: `WorkPool.Tag` pulls no engine code.
 // ============================================================================
 
-export { makeQueueEffect, queueHyperlinkLayer, buildQueueEngine };
+export { makeQueueEffect, workPoolLayer, buildQueueEngine };
 
 /**
  * Engine class factory: creates a Context tag with a baked-in `.layer`. Surfaced publicly as
@@ -3636,30 +3636,30 @@ export const Service = <Self, T, E = never>() => {
       ): WorkPoolServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
     };
 
-    const queueHyperlinkServiceImpl = (
+    const workPoolServiceImpl = (
       name: string,
       effect: QueueWorkerEffect<T, E, any, any> | WorkPoolConfig<T, E, any>,
       options?: WorkPoolOptionsWithoutItemSchema<T, E, any> | WorkPoolOptionsWithItemSchema<T, E, any>,
     ) => {
       if (typeof effect === "function") {
         if (options !== undefined && options.itemSchema !== undefined) {
-          return queueHyperlinkServiceWithSchema(name, {
+          return workPoolServiceWithSchema(name, {
             ...options,
             effect,
             name,
             itemSchema: options.itemSchema,
           });
         }
-        return queueHyperlinkServiceWithoutSchema(name, { ...(options ?? {}), effect, name });
+        return workPoolServiceWithoutSchema(name, { ...(options ?? {}), effect, name });
       }
       if (hasItemSchema(effect)) {
-        return queueHyperlinkServiceWithSchema(name, { ...effect, name });
+        return workPoolServiceWithSchema(name, { ...effect, name });
       }
       const { itemSchema: _itemSchema, ...rest } = effect;
-      return queueHyperlinkServiceWithoutSchema(name, { ...rest, name });
+      return workPoolServiceWithoutSchema(name, { ...rest, name });
     };
 
-    return queueHyperlinkServiceImpl as WorkPoolServiceFactory;
+    return workPoolServiceImpl as WorkPoolServiceFactory;
   };
 
 /**
@@ -3673,7 +3673,7 @@ export const Tag = <Self, T, E = never, R = never>() =>
   const base = Context.Service<Self, EngineQueueHandle<T, E, never, R>>()(name);
   return Object.assign(base, {
     id: name,
-    kind: queueHyperlinkKind,
+    kind: workPoolKind,
     tag: base,
   });
 };

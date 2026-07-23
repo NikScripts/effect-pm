@@ -73,7 +73,7 @@ import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   makeGateStoreAnalyticsContract,
   type GateStoreAnalyticsContract,
-} from "./internal/store/runHyperlinkStoreSpec";
+} from "./internal/store/gateStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type { StoreScopeTag } from "./internal/store/registration";
 import {
@@ -82,14 +82,14 @@ import {
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./HyperlinkConfigure";
-import * as internal from "./internal/runHyperlink";
-import { stampRunWireSchemas } from "./internal/runTagSchemas";
+import * as internal from "./internal/gate";
+import { stampRunWireSchemas } from "./internal/gateTagSchemas";
 import * as Store from "./Store";
 import {
   runGateStatus,
   runSpec,
   type RunInstanceSpec,
-} from "./internal/runHyperlinkSchema";
+} from "./internal/gateSchema";
 
 // ============================================================================
 // Public wire schemas + spec
@@ -1037,7 +1037,7 @@ export const makeRunner = <const Name extends string>(
 };
 
 // ── HTTP API client ─────────────────────────────────────────────────────────
-// A concurrency-gated typed HttpApiClient — the former HttpApiHyperlink module folded into Gate.
+// A concurrency-gated typed HttpApiClient — the former HttpApiClient module folded into Gate.
 // `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
 // HttpClient transport via HttpClientRunGate); the engine lives in ./internal/httpApiClient and is
 // pulled in only when these are referenced.
@@ -1050,6 +1050,6 @@ export {
   instrumentEndpoints,
 } from "./internal/httpApiClient";
 export type {
-  HttpApiHyperlinkConfig as HttpApiClientConfig,
-  HttpApiHyperlinkLayerEffectConfig as HttpApiClientLayerEffectConfig,
+  HttpApiClientConfig as HttpApiClientConfig,
+  HttpApiClientLayerEffectConfig as HttpApiClientLayerEffectConfig,
 } from "./internal/httpApiClient";

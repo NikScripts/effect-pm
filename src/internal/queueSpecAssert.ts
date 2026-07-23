@@ -1,6 +1,6 @@
 /**
  * Queue instance spec validation — single boundary cast site for {@link WorkPool.Tag}
- * and {@link CustomQueueHyperlink.Tag}.
+ * and {@link WorkPoolPriority.Tag}.
  *
  * @remarks
  * **Invariant:** every method key and RPC kind on a wired spec must match the erased baseline

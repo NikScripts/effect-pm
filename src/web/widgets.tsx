@@ -232,7 +232,7 @@ const LaneRow = (props: {
 const CQ_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
 
 /**
- * A **custom queue** as a grid card — the {@link QueueCard} sibling for `CustomQueueHyperlink`: same
+ * A **custom queue** as a grid card — the {@link QueueCard} sibling for `WorkPoolPriority`: same
  * pending / done / phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar
  * each instead of the fixed high/normal/low priorities. @public
  */

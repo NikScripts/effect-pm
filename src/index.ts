@@ -306,10 +306,10 @@ export type {
 export {
   runGateStatus,
   runSpec,
-  kind as runHyperlinkKind,
-  layer as runHyperlinkLayer,
-  serve as runHyperlinkServe,
-  serveRemote as runHyperlinkServeRemote,
+  kind as gateKind,
+  layer as gateLayer,
+  serve as gateServe,
+  serveRemote as gateServeRemote,
 } from "./Gate";
 
 // Types - Control Service
