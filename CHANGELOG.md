@@ -1,12 +1,80 @@
-# @nikscripts/effect-pm
+# hyperlink-ts
 
-## Unreleased (integration / `cursor/process-store-cutover-a3ad`)
+## 0.9.0-beta.0
 
-### Minor Changes
+**The rebrand release.** `hyperlink-ts` continues the `@nikscripts/effect-pm` line: the 0.8 betas
+were effect-pm; the 0.9 betas are **Effect Hyperlink**. The web made documents
+location-transparent; Hyperlink does it for Services. This entry consolidates the ~200 changesets
+accumulated since 0.8.0-beta.28.
 
-- **Process tag wire schemas and execution store (breaking).** `Process.Tag` uses positional **`success`** / **`error`** (no `Process.result` pipe). **`Process.layer` / `serve` / `serveRemote`** auto-append terminal runs to **`Process.store(tag)`** and merge a default in-memory **`Store.Storage`**; **`Process.make`** does not. Override with `Layer.provideMerge(AppStore.layerMemory, Process.layer(...))` at the app root.
-- **Removed `ProcessExecutionStore` facet (breaking).** Deleted `@nikscripts/effect-pm/store/ProcessExecution`, `ProcessStorage.ProcessExecution`, and `process.execution.completed` runtime facet. Use **`Process.store(tag)`** → `events()` for execution history.
-- **`Store.Storage` public API.** `Store.layerDefaultMemory`, `Store.withDefault`, `Store.withStorage` — replaces internal `StoreScopeBridgeTag`.
+### Major: package and primitive rename
+
+- npm name: `@nikscripts/effect-pm` → **`hyperlink-ts`** (unscoped). Import subpaths follow
+  (`hyperlink-ts/Hyperlink`, `hyperlink-ts/Node`, ...). Wire ids, `Symbol.for` keys, and Context
+  ids move from `@nikscripts/effect-pm/...` to `hyperlink-ts/...`.
+- The primitive `Resource` is now **`Hyperlink`**: module, namespace, and every foundation symbol
+  (`ResourceTag` → `HyperlinkTag`, `BuiltResource` → `BuiltHyperlink`, `ServedResources` →
+  `ServedHyperlinks`, `DuplicateResourceKey` → `DuplicateHyperlinkKey`, ...).
+
+### Major: kinds renamed to generic nouns, variants folded
+
+- `QueueHyperlink` → **`WorkPool`** · `RunHyperlink` → **`Gate`** · `Process` → **`Daemon`**.
+- `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
+  `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
+  tree-shakeable as `WorkPool.makePriority`). Subpath removed.
+- `HttpApiHyperlink` folds into **`Gate.httpApiClient(...)`** (+ `httpApiClientService`,
+  `httpApiClientLayer`, `acceptJson`, `instrumentEndpoints`). Subpath removed.
+- Priority-lane vocabulary unified to **lane**: `laneCount`, `namedLanes`, `add(item, lane?)`.
+- `NodeStatus` folds into the Node namespace as **`Node.status`** (subpath and barrel export
+  removed), with a node-addressed `client(node)` layer factory.
+
+### Nodes, transports, and loud failures
+
+- Two-stage tag factories: `Node.Tag<Self>()("name", target)` (and Lookup), eliminating
+  context-inference false positives structurally.
+- Multi-protocol nodes: http, WebSocket, unix socket, and named-pipe servers/dialers with
+  protocol-precise kinds; `connect(tag, protocol(target))` replaces `clientHttp`; bare-port
+  targets resolve their dial host via Config.
+- Transport wiring fails **loud and typed** (`ProtocolUnanswered`, `UnaddressedNode`,
+  contract-hash verification, deep `verifyConnection`); silent-wiring paths removed.
+- Per-resource serving with isolated deps on one `/rpc`; listen/local catalogs; RPC transport is
+  an injected dependency (`layerProtocol`, `wsServer`).
+
+### Lookup and fleet
+
+- `Identity.claim` (first-wins, dead-incumbent replacement via NodeStatus ping),
+  `Directory.advertise`/`resolve`/`nodesServing` (`IncumbentAlive` guard), and placement
+  **Advice** (`advise`/`preferred`/`clearAdvice`).
+- Peers model (`Hyperlink.nodes([...])`) for multi-node placement; `FleetHealth`, `ShardMap`,
+  and fleet `Telemetry` surfaces.
+
+### WorkPool, Daemon, Polling
+
+- WorkPool: refill (`onStart`/`onDrained`/dependency-aware `load`), rate limiting, lane take
+  algorithms, presence-driven durability, three-tier full-capture store, handle error inference.
+- Daemon: execution store integration, live event streams, remote-proof events, typed control
+  verbs (`wake`, `resetCadence`).
+- Polling namespace: `spaced`/`jittered`/`backoff`/`accelerating`/`dynamic`/`adaptive`/`cron`
+  presets plus `wakeOn(stream)`; internal tag with `Polling.layer`/`Polling.current`.
+
+### Stores, logs, storage
+
+- `Store.Storage` public API (`layerDefaultMemory`, `withDefault`, `withStorage`); store
+  transforms (`mapEffects`, `catchWriteErrors` + `StoreWriteError`); journal codecs via
+  `Schema.toCodecJson`.
+- Durable `HostLogs` by host/resource with cursors; `LogContext` lineage; SQLite and Redis
+  runtime storage (Prisma removed).
+
+### Observability and UI
+
+- Custom metrics served from the Metric registry; per-type dashboard widgets (browser + Ink TUI
+  over one data layer); unified `pm` CLI (no-arg → TUI); `/cli`, `/tui`, `/web` subpath exports.
+
+### Docs
+
+- Documentation site (hyperlink.cool): compiler-accurate API reference with type-on-hover
+  previews and in-code API links, full-text search, llms.txt, releases page, standards corpus —
+  with every code sample typechecked against this release's source.
 
 ## 0.8.0-beta.28
 
