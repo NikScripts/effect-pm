@@ -1,13 +1,13 @@
-{#workpool-priority-retry title="WorkPool — Priority, Dedup, Retry" status="draft" appliesTo=all}
-# WorkPool — Priority, Dedup, Retry
+{#workpool-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
+# Queue — Priority, Dedup, Retry
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
 **Source:** [`examples/forms/queue/workpool-priority-retry.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/workpool-priority-retry.ts)  
-**Run:** `pnpm run example:queue-hyperlink`  
+**Run:** `pnpm run example:workpool-retry`  
 **Hub:** [Examples → Queue](/docs/examples#queue)  
-**Deep guide:** [Queues](/docs/queues)
+**Deep guide:** [Queues](/docs/work-pools)
 
 ## What this form shows
 
@@ -20,7 +20,7 @@ One `WorkPool` handle exercising four operators together:
    before an auto re-enqueue).
 3. **Retry budget** — `attempts: 2` means one automatic re-enqueue after failure, then
    `RetryExhausted`. No `onFailure` here → the default disposition (retry until budget, then
-   dead-letter). Per-error routing belongs in `onFailure` on the [Queues](/docs/queues) guide.
+   dead-letter). Per-error routing belongs in `onFailure` on the [Queues](/docs/work-pools) guide.
 4. **Lifecycle** — one `events` subscriber with `Hyperlink.runForEachTag` (pick the tags you
    care about; ignore the rest). Prefer this over old onExit-style hooks.
 
@@ -165,7 +165,7 @@ void Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueueLive),
     Effect.scoped,
-    Effect.tap(() => Effect.logInfo("form:workpool-priority-retry finished OK")),
+    Effect.tap(() => Effect.logInfo("form:queue-hyperlink-priority-retry finished OK")),
   ),
 )
 ```

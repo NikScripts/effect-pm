@@ -1,4 +1,4 @@
-{#queues title="Queues" status="draft" appliesTo=all}
+{#work-pools title="Work Pools" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -366,12 +366,12 @@ const EmailsLive = WorkPool.layer(Emails, {
   onFailure: (entry, cause) =>
     isTransient(cause)
       ? Effect.succeed("retry" as const)        // a blip — spend an attempt
-      : Effect.succeed("dead-letter" as const),  // a bad address — set it aside
+      : Effect.succeed("deadLetter" as const),  // a bad address — set it aside
 })
 ```
 
 Three dispositions: **`"retry"`** re-enqueues (until `attempts` runs out),
-**`"dead-letter"`** sets the entry aside as failed (a `DeadLettered` event), and
+**`"deadLetter"`** sets the entry aside as failed (a `DeadLettered` event), and
 **`"drop"`** discards it silently. Without `onFailure`, the default is retry until
 `attempts`, then dead-letter. For *retrying the effect itself* (backoff, jitter),
 put `Effect.retry` on your worker `effect` — that's a different layer of the onion:
@@ -444,7 +444,7 @@ const EmailsLive = WorkPool.layer(Emails, {
   refill: {
     onStart: true,                                    // seed on boot
     onDrained: true,                                  // re-poll when empty
-    load: (queue) => Effect.flatMap(nextBatch, queue.add),
+    load: (queue) => Effect.flatMap(nextBatch, queue.add).pipe(Effect.orDie),
   },
 })
 ```
@@ -535,7 +535,7 @@ flag, or a live `DynamicConfig` swap that re-tunes the queue while it runs.
 ## Custom priority lanes
 
 `high` / `normal` / `defer` covers most needs, but some domains have their own
-ordering — tiers, SLAs, numbered levels. `CustomQueueHyperlink` is the same queue
+ordering — tiers, SLAs, numbered levels. `WorkPool` is the same queue
 with **arbitrary lanes**: you define the levels, and `add` targets one by name. The
 handle reads the same; only the priority axis is yours to shape.
 

@@ -21,16 +21,16 @@ Here are two Hyperlinks — a queue and a scheduled process — on two runtimes,
 {.twoslash}
 ``` ts
 import * as WorkPool from "hyperlink-ts/WorkPool"
-import * as Process from "hyperlink-ts/Process"
+import * as Daemon from "hyperlink-ts/Daemon"
 import { Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 // ---cut---
 // two resources, defined once
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
-class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
+class Digest extends Daemon.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-[`Node.httpServer(serve)`](/docs/resource) is platform-agnostic — it just needs an HTTP server
+[`Node.httpServer(serve)`](/docs/managing-layers) is platform-agnostic: it just needs an HTTP server
 provided, and that provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
 for Bun, Deno, or an edge runtime is the only line that changes:
 
@@ -49,7 +49,7 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
   )
 ```
 
-Now the **worker runtime** is one pipe — [`WorkPool.serve`](/docs/queues) gives `Emails` its worker (the `effect`
+Now the **worker runtime** is one pipe — [`WorkPool.serve`](/docs/work-pools) gives `Emails` its worker (the `effect`
 that drains each job), piped onto port 3001:
 
 {.twoslash}
@@ -79,17 +79,17 @@ that lives on the *other* runtime, reached by port:
 
 {.twoslash}
 ``` ts
-import * as Process from "hyperlink-ts/Process"
+import * as Daemon from "hyperlink-ts/Daemon"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Polling } from "hyperlink-ts/Polling"
+import * as Polling from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
-class Digest extends Process.Tag<Digest>()("app/Digest") {}
+class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
-const scheduler = Process.layer(Digest, {
+const scheduler = Daemon.layer(Digest, {
   effect: Effect.gen(function* () {
     const emails = yield* Emails            // emails: the Emails handle (here, an RPC client)
     const email = yield* nextEmail          // email: EmailJob
@@ -155,7 +155,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
@@ -179,7 +179,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
@@ -292,9 +292,9 @@ and web dashboards — because it's the same kind of thing `Emails` is.
 You don't start from scratch, either — the types you reach for most ship ready-made, each a
 cross-runtime Service you use like an Effect primitive:
 
-- **Long-running processes** ([`Process`](/docs/processes)) — continuous or recurring work: a polling
+- **Long-running processes** ([`Process`](/docs/daemons)) — continuous or recurring work: a polling
   cadence, arm/disarm schedule windows, execution history, and more.
-- **Queue** ([`WorkPool`](/docs/queues)) — a priority work queue: enqueue items, workers drain them
+- **Queue** ([`WorkPool`](/docs/work-pools)) — a priority work queue: enqueue items, workers drain them
   with dedup, retry, and concurrency control; durable when you provide a store.
 - **Shard map** ([`ShardMap`](/docs/shardmap)) — partitioned key/value across a fleet: routed
   `get` / `put` / `delete`, leaf shards, and fleet size folds via peers.

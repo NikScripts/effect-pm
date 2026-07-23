@@ -7,7 +7,7 @@
 // We render Shiki's HAST as real React elements. The ONE exception is the inert popup template
 // content, which crosses the single sanctioned boundary in src/lib/inert-html.tsx (see there).
 
-import { fileURLToPath } from "node:url";
+import * as nodePath from "node:path";
 import * as React from "react";
 import * as ts from "typescript";
 import { createHighlighter, type Highlighter } from "shiki";
@@ -59,7 +59,12 @@ const ALIAS: Record<string, string> = {
 // Twoslash type-checks each opted-in block against OUR types. Omitting `fsMap` makes it read the
 // real filesystem (rooted at the repo), so `effect` resolves from node_modules; `paths` maps the
 // package name to its source so `hyperlink-ts/*` → `src/*`.
-const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+// process.cwd(), NOT import.meta.url: bundled server chunks relocate this module under dist/, so a
+// url-relative walk lands outside the repo and the expander's vfs silently resolves nothing — dev
+// (served from source) worked while every BUILT guide page lost its in-code api links. Same
+// convention as api-source-links.ts / api-data.ts: cwd is docs/site in dev, build, and the
+// container.
+const repoRoot = nodePath.resolve(process.cwd(), "../..");
 const compilerOptions: ts.CompilerOptions = {
   module: ts.ModuleKind.ESNext,
   target: ts.ScriptTarget.ESNext,
@@ -94,7 +99,17 @@ const toFullOffset = (
 // SEPARATE box below, the compiler-API-expanded declaration (`const emails: { …members… }`). We stash
 // the expansion in `node.docs` behind a sentinel and a custom `renderMarkdown` (below) turns it into a
 // highlighted code box. Best-effort: any failure just drops the expansion, never the page.
-const baseTwoslasher = createTwoslasher({ vfsRoot: repoRoot, compilerOptions });
+// A FRESH twoslasher per call, not a shared instance: the shared env accumulates state across
+// blocks (all reuse one virtual filename), and under the bundled build's prerender the failures
+// ROAM between runs — one build trips 2488 on a queue page, the next 2307 module-not-found on a
+// different page, while dev/tsx (sequential, or per-page) stay green. Isolation costs ~1-2s of
+// env setup per block and makes every render deterministic.
+const baseTwoslasher = (
+  code: string,
+  extension: string | undefined,
+  options: Parameters<ReturnType<typeof createTwoslasher>>[2]
+): ReturnType<ReturnType<typeof createTwoslasher>> =>
+  createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(code, extension, options);
 const expandTypes = makeTypeExpander({
   compilerOptions,
   vfsRoot: repoRoot,
@@ -426,8 +441,9 @@ const twoslasher = Object.assign(
     }
     return result;
   },
-  // A `TwoslashInstance` is callable + carries a `getCacheMap`; reuse the base instance's.
-  { getCacheMap: baseTwoslasher.getCacheMap }
+  // A `TwoslashInstance` is callable + carries a `getCacheMap`. Ours is per-call isolated, so
+  // there is no shared cache to expose — an empty map satisfies the interface honestly.
+  { getCacheMap: () => new Map() }
 );
 
 // HAST helpers to splice the expanded box into the popup, and a renderer that inserts it BETWEEN the

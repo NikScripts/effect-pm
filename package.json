@@ -1,6 +1,6 @@
 {
   "name": "hyperlink-ts",
-  "version": "0.8.0-beta.28",
+  "version": "0.9.0-beta.0",
   "packageManager": "pnpm@10.33.4",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
@@ -192,8 +192,8 @@
     "example:session": "bash scripts/effect-example.sh",
     "example:dashboard-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-live.tsx",
-    "example:queue-hyperlink": "tsx examples/forms/queue/queue-hyperlink-priority-retry.ts",
-    "example:custom-queue-hyperlink": "tsx examples/forms/queue/custom-queue-hyperlink-n-level.ts",
+    "example:workpool-retry": "tsx examples/forms/queue/workpool-priority-retry.ts",
+    "example:workpool-priority": "tsx examples/forms/queue/workpool-priority-lanes.ts",
     "example:process-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
     "example:process-supervisor-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
     "example:sports-polling-accelerating": "tsx examples/forms/polling/polling-spaced-read.ts && tsx examples/forms/polling/polling-accelerating-reset-cadence.ts && tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",

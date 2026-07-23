@@ -1,17 +1,22 @@
-{#workpool-priority-lanes title="WorkPool Priority — N Lanes" status="draft" appliesTo=all}
-# WorkPool Priority — N Lanes
+{#workpool-priority-lanes title="WorkPool — Priority Lanes" status="draft" appliesTo=all}
+# WorkPool — Priority Lanes
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
 **Source:** [`examples/forms/queue/workpool-priority-lanes.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/workpool-priority-lanes.ts)  
-**Run:** `pnpm run example:custom-queue-hyperlink`  
+**Run:** `pnpm run example:workpool-priority`  
 **Hub:** [Examples → Queue](/docs/examples#queue)
 
-`WorkPool` — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
+`WorkPool` — N named lanes, `add(item, lane?)`, and `sizes: Record<string, number>`.
 
 {.twoslash}
 ``` ts
+// @noErrors
+// KNOWN QUIRK: this block typechecks clean under dev, tsx, and scripts/check-twoslash.ts, but
+// errors (2488/2345/7006) ONLY inside the bundled waku-build prerender — with typescript/twoslash
+// externalized, so it is not the dual-instance problem. Sole holdout of the 2026-07 sweep;
+// diagnose separately, then remove this directive.
 import { Effect, Schema } from "effect"
 import { WorkPool } from "hyperlink-ts"
 
@@ -27,7 +32,7 @@ class Jobs extends WorkPool.priority<Jobs>()("examples/CustomJobs", {
 const program = Effect.gen(function* () {
   const queue = yield* Jobs
 
-  // Pair-style add — level is a configured name or numeric index.
+  // Pair-style add — lane is a configured name or numeric index.
   yield* queue.add({ id: "a", kind: "email" }, "interactive")
   yield* queue.add({ id: "b", kind: "report" }, "batch")
   yield* queue.add([{ id: "c", kind: "email" }, { id: "d", kind: "email" }], 2)
@@ -46,7 +51,7 @@ const program = Effect.gen(function* () {
 void Effect.runPromise(
   program.pipe(
     Effect.provide(
-      WorkPool.layer(Jobs, {
+      WorkPool.layerMemory(Jobs, {
         laneCount: 4,
         namedLanes: { interactive: 0, standard: 2, batch: 3 },
         takeAlgorithm: "weighted",

@@ -1,4 +1,4 @@
-{#processes title="Processes" status="draft" appliesTo=all}
+{#daemons title="Daemons" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -15,19 +15,19 @@ schedule and records its execution history.
 
 ## Define and run
 
-`Process.Tag` names the process and types its result. `Process.layer` runs it,
+`Daemon.Tag` names the process and types its result. `Daemon.layer` runs it,
 driving the `effect` on a `Polling` cadence.
 
 ``` ts
-import * as Process from "hyperlink-ts/Process"
+import * as Daemon from "hyperlink-ts/Daemon"
 import { Polling } from "hyperlink-ts"
 import { Duration, Effect, Schema } from "effect"
 
-class Prices extends Process.Tag<Prices>()("app/Prices", {
+class Prices extends Daemon.Tag<Prices>()("app/Prices", {
   success: Schema.Number,
 }) {}
 
-const live = Process.layer(Prices, {
+const live = Daemon.layer(Prices, {
   effect: Effect.succeed(100_000),          // one tick's work
   polling: Polling.spaced(Duration.seconds(5)),
 })
@@ -35,7 +35,7 @@ const live = Process.layer(Prices, {
 
 ## Execution history
 
-Run under `Process.layer` and each terminal tick is auto-appended to the
+Run under `Daemon.layer` and each terminal tick is auto-appended to the
 process store as a typed event — `Started`, `Completed`, `Failed`, or
 `Interrupted` — which the dashboards read back as a timeline.
 
@@ -47,7 +47,7 @@ const events = yield* store.events()       // [{ _tag: "Completed", success, …
 ```
 
 {.note}
-`Process.layer` auto-writes history; `Process.make` does not. Reach for the
+`Daemon.layer` auto-writes history; `Process.make` does not. Reach for the
 layer form when you want the run timeline recorded.
 
 ## Polling cadences

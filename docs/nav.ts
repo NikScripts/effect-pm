@@ -38,9 +38,9 @@ export const nav: ReadonlyArray<NavGroup> = [
   {
     label: "Guides",
     slugs: [
-      "queues",
+      "work-pools",
       "gates",
-      "processes",
+      "daemons",
       "stores",
       "logs",
       "metrics",

@@ -34,7 +34,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
 | **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
-| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Process.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
+| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
@@ -101,11 +101,11 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 import * as Node from "hyperlink-ts/Node"
 import * as Logs from "hyperlink-ts/Logs";
-import * as Process from "hyperlink-ts/Process";
+import * as Daemon from "hyperlink-ts/Daemon";
 import * as Store from "hyperlink-ts/Store";
 
 class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
-class Daily extends Process.Tag<Daily>()("app/Daily") {}
+class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,
@@ -127,7 +127,7 @@ Logs.byNode("wnba") // WnbaNode.key is "wnba/scores", not "wnba"
 Hyperlink identity uses **`tag.key`** (may contain `/`; metrics tags may use `@` prefix).
 
 ```ts
-import * as Process from "hyperlink-ts/Process";
+import * as Daemon from "hyperlink-ts/Daemon";
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 import * as Logs from "hyperlink-ts/Logs";
 import * as LogEntry from "hyperlink-ts/LogEntry";
@@ -177,7 +177,7 @@ const live = yield* Logs.stream;
 
 ```ts
 import * as Logs from "hyperlink-ts/Logs";
-import * as Process from "hyperlink-ts/Process";
+import * as Daemon from "hyperlink-ts/Daemon";
 import * as Store from "hyperlink-ts/Store";
 // example: resource-web/server.ts
 
@@ -190,7 +190,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 // auto-started queue workers fork (Process can use either order — workers start on `run`).
 Effect.provide(
   program,
-  Process.layer(...).pipe(Layer.provideMerge(AppStore.layerMemory)),
+  Daemon.layer(...).pipe(Layer.provideMerge(AppStore.layerMemory)),
 )
 ```
 

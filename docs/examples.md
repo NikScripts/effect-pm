@@ -19,12 +19,12 @@ with `#queue`, `#resource`, …
 
 ### [Priority, Dedup, Retry](/docs/workpool-priority-retry)
 
-Source: `examples/forms/queue/workpool-priority-retry.ts`  
+Source: `examples/forms/queue/queue-hyperlink-priority-retry.ts`  
 Run: `pnpm run example:queue-hyperlink`
 
-### [Custom N-Level Lanes](/docs/workpool-priority-lanes)
+### [Custom N-Lane Priorities](/docs/workpool-priority-lanes)
 
-Source: `examples/forms/queue/workpool-priority-lanes.ts`  
+Source: `examples/forms/queue/custom-queue-hyperlink-n-level.ts`  
 Run: `pnpm run example:custom-queue-hyperlink`
 
 ---

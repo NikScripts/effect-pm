@@ -2,9 +2,9 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/gates>.
+> and live type previews — is at <https://hyperlink.cool/docs/run-hyperlinks>.
 <!-- docs-site-link:end -->
-# Gates
+# Run resources
 
 {.note}
 **⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
@@ -74,6 +74,6 @@ concurrency 2). Hit **Run** to invoke it and watch `in-flight`; hit **Run ×5** 
 you'll see only two run at once while the rest wait behind the gate. The live
 values read straight off the service's `inFlight` subscribable — no dashboard widget.
 
-```gate
+``` run-resource
 docs/Double
 ```
