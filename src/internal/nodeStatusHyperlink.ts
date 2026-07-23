@@ -13,14 +13,18 @@
  */
 import {
   Clock,
+  Context,
   DateTime,
   Duration,
   Effect,
+  Layer,
   Option,
   Schema,
   Stream,
 } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
 import * as Hyperlink from "../Hyperlink";
+import { NodeUnreachable, type NodeStatusAccessors } from "./nodeCore";
 import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
@@ -190,3 +194,47 @@ export const nodeStatusServeEntry = (options: {
   tag: NodeStatusHyperlink,
   impl: buildNodeStatusImpl(options),
 });
+
+/**
+ * Build the {@link NodeStatusAccessors} for a connected node from its own transport `protocol` — the
+ * real dial logic behind `yield* MyNode` → `n.ping` / `n.status` / `n.logs`. Verify is off (this IS
+ * the health probe); every access dials the node's reserved status resource, scoped per read. Called
+ * lazily from `connectLayer` via dynamic import so nodeConnect never statically pulls this engine.
+ * @internal
+ */
+export const nodeStatusAccessors = (
+  protocol: Context.Service.Shape<typeof RpcClient.Protocol>,
+): NodeStatusAccessors => {
+  const clientLayer = Hyperlink.client(NodeStatusHyperlink).pipe(
+    Layer.provide(Layer.succeed(RpcClient.Protocol, protocol)),
+    Layer.provide(Hyperlink.clientVerify(false)),
+  );
+  const toUnreachable = (cause: unknown) =>
+    new NodeUnreachable({ node: HOST_STATUS_KEY, url: "node handle", cause });
+  // One-shot read: build the per-node status client into a Context (scoped) and provide THAT — never
+  // `Effect.provide(effect, Layer)` in a library internal (breaks scope lifetimes; strictEffectProvide).
+  const oneShot = <A>(
+    read: Effect.Effect<A, unknown, NodeStatusHyperlink>,
+  ): Effect.Effect<A, NodeUnreachable> =>
+    Effect.scoped(
+      Effect.flatMap(Layer.build(clientLayer), (ctx) => Effect.provide(read, ctx)),
+    ).pipe(Effect.mapError(toUnreachable));
+  return {
+    ping: oneShot(Effect.flatMap(NodeStatusHyperlink, (h) => h.ping)),
+    status: {
+      get: oneShot(Effect.flatMap(NodeStatusHyperlink, (h) => h.status.get)),
+      changes: Stream.unwrap(Effect.map(NodeStatusHyperlink, (h) => h.status.changes)).pipe(
+        Stream.provide(clientLayer),
+        Stream.mapError(toUnreachable),
+      ),
+    },
+    logs: {
+      stream: Stream.unwrap(Effect.map(NodeStatusHyperlink, (h) => h.logs.stream)).pipe(
+        Stream.provide(clientLayer),
+        Stream.mapError(toUnreachable),
+      ),
+      query: (options) =>
+        oneShot(Effect.flatMap(NodeStatusHyperlink, (h) => h.logs.query(options))),
+    },
+  };
+};

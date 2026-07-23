@@ -6,13 +6,40 @@
  * @internal
  */
 import { Context, Data, Predicate, Result } from "effect"
-import type { Layer } from "effect"
+import type { Effect, Layer, Stream } from "effect"
 import type { HttpRouter } from "effect/unstable/http"
 import type { RpcClient } from "effect/unstable/rpc"
 import type { RpcSerialization } from "effect/unstable/rpc"
+import type { LogEntry } from "../LogEntry"
+import type { NodeStatus as NodeStatusSnapshot } from "./nodeStatusHyperlink"
 
-/** @internal */
-export interface NodeProtocol {
+/**
+ * The reserved status/logs/ping features every node auto-serves, read straight off a connected node
+ * handle (`const n = yield* MyNode; yield* n.ping`). Each accessor lazily dials the node's own status
+ * over its {@link NodeProtocol.protocol} and is self-scoped (`R = never`). This is the whole public
+ * face of node status — there is no separate resource to declare. @internal
+ */
+export interface NodeStatusAccessors {
+  /** Server epoch millis — a round-trip liveness probe. */
+  readonly ping: Effect.Effect<number, NodeUnreachable>
+  readonly status: {
+    /** One-shot snapshot: up / uptime / resource readiness. */
+    readonly get: Effect.Effect<NodeStatusSnapshot, NodeUnreachable>
+    /** Live snapshot stream (periodic re-emit). */
+    readonly changes: Stream.Stream<NodeStatusSnapshot, NodeUnreachable>
+  }
+  readonly logs: {
+    /** Runtime-wide node log stream (recent tail, then live). */
+    readonly stream: Stream.Stream<LogEntry, NodeUnreachable>
+    /** Replay persisted node logs (newest `limit`). */
+    readonly query: (options: {
+      readonly limit: number
+    }) => Effect.Effect<ReadonlyArray<LogEntry>, NodeUnreachable>
+  }
+}
+
+/** What `yield* MyNode` resolves to — the node's transport plus its status accessors. @internal */
+export interface NodeProtocol extends NodeStatusAccessors {
   readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>
 }
 
