@@ -17,21 +17,21 @@ with `#queue`, `#resource`, …
 
 ## Queue
 
-### [Priority, Dedup, Retry](/docs/queue-hyperlink-priority-retry)
+### [Priority, Dedup, Retry](/docs/workpool-priority-retry)
 
-Source: `examples/forms/queue/queue-hyperlink-priority-retry.ts`  
+Source: `examples/forms/queue/workpool-priority-retry.ts`  
 Run: `pnpm run example:queue-hyperlink`
 
-### [Custom N-Level Lanes](/docs/custom-queue-hyperlink-n-level)
+### [Custom N-Level Lanes](/docs/workpool-priority-lanes)
 
-Source: `examples/forms/queue/custom-queue-hyperlink-n-level.ts`  
+Source: `examples/forms/queue/workpool-priority-lanes.ts`  
 Run: `pnpm run example:custom-queue-hyperlink`
 
 ---
 
 ## Hyperlink
 
-Coming next (forms/resource — RunHyperlink, HttpApi, Telemetry, FleetHealth, ShardMap).
+Coming next (forms/resource — Gate, HttpApi, Telemetry, FleetHealth, ShardMap).
 
 ---
 

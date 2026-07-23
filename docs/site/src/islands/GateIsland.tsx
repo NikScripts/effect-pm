@@ -1,6 +1,6 @@
 "use client";
 
-// The most basic resource: a RunHyperlink (a concurrency-gated effect you call on demand).
+// The most basic resource: a Gate (a concurrency-gated effect you call on demand).
 // Create it → run it from a button → watch the live in-flight count. No dashboard widget;
 // live values read straight off the service's Subscribables. Tailwind scoped to .pm-dashboard.
 
@@ -30,7 +30,7 @@ function Panel(): React.ReactElement {
     <div className="pm-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">docs/Double</span>
-        <span className="text-xs text-muted-foreground">RunHyperlink · concurrency 2 · in your browser</span>
+        <span className="text-xs text-muted-foreground">Gate · concurrency 2 · in your browser</span>
       </div>
       <div className="flex flex-wrap gap-4 text-xs">
         {stat("last result", last)}
@@ -59,7 +59,7 @@ function Panel(): React.ReactElement {
   );
 }
 
-export function RunHyperlinkIsland(): React.ReactElement {
+export function GateIsland(): React.ReactElement {
   return (
     <RegistryProvider>
       <Panel />

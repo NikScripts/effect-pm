@@ -15,7 +15,7 @@ There is no separate “process log API” and “queue log API.” Capture is c
 carve the bus into journals and Handle-facing exports.
 
 This chapter is the narrative guide. Deep tables and fixture indexes remain in
-[`docs/LOGS.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/LOGS.md) when you need
+[`docs/LOGS.md`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/LOGS.md) when you need
 a lookup.
 
 ## What you get
@@ -79,7 +79,7 @@ Live-only is enough for ephemeral UIs. History needs Storage.
 
 Register journals on a `Store.Service`. Node-wide history uses `Node.logs` (or
 `Hyperlink.store(Node)`). Per-Hyperlink history uses the toolkit store registration —
-`Process.store(tag)`, `QueueHyperlink.store(tag)`, and friends — which carry a private `_logs`
+`Process.store(tag)`, `WorkPool.store(tag)`, and friends — which carry a private `_logs`
 journal. Read durable history with `Logs.byNode` / `Logs.byHyperlink` / `Hyperlink.logs(tag).query`
 (not a public `handle.log` surface).
 
@@ -121,13 +121,13 @@ before queue workers fork at Layer build:
 ``` ts
 Effect.provide(
   program,
-  QueueHyperlink.layer(MyQueue, { effect: worker }).pipe(
+  WorkPool.layer(MyQueue, { effect: worker }).pipe(
     Layer.provideMerge(AppStore.layerMemory),
   ),
 )
 ```
 
-Bare `QueueHyperlink.layer` / `Process.layer` (or `*Memory` aliases) work without an AppStore;
+Bare `WorkPool.layer` / `Process.layer` (or `*Memory` aliases) work without an AppStore;
 durable logs still need `Store.Service.layer*`. Recipe SSOT: [`docs/guides/stores.md`](./stores.md).
 
 ## Keys
@@ -225,7 +225,7 @@ const program = Effect.gen(function* () {
 Pipe `Hyperlink.withLogExport` onto a Tag when you want `yield* Tag.logs` as a member:
 
 ``` ts
-class MailQueue extends QueueHyperlink.Tag<MailQueue>()("app/Mail", MailJob).pipe(
+class MailQueue extends WorkPool.Tag<MailQueue>()("app/Mail", MailJob).pipe(
   Hyperlink.withLogExport,
 ) {}
 
@@ -307,5 +307,5 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 ## See also
 
 - [Stores](/docs/stores) — registering journals and reading Storage  
-- [`docs/LOGS.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/LOGS.md) — key catalog and fixture map  
+- [`docs/LOGS.md`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/LOGS.md) — key catalog and fixture map  
 - [Queues](/docs/queues) / [Processes](/docs/processes) — engines that stamp lineage at materialize  

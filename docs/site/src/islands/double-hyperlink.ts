@@ -1,12 +1,12 @@
-// The `docs/Double` RunHyperlink — declared here in a plain (non-"use client") module so a
-// content hot-edit that re-imports the RunHyperlinkIsland entry doesn't re-declare it (the
+// The `docs/Double` Gate — declared here in a plain (non-"use client") module so a
+// content hot-edit that re-imports the GateIsland entry doesn't re-declare it (the
 // registry rejects a duplicate group id). Declared once; the island imports these atoms.
 
 import { Effect, Schema, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as RunHyperlink from "@pm/RunHyperlink";
+import * as Gate from "@pm/Gate";
 
-class Double extends RunHyperlink.Service<Double>()("docs/Double", {
+class Double extends Gate.Service<Double>()("docs/Double", {
   payload: Schema.Number,
   success: Schema.Number,
   concurrency: 2, // only 2 run at once; extra calls queue behind the gate

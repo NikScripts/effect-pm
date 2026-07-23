@@ -373,10 +373,10 @@ const walkPackage = (
     }
   }
 
-  // Nested namespaces: a group module re-exporting a whole module (`export * as status from
-  // "./NodeStatus"` inside Node.ts) surfaces as a dotted child group ("Node.status") — unless the
-  // target already has a page of its own (a subpath or another group), which keeps one page per
-  // module. One level deep: the snapshot iterates only the groups found above.
+  // Nested namespaces: a group module re-exporting a whole module (`export * as sub from
+  // "./Sub"`) surfaces as a dotted child group ("Owner.sub") — unless the target already has a
+  // page of its own (a subpath or another group), which keeps one page per module. One level
+  // deep: the snapshot iterates only the groups found above.
   const groupModules = new Set(groups.map((g) => g.module));
   for (const group of [...groups]) {
     for (const member of checker.getExportsOfModule(group.module)) {
@@ -495,8 +495,8 @@ const walkPackage = (
 };
 
 // Resolve one extracted symbol's JSDoc {@link} targets through the LinkResolver — the compiler picks
-// the exact symbol, so bare names disambiguate by context (`layer` inside QueueHyperlink's docs is
-// QueueHyperlink.layer). Runs AFTER extraction, once every symbol in the package has a URL.
+// the exact symbol, so bare names disambiguate by context (`layer` inside WorkPool's docs is
+// WorkPool.layer). Runs AFTER extraction, once every symbol in the package has a URL.
 const docLinksOf = (
   resolver: LinkResolver.LinkResolver,
   decl: ts.Declaration

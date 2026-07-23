@@ -4,9 +4,9 @@
 
 import { Effect, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as QueueHyperlink from "@pm/QueueHyperlink";
+import * as WorkPool from "@pm/WorkPool";
 
-class DemoQueue extends QueueHyperlink.Service<DemoQueue, string, never>()("docs/DemoQueue", {
+class DemoQueue extends WorkPool.Service<DemoQueue, string, never>()("docs/DemoQueue", {
   concurrency: 1,
   effect: (item: string) =>
     Effect.gen(function* () {

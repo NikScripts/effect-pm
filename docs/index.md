@@ -20,13 +20,13 @@ Here are two Hyperlinks — a queue and a scheduled process — on two runtimes,
 
 {.twoslash}
 ``` ts
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
+import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Process from "hyperlink-ts/Process"
 import { Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 // ---cut---
 // two resources, defined once
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
@@ -49,26 +49,26 @@ const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =
   )
 ```
 
-Now the **worker runtime** is one pipe — [`QueueHyperlink.serve`](/docs/queues) gives `Emails` its worker (the `effect`
+Now the **worker runtime** is one pipe — [`WorkPool.serve`](/docs/queues) gives `Emails` its worker (the `effect`
 that drains each job), piped onto port 3001:
 
 {.twoslash}
 ``` ts
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
+import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema, Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", EmailJob) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 // ---cut---
-const worker = QueueHyperlink
+const worker = WorkPool
   .serve(Emails, { effect: sendEmail })
   .pipe(nodeServer(3001))
 // worker: Layer — provide it to a runtime to run the queue on :3001
@@ -80,12 +80,12 @@ that lives on the *other* runtime, reached by port:
 {.twoslash}
 ``` ts
 import * as Process from "hyperlink-ts/Process"
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
+import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Polling } from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", EmailJob) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
 class Digest extends Process.Tag<Digest>()("app/Digest") {}
 declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
@@ -112,10 +112,10 @@ anywhere it's reached:
 
 {.twoslash}
 ``` ts
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
+import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Stream, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", EmailJob) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
 declare const onChange: (e: unknown) => Effect.Effect<void>
 const program = Effect.gen(function* () {
 // ---cut---
@@ -294,7 +294,7 @@ cross-runtime Service you use like an Effect primitive:
 
 - **Long-running processes** ([`Process`](/docs/processes)) — continuous or recurring work: a polling
   cadence, arm/disarm schedule windows, execution history, and more.
-- **Queue** ([`QueueHyperlink`](/docs/queues)) — a priority work queue: enqueue items, workers drain them
+- **Queue** ([`WorkPool`](/docs/queues)) — a priority work queue: enqueue items, workers drain them
   with dedup, retry, and concurrency control; durable when you provide a store.
 - **Shard map** ([`ShardMap`](/docs/shardmap)) — partitioned key/value across a fleet: routed
   `get` / `put` / `delete`, leaf shards, and fleet size folds via peers.

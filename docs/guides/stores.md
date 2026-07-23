@@ -16,7 +16,7 @@ engine-owned SQL) live in [`docs/standards/storage.md`](../standards/storage.md)
 ## The recipe (Effect-true)
 
 Toolkit engines (`Process.layer` / `serve` / `serveRemote`, and the Queue / CustomQueue /
-RunHyperlink counterparts) **soft-default** `Store.layerDefaultMemory` via
+Gate counterparts) **soft-default** `Store.layerDefaultMemory` via
 `Store.withDefaultStorage` — **R is fulfilled** out of the box. `*Memory` variants are
 aliases of the same soft-default (ephemeral engine journal — **no** Logs platform).
 
@@ -71,7 +71,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 
 **Do not** sibling-`Layer.merge` the toolkit layer with AppStore and expect override — Soft never sees `Storage`, engines stay on the default journal, and the AppStore file stays empty.
 
-**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge and toolkit layers **die at build** (`Store.resolveOrDie`) when the engine scope is missing. Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `QueueHyperlink.store` / ….
+**Do not** Soft-override with a Node-logs-only `Store.Service` unless that store also registers the engines you run — Soft captures that bridge and toolkit layers **die at build** (`Store.resolveOrDie`) when the engine scope is missing. Live-only log bus: `Logs.layer` (no `Storage`). Durable journals: one AppStore with `Node.logs` + `Process.store` / `WorkPool.store` / ….
 
 ## One store per Node (intentional multi-node = N stores)
 

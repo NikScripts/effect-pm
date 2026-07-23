@@ -56,7 +56,7 @@ react react-dom recharts @tanstack/react-table
 Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only what you use:
 
 - **`/Hyperlink`** — build your own resource
-- **`/QueueHyperlink`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
+- **`/WorkPool`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
 - **`/Store`** — durable storage
 - **`/web`**, **`/tui`**, **`/cli`** — dashboards
 - **`hyperlink-ts`** — the barrel: everything under short names
