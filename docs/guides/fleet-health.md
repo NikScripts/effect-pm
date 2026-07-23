@@ -27,7 +27,7 @@ class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 ```
 
@@ -45,7 +45,7 @@ import { Effect, Layer } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 // ---cut---
 const readiness = Effect.succeed([
@@ -76,7 +76,7 @@ import { Effect } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 const program = Effect.gen(function* () {
 // ---cut---

@@ -15,7 +15,7 @@ There is no separate “process log API” and “queue log API.” Capture is c
 carve the bus into journals and Handle-facing exports.
 
 This chapter is the narrative guide. Deep tables and fixture indexes remain in
-[`docs/LOGS.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/LOGS.md) when you need
+[`docs/LOGS.md`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/LOGS.md) when you need
 a lookup.
 
 ## What you get
@@ -307,5 +307,5 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 ## See also
 
 - [Stores](/docs/stores) — registering journals and reading Storage  
-- [`docs/LOGS.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/LOGS.md) — key catalog and fixture map  
+- [`docs/LOGS.md`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/LOGS.md) — key catalog and fixture map  
 - [Queues](/docs/queues) / [Processes](/docs/processes) — engines that stamp lineage at materialize  

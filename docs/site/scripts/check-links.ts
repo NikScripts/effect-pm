@@ -102,8 +102,45 @@ const program = Effect.gen(function* () {
     yield* Console.log("api-hovers/ absent — sidecar anchors not checked (run gen-hovers first)");
   }
 
+  // Prose /docs/* links in the content markdown — the class of link the api-only sets above
+  // never covered (a renamed chapter slug sailed through as "0 dead"). Valid slugs are md
+  // BASENAMES from the real content walk: chapter urls are /docs/<basename> regardless of the
+  // file's directory. Non-content trees (site, handoffs, legacy, plans, docgen) neither
+  // contribute slugs nor get their links checked.
+  const docsRoot = nodePath.join(repoRoot, "docs");
+  const skipDirs = new Set(["site", "handoffs", "legacy", "plans", "docgen"]);
+  const contentFiles: Array<string> = [];
+  const walk = (dir: string): Effect.Effect<void, never, FileSystem.FileSystem> =>
+    Effect.gen(function* () {
+      for (const entry of yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []))) {
+        const abs = nodePath.join(dir, entry);
+        const info = yield* fs.stat(abs).pipe(Effect.orElseSucceed(() => undefined));
+        if (info === undefined) continue;
+        if (info.type === "Directory") {
+          if (dir !== docsRoot || !skipDirs.has(entry)) yield* walk(abs);
+        } else if (entry.endsWith(".md") && entry !== "README.md") {
+          contentFiles.push(abs);
+        }
+      }
+    });
+  yield* walk(docsRoot);
+  const pageSlugs = new Set(
+    contentFiles.map((f) => nodePath.basename(f).replace(/\.md$/, ""))
+  );
+  let proseChecked = 0;
+  for (const file of contentFiles) {
+    const text = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => ""));
+    for (const m of text.matchAll(/\]\(\/docs\/([A-Za-z0-9-]+)(?:#[^)\s]*)?\)/g)) {
+      proseChecked += 1;
+      if (!pageSlugs.has(m[1])) {
+        failures.push(`${nodePath.relative(repoRoot, file)} -> /docs/${m[1]}`);
+      }
+    }
+  }
+  checked += proseChecked;
+
   yield* Console.log(
-    `link check: ${valid.size} pages, ${checked} links checked (${sidecars} sidecars), ${failures.length} dead`
+    `link check: ${valid.size} pages, ${checked} links checked (${sidecars} sidecars, ${proseChecked} prose docs links), ${failures.length} dead`
   );
   if (failures.length > 0) {
     for (const failure of failures.slice(0, 25)) yield* Console.error(`DEAD ${failure}`);

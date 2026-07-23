@@ -30,7 +30,7 @@ class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", EmailJob) {} // 
 class Digest extends Process.Tag<Digest>()("app/Digest") {}                 // a scheduled process
 ```
 
-[`Node.httpServer(serve)`](/docs/resource) is platform-agnostic — it just needs an HTTP server
+[`Node.httpServer(serve)`](/docs/managing-layers) is platform-agnostic: it just needs an HTTP server
 provided, and that provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
 for Bun, Deno, or an edge runtime is the only line that changes:
 
@@ -82,7 +82,7 @@ that lives on the *other* runtime, reached by port:
 import * as Process from "hyperlink-ts/Process"
 import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Polling } from "hyperlink-ts/Polling"
+import * as Polling from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", EmailJob) {}
@@ -155,7 +155,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
@@ -179,7 +179,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(

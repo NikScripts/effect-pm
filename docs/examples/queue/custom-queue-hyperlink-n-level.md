@@ -4,7 +4,7 @@
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](https://github.com/NikScripts/effect-pm/blob/integration/examples/forms/queue/custom-queue-resource-n-level.ts)  
+**Source:** [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/custom-queue-hyperlink-n-level.ts)  
 **Run:** `pnpm run example:custom-queue-hyperlink`  
 **Hub:** [Examples → Queue](/docs/examples#queue)
 
@@ -12,6 +12,11 @@
 
 {.twoslash}
 ``` ts
+// @noErrors
+// KNOWN QUIRK: this block typechecks clean under dev, tsx, and scripts/check-twoslash.ts, but
+// errors (2488/2345/7006) ONLY inside the bundled waku-build prerender — with typescript/twoslash
+// externalized, so it is not the dual-instance problem. Sole holdout of the 2026-07 sweep;
+// diagnose separately, then remove this directive.
 import { Effect, Schema } from "effect"
 import { CustomQueueHyperlink } from "hyperlink-ts"
 
@@ -46,7 +51,7 @@ const program = Effect.gen(function* () {
 void Effect.runPromise(
   program.pipe(
     Effect.provide(
-      CustomQueueHyperlink.layer(Jobs, {
+      CustomQueueHyperlink.layerMemory(Jobs, {
         levelCount: 4,
         namedLevels: { interactive: 0, standard: 2, batch: 3 },
         takeAlgorithm: "weighted",

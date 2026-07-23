@@ -366,12 +366,12 @@ const EmailsLive = QueueHyperlink.layer(Emails, {
   onFailure: (entry, cause) =>
     isTransient(cause)
       ? Effect.succeed("retry" as const)        // a blip — spend an attempt
-      : Effect.succeed("dead-letter" as const),  // a bad address — set it aside
+      : Effect.succeed("deadLetter" as const),  // a bad address — set it aside
 })
 ```
 
 Three dispositions: **`"retry"`** re-enqueues (until `attempts` runs out),
-**`"dead-letter"`** sets the entry aside as failed (a `DeadLettered` event), and
+**`"deadLetter"`** sets the entry aside as failed (a `DeadLettered` event), and
 **`"drop"`** discards it silently. Without `onFailure`, the default is retry until
 `attempts`, then dead-letter. For *retrying the effect itself* (backoff, jitter),
 put `Effect.retry` on your worker `effect` — that's a different layer of the onion:
@@ -444,7 +444,7 @@ const EmailsLive = QueueHyperlink.layer(Emails, {
   refill: {
     onStart: true,                                    // seed on boot
     onDrained: true,                                  // re-poll when empty
-    load: (queue) => Effect.flatMap(nextBatch, queue.add),
+    load: (queue) => Effect.flatMap(nextBatch, queue.add).pipe(Effect.orDie),
   },
 })
 ```

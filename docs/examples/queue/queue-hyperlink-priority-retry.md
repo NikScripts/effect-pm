@@ -4,7 +4,7 @@
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/forms/queue/queue-hyperlink-priority-retry.ts`](https://github.com/NikScripts/effect-pm/blob/integration/examples/forms/queue/queue-resource-priority-retry.ts)  
+**Source:** [`examples/forms/queue/queue-hyperlink-priority-retry.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/queue-hyperlink-priority-retry.ts)  
 **Run:** `pnpm run example:queue-hyperlink`  
 **Hub:** [Examples → Queue](/docs/examples#queue)  
 **Deep guide:** [Queues](/docs/queues)
