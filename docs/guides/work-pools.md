@@ -1,4 +1,4 @@
-{#queues title="Queues" status="draft" appliesTo=all}
+{#work-pools title="Work Pools" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -29,7 +29,7 @@ thing:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 
 // The item: a plain schema. This is the queue's payload type.
@@ -39,12 +39,12 @@ const EmailJob = Schema.Struct({
 })
 
 // The tag: the contract. `Self` is the class itself (Effect's two-stage form).
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", {
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", {
   payload: EmailJob,
 }) {}
 
 // The layer: the worker. `effect` runs once per item.
-const EmailsLive = QueueHyperlink.layer(Emails, {
+const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(`sending "${job.subject}" to ${job.to}`),
   concurrency: 4,
 })
@@ -55,10 +55,10 @@ That's a complete, running queue. To use it, `yield* Emails` for the handle and
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 // ---cut---
 const program = Effect.gen(function* () {
   const emails = yield* Emails
@@ -76,10 +76,10 @@ Hover `emails` and you'll see its type — the named handle:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 const program = Effect.gen(function* () {
 // ---cut---
 const emails = yield* Emails
@@ -87,8 +87,8 @@ const emails = yield* Emails
 })
 ```
 
-`QueueHyperlink<{ to: string; subject: string }, void, never, never>` reads as
-`QueueHyperlink<Payload, Success, Error, Requirements>`:
+`WorkPool<{ to: string; subject: string }, void, never, never>` reads as
+`WorkPool<Payload, Success, Error, Requirements>`:
 
 - **Payload** — the decoded item type. What `add` accepts.
 - **Success** — the worker's return value (here `void`; see [Success values](#success-values)).
@@ -125,12 +125,12 @@ how it drains:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 // ---cut---
-const EmailsLive = QueueHyperlink.layer(Emails, {
+const EmailsLive = WorkPool.layer(Emails, {
   // runs once per item; the second arg is per-attempt context
   effect: (job, ctx) =>
     Effect.log(`send ${job.to} (attempt ${ctx.attempts}, ${ctx.priority})`),
@@ -164,19 +164,19 @@ rides the `Failed` event's `cause`:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 // ---cut---
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 
 // declare the failure type on the tag…
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", {
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", {
   payload: EmailJob,
   error: Schema.String,     // the worker may fail with a string
 }) {}
 
 // …and now the worker is allowed to fail with it
-const EmailsLive = QueueHyperlink.layer(Emails, {
+const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) =>
     job.to.includes("@")
       ? Effect.void
@@ -185,7 +185,7 @@ const EmailsLive = QueueHyperlink.layer(Emails, {
 })
 ```
 
-The handle now types as `QueueHyperlink<…, void, string, never>` — the `string`
+The handle now types as `WorkPool<…, void, string, never>` — the `string`
 error is visible to anyone watching `events`. The rule is deliberate: **the tag is
 the error contract, and workers conform to it.** A queue's declared failures are
 part of its public shape, not an implementation detail.
@@ -196,10 +196,10 @@ Four verbs put work in. Three are priority lanes:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 const program = Effect.gen(function* () {
 const emails = yield* Emails
 // ---cut---
@@ -224,10 +224,10 @@ stream you can render:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema, Stream } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const onDepth: (n: number) => Effect.Effect<void>
 const program = Effect.gen(function* () {
 const emails = yield* Emails
@@ -244,10 +244,10 @@ Subscribe once, off-fiber, and dispatch by tag:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink, Hyperlink } from "hyperlink-ts"
+import { WorkPool, Hyperlink } from "hyperlink-ts"
 import { Cause, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 const program = Effect.gen(function* () {
 const emails = yield* Emails
 // ---cut---
@@ -293,38 +293,38 @@ the `Completed` event and the store's analytics:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 // ---cut---
 const Job = Schema.Struct({ id: Schema.String })
 
-class Doubler extends QueueHyperlink.Tag<Doubler>()("app/Doubler", {
+class Doubler extends WorkPool.Tag<Doubler>()("app/Doubler", {
   payload: Job,
   success: Schema.Number,   // the worker returns a number
 }) {}
 
-const DoublerLive = QueueHyperlink.layer(Doubler, {
+const DoublerLive = WorkPool.layer(Doubler, {
   effect: (job) => Effect.succeed(job.id.length * 2),
 })
 ```
 
-The handle types as `QueueHyperlink<{ id: string }, number, never, never>`, and
+The handle types as `WorkPool<{ id: string }, number, never, never>`, and
 `Completed.success` carries the `number`.
 
 ## The `.Service` shorthand
 
 `Tag` + `layer` keeps the contract and the worker separate — which is what makes a
 queue location-transparent (the same tag, a different layer, and it runs remotely).
-When you don't need that split, `QueueHyperlink.Service` fuses both into one class — a
+When you don't need that split, `WorkPool.Service` fuses both into one class — a
 self-contained [**Service**](/docs/glossary#service):
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 // ---cut---
-class Emails extends QueueHyperlink.Service<Emails, typeof EmailJob.Type, never>()(
+class Emails extends WorkPool.Service<Emails, typeof EmailJob.Type, never>()(
   "app/Emails",
   {
     concurrency: 4,
@@ -350,17 +350,17 @@ next — retry, dead-letter, or drop:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Cause, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", {
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", {
   payload: EmailJob,
   error: Schema.String,
 }) {}
 declare const isTransient: (cause: Cause.Cause<string>) => boolean
 declare const send: (job: { to: string }) => Effect.Effect<void, string>
 // ---cut---
-const EmailsLive = QueueHyperlink.layer(Emails, {
+const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => send(job),
   attempts: 5,
   onFailure: (entry, cause) =>
@@ -385,12 +385,12 @@ ceiling bites:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Duration, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 // ---cut---
-const EmailsLive = QueueHyperlink.layer(Emails, {
+const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(`send ${job.to}`),
   concurrency: 8,
   rateLimit: { limit: 100, window: Duration.seconds(1) }, // ≤ 100 starts/sec
@@ -408,11 +408,11 @@ subscriber, then let it rip. Start it paused and `resume` when ready:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
-const EmailsLive = QueueHyperlink.layer(Emails, {
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(job.to),
   paused: true,        // workers are forked but idle
 })
@@ -433,13 +433,13 @@ queue into a durable poller over an external source (a table, a topic, an inbox)
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const nextBatch: Effect.Effect<ReadonlyArray<{ to: string; subject: string }>>
 // ---cut---
-const EmailsLive = QueueHyperlink.layer(Emails, {
+const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(job.to),
   refill: {
     onStart: true,                                    // seed on boot
@@ -491,15 +491,15 @@ dashboard reconnecting after a redeploy still sees yesterday's throughput.
 The store is also an analytics surface in its own right — beyond `metrics.query` it
 answers questions like "the *slowest* completions" and "how many have completed",
 computed over the recorded history rather than the live queue. You reach it with
-`QueueHyperlink.store(tag)`.
+`WorkPool.store(tag)`.
 
 ## Running it across the network
 
 This is the payoff of the tag/layer split. The **tag is the contract**; the
 **layer decides where the work runs** — and nothing else in your code changes.
 
-Provide `QueueHyperlink.layer` and the queue is local. Provide
-`QueueHyperlink.serve` instead and the worker runs behind an RPC server, its
+Provide `WorkPool.layer` and the queue is local. Provide
+`WorkPool.serve` instead and the worker runs behind an RPC server, its
 handlers mounted for callers. A *different* process then provides
 `Hyperlink.client(Tag)` (or `Hyperlink.connect(Tag, Hyperlink.protocolHttp(port))` over HTTP), and the
 **same `yield* Tag` code** drives the remote queue — `add`, `size`, `events`,
@@ -513,19 +513,19 @@ the other side `enqueue`s them, attempt budgets intact.
 ## Reconfiguring at runtime
 
 A queue's `concurrency`, `rateLimit`, or `paused` state isn't frozen at definition.
-`QueueHyperlink.configure(Tag, patch)` is a layer that overlays a config patch on top
+`WorkPool.configure(Tag, patch)` is a layer that overlays a config patch on top
 of the base — `Layer.provideMerge` it, and the queue drains under the merged config:
 
 {.twoslash}
 ``` ts
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends QueueHyperlink.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const EmailsLive: Layer.Layer<Emails>
 // ---cut---
 const Tuned = EmailsLive.pipe(
-  Layer.provideMerge(QueueHyperlink.configure(Emails, { concurrency: 16 })),
+  Layer.provideMerge(WorkPool.configure(Emails, { concurrency: 16 })),
 )
 ```
 
@@ -535,7 +535,7 @@ flag, or a live `DynamicConfig` swap that re-tunes the queue while it runs.
 ## Custom priority lanes
 
 `high` / `normal` / `defer` covers most needs, but some domains have their own
-ordering — tiers, SLAs, numbered levels. `CustomQueueHyperlink` is the same queue
+ordering — tiers, SLAs, numbered levels. `WorkPool` is the same queue
 with **arbitrary lanes**: you define the levels, and `add` targets one by name. The
 handle reads the same; only the priority axis is yours to shape.
 
@@ -556,7 +556,7 @@ extra wiring.
 
 ## The raw engine
 
-Under the resource wrapper is a plain queue engine. `QueueHyperlink.make(config)`
+Under the resource wrapper is a plain queue engine. `WorkPool.make(config)`
 returns a handle directly — the workers, retries, and events, without the Tag,
 Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
 only when you want to embed a queue inside something else and manage its scope

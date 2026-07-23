@@ -146,12 +146,12 @@ collapsed literal is unreadable on a narrow screen and buries a bad diff.
 
 ``` ts
 // ❌ bad — collapsed onto one line
-const config = { levelCount: 4, namedLevels: { interactive: 0, batch: 3 }, takeAlgorithm: "weighted" }
+const config = { laneCount: 4, namedLanes: { interactive: 0, batch: 3 }, takeAlgorithm: "weighted" }
 
 // ✅ good — one field per line
 const config = {
-  levelCount: 4,
-  namedLevels: { interactive: 0, batch: 3 },
+  laneCount: 4,
+  namedLanes: { interactive: 0, batch: 3 },
   takeAlgorithm: "weighted",
 }
 ```

@@ -1,14 +1,14 @@
-{#custom-queue-hyperlink-n-level title="CustomQueue — N-Level Lanes" status="draft" appliesTo=all}
-# CustomQueue — N-Level Lanes
+{#workpool-priority-lanes title="WorkPool — Priority Lanes" status="draft" appliesTo=all}
+# WorkPool — Priority Lanes
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/custom-queue-hyperlink-n-level.ts)  
-**Run:** `pnpm run example:custom-queue-hyperlink`  
+**Source:** [`examples/forms/queue/workpool-priority-lanes.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/workpool-priority-lanes.ts)  
+**Run:** `pnpm run example:workpool-priority`  
 **Hub:** [Examples → Queue](/docs/examples#queue)
 
-`CustomQueueHyperlink` — N named lanes, `add(item, level?)`, and `sizes: Record<string, number>`.
+`WorkPool` — N named lanes, `add(item, lane?)`, and `sizes: Record<string, number>`.
 
 {.twoslash}
 ``` ts
@@ -18,21 +18,21 @@
 // externalized, so it is not the dual-instance problem. Sole holdout of the 2026-07 sweep;
 // diagnose separately, then remove this directive.
 import { Effect, Schema } from "effect"
-import { CustomQueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 
 const JobSchema = Schema.Struct({ id: Schema.String, kind: Schema.String })
 
-/** Tag factory: config object — `{ payload, levelCount, namedLevels? }`. */
-class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("examples/CustomJobs", {
+/** Tag factory: config object — `{ payload, laneCount, namedLanes? }`. */
+class Jobs extends WorkPool.priority<Jobs>()("examples/CustomJobs", {
   payload: JobSchema,
-  levelCount: 4,
-  namedLevels: { interactive: 0, standard: 2, batch: 3 },
+  laneCount: 4,
+  namedLanes: { interactive: 0, standard: 2, batch: 3 },
 }) {}
 
 const program = Effect.gen(function* () {
   const queue = yield* Jobs
 
-  // Pair-style add — level is a configured name or numeric index.
+  // Pair-style add — lane is a configured name or numeric index.
   yield* queue.add({ id: "a", kind: "email" }, "interactive")
   yield* queue.add({ id: "b", kind: "report" }, "batch")
   yield* queue.add([{ id: "c", kind: "email" }, { id: "d", kind: "email" }], 2)
@@ -51,9 +51,9 @@ const program = Effect.gen(function* () {
 void Effect.runPromise(
   program.pipe(
     Effect.provide(
-      CustomQueueHyperlink.layerMemory(Jobs, {
-        levelCount: 4,
-        namedLevels: { interactive: 0, standard: 2, batch: 3 },
+      WorkPool.layerMemory(Jobs, {
+        laneCount: 4,
+        namedLanes: { interactive: 0, standard: 2, batch: 3 },
         takeAlgorithm: "weighted",
         concurrency: 2,
         effect: (job) => Effect.logInfo(`processed ${job.id} (${job.kind})`),

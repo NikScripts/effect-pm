@@ -1,17 +1,17 @@
-{#queue-hyperlink-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
+{#workpool-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
 # Queue — Priority, Dedup, Retry
 
 {.draft}
 **Draft** — paired with a runnable example; tip-check before treating as SSOT.
 
-**Source:** [`examples/forms/queue/queue-hyperlink-priority-retry.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/queue-hyperlink-priority-retry.ts)  
-**Run:** `pnpm run example:queue-hyperlink`  
+**Source:** [`examples/forms/queue/workpool-priority-retry.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/queue/workpool-priority-retry.ts)  
+**Run:** `pnpm run example:workpool-retry`  
 **Hub:** [Examples → Queue](/docs/examples#queue)  
-**Deep guide:** [Queues](/docs/queues)
+**Deep guide:** [Queues](/docs/work-pools)
 
 ## What this form shows
 
-One `QueueHyperlink` handle exercising four operators together:
+One `WorkPool` handle exercising four operators together:
 
 1. **Lanes** — `add` (normal), `prioritize` (high), `defer` (low); each accepts a batch array
    (one RPC round-trip when remote).
@@ -20,7 +20,7 @@ One `QueueHyperlink` handle exercising four operators together:
    before an auto re-enqueue).
 3. **Retry budget** — `attempts: 2` means one automatic re-enqueue after failure, then
    `RetryExhausted`. No `onFailure` here → the default disposition (retry until budget, then
-   dead-letter). Per-error routing belongs in `onFailure` on the [Queues](/docs/queues) guide.
+   dead-letter). Per-error routing belongs in `onFailure` on the [Queues](/docs/work-pools) guide.
 4. **Lifecycle** — one `events` subscriber with `Hyperlink.runForEachTag` (pick the tags you
    care about; ignore the rest). Prefer this over old onExit-style hooks.
 
@@ -51,7 +51,7 @@ sends only.” On the tip `Tag` handle there is no top-level `queue.completed`; 
 {.twoslash}
 ``` ts
 import { Cause, Duration, Effect, Schema } from "effect"
-import { QueueHyperlink, Hyperlink } from "hyperlink-ts"
+import { WorkPool, Hyperlink } from "hyperlink-ts"
 
 // ── Contract: payload + typed worker failure ──────────────────────────────────
 
@@ -72,7 +72,7 @@ class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
   reason: Schema.String,
 }) {}
 
-class EmailQueue extends QueueHyperlink.Tag<EmailQueue>()("examples/EmailQueue", {
+class EmailQueue extends WorkPool.Tag<EmailQueue>()("examples/EmailQueue", {
   payload: EmailJob,
   error: SendError,
 }) {}
@@ -90,7 +90,7 @@ const waitUntilCompleted = (expected: number) =>
 
 // ── Layer: worker + policy (Tag stays free of runtime config) ─────────────────
 
-const EmailQueueLive = QueueHyperlink.layer(EmailQueue, {
+const EmailQueueLive = WorkPool.layer(EmailQueue, {
   paused: true, // enqueue / subscribe first; drain only after `resume`
   concurrency: 1, // sequential — log order stays readable for the demo
   capacity: 100,
